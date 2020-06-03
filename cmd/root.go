@@ -35,6 +35,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 
 	// add sub commands
 	rootCmd.AddCommand(newCmdReset(streams, kubeFlags))
+	rootCmd.AddCommand(newCmdSet(streams, kubeFlags))
 
 	// add options command to list global flags
 	templates.ActsAsRootCommand(rootCmd, []string{"options"})
