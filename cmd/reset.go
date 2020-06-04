@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
@@ -20,7 +19,7 @@ import (
 
 const (
 	awsAccountNamespace = "aws-account-operator"
-	ResetUsage          = "The name of Account CR is required for reset command"
+	resetUsage          = "The name of Account CR is required for reset command"
 )
 
 // newCmdReset implements the reset command which resets the specified account cr
@@ -29,7 +28,6 @@ func newCmdReset(streams genericclioptions.IOStreams, flags *genericclioptions.C
 	resetCmd := &cobra.Command{
 		Use:                   "reset [flags] <account name> [options]",
 		Short:                 "reset AWS account",
-		Args:                  cobra.ExactArgs(1),
 		DisableFlagsInUseLine: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd, args))
@@ -51,21 +49,18 @@ type resetOptions struct {
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
 	kubeCli client.Client
-
-	logger *log.Logger
 }
 
 func newResetOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *resetOptions {
 	return &resetOptions{
 		flags:     flags,
 		IOStreams: streams,
-		logger:    log.New(streams.Out, "aws-account-cli", log.LstdFlags|log.Lshortfile),
 	}
 }
 
 func (o *resetOptions) complete(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, ResetUsage)
+		return cmdutil.UsageErrorf(cmd, resetUsage)
 	}
 	o.accountName = args[0]
 

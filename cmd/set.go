@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	"github.com/spf13/cobra"
@@ -62,15 +61,12 @@ type setOptions struct {
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
 	kubeCli client.Client
-
-	logger *log.Logger
 }
 
 func newSetOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *setOptions {
 	return &setOptions{
 		flags:     flags,
 		IOStreams: streams,
-		logger:    log.New(streams.Out, "aws-account-cli", log.LstdFlags|log.Lshortfile),
 	}
 }
 

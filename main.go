@@ -17,10 +17,10 @@ func main() {
 	flag.CommandLine.Parse([]string{})
 	pflag.CommandLine = flags
 
-	command := cmd.NewCmdRoot(genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr})
-
 	logs.InitLogs()
 	defer logs.FlushLogs()
+
+	command := cmd.NewCmdRoot(genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr})
 
 	if err := command.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
