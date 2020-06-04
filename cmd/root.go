@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 
+	routev1 "github.com/openshift/api/route/v1"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	"github.com/openshift/osd-utils-cli/cmd/list"
 	"github.com/spf13/cobra"
@@ -15,6 +16,7 @@ import (
 
 func init() {
 	awsv1alpha1.AddToScheme(scheme.Scheme)
+	routev1.AddToScheme(scheme.Scheme)
 
 	NewCmdRoot(genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr})
 }
@@ -39,6 +41,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(newCmdSet(streams, kubeFlags))
 	rootCmd.AddCommand(list.NewCmdList(streams, kubeFlags))
 	rootCmd.AddCommand(newCmdConsole(streams, kubeFlags))
+	rootCmd.AddCommand(newCmdMetrics(streams, kubeFlags))
 
 	// add options command to list global flags
 	templates.ActsAsRootCommand(rootCmd, []string{"options"})
