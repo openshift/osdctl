@@ -59,3 +59,21 @@ func GetAWSAccountCredentials(
 		AwsAccessKey: string(secretAccessKey),
 	}, nil
 }
+
+// Get AWS Account Claim CR
+func GetAWSAccountClaim(
+	ctx context.Context,
+	cli client.Client,
+	namespace,
+	accountClaimName string,
+) (*awsv1alpha1.AccountClaim, error) {
+	var ac awsv1alpha1.AccountClaim
+	if err := cli.Get(ctx, types.NamespacedName{
+		Name:      accountClaimName,
+		Namespace: namespace,
+	}, &ac); err != nil {
+		return nil, err
+	}
+
+	return &ac, nil
+}

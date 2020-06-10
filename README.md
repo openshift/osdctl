@@ -119,6 +119,40 @@ osdctl account check-secrets
 osdctl account check-secrets <Account CR Name>
 ```
 
+### Match AWS Account with AWS Account Operator related resources
+
+1. Get AWS Account Operator related resources
+
+```bash
+# Get Account Name by AWS Account ID, output to json
+osdctl account get account -i <Account ID> -o json
+
+# Get Account Claim CR by AWS Account ID, output to yaml
+osdctl account get account-claim -i <Account ID> -o yaml
+
+# Get Legal Entity information by AWS Account ID
+osdctl account get legal-entity -i <Account ID>
+
+# Get Secrets information by AWS Account ID
+osdctl account get secrets -i <Account ID>
+
+test-cr-osdmanagedadminsre-secret
+test-cr-secret
+test-cr-sre-cli-credentials
+test-cr-sre-console-url
+```
+
+2. Get AWS Account ID
+
+```bash
+# Get AWS Account ID by Account CR Name
+osdctl get aws-account -a <Account CR Name>
+
+# Get AWS Account ID by Account Claim CR Name and Namespace
+osdctl get aws-account -c <Claim Name> -n <Claim Namepace>
+```
+
+
 ### AWS Account Operator metrics display
 
 ```bash

@@ -1,6 +1,7 @@
 package account
 
 import (
+	"github.com/openshift/osd-utils-cli/cmd/account/get"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
@@ -21,6 +22,7 @@ func NewCmdAccount(streams genericclioptions.IOStreams, flags *genericclioptions
 	accountCmd.AddCommand(newCmdList(streams, flags))
 	accountCmd.AddCommand(newCmdCleanVeleroSnapshots(streams))
 	accountCmd.AddCommand(newCmdCheckSecrets(streams, flags))
+	accountCmd.AddCommand(get.NewCmdGet(streams, flags))
 
 	return accountCmd
 }
