@@ -90,7 +90,7 @@ func (o *setOptions) complete(cmd *cobra.Command, args []string) error {
 
 	// throw error
 	default:
-		return cmdutil.UsageErrorf(cmd, "unsupported account state " + o.state)
+		return cmdutil.UsageErrorf(cmd, "unsupported account state "+o.state)
 	}
 
 	var err error
