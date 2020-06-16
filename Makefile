@@ -23,3 +23,13 @@ mod:
 	@echo "go mod tidy"
 	GO111MODULE=on go mod tidy
 	@git diff --exit-code -- go.mod
+
+docgen: build-docgen
+	./bin/docgen ./docs
+
+build-docgen:
+	go build -o ./bin/docgen docgen/main.go
+
+check-docs:
+	@make docgen
+	@git diff --exit-code -- docs/
