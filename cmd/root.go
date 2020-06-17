@@ -2,10 +2,10 @@ package cmd
 
 import (
 	"flag"
-	"github.com/openshift/osd-utils-cli/cmd/list"
 	"os"
 
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
+	"github.com/openshift/osd-utils-cli/cmd/list"
 	"github.com/spf13/cobra"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -38,6 +38,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(newCmdReset(streams, kubeFlags))
 	rootCmd.AddCommand(newCmdSet(streams, kubeFlags))
 	rootCmd.AddCommand(list.NewCmdList(streams, kubeFlags))
+	rootCmd.AddCommand(newCmdConsole(streams, kubeFlags))
 
 	// add options command to list global flags
 	templates.ActsAsRootCommand(rootCmd, []string{"options"})
