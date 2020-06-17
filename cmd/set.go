@@ -12,6 +12,8 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/osd-utils-cli/pkg/k8s"
 )
 
 const (
@@ -90,37 +92,25 @@ func (o *setOptions) complete(cmd *cobra.Command, args []string) error {
 	}
 
 	var err error
-	configLoader := o.flags.ToRawKubeConfigLoader()
-	cfg, err := configLoader.ClientConfig()
+	o.kubeCli, err = k8s.NewClient(o.flags)
 	if err != nil {
 		return err
 	}
 
-	cli, err := client.New(cfg, client.Options{})
-	if err != nil {
-		return err
-	}
-
-	o.kubeCli = cli
 	return nil
 }
 
 func (o *setOptions) run() error {
-	key := types.NamespacedName{
-		Namespace: o.accountNamespace,
-		Name:      o.accountName,
-	}
-
 	ctx := context.TODO()
 
-	var acc awsv1alpha1.Account
-	if err := o.kubeCli.Get(ctx, key, &acc); err != nil {
+	acc, err := k8s.GetAWSAccount(ctx, o.kubeCli, o.accountNamespace, o.accountName)
+	if err != nil {
 		return err
 	}
 
 	// patch account using the provided raw payload
 	if o.patchPayload != "" {
-		return o.rawPatch(ctx, &acc)
+		return o.rawPatch(ctx, acc)
 	}
 
 	payload := map[string]interface{}{
@@ -138,7 +128,7 @@ func (o *setOptions) run() error {
 	var mergePatch []byte
 	mergePatch, _ = json.Marshal(payload)
 
-	return o.kubeCli.Status().Patch(ctx, &acc, client.RawPatch(types.MergePatchType, mergePatch))
+	return o.kubeCli.Status().Patch(ctx, acc, client.RawPatch(types.MergePatchType, mergePatch))
 }
 
 // patch account status with raw input data
