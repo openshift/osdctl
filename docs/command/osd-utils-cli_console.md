@@ -1,24 +1,24 @@
-## osd-utils-cli set
+## osd-utils-cli console
 
-set AWS account cr status
+generate an AWS console URL on the fly
 
 ### Synopsis
 
-set AWS account cr status
+generate an AWS console URL on the fly
 
 ```
-osd-utils-cli set [flags] <account name> [options]
+osd-utils-cli console [flags] [options]
 ```
 
 ### Options
 
 ```
-  -a, --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
-  -h, --help                       help for set
-  -p, --patch string               the raw payload used to patch the account status
-  -r, --rotate-credentials         set status.rotateCredentials in the specified account
-      --state string               set status.state field in the specified account
-  -t, --type string                The type of patch being provided; one of [merge json]. The strategic patch is not supported. (default "merge")
+  -i, --account-id string          The AWS account ID we need to create AWS console URL for
+  -a, --account-name string        The AWS account cr we need to create AWS console URL for
+      --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
+  -r, --aws-region string          specify AWS region (default "us-east-1")
+  -d, --duration int               The duration of the console session. Default value is 3600 seconds(1 hour) (default 3600)
+  -h, --help                       help for console
 ```
 
 ### Options inherited from parent commands

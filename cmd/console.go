@@ -26,7 +26,7 @@ func newCmdConsole(streams genericclioptions.IOStreams, flags *genericclioptions
 	ops := newConsoleOptions(streams, flags)
 	consoleCmd := &cobra.Command{
 		Use:                   "console [flags] [options]",
-		Short:                 "generate a AWS console URL on the fly",
+		Short:                 "generate an AWS console URL on the fly",
 		Args:                  cobra.NoArgs,
 		DisableFlagsInUseLine: true,
 		Run: func(cmd *cobra.Command, args []string) {
