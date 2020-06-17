@@ -113,8 +113,8 @@ func (o *checkSecretsOptions) run() error {
 			credentials = append(credentials, &awsSecret{
 				secret: account.Spec.IAMUserSecret,
 				awsCreds: &awsprovider.AwsClientInput{
-					AwsIDKey:     creds.AwsIDKey,
-					AwsAccessKey: creds.AwsAccessKey,
+					AccessKeyID:     creds.AccessKeyID,
+					SecretAccessKey: creds.SecretAccessKey,
 				},
 			})
 		}
@@ -136,8 +136,8 @@ func (o *checkSecretsOptions) run() error {
 		credentials = append(credentials, &awsSecret{
 			secret: account.Spec.IAMUserSecret,
 			awsCreds: &awsprovider.AwsClientInput{
-				AwsIDKey:     creds.AwsIDKey,
-				AwsAccessKey: creds.AwsAccessKey,
+				AccessKeyID:     creds.AccessKeyID,
+				SecretAccessKey: creds.SecretAccessKey,
 			},
 		})
 	}
