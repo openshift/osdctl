@@ -1,19 +1,21 @@
-## osdctl options
+## osdctl check-secrets
 
-Print the list of flags inherited by all commands
+check AWS Account CR IAM User credentials
 
 ### Synopsis
 
-Print the list of flags inherited by all commands
+check AWS Account CR IAM User credentials
 
 ```
-osdctl options
+osdctl check-secrets [<account name>] [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for options
+      --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
+  -h, --help                       help for check-secrets
+  -v, --verbose                    Verbose output
 ```
 
 ### Options inherited from parent commands

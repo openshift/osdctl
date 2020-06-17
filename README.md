@@ -110,3 +110,15 @@ osdctl clean-velero-snapshots -a <AWS ACCESS KEY ID> -x <AWS SECRET ACCESS KEY>
 # we also support specifying profile and config file path
 osdctl clean-velero-snapshots -p <profile name> -c <config file path>
 ```
+
+### AWS Account IAM User Credentials validation
+
+`check-secrets` command checks the IAM User Secret associated with Account Accout CR.
+
+```bash
+# no argument, check all account secrets
+osdctl check-secrets
+
+# specify the Account CR name, then only check the IAM User Secret for that Account.
+osdctl check-secrets <Account CR Name>
+```
