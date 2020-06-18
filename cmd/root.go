@@ -57,6 +57,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(list.NewCmdList(streams, kubeFlags))
 	rootCmd.AddCommand(newCmdConsole(streams, kubeFlags))
 	rootCmd.AddCommand(newCmdMetrics(streams, kubeFlags))
+	rootCmd.AddCommand(newCmdCleanVeleroSnapshots(streams))
 
 	// add docs command
 	rootCmd.AddCommand(newCmdDocs(streams))

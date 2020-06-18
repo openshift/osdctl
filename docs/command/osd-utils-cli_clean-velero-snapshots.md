@@ -1,23 +1,33 @@
-## osd-utils-cli
+## osd-utils-cli clean-velero-snapshots
 
-OSD CLI
+cleans up S3 buckets whose name start with managed-velero
 
 ### Synopsis
 
-CLI tool to provide OSD related utilities
+cleans up S3 buckets whose name start with managed-velero
 
 ```
-osd-utils-cli [flags]
+osd-utils-cli clean-velero-snapshots <account name> [flags]
 ```
 
 ### Options
+
+```
+  -a, --aws-access-key-id string       AWS Access Key ID
+  -c, --aws-config string              specify AWS config file path
+  -p, --aws-profile string             specify AWS profile
+  -r, --aws-region string              specify AWS region (default "us-east-1")
+  -x, --aws-secret-access-key string   AWS Secret Access Key
+  -h, --help                           help for clean-velero-snapshots
+```
+
+### Options inherited from parent commands
 
 ```
       --add_dir_header                   If true, adds the file directory to the header
       --alsologtostderr                  log to standard error as well as files
       --cluster string                   The name of the kubeconfig cluster to use
       --context string                   The name of the kubeconfig context to use
-  -h, --help                             help for osd-utils-cli
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
       --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
@@ -37,11 +47,5 @@ osd-utils-cli [flags]
 
 ### SEE ALSO
 
-* [osd-utils-cli clean-velero-snapshots](osd-utils-cli_clean-velero-snapshots.md)	 - cleans up S3 buckets whose name start with managed-velero
-* [osd-utils-cli console](osd-utils-cli_console.md)	 - generate an AWS console URL on the fly
-* [osd-utils-cli list](osd-utils-cli_list.md)	 - list resources
-* [osd-utils-cli metrics](osd-utils-cli_metrics.md)	 - display metrics of aws-account-operator
-* [osd-utils-cli options](osd-utils-cli_options.md)	 - Print the list of flags inherited by all commands
-* [osd-utils-cli reset](osd-utils-cli_reset.md)	 - reset AWS account
-* [osd-utils-cli set](osd-utils-cli_set.md)	 - set AWS account cr status
+* [osd-utils-cli](osd-utils-cli.md)	 - OSD CLI
 

@@ -35,9 +35,8 @@ func GetAWSAccountCredentials(
 	ctx context.Context,
 	cli client.Client,
 	namespace,
-	accountCRName string,
+	secretName string,
 ) (*awsprovider.AwsClientInput, error) {
-	secretName := accountCRName + "-secret"
 	var secret v1.Secret
 	if err := cli.Get(ctx, types.NamespacedName{
 		Name:      secretName,

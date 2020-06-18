@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/sts"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 )
@@ -66,12 +65,7 @@ func getFederationToken(awsClient Client, DurationSeconds *int64, FederatedUserN
 	// Get Federated token credentials to build console URL
 	GetFederationTokenOutput, err := awsClient.GetFederationToken(getFederationTokenInput)
 	if err != nil {
-		if awsErr, ok := err.(awserr.Error); ok {
-			// Get error details
-			klog.Errorf("Failed to get federation token: %s, %s %v", awsErr.Code(), awsErr.Message(), err)
-			return nil, err
-		}
-
+		klog.Errorf("Failed to get federation token: %v", err)
 		return nil, err
 	}
 
@@ -91,11 +85,8 @@ func getAssumeRoleCredentials(awsClient Client, durationSeconds *int64, roleSess
 		RoleArn:         roleArn,
 	})
 	if err != nil {
-		if awsErr, ok := err.(awserr.Error); ok {
-			// Get error details
-			klog.Errorf("Failed to assume role: %s, %s %v", awsErr.Code(), awsErr.Message(), err)
-			return nil, err
-		}
+		// Get error details
+		klog.Errorf("Failed to assume role: %v", err)
 
 		return nil, err
 	}
