@@ -13,7 +13,7 @@ export CGO_ENABLED=0
 
 all: format build
 
-format: vet fmt
+format: mod vet fmt
 
 fmt:
 	@echo "gofmt"
@@ -21,10 +21,10 @@ fmt:
 	@git diff --exit-code .
 
 build: mod
-	go build -o ./bin/osd-utils-cli main.go
+	go build -mod=mod -o ./bin/osd-utils-cli main.go
 
 vet:
-	go vet ./...
+	go vet -mod=mod ./...
 
 mod:
 	@echo "go mod tidy"
