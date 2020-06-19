@@ -27,7 +27,7 @@ TBD
 
 For the detailed usage of each command, please refer to [here](./docs/command).
 
-### AWS account cr reset
+### AWS Account CR reset
 
 `reset` command resets the Account CR status and cleans up related secrets.
 
@@ -40,14 +40,43 @@ Deleting secret test-cr-sre-cli-credentials
 Deleting secret test-cr-sre-console-url
 ```
 
-### Aws account cr status patch
+### AWS Account CR status patch
 
-`set` command enables you to patch Account CR status directly.
+`set` command enables you to patch Account CR status directly. 
+
+There are two ways of status patching:
+
+1. Using flags.
+
+``` bash
+osd-utils-cli set test-cr --state=Creating -r=true
+```
+
+2. Using raw data. For patch strategy, only `merge` and `json` are supported. The default is `merge`. 
 
 ```bash
-# patch status directly using raw data, the default patch strategy is merge
 osd-utils-cli set test-cr --patch='{"status":{"state": "Failed", "claimed": false}}'
+```
 
-# using flags
-osd-utils-cli set test-cr --state=Creating
+### AWS Account CR list
+
+`list account` command lists the Account CRs in the cluster. You can use flags to filter the status.
+
+```bash
+osd-utils-cli list account --state=Creating
+
+Name                State               AWS ACCOUNT ID      Last Probe Time                 Last Transition Time            Message
+test-cr             Creating            181787396432        2020-06-18 10:38:40 -0400 EDT   2020-06-18 10:38:40 -0400 EDT   AWS account already created
+```
+
+### AWS Account Console URL generate
+
+`console` command generates an AWS console URL for the specified Account CR or AWS Account ID.
+
+```bash
+# generate console URL via Account CR name
+osd-utils-cli console -a test-cr
+
+# generate console URL via AWS Account ID
+osd-utils-cli console -i 1111111111
 ```
