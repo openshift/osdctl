@@ -9,12 +9,12 @@ import (
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	"github.com/spf13/cobra"
 
-	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
-
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/osd-utils-cli/pkg/k8s"
+	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
 )
 
 const (
@@ -81,18 +81,10 @@ func (o *consoleOptions) complete(cmd *cobra.Command) error {
 	// only initialize kubernetes client when account name is set
 	if o.accountName != "" {
 		var err error
-		configLoader := o.flags.ToRawKubeConfigLoader()
-		cfg, err := configLoader.ClientConfig()
+		o.kubeCli, err = k8s.NewClient(o.flags)
 		if err != nil {
 			return err
 		}
-
-		cli, err := client.New(cfg, client.Options{})
-		if err != nil {
-			return err
-		}
-
-		o.kubeCli = cli
 	}
 
 	return nil
@@ -105,12 +97,14 @@ func (o *consoleOptions) run() error {
 		return err
 	}
 
+	ctx := context.TODO()
 	var accountID string
 	if o.accountName != "" {
-		accountID, err = o.getAccountIDFromCR()
+		account, err := k8s.GetAWSAccount(ctx, o.kubeCli, o.accountNamespace, o.accountName)
 		if err != nil {
 			return err
 		}
+		accountID = account.Spec.AwsAccountID
 	} else {
 		accountID = o.accountID
 	}
@@ -129,19 +123,4 @@ func (o *consoleOptions) run() error {
 	fmt.Fprintf(o.IOStreams.Out, "The AWS Console URL is:\n%s\n", consoleURL)
 
 	return nil
-}
-
-func (o *consoleOptions) getAccountIDFromCR() (string, error) {
-	ctx := context.TODO()
-	accountKey := types.NamespacedName{
-		Namespace: o.accountNamespace,
-		Name:      o.accountName,
-	}
-
-	var account awsv1alpha1.Account
-	if err := o.kubeCli.Get(ctx, accountKey, &account); err != nil {
-		return "", err
-	}
-
-	return account.Spec.AwsAccountID, nil
 }

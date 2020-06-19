@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	"github.com/spf13/cobra"
 
 	v1 "k8s.io/api/core/v1"
@@ -15,6 +14,8 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/osd-utils-cli/pkg/k8s"
 )
 
 const (
@@ -65,27 +66,15 @@ func (o *resetOptions) complete(cmd *cobra.Command, args []string) error {
 	o.accountName = args[0]
 
 	var err error
-	configLoader := o.flags.ToRawKubeConfigLoader()
-	cfg, err := configLoader.ClientConfig()
+	o.kubeCli, err = k8s.NewClient(o.flags)
 	if err != nil {
 		return err
 	}
 
-	cli, err := client.New(cfg, client.Options{})
-	if err != nil {
-		return err
-	}
-
-	o.kubeCli = cli
 	return nil
 }
 
 func (o *resetOptions) run() error {
-	key := types.NamespacedName{
-		Namespace: o.accountNamespace,
-		Name:      o.accountName,
-	}
-
 	ctx := context.TODO()
 
 	//cleanup secrets
@@ -107,8 +96,8 @@ func (o *resetOptions) run() error {
 		}
 	}
 
-	var account awsv1alpha1.Account
-	if err := o.kubeCli.Get(ctx, key, &account); err != nil {
+	account, err := k8s.GetAWSAccount(ctx, o.kubeCli, o.accountNamespace, o.accountName)
+	if err != nil {
 		return err
 	}
 
@@ -116,7 +105,7 @@ func (o *resetOptions) run() error {
 	account.Spec.ClaimLink = ""
 	account.Spec.ClaimLinkNamespace = ""
 	account.Spec.IAMUserSecret = ""
-	if err := o.kubeCli.Update(ctx, &account, &client.UpdateOptions{}); err != nil {
+	if err := o.kubeCli.Update(ctx, account, &client.UpdateOptions{}); err != nil {
 		return err
 	}
 
@@ -131,5 +120,5 @@ func (o *resetOptions) run() error {
 		},
 	})
 
-	return o.kubeCli.Status().Patch(ctx, &account, client.RawPatch(types.MergePatchType, mergePatch))
+	return o.kubeCli.Status().Patch(ctx, account, client.RawPatch(types.MergePatchType, mergePatch))
 }

@@ -5,12 +5,14 @@ import (
 	"time"
 
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
-	"github.com/openshift/osd-utils-cli/pkg/printer"
 	"github.com/spf13/cobra"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/osd-utils-cli/pkg/k8s"
+	"github.com/openshift/osd-utils-cli/pkg/printer"
 )
 
 // newCmdListAccounts implements the list account command to list account crs
@@ -69,18 +71,11 @@ func (o *listAccountOptions) complete(cmd *cobra.Command, _ []string) error {
 	}
 
 	var err error
-	configLoader := o.flags.ToRawKubeConfigLoader()
-	cfg, err := configLoader.ClientConfig()
+	o.kubeCli, err = k8s.NewClient(o.flags)
 	if err != nil {
 		return err
 	}
 
-	cli, err := client.New(cfg, client.Options{})
-	if err != nil {
-		return err
-	}
-
-	o.kubeCli = cli
 	return nil
 }
 
