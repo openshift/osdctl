@@ -4,6 +4,13 @@ GO=GO15VENDOREXPERIMENT="1" CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) GO111MOD
 
 FILES_TO_FMT  := $(shell find . -path -prune -o -name '*.go' -print)
 
+# Ensure go modules are enabled:
+export GO111MODULE=on
+export GOPROXY=https://proxy.golang.org
+
+# Disable CGO so that we always generate static binaries:
+export CGO_ENABLED=0
+
 all: format build
 
 format: vet fmt
