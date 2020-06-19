@@ -27,10 +27,10 @@ const (
 func newCmdMetrics(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
 	ops := newMetricsOptions(streams, flags)
 	resetCmd := &cobra.Command{
-		Use:                   "metrics [flags] [options]",
-		Short:                 "display metrics of aws-account-operator",
-		Args:                  cobra.NoArgs,
-		DisableFlagsInUseLine: true,
+		Use:               "metrics",
+		Short:             "display metrics of aws-account-operator",
+		Args:              cobra.NoArgs,
+		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd))
 			cmdutil.CheckErr(ops.run())

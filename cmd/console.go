@@ -25,10 +25,10 @@ const (
 func newCmdConsole(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
 	ops := newConsoleOptions(streams, flags)
 	consoleCmd := &cobra.Command{
-		Use:                   "console [flags] [options]",
-		Short:                 "generate an AWS console URL on the fly",
-		Args:                  cobra.NoArgs,
-		DisableFlagsInUseLine: true,
+		Use:               "console",
+		Short:             "generate an AWS console URL on the fly",
+		Args:              cobra.NoArgs,
+		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd))
 			cmdutil.CheckErr(ops.run())

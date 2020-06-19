@@ -1,20 +1,24 @@
-## osd-utils-cli reset
+## osd-utils-cli metrics
 
-reset AWS account
+display metrics of aws-account-operator
 
 ### Synopsis
 
-reset AWS account
+display metrics of aws-account-operator
 
 ```
-osd-utils-cli reset <account name> [flags]
+osd-utils-cli metrics [flags]
 ```
 
 ### Options
 
 ```
       --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
-  -h, --help                       help for reset
+  -h, --help                       help for metrics
+      --https                      Use HTTPS to access metrics or not. By default we use HTTP scheme.
+  -m, --metrics-url string         The URL of aws-account-operator metrics endpoint. Used only for debug purpose! Only HTTP scheme is supported.
+  -r, --route string               The route created for aws-account-operator (default "aws-account-operator")
+      --sa string                  The service account name for aws-account-operator (default "aws-account-operator")
 ```
 
 ### Options inherited from parent commands

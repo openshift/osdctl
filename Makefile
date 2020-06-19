@@ -12,7 +12,7 @@ FILES_TO_FMT  := $(shell find . -path -prune -o -name '*.go' -print)
 
 all: format build
 
-format: mod vet fmt
+format: vet fmt docs
 
 fmt:
 	@echo "gofmt"
@@ -29,3 +29,7 @@ mod:
 	@echo "go mod tidy"
 	$(GO) mod tidy
 	@git diff --exit-code -- go.mod
+
+docs: build
+	./bin/osd-utils-cli docs ./docs/command
+	@git diff --exit-code -- ./docs/command/

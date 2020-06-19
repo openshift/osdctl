@@ -12,11 +12,11 @@ const (
 // NewCmdList implements the basic list command to list operator crs
 func NewCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
 	getCmd := &cobra.Command{
-		Use:                   "list",
-		Short:                 "list resources",
-		Args:                  cobra.NoArgs,
-		DisableFlagsInUseLine: true,
-		Run:                   help,
+		Use:               "list",
+		Short:             "list resources",
+		Args:              cobra.NoArgs,
+		DisableAutoGenTag: true,
+		Run:               help,
 	}
 
 	getCmd.AddCommand(newCmdListAccount(streams, flags))

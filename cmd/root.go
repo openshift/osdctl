@@ -24,10 +24,11 @@ func init() {
 // rootCmd represents the base command when called without any subcommands
 func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "osd-utils-cli",
-		Short: "OSD CLI",
-		Long:  `CLI tool to provide OSD related utilities`,
-		Run:   help,
+		Use:               "osd-utils-cli",
+		Short:             "OSD CLI",
+		Long:              `CLI tool to provide OSD related utilities`,
+		DisableAutoGenTag: true,
+		Run:               help,
 	}
 
 	rootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
@@ -42,6 +43,9 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(list.NewCmdList(streams, kubeFlags))
 	rootCmd.AddCommand(newCmdConsole(streams, kubeFlags))
 	rootCmd.AddCommand(newCmdMetrics(streams, kubeFlags))
+
+	// add docs command
+	rootCmd.AddCommand(newCmdDocs(streams))
 
 	// add options command to list global flags
 	templates.ActsAsRootCommand(rootCmd, []string{"options"})

@@ -27,9 +27,9 @@ const (
 func newCmdReset(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
 	ops := newResetOptions(streams, flags)
 	resetCmd := &cobra.Command{
-		Use:                   "reset [flags] <account name> [options]",
-		Short:                 "reset AWS account",
-		DisableFlagsInUseLine: true,
+		Use:               "reset <account name>",
+		Short:             "reset AWS account",
+		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd, args))
 			cmdutil.CheckErr(ops.run())
