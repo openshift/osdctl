@@ -119,7 +119,7 @@ func getSignInToken(creds *sts.Credentials) (string, error) {
 
 	data, err := json.Marshal(jsonCreds)
 	if err != nil {
-		klog.Error("Failed to marshal federation credentials %v", err)
+		klog.Errorf("Failed to marshal federation credentials %v", err)
 		return "", err
 	}
 
