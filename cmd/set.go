@@ -24,10 +24,10 @@ const (
 func newCmdSet(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
 	ops := newSetOptions(streams, flags)
 	setCmd := &cobra.Command{
-		Use:                   "set [flags] <account name> [options]",
-		Short:                 "set AWS account cr status",
-		Args:                  cobra.ExactArgs(1),
-		DisableFlagsInUseLine: true,
+		Use:               "set <account name>",
+		Short:             "set AWS account cr status",
+		Args:              cobra.ExactArgs(1),
+		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd, args))
 			cmdutil.CheckErr(ops.run())

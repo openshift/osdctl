@@ -19,10 +19,10 @@ import (
 func newCmdListAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
 	ops := newListAccountOptions(streams, flags)
 	listAccountCmd := &cobra.Command{
-		Use:                   "account [flags] [options]",
-		Short:                 "List AWS Account CR",
-		Args:                  cobra.NoArgs,
-		DisableFlagsInUseLine: true,
+		Use:               "account",
+		Short:             "List AWS Account CR",
+		Args:              cobra.NoArgs,
+		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd, args))
 			cmdutil.CheckErr(ops.run())

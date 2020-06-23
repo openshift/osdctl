@@ -10,8 +10,10 @@ import (
 // newCmdOptions implements the options command which shows all global options
 func newCmdOptions(streams genericclioptions.IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "options",
-		Short: "Print the list of flags inherited by all commands",
+		Use:                   "options",
+		Short:                 "Print the list of flags inherited by all commands",
+		DisableAutoGenTag:     true,
+		DisableFlagsInUseLine: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.Usage()
 		},

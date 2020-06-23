@@ -80,3 +80,14 @@ osd-utils-cli console -a test-cr
 # generate console URL via AWS Account ID
 osd-utils-cli console -i 1111111111
 ```
+
+### AWS Account Operator metrics display
+
+```bash
+osd-utils-cli metrics
+
+aws_account_operator_pool_size_vs_unclaimed{name="aws-account-operator"} => 893.000000
+aws_account_operator_total_account_crs{name="aws-account-operator"} => 2173.000000
+aws_account_operator_total_accounts_crs_claimed{name="aws-account-operator"} => 436.000000
+......
+```
