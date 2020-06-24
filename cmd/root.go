@@ -15,6 +15,9 @@ import (
 	"k8s.io/utils/pointer"
 )
 
+// GitCommit is the short git commit hash from the environment
+var GitCommit string
+
 func init() {
 	awsv1alpha1.AddToScheme(scheme.Scheme)
 	routev1.AddToScheme(scheme.Scheme)
@@ -26,6 +29,7 @@ func init() {
 func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:               "osd-utils-cli",
+		Version:           GitCommit,
 		Short:             "OSD CLI",
 		Long:              `CLI tool to provide OSD related utilities`,
 		DisableAutoGenTag: true,
