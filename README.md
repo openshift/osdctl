@@ -23,6 +23,12 @@ Then you can find the `osd-utils-cli` binary file in the `./bin` directory.
 
 TBD
 
+### Run tests
+
+``` bash
+make test
+```
+
 ## Usage
 
 For the detailed usage of each command, please refer to [here](./docs/command).
