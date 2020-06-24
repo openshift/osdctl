@@ -13,6 +13,7 @@ import (
 )
 
 func main() {
+
 	flags := pflag.NewFlagSet("osd-utils-cli", pflag.ExitOnError)
 	flag.CommandLine.Parse([]string{})
 	pflag.CommandLine = flags
