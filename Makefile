@@ -37,4 +37,4 @@ docs: build
 	@git diff --exit-code -- ./docs/command/
 
 test:
-	$(GO) test ./... -cover $(PACKAGES)
+	$(GO) test ${BUILDFLAGS} ./... -cover $(PACKAGES)
