@@ -8,6 +8,8 @@ ifeq ($(shell expr ${GOVERSION} \>= 1.14), 1)
 	BUILDFLAGS += -mod=mod
 endif
 
+PACKAGE_LIST  := go list ./...
+PACKAGES  := $$($(PACKAGE_LIST))
 FILES_TO_FMT  := $(shell find . -path -prune -o -name '*.go' -print)
 
 all: format build
@@ -33,3 +35,6 @@ mod:
 docs: build
 	./bin/osd-utils-cli docs ./docs/command
 	@git diff --exit-code -- ./docs/command/
+
+test:
+	$(GO) test ./... -cover $(PACKAGES)

@@ -24,7 +24,7 @@ func DecodeMetrics(r io.Reader, matchers map[string]string) ([]string, error) {
 			if err == io.EOF {
 				break
 			}
-			continue
+			return nil, err
 		}
 		for _, metric := range vector {
 			if matchLabels(metric.Metric, matchers) {
