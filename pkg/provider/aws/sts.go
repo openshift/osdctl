@@ -3,6 +3,7 @@ package aws
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"k8s.io/klog"
 	"net/http"
@@ -28,6 +29,12 @@ type awsSignInTokenResponse struct {
 	SigninToken string
 }
 
+type sessionPayload struct {
+	SessionID    string `json:"sessionId"`
+	SessionKey   string `json:"sessionKey"`
+	SessionToken string `json:"sessionToken"`
+}
+
 // RequestSignInToken makes a HTTP request to retrieve an AWS SignIn Token
 // via the AWS Federation endpoint
 func RequestSignInToken(awsClient Client, durationSeconds *int64, sessionName, roleArn *string) (string, error) {
@@ -36,7 +43,7 @@ func RequestSignInToken(awsClient Client, durationSeconds *int64, sessionName, r
 		return "", err
 	}
 
-	signInToken, err := getSignInToken(credentials)
+	signInToken, err := getSignInToken(federationEndpointURL, credentials)
 	if err != nil {
 		return "", err
 	}
@@ -52,29 +59,6 @@ func RequestSignInToken(awsClient Client, durationSeconds *int64, sessionName, r
 
 	// Return Signin Token
 	return signedFederationURL.String(), nil
-}
-
-// getFederationToken gets the Federation Token from AWS.
-func getFederationToken(awsClient Client, DurationSeconds *int64, FederatedUserName *string, PolicyArns []*sts.PolicyDescriptorType) (*sts.Credentials, error) {
-	getFederationTokenInput := &sts.GetFederationTokenInput{
-		DurationSeconds: DurationSeconds,
-		Name:            FederatedUserName,
-		PolicyArns:      PolicyArns,
-	}
-
-	// Get Federated token credentials to build console URL
-	GetFederationTokenOutput, err := awsClient.GetFederationToken(getFederationTokenInput)
-	if err != nil {
-		klog.Errorf("Failed to get federation token: %v", err)
-		return nil, err
-	}
-
-	if GetFederationTokenOutput == nil {
-		klog.Errorf("Get federation token nil %v", awsv1alpha1.ErrFederationTokenOutputNil)
-		return nil, awsv1alpha1.ErrFederationTokenOutputNil
-	}
-
-	return GetFederationTokenOutput.Credentials, nil
 }
 
 // getAssumeRoleCredentials gets the Federation Token from AWS.
@@ -101,20 +85,20 @@ func getAssumeRoleCredentials(awsClient Client, durationSeconds *int64, roleSess
 
 // getSignInToken makes a request to the federation endpoint to sign signin token
 // Takes a logger, the base url, and the federation token to sign with
-func getSignInToken(creds *sts.Credentials) (string, error) {
-	jsonCreds := map[string]string{
-		"sessionId":    *creds.AccessKeyId,
-		"sessionKey":   *creds.SecretAccessKey,
-		"sessionToken": *creds.SessionToken,
+func getSignInToken(baseURL string, creds *sts.Credentials) (string, error) {
+	credsPayload := sessionPayload{
+		SessionID:    *creds.AccessKeyId,
+		SessionKey:   *creds.SecretAccessKey,
+		SessionToken: *creds.SessionToken,
 	}
 
-	data, err := json.Marshal(jsonCreds)
+	data, err := json.Marshal(credsPayload)
 	if err != nil {
-		klog.Errorf("Failed to marshal federation credentials %v", err)
+		klog.Errorf("Failed to marshal credentials to json %v", err)
 		return "", err
 	}
 
-	token, err := requestSignedURL(data)
+	token, err := requestSignedURL(baseURL, data)
 	if err != nil {
 		return "", err
 	}
@@ -124,9 +108,9 @@ func getSignInToken(creds *sts.Credentials) (string, error) {
 
 // requestSignedURL makes a HTTP call to the baseFederationURL to retrieve a signed federated URL for web console login
 // Takes a logger, and the base URL
-func requestSignedURL(jsonCredentials []byte) (string, error) {
+func requestSignedURL(baseURL string, jsonCredentials []byte) (string, error) {
 	// Build URL to request SignIn Token via Federation end point
-	baseFederationURL, err := url.Parse(federationEndpointURL)
+	baseFederationURL, err := url.Parse(baseURL)
 	if err != nil {
 		return "", err
 	}
@@ -143,6 +127,11 @@ func requestSignedURL(jsonCredentials []byte) (string, error) {
 	if err != nil {
 		klog.Errorf("Failed to request Signin token from: %s, %v", baseFederationURL, err)
 		return "", err
+	}
+
+	if res.StatusCode/100 != 2 {
+		klog.Errorf("Failed to request Signin token from: %s, status code %d", baseFederationURL, res.StatusCode)
+		return "", fmt.Errorf("bad response code %d", res.StatusCode)
 	}
 
 	defer res.Body.Close()

@@ -18,9 +18,9 @@ PACKAGE_LIST  := go list ./...
 PACKAGES  := $$($(PACKAGE_LIST))
 FILES_TO_FMT  := $(shell find . -path -prune -o -name '*.go' -print)
 
-all: format build
+all: format build test
 
-format: vet fmt docs
+format: vet fmt mockgen docs
 
 fmt:
 	@echo "gofmt"
@@ -41,6 +41,13 @@ mod:
 docs: build
 	./bin/osd-utils-cli docs ./docs/command
 	@git diff --exit-code -- ./docs/command/
+
+mockgen: ensure-mockgen
+	./hack/mockgen.sh
+	@git diff --exit-code -- ./pkg/provider/aws/mock
+
+ensure-mockgen:
+	GO111MODULE=off go get -u github.com/golang/mock/mockgen
 
 test:
 	$(GO) test ${BUILDFLAGS} ./... -cover $(PACKAGES)
