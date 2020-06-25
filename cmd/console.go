@@ -39,6 +39,8 @@ func newCmdConsole(streams genericclioptions.IOStreams, flags *genericclioptions
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 	consoleCmd.Flags().StringVarP(&ops.accountName, "account-name", "a", "", "The AWS account cr we need to create AWS console URL for")
 	consoleCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "The AWS account ID we need to create AWS console URL for")
+	consoleCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile")
+	consoleCmd.Flags().StringVarP(&ops.cfgFile, "aws-config", "c", "", "specify AWS config file")
 	consoleCmd.Flags().StringVarP(&ops.region, "aws-region", "r", defaultRegion, "specify AWS region")
 	consoleCmd.Flags().Int64VarP(&ops.consoleDuration, "duration", "d", 3600, "The duration of the console session. "+
 		"Default value is 3600 seconds(1 hour)")
@@ -54,7 +56,9 @@ type consoleOptions struct {
 	consoleDuration  int64
 
 	// AWS config
-	region string
+	region  string
+	profile string
+	cfgFile string
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
@@ -92,7 +96,7 @@ func (o *consoleOptions) complete(cmd *cobra.Command) error {
 
 func (o *consoleOptions) run() error {
 	var err error
-	awsClient, err := awsprovider.NewAwsClient(o.region)
+	awsClient, err := awsprovider.NewAwsClient(o.profile, o.region, o.cfgFile)
 	if err != nil {
 		return err
 	}

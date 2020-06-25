@@ -1,14 +1,15 @@
 package aws
 
 import (
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/pkg/errors"
+	"path/filepath"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/aws/aws-sdk-go/service/sts/stsiface"
+	"github.com/pkg/errors"
 )
 
 // AwsClientInput input for new aws client
@@ -32,12 +33,24 @@ type AwsClient struct {
 }
 
 // NewAwsClient creates an AWS client with credentials in the environment
-func NewAwsClient(region string) (Client, error) {
-	config := &aws.Config{
-		Region: aws.String(region),
+func NewAwsClient(profile, region, configFile string) (Client, error) {
+	opt := session.Options{
+		Config: aws.Config{
+			Region: aws.String(region),
+		},
+		Profile: profile,
 	}
 
-	sess := session.Must(session.NewSession(config))
+	// only set config file if it is not empty
+	if configFile != "" {
+		absCfgPath, err := filepath.Abs(configFile)
+		if err != nil {
+			return nil, err
+		}
+		opt.SharedConfigFiles = []string{absCfgPath}
+	}
+
+	sess := session.Must(session.NewSessionWithOptions(opt))
 	_, err := sess.Config.Credentials.Get()
 
 	if aerr, ok := err.(awserr.Error); ok {
