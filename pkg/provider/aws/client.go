@@ -7,8 +7,11 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/aws/aws-sdk-go/service/sts/stsiface"
+
 	"github.com/pkg/errors"
 )
 
@@ -22,14 +25,21 @@ type AwsClientInput struct {
 
 // TODO: Add more methods when needed
 type Client interface {
-	//sts
+	// sts
 	AssumeRole(*sts.AssumeRoleInput) (*sts.AssumeRoleOutput, error)
 	GetCallerIdentity(*sts.GetCallerIdentityInput) (*sts.GetCallerIdentityOutput, error)
-	GetFederationToken(input *sts.GetFederationTokenInput) (*sts.GetFederationTokenOutput, error)
+	GetFederationToken(*sts.GetFederationTokenInput) (*sts.GetFederationTokenOutput, error)
+
+	// S3
+	ListBuckets(*s3.ListBucketsInput) (*s3.ListBucketsOutput, error)
+	DeleteBucket(*s3.DeleteBucketInput) (*s3.DeleteBucketOutput, error)
+	ListObjects(*s3.ListObjectsInput) (*s3.ListObjectsOutput, error)
+	DeleteObjects(*s3.DeleteObjectsInput) (*s3.DeleteObjectsOutput, error)
 }
 
 type AwsClient struct {
 	stsClient stsiface.STSAPI
+	s3Client  s3iface.S3API
 }
 
 // NewAwsClient creates an AWS client with credentials in the environment
@@ -64,6 +74,7 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 
 	return &AwsClient{
 		stsClient: sts.New(sess),
+		s3Client:  s3.New(sess),
 	}, nil
 }
 
@@ -81,6 +92,7 @@ func NewAwsClientWithInput(input *AwsClientInput) (Client, error) {
 
 	return &AwsClient{
 		stsClient: sts.New(s),
+		s3Client:  s3.New(s),
 	}, nil
 }
 
@@ -93,9 +105,21 @@ func (c *AwsClient) GetCallerIdentity(input *sts.GetCallerIdentityInput) (*sts.G
 }
 
 func (c *AwsClient) GetFederationToken(input *sts.GetFederationTokenInput) (*sts.GetFederationTokenOutput, error) {
-	GetFederationTokenOutput, err := c.stsClient.GetFederationToken(input)
-	if GetFederationTokenOutput != nil {
-		return GetFederationTokenOutput, err
-	}
-	return &sts.GetFederationTokenOutput{}, err
+	return c.stsClient.GetFederationToken(input)
+}
+
+func (c *AwsClient) ListBuckets(input *s3.ListBucketsInput) (*s3.ListBucketsOutput, error) {
+	return c.s3Client.ListBuckets(input)
+}
+
+func (c *AwsClient) DeleteBucket(input *s3.DeleteBucketInput) (*s3.DeleteBucketOutput, error) {
+	return c.s3Client.DeleteBucket(input)
+}
+
+func (c *AwsClient) ListObjects(input *s3.ListObjectsInput) (*s3.ListObjectsOutput, error) {
+	return c.s3Client.ListObjects(input)
+}
+
+func (c *AwsClient) DeleteObjects(input *s3.DeleteObjectsInput) (*s3.DeleteObjectsOutput, error) {
+	return c.s3Client.DeleteObjects(input)
 }

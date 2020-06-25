@@ -97,3 +97,16 @@ aws_account_operator_total_account_crs{name="aws-account-operator"} => 2173.0000
 aws_account_operator_total_accounts_crs_claimed{name="aws-account-operator"} => 436.000000
 ......
 ```
+
+### Cleanup Velero managed snapshots
+
+`clean-velero-snapshots` command cleans up the Velero managed buckets for the specified Account.
+
+```bash
+# clean up by providing the credentials via flags
+osd-utils-cli clean-velero-snapshots -a <AWS ACCESS KEY ID> -x <AWS SECRET ACCESS KEY>
+
+# if flags are not provided, it will get credentials from credentials file,
+# we also support specifying profile and config file path
+osd-utils-cli clean-velero-snapshots -p <profile name> -c <config file path>
+```

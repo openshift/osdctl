@@ -40,7 +40,7 @@ func newCmdConsole(streams genericclioptions.IOStreams, flags *genericclioptions
 	consoleCmd.Flags().StringVarP(&ops.accountName, "account-name", "a", "", "The AWS account cr we need to create AWS console URL for")
 	consoleCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "The AWS account ID we need to create AWS console URL for")
 	consoleCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile")
-	consoleCmd.Flags().StringVarP(&ops.cfgFile, "aws-config", "c", "", "specify AWS config file")
+	consoleCmd.Flags().StringVarP(&ops.cfgFile, "aws-config", "c", "", "specify AWS config file path")
 	consoleCmd.Flags().StringVarP(&ops.region, "aws-region", "r", defaultRegion, "specify AWS region")
 	consoleCmd.Flags().Int64VarP(&ops.consoleDuration, "duration", "d", 3600, "The duration of the console session. "+
 		"Default value is 3600 seconds(1 hour)")

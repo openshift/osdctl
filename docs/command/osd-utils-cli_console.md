@@ -16,7 +16,7 @@ osd-utils-cli console [flags]
   -i, --account-id string          The AWS account ID we need to create AWS console URL for
   -a, --account-name string        The AWS account cr we need to create AWS console URL for
       --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
-  -c, --aws-config string          specify AWS config file
+  -c, --aws-config string          specify AWS config file path
   -p, --aws-profile string         specify AWS profile
   -r, --aws-region string          specify AWS region (default "us-east-1")
   -d, --duration int               The duration of the console session. Default value is 3600 seconds(1 hour) (default 3600)
