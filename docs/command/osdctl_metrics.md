@@ -1,19 +1,24 @@
-## osd-utils-cli options
+## osdctl metrics
 
-Print the list of flags inherited by all commands
+display metrics of aws-account-operator
 
 ### Synopsis
 
-Print the list of flags inherited by all commands
+display metrics of aws-account-operator
 
 ```
-osd-utils-cli options
+osdctl metrics [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for options
+      --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
+  -h, --help                       help for metrics
+      --https                      Use HTTPS to access metrics or not. By default we use HTTP scheme.
+  -m, --metrics-url string         The URL of aws-account-operator metrics endpoint. Used only for debug purpose! Only HTTP scheme is supported.
+  -r, --route string               The route created for aws-account-operator (default "aws-account-operator")
+      --sa string                  The service account name for aws-account-operator (default "aws-account-operator")
 ```
 
 ### Options inherited from parent commands
@@ -42,5 +47,5 @@ osd-utils-cli options
 
 ### SEE ALSO
 
-* [osd-utils-cli](osd-utils-cli.md)	 - OSD CLI
+* [osdctl](osdctl.md)	 - OSD CLI
 

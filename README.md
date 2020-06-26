@@ -1,10 +1,10 @@
-# osd-utils-cli
+# osdctl
 
 A toolbox for OSD!
 
 ## Overview
 
-osd-utils-cli is a cli tool intended to eliminate toils for SREs when managing OSD related work.
+osdctl is a cli tool intended to eliminate toils for SREs when managing OSD related work.
 
 Currently, it mainly supports related work for AWS, especially [aws-account-operator](https://github.com/openshift/aws-account-operator).
 
@@ -17,7 +17,7 @@ git clone https://github.com/openshift/osd-utils-cli.git
 make build
 ```
 
-Then you can find the `osd-utils-cli` binary file in the `./bin` directory.
+Then you can find the `osdctl` binary file in the `./bin` directory.
 
 ### Download from release
 
@@ -38,7 +38,7 @@ For the detailed usage of each command, please refer to [here](./docs/command).
 `reset` command resets the Account CR status and cleans up related secrets.
 
 ``` bash
-osd-utils-cli reset test-cr
+osdctl reset test-cr
 
 Deleting secret test-cr-osdmanagedadminsre-secret
 Deleting secret test-cr-secret
@@ -55,13 +55,13 @@ There are two ways of status patching:
 1. Using flags.
 
 ``` bash
-osd-utils-cli set test-cr --state=Creating -r=true
+osdctl set test-cr --state=Creating -r=true
 ```
 
 2. Using raw data. For patch strategy, only `merge` and `json` are supported. The default is `merge`. 
 
 ```bash
-osd-utils-cli set test-cr --patch='{"status":{"state": "Failed", "claimed": false}}'
+osdctl set test-cr --patch='{"status":{"state": "Failed", "claimed": false}}'
 ```
 
 ### AWS Account CR list
@@ -69,7 +69,7 @@ osd-utils-cli set test-cr --patch='{"status":{"state": "Failed", "claimed": fals
 `list account` command lists the Account CRs in the cluster. You can use flags to filter the status.
 
 ```bash
-osd-utils-cli list account --state=Creating
+osdctl list account --state=Creating
 
 Name                State               AWS ACCOUNT ID      Last Probe Time                 Last Transition Time            Message
 test-cr             Creating            181787396432        2020-06-18 10:38:40 -0400 EDT   2020-06-18 10:38:40 -0400 EDT   AWS account already created
@@ -81,16 +81,16 @@ test-cr             Creating            181787396432        2020-06-18 10:38:40 
 
 ```bash
 # generate console URL via Account CR name
-osd-utils-cli console -a test-cr
+osdctl console -a test-cr
 
 # generate console URL via AWS Account ID
-osd-utils-cli console -i 1111111111
+osdctl console -i 1111111111
 ```
 
 ### AWS Account Operator metrics display
 
 ```bash
-osd-utils-cli metrics
+osdctl metrics
 
 aws_account_operator_pool_size_vs_unclaimed{name="aws-account-operator"} => 893.000000
 aws_account_operator_total_account_crs{name="aws-account-operator"} => 2173.000000
@@ -104,9 +104,9 @@ aws_account_operator_total_accounts_crs_claimed{name="aws-account-operator"} => 
 
 ```bash
 # clean up by providing the credentials via flags
-osd-utils-cli clean-velero-snapshots -a <AWS ACCESS KEY ID> -x <AWS SECRET ACCESS KEY>
+osdctl clean-velero-snapshots -a <AWS ACCESS KEY ID> -x <AWS SECRET ACCESS KEY>
 
 # if flags are not provided, it will get credentials from credentials file,
 # we also support specifying profile and config file path
-osd-utils-cli clean-velero-snapshots -p <profile name> -c <config file path>
+osdctl clean-velero-snapshots -p <profile name> -c <config file path>
 ```

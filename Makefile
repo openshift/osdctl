@@ -28,7 +28,7 @@ fmt:
 	@git diff --exit-code .
 
 build: mod
-	$(GO) build ${BUILDFLAGS} ${LDFLAGS} -o ./bin/osd-utils-cli main.go
+	$(GO) build ${BUILDFLAGS} ${LDFLAGS} -o ./bin/osdctl main.go
 
 vet:
 	$(GO) vet ${BUILDFLAGS} ./...
@@ -39,7 +39,7 @@ mod:
 	@git diff --exit-code -- go.mod
 
 docs: build
-	./bin/osd-utils-cli docs ./docs/command
+	./bin/osdctl docs ./docs/command
 	@git diff --exit-code -- ./docs/command/
 
 test:

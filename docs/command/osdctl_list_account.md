@@ -1,24 +1,22 @@
-## osd-utils-cli clean-velero-snapshots
+## osdctl list account
 
-cleans up S3 buckets whose name start with managed-velero
+List AWS Account CR
 
 ### Synopsis
 
-cleans up S3 buckets whose name start with managed-velero
+List AWS Account CR
 
 ```
-osd-utils-cli clean-velero-snapshots <account name> [flags]
+osdctl list account [flags]
 ```
 
 ### Options
 
 ```
-  -a, --aws-access-key-id string       AWS Access Key ID
-  -c, --aws-config string              specify AWS config file path
-  -p, --aws-profile string             specify AWS profile
-  -r, --aws-region string              specify AWS region (default "us-east-1")
-  -x, --aws-secret-access-key string   AWS Secret Access Key
-  -h, --help                           help for clean-velero-snapshots
+      --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
+  -h, --help                       help for account
+  -r, --reuse                      Only list reused accounts CR if true
+      --state string               Account cr state. If not specified, it will list all crs by default.
 ```
 
 ### Options inherited from parent commands
@@ -47,5 +45,5 @@ osd-utils-cli clean-velero-snapshots <account name> [flags]
 
 ### SEE ALSO
 
-* [osd-utils-cli](osd-utils-cli.md)	 - OSD CLI
+* [osdctl list](osdctl_list.md)	 - list resources
 

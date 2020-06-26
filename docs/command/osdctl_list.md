@@ -1,24 +1,19 @@
-## osd-utils-cli metrics
+## osdctl list
 
-display metrics of aws-account-operator
+list resources
 
 ### Synopsis
 
-display metrics of aws-account-operator
+list resources
 
 ```
-osd-utils-cli metrics [flags]
+osdctl list [flags]
 ```
 
 ### Options
 
 ```
-      --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
-  -h, --help                       help for metrics
-      --https                      Use HTTPS to access metrics or not. By default we use HTTP scheme.
-  -m, --metrics-url string         The URL of aws-account-operator metrics endpoint. Used only for debug purpose! Only HTTP scheme is supported.
-  -r, --route string               The route created for aws-account-operator (default "aws-account-operator")
-      --sa string                  The service account name for aws-account-operator (default "aws-account-operator")
+  -h, --help   help for list
 ```
 
 ### Options inherited from parent commands
@@ -47,5 +42,6 @@ osd-utils-cli metrics [flags]
 
 ### SEE ALSO
 
-* [osd-utils-cli](osd-utils-cli.md)	 - OSD CLI
+* [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl list account](osdctl_list_account.md)	 - List AWS Account CR
 

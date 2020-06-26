@@ -1,33 +1,23 @@
-## osd-utils-cli set
+## osdctl
 
-set AWS account cr status
+OSD CLI
 
 ### Synopsis
 
-set AWS account cr status
+CLI tool to provide OSD related utilities
 
 ```
-osd-utils-cli set <account name> [flags]
+osdctl [flags]
 ```
 
 ### Options
-
-```
-  -a, --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
-  -h, --help                       help for set
-  -p, --patch string               the raw payload used to patch the account status
-  -r, --rotate-credentials         set status.rotateCredentials in the specified account
-      --state string               set status.state field in the specified account
-  -t, --type string                The type of patch being provided; one of [merge json]. The strategic patch is not supported. (default "merge")
-```
-
-### Options inherited from parent commands
 
 ```
       --add_dir_header                   If true, adds the file directory to the header
       --alsologtostderr                  log to standard error as well as files
       --cluster string                   The name of the kubeconfig cluster to use
       --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for osdctl
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
       --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
@@ -47,5 +37,11 @@ osd-utils-cli set <account name> [flags]
 
 ### SEE ALSO
 
-* [osd-utils-cli](osd-utils-cli.md)	 - OSD CLI
+* [osdctl clean-velero-snapshots](osdctl_clean-velero-snapshots.md)	 - cleans up S3 buckets whose name start with managed-velero
+* [osdctl console](osdctl_console.md)	 - generate an AWS console URL on the fly
+* [osdctl list](osdctl_list.md)	 - list resources
+* [osdctl metrics](osdctl_metrics.md)	 - display metrics of aws-account-operator
+* [osdctl options](osdctl_options.md)	 - Print the list of flags inherited by all commands
+* [osdctl reset](osdctl_reset.md)	 - reset AWS account
+* [osdctl set](osdctl_set.md)	 - set AWS account cr status
 
