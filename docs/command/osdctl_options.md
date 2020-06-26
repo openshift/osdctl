@@ -1,26 +1,19 @@
-## osd-utils-cli console
+## osdctl options
 
-generate an AWS console URL on the fly
+Print the list of flags inherited by all commands
 
 ### Synopsis
 
-generate an AWS console URL on the fly
+Print the list of flags inherited by all commands
 
 ```
-osd-utils-cli console [flags]
+osdctl options
 ```
 
 ### Options
 
 ```
-  -i, --account-id string          The AWS account ID we need to create AWS console URL for
-  -a, --account-name string        The AWS account cr we need to create AWS console URL for
-      --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
-  -c, --aws-config string          specify AWS config file path
-  -p, --aws-profile string         specify AWS profile
-  -r, --aws-region string          specify AWS region (default "us-east-1")
-  -d, --duration int               The duration of the console session. Default value is 3600 seconds(1 hour) (default 3600)
-  -h, --help                       help for console
+  -h, --help   help for options
 ```
 
 ### Options inherited from parent commands
@@ -49,5 +42,5 @@ osd-utils-cli console [flags]
 
 ### SEE ALSO
 
-* [osd-utils-cli](osd-utils-cli.md)	 - OSD CLI
+* [osdctl](osdctl.md)	 - OSD CLI
 

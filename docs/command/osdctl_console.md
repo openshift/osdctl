@@ -1,22 +1,26 @@
-## osd-utils-cli list account
+## osdctl console
 
-List AWS Account CR
+generate an AWS console URL on the fly
 
 ### Synopsis
 
-List AWS Account CR
+generate an AWS console URL on the fly
 
 ```
-osd-utils-cli list account [flags]
+osdctl console [flags]
 ```
 
 ### Options
 
 ```
+  -i, --account-id string          The AWS account ID we need to create AWS console URL for
+  -a, --account-name string        The AWS account cr we need to create AWS console URL for
       --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
-  -h, --help                       help for account
-  -r, --reuse                      Only list reused accounts CR if true
-      --state string               Account cr state. If not specified, it will list all crs by default.
+  -c, --aws-config string          specify AWS config file path
+  -p, --aws-profile string         specify AWS profile
+  -r, --aws-region string          specify AWS region (default "us-east-1")
+  -d, --duration int               The duration of the console session. Default value is 3600 seconds(1 hour) (default 3600)
+  -h, --help                       help for console
 ```
 
 ### Options inherited from parent commands
@@ -45,5 +49,5 @@ osd-utils-cli list account [flags]
 
 ### SEE ALSO
 
-* [osd-utils-cli list](osd-utils-cli_list.md)	 - list resources
+* [osdctl](osdctl.md)	 - OSD CLI
 

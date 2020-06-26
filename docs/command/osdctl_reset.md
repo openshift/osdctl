@@ -1,4 +1,4 @@
-## osd-utils-cli reset
+## osdctl reset
 
 reset AWS account
 
@@ -7,7 +7,7 @@ reset AWS account
 reset AWS account
 
 ```
-osd-utils-cli reset <account name> [flags]
+osdctl reset <account name> [flags]
 ```
 
 ### Options
@@ -43,5 +43,5 @@ osd-utils-cli reset <account name> [flags]
 
 ### SEE ALSO
 
-* [osd-utils-cli](osd-utils-cli.md)	 - OSD CLI
+* [osdctl](osdctl.md)	 - OSD CLI
 

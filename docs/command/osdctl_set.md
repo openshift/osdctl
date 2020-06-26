@@ -1,19 +1,24 @@
-## osd-utils-cli list
+## osdctl set
 
-list resources
+set AWS account cr status
 
 ### Synopsis
 
-list resources
+set AWS account cr status
 
 ```
-osd-utils-cli list [flags]
+osdctl set <account name> [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for list
+  -a, --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
+  -h, --help                       help for set
+  -p, --patch string               the raw payload used to patch the account status
+  -r, --rotate-credentials         set status.rotateCredentials in the specified account
+      --state string               set status.state field in the specified account
+  -t, --type string                The type of patch being provided; one of [merge json]. The strategic patch is not supported. (default "merge")
 ```
 
 ### Options inherited from parent commands
@@ -42,6 +47,5 @@ osd-utils-cli list [flags]
 
 ### SEE ALSO
 
-* [osd-utils-cli](osd-utils-cli.md)	 - OSD CLI
-* [osd-utils-cli list account](osd-utils-cli_list_account.md)	 - List AWS Account CR
+* [osdctl](osdctl.md)	 - OSD CLI
 

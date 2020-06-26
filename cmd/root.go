@@ -28,7 +28,7 @@ func init() {
 // rootCmd represents the base command when called without any subcommands
 func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:               "osd-utils-cli",
+		Use:               "osdctl",
 		Version:           GitCommit,
 		Short:             "OSD CLI",
 		Long:              `CLI tool to provide OSD related utilities`,
