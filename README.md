@@ -23,7 +23,7 @@ Then you can find the `osdctl` binary file in the `./bin` directory.
 
 TBD
 
-### Run tests
+## Run tests
 
 ``` bash
 make test
