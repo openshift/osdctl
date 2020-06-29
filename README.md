@@ -206,3 +206,13 @@ aws_account_operator_total_accounts_crs_claimed{name="aws-account-operator"} => 
 ```bash
 osdctl clusterdeployment list
 ```
+
+### AWS Account Federated Role Apply
+
+```bash
+# apply via URL
+osdctl federatedrole apply -u <URL>
+
+# apply via local file
+osdctl federatedrole apply -f <yaml file>
+```

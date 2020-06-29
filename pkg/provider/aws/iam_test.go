@@ -10,6 +10,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/golang/mock/gomock"
+	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/openshift/osd-utils-cli/pkg/provider/aws/mock"
 )
 
@@ -243,6 +246,310 @@ func TestCreateIAMUserAndAttachPolicy(t *testing.T) {
 			defer mocks.mockCtrl.Finish()
 
 			err := CreateIAMUserAndAttachPolicy(mocks.mockAWSClient, tc.username, tc.policyArn)
+			if tc.errExpected {
+				g.Expect(err).Should(HaveOccurred())
+			} else {
+				g.Expect(err).ShouldNot(HaveOccurred())
+			}
+		})
+	}
+}
+
+func TestRefreshIAMPolicy(t *testing.T) {
+	g := NewGomegaWithT(t)
+
+	exampleFederatedRole := &awsv1alpha1.AWSFederatedRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "foo",
+		},
+		Spec: awsv1alpha1.AWSFederatedRoleSpec{
+			AWSCustomPolicy: awsv1alpha1.AWSCustomPolicy{
+				Name:        "bar",
+				Description: "foo",
+				Statements: []awsv1alpha1.StatementEntry{
+					{
+						Effect:   "Allow",
+						Action:   []string{"aws-portal:ViewAccount"},
+						Resource: []string{"*"},
+					},
+				},
+			},
+		},
+	}
+
+	exampleFederatedRoleWithManagedPolices := &awsv1alpha1.AWSFederatedRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "foo",
+		},
+		Spec: awsv1alpha1.AWSFederatedRoleSpec{
+			AWSCustomPolicy: awsv1alpha1.AWSCustomPolicy{
+				Name:        "bar",
+				Description: "foo",
+				Statements: []awsv1alpha1.StatementEntry{
+					{
+						Effect:   "Allow",
+						Action:   []string{"aws-portal:ViewAccount"},
+						Resource: []string{"*"},
+					},
+				},
+			},
+			AWSManagedPolicies: []string{
+				"foo",
+				"bar",
+			},
+		},
+	}
+
+	testCases := []struct {
+		title         string
+		setupAWSMock  func(r *mock.MockClientMockRecorder)
+		federatedRole *awsv1alpha1.AWSFederatedRole
+		accountID     string
+		uid           string
+		errExpected   bool
+	}{
+		{
+			title: "Failed to detach role policy",
+			setupAWSMock: func(r *mock.MockClientMockRecorder) {
+				r.DetachRolePolicy(gomock.Any()).Return(nil, errors.New("FakeError")).Times(1)
+			},
+			federatedRole: exampleFederatedRole,
+			accountID:     "foo",
+			uid:           "bar",
+			errExpected:   true,
+		},
+		{
+			title: "Failed to delete policy",
+			setupAWSMock: func(r *mock.MockClientMockRecorder) {
+				gomock.InOrder(
+					r.DetachRolePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.DeletePolicy(gomock.Any()).Return(nil, errors.New("FakeError")).Times(1),
+				)
+			},
+			federatedRole: exampleFederatedRole,
+			accountID:     "foo",
+			uid:           "bar",
+			errExpected:   true,
+		},
+		{
+			title: "Failed to create policy",
+			setupAWSMock: func(r *mock.MockClientMockRecorder) {
+				gomock.InOrder(
+					r.DetachRolePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.DeletePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.CreatePolicy(gomock.Any()).Return(nil, errors.New("FakeError")).Times(1),
+				)
+			},
+			federatedRole: exampleFederatedRole,
+			accountID:     "foo",
+			uid:           "bar",
+			errExpected:   true,
+		},
+		{
+			title: "Failed to list current role policies",
+			setupAWSMock: func(r *mock.MockClientMockRecorder) {
+				gomock.InOrder(
+					r.DetachRolePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.DeletePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.CreatePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.ListAttachedRolePolicies(gomock.Any()).Return(nil, errors.New("FakeError")).Times(1),
+				)
+			},
+			federatedRole: exampleFederatedRole,
+			accountID:     "foo",
+			uid:           "bar",
+			errExpected:   true,
+		},
+		{
+			title: "Failed to attach role policy",
+			setupAWSMock: func(r *mock.MockClientMockRecorder) {
+				gomock.InOrder(
+					r.DetachRolePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.DeletePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.CreatePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.ListAttachedRolePolicies(gomock.Any()).Return(
+						&iam.ListAttachedRolePoliciesOutput{
+							AttachedPolicies: []*iam.AttachedPolicy{}}, nil).Times(1),
+					r.AttachRolePolicy(gomock.Any()).Return(nil, errors.New("FakeError")).Times(1),
+				)
+			},
+			federatedRole: exampleFederatedRole,
+			accountID:     "foo",
+			uid:           "bar",
+			errExpected:   true,
+		},
+		{
+			title: "Detach role policy noSuchEntity error",
+			setupAWSMock: func(r *mock.MockClientMockRecorder) {
+				gomock.InOrder(
+					r.DetachRolePolicy(gomock.Any()).
+						Return(nil, awserr.New(iam.ErrCodeNoSuchEntityException, "",
+							errors.New("FakeError"))).Times(1),
+					r.DeletePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.CreatePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.ListAttachedRolePolicies(gomock.Any()).Return(
+						&iam.ListAttachedRolePoliciesOutput{
+							AttachedPolicies: []*iam.AttachedPolicy{}}, nil).Times(1),
+					r.AttachRolePolicy(gomock.Any()).Return(nil, nil).Times(1),
+				)
+			},
+			federatedRole: exampleFederatedRole,
+			accountID:     "foo",
+			uid:           "bar",
+			errExpected:   false,
+		},
+		{
+			title: "Detach role policy noSuchEntity error",
+			setupAWSMock: func(r *mock.MockClientMockRecorder) {
+				gomock.InOrder(
+					r.DetachRolePolicy(gomock.Any()).
+						Return(nil, awserr.New(iam.ErrCodeNoSuchEntityException, "",
+							errors.New("FakeError"))).Times(1),
+					r.DeletePolicy(gomock.Any()).
+						Return(nil, awserr.New(iam.ErrCodeNoSuchEntityException, "",
+							errors.New("FakeError"))).Times(1),
+					r.CreatePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.ListAttachedRolePolicies(gomock.Any()).Return(
+						&iam.ListAttachedRolePoliciesOutput{
+							AttachedPolicies: []*iam.AttachedPolicy{}}, nil).Times(1),
+					r.AttachRolePolicy(gomock.Any()).Return(nil, nil).Times(1),
+				)
+			},
+			federatedRole: exampleFederatedRole,
+			accountID:     "foo",
+			uid:           "bar",
+			errExpected:   false,
+		},
+		{
+			title: "Retry entity already exists error",
+			setupAWSMock: func(r *mock.MockClientMockRecorder) {
+				gomock.InOrder(
+					r.DetachRolePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.DeletePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					// Retry one time
+					r.CreatePolicy(gomock.Any()).Return(nil,
+						awserr.New(iam.ErrCodeEntityAlreadyExistsException, "",
+							errors.New("FakeError"))).Times(1),
+					r.CreatePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.ListAttachedRolePolicies(gomock.Any()).Return(
+						&iam.ListAttachedRolePoliciesOutput{
+							AttachedPolicies: []*iam.AttachedPolicy{}}, nil).Times(1),
+					r.AttachRolePolicy(gomock.Any()).Return(nil, nil).Times(1),
+				)
+			},
+			federatedRole: exampleFederatedRole,
+			accountID:     "foo",
+			uid:           "bar",
+			errExpected:   false,
+		},
+		{
+			title: "success with none policy names",
+			setupAWSMock: func(r *mock.MockClientMockRecorder) {
+				gomock.InOrder(
+					r.DetachRolePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.DeletePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.CreatePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.ListAttachedRolePolicies(gomock.Any()).Return(
+						&iam.ListAttachedRolePoliciesOutput{
+							AttachedPolicies: []*iam.AttachedPolicy{}}, nil).Times(1),
+					r.AttachRolePolicy(gomock.Any()).Return(nil, nil).Times(1),
+				)
+			},
+			federatedRole: exampleFederatedRole,
+			accountID:     "foo",
+			uid:           "bar",
+			errExpected:   false,
+		},
+		{
+			title: "need to remove outdated policies",
+			setupAWSMock: func(r *mock.MockClientMockRecorder) {
+				gomock.InOrder(
+					r.DetachRolePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.DeletePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.CreatePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.ListAttachedRolePolicies(gomock.Any()).Return(
+						&iam.ListAttachedRolePoliciesOutput{
+							AttachedPolicies: []*iam.AttachedPolicy{
+								{
+									PolicyArn:  aws.String("foo"),
+									PolicyName: aws.String("foo"),
+								},
+								{
+									PolicyArn:  aws.String("bar"),
+									PolicyName: aws.String("bar"),
+								},
+							}}, nil).Times(1),
+					r.DetachRolePolicy(gomock.Any()).Return(nil, nil).Times(2),
+					r.AttachRolePolicy(gomock.Any()).Return(nil, nil).Times(1),
+				)
+			},
+			federatedRole: exampleFederatedRole,
+			accountID:     "foo",
+			uid:           "bar",
+			errExpected:   false,
+		},
+		{
+			title: "don't need to remove managed policies",
+			setupAWSMock: func(r *mock.MockClientMockRecorder) {
+				gomock.InOrder(
+					r.DetachRolePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.DeletePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.CreatePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.ListAttachedRolePolicies(gomock.Any()).Return(
+						&iam.ListAttachedRolePoliciesOutput{
+							AttachedPolicies: []*iam.AttachedPolicy{
+								{
+									PolicyName: aws.String("foo"),
+									PolicyArn:  aws.String("foo"),
+								},
+								{
+									PolicyName: aws.String("bar"),
+									PolicyArn:  aws.String("bar"),
+								},
+							}}, nil).Times(1),
+					r.AttachRolePolicy(gomock.Any()).Return(nil, nil).Times(1),
+				)
+			},
+			federatedRole: exampleFederatedRoleWithManagedPolices,
+			accountID:     "foo",
+			uid:           "bar",
+			errExpected:   false,
+		},
+		{
+			title: "need to add new managed policies",
+			setupAWSMock: func(r *mock.MockClientMockRecorder) {
+				gomock.InOrder(
+					r.DetachRolePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.DeletePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.CreatePolicy(gomock.Any()).Return(nil, nil).Times(1),
+					r.ListAttachedRolePolicies(gomock.Any()).Return(
+						&iam.ListAttachedRolePoliciesOutput{
+							AttachedPolicies: []*iam.AttachedPolicy{
+								{
+									PolicyName: aws.String("foo"),
+									PolicyArn:  aws.String("bar"),
+								},
+							}}, nil).Times(1),
+					r.AttachRolePolicy(gomock.Any()).Return(nil, nil).Times(2),
+				)
+			},
+			federatedRole: exampleFederatedRoleWithManagedPolices,
+			accountID:     "foo",
+			uid:           "bar",
+			errExpected:   false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			mocks := setupDefaultMocks(t)
+			tc.setupAWSMock(mocks.mockAWSClient.EXPECT())
+
+			// This is necessary for the mocks to report failures like methods not being called an expected number of times.
+			// after mocks is defined
+			defer mocks.mockCtrl.Finish()
+
+			err := RefreshIAMPolicy(mocks.mockAWSClient, tc.federatedRole, tc.accountID, tc.uid)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())
 			} else {
