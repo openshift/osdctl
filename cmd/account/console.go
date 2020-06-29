@@ -1,4 +1,4 @@
-package cmd
+package account
 
 import (
 	"context"
@@ -14,12 +14,9 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/osd-utils-cli/cmd/common"
 	"github.com/openshift/osd-utils-cli/pkg/k8s"
 	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
-)
-
-const (
-	defaultRegion = "us-east-1"
 )
 
 // newCmdConsole implements the Console command which Consoles the specified account cr
@@ -27,7 +24,7 @@ func newCmdConsole(streams genericclioptions.IOStreams, flags *genericclioptions
 	ops := newConsoleOptions(streams, flags)
 	consoleCmd := &cobra.Command{
 		Use:               "console",
-		Short:             "generate an AWS console URL on the fly",
+		Short:             "Generate an AWS console URL on the fly",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -36,13 +33,13 @@ func newCmdConsole(streams genericclioptions.IOStreams, flags *genericclioptions
 		},
 	}
 
-	consoleCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", awsAccountNamespace,
+	consoleCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 	consoleCmd.Flags().StringVarP(&ops.accountName, "account-name", "a", "", "The AWS account cr we need to create AWS console URL for")
 	consoleCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "The AWS account ID we need to create AWS console URL for")
 	consoleCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile")
 	consoleCmd.Flags().StringVarP(&ops.cfgFile, "aws-config", "c", "", "specify AWS config file path")
-	consoleCmd.Flags().StringVarP(&ops.region, "aws-region", "r", defaultRegion, "specify AWS region")
+	consoleCmd.Flags().StringVarP(&ops.region, "aws-region", "r", common.DefaultRegion, "specify AWS region")
 	consoleCmd.Flags().Int64VarP(&ops.consoleDuration, "duration", "d", 3600, "The duration of the console session. "+
 		"Default value is 3600 seconds(1 hour)")
 	consoleCmd.Flags().BoolVarP(&ops.verbose, "verbose", "v", false, "Verbose output")

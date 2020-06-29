@@ -1,4 +1,4 @@
-package cmd
+package account
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
+	"github.com/openshift/osd-utils-cli/cmd/common"
 	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
 )
 
@@ -19,8 +20,8 @@ const (
 func newCmdCleanVeleroSnapshots(streams genericclioptions.IOStreams) *cobra.Command {
 	ops := newCleanVeleroSnapshotsOptions(streams)
 	cleanCmd := &cobra.Command{
-		Use:               "clean-velero-snapshots <account name>",
-		Short:             "cleans up S3 buckets whose name start with managed-velero",
+		Use:               "clean-velero-snapshots",
+		Short:             "Cleans up S3 buckets whose name start with managed-velero",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -33,7 +34,7 @@ func newCmdCleanVeleroSnapshots(streams genericclioptions.IOStreams) *cobra.Comm
 	cleanCmd.Flags().StringVarP(&ops.secretAccessKey, "aws-secret-access-key", "x", "", "AWS Secret Access Key")
 	cleanCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile")
 	cleanCmd.Flags().StringVarP(&ops.configFile, "aws-config", "c", "", "specify AWS config file path")
-	cleanCmd.Flags().StringVarP(&ops.region, "aws-region", "r", defaultRegion, "specify AWS region")
+	cleanCmd.Flags().StringVarP(&ops.region, "aws-region", "r", common.DefaultRegion, "specify AWS region")
 
 	return cleanCmd
 }

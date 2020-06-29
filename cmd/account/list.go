@@ -1,4 +1,4 @@
-package list
+package account
 
 import (
 	"context"
@@ -11,15 +11,16 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/osd-utils-cli/cmd/common"
 	"github.com/openshift/osd-utils-cli/pkg/k8s"
 	"github.com/openshift/osd-utils-cli/pkg/printer"
 )
 
-// newCmdListAccounts implements the list account command to list account crs
-func newCmdListAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newListAccountOptions(streams, flags)
-	listAccountCmd := &cobra.Command{
-		Use:               "account",
+// newCmdList implements the list command to list account crs
+func newCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
+	ops := newListOptions(streams, flags)
+	listCmd := &cobra.Command{
+		Use:               "list",
 		Short:             "List AWS Account CR",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
@@ -29,16 +30,16 @@ func newCmdListAccount(streams genericclioptions.IOStreams, flags *genericcliopt
 		},
 	}
 
-	listAccountCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", awsAccountNamespace,
+	listCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
-	listAccountCmd.Flags().BoolVarP(&ops.reused, "reuse", "r", false, "Only list reused accounts CR if true")
-	listAccountCmd.Flags().StringVar(&ops.state, "state", "", "Account cr state. If not specified, it will list all crs by default.")
+	listCmd.Flags().BoolVarP(&ops.reused, "reuse", "r", false, "Only list reused accounts CR if true")
+	listCmd.Flags().StringVar(&ops.state, "state", "", "Account cr state. If not specified, it will list all crs by default.")
 
-	return listAccountCmd
+	return listCmd
 }
 
-// listAccountOptions defines the struct for running list account command
-type listAccountOptions struct {
+// listOptions defines the struct for running list command
+type listOptions struct {
 	accountNamespace string
 
 	reused bool
@@ -49,14 +50,14 @@ type listAccountOptions struct {
 	kubeCli client.Client
 }
 
-func newListAccountOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *listAccountOptions {
-	return &listAccountOptions{
+func newListOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *listOptions {
+	return &listOptions{
 		flags:     flags,
 		IOStreams: streams,
 	}
 }
 
-func (o *listAccountOptions) complete(cmd *cobra.Command, _ []string) error {
+func (o *listOptions) complete(cmd *cobra.Command, _ []string) error {
 	switch o.state {
 	// state doesn't set, continue
 	case "":
@@ -79,7 +80,7 @@ func (o *listAccountOptions) complete(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func (o *listAccountOptions) run() error {
+func (o *listOptions) run() error {
 	ctx := context.TODO()
 	var accounts awsv1alpha1.AccountList
 	if err := o.kubeCli.List(ctx, &accounts, &client.ListOptions{

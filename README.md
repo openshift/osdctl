@@ -38,7 +38,7 @@ For the detailed usage of each command, please refer to [here](./docs/command).
 `reset` command resets the Account CR status and cleans up related secrets.
 
 ``` bash
-osdctl reset test-cr
+osdctl account reset test-cr
 Reset account test-cr? (Y/N) y
 
 Deleting secret test-cr-osdmanagedadminsre-secret
@@ -50,7 +50,7 @@ Deleting secret test-cr-sre-console-url
 You can skip the prompt by adding a flag `-y`, but it is not recommended.
 
 ```bash
-osdctl reset test-cr -y
+osdctl account reset test-cr -y
 ```
 
 ### AWS Account CR status patch
@@ -62,21 +62,21 @@ There are two ways of status patching:
 1. Using flags.
 
 ``` bash
-osdctl set test-cr --state=Creating -r=true
+osdctl account set test-cr --state=Creating -r=true
 ```
 
 2. Using raw data. For patch strategy, only `merge` and `json` are supported. The default is `merge`. 
 
 ```bash
-osdctl set test-cr --patch='{"status":{"state": "Failed", "claimed": false}}'
+osdctl account set test-cr --patch='{"status":{"state": "Failed", "claimed": false}}'
 ```
 
 ### AWS Account CR list
 
-`list account` command lists the Account CRs in the cluster. You can use flags to filter the status.
+`list` command lists the Account CRs in the cluster. You can use flags to filter the status.
 
 ```bash
-osdctl list account --state=Creating
+osdctl account list --state=Creating
 
 Name                State               AWS ACCOUNT ID      Last Probe Time                 Last Transition Time            Message
 test-cr             Creating            181787396432        2020-06-18 10:38:40 -0400 EDT   2020-06-18 10:38:40 -0400 EDT   AWS account already created
@@ -88,10 +88,35 @@ test-cr             Creating            181787396432        2020-06-18 10:38:40 
 
 ```bash
 # generate console URL via Account CR name
-osdctl console -a test-cr
+osdctl account console -a test-cr
 
 # generate console URL via AWS Account ID
-osdctl console -i 1111111111
+osdctl account console -i 1111111111
+```
+
+### Cleanup Velero managed snapshots
+
+`clean-velero-snapshots` command cleans up the Velero managed buckets for the specified Account.
+
+```bash
+# clean up by providing the credentials via flags
+osdctl account clean-velero-snapshots -a <AWS ACCESS KEY ID> -x <AWS SECRET ACCESS KEY>
+
+# if flags are not provided, it will get credentials from credentials file,
+# we also support specifying profile and config file path
+osdctl account clean-velero-snapshots -p <profile name> -c <config file path>
+```
+
+### AWS Account IAM User Credentials validation
+
+`check-secrets` command checks the IAM User Secret associated with Account Accout CR.
+
+```bash
+# no argument, check all account secrets
+osdctl account check-secrets
+
+# specify the Account CR name, then only check the IAM User Secret for that Account.
+osdctl account check-secrets <Account CR Name>
 ```
 
 ### AWS Account Operator metrics display
@@ -103,29 +128,4 @@ aws_account_operator_pool_size_vs_unclaimed{name="aws-account-operator"} => 893.
 aws_account_operator_total_account_crs{name="aws-account-operator"} => 2173.000000
 aws_account_operator_total_accounts_crs_claimed{name="aws-account-operator"} => 436.000000
 ......
-```
-
-### Cleanup Velero managed snapshots
-
-`clean-velero-snapshots` command cleans up the Velero managed buckets for the specified Account.
-
-```bash
-# clean up by providing the credentials via flags
-osdctl clean-velero-snapshots -a <AWS ACCESS KEY ID> -x <AWS SECRET ACCESS KEY>
-
-# if flags are not provided, it will get credentials from credentials file,
-# we also support specifying profile and config file path
-osdctl clean-velero-snapshots -p <profile name> -c <config file path>
-```
-
-### AWS Account IAM User Credentials validation
-
-`check-secrets` command checks the IAM User Secret associated with Account Accout CR.
-
-```bash
-# no argument, check all account secrets
-osdctl check-secrets
-
-# specify the Account CR name, then only check the IAM User Secret for that Account.
-osdctl check-secrets <Account CR Name>
 ```

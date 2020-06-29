@@ -1,4 +1,4 @@
-package cmd
+package account
 
 import (
 	"context"
@@ -13,11 +13,8 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/osd-utils-cli/cmd/common"
 	"github.com/openshift/osd-utils-cli/pkg/k8s"
-)
-
-const (
-	setUsage = "The name of Account CR is required for set command"
 )
 
 // newCmdSet implements the set command which sets fields in account cr status
@@ -25,7 +22,7 @@ func newCmdSet(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 	ops := newSetOptions(streams, flags)
 	setCmd := &cobra.Command{
 		Use:               "set <account name>",
-		Short:             "set AWS account cr status",
+		Short:             "Set AWS Account CR status",
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -34,7 +31,7 @@ func newCmdSet(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 		},
 	}
 
-	setCmd.Flags().StringVarP(&ops.accountNamespace, "account-namespace", "a", awsAccountNamespace,
+	setCmd.Flags().StringVarP(&ops.accountNamespace, "account-namespace", "a", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 
 	setCmd.Flags().StringVar(&ops.state, "state", "", "set status.state field in the specified account")
@@ -74,7 +71,7 @@ func newSetOptions(streams genericclioptions.IOStreams, flags *genericclioptions
 
 func (o *setOptions) complete(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, setUsage)
+		return cmdutil.UsageErrorf(cmd, "The name of Account CR is required for set command")
 	}
 	o.accountName = args[0]
 
