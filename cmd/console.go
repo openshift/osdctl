@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/klog"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -44,6 +45,7 @@ func newCmdConsole(streams genericclioptions.IOStreams, flags *genericclioptions
 	consoleCmd.Flags().StringVarP(&ops.region, "aws-region", "r", defaultRegion, "specify AWS region")
 	consoleCmd.Flags().Int64VarP(&ops.consoleDuration, "duration", "d", 3600, "The duration of the console session. "+
 		"Default value is 3600 seconds(1 hour)")
+	consoleCmd.Flags().BoolVarP(&ops.verbose, "verbose", "v", false, "Verbose output")
 
 	return consoleCmd
 }
@@ -59,6 +61,8 @@ type consoleOptions struct {
 	region  string
 	profile string
 	cfgFile string
+
+	verbose bool
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
@@ -115,7 +119,11 @@ func (o *consoleOptions) run() error {
 
 	callerIdentityOutput, err := awsClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
 	if err != nil {
+		klog.Error("Fail to get caller identity. Could you please validate the credentials?")
 		return err
+	}
+	if o.verbose {
+		fmt.Println(callerIdentityOutput)
 	}
 
 	roleName := awsv1alpha1.AccountOperatorIAMRole
