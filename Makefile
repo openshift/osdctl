@@ -43,7 +43,7 @@ docs: build
 	@git diff --exit-code -- ./docs/command/
 
 mockgen: ensure-mockgen
-	./hack/mockgen.sh
+	$(GO) generate ${BUILDFLAGS} ./...
 	@git diff --exit-code -- ./pkg/provider/aws/mock
 
 ensure-mockgen:

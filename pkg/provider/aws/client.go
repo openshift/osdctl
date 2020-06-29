@@ -1,5 +1,8 @@
 package aws
 
+// Generate client mocks for testing
+//go:generate mockgen -source=client.go -package=mock -destination=mock/client.go
+
 import (
 	"path/filepath"
 
