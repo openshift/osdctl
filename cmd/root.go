@@ -19,8 +19,8 @@ import (
 var GitCommit string
 
 func init() {
-	awsv1alpha1.AddToScheme(scheme.Scheme)
-	routev1.AddToScheme(scheme.Scheme)
+	_ = awsv1alpha1.AddToScheme(scheme.Scheme)
+	_ = routev1.AddToScheme(scheme.Scheme)
 
 	NewCmdRoot(genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr})
 }
