@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -38,6 +39,11 @@ func newCmdReset(streams genericclioptions.IOStreams, flags *genericclioptions.C
 
 	resetCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", awsAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
+	resetCmd.Flags().BoolVarP(&ops.skipCheck, "skip-check", "y", false,
+		"Skip the prompt check")
+
+	// mark this flag hidden because it is not recommended to use
+	_ = resetCmd.Flags().MarkHidden("skip-check")
 
 	return resetCmd
 }
@@ -46,6 +52,8 @@ func newCmdReset(streams genericclioptions.IOStreams, flags *genericclioptions.C
 type resetOptions struct {
 	accountName      string
 	accountNamespace string
+
+	skipCheck bool
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
@@ -75,6 +83,17 @@ func (o *resetOptions) complete(cmd *cobra.Command, args []string) error {
 }
 
 func (o *resetOptions) run() error {
+	if !o.skipCheck {
+		reader := bufio.NewReader(o.In)
+		fmt.Fprintf(o.Out, fmt.Sprintf("Reset account %s? (Y/N) ", o.accountName))
+		text, _ := reader.ReadSlice('\n')
+
+		input := strings.ToLower(strings.Trim(string(text), "\n"))
+		if input != "y" {
+			return nil
+		}
+	}
+
 	ctx := context.TODO()
 
 	//cleanup secrets
