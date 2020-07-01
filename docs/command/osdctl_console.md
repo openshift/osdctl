@@ -21,6 +21,7 @@ osdctl console [flags]
   -r, --aws-region string          specify AWS region (default "us-east-1")
   -d, --duration int               The duration of the console session. Default value is 3600 seconds(1 hour) (default 3600)
   -h, --help                       help for console
+  -v, --verbose                    Verbose output
 ```
 
 ### Options inherited from parent commands
