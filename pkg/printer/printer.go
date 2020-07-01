@@ -1,8 +1,11 @@
 package printer
 
 import (
+	"encoding/json"
 	"fmt"
+	"gopkg.in/yaml.v2"
 	"io"
+	"k8s.io/apimachinery/pkg/runtime"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -33,4 +36,26 @@ func (p *printer) Flush() error {
 func (p *printer) ClearScreen() {
 	fmt.Fprint(os.Stdout, "\033[2J")
 	fmt.Fprint(os.Stdout, "\033[H")
+}
+
+func FormatOutput(w io.Writer, format string, obj runtime.Object) error {
+	var (
+		bytes []byte
+		err   error
+	)
+	switch format {
+	case "yaml":
+		bytes, err = yaml.Marshal(obj)
+	case "json":
+		bytes, err = json.Marshal(obj)
+	default:
+		return fmt.Errorf("Unsupported format %s\n", format)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(w, string(bytes))
+	return nil
 }

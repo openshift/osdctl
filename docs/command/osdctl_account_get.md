@@ -1,19 +1,19 @@
-## osdctl account
+## osdctl account get
 
-AWS Account related utilities
+get resources
 
 ### Synopsis
 
-AWS Account related utilities
+get resources
 
 ```
-osdctl account [flags]
+osdctl account get [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for account
+  -h, --help   help for get
 ```
 
 ### Options inherited from parent commands
@@ -29,12 +29,10 @@ osdctl account [flags]
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
-* [osdctl account check-secrets](osdctl_account_check-secrets.md)	 - Check AWS Account CR IAM User credentials
-* [osdctl account clean-velero-snapshots](osdctl_account_clean-velero-snapshots.md)	 - Cleans up S3 buckets whose name start with managed-velero
-* [osdctl account console](osdctl_account_console.md)	 - Generate an AWS console URL on the fly
-* [osdctl account get](osdctl_account_get.md)	 - get resources
-* [osdctl account list](osdctl_account_list.md)	 - List AWS Account CR
-* [osdctl account reset](osdctl_account_reset.md)	 - Reset AWS Account CR
-* [osdctl account set](osdctl_account_set.md)	 - Set AWS Account CR status
+* [osdctl account](osdctl_account.md)	 - AWS Account related utilities
+* [osdctl account get account](osdctl_account_get_account.md)	 - Get AWS Account CR
+* [osdctl account get account-claim](osdctl_account_get_account-claim.md)	 - Get AWS Account Claim CR
+* [osdctl account get aws-account](osdctl_account_get_aws-account.md)	 - Get AWS Account ID
+* [osdctl account get legal-entity](osdctl_account_get_legal-entity.md)	 - Get AWS Account Legal Entity
+* [osdctl account get secrets](osdctl_account_get_secrets.md)	 - Get AWS Account CR related secrets
 
