@@ -16,11 +16,14 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/osd-utils-cli/cmd/common"
+	"github.com/openshift/osd-utils-cli/pkg/k8s"
 )
 
 const (
-	operatorRoute          = awsAccountNamespace
-	operatorServiceAccount = awsAccountNamespace
+	operatorRoute          = common.AWSAccountNamespace
+	operatorServiceAccount = common.AWSAccountNamespace
 )
 
 // newCmdMetrics displays the metrics of aws-account-operator
@@ -28,7 +31,7 @@ func newCmdMetrics(streams genericclioptions.IOStreams, flags *genericclioptions
 	ops := newMetricsOptions(streams, flags)
 	resetCmd := &cobra.Command{
 		Use:               "metrics",
-		Short:             "display metrics of aws-account-operator",
+		Short:             "Display metrics of aws-account-operator",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -37,7 +40,7 @@ func newCmdMetrics(streams genericclioptions.IOStreams, flags *genericclioptions
 		},
 	}
 
-	resetCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", awsAccountNamespace,
+	resetCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 	resetCmd.Flags().StringVarP(&ops.metricsURL, "metrics-url", "m", "", "The URL of aws-account-operator metrics endpoint. "+
 		"Used only for debug purpose! Only HTTP scheme is supported.")
@@ -77,18 +80,11 @@ func (o *metricsOptions) complete(cmd *cobra.Command) error {
 	}
 
 	var err error
-	configLoader := o.flags.ToRawKubeConfigLoader()
-	cfg, err := configLoader.ClientConfig()
+	o.kubeCli, err = k8s.NewClient(o.flags)
 	if err != nil {
 		return err
 	}
 
-	cli, err := client.New(cfg, client.Options{})
-	if err != nil {
-		return err
-	}
-
-	o.kubeCli = cli
 	return nil
 }
 

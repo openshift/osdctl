@@ -1,4 +1,4 @@
-package cmd
+package account
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/osd-utils-cli/cmd/common"
 	"github.com/openshift/osd-utils-cli/pkg/k8s"
 	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
 )
@@ -27,7 +28,7 @@ func newCmdCheckSecrets(streams genericclioptions.IOStreams, flags *genericcliop
 	ops := newCheckSecretsOptions(streams, flags)
 	checkSecretsCmd := &cobra.Command{
 		Use:               "check-secrets [<account name>]",
-		Short:             "check AWS Account CR IAM User credentials",
+		Short:             "Check AWS Account CR IAM User credentials",
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd, args))
@@ -35,7 +36,7 @@ func newCmdCheckSecrets(streams genericclioptions.IOStreams, flags *genericcliop
 		},
 	}
 
-	checkSecretsCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", awsAccountNamespace,
+	checkSecretsCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 	checkSecretsCmd.Flags().BoolVarP(&ops.verbose, "verbose", "v", false, "Verbose output")
 

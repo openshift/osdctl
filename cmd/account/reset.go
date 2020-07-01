@@ -1,4 +1,4 @@
-package cmd
+package account
 
 import (
 	"bufio"
@@ -16,12 +16,8 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/osd-utils-cli/cmd/common"
 	"github.com/openshift/osd-utils-cli/pkg/k8s"
-)
-
-const (
-	awsAccountNamespace = "aws-account-operator"
-	resetUsage          = "The name of Account CR is required for reset command"
 )
 
 // newCmdReset implements the reset command which resets the specified account cr
@@ -29,7 +25,7 @@ func newCmdReset(streams genericclioptions.IOStreams, flags *genericclioptions.C
 	ops := newResetOptions(streams, flags)
 	resetCmd := &cobra.Command{
 		Use:               "reset <account name>",
-		Short:             "reset AWS account",
+		Short:             "Reset AWS Account CR",
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd, args))
@@ -37,7 +33,7 @@ func newCmdReset(streams genericclioptions.IOStreams, flags *genericclioptions.C
 		},
 	}
 
-	resetCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", awsAccountNamespace,
+	resetCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 	resetCmd.Flags().BoolVarP(&ops.skipCheck, "skip-check", "y", false,
 		"Skip the prompt check")
@@ -69,7 +65,7 @@ func newResetOptions(streams genericclioptions.IOStreams, flags *genericclioptio
 
 func (o *resetOptions) complete(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, resetUsage)
+		return cmdutil.UsageErrorf(cmd, "The name of Account CR is required for reset command")
 	}
 	o.accountName = args[0]
 

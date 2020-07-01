@@ -1,24 +1,19 @@
-## osdctl set
+## osdctl account
 
-set AWS account cr status
+AWS Account related utilities
 
 ### Synopsis
 
-set AWS account cr status
+AWS Account related utilities
 
 ```
-osdctl set <account name> [flags]
+osdctl account [flags]
 ```
 
 ### Options
 
 ```
-  -a, --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
-  -h, --help                       help for set
-  -p, --patch string               the raw payload used to patch the account status
-  -r, --rotate-credentials         set status.rotateCredentials in the specified account
-      --state string               set status.state field in the specified account
-  -t, --type string                The type of patch being provided; one of [merge json]. The strategic patch is not supported. (default "merge")
+  -h, --help   help for account
 ```
 
 ### Options inherited from parent commands
@@ -28,7 +23,6 @@ osdctl set <account name> [flags]
       --context string             The name of the kubeconfig context to use
       --insecure-skip-tls-verify   If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string          Path to the kubeconfig file to use for CLI requests.
-  -n, --namespace string           If present, the namespace scope for this CLI request
       --request-timeout string     The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string              The address and port of the Kubernetes API server
 ```
@@ -36,4 +30,10 @@ osdctl set <account name> [flags]
 ### SEE ALSO
 
 * [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl account check-secrets](osdctl_account_check-secrets.md)	 - Check AWS Account CR IAM User credentials
+* [osdctl account clean-velero-snapshots](osdctl_account_clean-velero-snapshots.md)	 - Cleans up S3 buckets whose name start with managed-velero
+* [osdctl account console](osdctl_account_console.md)	 - Generate an AWS console URL on the fly
+* [osdctl account list](osdctl_account_list.md)	 - List AWS Account CR
+* [osdctl account reset](osdctl_account_reset.md)	 - Reset AWS Account CR
+* [osdctl account set](osdctl_account_set.md)	 - Set AWS Account CR status
 
