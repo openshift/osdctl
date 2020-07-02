@@ -80,6 +80,12 @@ osdctl account list --state=Creating
 
 Name                State               AWS ACCOUNT ID      Last Probe Time                 Last Transition Time            Message
 test-cr             Creating            181787396432        2020-06-18 10:38:40 -0400 EDT   2020-06-18 10:38:40 -0400 EDT   AWS account already created
+
+# filter accounts by reused or claimed status
+osdctl account list --reuse=true --claim=false
+
+# custom output using jsonpath
+osdctl account list -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.awsAccountID}{"\t"}{.status.state}{"\n"}{end}'
 ```
 
 ### AWS Account Console URL generate
