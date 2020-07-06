@@ -15,9 +15,14 @@ import (
 	"k8s.io/utils/pointer"
 
 	"github.com/openshift/osd-utils-cli/cmd/account"
+<<<<<<< HEAD
 	"github.com/openshift/osd-utils-cli/cmd/clusterdeployment"
 	"github.com/openshift/osd-utils-cli/cmd/federatedrole"
 	"github.com/openshift/osd-utils-cli/cmd/cost"
+=======
+	"github.com/openshift/osd-utils-cli/cmd/cost"
+
+>>>>>>> updated import path to cost.go in root.go
 )
 
 // GitCommit is the short git commit hash from the environment
