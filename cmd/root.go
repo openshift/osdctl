@@ -17,6 +17,7 @@ import (
 	"github.com/openshift/osd-utils-cli/cmd/account"
 	"github.com/openshift/osd-utils-cli/cmd/clusterdeployment"
 	"github.com/openshift/osd-utils-cli/cmd/federatedrole"
+	"github.com/openshift/osd-utils-cli/cmd/cost"
 )
 
 // GitCommit is the short git commit hash from the environment
@@ -72,7 +73,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(newCmdOptions(streams))
 
 	//Add cost command to use AWS Cost Manager
-	rootCmd.AddCommand(costCmd)
+	rootCmd.AddCommand(cost.CostCmd)
 
 	return rootCmd
 }
