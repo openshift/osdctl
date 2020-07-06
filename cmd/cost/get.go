@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/organizations"
 
 	"github.com/spf13/cobra"
-<<<<<<< HEAD
 
 	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
 )
