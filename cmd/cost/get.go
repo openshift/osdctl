@@ -58,11 +58,10 @@ to quickly create a Cobra application.`,
 }
 
 func init() {
+	getCmd.Flags().String("ou", "ou-0wd6-aff5ji37", "get OU ID (default is v4)") //Default OU is v4
 	getCmd.Flags().BoolP("recursive", "r", false, "recurse through OUs")
 	getCmd.Flags().StringP("time", "t", "all", "set time")
-	getCmd.Flags().String("ou", "ou-0wd6-aff5ji37", "get OU ID (default is v4)")	//Default OU is v4
 }
-
 
 //Get account IDs of immediate accounts under given OU
 func getAccounts(OU *organizations.OrganizationalUnit, org *organizations.Organizations) []*string {
@@ -71,13 +70,13 @@ func getAccounts(OU *organizations.OrganizationalUnit, org *organizations.Organi
 
 	//Get accounts
 	accounts, err := org.ListAccountsForParent(&organizations.ListAccountsForParentInput{
-		ParentId:   OU.Id,
+		ParentId: OU.Id,
 	})
 
 	//Populate accountSlice with accounts by looping until accounts.NextToken is null
 	for {
-		if err != nil {	//Look at this for error handling: https://docs.aws.amazon.com/sdk-for-go/api/service/organizations/#example_Organizations_ListOrganizationalUnitsForParent_shared00
-			log.Fatalln("Unable to retrieve accounts under OU:",err)
+		if err != nil { //Look at this for error handling: https://docs.aws.amazon.com/sdk-for-go/api/service/organizations/#example_Organizations_ListOrganizationalUnitsForParent_shared00
+			log.Fatalln("Unable to retrieve accounts under OU:", err)
 		}
 
 		for i := 0; i < len(accounts.Accounts); i++ {
@@ -90,7 +89,7 @@ func getAccounts(OU *organizations.OrganizationalUnit, org *organizations.Organi
 
 		//Get accounts
 		accounts, err = org.ListAccountsForParent(&organizations.ListAccountsForParentInput{
-			ParentId:   OU.Id,
+			ParentId:  OU.Id,
 			NextToken: accounts.NextToken,
 		})
 	}
@@ -106,7 +105,7 @@ func getAccountsRecursive(OU *organizations.OrganizationalUnit, org *organizatio
 	OUs := getOUs(OU, org)
 
 	//Loop through all child OUs, get their costs, and store it to cost of current OU
-	for _,childOU := range OUs {
+	for _, childOU := range OUs {
 		accountsIDs = append(accountsIDs, getAccountsRecursive(childOU, org)...)
 	}
 
@@ -127,12 +126,12 @@ func getOUs(OU *organizations.OrganizationalUnit, org *organizations.Organizatio
 	//Populate OUSlice with OUs by looping until OUs.NextToken is null
 	for {
 		if err != nil {
-			log.Fatalln("Unable to retrieve child OUs under OU:",err)
+			log.Fatalln("Unable to retrieve child OUs under OU:", err)
 		}
 
 		//Add OUs to slice
 		for childOU := 0; childOU < len(OUs.OrganizationalUnits); childOU++ {
-			OUSlice = append(OUSlice,OUs.OrganizationalUnits[childOU])
+			OUSlice = append(OUSlice, OUs.OrganizationalUnits[childOU])
 		}
 
 		if OUs.NextToken == nil {
@@ -167,7 +166,7 @@ func getOUsRecursive(OU *organizations.OrganizationalUnit, org *organizations.Or
 //Get cost of given account
 func getAccountCost(accountID *string, ce *costexplorer.CostExplorer, timePtr *string, cost *float64) {
 
-	start := strconv.Itoa(time.Now().Year()-1) + time.Now().Format("-01-") + "01"	//Starting from the 1st of the current month last year i.e. if today is 2020-06-29, then start date is 2019-06-01
+	start := strconv.Itoa(time.Now().Year()-1) + time.Now().Format("-01-") + "01" //Starting from the 1st of the current month last year i.e. if today is 2020-06-29, then start date is 2019-06-01
 	end := time.Now().Format("2006-01-02")
 	granularity := "MONTHLY"
 	metrics := []string{
@@ -201,10 +200,10 @@ func getAccountCost(accountID *string, ce *costexplorer.CostExplorer, timePtr *s
 			End:   aws.String(end),
 		},
 		Granularity: aws.String(granularity),
-		Metrics: aws.StringSlice(metrics),
+		Metrics:     aws.StringSlice(metrics),
 	})
 	if err != nil {
-		log.Fatalln("Error getting costs report:",err)
+		log.Fatalln("Error getting costs report:", err)
 	}
 
 	//Loop through month-by-month cost and increment to get total cost

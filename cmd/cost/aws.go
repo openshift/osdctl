@@ -39,7 +39,7 @@ func initAWSClients() (*organizations.Organizations, *costexplorer.CostExplorer)
 		Profile: "osd-staging-1",
 	})
 	if err != nil {
-		log.Fatalln("Unable to generate session:",err)
+		log.Fatalln("Unable to generate session:", err)
 	}
 
 	//Create Cost Explorer client
