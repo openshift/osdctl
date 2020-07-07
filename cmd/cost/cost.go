@@ -37,15 +37,4 @@ to quickly create a Cobra application.`,
 
 func init() {
 	CostCmd.AddCommand(awsCmd)
-	//NewCmdRoot(genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr}).AddCommand(costCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// costCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// costCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
