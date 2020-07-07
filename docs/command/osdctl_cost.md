@@ -10,7 +10,6 @@ platforms may be added in the future)
 ```
 osdctl cost [flags]
 ```
-=======
 The cost command allows for cost management on the AWS platform (other
 platforms may be added in the future. Its functions include:
 
