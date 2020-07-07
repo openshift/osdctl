@@ -63,7 +63,6 @@ func init() {
 	getCmd.Flags().StringP("time", "t", "all", "set time")
 }
 
-
 //Get account IDs of immediate accounts under given OU
 func getAccounts(OU *organizations.OrganizationalUnit, org *organizations.Organizations) []*string {
 	//accountSlice stores accounts
