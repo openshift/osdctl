@@ -38,4 +38,3 @@ osdctl cost aws [flags]
 * [osdctl cost aws create](osdctl_cost_aws_create.md)	 - A brief description of your command
 * [osdctl cost aws get](osdctl_cost_aws_get.md)	 - A brief description of your command
 * [osdctl cost aws reconcile](osdctl_cost_aws_reconcile.md)	 - A brief description of your command
-
