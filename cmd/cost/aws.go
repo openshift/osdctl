@@ -43,6 +43,8 @@ to quickly create a Cobra application.`,
 
 func init() {
 	awsCmd.AddCommand(getCmd)
+	awsCmd.AddCommand(createCmd)
+	awsCmd.AddCommand(reconcileCmd)
 }
 
 func initAWSClients() (*organizations.Organizations, *costexplorer.CostExplorer) {
