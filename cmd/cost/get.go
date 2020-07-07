@@ -71,13 +71,13 @@ func getAccounts(OU *organizations.OrganizationalUnit, org *organizations.Organi
 
 	//Get accounts
 	accounts, err := org.ListAccountsForParent(&organizations.ListAccountsForParentInput{
-		ParentId:   OU.Id,
+		ParentId: OU.Id,
 	})
 
 	//Populate accountSlice with accounts by looping until accounts.NextToken is null
 	for {
 		if err != nil {	//Look at this for error handling: https://docs.aws.amazon.com/sdk-for-go/api/service/organizations/#example_Organizations_ListOrganizationalUnitsForParent_shared00
-			log.Fatalln("Unable to retrieve accounts under OU:",err)
+			log.Fatalln("Unable to retrieve accounts under OU:", err)
 		}
 
 		for i := 0; i < len(accounts.Accounts); i++ {
@@ -90,7 +90,7 @@ func getAccounts(OU *organizations.OrganizationalUnit, org *organizations.Organi
 
 		//Get accounts
 		accounts, err = org.ListAccountsForParent(&organizations.ListAccountsForParentInput{
-			ParentId:   OU.Id,
+			ParentId:  OU.Id,
 			NextToken: accounts.NextToken,
 		})
 	}
@@ -106,7 +106,7 @@ func getAccountsRecursive(OU *organizations.OrganizationalUnit, org *organizatio
 	OUs := getOUs(OU, org)
 
 	//Loop through all child OUs, get their costs, and store it to cost of current OU
-	for _,childOU := range OUs {
+	for _, childOU := range OUs {
 		accountsIDs = append(accountsIDs, getAccountsRecursive(childOU, org)...)
 	}
 
