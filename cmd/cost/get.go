@@ -60,7 +60,7 @@ to quickly create a Cobra application.`,
 func init() {
 	getCmd.Flags().BoolP("recursive", "r", false, "recurse through OUs")
 	getCmd.Flags().StringP("time", "t", "all", "set time")
-	getCmd.Flags().String("ou", "ou-0wd6-aff5ji37", "get OU ID (default is v4)")	//Default OU is v4
+	getCmd.Flags().String("ou", "ou-0wd6-aff5ji37", "get OU ID (default is v4)") //Default OU is v4
 }
 
 
@@ -76,7 +76,7 @@ func getAccounts(OU *organizations.OrganizationalUnit, org *organizations.Organi
 
 	//Populate accountSlice with accounts by looping until accounts.NextToken is null
 	for {
-		if err != nil {	//Look at this for error handling: https://docs.aws.amazon.com/sdk-for-go/api/service/organizations/#example_Organizations_ListOrganizationalUnitsForParent_shared00
+		if err != nil { //Look at this for error handling: https://docs.aws.amazon.com/sdk-for-go/api/service/organizations/#example_Organizations_ListOrganizationalUnitsForParent_shared00
 			log.Fatalln("Unable to retrieve accounts under OU:", err)
 		}
 
@@ -201,7 +201,7 @@ func getAccountCost(accountID *string, ce *costexplorer.CostExplorer, timePtr *s
 			End:   aws.String(end),
 		},
 		Granularity: aws.String(granularity),
-		Metrics:	 aws.StringSlice(metrics),
+		Metrics:     aws.StringSlice(metrics),
 	})
 	if err != nil {
 		log.Fatalln("Error getting costs report:", err)
