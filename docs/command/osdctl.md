@@ -28,6 +28,7 @@ osdctl [flags]
 * [osdctl clusterdeployment](osdctl_clusterdeployment.md)	 - cluster deployment related utilities
 * [osdctl completion](osdctl_completion.md)	 - Output shell completion code for the specified shell (bash or zsh)
 * [osdctl federatedrole](osdctl_federatedrole.md)	 - federated role related commands
+* [osdctl cost](osdctl_cost.md)	 - Cost Management related utilities
 * [osdctl metrics](osdctl_metrics.md)	 - Display metrics of aws-account-operator
 * [osdctl options](osdctl_options.md)	 - Print the list of flags inherited by all commands
 

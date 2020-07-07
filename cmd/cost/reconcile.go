@@ -60,4 +60,3 @@ func reconciliateCostCategories(OU *organizations.OrganizationalUnit, org *organ
 		fmt.Println("Cost categories are up-to-date. No cost category created.")
 	}
 }
-
