@@ -35,5 +35,4 @@ management support for other platforms e.g. `osdctl cost gcp`
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
 * [osdctl cost aws](osdctl_cost_aws.md)	 - A brief description of your command
