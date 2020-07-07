@@ -58,13 +58,13 @@ func createCostCategory(OUid *string, OU *organizations.OrganizationalUnit, org 
 	accounts := getAccountsRecursive(OU, org)
 
 	_, err := ce.CreateCostCategoryDefinition(&costexplorer.CreateCostCategoryDefinitionInput{
-		Name:        OUid,
+		Name: 		 OUid,
 		RuleVersion: aws.String("CostCategoryExpression.v1"),
 		Rules: []*costexplorer.CostCategoryRule{
 			{
 				Rule: &costexplorer.Expression{
 					Dimensions: &costexplorer.DimensionValues{
-						Key:    aws.String("LINKED_ACCOUNT"),
+						Key: 	aws.String("LINKED_ACCOUNT"),
 						Values: accounts,
 					},
 				},

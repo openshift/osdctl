@@ -77,7 +77,7 @@ func getAccounts(OU *organizations.OrganizationalUnit, org awsprovider.Organizat
 
 	//Populate accountSlice with accounts by looping until accounts.NextToken is null
 	for {
-		if err != nil { //Look at this for error handling: https://docs.aws.amazon.com/sdk-for-go/api/service/organizations/#example_Organizations_ListOrganizationalUnitsForParent_shared00
+		if err != nil {	//Look at this for error handling: https://docs.aws.amazon.com/sdk-for-go/api/service/organizations/#example_Organizations_ListOrganizationalUnitsForParent_shared00
 			log.Fatalln("Unable to retrieve accounts under OU:", err)
 		}
 
