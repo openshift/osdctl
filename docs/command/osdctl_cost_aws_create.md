@@ -36,4 +36,3 @@ osdctl cost aws create [flags]
 ### SEE ALSO
 
 * [osdctl cost aws](osdctl_cost_aws.md)	 - A brief description of your command
-
