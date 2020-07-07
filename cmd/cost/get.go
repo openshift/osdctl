@@ -127,12 +127,12 @@ func getOUs(OU *organizations.OrganizationalUnit, org *organizations.Organizatio
 	//Populate OUSlice with OUs by looping until OUs.NextToken is null
 	for {
 		if err != nil {
-			log.Fatalln("Unable to retrieve child OUs under OU:",err)
+			log.Fatalln("Unable to retrieve child OUs under OU:", err)
 		}
 
 		//Add OUs to slice
 		for childOU := 0; childOU < len(OUs.OrganizationalUnits); childOU++ {
-			OUSlice = append(OUSlice,OUs.OrganizationalUnits[childOU])
+			OUSlice = append(OUSlice, OUs.OrganizationalUnits[childOU])
 		}
 
 		if OUs.NextToken == nil {
@@ -167,7 +167,7 @@ func getOUsRecursive(OU *organizations.OrganizationalUnit, org *organizations.Or
 //Get cost of given account
 func getAccountCost(accountID *string, ce *costexplorer.CostExplorer, timePtr *string, cost *float64) {
 
-	start := strconv.Itoa(time.Now().Year()-1) + time.Now().Format("-01-") + "01"	//Starting from the 1st of the current month last year i.e. if today is 2020-06-29, then start date is 2019-06-01
+	start := strconv.Itoa(time.Now().Year()-1) + time.Now().Format("-01-") + "01" //Starting from the 1st of the current month last year i.e. if today is 2020-06-29, then start date is 2019-06-01
 	end := time.Now().Format("2006-01-02")
 	granularity := "MONTHLY"
 	metrics := []string{
@@ -201,10 +201,10 @@ func getAccountCost(accountID *string, ce *costexplorer.CostExplorer, timePtr *s
 			End:   aws.String(end),
 		},
 		Granularity: aws.String(granularity),
-		Metrics: aws.StringSlice(metrics),
+		Metrics:	 aws.StringSlice(metrics),
 	})
 	if err != nil {
-		log.Fatalln("Error getting costs report:",err)
+		log.Fatalln("Error getting costs report:", err)
 	}
 
 	//Loop through month-by-month cost and increment to get total cost
