@@ -4,7 +4,6 @@ Cost Management related utilities
 
 ### Synopsis
 
-<<<<<<< HEAD
 The cost command allows for cost management on the AWS platform (other 
 platforms may be added in the future)
 
@@ -23,7 +22,6 @@ management support for other platforms e.g. `osdctl cost gcp`
 - Create cost category with `osdctl cost aws create`
 
 - Reconcile cost categories with `osdctl cost aws reconcile`
->>>>>>> completed osdctl_cost.md
 
 ```
 osdctl cost [flags]
