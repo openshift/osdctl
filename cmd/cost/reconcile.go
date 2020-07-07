@@ -33,19 +33,33 @@ to quickly create a Cobra application.`,
 
 //Checks if there's a cost category for every OU. If not, creates the missing cost category. This should be ran every 24 hours.
 func reconciliateCostCategories(OU *organizations.OrganizationalUnit, org *organizations.Organizations, ce *costexplorer.CostExplorer) {
-	//Keep track whether cost category was created
 	costCategoryCreated := false
 
 	OUs := getOUsRecursive(OU, org)
 	costCategoriesSet := mapset.NewSet()
 
 	existingCostCategories, err := ce.ListCostCategoryDefinitions(&costexplorer.ListCostCategoryDefinitionsInput{})
-	if err != nil {
-		log.Fatalln("Error listing cost categories:", err)
-	}
-	//Loop through and add to costCategoriesSet. Set makes lookup easier
-	for _, costCategory := range existingCostCategories.CostCategoryReferences {
-		costCategoriesSet.Add(*costCategory.Name)
+
+	//Populate costCategoriesSet with cost categories by looping until existingCostCategories.NextToken is null
+	for {
+		if err != nil {
+			log.Fatalln("Error listing cost categories:", err)
+		}
+
+		//Loop through and add to costCategoriesSet. Set makes lookup easier
+		for _, costCategory := range existingCostCategories.CostCategoryReferences {
+			costCategoriesSet.Add(*costCategory.Name)
+		}
+
+		fmt.Println("hello from reconcile loop")
+		fmt.Println("length cc:", len(existingCostCategories.CostCategoryReferences))
+
+		if existingCostCategories.NextToken == nil {
+			break
+		}
+
+		//Get accounts
+		existingCostCategories, err = ce.ListCostCategoryDefinitions(&costexplorer.ListCostCategoryDefinitionsInput{})
 	}
 
 	//Loop through every OU under OpenShift and create cost category if missing
