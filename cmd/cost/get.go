@@ -211,7 +211,7 @@ func getAccountCost(accountID *string, ce *costexplorer.CostExplorer, timePtr *s
 	for month := 0; month < len(costs.ResultsByTime); month++ {
 		monthCost, err := strconv.ParseFloat(*costs.ResultsByTime[month].Total["NetUnblendedCost"].Amount, 64)
 		if err != nil {
-			log.Fatalln("Unable to get cost:",err)
+			log.Fatalln("Unable to get cost:", err)
 		}
 		*cost += monthCost
 	}
@@ -223,7 +223,7 @@ func getOUCost(OU *organizations.OrganizationalUnit, org *organizations.Organiza
 	accounts := getAccounts(OU, org)
 
 	//Increment costs of accounts
-	for _,account := range accounts {
+	for _, account := range accounts {
 		getAccountCost(account, ce, timePtr, cost)
 	}
 }
@@ -234,7 +234,7 @@ func getOUCostRecursive(OU *organizations.OrganizationalUnit, org *organizations
 	OUs := getOUs(OU, org)
 
 	//Loop through all child OUs, get their costs, and store it to cost of current OU
-	for _,childOU := range OUs {
+	for _, childOU := range OUs {
 		getOUCostRecursive(childOU, org, ce, timePtr, cost)
 	}
 
