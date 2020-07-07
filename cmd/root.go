@@ -15,7 +15,6 @@ import (
 
 	"github.com/openshift/osd-utils-cli/cmd/account"
 	"github.com/openshift/osd-utils-cli/cmd/cost"
-
 )
 
 // GitCommit is the short git commit hash from the environment

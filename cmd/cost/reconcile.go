@@ -41,7 +41,7 @@ func reconciliateCostCategories(OU *organizations.OrganizationalUnit, org *organ
 
 	existingCostCategories, err := ce.ListCostCategoryDefinitions(&costexplorer.ListCostCategoryDefinitionsInput{})
 	if err != nil {
-		log.Fatalln("Error listing cost categories:",err)
+		log.Fatalln("Error listing cost categories:", err)
 	}
 	//Loop through and add to costCategoriesSet. Set makes lookup easier
 	for _, costCategory := range existingCostCategories.CostCategoryReferences {
