@@ -75,7 +75,7 @@ to quickly create a Cobra application.`,
 func init() {
 	getCmd.Flags().BoolP("recursive", "r", false, "recurse through OUs")
 	getCmd.Flags().StringP("time", "t", "all", "set time")
-	getCmd.Flags().String("ou", "ou-0wd6-aff5ji37", "get OU ID (default is v4")	//Default OU is v4
+	getCmd.Flags().String("ou", "ou-0wd6-aff5ji37", "get OU ID (default is v4)")	//Default OU is v4
 }
 
 
