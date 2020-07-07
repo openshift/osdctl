@@ -31,10 +31,11 @@ func newCmdGetAccountClaim(streams genericclioptions.IOStreams, flags *genericcl
 		},
 	}
 
+	ops.printFlags.AddFlags(getAccountClaimCmd)
+	getAccountClaimCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
 	getAccountClaimCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 	getAccountClaimCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "AWS account ID")
-	getAccountClaimCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format, json and yaml are supported.")
 
 	return getAccountClaimCmd
 }
@@ -46,15 +47,17 @@ type getAccountClaimOptions struct {
 
 	output string
 
-	flags *genericclioptions.ConfigFlags
+	flags      *genericclioptions.ConfigFlags
+	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
 	kubeCli client.Client
 }
 
 func newGetAccountClaimOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *getAccountClaimOptions {
 	return &getAccountClaimOptions{
-		flags:     flags,
-		IOStreams: streams,
+		flags:      flags,
+		printFlags: printer.NewPrintFlags(),
+		IOStreams:  streams,
 	}
 }
 
@@ -120,5 +123,10 @@ func (o *getAccountClaimOptions) run() error {
 		return p.Flush()
 	}
 
-	return printer.FormatOutput(o.IOStreams.Out, o.output, &accountClaim)
+	resourcePrinter, err := o.printFlags.ToPrinter(o.output)
+	if err != nil {
+		return err
+	}
+
+	return resourcePrinter.PrintObj(&accountClaim, o.Out)
 }

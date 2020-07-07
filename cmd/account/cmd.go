@@ -1,9 +1,10 @@
 package account
 
 import (
-	"github.com/openshift/osd-utils-cli/cmd/account/get"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+
+	"github.com/openshift/osd-utils-cli/cmd/account/get"
 )
 
 // NewCmdAccount implements the base account command
