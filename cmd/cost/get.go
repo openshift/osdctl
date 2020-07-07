@@ -202,7 +202,7 @@ func getAccountCost(accountID *string, ce awsprovider.CostExplorerClient, timePt
 			End:   aws.String(end),
 		},
 		Granularity: aws.String(granularity),
-		Metrics:     aws.StringSlice(metrics),
+		Metrics:	 aws.StringSlice(metrics),
 	})
 	if err != nil {
 		log.Fatalln("Error getting costs report:", err)
