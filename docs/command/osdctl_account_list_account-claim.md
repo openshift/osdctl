@@ -1,19 +1,20 @@
-## osdctl account list
+## osdctl account list account-claim
 
-List resources
+List AWS Account Claim CR
 
 ### Synopsis
 
-List resources
+List AWS Account Claim CR
 
 ```
-osdctl account list [flags]
+osdctl account list account-claim [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for list
+  -h, --help           help for account-claim
+      --state string   Account cr state. If not specified, it will list all crs by default.
 ```
 
 ### Options inherited from parent commands
@@ -29,7 +30,5 @@ osdctl account list [flags]
 
 ### SEE ALSO
 
-* [osdctl account](osdctl_account.md)	 - AWS Account related utilities
-* [osdctl account list account](osdctl_account_list_account.md)	 - List AWS Account CR
-* [osdctl account list account-claim](osdctl_account_list_account-claim.md)	 - List AWS Account Claim CR
+* [osdctl account list](osdctl_account_list.md)	 - List resources
 

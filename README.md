@@ -78,10 +78,10 @@ osdctl account set test-cr --patch='{"status":{"state": "Failed", "claimed": fal
 
 ### AWS Account CR list
 
-`list` command lists the Account CRs in the cluster. You can use flags to filter the status.
+`list account` command lists the Account CRs in the cluster. You can use flags to filter the status.
 
 ```bash
-osdctl account list --state=Creating
+osdctl account list account --state=Creating
 
 Name                State               AWS ACCOUNT ID      Last Probe Time                 Last Transition Time            Message
 test-cr             Creating            181787396432        2020-06-18 10:38:40 -0400 EDT   2020-06-18 10:38:40 -0400 EDT   AWS account already created
@@ -91,6 +91,15 @@ osdctl account list --reuse=true --claim=false
 
 # custom output using jsonpath
 osdctl account list -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.awsAccountID}{"\t"}{.status.state}{"\n"}{end}'
+test-cr             Creating            111111111111        2020-06-18 10:38:40 -0400 EDT   2020-06-18 10:38:40 -0400 EDT   AWS account already created
+```
+
+### AWS Account Claim CR list
+
+`list account-claim` command lists the Account Claim CRs in the cluster. You can use flags to filter the status.
+
+```bash
+osdctl account list account-claim --state=Ready
 ```
 
 ### AWS Account Console URL generate
