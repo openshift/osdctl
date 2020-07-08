@@ -21,12 +21,22 @@ func TestGetAccountClaimCmdComplete(t *testing.T) {
 		errContent  string
 	}{
 		{
-			title: "empty account ID",
+			title: "account id and account cr name empty at the same time",
 			option: &getAccountClaimOptions{
-				accountID: "",
+				accountID:   "",
+				accountName: "",
 			},
 			errExpected: true,
-			errContent:  accountIDRequired,
+			errContent:  "AWS account ID and Account CR Name cannot be empty at the same time",
+		},
+		{
+			title: "account id and account cr name set at the same time",
+			option: &getAccountClaimOptions{
+				accountID:   "foo",
+				accountName: "bar",
+			},
+			errExpected: true,
+			errContent:  "AWS account ID and Account CR Name cannot be set at the same time",
 		},
 		{
 			title: "succeed",

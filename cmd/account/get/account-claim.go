@@ -35,6 +35,7 @@ func newCmdGetAccountClaim(streams genericclioptions.IOStreams, flags *genericcl
 	getAccountClaimCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
 	getAccountClaimCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
+	getAccountClaimCmd.Flags().StringVarP(&ops.accountName, "account", "a", "", "Account CR Name")
 	getAccountClaimCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "AWS account ID")
 
 	return getAccountClaimCmd
@@ -42,6 +43,7 @@ func newCmdGetAccountClaim(streams genericclioptions.IOStreams, flags *genericcl
 
 // getAccountClaimOptions defines the struct for running get account-claim command
 type getAccountClaimOptions struct {
+	accountName      string
 	accountID        string
 	accountNamespace string
 
@@ -62,8 +64,11 @@ func newGetAccountClaimOptions(streams genericclioptions.IOStreams, flags *gener
 }
 
 func (o *getAccountClaimOptions) complete(cmd *cobra.Command, _ []string) error {
-	if o.accountID == "" {
-		return cmdutil.UsageErrorf(cmd, accountIDRequired)
+	if o.accountID == "" && o.accountName == "" {
+		return cmdutil.UsageErrorf(cmd, "AWS account ID and Account CR Name cannot be empty at the same time")
+	}
+	if o.accountID != "" && o.accountName != "" {
+		return cmdutil.UsageErrorf(cmd, "AWS account ID and Account CR Name cannot be set at the same time")
 	}
 
 	var err error
@@ -85,20 +90,25 @@ func (o *getAccountClaimOptions) run() error {
 		accountClaimName string
 		accountClaim     awsv1alpha1.AccountClaim
 	)
-	if err := o.kubeCli.List(ctx, &accounts, &client.ListOptions{
-		Namespace: o.accountNamespace,
-	}); err != nil {
-		return nil
-	}
 
-	for _, a := range accounts.Items {
-		if a.Spec.AwsAccountID == o.accountID {
-			accountCRName = a.Name
-			break
+	if o.accountName != "" {
+		accountCRName = o.accountName
+	} else {
+		if err := o.kubeCli.List(ctx, &accounts, &client.ListOptions{
+			Namespace: o.accountNamespace,
+		}); err != nil {
+			return nil
 		}
-	}
-	if accountCRName == "" {
-		return fmt.Errorf("Account matched for AWS Account ID %s not found\n", o.accountID)
+
+		for _, a := range accounts.Items {
+			if a.Spec.AwsAccountID == o.accountID {
+				accountCRName = a.Name
+				break
+			}
+		}
+		if accountCRName == "" {
+			return fmt.Errorf("Account matched for AWS Account ID %s not found\n", o.accountID)
+		}
 	}
 
 	if err := o.kubeCli.List(ctx, &accountClaims); err != nil {
