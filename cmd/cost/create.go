@@ -31,7 +31,7 @@ to quickly create a Cobra application.`,
 		//Get Organizational Unit
 		OU := organizations.OrganizationalUnit{Id: aws.String(OUid)}
 		//Initialize AWS clients
-		org, ce := initAWSClients()
+		//org, ce := initAWSClients()
 
 		createCostCategory(&OUid, &OU, org, ce)
 	},
