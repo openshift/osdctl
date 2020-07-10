@@ -4,6 +4,8 @@ package aws
 //go:generate mockgen -source=client.go -package=mock -destination=mock/client.go
 
 import (
+	"github.com/aws/aws-sdk-go/service/costexplorer"
+	"github.com/aws/aws-sdk-go/service/organizations"
 	"path/filepath"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -54,12 +56,18 @@ type Client interface {
 	AttachRolePolicy(*iam.AttachRolePolicyInput) (*iam.AttachRolePolicyOutput, error)
 	DetachRolePolicy(*iam.DetachRolePolicyInput) (*iam.DetachRolePolicyOutput, error)
 	ListAttachedRolePolicies(*iam.ListAttachedRolePoliciesInput) (*iam.ListAttachedRolePoliciesOutput, error)
+
+	// Organizations and Cost Explorer
+	GetOrg() *organizations.Organizations
+	GetCE() *costexplorer.CostExplorer
 }
 
 type AwsClient struct {
 	iamClient iamiface.IAMAPI
 	stsClient stsiface.STSAPI
 	s3Client  s3iface.S3API
+	orgClient *organizations.Organizations
+	ceClient *costexplorer.CostExplorer
 }
 
 // NewAwsClient creates an AWS client with credentials in the environment
@@ -96,6 +104,8 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 		iamClient: iam.New(sess),
 		stsClient: sts.New(sess),
 		s3Client:  s3.New(sess),
+		orgClient: organizations.New(sess),
+		ceClient: costexplorer.New(sess),
 	}, nil
 }
 
@@ -115,6 +125,8 @@ func NewAwsClientWithInput(input *AwsClientInput) (Client, error) {
 		iamClient: iam.New(s),
 		stsClient: sts.New(s),
 		s3Client:  s3.New(s),
+		orgClient: organizations.New(s),
+		ceClient: costexplorer.New(s),
 	}, nil
 }
 
@@ -192,4 +204,12 @@ func (c *AwsClient) DetachRolePolicy(input *iam.DetachRolePolicyInput) (*iam.Det
 
 func (c *AwsClient) ListAttachedRolePolicies(input *iam.ListAttachedRolePoliciesInput) (*iam.ListAttachedRolePoliciesOutput, error) {
 	return c.iamClient.ListAttachedRolePolicies(input)
+}
+
+func (c *AwsClient) GetOrg() *organizations.Organizations {
+	return c.orgClient
+}
+
+func (c *AwsClient) GetCE() *costexplorer.CostExplorer {
+	return c.ceClient
 }
