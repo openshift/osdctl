@@ -2,6 +2,8 @@ package cost
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go/service/costexplorer"
+	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/openshift/osd-utils-cli/cmd/common"
 	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
 	"github.com/spf13/cobra"
@@ -86,7 +88,7 @@ func (opsCost *costOptions) initAWSClients() (awsprovider.OrganizationsClient, a
 		awsClient, err = awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
 			AccessKeyID:     opsCost.accessKeyID,
 			SecretAccessKey: opsCost.secretAccessKey,
-			Region:    opsCost.region,
+			Region:    		 opsCost.region,
 		})
 	}
 
