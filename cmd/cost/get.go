@@ -16,59 +16,46 @@ import (
 
 // getCmd represents the get command
 func newCmdGet(streams genericclioptions.IOStreams) *cobra.Command{
+	ops := newGetOptions(streams)
 	var getCmd = &cobra.Command{
 		Use:   "get",
-		Short: "A brief description of your command",
-		Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+		Short: "Get total cost of a given OU. If no OU given, then gets total cost of v4 OU.",
 		Run: func(cmd *cobra.Command, args []string) {
-			//Flags
-			time, err := cmd.Flags().GetString("time")
-			if err != nil {
-				log.Fatalln("Time flag:", err)
-			}
-			recursive, err := cmd.Flags().GetBool("recursive")
-			if err != nil {
-				log.Fatalln("Recursive flag:", err)
-			}
-			OUid, err := cmd.Flags().GetString("ou")
-			if err != nil {
-				log.Fatalln("OU flag:", err)
-			}
-
 			//Get Organizational Unit
-			OU := organizations.OrganizationalUnit{Id: aws.String(OUid)}
+			OU := organizations.OrganizationalUnit{Id: aws.String(ops.ou)}
 			//Store cost
 			var cost float64 = 0
 
-
-
-			if recursive {
-				getOUCostRecursive(&OU, org, ce, &time, &cost)
-				fmt.Printf("Cost of %s recursively is: %f\n", OUid, cost)
+			if ops.recursive {
+				getOUCostRecursive(&OU, org, ce, &ops.time, &cost)
+				fmt.Printf("Cost of %s recursively is: %f\n", ops.ou, cost)
 			} else {
-				getOUCost(&OU, org, ce, &time, &cost)
-				fmt.Printf("Cost of %s is: %f\n", OUid, cost)
+				getOUCost(&OU, org, ce, &ops.time, &cost)
+				fmt.Printf("Cost of %s is: %f\n", ops.ou, cost)
 			}
 		},
 	}
-	getCmd.Flags().String("ou", "ou-0wd6-aff5ji37", "get OU ID (default is v4)") //Default OU is v4
-	getCmd.Flags().BoolP("recursive", "r", false, "recurse through OUs")
-	getCmd.Flags().StringP("time", "t", "all", "set time")
+	getCmd.Flags().StringVar(&ops.ou, "ou", "ou-0wd6-aff5ji37", "get OU ID (default is v4)") //Default OU is v4
+	getCmd.Flags().BoolVarP(&ops.recursive, "recursive", "r", false, "recurse through OUs")
+	getCmd.Flags().StringVarP(&ops.time, "time", "t", "all", "set time")
 
 	return getCmd
 }
 
+//Store flag options for get command
+type getOptions struct {
+	ou		  string
+	recursive bool
+	time	  string
 
-//func init() {
-//	getCmd.Flags().String("ou", "ou-0wd6-aff5ji37", "get OU ID (default is v4)") //Default OU is v4
-//	getCmd.Flags().BoolP("recursive", "r", false, "recurse through OUs")
-//	getCmd.Flags().StringP("time", "t", "all", "set time")
-//}
+	genericclioptions.IOStreams
+}
+
+func newGetOptions(streams genericclioptions.IOStreams) *getOptions {
+	return &getOptions{
+		IOStreams: streams,
+	}
+}
 
 //Get account IDs of immediate accounts under given OU
 func getAccounts(OU *organizations.OrganizationalUnit, org *organizations.Organizations) []*string {
