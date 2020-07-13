@@ -163,3 +163,9 @@ aws_account_operator_total_account_crs{name="aws-account-operator"} => 2173.0000
 aws_account_operator_total_accounts_crs_claimed{name="aws-account-operator"} => 436.000000
 ......
 ```
+
+### Hive ClusterDeployment CR list
+
+```bash
+osdctl clusterdeployment list
+```
