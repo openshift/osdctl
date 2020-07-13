@@ -2,6 +2,8 @@ package account
 
 import (
 	"context"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/cli-runtime/pkg/printers"
 	"time"
 
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
@@ -30,10 +32,15 @@ func newCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.Co
 		},
 	}
 
+	ops.printFlags.AddFlags(listCmd)
+	listCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
 	listCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
-	listCmd.Flags().BoolVarP(&ops.reused, "reuse", "r", false, "Only list reused accounts CR if true")
-	listCmd.Flags().StringVar(&ops.state, "state", "", "Account cr state. If not specified, it will list all crs by default.")
+	listCmd.Flags().StringVarP(&ops.reused, "reuse", "r", "",
+		"Filter account CRs by reused or not. Supported values are true, false. Otherwise it lists all accounts")
+	listCmd.Flags().StringVarP(&ops.claimed, "claim", "c", "",
+		"Filter account CRs by claimed or not. Supported values are true, false. Otherwise it lists all accounts")
+	listCmd.Flags().StringVar(&ops.state, "state", "all", "Account cr state. The default value is all to display all the crs")
 
 	return listCmd
 }
@@ -42,33 +49,50 @@ func newCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.Co
 type listOptions struct {
 	accountNamespace string
 
-	reused bool
-	state  string
+	reused  string
+	claimed string
+	state   string
 
-	flags *genericclioptions.ConfigFlags
+	output string
+
+	flags      *genericclioptions.ConfigFlags
+	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
 	kubeCli client.Client
 }
 
 func newListOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *listOptions {
 	return &listOptions{
-		flags:     flags,
-		IOStreams: streams,
+		flags:      flags,
+		printFlags: printer.NewPrintFlags(),
+		IOStreams:  streams,
 	}
 }
 
 func (o *listOptions) complete(cmd *cobra.Command, _ []string) error {
 	switch o.state {
-	// state doesn't set, continue
-	case "":
+	// display all the crs
+	case "all":
 
 	// valid value, continue
 	case "Creating", "Pending", "PendingVerification",
-		"Failed", "Ready":
+		"Failed", "Ready", "":
 
 	// throw error
 	default:
 		return cmdutil.UsageErrorf(cmd, "unsupported account state "+o.state)
+	}
+
+	switch o.reused {
+	case "", "true", "false":
+	default:
+		return cmdutil.UsageErrorf(cmd, "unsupported reused status filter "+o.reused)
+	}
+
+	switch o.claimed {
+	case "", "true", "false":
+	default:
+		return cmdutil.UsageErrorf(cmd, "unsupported claimed status filter "+o.claimed)
 	}
 
 	var err error
@@ -82,21 +106,69 @@ func (o *listOptions) complete(cmd *cobra.Command, _ []string) error {
 
 func (o *listOptions) run() error {
 	ctx := context.TODO()
-	var accounts awsv1alpha1.AccountList
+
+	var (
+		accounts        awsv1alpha1.AccountList
+		outputAccounts  awsv1alpha1.AccountList
+		resourcePrinter printers.ResourcePrinter
+		matched         bool
+		reused          bool
+		claimed         bool
+		err             error
+	)
+	if o.reused != "" {
+		if o.reused == "true" {
+			reused = true
+		}
+	}
+
+	if o.claimed != "" {
+		if o.claimed == "true" {
+			claimed = true
+		}
+	}
+
 	if err := o.kubeCli.List(ctx, &accounts, &client.ListOptions{
 		Namespace: o.accountNamespace}); err != nil {
 		return err
 	}
 
-	var matched bool
+	if o.output != "" {
+		outputAccounts = awsv1alpha1.AccountList{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "v1",
+				Kind:       "List",
+			},
+			Items: make([]awsv1alpha1.Account, 0),
+		}
+
+		resourcePrinter, err = o.printFlags.ToPrinter(o.output)
+		if err != nil {
+			return err
+		}
+	}
+
 	p := printer.NewTablePrinter(o.IOStreams.Out, 20, 1, 3, ' ')
 	p.AddRow([]string{"Name", "State", "AWS ACCOUNT ID", "Last Probe Time", "Last Transition Time", "Message"})
+
 	for _, account := range accounts.Items {
-		if o.reused != account.Status.Reused {
+		if o.claimed != "" {
+			if account.Status.Claimed != claimed {
+				continue
+			}
+		}
+		if o.reused != "" {
+			if account.Status.Reused != reused {
+				continue
+			}
+		}
+
+		if o.state != "all" && account.Status.State != o.state {
 			continue
 		}
 
-		if o.state != "" && account.Status.State != o.state {
+		if o.output != "" {
+			outputAccounts.Items = append(outputAccounts.Items, account)
 			continue
 		}
 
@@ -111,17 +183,24 @@ func (o *listOptions) run() error {
 			lastTransitionTime = account.Status.Conditions[conditionLen-1].LastTransitionTime.Time
 			message = account.Status.Conditions[conditionLen-1].Message
 		}
-		p.AddRow([]string{
+
+		rows := []string{
 			account.Name,
 			account.Status.State,
 			account.Spec.AwsAccountID,
 			lastProbeTime.String(),
 			lastTransitionTime.String(),
 			message,
-		})
+		}
+
+		p.AddRow(rows)
 
 		// this is used to mark whether there are matched accounts or not
 		matched = true
+	}
+
+	if o.output != "" {
+		return resourcePrinter.PrintObj(&outputAccounts, o.Out)
 	}
 
 	if matched {

@@ -14,9 +14,12 @@ osdctl account list [flags]
 
 ```
       --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
+  -c, --claim string               Filter account CRs by claimed or not. Supported values are true, false. Otherwise it lists all accounts
   -h, --help                       help for list
-  -r, --reuse                      Only list reused accounts CR if true
-      --state string               Account cr state. If not specified, it will list all crs by default.
+  -o, --output string              Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].
+  -r, --reuse string               Filter account CRs by reused or not. Supported values are true, false. Otherwise it lists all accounts
+      --state string               Account cr state. The default value is all to display all the crs (default "all")
+      --template string            Template string or path to template file to use when --output=jsonpath, --output=jsonpath-file.
 ```
 
 ### Options inherited from parent commands

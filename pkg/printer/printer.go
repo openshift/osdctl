@@ -3,12 +3,14 @@ package printer
 import (
 	"encoding/json"
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"io"
-	"k8s.io/apimachinery/pkg/runtime"
 	"os"
 	"strings"
 	"text/tabwriter"
+
+	"gopkg.in/yaml.v2"
+
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // printer use to output something on screen with table format.
