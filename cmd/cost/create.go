@@ -2,6 +2,7 @@ package cost
 
 import (
 	"fmt"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/costexplorer"
@@ -12,37 +13,30 @@ import (
 )
 
 // createCmd represents the create command
-var createCmd = &cobra.Command{
-	Use:   "create",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+func newCmdCreate(streams genericclioptions.IOStreams) *cobra.Command {
+	var createCmd = &cobra.Command{
+		Use:   "create",
+		Short: "Create a cost category for the given OU",
+		Run: func(cmd *cobra.Command, args []string) {
+			//OU Flag
+			OUid, err := cmd.Flags().GetString("ou")
+			if err != nil {
+				log.Fatalln("OU flag:", err)
+			}
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		//OU Flag
-		OUid, err := cmd.Flags().GetString("ou")
-		if err != nil {
-			log.Fatalln("OU flag:", err)
-		}
+			//Get Organizational Unit
+			OU := organizations.OrganizationalUnit{Id: aws.String(OUid)}
 
-		//Get Organizational Unit
-		OU := organizations.OrganizationalUnit{Id: aws.String(OUid)}
-		//Initialize AWS clients
-		//org, ce := initAWSClients()
-
-		createCostCategory(&OUid, &OU, org, ce)
-	},
-}
-
-func init() {
+			createCostCategory(&OUid, &OU, org, ce)
+		},
+	}
 	createCmd.Flags().String("ou", "", "get OU ID")
 	err := createCmd.MarkFlagRequired("ou")
 	if err != nil {
 		log.Fatalln("OU flag:", err)
 	}
+
+	return createCmd
 }
 
 //Create Cost Category for OU given as argument for -ccc flag

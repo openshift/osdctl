@@ -36,7 +36,7 @@ platforms may be added in the future)`,
 	//Add commands
 	costCmd.AddCommand(newCmdGet(streams))
 	costCmd.AddCommand(newCmdReconcile(streams))
-	//costCmd.AddCommand(newCmdCreate(streams))
+	costCmd.AddCommand(newCmdCreate(streams))
 
 	return costCmd
 }
