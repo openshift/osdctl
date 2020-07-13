@@ -20,12 +20,9 @@ func NewCmdCost(streams genericclioptions.IOStreams) *cobra.Command {
 		Short: "Cost Management related utilities",
 		Long: `The cost command allows for cost management on the AWS platform (other 
 platforms may be added in the future)`,
-		Run: func(cmd *cobra.Command, args []string) {
-
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd, args))
 			cmdutil.CheckErr(ops.initAWSClients())
-
-			//ops.initAWSClients()
 		},
 	}
 
@@ -34,11 +31,12 @@ platforms may be added in the future)`,
 	costCmd.PersistentFlags().StringVarP(&ops.secretAccessKey, "aws-secret-access-key", "x", "", "AWS Secret Access Key")
 	costCmd.PersistentFlags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile")
 	costCmd.PersistentFlags().StringVarP(&ops.configFile, "aws-config", "c", "", "specify AWS config file path")
-	costCmd.PersistentFlags().StringVarP(&ops.region, "aws-region", "z", common.DefaultRegion, "specify AWS region")
+	costCmd.PersistentFlags().StringVarP(&ops.region, "aws-region", "g", common.DefaultRegion, "specify AWS region")
 
-	//costCmd.AddCommand(awsCmd)
+	//Add commands
 	costCmd.AddCommand(newCmdGet(streams))
 	costCmd.AddCommand(newCmdReconcile(streams))
+	//costCmd.AddCommand(newCmdCreate(streams))
 
 	return costCmd
 }
@@ -65,8 +63,6 @@ func newCostOptions(streams genericclioptions.IOStreams) *costOptions {
 }
 
 func (ops *costOptions) initAWSClients() error {
-	//ops := newCostOptions(streams)
-
 	//Initialize AWS clients
 	var (
 		awsClient awsprovider.Client
@@ -102,25 +98,3 @@ func (ops *costOptions) complete(cmd *cobra.Command, _ []string) error {
 
 	return nil
 }
-
-//func (ops *costOptions) run() error {
-//	var (
-//		awsClient awsprovider.Client
-//		err       error
-//	)
-//	if ops.accessKeyID == "" && ops.secretAccessKey == "" {
-//		awsClient, err = awsprovider.NewAwsClient(ops.profile, ops.region, ops.configFile)
-//	} else {
-//		awsClient, err = awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
-//			AwsIDKey:     ops.accessKeyID,
-//			AwsAccessKey: ops.secretAccessKey,
-//			AwsRegion:    ops.region,
-//		})
-//	}
-//
-//	if err != nil {
-//		return err
-//	}
-//}
-
-
