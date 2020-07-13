@@ -26,9 +26,6 @@ to quickly create a Cobra application.`,
 			//Set OU as Openshift: reconciliateCostCategories will then create cost categories for v4 and its child OUs
 			OU := organizations.OrganizationalUnit{Id: aws.String("ou-0wd6-3q0027q7")}
 
-			//Initialize AWS clients
-			//org, ce := initAWSClients()
-
 			reconciliateCostCategories(&OU, org, ce)
 		},
 	}
@@ -55,9 +52,6 @@ func reconciliateCostCategories(OU *organizations.OrganizationalUnit, org *organ
 		for _, costCategory := range existingCostCategories.CostCategoryReferences {
 			costCategoriesSet.Add(*costCategory.Name)
 		}
-
-		fmt.Println("hello from reconcile loop")
-		fmt.Println("length cc:", len(existingCostCategories.CostCategoryReferences))
 
 		if existingCostCategories.NextToken == nil {
 			break
