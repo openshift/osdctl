@@ -62,6 +62,11 @@ type Client interface {
 	GetCE() *costexplorer.CostExplorer
 }
 
+type Org interface {
+	ListAccountsForParent(input *organizations.ListOrganizationalUnitsForParentInput) *organizations.ListOrganizationalUnitsForParentInput
+}
+
+
 type AwsClient struct {
 	iamClient iamiface.IAMAPI
 	stsClient stsiface.STSAPI
