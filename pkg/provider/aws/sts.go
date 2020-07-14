@@ -38,7 +38,7 @@ type sessionPayload struct {
 // RequestSignInToken makes a HTTP request to retrieve an AWS SignIn Token
 // via the AWS Federation endpoint
 func RequestSignInToken(awsClient Client, durationSeconds *int64, sessionName, roleArn *string) (string, error) {
-	credentials, err := getAssumeRoleCredentials(awsClient, durationSeconds, sessionName, roleArn)
+	credentials, err := GetAssumeRoleCredentials(awsClient, durationSeconds, sessionName, roleArn)
 	if err != nil {
 		return "", err
 	}
@@ -61,8 +61,8 @@ func RequestSignInToken(awsClient Client, durationSeconds *int64, sessionName, r
 	return signedFederationURL.String(), nil
 }
 
-// getAssumeRoleCredentials gets the Federation Token from AWS.
-func getAssumeRoleCredentials(awsClient Client, durationSeconds *int64, roleSessionName, roleArn *string) (*sts.Credentials, error) {
+// GetAssumeRoleCredentials gets the Federation Token from AWS.
+func GetAssumeRoleCredentials(awsClient Client, durationSeconds *int64, roleSessionName, roleArn *string) (*sts.Credentials, error) {
 	assumeRoleOutput, err := awsClient.AssumeRole(&sts.AssumeRoleInput{
 		DurationSeconds: durationSeconds,
 		RoleSessionName: roleSessionName,

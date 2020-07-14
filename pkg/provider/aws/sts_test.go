@@ -92,7 +92,7 @@ func TestGetAssumeRoleCredentials(t *testing.T) {
 			// after mocks is defined
 			defer mocks.mockCtrl.Finish()
 
-			creds, err := getAssumeRoleCredentials(mocks.mockAWSClient, aws.Int64(0), &tc.roleSessionName, &tc.roleArn)
+			creds, err := GetAssumeRoleCredentials(mocks.mockAWSClient, aws.Int64(0), &tc.roleSessionName, &tc.roleArn)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())
 			} else {
