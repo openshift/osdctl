@@ -32,6 +32,7 @@ osdctl account [flags]
 * [osdctl](osdctl.md)	 - OSD CLI
 * [osdctl account check-secrets](osdctl_account_check-secrets.md)	 - Check AWS Account CR IAM User credentials
 * [osdctl account clean-velero-snapshots](osdctl_account_clean-velero-snapshots.md)	 - Cleans up S3 buckets whose name start with managed-velero
+* [osdctl account cli](osdctl_account_cli.md)	 - Generate temporary AWS CLI credentials on demand
 * [osdctl account console](osdctl_account_console.md)	 - Generate an AWS console URL on the fly
 * [osdctl account get](osdctl_account_get.md)	 - get resources
 * [osdctl account list](osdctl_account_list.md)	 - List AWS Account CR
