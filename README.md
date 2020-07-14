@@ -12,6 +12,11 @@ Currently, it mainly supports related work for AWS, especially [aws-account-oper
 
 ### Build from source
 
+#### Requirements
+
+- Go >= 1.13
+- make
+
 ``` bash
 git clone https://github.com/openshift/osd-utils-cli.git
 make build
