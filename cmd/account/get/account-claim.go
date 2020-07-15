@@ -97,7 +97,7 @@ func (o *getAccountClaimOptions) run() error {
 		if err := o.kubeCli.List(ctx, &accounts, &client.ListOptions{
 			Namespace: o.accountNamespace,
 		}); err != nil {
-			return nil
+			return err
 		}
 
 		for _, a := range accounts.Items {
