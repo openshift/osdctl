@@ -31,12 +31,13 @@ func newCmdGetAccount(streams genericclioptions.IOStreams, flags *genericcliopti
 		},
 	}
 
+	ops.printFlags.AddFlags(getAccountCmd)
+	getAccountCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
 	getAccountCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 	getAccountCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "AWS account ID")
 	getAccountCmd.Flags().StringVarP(&ops.accountClaimName, "account-claim", "c", "", "Account Claim CR name")
 	getAccountCmd.Flags().StringVarP(&ops.accountClaimNamespace, "account-claim-ns", "n", "", "Account Claim CR namespace")
-	getAccountCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format, json and yaml are supported.")
 
 	return getAccountCmd
 }
@@ -50,15 +51,17 @@ type getAccountOptions struct {
 
 	output string
 
-	flags *genericclioptions.ConfigFlags
+	flags      *genericclioptions.ConfigFlags
+	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
 	kubeCli client.Client
 }
 
 func newGetAccountOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *getAccountOptions {
 	return &getAccountOptions{
-		flags:     flags,
-		IOStreams: streams,
+		flags:      flags,
+		printFlags: printer.NewPrintFlags(),
+		IOStreams:  streams,
 	}
 }
 
@@ -134,5 +137,10 @@ func (o *getAccountOptions) run() error {
 		return nil
 	}
 
-	return printer.FormatOutput(o.IOStreams.Out, o.output, account)
+	resourcePrinter, err := o.printFlags.ToPrinter(o.output)
+	if err != nil {
+		return err
+	}
+
+	return resourcePrinter.PrintObj(account, o.Out)
 }

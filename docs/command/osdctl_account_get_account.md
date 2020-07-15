@@ -18,7 +18,8 @@ osdctl account get account [flags]
   -i, --account-id string          AWS account ID
       --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
   -h, --help                       help for account
-  -o, --output string              Output format, json and yaml are supported.
+  -o, --output string              Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].
+      --template string            Template string or path to template file to use when --output=jsonpath, --output=jsonpath-file.
 ```
 
 ### Options inherited from parent commands
