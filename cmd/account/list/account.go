@@ -1,4 +1,4 @@
-package account
+package list
 
 import (
 	"context"
@@ -18,11 +18,11 @@ import (
 	"github.com/openshift/osd-utils-cli/pkg/printer"
 )
 
-// newCmdList implements the list command to list account crs
-func newCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newListOptions(streams, flags)
-	listCmd := &cobra.Command{
-		Use:               "list",
+// newCmdListAccount implements the list account command to list account crs
+func newCmdListAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
+	ops := newListAccountOptions(streams, flags)
+	listAccountCmd := &cobra.Command{
+		Use:               "account",
 		Short:             "List AWS Account CR",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
@@ -32,21 +32,21 @@ func newCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.Co
 		},
 	}
 
-	ops.printFlags.AddFlags(listCmd)
-	listCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
-	listCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
+	ops.printFlags.AddFlags(listAccountCmd)
+	listAccountCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
+	listAccountCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
-	listCmd.Flags().StringVarP(&ops.reused, "reuse", "r", "",
+	listAccountCmd.Flags().StringVarP(&ops.reused, "reuse", "r", "",
 		"Filter account CRs by reused or not. Supported values are true, false. Otherwise it lists all accounts")
-	listCmd.Flags().StringVarP(&ops.claimed, "claim", "c", "",
+	listAccountCmd.Flags().StringVarP(&ops.claimed, "claim", "c", "",
 		"Filter account CRs by claimed or not. Supported values are true, false. Otherwise it lists all accounts")
-	listCmd.Flags().StringVar(&ops.state, "state", "all", "Account cr state. The default value is all to display all the crs")
+	listAccountCmd.Flags().StringVar(&ops.state, "state", "all", "Account cr state. The default value is all to display all the crs")
 
-	return listCmd
+	return listAccountCmd
 }
 
-// listOptions defines the struct for running list command
-type listOptions struct {
+// listAccountOptions defines the struct for running list account command
+type listAccountOptions struct {
 	accountNamespace string
 
 	reused  string
@@ -61,15 +61,15 @@ type listOptions struct {
 	kubeCli client.Client
 }
 
-func newListOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *listOptions {
-	return &listOptions{
+func newListAccountOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *listAccountOptions {
+	return &listAccountOptions{
 		flags:      flags,
 		printFlags: printer.NewPrintFlags(),
 		IOStreams:  streams,
 	}
 }
 
-func (o *listOptions) complete(cmd *cobra.Command, _ []string) error {
+func (o *listAccountOptions) complete(cmd *cobra.Command, _ []string) error {
 	switch o.state {
 	// display all the crs
 	case "all":
@@ -104,7 +104,7 @@ func (o *listOptions) complete(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func (o *listOptions) run() error {
+func (o *listAccountOptions) run() error {
 	ctx := context.TODO()
 
 	var (
