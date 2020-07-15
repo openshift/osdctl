@@ -16,7 +16,7 @@ import (
 	"github.com/openshift/osd-utils-cli/pkg/printer"
 )
 
-// newCmdGetAccountClaim implements the get account command which get the Account CR
+// newCmdGetAccount implements the get account command which get the Account CR
 // related to the specified AWS Account ID or the specified Account Claim CR
 func newCmdGetAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
 	ops := newGetAccountOptions(streams, flags)

@@ -59,13 +59,13 @@ func newGetAWSAccountOptions(streams genericclioptions.IOStreams, flags *generic
 }
 
 func (o *getAWSAccountOptions) complete(cmd *cobra.Command, _ []string) error {
-	// account claim CR name and account ID cannot be empty at the same time
+	// account claim CR name and account CR name cannot be empty at the same time
 	if o.accountName == "" && o.accountClaimName == "" {
-		return cmdutil.UsageErrorf(cmd, "AWS account ID and AccountClaim CR Name cannot be empty at the same time")
+		return cmdutil.UsageErrorf(cmd, "Account CR Name and AccountClaim CR Name cannot be empty at the same time")
 	}
 
 	if o.accountName != "" && o.accountClaimName != "" {
-		return cmdutil.UsageErrorf(cmd, "AWS account ID and AccountClaim CR Name cannot be set at the same time")
+		return cmdutil.UsageErrorf(cmd, "Account CR Name and AccountClaim CR Name cannot be set at the same time")
 	}
 
 	var err error
