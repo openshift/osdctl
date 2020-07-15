@@ -62,11 +62,6 @@ type Client interface {
 	GetCE() *costexplorer.CostExplorer
 }
 
-type Org interface {
-	ListAccountsForParent(input *organizations.ListOrganizationalUnitsForParentInput) *organizations.ListOrganizationalUnitsForParentInput
-}
-
-
 type AwsClient struct {
 	iamClient iamiface.IAMAPI
 	stsClient stsiface.STSAPI
@@ -86,6 +81,10 @@ type CostExplorerClient interface {
 	ListCostCategoryDefinitions(input *costexplorer.ListCostCategoryDefinitionsInput) (*costexplorer.ListCostCategoryDefinitionsOutput, error)
 }
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> Created interfaces OrganizationsClients and CostExplorerClient and changed necessary parameters of all files to reflect this
 // NewAwsClient creates an AWS client with credentials in the environment
 func NewAwsClient(profile, region, configFile string) (Client, error) {
 	opt := session.Options{
