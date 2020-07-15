@@ -3,6 +3,7 @@ package cost
 import (
 	"fmt"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"log"
 	"strconv"
 	"time"
@@ -12,15 +13,23 @@ import (
 	"github.com/aws/aws-sdk-go/service/organizations"
 
 	"github.com/spf13/cobra"
+
+	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
 )
 
 // getCmd represents the get command
 func newCmdGet(streams genericclioptions.IOStreams) *cobra.Command{
 	ops := newGetOptions(streams)
+
 	var getCmd = &cobra.Command{
 		Use:   "get",
 		Short: "Get total cost of a given OU. If no OU given, then gets total cost of v4 OU.",
 		Run: func(cmd *cobra.Command, args []string) {
+
+			cmdutil.CheckErr(opsCost.complete(cmd, args))
+			org, ce, err := opsCost.initAWSClients()
+			cmdutil.CheckErr(err)
+
 			//Get Organizational Unit
 			OU := organizations.OrganizationalUnit{Id: aws.String(ops.ou)}
 			//Store cost
@@ -58,7 +67,7 @@ func newGetOptions(streams genericclioptions.IOStreams) *getOptions {
 }
 
 //Get account IDs of immediate accounts under given OU
-func getAccounts(OU *organizations.OrganizationalUnit, org *organizations.Organizations) []*string {
+func getAccounts(OU *organizations.OrganizationalUnit, org awsprovider.OrganizationsClient) []*string {
 	//accountSlice stores accounts
 	var accountSlice []*string
 
@@ -92,7 +101,7 @@ func getAccounts(OU *organizations.OrganizationalUnit, org *organizations.Organi
 }
 
 //Get the account IDs of all (not only immediate) accounts under OU
-func getAccountsRecursive(OU *organizations.OrganizationalUnit, org *organizations.Organizations) []*string {
+func getAccountsRecursive(OU *organizations.OrganizationalUnit, org awsprovider.OrganizationsClient) []*string {
 	var accountsIDs []*string
 
 	//Populate OUs
@@ -108,7 +117,7 @@ func getAccountsRecursive(OU *organizations.OrganizationalUnit, org *organizatio
 }
 
 //Get immediate OUs (child nodes) directly under given OU
-func getOUs(OU *organizations.OrganizationalUnit, org *organizations.Organizations) []*organizations.OrganizationalUnit {
+func getOUs(OU *organizations.OrganizationalUnit, org awsprovider.OrganizationsClient) []*organizations.OrganizationalUnit {
 	//OUSlice stores OUs
 	var OUSlice []*organizations.OrganizationalUnit
 
@@ -142,7 +151,7 @@ func getOUs(OU *organizations.OrganizationalUnit, org *organizations.Organizatio
 }
 
 //Get the account IDs of all (not only immediate) accounts under OU
-func getOUsRecursive(OU *organizations.OrganizationalUnit, org *organizations.Organizations) []*organizations.OrganizationalUnit {
+func getOUsRecursive(OU *organizations.OrganizationalUnit, org awsprovider.OrganizationsClient) []*organizations.OrganizationalUnit {
 	var OUs []*organizations.OrganizationalUnit
 
 	//Populate OUs by getting immediate OUs (direct nodes)
@@ -158,7 +167,7 @@ func getOUsRecursive(OU *organizations.OrganizationalUnit, org *organizations.Or
 }
 
 //Get cost of given account
-func getAccountCost(accountID *string, ce *costexplorer.CostExplorer, timePtr *string, cost *float64) {
+func getAccountCost(accountID *string, ce awsprovider.CostExplorerClient, timePtr *string, cost *float64) {
 
 	start := strconv.Itoa(time.Now().Year()-1) + time.Now().Format("-01-") + "01" //Starting from the 1st of the current month last year i.e. if today is 2020-06-29, then start date is 2019-06-01
 	end := time.Now().Format("2006-01-02")
@@ -211,7 +220,7 @@ func getAccountCost(accountID *string, ce *costexplorer.CostExplorer, timePtr *s
 }
 
 //Get cost of given OU by aggregating costs of immediate accounts under given OU
-func getOUCost(OU *organizations.OrganizationalUnit, org *organizations.Organizations, ce *costexplorer.CostExplorer, timePtr *string, cost *float64) {
+func getOUCost(OU *organizations.OrganizationalUnit, org awsprovider.OrganizationsClient, ce awsprovider.CostExplorerClient, timePtr *string, cost *float64) {
 	//Populate accounts
 	accounts := getAccounts(OU, org)
 
@@ -222,7 +231,7 @@ func getOUCost(OU *organizations.OrganizationalUnit, org *organizations.Organiza
 }
 
 //Get cost of all (not only immediate) accounts under OU
-func getOUCostRecursive(OU *organizations.OrganizationalUnit, org *organizations.Organizations, ce *costexplorer.CostExplorer, timePtr *string, cost *float64) {
+func getOUCostRecursive(OU *organizations.OrganizationalUnit, org awsprovider.OrganizationsClient, ce awsprovider.CostExplorerClient, timePtr *string, cost *float64) {
 	//Populate OUs
 	OUs := getOUs(OU, org)
 

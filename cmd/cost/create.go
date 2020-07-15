@@ -2,7 +2,9 @@ package cost
 
 import (
 	"fmt"
+	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/costexplorer"
@@ -18,6 +20,11 @@ func newCmdCreate(streams genericclioptions.IOStreams) *cobra.Command {
 		Use:   "create",
 		Short: "Create a cost category for the given OU",
 		Run: func(cmd *cobra.Command, args []string) {
+
+			cmdutil.CheckErr(opsCost.complete(cmd, args))
+			org, ce, err := opsCost.initAWSClients()
+			cmdutil.CheckErr(err)
+
 			//OU Flag
 			OUid, err := cmd.Flags().GetString("ou")
 			if err != nil {
@@ -40,7 +47,7 @@ func newCmdCreate(streams genericclioptions.IOStreams) *cobra.Command {
 }
 
 //Create Cost Category for OU given as argument for -ccc flag
-func createCostCategory(OUid *string, OU *organizations.OrganizationalUnit, org *organizations.Organizations, ce *costexplorer.CostExplorer) {
+func createCostCategory(OUid *string, OU *organizations.OrganizationalUnit, org awsprovider.OrganizationsClient, ce awsprovider.CostExplorerClient) {
 	accounts := getAccountsRecursive(OU, org)
 
 	_, err := ce.CreateCostCategoryDefinition(&costexplorer.CreateCostCategoryDefinitionInput{

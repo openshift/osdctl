@@ -6,23 +6,25 @@ import (
 	"github.com/aws/aws-sdk-go/service/costexplorer"
 	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/deckarep/golang-set"
+	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"log"
 )
 
 // reconcileCmd represents the reconcile command
 func newCmdReconcile(streams genericclioptions.IOStreams) *cobra.Command {
+
 	var reconcileCmd = &cobra.Command{
 		Use:   "reconcile",
-		Short: "A brief description of your command",
-		Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+		Short: "Checks if there's a cost category for every OU. If an OU is missing a cost category, creates the cost category",
 		Run: func(cmd *cobra.Command, args []string) {
+
+			cmdutil.CheckErr(opsCost.complete(cmd, args))
+			org, ce, err := opsCost.initAWSClients()
+			cmdutil.CheckErr(err)
+
 			//Set OU as Openshift: reconciliateCostCategories will then create cost categories for v4 and its child OUs
 			OU := organizations.OrganizationalUnit{Id: aws.String("ou-0wd6-3q0027q7")}
 
@@ -34,7 +36,7 @@ to quickly create a Cobra application.`,
 }
 
 //Checks if there's a cost category for every OU. If not, creates the missing cost category. This should be ran every 24 hours.
-func reconciliateCostCategories(OU *organizations.OrganizationalUnit, org *organizations.Organizations, ce *costexplorer.CostExplorer) {
+func reconciliateCostCategories(OU *organizations.OrganizationalUnit, org awsprovider.OrganizationsClient, ce awsprovider.CostExplorerClient) {
 	costCategoryCreated := false
 
 	OUs := getOUsRecursive(OU, org)
