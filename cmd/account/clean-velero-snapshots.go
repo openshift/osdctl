@@ -76,9 +76,9 @@ func (o *cleanVeleroSnapshotsOptions) run() error {
 		awsClient, err = awsprovider.NewAwsClient(o.profile, o.region, o.configFile)
 	} else {
 		awsClient, err = awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
-			AwsIDKey:     o.accessKeyID,
-			AwsAccessKey: o.secretAccessKey,
-			AwsRegion:    o.region,
+			AccessKeyID:     o.accessKeyID,
+			SecretAccessKey: o.secretAccessKey,
+			Region:          o.region,
 		})
 	}
 

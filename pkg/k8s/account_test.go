@@ -80,6 +80,69 @@ func TestGetAWSAccount(t *testing.T) {
 	}
 }
 
+func TestGetAWSAccountClaim(t *testing.T) {
+	_ = awsv1alpha1.AddToScheme(scheme.Scheme)
+	g := NewGomegaWithT(t)
+	testCases := []struct {
+		title           string
+		localObjects    []runtime.Object
+		namespace       string
+		claimName       string
+		expectedAccount awsv1alpha1.AccountClaim
+		errExpected     bool
+		errReason       metav1.StatusReason
+	}{
+		{
+			title:        "not found account claim",
+			localObjects: nil,
+			namespace:    "foo",
+			claimName:    "bar",
+			errExpected:  true,
+			errReason:    metav1.StatusReasonNotFound,
+		},
+		{
+			title: "success",
+			localObjects: []runtime.Object{
+				&awsv1alpha1.AccountClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "bar",
+						Namespace: "foo",
+					},
+				},
+			},
+			namespace:   "foo",
+			claimName:   "bar",
+			errExpected: false,
+			expectedAccount: awsv1alpha1.AccountClaim{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "AccountClaim",
+					APIVersion: "aws.managed.openshift.io/v1alpha1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bar",
+					Namespace: "foo",
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			ctx := context.TODO()
+			client := fake.NewFakeClientWithScheme(scheme.Scheme, tc.localObjects...)
+			accountClaim, err := GetAWSAccountClaim(ctx, client, tc.namespace, tc.claimName)
+			if tc.errExpected {
+				g.Expect(err).Should(HaveOccurred())
+				if tc.errReason != "" {
+					g.Expect(tc.errReason).Should(Equal(apierrors.ReasonForError(err)))
+				}
+			} else {
+				g.Expect(tc.expectedAccount).Should(Equal(*accountClaim))
+			}
+		})
+	}
+}
+
 func TestGetAWSAccountCredentials(t *testing.T) {
 	g := NewGomegaWithT(t)
 	testCases := []struct {
@@ -148,8 +211,8 @@ func TestGetAWSAccountCredentials(t *testing.T) {
 			secretName:  "bar",
 			errExpected: false,
 			credentials: awsprovider.AwsClientInput{
-				AwsIDKey:     "foo",
-				AwsAccessKey: "bar",
+				AccessKeyID:     "foo",
+				SecretAccessKey: "bar",
 			},
 		},
 	}
@@ -167,6 +230,65 @@ func TestGetAWSAccountCredentials(t *testing.T) {
 			} else {
 				g.Expect(tc.credentials).Should(Equal(*creds))
 			}
+		})
+	}
+}
+
+func TestNewAWSSecret(t *testing.T) {
+	g := NewGomegaWithT(t)
+	testCases := []struct {
+		title           string
+		name            string
+		namespace       string
+		accessKeyID     string
+		secretAccessKey string
+		output          string
+	}{
+		{
+			title:           "test case 1",
+			name:            "foo",
+			namespace:       "bar",
+			accessKeyID:     "foo",
+			secretAccessKey: "bar",
+			output: `apiVersion: v1
+data:
+  aws_access_key_id: Zm9v
+  aws_secret_access_key: YmFy
+kind: Secret
+metadata:
+  name: foo
+  namespace: bar
+type: Opaque
+`,
+		},
+		{
+			title:           "test case 2",
+			name:            "foo-secret",
+			namespace:       "aws-account-operator",
+			accessKeyID:     "admin",
+			secretAccessKey: "admin",
+			output: `apiVersion: v1
+data:
+  aws_access_key_id: YWRtaW4=
+  aws_secret_access_key: YWRtaW4=
+kind: Secret
+metadata:
+  name: foo-secret
+  namespace: aws-account-operator
+type: Opaque
+`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			secret := NewAWSSecret(tc.name,
+				tc.namespace,
+				tc.accessKeyID,
+				tc.secretAccessKey,
+			)
+
+			g.Expect(secret).Should(Equal(tc.output))
 		})
 	}
 }

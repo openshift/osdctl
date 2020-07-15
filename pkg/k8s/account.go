@@ -2,10 +2,11 @@ package k8s
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -55,8 +56,8 @@ func GetAWSAccountCredentials(
 	}
 
 	return &awsprovider.AwsClientInput{
-		AwsIDKey:     string(accessKeyID),
-		AwsAccessKey: string(secretAccessKey),
+		AccessKeyID:     string(accessKeyID),
+		SecretAccessKey: string(secretAccessKey),
 	}, nil
 }
 
@@ -76,4 +77,19 @@ func GetAWSAccountClaim(
 	}
 
 	return &ac, nil
+}
+
+func NewAWSSecret(name, namespace, accessKeyID, secretAccessKey string) string {
+	encodedAccessKeyID := base64.StdEncoding.EncodeToString([]byte(accessKeyID))
+	encodedSecretAccessKey := base64.StdEncoding.EncodeToString([]byte(secretAccessKey))
+	return fmt.Sprintf(`apiVersion: v1
+data:
+  aws_access_key_id: %s
+  aws_secret_access_key: %s
+kind: Secret
+metadata:
+  name: %s
+  namespace: %s
+type: Opaque
+`, encodedAccessKeyID, encodedSecretAccessKey, name, namespace)
 }

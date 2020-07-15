@@ -37,5 +37,6 @@ osdctl account [flags]
 * [osdctl account get](osdctl_account_get.md)	 - get resources
 * [osdctl account list](osdctl_account_list.md)	 - List AWS Account CR
 * [osdctl account reset](osdctl_account_reset.md)	 - Reset AWS Account CR
+* [osdctl account rotate-secret](osdctl_account_rotate-secret.md)	 - Rotate IAM credentials secret
 * [osdctl account set](osdctl_account_set.md)	 - Set AWS Account CR status
 

@@ -61,7 +61,7 @@ func RequestSignInToken(awsClient Client, durationSeconds *int64, sessionName, r
 	return signedFederationURL.String(), nil
 }
 
-// GetAssumeRoleCredentials gets the Federation Token from AWS.
+// GetAssumeRoleCredentials gets the assume role credentials from AWS.
 func GetAssumeRoleCredentials(awsClient Client, durationSeconds *int64, roleSessionName, roleArn *string) (*sts.Credentials, error) {
 	assumeRoleOutput, err := awsClient.AssumeRole(&sts.AssumeRoleInput{
 		DurationSeconds: durationSeconds,

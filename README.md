@@ -163,6 +163,20 @@ osdctl get aws-account -a <Account CR Name>
 osdctl get aws-account -c <Claim Name> -n <Claim Namepace>
 ```
 
+### Rotate AWS IAM Credentials
+
+`rotate-secret` command rotates the credentials for one IAM User, it will print out the generated secret by default.
+
+```bash
+# specify by Account ID
+osdctl account rotate-secret <IAM Username> -i 1111111111
+
+# specify by Account CR Name
+osdctl account rotate-secret <IAM Username> -a test-cr
+
+# output the new secret to a path
+osdctl account rotate-secret <IAM Username> -a test-cr --output=/test/secret --secret-name=secret
+```
 
 ### AWS Account Operator metrics display
 
