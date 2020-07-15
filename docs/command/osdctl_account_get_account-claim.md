@@ -13,6 +13,7 @@ osdctl account get account-claim [flags]
 ### Options
 
 ```
+  -a, --account string             Account CR Name
   -i, --account-id string          AWS account ID
       --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
   -h, --help                       help for account-claim

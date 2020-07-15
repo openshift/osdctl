@@ -147,6 +147,9 @@ osdctl account check-secrets <Account CR Name>
 # Get Account Name by AWS Account ID, output to json
 osdctl account get account -i <Account ID> -o json
 
+# Get Account Claim CR by Account CR Name
+osdctl account get account-claim -a <Account CR Name>
+
 # Get Account Claim CR by AWS Account ID, output to yaml
 osdctl account get account-claim -i <Account ID> -o yaml
 
