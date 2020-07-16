@@ -17,7 +17,6 @@ require (
 	github.com/spf13/pflag v1.0.5
 	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae // indirect
 	golang.org/x/text v0.3.3 // indirect
-	google.golang.org/appengine v1.6.1 // indirect
 	gopkg.in/yaml.v2 v2.3.0
 	k8s.io/api v0.18.3
 	k8s.io/apimachinery v0.18.3
