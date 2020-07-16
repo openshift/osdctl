@@ -49,6 +49,11 @@ type Client interface {
 	CreateUser(*iam.CreateUserInput) (*iam.CreateUserOutput, error)
 	ListUsers(*iam.ListUsersInput) (*iam.ListUsersOutput, error)
 	AttachUserPolicy(*iam.AttachUserPolicyInput) (*iam.AttachUserPolicyOutput, error)
+	CreatePolicy(*iam.CreatePolicyInput) (*iam.CreatePolicyOutput, error)
+	DeletePolicy(*iam.DeletePolicyInput) (*iam.DeletePolicyOutput, error)
+	AttachRolePolicy(*iam.AttachRolePolicyInput) (*iam.AttachRolePolicyOutput, error)
+	DetachRolePolicy(*iam.DetachRolePolicyInput) (*iam.DetachRolePolicyOutput, error)
+	ListAttachedRolePolicies(*iam.ListAttachedRolePoliciesInput) (*iam.ListAttachedRolePoliciesOutput, error)
 }
 
 type AwsClient struct {
@@ -167,4 +172,24 @@ func (c *AwsClient) ListUsers(input *iam.ListUsersInput) (*iam.ListUsersOutput, 
 
 func (c *AwsClient) AttachUserPolicy(input *iam.AttachUserPolicyInput) (*iam.AttachUserPolicyOutput, error) {
 	return c.iamClient.AttachUserPolicy(input)
+}
+
+func (c *AwsClient) CreatePolicy(input *iam.CreatePolicyInput) (*iam.CreatePolicyOutput, error) {
+	return c.iamClient.CreatePolicy(input)
+}
+
+func (c *AwsClient) DeletePolicy(input *iam.DeletePolicyInput) (*iam.DeletePolicyOutput, error) {
+	return c.iamClient.DeletePolicy(input)
+}
+
+func (c *AwsClient) AttachRolePolicy(input *iam.AttachRolePolicyInput) (*iam.AttachRolePolicyOutput, error) {
+	return c.iamClient.AttachRolePolicy(input)
+}
+
+func (c *AwsClient) DetachRolePolicy(input *iam.DetachRolePolicyInput) (*iam.DetachRolePolicyOutput, error) {
+	return c.iamClient.DetachRolePolicy(input)
+}
+
+func (c *AwsClient) ListAttachedRolePolicies(input *iam.ListAttachedRolePoliciesInput) (*iam.ListAttachedRolePoliciesOutput, error) {
+	return c.iamClient.ListAttachedRolePolicies(input)
 }

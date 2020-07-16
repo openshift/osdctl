@@ -244,3 +244,78 @@ func (mr *MockClientMockRecorder) AttachUserPolicy(arg0 interface{}) *gomock.Cal
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttachUserPolicy", reflect.TypeOf((*MockClient)(nil).AttachUserPolicy), arg0)
 }
+
+// CreatePolicy mocks base method.
+func (m *MockClient) CreatePolicy(arg0 *iam.CreatePolicyInput) (*iam.CreatePolicyOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreatePolicy", arg0)
+	ret0, _ := ret[0].(*iam.CreatePolicyOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreatePolicy indicates an expected call of CreatePolicy.
+func (mr *MockClientMockRecorder) CreatePolicy(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePolicy", reflect.TypeOf((*MockClient)(nil).CreatePolicy), arg0)
+}
+
+// DeletePolicy mocks base method.
+func (m *MockClient) DeletePolicy(arg0 *iam.DeletePolicyInput) (*iam.DeletePolicyOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePolicy", arg0)
+	ret0, _ := ret[0].(*iam.DeletePolicyOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeletePolicy indicates an expected call of DeletePolicy.
+func (mr *MockClientMockRecorder) DeletePolicy(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePolicy", reflect.TypeOf((*MockClient)(nil).DeletePolicy), arg0)
+}
+
+// AttachRolePolicy mocks base method.
+func (m *MockClient) AttachRolePolicy(arg0 *iam.AttachRolePolicyInput) (*iam.AttachRolePolicyOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AttachRolePolicy", arg0)
+	ret0, _ := ret[0].(*iam.AttachRolePolicyOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AttachRolePolicy indicates an expected call of AttachRolePolicy.
+func (mr *MockClientMockRecorder) AttachRolePolicy(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AttachRolePolicy", reflect.TypeOf((*MockClient)(nil).AttachRolePolicy), arg0)
+}
+
+// DetachRolePolicy mocks base method.
+func (m *MockClient) DetachRolePolicy(arg0 *iam.DetachRolePolicyInput) (*iam.DetachRolePolicyOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DetachRolePolicy", arg0)
+	ret0, _ := ret[0].(*iam.DetachRolePolicyOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DetachRolePolicy indicates an expected call of DetachRolePolicy.
+func (mr *MockClientMockRecorder) DetachRolePolicy(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DetachRolePolicy", reflect.TypeOf((*MockClient)(nil).DetachRolePolicy), arg0)
+}
+
+// ListAttachedRolePolicies mocks base method.
+func (m *MockClient) ListAttachedRolePolicies(arg0 *iam.ListAttachedRolePoliciesInput) (*iam.ListAttachedRolePoliciesOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAttachedRolePolicies", arg0)
+	ret0, _ := ret[0].(*iam.ListAttachedRolePoliciesOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAttachedRolePolicies indicates an expected call of ListAttachedRolePolicies.
+func (mr *MockClientMockRecorder) ListAttachedRolePolicies(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAttachedRolePolicies", reflect.TypeOf((*MockClient)(nil).ListAttachedRolePolicies), arg0)
+}
