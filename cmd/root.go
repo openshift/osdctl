@@ -62,6 +62,9 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	// add docs command
 	rootCmd.AddCommand(newCmdDocs(streams))
 
+	// add completion command
+	rootCmd.AddCommand(newCmdCompletion(streams))
+
 	// add options command to list global flags
 	templates.ActsAsRootCommand(rootCmd, []string{"options"})
 	rootCmd.AddCommand(newCmdOptions(streams))
