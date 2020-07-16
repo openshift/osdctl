@@ -16,7 +16,7 @@ import (
 
 // createCmd represents the create command
 func newCmdCreate(streams genericclioptions.IOStreams) *cobra.Command {
-	var createCmd = &cobra.Command{
+	createCmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a cost category for the given OU",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -44,6 +44,13 @@ func newCmdCreate(streams genericclioptions.IOStreams) *cobra.Command {
 	}
 
 	return createCmd
+}
+
+//Store flag options for get command
+type createOptions struct {
+	ou		  string
+
+	genericclioptions.IOStreams
 }
 
 //Create Cost Category for OU given as argument for -ccc flag
