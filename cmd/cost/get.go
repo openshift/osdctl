@@ -20,8 +20,7 @@ import (
 // getCmd represents the get command
 func newCmdGet(streams genericclioptions.IOStreams) *cobra.Command{
 	ops := newGetOptions(streams)
-
-	var getCmd = &cobra.Command{
+	getCmd := &cobra.Command{
 		Use:   "get",
 		Short: "Get total cost of a given OU. If no OU given, then gets total cost of v4 OU.",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -46,7 +45,7 @@ func newCmdGet(streams genericclioptions.IOStreams) *cobra.Command{
 	}
 	getCmd.Flags().StringVar(&ops.ou, "ou", "ou-0wd6-aff5ji37", "get OU ID (default is v4)") //Default OU is v4
 	getCmd.Flags().BoolVarP(&ops.recursive, "recursive", "r", false, "recurse through OUs")
-	getCmd.Flags().StringVarP(&ops.time, "time", "t", "all", "set time")
+	getCmd.Flags().StringVarP(&ops.time, "time", "t", "", "set time")
 
 	return getCmd
 }

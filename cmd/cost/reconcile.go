@@ -15,8 +15,7 @@ import (
 
 // reconcileCmd represents the reconcile command
 func newCmdReconcile(streams genericclioptions.IOStreams) *cobra.Command {
-
-	var reconcileCmd = &cobra.Command{
+	reconcileCmd := &cobra.Command{
 		Use:   "reconcile",
 		Short: "Checks if there's a cost category for every OU. If an OU is missing a cost category, creates the cost category",
 		Run: func(cmd *cobra.Command, args []string) {
