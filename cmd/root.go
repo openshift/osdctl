@@ -15,7 +15,10 @@ import (
 	"k8s.io/utils/pointer"
 
 	"github.com/openshift/osd-utils-cli/cmd/account"
+<<<<<<< HEAD
 	"github.com/openshift/osd-utils-cli/cmd/clusterdeployment"
+=======
+>>>>>>> 66a5d1adfeeaeb7dbdbbed845f7a6c217c0e6356
 	"github.com/openshift/osd-utils-cli/cmd/cost"
 )
 
@@ -71,7 +74,11 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(newCmdOptions(streams))
 
 	//Add cost command to use AWS Cost Manager
+<<<<<<< HEAD
 	rootCmd.AddCommand(cost.NewCmdCost(streams))
+=======
+	rootCmd.AddCommand(cost.CostCmd)
+>>>>>>> 66a5d1adfeeaeb7dbdbbed845f7a6c217c0e6356
 
 	return rootCmd
 }
