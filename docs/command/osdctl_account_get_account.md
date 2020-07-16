@@ -35,5 +35,5 @@ osdctl account get account [flags]
 
 ### SEE ALSO
 
-* [osdctl account get](osdctl_account_get.md)	 - get resources
+* [osdctl account get](osdctl_account_get.md)	 - Get resources
 

@@ -1,10 +1,10 @@
 ## osdctl account get
 
-get resources
+Get resources
 
 ### Synopsis
 
-get resources
+Get resources
 
 ```
 osdctl account get [flags]

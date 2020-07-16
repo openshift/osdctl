@@ -120,7 +120,7 @@ func (o *consoleOptions) run() error {
 		return err
 	}
 	if o.verbose {
-		fmt.Println(callerIdentityOutput)
+		fmt.Fprintln(o.Out, callerIdentityOutput)
 	}
 
 	roleName := awsv1alpha1.AccountOperatorIAMRole
