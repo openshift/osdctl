@@ -40,21 +40,6 @@ platforms may be added in the future)`,
 
 var opsCost *costOptions
 
-//var org *organizations.Organizations
-//var ce *costexplorer.CostExplorer
-
-
-//For interfaces-------------------------------------------------
-//var orgClient awsprovider.OrganizationsClient
-//var ceClient awsprovider.CostExplorerI
-
-//func init() {
-//	orgClient = &organizations.Organizations{}
-//	ceClient = &costexplorer.CostExplorer{}
-//}
-//----------------------------------------------------------------
-
-
 // costOptions defines the struct for running Cost command
 type costOptions struct {
 	// AWS config
