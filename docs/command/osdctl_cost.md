@@ -7,29 +7,15 @@ Cost Management related utilities
 The cost command allows for cost management on the AWS platform (other 
 platforms may be added in the future)
 
-```
-osdctl cost [flags]
-```
-The cost command allows for cost management on the AWS platform (other
-platforms may be added in the future. Its functions include:
-
-- Managing the AWS Cost Explorer with `osdctl cost aws`. This leaves the possibility of adding cost 
-management support for other platforms e.g. `osdctl cost gcp`
-
-- Get cost of OUs with `osdctl cost aws get`
-
-- Create cost category with `osdctl cost aws create`
-
-- Reconcile cost categories with `osdctl cost aws reconcile`
-
-```
-osdctl cost [flags]
-```
-
 ### Options
 
 ```
-  -h, --help   help for cost
+  -a, --aws-access-key-id string       AWS Access Key ID
+  -c, --aws-config string              specify AWS config file path
+  -p, --aws-profile string             specify AWS profile
+  -g, --aws-region string              specify AWS region (default "us-east-1")
+  -x, --aws-secret-access-key string   AWS Secret Access Key
+  -h, --help                           help for cost
 ```
 
 ### Options inherited from parent commands
@@ -46,4 +32,7 @@ osdctl cost [flags]
 ### SEE ALSO
 
 * [osdctl](osdctl.md)	 - OSD CLI
-* [osdctl cost aws](osdctl_cost_aws.md)	 - A brief description of your command
+* [osdctl cost create](osdctl_cost_create.md)	 - Create a cost category for the given OU
+* [osdctl cost get](osdctl_cost_get.md)	 - Get total cost of a given OU. If no OU given, then gets total cost of v4 OU.
+* [osdctl cost list](osdctl_cost_list.md)	 - List the cost of each OU under given OU
+* [osdctl cost reconcile](osdctl_cost_reconcile.md)	 - Checks if there's a cost category for every OU. If an OU is missing a cost category, creates the cost category

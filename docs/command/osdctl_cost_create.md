@@ -1,4 +1,4 @@
-## osdctl cost aws create
+## osdctl cost create
 
 A brief description of your command
 
@@ -12,7 +12,7 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.
 
 ```
-osdctl cost aws create [flags]
+osdctl cost create [flags]
 ```
 
 ### Options

@@ -1,4 +1,4 @@
-## osdctl cost aws get
+## osdctl cost reconcile
 
 A brief description of your command
 
@@ -12,16 +12,13 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.
 
 ```
-osdctl cost aws get [flags]
+osdctl cost reconcile [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help          help for get
-      --ou string     get OU ID (default is v4) (default "ou-0wd6-aff5ji37")
-  -r, --recursive     recurse through OUs
-  -t, --time string   set time (default "all")
+  -h, --help   help for reconcile
 ```
 
 ### Options inherited from parent commands
