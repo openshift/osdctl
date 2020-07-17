@@ -36,3 +36,4 @@ platforms may be added in the future)
 * [osdctl cost get](osdctl_cost_get.md)	 - Get total cost of a given OU. If no OU given, then gets total cost of v4 OU.
 * [osdctl cost list](osdctl_cost_list.md)	 - List the cost of each OU under given OU
 * [osdctl cost reconcile](osdctl_cost_reconcile.md)	 - Checks if there's a cost category for every OU. If an OU is missing a cost category, creates the cost category
+
