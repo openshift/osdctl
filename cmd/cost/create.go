@@ -48,7 +48,7 @@ func newCmdCreate(streams genericclioptions.IOStreams) *cobra.Command {
 
 //Store flag options for get command
 type createOptions struct {
-	ou		  string
+	ou string
 
 	genericclioptions.IOStreams
 }

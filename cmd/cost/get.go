@@ -18,7 +18,7 @@ import (
 )
 
 // getCmd represents the get command
-func newCmdGet(streams genericclioptions.IOStreams) *cobra.Command{
+func newCmdGet(streams genericclioptions.IOStreams) *cobra.Command {
 	ops := newGetOptions(streams)
 	getCmd := &cobra.Command{
 		Use:   "get",
@@ -52,9 +52,9 @@ func newCmdGet(streams genericclioptions.IOStreams) *cobra.Command{
 
 //Store flag options for get command
 type getOptions struct {
-	ou		  string
+	ou        string
 	recursive bool
-	time	  string
+	time      string
 
 	genericclioptions.IOStreams
 }

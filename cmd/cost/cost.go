@@ -86,7 +86,7 @@ func (opsCost *costOptions) initAWSClients() (awsprovider.OrganizationsClient, a
 		awsClient, err = awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
 			AccessKeyID:     opsCost.accessKeyID,
 			SecretAccessKey: opsCost.secretAccessKey,
-			Region:    		 opsCost.region,
+			Region:          opsCost.region,
 		})
 	}
 

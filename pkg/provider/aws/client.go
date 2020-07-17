@@ -67,7 +67,7 @@ type AwsClient struct {
 	stsClient stsiface.STSAPI
 	s3Client  s3iface.S3API
 	orgClient *organizations.Organizations
-	ceClient *costexplorer.CostExplorer
+	ceClient  *costexplorer.CostExplorer
 }
 
 type OrganizationsClient interface {
@@ -116,7 +116,7 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 		stsClient: sts.New(sess),
 		s3Client:  s3.New(sess),
 		orgClient: organizations.New(sess),
-		ceClient: costexplorer.New(sess),
+		ceClient:  costexplorer.New(sess),
 	}, nil
 }
 
@@ -137,7 +137,7 @@ func NewAwsClientWithInput(input *AwsClientInput) (Client, error) {
 		stsClient: sts.New(s),
 		s3Client:  s3.New(s),
 		orgClient: organizations.New(s),
-		ceClient: costexplorer.New(s),
+		ceClient:  costexplorer.New(s),
 	}, nil
 }
 
