@@ -16,6 +16,7 @@ import (
 
 	"github.com/openshift/osd-utils-cli/cmd/account"
 	"github.com/openshift/osd-utils-cli/cmd/clusterdeployment"
+	"github.com/openshift/osd-utils-cli/cmd/cost"
 	"github.com/openshift/osd-utils-cli/cmd/federatedrole"
 )
 
@@ -70,6 +71,9 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	// add options command to list global flags
 	templates.ActsAsRootCommand(rootCmd, []string{"options"})
 	rootCmd.AddCommand(newCmdOptions(streams))
+
+	//Add cost command to use AWS Cost Manager
+	rootCmd.AddCommand(cost.NewCmdCost(streams))
 
 	return rootCmd
 }
