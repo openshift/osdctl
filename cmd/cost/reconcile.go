@@ -2,7 +2,6 @@ package cost
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/costexplorer"
 	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/deckarep/golang-set"
@@ -29,10 +28,10 @@ func newCmdReconcile(streams genericclioptions.IOStreams) *cobra.Command {
 				log.Fatalln("OU flag:", err)
 			}
 
-			//Set OU as Openshift: reconciliateCostCategories will then create cost categories for v4 and its child OUs
-			OU := organizations.OrganizationalUnit{Id: aws.String(OUid)}
+			//Get information regarding Organizational Unit
+			OU := getOU(awsClient, OUid)
 
-			if err := reconcileCostCategories(&OU, awsClient); err != nil {
+			if err := reconcileCostCategories(OU, awsClient); err != nil {
 				log.Fatalln("Error reconciling cost categories:", err)
 			}
 		},

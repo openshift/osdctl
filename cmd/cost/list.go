@@ -7,7 +7,6 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"log"
 
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/spf13/cobra"
 )
@@ -32,10 +31,10 @@ func newCmdList(streams genericclioptions.IOStreams) *cobra.Command {
 				log.Fatalln("Time flag:", err)
 			}
 
-			//Get Organizational Unit
-			OU := organizations.OrganizationalUnit{Id: aws.String(OUid)}
+			//Get information regarding Organizational Unit
+			OU := getOU(awsClient, OUid)
 
-			if err := listCostsUnderOU(&OU, awsClient, &time); err != nil {
+			if err := listCostsUnderOU(OU, awsClient, &time); err != nil {
 				log.Fatalln("Error listing costs under OU:", err)
 			}
 		},
@@ -64,9 +63,9 @@ func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovide
 		return err
 	}
 	if len(OUs) != 0 {
-		fmt.Printf("Cost of %s: %f\n\nCost of child OUs:\n", *OU.Id, cost)
+		fmt.Printf("Cost of %s: %f\n\nCost of child OUs:\n", *OU.Name, cost)
 	} else {
-		fmt.Printf("Cost of %s: %f\nNo child OUs.\n", *OU.Id, cost)
+		fmt.Printf("Cost of %s: %f\nNo child OUs.\n", *OU.Name, cost)
 	}
 	//Print costs of child OUs under given OU
 	for _, childOU := range OUs {
@@ -74,7 +73,7 @@ func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovide
 		if err := getOUCostRecursive(&cost, childOU, awsClient, timePtr); err != nil {
 			return err
 		}
-		fmt.Printf("Cost of %s: %f\n", *childOU.Id, cost)
+		fmt.Printf("Cost of %s: %f\n", *childOU.Name, cost)
 	}
 
 	return nil

@@ -30,10 +30,10 @@ func newCmdCreate(streams genericclioptions.IOStreams) *cobra.Command {
 				log.Fatalln("OU flag:", err)
 			}
 
-			//Get Organizational Unit
-			OU := organizations.OrganizationalUnit{Id: aws.String(OUid)}
+			//Get information regarding Organizational Unit
+			OU := getOU(awsClient, OUid)
 
-			if err := createCostCategory(&OUid, &OU, awsClient); err != nil {
+			if err := createCostCategory(&OUid, OU, awsClient); err != nil {
 				log.Fatalf("Error creating cost category for %s: %v", OUid, err)
 			}
 		},
@@ -79,7 +79,7 @@ func createCostCategory(OUid *string, OU *organizations.OrganizationalUnit, awsC
 		return err
 	}
 
-	fmt.Println("Created Cost Category for", *OUid)
+	fmt.Println("Created Cost Category for", *OU.Name, "OU")
 
 	return nil
 }

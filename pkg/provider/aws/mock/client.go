@@ -353,6 +353,21 @@ func (mr *MockClientMockRecorder) ListOrganizationalUnitsForParent(input interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOrganizationalUnitsForParent", reflect.TypeOf((*MockClient)(nil).ListOrganizationalUnitsForParent), input)
 }
 
+// DescribeOrganizationalUnit mocks base method.
+func (m *MockClient) DescribeOrganizationalUnit(input *organizations.DescribeOrganizationalUnitInput) (*organizations.DescribeOrganizationalUnitOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescribeOrganizationalUnit", input)
+	ret0, _ := ret[0].(*organizations.DescribeOrganizationalUnitOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeOrganizationalUnit indicates an expected call of DescribeOrganizationalUnit.
+func (mr *MockClientMockRecorder) DescribeOrganizationalUnit(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeOrganizationalUnit", reflect.TypeOf((*MockClient)(nil).DescribeOrganizationalUnit), input)
+}
+
 // GetCostAndUsage mocks base method.
 func (m *MockClient) GetCostAndUsage(input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {
 	m.ctrl.T.Helper()

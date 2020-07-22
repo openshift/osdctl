@@ -27,21 +27,22 @@ func newCmdGet(streams genericclioptions.IOStreams) *cobra.Command {
 			awsClient, err := opsCost.initAWSClients()
 			cmdutil.CheckErr(err)
 
-			//Get Organizational Unit
-			OU := organizations.OrganizationalUnit{Id: aws.String(ops.ou)}
-			//Store cost
-			var cost float64
+			//Get information regarding Organizational Unit
+			OU := getOU(awsClient, ops.ou)
 
-			if ops.recursive { //Get cost of given OU by aggregating costs of all (including immediate) accounts under OU
-				if err := getOUCostRecursive(&cost, &OU, awsClient, &ops.time); err != nil {
+			var cost float64
+			var unit string
+
+			if ops.recursive {
+				if err := getOUCostRecursive(&cost, OU, awsClient, &ops.time); err != nil {
 					log.Fatalln("Error getting cost of OU recursively:", err)
 				}
-				fmt.Printf("Cost of %s recursively is: %f\n", ops.ou, cost)
-			} else { //Get cost of given OU by aggregating costs of only immediate accounts under given OU
-				if err := getOUCost(&cost, &OU, awsClient, &ops.time); err != nil {
+				fmt.Printf("Cost of %s OU recursively is: %f%s\n", *OU.Name, cost, unit)
+			} else {
+				if err := getOUCost(&cost, OU, awsClient, &ops.time); err != nil {
 					log.Fatalln("Error getting cost of OU:", err)
 				}
-				fmt.Printf("Cost of %s is: %f\n", ops.ou, cost)
+				fmt.Printf("Cost of %s OU is: %f%s\n", *OU.Name, cost, unit)
 			}
 		},
 	}
