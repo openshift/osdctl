@@ -161,8 +161,6 @@ osdctl account get secrets -i <Account ID>
 
 test-cr-osdmanagedadminsre-secret
 test-cr-secret
-test-cr-sre-cli-credentials
-test-cr-sre-console-url
 ```
 
 2. Get AWS Account ID
