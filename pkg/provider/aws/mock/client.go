@@ -5,11 +5,14 @@
 package mock
 
 import (
+	reflect "reflect"
+
+	costexplorer "github.com/aws/aws-sdk-go/service/costexplorer"
 	iam "github.com/aws/aws-sdk-go/service/iam"
+	organizations "github.com/aws/aws-sdk-go/service/organizations"
 	s3 "github.com/aws/aws-sdk-go/service/s3"
 	sts "github.com/aws/aws-sdk-go/service/sts"
 	gomock "github.com/golang/mock/gomock"
-	reflect "reflect"
 )
 
 // MockClient is a mock of Client interface.
@@ -318,4 +321,79 @@ func (m *MockClient) ListAttachedRolePolicies(arg0 *iam.ListAttachedRolePolicies
 func (mr *MockClientMockRecorder) ListAttachedRolePolicies(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAttachedRolePolicies", reflect.TypeOf((*MockClient)(nil).ListAttachedRolePolicies), arg0)
+}
+
+// ListAccountsForParent mocks base method.
+func (m *MockClient) ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAccountsForParent", input)
+	ret0, _ := ret[0].(*organizations.ListAccountsForParentOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAccountsForParent indicates an expected call of ListAccountsForParent.
+func (mr *MockClientMockRecorder) ListAccountsForParent(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAccountsForParent", reflect.TypeOf((*MockClient)(nil).ListAccountsForParent), input)
+}
+
+// ListOrganizationalUnitsForParent mocks base method.
+func (m *MockClient) ListOrganizationalUnitsForParent(input *organizations.ListOrganizationalUnitsForParentInput) (*organizations.ListOrganizationalUnitsForParentOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListOrganizationalUnitsForParent", input)
+	ret0, _ := ret[0].(*organizations.ListOrganizationalUnitsForParentOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListOrganizationalUnitsForParent indicates an expected call of ListOrganizationalUnitsForParent.
+func (mr *MockClientMockRecorder) ListOrganizationalUnitsForParent(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOrganizationalUnitsForParent", reflect.TypeOf((*MockClient)(nil).ListOrganizationalUnitsForParent), input)
+}
+
+// GetCostAndUsage mocks base method.
+func (m *MockClient) GetCostAndUsage(input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCostAndUsage", input)
+	ret0, _ := ret[0].(*costexplorer.GetCostAndUsageOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCostAndUsage indicates an expected call of GetCostAndUsage.
+func (mr *MockClientMockRecorder) GetCostAndUsage(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCostAndUsage", reflect.TypeOf((*MockClient)(nil).GetCostAndUsage), input)
+}
+
+// CreateCostCategoryDefinition mocks base method.
+func (m *MockClient) CreateCostCategoryDefinition(input *costexplorer.CreateCostCategoryDefinitionInput) (*costexplorer.CreateCostCategoryDefinitionOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateCostCategoryDefinition", input)
+	ret0, _ := ret[0].(*costexplorer.CreateCostCategoryDefinitionOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateCostCategoryDefinition indicates an expected call of CreateCostCategoryDefinition.
+func (mr *MockClientMockRecorder) CreateCostCategoryDefinition(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCostCategoryDefinition", reflect.TypeOf((*MockClient)(nil).CreateCostCategoryDefinition), input)
+}
+
+// ListCostCategoryDefinitions mocks base method.
+func (m *MockClient) ListCostCategoryDefinitions(input *costexplorer.ListCostCategoryDefinitionsInput) (*costexplorer.ListCostCategoryDefinitionsOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListCostCategoryDefinitions", input)
+	ret0, _ := ret[0].(*costexplorer.ListCostCategoryDefinitionsOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListCostCategoryDefinitions indicates an expected call of ListCostCategoryDefinitions.
+func (mr *MockClientMockRecorder) ListCostCategoryDefinitions(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCostCategoryDefinitions", reflect.TypeOf((*MockClient)(nil).ListCostCategoryDefinitions), input)
 }

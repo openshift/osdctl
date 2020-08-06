@@ -4,6 +4,11 @@ package aws
 //go:generate mockgen -source=client.go -package=mock -destination=mock/client.go
 
 import (
+	"fmt"
+	"github.com/aws/aws-sdk-go/service/costexplorer"
+	"github.com/aws/aws-sdk-go/service/costexplorer/costexploreriface"
+	"github.com/aws/aws-sdk-go/service/organizations"
+	"github.com/aws/aws-sdk-go/service/organizations/organizationsiface"
 	"path/filepath"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -54,12 +59,23 @@ type Client interface {
 	AttachRolePolicy(*iam.AttachRolePolicyInput) (*iam.AttachRolePolicyOutput, error)
 	DetachRolePolicy(*iam.DetachRolePolicyInput) (*iam.DetachRolePolicyOutput, error)
 	ListAttachedRolePolicies(*iam.ListAttachedRolePoliciesInput) (*iam.ListAttachedRolePoliciesOutput, error)
+
+	// Organizations
+	ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error)
+	ListOrganizationalUnitsForParent(input *organizations.ListOrganizationalUnitsForParentInput) (*organizations.ListOrganizationalUnitsForParentOutput, error)
+
+	// Cost Explorer
+	GetCostAndUsage(input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error)
+	CreateCostCategoryDefinition(input *costexplorer.CreateCostCategoryDefinitionInput) (*costexplorer.CreateCostCategoryDefinitionOutput, error)
+	ListCostCategoryDefinitions(input *costexplorer.ListCostCategoryDefinitionsInput) (*costexplorer.ListCostCategoryDefinitionsOutput, error)
 }
 
 type AwsClient struct {
 	iamClient iamiface.IAMAPI
 	stsClient stsiface.STSAPI
 	s3Client  s3iface.S3API
+	orgClient organizationsiface.OrganizationsAPI
+	ceClient  costexploreriface.CostExplorerAPI
 }
 
 // NewAwsClient creates an AWS client with credentials in the environment
@@ -71,8 +87,13 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 		Profile: profile,
 	}
 
-	// only set config file if it is not empty
-	if configFile != "" {
+	if profile == "" && configFile == "" {
+		fmt.Println("Config file and profile are not provided. Reading from env vars.")
+	} else if profile == "" {
+		fmt.Println("No profile provided. Reading from env vars, otherwise, please provide profile to use with config file.")
+	} else if configFile == "" {
+		fmt.Println("No config file provided. Reading from env vars, otherwise, please provide config file to use for profile.")
+	} else { // only set config file if it is not empty
 		absCfgPath, err := filepath.Abs(configFile)
 		if err != nil {
 			return nil, err
@@ -96,6 +117,8 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 		iamClient: iam.New(sess),
 		stsClient: sts.New(sess),
 		s3Client:  s3.New(sess),
+		orgClient: organizations.New(sess),
+		ceClient:  costexplorer.New(sess),
 	}, nil
 }
 
@@ -115,6 +138,8 @@ func NewAwsClientWithInput(input *AwsClientInput) (Client, error) {
 		iamClient: iam.New(s),
 		stsClient: sts.New(s),
 		s3Client:  s3.New(s),
+		orgClient: organizations.New(s),
+		ceClient:  costexplorer.New(s),
 	}, nil
 }
 
@@ -192,4 +217,24 @@ func (c *AwsClient) DetachRolePolicy(input *iam.DetachRolePolicyInput) (*iam.Det
 
 func (c *AwsClient) ListAttachedRolePolicies(input *iam.ListAttachedRolePoliciesInput) (*iam.ListAttachedRolePoliciesOutput, error) {
 	return c.iamClient.ListAttachedRolePolicies(input)
+}
+
+func (c *AwsClient) ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error) {
+	return c.orgClient.ListAccountsForParent(input)
+}
+
+func (c *AwsClient) ListOrganizationalUnitsForParent(input *organizations.ListOrganizationalUnitsForParentInput) (*organizations.ListOrganizationalUnitsForParentOutput, error) {
+	return c.orgClient.ListOrganizationalUnitsForParent(input)
+}
+
+func (c *AwsClient) GetCostAndUsage(input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {
+	return c.ceClient.GetCostAndUsage(input)
+}
+
+func (c *AwsClient) CreateCostCategoryDefinition(input *costexplorer.CreateCostCategoryDefinitionInput) (*costexplorer.CreateCostCategoryDefinitionOutput, error) {
+	return c.ceClient.CreateCostCategoryDefinition(input)
+}
+
+func (c *AwsClient) ListCostCategoryDefinitions(input *costexplorer.ListCostCategoryDefinitionsInput) (*costexplorer.ListCostCategoryDefinitionsOutput, error) {
+	return c.ceClient.ListCostCategoryDefinitions(input)
 }
