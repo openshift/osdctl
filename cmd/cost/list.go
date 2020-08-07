@@ -74,7 +74,7 @@ func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovide
 		if err := getOUCostRecursive(&cost, childOU, awsClient, timePtr); err != nil {
 			return err
 		}
-		fmt.Printf("Cost of %s: %f\n", *childOU.Id, cost)
+		fmt.Printf("Cost of %s: %f\n", *childOU.Name, cost)
 	}
 
 	return nil
