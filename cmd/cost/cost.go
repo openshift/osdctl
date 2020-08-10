@@ -2,11 +2,14 @@ package cost
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/openshift/osd-utils-cli/cmd/common"
 	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"log"
 )
 
 // costCmd represents the cost command
@@ -58,6 +61,16 @@ func newCostOptions(streams genericclioptions.IOStreams) *costOptions {
 	}
 }
 
+func (opsCost *costOptions) complete(cmd *cobra.Command, _ []string) error {
+	if opsCost.accessKeyID == "" && opsCost.secretAccessKey == "" {
+		fmt.Fprintln(opsCost.Out, "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are not provided, reading credentials from config file or env vars.")
+	} else if opsCost.accessKeyID == "" || opsCost.secretAccessKey == "" {
+		return cmdutil.UsageErrorf(cmd, "The flag aws-access-key-id and aws-secret-access-key should be set or not set at the same time")
+	}
+
+	return nil
+}
+
 //Initiate AWS clients for Organizations and Cost Explorer services using, if given, credentials in flags, else, credentials in the environment
 func (opsCost *costOptions) initAWSClients() (awsprovider.Client, error) {
 	//Initialize AWS clients
@@ -82,13 +95,14 @@ func (opsCost *costOptions) initAWSClients() (awsprovider.Client, error) {
 	return awsClient, err
 }
 
-//Initializes costOptions struct
-func (opsCost *costOptions) complete(cmd *cobra.Command, _ []string) error {
-	if opsCost.accessKeyID == "" && opsCost.secretAccessKey == "" {
-		fmt.Fprintln(opsCost.Out, "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are not provided, reading credentials from config file or env vars.")
-	} else if opsCost.accessKeyID == "" || opsCost.secretAccessKey == "" {
-		return cmdutil.UsageErrorf(cmd, "The flag aws-access-key-id and aws-secret-access-key should be set or not set at the same time")
+//Gets information regarding Organizational Unit
+func getOU(org awsprovider.Client, OUid string) *organizations.OrganizationalUnit {
+	result, err := org.DescribeOrganizationalUnit(&organizations.DescribeOrganizationalUnitInput{
+		OrganizationalUnitId: aws.String(OUid),
+	})
+	if err != nil {
+		log.Fatalln("Cannot get Organizational Unit:", err)
 	}
 
-	return nil
+	return result.OrganizationalUnit
 }
