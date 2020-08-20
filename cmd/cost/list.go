@@ -29,18 +29,22 @@ func newCmdList(streams genericclioptions.IOStreams) *cobra.Command {
 			}
 		},
 	}
-	listCmd.Flags().StringVar(&ops.ou, "ou", "ou-0wd6-aff5ji37", "get name of OU (default is name of v4's OU)")
+	listCmd.Flags().StringVar(&ops.ou, "ou", "", "get OU ID")
 	listCmd.Flags().StringVarP(&ops.time, "time", "t", "", "set time")
 	listCmd.Flags().BoolVar(&ops.csv, "csv", false, "output result as csv")
+
+	if err := listCmd.MarkFlagRequired("ou"); err != nil {
+		log.Fatalln("OU flag:", err)
+	}
 
 	return listCmd
 }
 
 //Store flag options for get command
 type listOptions struct {
-	ou        string
-	time      string
-	csv       bool
+	ou   string
+	time string
+	csv  bool
 
 	genericclioptions.IOStreams
 }

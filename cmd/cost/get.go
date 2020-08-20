@@ -50,6 +50,10 @@ func newCmdGet(streams genericclioptions.IOStreams) *cobra.Command {
 	getCmd.Flags().StringVarP(&ops.time, "time", "t", "", "set time")
 	getCmd.Flags().BoolVar(&ops.csv, "csv", false, "output result as csv")
 
+	if err := getCmd.MarkFlagRequired("ou"); err != nil {
+		log.Fatalln("OU flag:", err)
+	}
+
 	return getCmd
 }
 
