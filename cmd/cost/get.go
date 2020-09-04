@@ -176,24 +176,11 @@ func getOUsRecursive(OU *organizations.OrganizationalUnit, awsClient awsprovider
 
 //Get cost of given account
 func getAccountCost(accountID *string, awsClient awsprovider.Client, timePtr *string, cost *float64) error {
-	//Starting from the 1st of the current month last year i.e. if today is 2020-06-29, then start date is 2019-06-01
-	start := strconv.Itoa(time.Now().Year()-1) + time.Now().Format("-01-") + "01"
-	end := time.Now().Format("2006-01-02")
+
+	start, end := getTimePeriod(timePtr)
 	granularity := "MONTHLY"
 	metrics := []string{
 		"NetUnblendedCost",
-	}
-
-	switch *timePtr {
-	case "MTD":
-		start = time.Now().Format("2006-01") + "-01"
-		end = time.Now().Format("2006-01-02")
-	case "YTD":
-		start = time.Now().Format("2006") + "-01-01"
-		end = time.Now().Format("2006-01-02")
-	case "TestError":
-		start = "2020-05-23"
-		end = "2019-06-12"
 	}
 
 	//Get cost information for chosen account
@@ -268,4 +255,39 @@ func getOUCostRecursive(cost *float64, OU *organizations.OrganizationalUnit, aws
 	}
 
 	return nil
+}
+
+//Get time period based on time flag
+func getTimePeriod(timePtr *string) (string, string) {
+	t := time.Now()
+
+	//Starting from the 1st of the current month last year i.e. if today is 2020-06-29, then start date is 2019-06-01
+	start := fmt.Sprintf("%d-%02d-%02d", t.Year()-1, t.Month(), 01)
+	end := fmt.Sprintf("%d-%02d-%02d", t.Year(), t.Month(), t.Day())
+
+	switch *timePtr {
+	case "LM": //Last Month
+		start = fmt.Sprintf("%d-%02d-%02d", t.Year(), t.Month()-1, 01)
+		end = fmt.Sprintf("%d-%02d-%02d", t.Year(), t.Month(), 01)
+	case "MTD":
+		start = fmt.Sprintf("%d-%02d-%02d", t.Year(), t.Month(), 01)
+	case "YTD":
+		start = fmt.Sprintf("%d-%02d-%02d", t.Year(), 01, 01)
+	case "3M":
+		if month := t.Month(); month > 3 {
+			start = t.AddDate(0, -3, 0).Format("2006-01-02")
+		} else {
+			start = t.AddDate(-1, 9, 0).Format("2006-01-02")
+		}
+	case "6M":
+		if month, _ := strconv.Atoi(time.Now().Format("01")); month > 6 {
+			start = t.AddDate(0, -6, 0).Format("2006-01-02")
+		} else {
+			start = t.AddDate(-1, 6, 0).Format("2006-01-02")
+		}
+	case "1Y":
+		start = t.AddDate(-1, 0, 0).Format("2006-01-02")
+	}
+
+	return start, end
 }
