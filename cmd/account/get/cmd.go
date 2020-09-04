@@ -14,7 +14,7 @@ const (
 func NewCmdGet(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
 	getCmd := &cobra.Command{
 		Use:               "get",
-		Short:             "get resources",
+		Short:             "Get resources",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run:               help,
