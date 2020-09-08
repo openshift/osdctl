@@ -1,4 +1,4 @@
-package account
+package secret
 
 import (
 	"context"
@@ -27,7 +27,7 @@ const (
 func newCmdCheckSecrets(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
 	ops := newCheckSecretsOptions(streams, flags)
 	checkSecretsCmd := &cobra.Command{
-		Use:               "check-secrets [<account name>]",
+		Use:               "check [<account name>]",
 		Short:             "Check AWS Account CR IAM User credentials",
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {

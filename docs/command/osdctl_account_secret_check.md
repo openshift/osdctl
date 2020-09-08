@@ -1,19 +1,21 @@
-## osdctl account
+## osdctl account secret check
 
-AWS Account related utilities
+Check AWS Account CR IAM User credentials
 
 ### Synopsis
 
-AWS Account related utilities
+Check AWS Account CR IAM User credentials
 
 ```
-osdctl account [flags]
+osdctl account secret check [<account name>] [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for account
+      --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
+  -h, --help                       help for check
+  -v, --verbose                    Verbose output
 ```
 
 ### Options inherited from parent commands
@@ -29,13 +31,5 @@ osdctl account [flags]
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
-* [osdctl account clean-velero-snapshots](osdctl_account_clean-velero-snapshots.md)	 - Cleans up S3 buckets whose name start with managed-velero
-* [osdctl account cli](osdctl_account_cli.md)	 - Generate temporary AWS CLI credentials on demand
-* [osdctl account console](osdctl_account_console.md)	 - Generate an AWS console URL on the fly
-* [osdctl account get](osdctl_account_get.md)	 - get resources
-* [osdctl account list](osdctl_account_list.md)	 - List resources
-* [osdctl account reset](osdctl_account_reset.md)	 - Reset AWS Account CR
 * [osdctl account secret](osdctl_account_secret.md)	 - secret <command>
-* [osdctl account set](osdctl_account_set.md)	 - Set AWS Account CR status
 

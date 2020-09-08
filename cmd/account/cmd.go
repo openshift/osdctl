@@ -6,6 +6,7 @@ import (
 
 	"github.com/openshift/osd-utils-cli/cmd/account/get"
 	"github.com/openshift/osd-utils-cli/cmd/account/list"
+	"github.com/openshift/osd-utils-cli/cmd/account/secret"
 )
 
 // NewCmdAccount implements the base account command
@@ -20,13 +21,13 @@ func NewCmdAccount(streams genericclioptions.IOStreams, flags *genericclioptions
 
 	accountCmd.AddCommand(get.NewCmdGet(streams, flags))
 	accountCmd.AddCommand(list.NewCmdList(streams, flags))
+	accountCmd.AddCommand(secret.NewCmdSecret(streams, flags))
+
 	accountCmd.AddCommand(newCmdReset(streams, flags))
 	accountCmd.AddCommand(newCmdSet(streams, flags))
 	accountCmd.AddCommand(newCmdConsole(streams, flags))
 	accountCmd.AddCommand(newCmdCli(streams, flags))
 	accountCmd.AddCommand(newCmdCleanVeleroSnapshots(streams))
-	accountCmd.AddCommand(newCmdCheckSecrets(streams, flags))
-	accountCmd.AddCommand(newCmdRotateSecret(streams, flags))
 
 	return accountCmd
 }

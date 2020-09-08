@@ -1,4 +1,4 @@
-package account
+package secret
 
 import (
 	"context"
@@ -25,7 +25,7 @@ import (
 func newCmdRotateSecret(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
 	ops := newRotateSecretOptions(streams, flags)
 	rotateSecretCmd := &cobra.Command{
-		Use:               "rotate-secret <IAM User name>",
+		Use:               "rotate <IAM User name>",
 		Short:             "Rotate IAM credentials secret",
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
