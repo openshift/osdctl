@@ -2,6 +2,7 @@ package account
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/service/sts"
@@ -19,16 +20,16 @@ import (
 )
 
 const (
-	checkSecretsUsage = "The check-secrets command should have only 0 or 1 arguments"
+	verifySecretsUsage = "The verify-secrets command should have only 0 or 1 arguments"
 )
 
-// newCmdCheckSecrets implements the check-secrets command
-// which checks AWS credentials managed by AWS Account Operator
-func newCmdCheckSecrets(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newCheckSecretsOptions(streams, flags)
-	checkSecretsCmd := &cobra.Command{
-		Use:               "check-secrets [<account name>]",
-		Short:             "Check AWS Account CR IAM User credentials",
+// newCmdVerifySecrets implements the verify-secrets command
+// which verifies AWS credentials managed by AWS Account Operator
+func newCmdVerifySecrets(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
+	ops := newVerifySecretsOptions(streams, flags)
+	verifySecretsCmd := &cobra.Command{
+		Use:               "verify-secrets [<account name>]",
+		Short:             "Verify AWS Account CR IAM User credentials",
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd, args))
@@ -36,35 +37,37 @@ func newCmdCheckSecrets(streams genericclioptions.IOStreams, flags *genericcliop
 		},
 	}
 
-	checkSecretsCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
+	verifySecretsCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
-	checkSecretsCmd.Flags().BoolVarP(&ops.verbose, "verbose", "v", false, "Verbose output")
+	verifySecretsCmd.Flags().BoolVarP(&ops.verbose, "verbose", "v", false, "Verbose output")
+	verifySecretsCmd.Flags().BoolVarP(&ops.all, "all", "A", false, "Verify all Account CRs")
 
-	return checkSecretsCmd
+	return verifySecretsCmd
 }
 
-// checkSecretsOptions defines the struct for running check command
-type checkSecretsOptions struct {
+// verifySecretsOptions defines the struct for running verify command
+type verifySecretsOptions struct {
 	accountName      string
 	accountNamespace string
 
 	verbose bool
+	all     bool
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
 	kubeCli client.Client
 }
 
-func newCheckSecretsOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *checkSecretsOptions {
-	return &checkSecretsOptions{
+func newVerifySecretsOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *verifySecretsOptions {
+	return &verifySecretsOptions{
 		flags:     flags,
 		IOStreams: streams,
 	}
 }
 
-func (o *checkSecretsOptions) complete(cmd *cobra.Command, args []string) error {
+func (o *verifySecretsOptions) complete(cmd *cobra.Command, args []string) error {
 	if len(args) > 1 {
-		return cmdutil.UsageErrorf(cmd, checkSecretsUsage)
+		return cmdutil.UsageErrorf(cmd, verifySecretsUsage)
 	}
 
 	if len(args) == 1 {
@@ -80,14 +83,15 @@ func (o *checkSecretsOptions) complete(cmd *cobra.Command, args []string) error 
 	return nil
 }
 
-func (o *checkSecretsOptions) run() error {
+func (o *verifySecretsOptions) run() error {
 	ctx := context.TODO()
 	var (
 		awsClient   awsprovider.Client
 		credentials []*awsSecret
 		err         error
+		allErr      bool
 	)
-	if o.accountName == "" {
+	if o.all {
 		var accounts awsv1alpha1.AccountList
 		if err := o.kubeCli.List(ctx, &accounts, &client.ListOptions{
 			Namespace: o.accountNamespace,
@@ -119,6 +123,9 @@ func (o *checkSecretsOptions) run() error {
 			})
 		}
 	} else {
+		if o.accountName == "" {
+			return fmt.Errorf("Please provide an account CR name")
+		}
 		account, err := k8s.GetAWSAccount(ctx, o.kubeCli, o.accountNamespace, o.accountName)
 		if err != nil {
 			return err
@@ -140,6 +147,21 @@ func (o *checkSecretsOptions) run() error {
 				SecretAccessKey: creds.SecretAccessKey,
 			},
 		})
+
+		// Add osdCcsAdmin credentials to be validated for CCS accounts
+		if account.Spec.BYOC {
+			creds, err := k8s.GetAWSAccountCredentials(ctx, o.kubeCli, account.Spec.ClaimLinkNamespace, "byoc")
+			if err != nil {
+				return err
+			}
+			credentials = append(credentials, &awsSecret{
+				secret: "byoc",
+				awsCreds: &awsprovider.AwsClientInput{
+					AccessKeyID:     creds.AccessKeyID,
+					SecretAccessKey: creds.SecretAccessKey,
+				},
+			})
+		}
 	}
 
 	for _, cred := range credentials {
@@ -149,13 +171,32 @@ func (o *checkSecretsOptions) run() error {
 		awsClient, err = awsprovider.NewAwsClientWithInput(cred.awsCreds)
 		if err != nil {
 			fmt.Fprintf(o.IOStreams.Out, "Failed to create AWS client with secret %s\n", cred.secret)
-			continue
+			if o.all {
+				allErr = true
+				continue
+			}
+			return err
 		}
 		if _, err := awsClient.GetCallerIdentity(
 			&sts.GetCallerIdentityInput{}); err != nil {
 			fmt.Fprintf(o.IOStreams.Out, "Failed to get caller identity with secret %s\n", cred.secret)
-			continue
+			if o.all {
+				allErr = true
+				continue
+			}
+			return err
 		}
+	}
+
+	if allErr {
+		fmt.Fprintf(o.IOStreams.Out, "Some credentials are invalid\n")
+		return errors.New("AccountCredentialError")
+	}
+
+	if !o.all {
+		fmt.Fprintf(o.IOStreams.Out, "Credentials valid for %s\n", o.accountName)
+	} else {
+		fmt.Fprintf(o.IOStreams.Out, "Credentials valid for all Account CRs\n")
 	}
 
 	return nil

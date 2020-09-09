@@ -25,7 +25,7 @@ func NewCmdAccount(streams genericclioptions.IOStreams, flags *genericclioptions
 	accountCmd.AddCommand(newCmdConsole(streams, flags))
 	accountCmd.AddCommand(newCmdCli(streams, flags))
 	accountCmd.AddCommand(newCmdCleanVeleroSnapshots(streams))
-	accountCmd.AddCommand(newCmdCheckSecrets(streams, flags))
+	accountCmd.AddCommand(newCmdVerifySecrets(streams, flags))
 	accountCmd.AddCommand(newCmdRotateSecret(streams, flags))
 
 	return accountCmd

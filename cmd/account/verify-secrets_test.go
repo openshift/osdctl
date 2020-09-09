@@ -16,7 +16,7 @@ func TestCheckSecretsCmdComplete(t *testing.T) {
 	kubeFlags := genericclioptions.NewConfigFlags(false)
 	testCases := []struct {
 		title       string
-		option      *checkSecretsOptions
+		option      *verifySecretsOptions
 		args        []string
 		errExpected bool
 		errContent  string
@@ -25,11 +25,11 @@ func TestCheckSecretsCmdComplete(t *testing.T) {
 			title:       "two args provided",
 			args:        []string{"foo", "bar"},
 			errExpected: true,
-			errContent:  checkSecretsUsage,
+			errContent:  verifySecretsUsage,
 		},
 		{
 			title: "succeed with one arg",
-			option: &checkSecretsOptions{
+			option: &verifySecretsOptions{
 				accountName: "foo",
 				flags:       kubeFlags,
 			},
@@ -38,7 +38,7 @@ func TestCheckSecretsCmdComplete(t *testing.T) {
 		},
 		{
 			title: "succeed with one arg",
-			option: &checkSecretsOptions{
+			option: &verifySecretsOptions{
 				flags: kubeFlags,
 			},
 			args:        []string{},
@@ -48,7 +48,7 @@ func TestCheckSecretsCmdComplete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
-			cmd := newCmdCheckSecrets(streams, kubeFlags)
+			cmd := newCmdVerifySecrets(streams, kubeFlags)
 			err := tc.option.complete(cmd, tc.args)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())
