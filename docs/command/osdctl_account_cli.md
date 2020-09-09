@@ -13,7 +13,7 @@ osdctl account cli [flags]
 ### Options
 
 ```
-  -i, --account-id string          The AWS Account ID we need to create temporary AWS credentials for
+  -i, --account-id string          The AWS Account ID we need to create temporary AWS credentials for -- This argument will not work for CCS accounts
   -a, --account-name string        The AWS Account CR name to generate the credentials for
       --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
   -c, --aws-config string          specify AWS config file path
