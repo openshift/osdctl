@@ -1,21 +1,27 @@
-## osdctl account rotate-secret
+## osdctl account generate-secret
 
-Rotate IAM credentials secret
+Generate IAM credentials secret
 
 ### Synopsis
 
-Rotate IAM credentials secret
+Generate IAM credentials secret
 
 ```
-osdctl account rotate-secret <IAM User name> [flags]
+osdctl account generate-secret <IAM User name> [flags]
 ```
 
 ### Options
 
 ```
-  -p, --aws-profile string   specify AWS profile
-      --ccs                  Also rotates osdCcsAdmin credential. Use caution.
-  -h, --help                 help for rotate-secret
+  -i, --account-id string          AWS Account ID
+  -a, --account-name string        AWS Account CR name
+      --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
+  -p, --aws-profile string         specify AWS profile
+      --ccs                        Only generate specific secret for osdCcsAdmin. Requires Account CR name
+  -h, --help                       help for generate-secret
+      --quiet                      Suppress logged output
+      --secret-name string         Specify name of the generated secret
+      --secret-namespace string    Specify namespace of the generated secret (default "aws-account-operator")
 ```
 
 ### Options inherited from parent commands

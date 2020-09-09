@@ -3,8 +3,6 @@ package account
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
-	"path/filepath"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/iam"
@@ -12,6 +10,9 @@ import (
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	"github.com/spf13/cobra"
 
+	corev1 "k8s.io/api/core/v1"
+
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,38 +35,17 @@ func newCmdRotateSecret(streams genericclioptions.IOStreams, flags *genericcliop
 		},
 	}
 
-	rotateSecretCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
-		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
-
-	rotateSecretCmd.Flags().StringVarP(&ops.accountName, "account-name", "a", "", "AWS Account CR name")
-	rotateSecretCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "AWS Account ID")
 	rotateSecretCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile")
-	rotateSecretCmd.Flags().StringVarP(&ops.cfgFile, "aws-config", "c", "", "specify AWS config file path")
-	rotateSecretCmd.Flags().StringVarP(&ops.region, "aws-region", "r", common.DefaultRegion, "Specify AWS region")
-	rotateSecretCmd.Flags().StringVar(&ops.secretName, "secret-name", "byoc", "Specify name of the generated secret")
-	rotateSecretCmd.Flags().StringVar(&ops.secretNamespace, "secret-namespace", "aws-account-operator", "Specify namespace of the generated secret")
-	rotateSecretCmd.Flags().BoolVar(&ops.printSecret, "print", true, "Print the generated secret")
-	rotateSecretCmd.Flags().StringVarP(&ops.outputPath, "output", "o", "", "Output path for secret yaml file")
+	rotateSecretCmd.Flags().BoolVar(&ops.updateCcsCreds, "ccs", false, "Also rotates osdCcsAdmin credential. Use caution.")
 
 	return rotateSecretCmd
 }
 
 // rotateSecretOptions defines the struct for running rotate-iam command
 type rotateSecretOptions struct {
-	accountName      string
-	accountID        string
-	accountNamespace string
-	iamUsername      string
-
-	secretName      string
-	secretNamespace string
-	printSecret     bool
-	outputPath      string
-
-	// AWS config
-	region  string
-	profile string
-	cfgFile string
+	accountCRName  string
+	profile        string
+	updateCcsCreds bool
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
@@ -80,128 +60,207 @@ func newRotateSecretOptions(streams genericclioptions.IOStreams, flags *genericc
 }
 
 func (o *rotateSecretOptions) complete(cmd *cobra.Command, args []string) error {
+
 	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, "IAM User name argument is required")
-	}
-	o.iamUsername = args[0]
-
-	// account CR name and account ID cannot be empty at the same time
-	if o.accountName == "" && o.accountID == "" {
-		return cmdutil.UsageErrorf(cmd, "AWS account CR name and AWS account ID cannot be empty at the same time")
+		return cmdutil.UsageErrorf(cmd, "Account CR argument is required")
 	}
 
-	if o.accountName != "" && o.accountID != "" {
-		return cmdutil.UsageErrorf(cmd, "AWS account CR name and AWS account ID cannot be set at the same time")
+	o.accountCRName = args[0]
+
+	if o.profile == "" {
+		o.profile = "default"
 	}
 
-	// only initialize kubernetes client when account name is set
-	if o.accountName != "" {
-		var err error
-		o.kubeCli, err = k8s.NewClient(o.flags)
-		if err != nil {
-			return err
-		}
+	var err error
+	o.kubeCli, err = k8s.NewClient(o.flags)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
 func (o *rotateSecretOptions) run() error {
+
 	ctx := context.TODO()
 	var err error
-	awsSetupClient, err := awsprovider.NewAwsClient(o.profile, o.region, o.cfgFile)
+
+	// Get the associated Account CR from the provided name
+	var accountID string
+	account, err := k8s.GetAWSAccount(ctx, o.kubeCli, common.AWSAccountNamespace, o.accountCRName)
 	if err != nil {
 		return err
 	}
 
-	var accountID string
-	if o.accountName != "" {
-		account, err := k8s.GetAWSAccount(ctx, o.kubeCli, o.accountNamespace, o.accountName)
-		if err != nil {
-			return err
-		}
-		accountID = account.Spec.AwsAccountID
-	} else {
-		accountID = o.accountID
+	// Set the account ID
+	accountID = account.Spec.AwsAccountID
+
+	// Get IAM user suffix from CR label
+
+	accountIDSuffixLabel, ok := account.Labels["iamUserId"]
+	if !ok {
+		return fmt.Errorf("No label on Account CR for IAM User")
 	}
 
+	// Use provided profile
+	awsSetupClient, err := awsprovider.NewAwsClient(o.profile, "", "")
+	if err != nil {
+		return err
+	}
+
+	// Ensure AWS calls are succesful with client
 	callerIdentityOutput, err := awsSetupClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
 	if err != nil {
 		return err
 	}
 
-	roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, awsv1alpha1.AccountOperatorIAMRole))
-	credentials, err := awsprovider.GetAssumeRoleCredentials(awsSetupClient, aws.Int64(900),
-		callerIdentityOutput.UserId, roleArn)
-	if err != nil {
-		return err
+	var credentials *sts.Credentials
+	// Need to role chain if the cluster is CCS
+	if account.Spec.BYOC {
+		// Get the aws-account-operator configmap
+		cm := &corev1.ConfigMap{}
+		cmErr := o.kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: common.AWSAccountNamespace, Name: common.DefaultConfigMap}, cm)
+		if cmErr != nil {
+			return fmt.Errorf("There was an error getting the ConfigMap to get the SRE Access Role %s", cmErr)
+		}
+		// Get the ARN value
+		SREAccessARN := cm.Data["CCS-Access-Arn"]
+		if SREAccessARN == "" {
+			return fmt.Errorf("SRE Access ARN is missing from configmap")
+		}
+
+		// Assume the ARN
+		srepRoleCredentials, err := awsprovider.GetAssumeRoleCredentials(awsSetupClient, aws.Int64(900), callerIdentityOutput.UserId, &SREAccessARN)
+		if err != nil {
+			return err
+		}
+
+		// Create client with the SREP role
+		srepRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+			AccessKeyID:     *srepRoleCredentials.AccessKeyId,
+			SecretAccessKey: *srepRoleCredentials.SecretAccessKey,
+			SessionToken:    *srepRoleCredentials.SessionToken,
+			Region:          "us-east-1",
+		})
+		if err != nil {
+			return err
+		}
+
+		// Role chain to assume BYOCAdminAccessRole-{uid}
+		roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, "BYOCAdminAccess-"+accountIDSuffixLabel))
+		credentials, err = awsprovider.GetAssumeRoleCredentials(srepRoleClient, aws.Int64(900),
+			callerIdentityOutput.UserId, roleArn)
+		if err != nil {
+			return err
+		}
+
+	} else {
+		// Assume the OrganizationAdminAccess role
+		roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, awsv1alpha1.AccountOperatorIAMRole))
+		credentials, err = awsprovider.GetAssumeRoleCredentials(awsSetupClient, aws.Int64(900),
+			callerIdentityOutput.UserId, roleArn)
+		if err != nil {
+			return err
+		}
 	}
 
+	// Build a new client with the assumed role
 	awsClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
 		AccessKeyID:     *credentials.AccessKeyId,
 		SecretAccessKey: *credentials.SecretAccessKey,
 		SessionToken:    *credentials.SessionToken,
-		Region:          o.region,
+		Region:          "us-east-1",
 	})
 	if err != nil {
 		return err
 	}
 
-	// if the account ID is specified, will
-	if o.accountID != "" {
-		callerIdentityOutput, err = awsClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
-		if err != nil {
-			return err
-		}
-		if *callerIdentityOutput.Account != o.accountID {
-			return fmt.Errorf("account ID %s does not match the input account ID %s",
-				*callerIdentityOutput.Account, o.accountID)
-		}
-	}
+	// Update osdManagedAdmin secrets
+	// Username is osdManagedAdmin-aaabbb
+	osdManagedAdminUsername := common.OSDManagedAdminIAM + "-" + accountIDSuffixLabel
 
-	username := aws.String(o.iamUsername)
-	ok, err := awsprovider.CheckIAMUserExists(awsClient, username)
-	if err != nil {
-		return err
-	}
-
-	// the specified user not exist, create one
-	if !ok {
-		policyArn := aws.String("arn:aws:iam::aws:policy/AdministratorAccess")
-		if err := awsprovider.CreateIAMUserAndAttachPolicy(awsClient,
-			username, policyArn); err != nil {
-			return err
-		}
-	} else {
-		fmt.Fprintf(o.IOStreams.Out, "User %s exists, deleting existing access keys now.\n", o.iamUsername)
-		if err := awsprovider.DeleteUserAccessKeys(awsClient, username); err != nil {
-			return err
-		}
-	}
-
-	newKey, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{
-		UserName: username,
+	createAccessKeyOutput, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{
+		UserName: aws.String(osdManagedAdminUsername),
 	})
 	if err != nil {
 		return err
 	}
 
-	secret := k8s.NewAWSSecret(
-		o.secretName,
-		o.secretNamespace,
-		*newKey.AccessKey.AccessKeyId,
-		*newKey.AccessKey.SecretAccessKey,
-	)
-	if o.printSecret {
-		fmt.Fprintln(o.IOStreams.Out, secret)
+	// Place new credentials into body for secret
+	newOsdManagedAdminSecretData := map[string][]byte{
+		"aws_user_name":         []byte(*createAccessKeyOutput.AccessKey.UserName),
+		"aws_access_key_id":     []byte(*createAccessKeyOutput.AccessKey.AccessKeyId),
+		"aws_secret_access_key": []byte(*createAccessKeyOutput.AccessKey.SecretAccessKey),
 	}
 
-	if o.outputPath != "" {
-		outputPath, err := filepath.Abs(o.outputPath)
-		if err != nil {
-			return err
+	// Update existing osdManagedAdmin secret
+	err = common.UpdateSecret(o.kubeCli, o.accountCRName+"-secret", common.AWSAccountNamespace, newOsdManagedAdminSecretData)
+	if err != nil {
+		return err
+	}
+
+	// Update secret in ClusterDeployment's namespace
+	err = common.UpdateSecret(o.kubeCli, "aws", account.Spec.ClaimLinkNamespace, newOsdManagedAdminSecretData)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Succesfully rotated secrets for %s\n", osdManagedAdminUsername)
+
+	// Update osdManagedAdminSRE secret
+	// Username is osdManagedAdminSRE-aaabbb
+	osdManagedAdminSREUsername := common.OSDManagedAdminIAM + "SRE" + "-" + accountIDSuffixLabel
+	createAccessKeyOutputSRE, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{
+		UserName: aws.String(osdManagedAdminSREUsername),
+	})
+	if err != nil {
+		return err
+	}
+
+	// Place new credentials into body for secret
+	newOsdManagedAdminSRESecretData := map[string][]byte{
+		"aws_user_name":         []byte(*createAccessKeyOutputSRE.AccessKey.UserName),
+		"aws_access_key_id":     []byte(*createAccessKeyOutputSRE.AccessKey.AccessKeyId),
+		"aws_secret_access_key": []byte(*createAccessKeyOutputSRE.AccessKey.SecretAccessKey),
+	}
+
+	// Update existing osdManagedAdmin secret
+	err = common.UpdateSecret(o.kubeCli, o.accountCRName+"-osdManagedAdminSRE-secret", common.AWSAccountNamespace, newOsdManagedAdminSRESecretData)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Succesfully rotated secrets for %s\n", osdManagedAdminSREUsername)
+
+	// Only update osdCcsAdmin credential if specified
+	if o.updateCcsCreds {
+		// Ony update if the Account CR is actually CCS
+		if account.Spec.BYOC {
+			// Rotate osdCcsAdmin creds
+			createAccessKeyOutputCCS, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{
+				UserName: aws.String("osdCcsAdmin"),
+			})
+			if err != nil {
+				return err
+			}
+
+			newOsdCcsAdminSecretData := map[string][]byte{
+				"aws_user_name":         []byte(*createAccessKeyOutputCCS.AccessKey.UserName),
+				"aws_access_key_id":     []byte(*createAccessKeyOutputCCS.AccessKey.AccessKeyId),
+				"aws_secret_access_key": []byte(*createAccessKeyOutputCCS.AccessKey.SecretAccessKey),
+			}
+
+			// Update byoc secret with new creds
+			err = common.UpdateSecret(o.kubeCli, "byoc", account.Spec.ClaimLinkNamespace, newOsdCcsAdminSecretData)
+			if err != nil {
+				return err
+			}
+
+			fmt.Println("Succesfully rotated secrets for osdCcsAdmin")
+		} else {
+			// Check yo self
+			fmt.Println("Account is not CCS, skipping osdCcsAdmin credential rotation")
 		}
-		return ioutil.WriteFile(outputPath, []byte(secret), 0644)
 	}
 
 	return nil

@@ -35,6 +35,7 @@ func newCmdVerifySecrets(streams genericclioptions.IOStreams, flags *genericclio
 			cmdutil.CheckErr(ops.complete(cmd, args))
 			cmdutil.CheckErr(ops.run())
 		},
+		Aliases: []string{"verify-secret"},
 	}
 
 	verifySecretsCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,

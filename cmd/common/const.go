@@ -6,4 +6,7 @@ const (
 
 	// default aws-account-operator namespace
 	AWSAccountNamespace = "aws-account-operator"
+	DefaultConfigMap    = "aws-account-operator-configmap"
+	OSDManagedAdminIAM  = "osdManagedAdmin"
+	OSDCcsAdminIAM      = "osdCcsAdmin"
 )
