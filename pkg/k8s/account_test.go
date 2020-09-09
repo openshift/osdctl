@@ -80,6 +80,62 @@ func TestGetAWSAccount(t *testing.T) {
 	}
 }
 
+func TestGetAccountClaimFromClusterID(t *testing.T) {
+	_ = awsv1alpha1.AddToScheme(scheme.Scheme)
+	g := NewGomegaWithT(t)
+	testCases := []struct {
+		title           string
+		localObjects    []runtime.Object
+		clusterID       string
+		expectedAccount awsv1alpha1.AccountClaim
+		errExpected     bool
+		nilExpected     bool
+	}{
+		{
+			title:        "not found account claim",
+			localObjects: nil,
+			clusterID:    "aaabbbccc",
+			errExpected:  false,
+			nilExpected:  true,
+		},
+		{
+			title: "success",
+			localObjects: []runtime.Object{
+				&awsv1alpha1.AccountClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "bar",
+						Namespace: "uhc-production-aaabbbccc",
+						Labels:    map[string]string{"api.openshift.com/id": "aaabbbccc"},
+					},
+				},
+			},
+			clusterID:   "aaabbbccc",
+			errExpected: false,
+			expectedAccount: awsv1alpha1.AccountClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bar",
+					Namespace: "uhc-production-aaabbbccc",
+					Labels:    map[string]string{"api.openshift.com/id": "aaabbbccc"},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			ctx := context.TODO()
+			client := fake.NewFakeClientWithScheme(scheme.Scheme, tc.localObjects...)
+			accountClaim, err := GetAccountClaimFromClusterID(ctx, client, tc.clusterID)
+			if tc.nilExpected {
+				g.Expect(accountClaim).Should(BeNil())
+			} else {
+				g.Expect(err).Should(Not(HaveOccurred()))
+				g.Expect(tc.expectedAccount).Should(Equal(*accountClaim))
+			}
+		})
+	}
+}
+
 func TestGetAWSAccountClaim(t *testing.T) {
 	_ = awsv1alpha1.AddToScheme(scheme.Scheme)
 	g := NewGomegaWithT(t)

@@ -7,6 +7,7 @@ import (
 
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -29,6 +30,30 @@ func GetAWSAccount(
 	}
 
 	return &account, nil
+}
+
+// GetAccountClaimFromClusterID returns an account based on the cluster ID
+func GetAccountClaimFromClusterID(
+	ctx context.Context,
+	cli client.Client,
+	clusterID string,
+) (*awsv1alpha1.AccountClaim, error) {
+	var accountClaims awsv1alpha1.AccountClaimList
+	labelSelector, err := labels.Parse(fmt.Sprintf("api.openshift.com/id=%s", clusterID))
+	if err != nil {
+		return nil, err
+	}
+	if err := cli.List(ctx, &accountClaims, &client.ListOptions{
+		LabelSelector: labelSelector,
+	}); err != nil {
+		return nil, err
+	}
+	if len(accountClaims.Items) == 0 {
+		return nil, nil
+	}
+
+	//There should only be one accountClaim
+	return &accountClaims.Items[0], nil
 }
 
 // Get the IAM Credentials created with AWS Account CR
