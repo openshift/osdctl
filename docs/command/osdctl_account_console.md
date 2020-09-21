@@ -19,6 +19,7 @@ osdctl account console [flags]
   -c, --aws-config string          specify AWS config file path
   -p, --aws-profile string         specify AWS profile
   -r, --aws-region string          specify AWS region (default "us-east-1")
+  -C, --cluster-id string          The Internal Cluster ID from Hive to create AWS console URL for
   -d, --duration int               The duration of the console session. Default value is 3600 seconds(1 hour) (default 3600)
   -h, --help                       help for console
   -v, --verbose                    Verbose output

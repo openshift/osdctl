@@ -37,6 +37,7 @@ func newCmdConsole(streams genericclioptions.IOStreams, flags *genericclioptions
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 	consoleCmd.Flags().StringVarP(&ops.accountName, "account-name", "a", "", "The AWS account cr we need to create AWS console URL for")
 	consoleCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "The AWS account ID we need to create AWS console URL for")
+	consoleCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "The Internal Cluster ID from Hive to create AWS console URL for")
 	consoleCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile")
 	consoleCmd.Flags().StringVarP(&ops.cfgFile, "aws-config", "c", "", "specify AWS config file path")
 	consoleCmd.Flags().StringVarP(&ops.region, "aws-region", "r", common.DefaultRegion, "specify AWS region")
@@ -52,6 +53,7 @@ type consoleOptions struct {
 	accountName      string
 	accountID        string
 	accountNamespace string
+	clusterID        string
 	consoleDuration  int64
 
 	// AWS config
@@ -75,16 +77,16 @@ func newConsoleOptions(streams genericclioptions.IOStreams, flags *genericcliopt
 
 func (o *consoleOptions) complete(cmd *cobra.Command) error {
 	// account CR name and account ID cannot be empty at the same time
-	if o.accountName == "" && o.accountID == "" {
-		return cmdutil.UsageErrorf(cmd, "AWS account CR name and AWS account ID cannot be empty at the same time")
+	if o.accountName == "" && o.accountID == "" && o.clusterID == "" {
+		return cmdutil.UsageErrorf(cmd, "AWS account CR name, AWS account ID and Cluster ID cannot be empty at the same time")
 	}
 
-	if o.accountName != "" && o.accountID != "" {
-		return cmdutil.UsageErrorf(cmd, "AWS account CR name and AWS account ID cannot be set at the same time")
+	if !o.hasOnlyOneTarget() {
+		return cmdutil.UsageErrorf(cmd, "AWS account CR name, AWS account ID and Cluster ID cannot be set at the same time")
 	}
 
-	// only initialize kubernetes client when account name is set
-	if o.accountName != "" {
+	// only initialize kubernetes client when account name is set or cluster ID is set
+	if o.accountName != "" || o.clusterID != "" {
 		var err error
 		o.kubeCli, err = k8s.NewClient(o.flags)
 		if err != nil {
@@ -93,6 +95,17 @@ func (o *consoleOptions) complete(cmd *cobra.Command) error {
 	}
 
 	return nil
+}
+
+func (o *consoleOptions) hasOnlyOneTarget() bool {
+	targets := []string{o.accountName, o.accountID, o.clusterID}
+	targetCount := 0
+	for _, t := range targets {
+		if t != "" {
+			targetCount++
+		}
+	}
+	return targetCount == 1
 }
 
 func (o *consoleOptions) run() error {
@@ -104,6 +117,19 @@ func (o *consoleOptions) run() error {
 
 	ctx := context.TODO()
 	var accountID string
+	if o.clusterID != "" {
+		accountClaim, err := k8s.GetAccountClaimFromClusterID(ctx, o.kubeCli, o.clusterID)
+		if err != nil {
+			return err
+		}
+		if accountClaim == nil {
+			return fmt.Errorf("Could not find any accountClaims for cluster with ID: %s", o.clusterID)
+		}
+		if accountClaim.Spec.AccountLink == "" {
+			return fmt.Errorf("An unexpected error occured: the AccountClaim has no Account")
+		}
+		o.accountName = accountClaim.Spec.AccountLink
+	}
 	if o.accountName != "" {
 		account, err := k8s.GetAWSAccount(ctx, o.kubeCli, o.accountNamespace, o.accountName)
 		if err != nil {

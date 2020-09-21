@@ -21,13 +21,14 @@ func TestConsoleCmdComplete(t *testing.T) {
 		errContent  string
 	}{
 		{
-			title: "account name and id empty at the same time",
+			title: "account name, id, and cluster id empty at the same time",
 			option: &consoleOptions{
 				accountName: "",
 				accountID:   "",
+				clusterID:   "",
 			},
 			errExpected: true,
-			errContent:  "AWS account CR name and AWS account ID cannot be empty at the same time",
+			errContent:  "cannot be empty at the same time",
 		},
 		{
 			title: "account name and id set at the same time",
@@ -36,7 +37,25 @@ func TestConsoleCmdComplete(t *testing.T) {
 				accountID:   "bar",
 			},
 			errExpected: true,
-			errContent:  "AWS account CR name and AWS account ID cannot be set at the same time",
+			errContent:  "cannot be set at the same time",
+		},
+		{
+			title: "account name and cluster id set at the same time",
+			option: &consoleOptions{
+				accountName: "foo",
+				clusterID:   "bar",
+			},
+			errExpected: true,
+			errContent:  "cannot be set at the same time",
+		},
+		{
+			title: "account id and cluster id set at the same time",
+			option: &consoleOptions{
+				accountID: "foo",
+				clusterID: "bar",
+			},
+			errExpected: true,
+			errContent:  "cannot be set at the same time",
 		},
 		{
 			title: "succeed",
