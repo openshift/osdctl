@@ -3,11 +3,14 @@ package account
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/sts"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/klog"
@@ -36,7 +39,7 @@ func newCmdConsole(streams genericclioptions.IOStreams, flags *genericclioptions
 	consoleCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 	consoleCmd.Flags().StringVarP(&ops.accountName, "account-name", "a", "", "The AWS account cr we need to create AWS console URL for")
-	consoleCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "The AWS account ID we need to create AWS console URL for")
+	consoleCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "The AWS account ID we need to create AWS console URL for -- This argument will not work for CCS accounts")
 	consoleCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "The Internal Cluster ID from Hive to create AWS console URL for")
 	consoleCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile")
 	consoleCmd.Flags().StringVarP(&ops.cfgFile, "aws-config", "c", "", "specify AWS config file path")
@@ -130,14 +133,19 @@ func (o *consoleOptions) run() error {
 		}
 		o.accountName = accountClaim.Spec.AccountLink
 	}
+	var isBYOC bool
+	var acctSuffix string
 	if o.accountName != "" {
 		account, err := k8s.GetAWSAccount(ctx, o.kubeCli, o.accountNamespace, o.accountName)
 		if err != nil {
 			return err
 		}
 		accountID = account.Spec.AwsAccountID
+		isBYOC = account.Spec.BYOC
+		acctSuffix = account.Labels["iamUserId"]
 	} else {
 		accountID = o.accountID
+		isBYOC = false
 	}
 
 	callerIdentityOutput, err := awsClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
@@ -148,10 +156,62 @@ func (o *consoleOptions) run() error {
 	if o.verbose {
 		fmt.Fprintln(o.Out, callerIdentityOutput)
 	}
+	splitArn := strings.Split(*callerIdentityOutput.Arn, "/")
+	username := splitArn[1]
+	sessionName := fmt.Sprintf("RH-SRE-%s", username)
 
+	// If BYOC we need to role-chain to use the right creds.
+	// Use the OrgAccess Role by default, override if BYOC
 	roleName := awsv1alpha1.AccountOperatorIAMRole
+
+	// TODO: Come back to this and do a lookup for the account CR if the account ID is the only one set so we can do this too.
+	if isBYOC {
+		cm := &corev1.ConfigMap{}
+		err = o.kubeCli.Get(ctx, types.NamespacedName{Namespace: awsv1alpha1.AccountCrNamespace, Name: awsv1alpha1.DefaultConfigMap}, cm)
+		if err != nil {
+			klog.Error("There was an error getting the configmap.")
+			return err
+		}
+		roleArn := cm.Data["CCS-Access-Arn"]
+
+		if roleArn == "" {
+			klog.Error("Empty SRE Jump Role in ConfigMap")
+			return fmt.Errorf("Empty ConfigMap Value")
+		}
+
+		// Build the role-name for Access:
+		if acctSuffix == "" {
+			klog.Error("Unexpected error parsing the account CR suffix")
+			return fmt.Errorf("Unexpected error parsing the account CR suffix.")
+		}
+		roleName = fmt.Sprintf("BYOCAdminAccess-%s", acctSuffix)
+
+		// Get STS Credentials
+		if o.verbose {
+			fmt.Printf("Elevating Access to SRE Jump Role for user %s\n", sessionName)
+		}
+		creds, err := awsprovider.GetAssumeRoleCredentials(awsClient, &o.consoleDuration, aws.String(sessionName), aws.String(roleArn))
+		if err != nil {
+			klog.Error("Failed to get jump-role creds for CCS")
+			return err
+		}
+
+		awsClientInput := &awsprovider.AwsClientInput{
+			AccessKeyID:     *creds.AccessKeyId,
+			SecretAccessKey: *creds.SecretAccessKey,
+			SessionToken:    *creds.SessionToken,
+			Region:          "us-east-1",
+		}
+		// New Client with STS Credentials
+		awsClient, err = awsprovider.NewAwsClientWithInput(awsClientInput)
+		if err != nil {
+			klog.Error("Failed to assume jump-role for CCS")
+			return err
+		}
+	}
+
 	consoleURL, err := awsprovider.RequestSignInToken(awsClient, &o.consoleDuration,
-		callerIdentityOutput.UserId, aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, roleName)))
+		aws.String(sessionName), aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, roleName)))
 	if err != nil {
 		return err
 	}

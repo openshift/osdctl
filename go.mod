@@ -9,7 +9,7 @@ require (
 	github.com/golang/mock v1.4.3
 	github.com/onsi/gomega v1.10.1
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
-	github.com/openshift/aws-account-operator v0.0.0-20200529133510-076b8c994393
+	github.com/openshift/aws-account-operator v0.0.0-20200914143350-bbda1c91242b
 	github.com/openshift/hive v1.0.5
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.10.0
