@@ -225,7 +225,7 @@ func (o *rotateSecretOptions) run() error {
 	}
 
 	// Update existing osdManagedAdmin secret
-	err = common.UpdateSecret(o.kubeCli, o.accountCRName+"-osdManagedAdminSRE-secret", common.AWSAccountNamespace, newOsdManagedAdminSRESecretData)
+	err = common.UpdateSecret(o.kubeCli, o.accountCRName+"-osdmanagedadminsre-secret", common.AWSAccountNamespace, newOsdManagedAdminSRESecretData)
 	if err != nil {
 		return err
 	}
