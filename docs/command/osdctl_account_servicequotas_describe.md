@@ -1,13 +1,13 @@
-## osdctl account cli
+## osdctl account servicequotas describe
 
-Generate temporary AWS CLI credentials on demand
+Describe AWS service-quotas
 
 ### Synopsis
 
-Generate temporary AWS CLI credentials on demand
+Describe AWS service-quotas
 
 ```
-osdctl account cli [flags]
+osdctl account servicequotas describe [flags]
 ```
 
 ### Options
@@ -21,8 +21,9 @@ osdctl account cli [flags]
   -r, --aws-region string          specify AWS region (default "us-east-1")
   -C, --cluster-id string          The Internal Cluster ID from Hive to create AWS console URL for
   -d, --duration int               The duration of the console session. Default value is 3600 seconds(1 hour) (default 3600)
-  -h, --help                       help for cli
-  -o, --out string                 Output format [default | json | env] (default "default")
+  -h, --help                       help for describe
+  -q, --quota-code string          Query for QuotaCode
+      --service-code string        Query for ServiceCode (default: ec2) (default "ec2")
   -v, --verbose                    Verbose output
 ```
 
@@ -39,5 +40,5 @@ osdctl account cli [flags]
 
 ### SEE ALSO
 
-* [osdctl account](osdctl_account.md)	 - AWS Account related utilities
+* [osdctl account servicequotas](osdctl_account_servicequotas.md)	 - Interact with AWS service-quotas
 

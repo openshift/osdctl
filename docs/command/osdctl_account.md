@@ -38,6 +38,7 @@ osdctl account [flags]
 * [osdctl account list](osdctl_account_list.md)	 - List resources
 * [osdctl account reset](osdctl_account_reset.md)	 - Reset AWS Account CR
 * [osdctl account rotate-secret](osdctl_account_rotate-secret.md)	 - Rotate IAM credentials secret
+* [osdctl account servicequotas](osdctl_account_servicequotas.md)	 - Interact with AWS service-quotas
 * [osdctl account set](osdctl_account_set.md)	 - Set AWS Account CR status
 * [osdctl account verify-secrets](osdctl_account_verify-secrets.md)	 - Verify AWS Account CR IAM User credentials
 

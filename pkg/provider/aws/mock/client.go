@@ -9,6 +9,7 @@ import (
 	iam "github.com/aws/aws-sdk-go/service/iam"
 	organizations "github.com/aws/aws-sdk-go/service/organizations"
 	s3 "github.com/aws/aws-sdk-go/service/s3"
+	servicequotas "github.com/aws/aws-sdk-go/service/servicequotas"
 	sts "github.com/aws/aws-sdk-go/service/sts"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
@@ -320,6 +321,21 @@ func (m *MockClient) ListAttachedRolePolicies(arg0 *iam.ListAttachedRolePolicies
 func (mr *MockClientMockRecorder) ListAttachedRolePolicies(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAttachedRolePolicies", reflect.TypeOf((*MockClient)(nil).ListAttachedRolePolicies), arg0)
+}
+
+// ListServiceQuotas mocks base method
+func (m *MockClient) ListServiceQuotas(arg0 *servicequotas.ListServiceQuotasInput) (*servicequotas.ListServiceQuotasOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListServiceQuotas", arg0)
+	ret0, _ := ret[0].(*servicequotas.ListServiceQuotasOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListServiceQuotas indicates an expected call of ListServiceQuotas
+func (mr *MockClientMockRecorder) ListServiceQuotas(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListServiceQuotas", reflect.TypeOf((*MockClient)(nil).ListServiceQuotas), arg0)
 }
 
 // ListAccountsForParent mocks base method

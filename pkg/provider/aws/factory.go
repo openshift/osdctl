@@ -17,6 +17,8 @@ type FactoryOptions struct {
 
 	ConsoleDuration int64
 
+	Credentials *sts.Credentials
+
 	CallerIdentity *sts.GetCallerIdentityOutput
 }
 
