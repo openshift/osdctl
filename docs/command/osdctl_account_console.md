@@ -13,8 +13,8 @@ osdctl account console [flags]
 ### Options
 
 ```
-  -i, --account-id string          The AWS account ID we need to create AWS console URL for -- This argument will not work for CCS accounts
-  -a, --account-name string        The AWS account cr we need to create AWS console URL for
+  -i, --account-id string          The AWS account ID we need to create AWS credentials for -- This argument will not work for CCS accounts
+  -a, --account-name string        The AWS account CR we need to create a temporary AWS console URL for
       --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
   -c, --aws-config string          specify AWS config file path
   -p, --aws-profile string         specify AWS profile
