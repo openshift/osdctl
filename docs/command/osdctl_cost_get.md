@@ -13,6 +13,7 @@ osdctl cost get [flags]
 ### Options
 
 ```
+      --csv           output result as csv
   -h, --help          help for get
       --ou string     get OU ID
   -r, --recursive     recurse through OUs

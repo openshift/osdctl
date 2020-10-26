@@ -79,7 +79,7 @@ func createCostCategory(OUid *string, OU *organizations.OrganizationalUnit, awsC
 		return err
 	}
 
-	fmt.Println("Created Cost Category for", *OU.Name, "OU")
+	fmt.Printf("Created Cost Category for %s (%s) OU\n", *OU.Name, *OU.Id)
 
 	return nil
 }

@@ -58,7 +58,7 @@ func reconcileCostCategories(OU *organizations.OrganizationalUnit, awsClient aws
 		})
 
 		if err != nil {
-			log.Fatalln("Error listing cost categories:", err)
+			return err
 		}
 
 		//Loop through and add to costCategoriesSet. Set makes lookup easier

@@ -13,6 +13,7 @@ import (
 
 // listCmd represents the list command
 func newCmdList(streams genericclioptions.IOStreams) *cobra.Command {
+	ops := newListOptions(streams)
 	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "List the cost of each OU under given OU",
@@ -21,26 +22,16 @@ func newCmdList(streams genericclioptions.IOStreams) *cobra.Command {
 			awsClient, err := opsCost.initAWSClients()
 			cmdutil.CheckErr(err)
 
-			//Get flags
-			OUid, err := cmd.Flags().GetString("ou")
-			if err != nil {
-				log.Fatalln("OU flag:", err)
-			}
-			time, err := cmd.Flags().GetString("time")
-			if err != nil {
-				log.Fatalln("Time flag:", err)
-			}
+			OU := getOU(awsClient, ops.ou)
 
-			//Get information regarding Organizational Unit
-			OU := getOU(awsClient, OUid)
-
-			if err := listCostsUnderOU(OU, awsClient, &time); err != nil {
+			if err := listCostsUnderOU(OU, awsClient, ops); err != nil {
 				log.Fatalln("Error listing costs under OU:", err)
 			}
 		},
 	}
-	listCmd.Flags().StringP("time", "t", "", "set time")
-	listCmd.Flags().String("ou", "", "get OU ID")
+	listCmd.Flags().StringVar(&ops.ou, "ou", "", "get OU ID")
+	listCmd.Flags().StringVarP(&ops.time, "time", "t", "", "set time")
+	listCmd.Flags().BoolVar(&ops.csv, "csv", false, "output result as csv")
 
 	if err := listCmd.MarkFlagRequired("ou"); err != nil {
 		log.Fatalln("OU flag:", err)
@@ -49,32 +40,66 @@ func newCmdList(streams genericclioptions.IOStreams) *cobra.Command {
 	return listCmd
 }
 
+//Store flag options for get command
+type listOptions struct {
+	ou   string
+	time string
+	csv  bool
+
+	genericclioptions.IOStreams
+}
+
+func newListOptions(streams genericclioptions.IOStreams) *listOptions {
+	return &listOptions{
+		IOStreams: streams,
+	}
+}
+
 //List the cost of each OU under given OU
-func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client, timePtr *string) error {
+func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client, ops *listOptions) error {
 	OUs, err := getOUsRecursive(OU, awsClient)
 	if err != nil {
 		return err
 	}
 
 	var cost float64
+	var unit string
+	var isChildNode bool
 
-	//Print total cost for given OU
-	if err := getOUCostRecursive(&cost, OU, awsClient, timePtr); err != nil {
+	if err := getOUCostRecursive(&cost, &unit, OU, awsClient, &ops.time); err != nil {
 		return err
 	}
-	if len(OUs) != 0 {
-		fmt.Printf("Cost of %s: %f\n\nCost of child OUs:\n", *OU.Name, cost)
-	} else {
-		fmt.Printf("Cost of %s: %f\nNo child OUs.\n", *OU.Name, cost)
-	}
+
+	//Print cost of given OU
+	printCostList(cost, unit, OU, ops, isChildNode)
+
 	//Print costs of child OUs under given OU
 	for _, childOU := range OUs {
 		cost = 0
-		if err := getOUCostRecursive(&cost, childOU, awsClient, timePtr); err != nil {
+		isChildNode = true
+
+		if err := getOUCostRecursive(&cost, &unit, childOU, awsClient, &ops.time); err != nil {
 			return err
 		}
-		fmt.Printf("Cost of %s: %f\n", *childOU.Name, cost)
+		printCostList(cost, unit, childOU, ops, isChildNode)
 	}
 
 	return nil
+}
+
+func printCostList(cost float64, unit string, OU *organizations.OrganizationalUnit, ops *listOptions, isChildNode bool) {
+	if !isChildNode {
+		if ops.csv {
+			fmt.Printf("\nOU,Cost(%s)\n%v,%f\n", unit, *OU.Name, cost)
+		} else {
+			fmt.Printf("\nListing costs of OU (%s, %s) and all its child OUs:\n\n", *OU.Id, *OU.Name)
+			fmt.Printf("%-30s%-30s%-30s%-30s\n", "OU ID", "OU Name", "Cost", "Unit")
+		}
+	}
+
+	if ops.csv {
+		fmt.Printf("%v,%f\n", *OU.Name, cost)
+	} else {
+		fmt.Printf("%-30s%-30s%-30f%-30s\n", *OU.Id, *OU.Name, cost, unit)
+	}
 }
