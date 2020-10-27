@@ -97,7 +97,6 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 	}
 
 	ctx := context.TODO()
-	var accountID string
 	if factory.ClusterID != "" {
 		accountClaim, err := GetAccountClaimFromClusterID(ctx, factory.KubeCli, factory.ClusterID)
 		if err != nil {
@@ -118,11 +117,10 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 		if err != nil {
 			return nil, err
 		}
-		accountID = account.Spec.AwsAccountID
+		factory.AccountID = account.Spec.AwsAccountID
 		isBYOC = account.Spec.BYOC
 		acctSuffix = account.Labels["iamUserId"]
 	} else {
-		accountID = factory.AccountID
 		isBYOC = false
 	}
 
@@ -134,13 +132,14 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 	if verbose {
 		fmt.Printf("%s\n", callerIdentityOutput)
 	}
+	factory.Awscloudfactory.CallerIdentity = callerIdentityOutput
 	splitArn := strings.Split(*callerIdentityOutput.Arn, "/")
 	username := splitArn[1]
-	sessionName := fmt.Sprintf("RH-SRE-%s", username)
+	factory.Awscloudfactory.SessionName = fmt.Sprintf("RH-SRE-%s", username)
 
 	// If BYOC we need to role-chain to use the right creds.
 	// Use the OrgAccess Role by default, override if BYOC
-	roleName := awsv1alpha1.AccountOperatorIAMRole
+	factory.Awscloudfactory.RoleName = awsv1alpha1.AccountOperatorIAMRole
 
 	// TODO: Come back to this and do a lookup for the account CR if the account ID is the only one set so we can do this too.
 	if isBYOC {
@@ -162,36 +161,48 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 			klog.Error("Unexpected error parsing the account CR suffix")
 			return nil, fmt.Errorf("Unexpected error parsing the account CR suffix")
 		}
-		roleName = fmt.Sprintf("BYOCAdminAccess-%s", acctSuffix)
+		factory.Awscloudfactory.RoleName = fmt.Sprintf("BYOCAdminAccess-%s", acctSuffix)
 
 		// Get STS Credentials
 		if verbose {
-			fmt.Printf("Elevating Access to SRE Jump Role for user %s\n", sessionName)
+			fmt.Printf("Elevating Access to SRE Jump Role for user %s\n", factory.Awscloudfactory.SessionName)
 		}
-		creds, err := awsprovider.GetAssumeRoleCredentials(awsClient, &factory.Awscloudfactory.ConsoleDuration, aws.String(sessionName), aws.String(roleArn))
+		factory.Awscloudfactory.Credentials, err = awsprovider.GetAssumeRoleCredentials(awsClient,
+			&factory.Awscloudfactory.ConsoleDuration, aws.String(factory.Awscloudfactory.SessionName), aws.String(roleArn))
 		if err != nil {
 			klog.Error("Failed to get jump-role creds for CCS")
 			return nil, err
 		}
-
-		awsClientInput := &awsprovider.AwsClientInput{
-			AccessKeyID:     *creds.AccessKeyId,
-			SecretAccessKey: *creds.SecretAccessKey,
-			SessionToken:    *creds.SessionToken,
-			Region:          "us-east-1",
-		}
-		// New Client with STS Credentials
-		awsClient, err = awsprovider.NewAwsClientWithInput(awsClientInput)
+	} else {
+		factory.Awscloudfactory.Credentials, err = awsprovider.GetAssumeRoleCredentials(awsClient, &factory.Awscloudfactory.ConsoleDuration,
+			factory.Awscloudfactory.CallerIdentity.UserId,
+			aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s",
+				factory.AccountID,
+				factory.Awscloudfactory.RoleName)))
 		if err != nil {
-			klog.Error("Failed to assume jump-role for CCS")
 			return nil, err
 		}
 	}
 
+	awsClient, err = awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+		AccessKeyID:     *factory.Awscloudfactory.Credentials.AccessKeyId,
+		SecretAccessKey: *factory.Awscloudfactory.Credentials.SecretAccessKey,
+		SessionToken:    *factory.Awscloudfactory.Credentials.SessionToken,
+		Region:          "us-east-1",
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	callerIdentityOutput, err = awsClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
+	if err != nil {
+		klog.Error("Fail to get caller identity. Could you please validate the credentials?")
+		return nil, err
+	}
+	if verbose {
+		fmt.Printf("%s\n", callerIdentityOutput)
+	}
 	factory.Awscloudfactory.CallerIdentity = callerIdentityOutput
-	factory.Awscloudfactory.RoleName = roleName
-	factory.Awscloudfactory.SessionName = sessionName
-	factory.AccountID = accountID
 
 	return awsClient, nil
 }

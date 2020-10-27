@@ -19,6 +19,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/iam/iamiface"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
+	"github.com/aws/aws-sdk-go/service/servicequotas"
+	"github.com/aws/aws-sdk-go/service/servicequotas/servicequotasiface"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/aws/aws-sdk-go/service/sts/stsiface"
 
@@ -60,6 +62,9 @@ type Client interface {
 	DetachRolePolicy(*iam.DetachRolePolicyInput) (*iam.DetachRolePolicyOutput, error)
 	ListAttachedRolePolicies(*iam.ListAttachedRolePoliciesInput) (*iam.ListAttachedRolePoliciesOutput, error)
 
+	// Service Quotas
+	ListServiceQuotas(*servicequotas.ListServiceQuotasInput) (*servicequotas.ListServiceQuotasOutput, error)
+
 	// Organizations
 	ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error)
 	ListOrganizationalUnitsForParent(input *organizations.ListOrganizationalUnitsForParentInput) (*organizations.ListOrganizationalUnitsForParentOutput, error)
@@ -72,11 +77,12 @@ type Client interface {
 }
 
 type AwsClient struct {
-	iamClient iamiface.IAMAPI
-	stsClient stsiface.STSAPI
-	s3Client  s3iface.S3API
-	orgClient organizationsiface.OrganizationsAPI
-	ceClient  costexploreriface.CostExplorerAPI
+	iamClient           iamiface.IAMAPI
+	stsClient           stsiface.STSAPI
+	s3Client            s3iface.S3API
+	servicequotasClient servicequotasiface.ServiceQuotasAPI
+	orgClient           organizationsiface.OrganizationsAPI
+	ceClient            costexploreriface.CostExplorerAPI
 }
 
 // NewAwsClient creates an AWS client with credentials in the environment
@@ -115,11 +121,12 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 	}
 
 	return &AwsClient{
-		iamClient: iam.New(sess),
-		stsClient: sts.New(sess),
-		s3Client:  s3.New(sess),
-		orgClient: organizations.New(sess),
-		ceClient:  costexplorer.New(sess),
+		iamClient:           iam.New(sess),
+		stsClient:           sts.New(sess),
+		s3Client:            s3.New(sess),
+		servicequotasClient: servicequotas.New(sess),
+		orgClient:           organizations.New(sess),
+		ceClient:            costexplorer.New(sess),
 	}, nil
 }
 
@@ -136,11 +143,12 @@ func NewAwsClientWithInput(input *AwsClientInput) (Client, error) {
 	}
 
 	return &AwsClient{
-		iamClient: iam.New(s),
-		stsClient: sts.New(s),
-		s3Client:  s3.New(s),
-		orgClient: organizations.New(s),
-		ceClient:  costexplorer.New(s),
+		iamClient:           iam.New(s),
+		stsClient:           sts.New(s),
+		s3Client:            s3.New(s),
+		servicequotasClient: servicequotas.New(s),
+		orgClient:           organizations.New(s),
+		ceClient:            costexplorer.New(s),
 	}, nil
 }
 
@@ -222,6 +230,10 @@ func (c *AwsClient) ListAttachedRolePolicies(input *iam.ListAttachedRolePolicies
 
 func (c *AwsClient) ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error) {
 	return c.orgClient.ListAccountsForParent(input)
+}
+
+func (c *AwsClient) ListServiceQuotas(input *servicequotas.ListServiceQuotasInput) (*servicequotas.ListServiceQuotasOutput, error) {
+	return c.servicequotasClient.ListServiceQuotas(input)
 }
 
 func (c *AwsClient) ListOrganizationalUnitsForParent(input *organizations.ListOrganizationalUnitsForParentInput) (*organizations.ListOrganizationalUnitsForParentOutput, error) {
