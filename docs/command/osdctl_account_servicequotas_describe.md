@@ -22,8 +22,8 @@ osdctl account servicequotas describe [flags]
   -C, --cluster-id string          The Internal Cluster ID from Hive to create AWS console URL for
   -d, --duration int               The duration of the console session. Default value is 3600 seconds(1 hour) (default 3600)
   -h, --help                       help for describe
-  -q, --quota-code string          Query for QuotaCode
-      --service-code string        Query for ServiceCode (default: ec2) (default "ec2")
+  -q, --quota-code string          Query for QuotaCode (default "L-1216C47A")
+      --service-code string        Query for ServiceCode (default "ec2")
   -v, --verbose                    Verbose output
 ```
 

@@ -32,8 +32,8 @@ func newCmdDescribe(streams genericclioptions.IOStreams, flags *genericclioption
 
 	ops.k8sclusterresourcefactory.AttachCobraCliFlags(describeCmd)
 
-	describeCmd.Flags().StringVarP(&ops.queryServiceCode, "service-code", "", "ec2", "Query for ServiceCode (default: ec2)")
-	describeCmd.Flags().StringVarP(&ops.queryQuotaCode, "quota-code", "q", "", "Query for QuotaCode")
+	describeCmd.Flags().StringVarP(&ops.queryServiceCode, "service-code", "", "ec2", "Query for ServiceCode")
+	describeCmd.Flags().StringVarP(&ops.queryQuotaCode, "quota-code", "q", "L-1216C47A", "Query for QuotaCode")
 
 	describeCmd.Flags().BoolVarP(&ops.verbose, "verbose", "v", false, "Verbose output")
 
