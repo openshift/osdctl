@@ -28,6 +28,7 @@ func newCmdDescribe(streams genericclioptions.IOStreams, flags *genericclioption
 			cmdutil.CheckErr(ops.complete(cmd))
 			cmdutil.CheckErr(ops.run())
 		},
+		Aliases: []string{"describe-quotas", "describe-quota"},
 	}
 
 	ops.k8sclusterresourcefactory.AttachCobraCliFlags(describeCmd)

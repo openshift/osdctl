@@ -338,6 +338,21 @@ func (mr *MockClientMockRecorder) ListServiceQuotas(arg0 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListServiceQuotas", reflect.TypeOf((*MockClient)(nil).ListServiceQuotas), arg0)
 }
 
+// RequestServiceQuotaIncrease mocks base method
+func (m *MockClient) RequestServiceQuotaIncrease(arg0 *servicequotas.RequestServiceQuotaIncreaseInput) (*servicequotas.RequestServiceQuotaIncreaseOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RequestServiceQuotaIncrease", arg0)
+	ret0, _ := ret[0].(*servicequotas.RequestServiceQuotaIncreaseOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RequestServiceQuotaIncrease indicates an expected call of RequestServiceQuotaIncrease
+func (mr *MockClientMockRecorder) RequestServiceQuotaIncrease(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequestServiceQuotaIncrease", reflect.TypeOf((*MockClient)(nil).RequestServiceQuotaIncrease), arg0)
+}
+
 // ListAccountsForParent mocks base method
 func (m *MockClient) ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error) {
 	m.ctrl.T.Helper()
