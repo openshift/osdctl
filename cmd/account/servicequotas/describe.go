@@ -36,6 +36,8 @@ func newCmdDescribe(streams genericclioptions.IOStreams, flags *genericclioption
 	describeCmd.Flags().StringVarP(&ops.queryServiceCode, "service-code", "", "ec2", "Query for ServiceCode")
 	describeCmd.Flags().StringVarP(&ops.queryQuotaCode, "quota-code", "q", "L-1216C47A", "Query for QuotaCode")
 
+	describeCmd.Flags().BoolVarP(&ops.allRegions, "all-regions", "", false, "Loop through all supported regions")
+
 	describeCmd.Flags().BoolVarP(&ops.verbose, "verbose", "v", false, "Verbose output")
 
 	return describeCmd
@@ -49,6 +51,7 @@ type describeOptions struct {
 	queryQuotaCode   string
 
 	verbose bool
+	allRegions bool
 
 	genericclioptions.IOStreams
 }
@@ -63,24 +66,45 @@ func newDescribeOptions(streams genericclioptions.IOStreams, flags *genericcliop
 }
 
 func (o *describeOptions) complete(cmd *cobra.Command) error {
-	k8svalid, err := o.k8sclusterresourcefactory.ValidateIdentifiers()
+	k8svalid, err1 := o.k8sclusterresourcefactory.ValidateIdentifiers()
 	if !k8svalid {
-		if err != nil {
-			return err
+		if err1 != nil {
+			return err1
 		}
 	}
 
-	awsvalid, err := o.k8sclusterresourcefactory.Awscloudfactory.ValidateIdentifiers()
+	awsvalid, err2 := o.k8sclusterresourcefactory.Awscloudfactory.ValidateIdentifiers()
 	if !awsvalid {
-		if err != nil {
-			return err
+		if err2 != nil {
+			return err2
 		}
+	}
+
+	_, err3 := GetSupportedRegions(o.k8sclusterresourcefactory.Awscloudfactory.Region, o.allRegions)
+	if (err3 != nil) {
+		return err3
 	}
 
 	return nil
 }
 
 func (o *describeOptions) run() error {
+	regions, error := GetSupportedRegions(o.k8sclusterresourcefactory.Awscloudfactory.Region, o.allRegions)
+	if (error != nil) {
+		return error
+	}
+
+	for _, region := range regions {
+		o.runOnceByRegion(region)
+	}
+
+	return nil
+}
+
+func (o *describeOptions) runOnceByRegion(region string) error {
+	// override region in factory class
+	o.k8sclusterresourcefactory.Awscloudfactory.Region = region
+
 	awsClient, err := o.k8sclusterresourcefactory.GetCloudProvider(o.verbose)
 	if err != nil {
 		return err

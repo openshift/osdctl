@@ -36,6 +36,8 @@ func newCmdUpdate(streams genericclioptions.IOStreams, flags *genericclioptions.
 	updateCmd.Flags().StringVarP(&ops.queryQuotaCode, "quota-code", "q", "L-1216C47A", "Query for QuotaCode")
 	updateCmd.Flags().Float64VarP(&ops.desiredValue, "desired-value", "", -1, "Desired Value for Quota")
 
+	updateCmd.Flags().BoolVarP(&ops.allRegions, "all-regions", "", false, "Loop through all supported regions")
+
 	updateCmd.Flags().BoolVarP(&ops.verbose, "verbose", "v", false, "Verbose output")
 
 	return updateCmd
@@ -50,6 +52,7 @@ type updateOptions struct {
 	desiredValue     float64
 
 	verbose bool
+	allRegions bool
 
 	genericclioptions.IOStreams
 }
@@ -64,24 +67,45 @@ func newUpdateOptions(streams genericclioptions.IOStreams, flags *genericcliopti
 }
 
 func (o *updateOptions) complete(cmd *cobra.Command) error {
-	k8svalid, err := o.k8sclusterresourcefactory.ValidateIdentifiers()
+	k8svalid, err1 := o.k8sclusterresourcefactory.ValidateIdentifiers()
 	if !k8svalid {
-		if err != nil {
-			return err
+		if err1 != nil {
+			return err1
 		}
 	}
 
-	awsvalid, err := o.k8sclusterresourcefactory.Awscloudfactory.ValidateIdentifiers()
+	awsvalid, err2 := o.k8sclusterresourcefactory.Awscloudfactory.ValidateIdentifiers()
 	if !awsvalid {
-		if err != nil {
-			return err
+		if err2 != nil {
+			return err2
 		}
+	}
+
+	_, err3 := GetSupportedRegions(o.k8sclusterresourcefactory.Awscloudfactory.Region, o.allRegions)
+	if (err3 != nil) {
+		return err3
 	}
 
 	return nil
 }
 
 func (o *updateOptions) run() error {
+	regions, error := GetSupportedRegions(o.k8sclusterresourcefactory.Awscloudfactory.Region, o.allRegions)
+	if (error != nil) {
+		return error
+	}
+
+	for _, region := range regions {
+		o.runOnceByRegion(region)
+	}
+
+	return nil
+}
+
+func (o *updateOptions) runOnceByRegion(region string) error {
+	// override region in factory class
+	o.k8sclusterresourcefactory.Awscloudfactory.Region = region
+
 	awsClient, err := o.k8sclusterresourcefactory.GetCloudProvider(o.verbose)
 	if err != nil {
 		return err
