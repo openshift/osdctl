@@ -188,7 +188,7 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 		AccessKeyID:     *factory.Awscloudfactory.Credentials.AccessKeyId,
 		SecretAccessKey: *factory.Awscloudfactory.Credentials.SecretAccessKey,
 		SessionToken:    *factory.Awscloudfactory.Credentials.SessionToken,
-		Region:          "us-east-1",
+		Region:          factory.Awscloudfactory.Region,
 	})
 	if err != nil {
 		return nil, err
