@@ -1,6 +1,5 @@
 package servicequotas
 
-
 import (
 	"strings"
 	"testing"
@@ -11,68 +10,68 @@ import (
 func TestGetSupportedRegions(t *testing.T) {
 	g := NewGomegaWithT(t)
 	testCases := []struct {
-		title		string
-		region      string
-		allRegions  bool
-		errExpected bool
-		errContent  string
+		title                    string
+		region                   string
+		allRegions               bool
+		errExpected              bool
+		errContent               string
 		expectRegionsMoreThanOne bool
-		expectRegionsOnlyOne bool
-		expectRegionsNone bool
+		expectRegionsOnlyOne     bool
+		expectRegionsNone        bool
 	}{
 		{
-			title:       "no region filter, not all regions, no error, return all",
-			region:       "",
-			allRegions:   false,
-			errExpected:  false,
+			title:                    "no region filter, not all regions, no error, return all",
+			region:                   "",
+			allRegions:               false,
+			errExpected:              false,
 			expectRegionsMoreThanOne: true,
-			expectRegionsOnlyOne: false,
-			expectRegionsNone: false,
+			expectRegionsOnlyOne:     false,
+			expectRegionsNone:        false,
 		},
 		{
-			title:       "no region filter, return all regions, no error, return all",
-			region:       "",
-			allRegions:   true,
-			errExpected:  false,
+			title:                    "no region filter, return all regions, no error, return all",
+			region:                   "",
+			allRegions:               true,
+			errExpected:              false,
 			expectRegionsMoreThanOne: true,
-			expectRegionsOnlyOne: false,
-			expectRegionsNone: false,
+			expectRegionsOnlyOne:     false,
+			expectRegionsNone:        false,
 		},
 		{
-			title:       "us-east-1 region filter, not all regions, should return 1 region",
-			region:       "us-east-1",
-			allRegions:   false,
-			errExpected:  false,
+			title:                    "us-east-1 region filter, not all regions, should return 1 region",
+			region:                   "us-east-1",
+			allRegions:               false,
+			errExpected:              false,
 			expectRegionsMoreThanOne: false,
-			expectRegionsOnlyOne: true,
-			expectRegionsNone: false,
+			expectRegionsOnlyOne:     true,
+			expectRegionsNone:        false,
 		},
 		{
-			title:       "us-east-1 region filter, return all regions, should return all regions",
-			region:       "us-east-1",
-			allRegions:   true,
-			errExpected:  false,
+			title:                    "us-east-1 region filter, return all regions, should return all regions",
+			region:                   "us-east-1",
+			allRegions:               true,
+			errExpected:              false,
 			expectRegionsMoreThanOne: true,
-			expectRegionsOnlyOne: false,
-			expectRegionsNone: false,
+			expectRegionsOnlyOne:     false,
+			expectRegionsNone:        false,
 		},
 		{
-			title:       "us-east-15 region filter, not all regions, should error",
-			region:       "us-east-15",
-			allRegions:   false,
-			errExpected:  true,
+			title:                    "us-east-15 region filter, not all regions, should error",
+			region:                   "us-east-15",
+			allRegions:               false,
+			errExpected:              true,
 			expectRegionsMoreThanOne: false,
-			expectRegionsOnlyOne: false,
-			expectRegionsNone: true,
+			expectRegionsOnlyOne:     false,
+			expectRegionsNone:        true,
 		},
 		{
-			title:       "us-east-15 region filter, return all regions, should return all regions",
-			region:       "us-east-15",
-			allRegions:   true,
-			errExpected:  false,
+			title:                    "us-east-15 region filter, return all regions, should return all regions",
+			region:                   "us-east-15",
+			allRegions:               true,
+			errExpected:              false,
 			expectRegionsMoreThanOne: true,
-			expectRegionsOnlyOne: false,
-			expectRegionsNone: false,
+			expectRegionsOnlyOne:     false,
+			expectRegionsNone:        false,
 		},
 	}
 

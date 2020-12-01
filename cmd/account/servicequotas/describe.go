@@ -50,7 +50,7 @@ type describeOptions struct {
 	queryServiceCode string
 	queryQuotaCode   string
 
-	verbose bool
+	verbose    bool
 	allRegions bool
 
 	genericclioptions.IOStreams
@@ -81,7 +81,7 @@ func (o *describeOptions) complete(cmd *cobra.Command) error {
 	}
 
 	_, err3 := GetSupportedRegions(o.k8sclusterresourcefactory.Awscloudfactory.Region, o.allRegions)
-	if (err3 != nil) {
+	if err3 != nil {
 		return err3
 	}
 
@@ -90,7 +90,7 @@ func (o *describeOptions) complete(cmd *cobra.Command) error {
 
 func (o *describeOptions) run() error {
 	regions, error := GetSupportedRegions(o.k8sclusterresourcefactory.Awscloudfactory.Region, o.allRegions)
-	if (error != nil) {
+	if error != nil {
 		return error
 	}
 

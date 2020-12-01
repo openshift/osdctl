@@ -11,7 +11,7 @@ func GetSupportedRegions(filter string, allRegions bool) ([]string, error) {
 	var results []string
 	for i := range awsv1alpha1.CoveredRegions {
 		if (filter != "") && (allRegions == false) {
-			if (filter == i) {
+			if filter == i {
 				results = append(results, i)
 				return results, nil
 			}
@@ -21,7 +21,7 @@ func GetSupportedRegions(filter string, allRegions bool) ([]string, error) {
 		results = append(results, i)
 	}
 
-	if (len(results) == 0) {
+	if len(results) == 0 {
 		return results, errors.New("Cannot find Supported Region")
 	}
 
