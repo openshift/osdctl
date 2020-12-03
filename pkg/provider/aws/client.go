@@ -64,6 +64,7 @@ type Client interface {
 
 	// Service Quotas
 	ListServiceQuotas(*servicequotas.ListServiceQuotasInput) (*servicequotas.ListServiceQuotasOutput, error)
+	RequestServiceQuotaIncrease(*servicequotas.RequestServiceQuotaIncreaseInput) (*servicequotas.RequestServiceQuotaIncreaseOutput, error)
 
 	// Organizations
 	ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error)
@@ -234,6 +235,10 @@ func (c *AwsClient) ListAccountsForParent(input *organizations.ListAccountsForPa
 
 func (c *AwsClient) ListServiceQuotas(input *servicequotas.ListServiceQuotasInput) (*servicequotas.ListServiceQuotasOutput, error) {
 	return c.servicequotasClient.ListServiceQuotas(input)
+}
+
+func (c *AwsClient) RequestServiceQuotaIncrease(input *servicequotas.RequestServiceQuotaIncreaseInput) (*servicequotas.RequestServiceQuotaIncreaseOutput, error) {
+	return c.servicequotasClient.RequestServiceQuotaIncrease(input)
 }
 
 func (c *AwsClient) ListOrganizationalUnitsForParent(input *organizations.ListOrganizationalUnitsForParentInput) (*organizations.ListOrganizationalUnitsForParentOutput, error) {
