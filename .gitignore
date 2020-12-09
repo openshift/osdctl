@@ -18,6 +18,7 @@ bin/
 # IDE
 .idea
 .vscode
+*.code-workspace
 
 # MacOS
 .DS_Store

@@ -5,7 +5,7 @@ BUILDFLAGS ?=
 LDFLAGS = -ldflags="-X '${REPOSITORY}/cmd.GitCommit=${GIT_COMMIT}'"
 unexport GOFLAGS
 
-all: format build test
+all: format mod build test
 
 format: vet fmt mockgen docs
 
@@ -14,7 +14,7 @@ fmt:
 	@gofmt -w -s .
 	@git diff --exit-code .
 
-build: mod
+build:
 	go build ${BUILDFLAGS} ${LDFLAGS} -o ./bin/osdctl main.go
 
 vet:
