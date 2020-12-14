@@ -8,7 +8,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
-func TestListCmdComplete(t *testing.T) {
+func TestPacketCaptureCmdComplete(t *testing.T) {
 	g := NewGomegaWithT(t)
 	kubeFlags := genericclioptions.NewConfigFlags(false)
 	testCases := []struct {
