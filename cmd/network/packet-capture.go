@@ -3,6 +3,7 @@ package network
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -14,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8serr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -124,7 +125,7 @@ func (o *packetCaptureOptions) run() error {
 func ensurePacketCaptureDaemonSet(o *packetCaptureOptions) (*appsv1.DaemonSet, error) {
 	key := types.NamespacedName{Name: o.name, Namespace: o.namespace}
 	desired := desiredPacketCaptureDaemonSet(o, key)
-	haveDs, current, err := currentPacketCaptureDaemonSet(o, key)
+	haveDs, err := hasPacketCaptureDaemonSet(o, key)
 	if err != nil {
 		log.Fatalf("Error getting current daemonset %v", err)
 		return nil, err
@@ -132,7 +133,7 @@ func ensurePacketCaptureDaemonSet(o *packetCaptureOptions) (*appsv1.DaemonSet, e
 
 	if haveDs {
 		log.Println("Already have packet-capture daemonset")
-		return current, nil
+		return nil, errors.New(fmt.Sprintf("%s daemonset already exists in the %s namespace", o.name, o.namespace))
 	}
 
 	err = createPacketCaptureDaemonSet(o, desired)
@@ -145,17 +146,17 @@ func ensurePacketCaptureDaemonSet(o *packetCaptureOptions) (*appsv1.DaemonSet, e
 	return desired, nil
 }
 
-// currentPacketCaptureDaemonSet returns the current daemonset
-func currentPacketCaptureDaemonSet(o *packetCaptureOptions, key types.NamespacedName) (bool, *appsv1.DaemonSet, error) {
+// hasPacketCaptureDaemonSet returns the current daemonset
+func hasPacketCaptureDaemonSet(o *packetCaptureOptions, key types.NamespacedName) (bool, error) {
 	ds := &appsv1.DaemonSet{}
 
 	if err := o.kubeCli.Get(context.TODO(), key, ds); err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil, nil
+		if k8serr.IsNotFound(err) {
+			return false, nil
 		}
-		return false, nil, err
+		return false, err
 	}
-	return true, ds, nil
+	return true, nil
 }
 
 // createPacketCaptureDaemonSet creates the given daemonset resource
