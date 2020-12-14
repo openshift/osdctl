@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	packetCaptureImage       = "quay.io/jharrington22/network-toolbox:latest"
+	packetCaptureImage       = "quay.io/openshift-sre/network-toolbox:latest"
 	packetCaptureName        = "sre-packet-capture"
 	packetCaptureNamespace   = "default"
 	outputDir                = "capture-output"
