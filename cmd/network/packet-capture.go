@@ -30,7 +30,7 @@ import (
 
 const (
 	packetCaptureImage       = "quay.io/jharrington22/network-toolbox:latest"
-	packetCaptureName        = "packet-capture"
+	packetCaptureName        = "sre-packet-capture"
 	packetCaptureNamespace   = "default"
 	outputDir                = "capture-output"
 	nodeLabelKey             = "node-role.kubernetes.io/worker"
