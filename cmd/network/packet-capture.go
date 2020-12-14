@@ -42,6 +42,7 @@ func newCmdPacketCapture(streams genericclioptions.IOStreams, flags *genericclio
 	ops := newPacketCaptureOptions(streams, flags)
 	packetCaptureCmd := &cobra.Command{
 		Use:               "packet-capture",
+		Aliases:           []string{"pcap"},
 		Short:             "Start packet capture",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
@@ -57,6 +58,7 @@ func newCmdPacketCapture(streams genericclioptions.IOStreams, flags *genericclio
 	packetCaptureCmd.Flags().StringVarP(&ops.nodeLabelKey, "node-label-key", "", nodeLabelKey, "Node label key")
 	packetCaptureCmd.Flags().StringVarP(&ops.nodeLabelValue, "node-label-value", "", nodeLabelValue, "Node label value")
 
+	ops.startTime = time.Now()
 	return packetCaptureCmd
 }
 
@@ -70,7 +72,8 @@ type packetCaptureOptions struct {
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
-	kubeCli client.Client
+	kubeCli   client.Client
+	startTime time.Time
 }
 
 func newPacketCaptureOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *packetCaptureOptions {
@@ -242,7 +245,8 @@ func desiredPacketCaptureDaemonSet(o *packetCaptureOptions, key types.Namespaced
 
 func copyFilesFromPod(o *packetCaptureOptions, pod *corev1.Pod) error {
 	os.MkdirAll(outputDir, 0755)
-	cmd := exec.Command("oc", "cp", pod.Namespace+"/"+pod.Name+":/tmp/capture-output/capture.pcap", outputDir+"/"+pod.Name+".pcap")
+	fileName := fmt.Sprintf("%s-%s.pcap", pod.Spec.NodeName, o.startTime.UTC().Format("20060102T150405"))
+	cmd := exec.Command("oc", "cp", pod.Namespace+"/"+pod.Name+":/tmp/capture-output/capture.pcap", outputDir+"/"+fileName)
 	var stdBuffer bytes.Buffer
 	mw := io.MultiWriter(os.Stdout, &stdBuffer)
 
