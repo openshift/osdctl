@@ -15,7 +15,7 @@ osdctl network packet-capture [flags]
 ```
   -d, --duration int              Duration (in seconds) of packet capture (default 60)
   -h, --help                      help for packet-capture
-      --name string               Name of Daemonset (default "packet-capture")
+      --name string               Name of Daemonset (default "sre-packet-capture")
   -n, --namespace string          Namespace to deploy Daemonset (default "default")
       --node-label-key string     Node label key (default "node-role.kubernetes.io/worker")
       --node-label-value string   Node label value
