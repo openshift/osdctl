@@ -67,23 +67,20 @@ func newUpdateOptions(streams genericclioptions.IOStreams, flags *genericcliopti
 }
 
 func (o *updateOptions) complete(cmd *cobra.Command) error {
-	k8svalid, err1 := o.k8sclusterresourcefactory.ValidateIdentifiers()
-	if !k8svalid {
-		if err1 != nil {
-			return err1
+	if valid, err := o.k8sclusterresourcefactory.ValidateIdentifiers(); !valid {
+		if err != nil {
+			return err
 		}
 	}
 
-	awsvalid, err2 := o.k8sclusterresourcefactory.Awscloudfactory.ValidateIdentifiers()
-	if !awsvalid {
-		if err2 != nil {
-			return err2
+	if valid, err := o.k8sclusterresourcefactory.Awscloudfactory.ValidateIdentifiers(); !valid {
+		if err != nil {
+			return err
 		}
 	}
 
-	_, err3 := GetSupportedRegions(o.k8sclusterresourcefactory.Awscloudfactory.Region, o.allRegions)
-	if err3 != nil {
-		return err3
+	if _, err := GetSupportedRegions(o.k8sclusterresourcefactory.Awscloudfactory.Region, o.allRegions); err != nil {
+		return err
 	}
 
 	return nil
@@ -96,7 +93,9 @@ func (o *updateOptions) run() error {
 	}
 
 	for _, region := range regions {
-		o.runOnceByRegion(region)
+		if err := o.runOnceByRegion(region); err != nil {
+			return err
+		}
 	}
 
 	return nil
