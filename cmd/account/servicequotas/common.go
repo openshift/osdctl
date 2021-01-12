@@ -6,14 +6,7 @@ import (
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 )
 
-/*GetSupportedRegions returns a []string of regions supported
-return []string of any regions found
-	if allRegions: return all found regions, ignore filter
-	if !allRegions:
-		filter set: return 1 element if region matches
-		filter == "": return all found regions
-return error if no regions are returned
-*/
+// GetSupportedRegions returns a []string of all supported regions if found and an error. Filtering for a single region is also supported.
 func GetSupportedRegions(filter string, allRegions bool) ([]string, error) {
 	var results []string
 	for i := range awsv1alpha1.CoveredRegions {
