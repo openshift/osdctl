@@ -36,6 +36,8 @@ func newCmdDescribe(streams genericclioptions.IOStreams, flags *genericclioption
 	describeCmd.Flags().StringVarP(&ops.queryServiceCode, "service-code", "", "ec2", "Query for ServiceCode")
 	describeCmd.Flags().StringVarP(&ops.queryQuotaCode, "quota-code", "q", "L-1216C47A", "Query for QuotaCode")
 
+	describeCmd.Flags().BoolVarP(&ops.allRegions, "all-regions", "", false, "Loop through all supported regions")
+
 	describeCmd.Flags().BoolVarP(&ops.verbose, "verbose", "v", false, "Verbose output")
 
 	return describeCmd
@@ -48,7 +50,8 @@ type describeOptions struct {
 	queryServiceCode string
 	queryQuotaCode   string
 
-	verbose bool
+	verbose    bool
+	allRegions bool
 
 	genericclioptions.IOStreams
 }
@@ -63,16 +66,33 @@ func newDescribeOptions(streams genericclioptions.IOStreams, flags *genericcliop
 }
 
 func (o *describeOptions) complete(cmd *cobra.Command) error {
-	k8svalid, err := o.k8sclusterresourcefactory.ValidateIdentifiers()
-	if !k8svalid {
+	if valid, err := o.k8sclusterresourcefactory.ValidateIdentifiers(); !valid {
 		if err != nil {
 			return err
 		}
 	}
 
-	awsvalid, err := o.k8sclusterresourcefactory.Awscloudfactory.ValidateIdentifiers()
-	if !awsvalid {
+	if valid, err := o.k8sclusterresourcefactory.Awscloudfactory.ValidateIdentifiers(); !valid {
 		if err != nil {
+			return err
+		}
+	}
+
+	if _, err := GetSupportedRegions(o.k8sclusterresourcefactory.Awscloudfactory.Region, o.allRegions); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (o *describeOptions) run() error {
+	regions, error := GetSupportedRegions(o.k8sclusterresourcefactory.Awscloudfactory.Region, o.allRegions)
+	if error != nil {
+		return error
+	}
+
+	for _, region := range regions {
+		if err := o.runOnceByRegion(region); err != nil {
 			return err
 		}
 	}
@@ -80,7 +100,10 @@ func (o *describeOptions) complete(cmd *cobra.Command) error {
 	return nil
 }
 
-func (o *describeOptions) run() error {
+func (o *describeOptions) runOnceByRegion(region string) error {
+	// override region in factory class
+	o.k8sclusterresourcefactory.Awscloudfactory.Region = region
+
 	awsClient, err := o.k8sclusterresourcefactory.GetCloudProvider(o.verbose)
 	if err != nil {
 		return err
