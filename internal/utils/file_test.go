@@ -16,8 +16,6 @@ var (
 	existingFile      = "./testdata/a-folder-that-exists/file.txt"
 	nonExistingFile   = "./testdata/a-folder-that-exists/missing-file.txt"
 	nonWritableDir    = "./testdata/non-writable-dir"
-	fileToDelete      = "./testdata/a-folder-that-exists/a-file-to-be-deleted.txt"
-	fileNotToDelete   = "./testdata/a-folder-that-exists/a-file-not-to-be-deleted.txt"
 )
 
 func ExampleFolderExists() {
@@ -126,68 +124,6 @@ func TestFileExists(t *testing.T) {
 	_ = os.RemoveAll(nonWritableDir)
 }
 
-func ExampleRemoveFile() {
-	_ = CreateFile(fileToDelete)
-	err := RemoveFile(fileToDelete)
-
-	if err == nil {
-		fmt.Println("File deleted")
-	} else {
-		fmt.Println("Unable to delete file")
-	}
-	// Output: File deleted
-}
-
-func TestRemoveFile(t *testing.T) {
-	_ = CreateFile(fileToDelete)
-
-	createImmutableFile(fileNotToDelete)
-
-	defer deleteImmutableFile(fileNotToDelete)
-
-	tests := []struct {
-		name    string
-		path    string
-		wantErr bool
-	}{
-		{
-			"Returns nil if existing file is deleted",
-			fileToDelete,
-			false,
-		},
-		{
-			"Returns err when asked to delete folder",
-			existingFolder,
-			true,
-		},
-		{
-			"Returns err when asked to delete file that does not exist",
-			nonExistingFile,
-			true,
-		},
-		{
-			"Returns err if asked to delete file that cannot be deleted ",
-			fileNotToDelete,
-			true,
-		},
-		{
-			"Returns err if argument is empty path",
-			"",
-			true,
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			err := RemoveFile(tt.path)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("RemoveFile() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func ExampleCreateFile() {
 	err := CreateFile(existingFile)
 	if err != nil {
@@ -261,18 +197,4 @@ func skipWindowsNonWritableDirScenario(t *testing.T, file string, scenarioName s
 	if strings.Contains(file, filepath.Base(nonWritableDir)) && runtime.GOOS == "windows" {
 		t.Skipf("Skip %q test in windows", scenarioName)
 	}
-}
-
-func createImmutableFile(file string) {
-	_ = CreateFile(file)
-	if err := os.Chmod(file, 0000); err != nil {
-		log.Fatalf("Cannot create non writable file %q", nonWritableDir)
-	}
-}
-
-func deleteImmutableFile(file string) {
-	if err := os.Chmod(file, 0777); err != nil {
-		log.Fatalf("Cannot change permissions to 0777 to file %q", nonWritableDir)
-	}
-	_ = os.Remove(file)
 }

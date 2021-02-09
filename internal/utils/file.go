@@ -36,19 +36,6 @@ func FileExists(path string) bool {
 	return exists(path, false)
 }
 
-// RemoveFile deletes the specified file
-func RemoveFile(path string) error {
-	if path == "" {
-		return argError{"empty argument"}
-	}
-
-	if !FileExists(path) {
-		return missingFileError{path}
-	}
-
-	return os.Remove(path)
-}
-
 // CreateFile creates a file on the given filepath
 // along with any necessary parents, and returns nil,
 // or else returns an error.

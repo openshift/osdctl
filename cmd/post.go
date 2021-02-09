@@ -277,9 +277,6 @@ func validateBadResponse(body []byte) {
 }
 
 func cleanup(dir string) {
-	if err := utils.RemoveFile(filepath.Join(dir, modifiedJSON)); err != nil {
-		log.Errorf("Couldn't clean up %q", err)
-	}
 	if err := os.RemoveAll(dir); err != nil {
 		log.Errorf("Couldn't clean up %q", err)
 	}
