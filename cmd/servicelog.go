@@ -12,3 +12,8 @@ var servicelogCmd = &cobra.Command{
 		cmd.Help()
 	},
 }
+
+func init() {
+	// Add subcommands
+	servicelogCmd.AddCommand(postCmd) // servicelog post
+}

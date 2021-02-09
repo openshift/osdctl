@@ -1,0 +1,64 @@
+package servicelog
+
+import "strings"
+
+// Message is the base template structure
+type Message struct {
+	Severity     string `json:"severity"`
+	ServiceName  string `json:"service_name"`
+	ClusterUUID  string `json:"cluster_uuid"`
+	Summary      string `json:"summary"`
+	Description  string `json:"description"`
+	InternalOnly bool   `json:"internal_only"`
+}
+
+func (m *Message) GetSeverity() string {
+	return m.Severity
+}
+
+func (m *Message) GetServiceName() string {
+	return m.ServiceName
+}
+
+func (m *Message) GetClusterUUID() string {
+	return m.ClusterUUID
+}
+
+func (m *Message) GetSummary() string {
+	return m.Summary
+}
+
+func (m *Message) GetDescription() string {
+	return m.Description
+}
+
+func (m *Message) GetInternalOnly() bool {
+	return m.InternalOnly
+}
+
+func (m *Message) ReplaceWithFlag(variable, value string) {
+	m.Severity = strings.ReplaceAll(m.Severity, variable, value)
+	m.ServiceName = strings.ReplaceAll(m.ServiceName, variable, value)
+	m.ClusterUUID = strings.ReplaceAll(m.ClusterUUID, variable, value)
+	m.Summary = strings.ReplaceAll(m.Summary, variable, value)
+	m.Description = strings.ReplaceAll(m.Description, variable, value)
+}
+
+func (m *Message) SearchFlag(placeholder string) (found bool) {
+	if found = strings.Contains(m.Severity, placeholder); found == true {
+		return found
+	}
+	if found = strings.Contains(m.ServiceName, placeholder); found == true {
+		return found
+	}
+	if found = strings.Contains(m.ClusterUUID, placeholder); found == true {
+		return found
+	}
+	if found = strings.Contains(m.Summary, placeholder); found == true {
+		return found
+	}
+	if found = strings.Contains(m.Description, placeholder); found == true {
+		return found
+	}
+	return false
+}
