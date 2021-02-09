@@ -26,9 +26,9 @@ var (
 )
 
 const (
-	defaultTemplate      = "/path/example.json"
-	defaultClusterUUID   = "abcdefgh-12d4-5678-b8ab-ca08e2e82ca7"
-	defaultCaseID        = "12345678"
+	defaultTemplate      = ""
+	defaultClusterUUID   = ""
+	defaultCaseID        = ""
 	targetAPIPath        = "/api/service_logs/v1/cluster_logs" // https://api.openshift.com/?urls.primaryName=Service%20logs#/default/post_api_service_logs_v1_cluster_logs
 	modifiedJSON         = "modified-template.json"
 	clusterParameter     = "${CLUSTER_UUID}"
@@ -58,7 +58,7 @@ var postCmd = &cobra.Command{
 		ocmClient := createConnection()
 		defer func() {
 			if err := ocmClient.Close(); err != nil {
-				log.Errorf("Couldn't close the ocmClient (possible memory leak): %q", err)
+				log.Errorf("Cannot close the ocmClient (possible memory leak): %q", err)
 			}
 		}()
 
@@ -80,8 +80,8 @@ func init() {
 // accessTemplate checks if the provided template is currently accessible and returns an error
 func accessTemplate(template string) (err error) {
 
-	if strings.Contains(template, defaultTemplate) {
-		log.Info("User template is not provided.")
+	if template == "" {
+		log.Errorf("Template file is not provided. Use '-t' to fix this.")
 		return err
 	}
 
@@ -102,7 +102,7 @@ func accessTemplate(template string) (err error) {
 		}
 	}
 
-	return fmt.Errorf("couldn't read the template %q", template)
+	return fmt.Errorf("cannot read the template %q", template)
 
 }
 
@@ -123,11 +123,11 @@ func readTemplate() {
 	if err := accessTemplate(template); err == nil {
 		file, err := ioutil.ReadFile(template)
 		if err != nil {
-			log.Fatalf("Could not read the file.\nError: %q\n", err)
+			log.Fatalf("Cannot not read the file.\nError: %q\n", err)
 		}
 
 		if err = parseTemplate(file); err != nil {
-			log.Fatalf("could not parse the JSON template.\nError: %q\n", err)
+			log.Fatalf("Cannot not parse the JSON template.\nError: %q\n", err)
 		}
 	} else {
 		log.Fatal(err)
@@ -174,7 +174,7 @@ func modifyTemplate(dir string) (newData string) {
 		// Create the corrected JSON
 		s, _ := json.MarshalIndent(Message, "", "\t")
 		if _, err := file.WriteString(string(s)); err != nil {
-			log.Fatalf("Couldn't write the new modified template %q", err)
+			log.Fatalf("Cannot write the new modified template %q", err)
 		}
 	} else {
 		log.Fatalf("Cannot create file %q", err)
@@ -237,7 +237,7 @@ func check(response *sdk.Response, dir string) {
 
 func validateGoodResponse(body []byte) {
 	if err := parseGoodReply(body); err != nil {
-		log.Fatalf("could not parse the JSON template.\nError: %q\n", err)
+		log.Fatalf("Cannot not parse the JSON template.\nError: %q\n", err)
 	}
 
 	severity := GoodReply.Severity
@@ -272,12 +272,12 @@ func validateBadResponse(body []byte) {
 	}
 
 	if err := parseBadReply(body); err != nil {
-		log.Fatalf("Couldn't parse the error JSON message %q", err)
+		log.Fatalf("Cannot parse the error JSON message %q", err)
 	}
 }
 
 func cleanup(dir string) {
 	if err := os.RemoveAll(dir); err != nil {
-		log.Errorf("Couldn't clean up %q", err)
+		log.Errorf("Cannot clean up %q", err)
 	}
 }

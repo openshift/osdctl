@@ -13,10 +13,10 @@ osdctl servicelog post [flags]
 ### Options
 
 ```
-  -c, --cluster-external-id string   Target cluster UUID (default "abcdefgh-12d4-5678-b8ab-ca08e2e82ca7")
+  -c, --cluster-external-id string   Target cluster UUID
   -h, --help                         help for post
-  -i, --support-case-id string       Related ticket (RedHat Support Case ID) (default "12345678")
-  -t, --template string              Message template file or URL (default "/path/example.json")
+  -i, --support-case-id string       Related ticket (RedHat Support Case ID)
+  -t, --template string              Message template file or URL
 ```
 
 ### Options inherited from parent commands
