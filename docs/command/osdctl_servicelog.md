@@ -1,33 +1,25 @@
-## osdctl cost list
+## osdctl servicelog
 
-List the cost of each OU under given OU
+OCM/Hive Service log
 
 ### Synopsis
 
-List the cost of each OU under given OU
+OCM/Hive Service log
 
 ```
-osdctl cost list [flags]
+osdctl servicelog [flags]
 ```
 
 ### Options
 
 ```
-      --csv           output result as csv
-  -h, --help          help for list
-      --ou string     get OU ID
-  -t, --time string   set time
+  -h, --help   help for servicelog
 ```
 
 ### Options inherited from parent commands
 
 ```
       --alsologtostderr                  log to standard error as well as files
-  -a, --aws-access-key-id string         AWS Access Key ID
-  -c, --aws-config string                specify AWS config file path
-  -p, --aws-profile string               specify AWS profile
-  -g, --aws-region string                specify AWS region (default "us-east-1")
-  -x, --aws-secret-access-key string     AWS Secret Access Key
       --cluster string                   The name of the kubeconfig cluster to use
       --context string                   The name of the kubeconfig context to use
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -44,5 +36,6 @@ osdctl cost list [flags]
 
 ### SEE ALSO
 
-* [osdctl cost](osdctl_cost.md)	 - Cost Management related utilities
+* [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl servicelog post](osdctl_servicelog_post.md)	 - Send a servicelog message to a given cluster
 

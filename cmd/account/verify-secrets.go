@@ -40,7 +40,7 @@ func newCmdVerifySecrets(streams genericclioptions.IOStreams, flags *genericclio
 
 	verifySecretsCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
-	verifySecretsCmd.Flags().BoolVarP(&ops.verbose, "verbose", "v", false, "Verbose output")
+	verifySecretsCmd.Flags().BoolVarP(&ops.verbose, "verbose", "m", false, "Verbose output")
 	verifySecretsCmd.Flags().BoolVarP(&ops.all, "all", "A", false, "Verify all Account CRs")
 
 	return verifySecretsCmd
