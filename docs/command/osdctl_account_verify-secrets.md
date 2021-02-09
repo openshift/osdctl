@@ -16,7 +16,7 @@ osdctl account verify-secrets [<account name>] [flags]
       --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
   -A, --all                        Verify all Account CRs
   -h, --help                       help for verify-secrets
-  -m, --verbose                    Verbose output
+      --verbose                    Verbose output
 ```
 
 ### Options inherited from parent commands

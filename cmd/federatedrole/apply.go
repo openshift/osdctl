@@ -43,7 +43,7 @@ func newCmdApply(streams genericclioptions.IOStreams, flags *genericclioptions.C
 
 	applyCmd.Flags().StringVarP(&ops.url, "url", "u", "", "The URL of federated role yaml file")
 	applyCmd.Flags().StringVarP(&ops.file, "file", "f", "", "The path of federated role yaml file")
-	applyCmd.Flags().BoolVarP(&ops.verbose, "verbose", "m", false, "Verbose output")
+	applyCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 
 	return applyCmd
 }

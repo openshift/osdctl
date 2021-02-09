@@ -25,7 +25,7 @@ osdctl account servicequotas describe [flags]
   -h, --help                       help for describe
   -q, --quota-code string          Query for QuotaCode (default "L-1216C47A")
       --service-code string        Query for ServiceCode (default "ec2")
-  -m, --verbose                    Verbose output
+      --verbose                    Verbose output
 ```
 
 ### Options inherited from parent commands

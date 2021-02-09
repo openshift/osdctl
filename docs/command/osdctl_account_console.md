@@ -22,7 +22,7 @@ osdctl account console [flags]
   -C, --cluster-id string          The Internal Cluster ID from Hive to create AWS console URL for
   -d, --duration int               The duration of the console session. Default value is 3600 seconds(1 hour) (default 3600)
   -h, --help                       help for console
-  -m, --verbose                    Verbose output
+      --verbose                    Verbose output
 ```
 
 ### Options inherited from parent commands

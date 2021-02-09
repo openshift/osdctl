@@ -16,7 +16,7 @@ osdctl federatedrole apply [flags]
   -f, --file string   The path of federated role yaml file
   -h, --help          help for apply
   -u, --url string    The URL of federated role yaml file
-  -m, --verbose       Verbose output
+      --verbose       Verbose output
 ```
 
 ### Options inherited from parent commands

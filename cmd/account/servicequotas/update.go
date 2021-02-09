@@ -38,7 +38,7 @@ func newCmdUpdate(streams genericclioptions.IOStreams, flags *genericclioptions.
 
 	updateCmd.Flags().BoolVarP(&ops.allRegions, "all-regions", "", false, "Loop through all supported regions")
 
-	updateCmd.Flags().BoolVarP(&ops.verbose, "verbose", "m", false, "Verbose output")
+	updateCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 
 	return updateCmd
 }

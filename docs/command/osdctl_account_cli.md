@@ -23,7 +23,7 @@ osdctl account cli [flags]
   -d, --duration int               The duration of the console session. Default value is 3600 seconds(1 hour) (default 3600)
   -h, --help                       help for cli
   -o, --out string                 Output format [default | json | env] (default "default")
-  -m, --verbose                    Verbose output
+      --verbose                    Verbose output
 ```
 
 ### Options inherited from parent commands
