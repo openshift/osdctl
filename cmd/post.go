@@ -20,6 +20,8 @@ import (
 
 var (
 	template, clusterUUID, caseID string
+	isURL                         bool
+	HTMLBody                      []byte
 	Message                       servicelog.Message
 	GoodReply                     servicelog.GoodReply
 	BadReply                      servicelog.BadReply
@@ -98,10 +100,13 @@ func accessTemplate(template string) (err error) {
 		if err := utils.IsOnline(*urlPage); err != nil {
 			log.Errorf("host %q is not accessible", template)
 		} else {
+			HTMLBody, err = utils.CurlThis(urlPage.String())
+			if err == nil {
+				isURL = true
+			}
 			return err
 		}
 	}
-
 	return fmt.Errorf("cannot read the template %q", template)
 
 }
@@ -120,10 +125,17 @@ func parseBadReply(jsonFile []byte) error {
 }
 
 func readTemplate() {
-	if err := accessTemplate(template); err == nil {
-		file, err := ioutil.ReadFile(template)
-		if err != nil {
-			log.Fatalf("Cannot not read the file.\nError: %q\n", err)
+	if err := accessTemplate(template); err == nil { // check if this URL or file and if we can access it
+		var file []byte
+		if isURL {
+			// template is URL on the web
+			file = HTMLBody
+		} else {
+			// template is file on the disk
+			file, err = ioutil.ReadFile(template) // this works only for files
+			if err != nil {
+				log.Fatalf("Cannot not read the file.\nError: %q\n", err)
+			}
 		}
 
 		if err = parseTemplate(file); err != nil {

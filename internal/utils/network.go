@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"time"
@@ -41,4 +42,19 @@ func IsValidUrl(toTest string) bool {
 	}
 
 	return true
+}
+
+func CurlThis(webpage string) (body []byte, err error) {
+	resp, err := http.Get(webpage)
+	defer func() {
+		err = resp.Body.Close()
+	}()
+	if resp.StatusCode == http.StatusOK {
+		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return body, err
+		}
+		body = bodyBytes
+	}
+	return body, err
 }
