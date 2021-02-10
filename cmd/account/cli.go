@@ -28,7 +28,7 @@ func newCmdCli(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 	ops.k8sclusterresourcefactory.AttachCobraCliFlags(cliCmd)
 
 	cliCmd.Flags().StringVarP(&ops.output, "out", "o", "default", "Output format [default | json | env]")
-	cliCmd.Flags().BoolVarP(&ops.verbose, "verbose", "v", false, "Verbose output")
+	cliCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 
 	return cliCmd
 }

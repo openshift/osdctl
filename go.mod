@@ -8,17 +8,18 @@ require (
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/golang/mock v1.4.4
 	github.com/onsi/gomega v1.10.1
+	github.com/openshift-online/ocm-cli v0.1.47
+	github.com/openshift-online/ocm-sdk-go v0.1.152
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/openshift/aws-account-operator v0.0.0-20200914143350-bbda1c91242b
 	github.com/openshift/hive v1.0.5
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/common v0.10.0
+	github.com/prometheus/common v0.11.1
+	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
-	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae // indirect
-	golang.org/x/text v0.3.3 // indirect
-	k8s.io/api v0.18.3
-	k8s.io/apimachinery v0.18.3
+	k8s.io/api v0.18.5
+	k8s.io/apimachinery v0.18.5
 	k8s.io/cli-runtime v0.18.3
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog v1.0.0

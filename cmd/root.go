@@ -2,12 +2,11 @@ package cmd
 
 import (
 	"flag"
-	"os"
-
 	routev1 "github.com/openshift/api/route/v1"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	"github.com/spf13/cobra"
+	"os"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -28,7 +27,6 @@ func init() {
 	_ = awsv1alpha1.AddToScheme(scheme.Scheme)
 	_ = routev1.AddToScheme(scheme.Scheme)
 	_ = hivev1.AddToScheme(scheme.Scheme)
-
 	NewCmdRoot(genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr})
 }
 
@@ -63,6 +61,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(federatedrole.NewCmdFederatedRole(streams, kubeFlags))
 	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeFlags))
 	rootCmd.AddCommand(newCmdMetrics(streams, kubeFlags))
+	rootCmd.AddCommand(servicelogCmd)
 
 	// add docs command
 	rootCmd.AddCommand(newCmdDocs(streams))

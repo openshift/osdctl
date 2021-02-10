@@ -38,7 +38,7 @@ func newCmdDescribe(streams genericclioptions.IOStreams, flags *genericclioption
 
 	describeCmd.Flags().BoolVarP(&ops.allRegions, "all-regions", "", false, "Loop through all supported regions")
 
-	describeCmd.Flags().BoolVarP(&ops.verbose, "verbose", "v", false, "Verbose output")
+	describeCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 
 	return describeCmd
 }

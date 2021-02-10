@@ -29,7 +29,7 @@ func newCmdConsole(streams genericclioptions.IOStreams, flags *genericclioptions
 
 	ops.k8sclusterresourcefactory.AttachCobraCliFlags(consoleCmd)
 
-	consoleCmd.Flags().BoolVarP(&ops.verbose, "verbose", "v", false, "Verbose output")
+	consoleCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 
 	return consoleCmd
 }
