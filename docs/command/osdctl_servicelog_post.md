@@ -13,10 +13,9 @@ osdctl servicelog post [flags]
 ### Options
 
 ```
-  -c, --cluster-external-id string   Target cluster UUID
-  -h, --help                         help for post
-  -i, --support-case-id string       Related ticket (RedHat Support Case ID)
-  -t, --template string              Message template file or URL
+  -h, --help                help for post
+  -p, --param stringArray   Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.
+  -t, --template string     Message template file or URL
 ```
 
 ### Options inherited from parent commands

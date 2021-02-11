@@ -19,26 +19,19 @@ import (
 )
 
 var (
-	template, clusterUUID, caseID string
-	isURL                         bool
-	HTMLBody                      []byte
-	Message                       servicelog.Message
-	GoodReply                     servicelog.GoodReply
-	BadReply                      servicelog.BadReply
+	template                                  string
+	isURL                                     bool
+	HTMLBody                                  []byte
+	Message                                   servicelog.Message
+	GoodReply                                 servicelog.GoodReply
+	BadReply                                  servicelog.BadReply
+	templateParams, sliceVariable, sliceValue []string
 )
 
 const (
-	defaultTemplate      = ""
-	defaultClusterUUID   = ""
-	defaultCaseID        = ""
-	targetAPIPath        = "/api/service_logs/v1/cluster_logs" // https://api.openshift.com/?urls.primaryName=Service%20logs#/default/post_api_service_logs_v1_cluster_logs
-	modifiedJSON         = "modified-template.json"
-	clusterParameter     = "${CLUSTER_UUID}"
-	caseIDParameter      = "${CASE_ID}"
-	clusterUUIDLongName  = "cluster-external-id"
-	caseIDLongName       = "support-case-id"
-	clusterUUIDShorthand = "c"
-	caseIDShorthand      = "i"
+	defaultTemplate = ""
+	targetAPIPath   = "/api/service_logs/v1/cluster_logs" // https://api.openshift.com/?urls.primaryName=Service%20logs#/default/post_api_service_logs_v1_cluster_logs
+	modifiedJSON    = "modified-template.json"
 )
 
 // postCmd represents the post command
@@ -46,9 +39,41 @@ var postCmd = &cobra.Command{
 	Use:   "post",
 	Short: "Send a servicelog message to a given cluster",
 	Run: func(cmd *cobra.Command, args []string) {
+
+		// Parse all the '-p' parameters from the command line
+		for k, v := range templateParams {
+			if !strings.Contains(v, "=") {
+				log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
+			}
+			sliceVariable = append(sliceVariable, fmt.Sprintf("${%v}", strings.Split(v, "=")[0]))
+			sliceValue = append(sliceValue, strings.Split(v, "=")[1])
+
+			if sliceValue[k] == "" {
+				log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
+			}
+		}
+
 		readTemplate() // verify and parse
-		replaceFlags(clusterUUID, defaultClusterUUID, clusterParameter, clusterUUIDLongName, clusterUUIDShorthand)
-		replaceFlags(caseID, defaultCaseID, caseIDParameter, caseIDLongName, caseIDShorthand)
+
+		// Replace the custom parameters given by the user
+		for k, v := range templateParams {
+			replaceFlags(sliceValue[k], "", sliceVariable[k], sliceVariable[k], "p", v)
+		}
+
+		// Check if there are any remaining parameters (aka ${...}) in the template that was not replaces
+		// checkLeftoverParameters()
+		unusedParameters, found := Message.FindLeftovers()
+		if found {
+			for _, v := range unusedParameters {
+				regex := strings.NewReplacer("${", "", "}", "")
+				log.Errorf("The selected template is using '%s' parameter, but '--%s' flag is not set for this one. Use '-%s %v=\"FOOBAR\"' to fix this.", v, "param", "p", regex.Replace(v))
+			}
+			if numberOfMissingParameters := len(unusedParameters); numberOfMissingParameters == 1 {
+				log.Fatal("Please define this missing parameter properly.")
+			} else {
+				log.Fatalf("Please define all %v missing parameters properly.", numberOfMissingParameters)
+			}
+		}
 
 		dir := tempDir()
 		defer cleanup(dir)
@@ -75,8 +100,7 @@ var postCmd = &cobra.Command{
 func init() {
 	// define required flags
 	postCmd.Flags().StringVarP(&template, "template", "t", defaultTemplate, "Message template file or URL")
-	postCmd.Flags().StringVarP(&clusterUUID, clusterUUIDLongName, clusterUUIDShorthand, defaultClusterUUID, "Target cluster UUID")
-	postCmd.Flags().StringVarP(&caseID, caseIDLongName, caseIDShorthand, defaultCaseID, "Related ticket (RedHat Support Case ID)")
+	postCmd.Flags().StringArrayVarP(&templateParams, "param", "p", templateParams, "Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.")
 }
 
 // accessTemplate checks if the provided template is currently accessible and returns an error
@@ -146,16 +170,16 @@ func readTemplate() {
 	}
 }
 
-func replaceFlags(flagName, flagDefaultValue, flagParameter, flagLongName, flagShorthand string) {
+func replaceFlags(flagName, flagDefaultValue, flagParameter, flagLongName, flagShorthand, parameter string) {
 	if err := strings.Compare(flagName, flagDefaultValue); err == 0 {
 		// The user didn't set the flag. Check if the template is using the flag.
 		if found := Message.SearchFlag(flagParameter); found == true {
-			log.Fatalf("The selected template is using '%s' parameter, but '%s' flag is not set. Use '-%s' to fix this.", flagParameter, flagLongName, flagShorthand)
+			log.Fatalf("The selected template is using '%s' parameter, but '%s' flag was not set. Use '-%s' to fix this.", flagParameter, flagLongName, flagShorthand)
 		}
 	} else {
 		// The user set the flag. Check if the template is using the flag.
 		if found := Message.SearchFlag(flagParameter); found == false {
-			log.Fatalf("The selected template is not using '%s' parameter, but '%s' flag is set. Do not use '-%s' to fix this.", flagParameter, flagLongName, flagShorthand)
+			log.Fatalf("The selected template is not using '%s' parameter, but '--%s' flag was set. Do not use '-%s %s' to fix this.", flagParameter, "param", flagShorthand, parameter)
 		}
 		Message.ReplaceWithFlag(flagParameter, flagName)
 	}
@@ -261,8 +285,8 @@ func validateGoodResponse(body []byte) {
 		log.Fatalf("Message sent, but wrong service_name information was passed (wanted %q, got %q)", Message.ServiceName, serviceName)
 	}
 	clusteruuid := GoodReply.ClusterUUID
-	if clusterUUID != clusteruuid {
-		log.Fatalf("Message sent, but to different cluster (wanted %q, got %q)", clusterUUID, clusteruuid)
+	if clusteruuid != Message.ClusterUUID {
+		log.Fatalf("Message sent, but to different cluster (wanted %q, got %q)", Message.ClusterUUID, clusteruuid)
 	}
 	summary := GoodReply.Summary
 	if summary != Message.Summary {
