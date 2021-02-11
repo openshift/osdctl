@@ -19,13 +19,13 @@ import (
 )
 
 var (
-	template                                  string
-	isURL                                     bool
-	HTMLBody                                  []byte
-	Message                                   servicelog.Message
-	GoodReply                                 servicelog.GoodReply
-	BadReply                                  servicelog.BadReply
-	templateParams, sliceVariable, sliceValue []string
+	template                                                string
+	isURL                                                   bool
+	HTMLBody                                                []byte
+	Message                                                 servicelog.Message
+	GoodReply                                               servicelog.GoodReply
+	BadReply                                                servicelog.BadReply
+	templateParams, userParameterNames, userParameterValues []string
 )
 
 const (
@@ -40,40 +40,17 @@ var postCmd = &cobra.Command{
 	Short: "Send a servicelog message to a given cluster",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		// Parse all the '-p' parameters from the command line
+		parseUserParameters() // parse all the '-p' user flags
+
+		readTemplate() // parse the given JSON template provided via '-t' flag
+
+		// For every '-p' flag, replace its related placeholder in the template
 		for k, v := range templateParams {
-			if !strings.Contains(v, "=") {
-				log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
-			}
-			sliceVariable = append(sliceVariable, fmt.Sprintf("${%v}", strings.Split(v, "=")[0]))
-			sliceValue = append(sliceValue, strings.Split(v, "=")[1])
-
-			if sliceValue[k] == "" {
-				log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
-			}
+			replaceFlags(userParameterValues[k], "", userParameterNames[k], userParameterNames[k], "p", v)
 		}
 
-		readTemplate() // verify and parse
-
-		// Replace the custom parameters given by the user
-		for k, v := range templateParams {
-			replaceFlags(sliceValue[k], "", sliceVariable[k], sliceVariable[k], "p", v)
-		}
-
-		// Check if there are any remaining parameters (aka ${...}) in the template that was not replaces
-		// checkLeftoverParameters()
-		unusedParameters, found := Message.FindLeftovers()
-		if found {
-			for _, v := range unusedParameters {
-				regex := strings.NewReplacer("${", "", "}", "")
-				log.Errorf("The selected template is using '%s' parameter, but '--%s' flag is not set for this one. Use '-%s %v=\"FOOBAR\"' to fix this.", v, "param", "p", regex.Replace(v))
-			}
-			if numberOfMissingParameters := len(unusedParameters); numberOfMissingParameters == 1 {
-				log.Fatal("Please define this missing parameter properly.")
-			} else {
-				log.Fatalf("Please define all %v missing parameters properly.", numberOfMissingParameters)
-			}
-		}
+		// Check if there are any remaining placeholders in the template that are not replaced by a parameter
+		checkLeftovers()
 
 		dir := tempDir()
 		defer cleanup(dir)
@@ -101,6 +78,22 @@ func init() {
 	// define required flags
 	postCmd.Flags().StringVarP(&template, "template", "t", defaultTemplate, "Message template file or URL")
 	postCmd.Flags().StringArrayVarP(&templateParams, "param", "p", templateParams, "Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.")
+}
+
+// parseUserParameters parse all the '-p FOO=BAR' parameters and checks for syntax errors
+func parseUserParameters() {
+	for k, v := range templateParams {
+		if !strings.Contains(v, "=") {
+			log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
+		}
+
+		userParameterNames = append(userParameterNames, fmt.Sprintf("${%v}", strings.Split(v, "=")[0]))
+		userParameterValues = append(userParameterValues, strings.Split(v, "=")[1])
+
+		if userParameterValues[k] == "" {
+			log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
+		}
+	}
 }
 
 // accessTemplate checks if the provided template is currently accessible and returns an error
@@ -167,6 +160,21 @@ func readTemplate() {
 		}
 	} else {
 		log.Fatal(err)
+	}
+}
+
+func checkLeftovers() {
+	unusedParameters, found := Message.FindLeftovers()
+	if found {
+		for _, v := range unusedParameters {
+			regex := strings.NewReplacer("${", "", "}", "")
+			log.Errorf("The selected template is using '%s' parameter, but '--%s' flag is not set for this one. Use '-%s %v=\"FOOBAR\"' to fix this.", v, "param", "p", regex.Replace(v))
+		}
+		if numberOfMissingParameters := len(unusedParameters); numberOfMissingParameters == 1 {
+			log.Fatal("Please define this missing parameter properly.")
+		} else {
+			log.Fatalf("Please define all %v missing parameters properly.", numberOfMissingParameters)
+		}
 	}
 }
 
