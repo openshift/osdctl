@@ -1,6 +1,9 @@
 package servicelog
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // Message is the base template structure
 type Message struct {
@@ -61,4 +64,14 @@ func (m *Message) SearchFlag(placeholder string) (found bool) {
 		return found
 	}
 	return false
+}
+
+func (m *Message) FindLeftovers() (matches []string, found bool) {
+	r := regexp.MustCompile(`\${[^{}]*}`)
+	str := m.Severity + m.ServiceName + m.ClusterUUID + m.Summary + m.Description
+	matches = r.FindAllString(str, -1)
+	if len(matches) > 0 {
+		found = true
+	}
+	return matches, found
 }
