@@ -97,11 +97,7 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 
 	if profile == "" && configFile == "" {
 		fmt.Println("Config file and profile are not provided. Reading from env vars.")
-	} else if profile == "" {
-		fmt.Println("No profile provided. Reading from env vars, otherwise, please provide profile to use with config file.")
-	} else if configFile == "" {
-		fmt.Println("No config file provided. Reading from env vars, otherwise, please provide config file to use for profile.")
-	} else { // only set config file if it is not empty
+	} else if configFile != "" { // only set config file if it is not empty
 		absCfgPath, err := filepath.Abs(configFile)
 		if err != nil {
 			return nil, err

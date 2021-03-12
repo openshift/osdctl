@@ -30,11 +30,16 @@ func newCmdList(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 	listCmd.Flags().StringVar(&ops.ou, "ou", "", "get OU ID")
-	listCmd.Flags().StringVarP(&ops.time, "time", "t", "", "set time")
+	// list supported time args
+	listCmd.Flags().StringVarP(&ops.time, "time", "t", "", "set time. One of 'LM', 'MTD', 'TYD', '3M', '6M', '1Y'")
 	listCmd.Flags().BoolVar(&ops.csv, "csv", false, "output result as csv")
 
 	if err := listCmd.MarkFlagRequired("ou"); err != nil {
 		log.Fatalln("OU flag:", err)
+	}
+	// require explicit time set
+	if err := listCmd.MarkFlagRequired("time"); err != nil {
+		log.Fatalln("time flag:", err)
 	}
 
 	return listCmd
@@ -90,16 +95,16 @@ func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovide
 func printCostList(cost float64, unit string, OU *organizations.OrganizationalUnit, ops *listOptions, isChildNode bool) {
 	if !isChildNode {
 		if ops.csv {
-			fmt.Printf("\nOU,Cost(%s)\n%v,%f\n", unit, *OU.Name, cost)
+			fmt.Printf("OU,Name,Cost (%s)\n", unit)
 		} else {
-			fmt.Printf("\nListing costs of OU (%s, %s) and all its child OUs:\n\n", *OU.Id, *OU.Name)
-			fmt.Printf("%-30s%-30s%-30s%-30s\n", "OU ID", "OU Name", "Cost", "Unit")
+			fmt.Printf("Costs of OU %s '%s' and its child OUs:\n\n", *OU.Id, *OU.Name)
+			fmt.Printf("%-20s%-30s%-20s\n", "OU ID", "OU Name", "Cost")
 		}
 	}
 
 	if ops.csv {
-		fmt.Printf("%v,%f\n", *OU.Name, cost)
+		fmt.Printf("%v,%v,%.2f\n", *OU.Id, *OU.Name, cost)
 	} else {
-		fmt.Printf("%-30s%-30s%-30f%-30s\n", *OU.Id, *OU.Name, cost, unit)
+		fmt.Printf("%-20s%-30s%.2f\n", *OU.Id, *OU.Name, cost)
 	}
 }

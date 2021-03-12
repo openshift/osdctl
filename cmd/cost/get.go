@@ -21,7 +21,7 @@ func newCmdGet(streams genericclioptions.IOStreams) *cobra.Command {
 	ops := newGetOptions(streams)
 	getCmd := &cobra.Command{
 		Use:   "get",
-		Short: "Get total cost of a given OU. If no OU given, then gets total cost of v4 OU.",
+		Short: "Get total cost of a given OU",
 		Run: func(cmd *cobra.Command, args []string) {
 
 			awsClient, err := opsCost.initAWSClients()
@@ -47,11 +47,14 @@ func newCmdGet(streams genericclioptions.IOStreams) *cobra.Command {
 	}
 	getCmd.Flags().StringVar(&ops.ou, "ou", "", "get OU ID")
 	getCmd.Flags().BoolVarP(&ops.recursive, "recursive", "r", false, "recurse through OUs")
-	getCmd.Flags().StringVarP(&ops.time, "time", "t", "", "set time")
+	getCmd.Flags().StringVarP(&ops.time, "time", "t", "", "set time. One of 'LM', 'MTD', 'TYD', '3M', '6M', '1Y'")
 	getCmd.Flags().BoolVar(&ops.csv, "csv", false, "output result as csv")
 
 	if err := getCmd.MarkFlagRequired("ou"); err != nil {
 		log.Fatalln("OU flag:", err)
+	}
+	if err := getCmd.MarkFlagRequired("time"); err != nil {
+		log.Fatalln("time flag:", err)
 	}
 
 	return getCmd
