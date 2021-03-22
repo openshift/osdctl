@@ -16,7 +16,7 @@ osdctl cost list [flags]
       --csv           output result as csv
   -h, --help          help for list
       --ou string     get OU ID
-  -t, --time string   set time
+  -t, --time string   set time. One of 'LM', 'MTD', 'TYD', '3M', '6M', '1Y'
 ```
 
 ### Options inherited from parent commands

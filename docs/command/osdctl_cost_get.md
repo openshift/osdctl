@@ -1,10 +1,10 @@
 ## osdctl cost get
 
-Get total cost of a given OU. If no OU given, then gets total cost of v4 OU.
+Get total cost of a given OU
 
 ### Synopsis
 
-Get total cost of a given OU. If no OU given, then gets total cost of v4 OU.
+Get total cost of a given OU
 
 ```
 osdctl cost get [flags]
@@ -17,7 +17,7 @@ osdctl cost get [flags]
   -h, --help          help for get
       --ou string     get OU ID
   -r, --recursive     recurse through OUs
-  -t, --time string   set time
+  -t, --time string   set time. One of 'LM', 'MTD', 'TYD', '3M', '6M', '1Y'
 ```
 
 ### Options inherited from parent commands
