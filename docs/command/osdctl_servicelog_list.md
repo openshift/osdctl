@@ -1,19 +1,20 @@
-## osdctl servicelog
+## osdctl servicelog list
 
-OCM/Hive Service log
+gets all servicelog messages for a given cluster
 
 ### Synopsis
 
-OCM/Hive Service log
+gets all servicelog messages for a given cluster
 
 ```
-osdctl servicelog [flags]
+osdctl servicelog list [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for servicelog
+  -A, --all-messages   Toggle if we should see all of the messages or only SRE-P specific ones
+  -h, --help           help for list
 ```
 
 ### Options inherited from parent commands
@@ -37,7 +38,5 @@ osdctl servicelog [flags]
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
-* [osdctl servicelog list](osdctl_servicelog_list.md)	 - gets all servicelog messages for a given cluster
-* [osdctl servicelog post](osdctl_servicelog_post.md)	 - Send a servicelog message to a given cluster
+* [osdctl servicelog](osdctl_servicelog.md)	 - OCM/Hive Service log
 
