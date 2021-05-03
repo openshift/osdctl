@@ -20,6 +20,7 @@ osdctl account list [flags]
 
 ```
       --alsologtostderr                  log to standard error as well as files
+      --as string                        Username to impersonate for the operation
       --cluster string                   The name of the kubeconfig cluster to use
       --context string                   The name of the kubeconfig context to use
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
