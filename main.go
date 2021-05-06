@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/openshift/osd-utils-cli/cmd"
+	"github.com/openshift/osdctl/cmd"
 	"github.com/spf13/pflag"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"

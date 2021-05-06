@@ -13,11 +13,11 @@ import (
 	"k8s.io/kubectl/pkg/util/templates"
 	"k8s.io/utils/pointer"
 
-	"github.com/openshift/osd-utils-cli/cmd/account"
-	"github.com/openshift/osd-utils-cli/cmd/clusterdeployment"
-	"github.com/openshift/osd-utils-cli/cmd/cost"
-	"github.com/openshift/osd-utils-cli/cmd/federatedrole"
-	"github.com/openshift/osd-utils-cli/cmd/network"
+	"github.com/openshift/osdctl/cmd/account"
+	"github.com/openshift/osdctl/cmd/clusterdeployment"
+	"github.com/openshift/osdctl/cmd/cost"
+	"github.com/openshift/osdctl/cmd/federatedrole"
+	"github.com/openshift/osdctl/cmd/network"
 )
 
 // GitCommit is the short git commit hash from the environment

@@ -18,7 +18,7 @@ Currently, it mainly supports related work for AWS, especially [aws-account-oper
 - make
 
 ``` bash
-git clone https://github.com/openshift/osd-utils-cli.git
+git clone https://github.com/openshift/osdctl.git
 make build
 ```
 

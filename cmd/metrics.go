@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	routev1 "github.com/openshift/api/route/v1"
-	"github.com/openshift/osd-utils-cli/pkg/prom"
+	"github.com/openshift/osdctl/pkg/prom"
 	"github.com/spf13/cobra"
 
 	v1 "k8s.io/api/core/v1"
@@ -17,8 +17,8 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift/osd-utils-cli/cmd/common"
-	"github.com/openshift/osd-utils-cli/pkg/k8s"
+	"github.com/openshift/osdctl/cmd/common"
+	"github.com/openshift/osdctl/pkg/k8s"
 )
 
 const (

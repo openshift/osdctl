@@ -14,7 +14,7 @@ import (
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 )
 
 func TestGetAWSAccount(t *testing.T) {

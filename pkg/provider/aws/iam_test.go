@@ -13,7 +13,7 @@ import (
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/openshift/osd-utils-cli/pkg/provider/aws/mock"
+	"github.com/openshift/osdctl/pkg/provider/aws/mock"
 )
 
 func TestCheckIAMUserExists(t *testing.T) {

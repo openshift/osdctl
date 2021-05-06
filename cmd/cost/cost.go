@@ -3,8 +3,8 @@ package cost
 import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/organizations"
-	"github.com/openshift/osd-utils-cli/cmd/common"
-	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
+	"github.com/openshift/osdctl/cmd/common"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"log"

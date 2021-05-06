@@ -14,8 +14,8 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift/osd-utils-cli/cmd/common"
-	"github.com/openshift/osd-utils-cli/pkg/k8s"
+	"github.com/openshift/osdctl/cmd/common"
+	"github.com/openshift/osdctl/pkg/k8s"
 )
 
 const (
