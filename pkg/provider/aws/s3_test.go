@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/golang/mock/gomock"
-	"github.com/openshift/osd-utils-cli/pkg/provider/aws/mock"
+	"github.com/openshift/osdctl/pkg/provider/aws/mock"
 )
 
 func TestDeleteS3BucketsWithPrefix(t *testing.T) {

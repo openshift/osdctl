@@ -9,8 +9,8 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
-	k8spkg "github.com/openshift/osd-utils-cli/pkg/k8s"
-	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
+	k8spkg "github.com/openshift/osdctl/pkg/k8s"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 )
 
 // newCmdConsole implements the Console command which Consoles the specified account cr

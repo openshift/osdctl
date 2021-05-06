@@ -1,4 +1,4 @@
-module github.com/openshift/osd-utils-cli
+module github.com/openshift/osdctl
 
 go 1.14
 

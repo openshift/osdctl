@@ -8,7 +8,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
-	k8spkg "github.com/openshift/osd-utils-cli/pkg/k8s"
+	k8spkg "github.com/openshift/osdctl/pkg/k8s"
 )
 
 // newCmdCli implements the Cli command which generates temporary STS cli credentials for the specified account cr

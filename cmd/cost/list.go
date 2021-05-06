@@ -2,7 +2,7 @@ package cost
 
 import (
 	"fmt"
-	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"log"

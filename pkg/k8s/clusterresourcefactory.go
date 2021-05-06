@@ -17,8 +17,8 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/klog"
 
-	"github.com/openshift/osd-utils-cli/cmd/common"
-	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
+	"github.com/openshift/osdctl/cmd/common"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 )
 
 // ClusterResourceFactoryOptions defines the struct for running list account command

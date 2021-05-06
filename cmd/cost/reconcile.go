@@ -5,7 +5,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/costexplorer"
 	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/deckarep/golang-set"
-	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"

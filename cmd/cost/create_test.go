@@ -7,7 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/golang/mock/gomock"
 	"github.com/onsi/gomega"
-	"github.com/openshift/osd-utils-cli/pkg/provider/aws/mock"
+	"github.com/openshift/osdctl/pkg/provider/aws/mock"
 	"testing"
 )
 

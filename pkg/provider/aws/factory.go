@@ -2,7 +2,7 @@ package aws
 
 import (
 	"github.com/aws/aws-sdk-go/service/sts"
-	"github.com/openshift/osd-utils-cli/cmd/common"
+	"github.com/openshift/osdctl/cmd/common"
 	"github.com/spf13/cobra"
 )
 

@@ -2,7 +2,7 @@ package cost
 
 import (
 	"fmt"
-	awsprovider "github.com/openshift/osd-utils-cli/pkg/provider/aws"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
 	"log"
 	"strconv"
