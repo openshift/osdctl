@@ -14,6 +14,7 @@ osdctl account reset <account name> [flags]
 
 ```
       --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
+      --reset-legalentity bool     Provides a way to recycle accounts, so that they can be used by other legal entities. This will wipe the legalEntity, claimLink and reused fields.
   -h, --help                       help for reset
 ```
 
