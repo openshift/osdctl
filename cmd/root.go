@@ -2,11 +2,12 @@ package cmd
 
 import (
 	"flag"
+	"os"
+
 	routev1 "github.com/openshift/api/route/v1"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	"github.com/spf13/cobra"
-	"os"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -52,6 +53,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 		APIServer:   pointer.StringPtr(""),
 		Timeout:     pointer.StringPtr("0"),
 		Insecure:    pointer.BoolPtr(false),
+		Impersonate: pointer.StringPtr(""),
 	}
 	kubeFlags.AddFlags(rootCmd.PersistentFlags())
 

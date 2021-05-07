@@ -24,6 +24,7 @@ osdctl cost get [flags]
 
 ```
       --alsologtostderr                  log to standard error as well as files
+      --as string                        Username to impersonate for the operation
   -a, --aws-access-key-id string         AWS Access Key ID
   -c, --aws-config string                specify AWS config file path
   -p, --aws-profile string               specify AWS profile

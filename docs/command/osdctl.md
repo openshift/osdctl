@@ -14,6 +14,7 @@ osdctl [flags]
 
 ```
       --alsologtostderr                  log to standard error as well as files
+      --as string                        Username to impersonate for the operation
       --cluster string                   The name of the kubeconfig cluster to use
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for osdctl
