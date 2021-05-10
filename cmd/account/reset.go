@@ -38,7 +38,7 @@ func newCmdReset(streams genericclioptions.IOStreams, flags *genericclioptions.C
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 	resetCmd.Flags().BoolVarP(&ops.skipCheck, "skip-check", "y", false,
 		"Skip the prompt check")
-	resetCmd.Flags().BoolVar(&ops.resetLegalEntity, "reset-legalentity ", false,
+	resetCmd.Flags().BoolVar(&ops.resetLegalEntity, "reset-legalentity", false,
 		`Provides a way to recycle accounts, so that they can be used by other legal entities.
 		This will wipe the legalEntity, claimLink and reused fields.`)
 
@@ -125,21 +125,30 @@ func (o *resetOptions) run() error {
 	account.Spec.ClaimLink = ""
 	account.Spec.ClaimLinkNamespace = ""
 	account.Spec.IAMUserSecret = ""
-	account.Spec.LegalEntity = v1alpha1.LegalEntity{}
+	if o.resetLegalEntity {
+		account.Spec.LegalEntity = v1alpha1.LegalEntity{}
+	}
+
 	if err := o.kubeCli.Update(ctx, account, &client.UpdateOptions{}); err != nil {
 		return err
 	}
 
 	// reset fields in status
 	var mergePatch []byte
+
+	status := map[string]interface{}{
+		"rotateCredentials":        false,
+		"rotateConsoleCredentials": false,
+		"claimed":                  false,
+		"state":                    "",
+	}
+
+	if o.resetLegalEntity {
+		status["reused"] = false
+	}
+
 	mergePatch, _ = json.Marshal(map[string]interface{}{
-		"status": map[string]interface{}{
-			"rotateCredentials":        false,
-			"rotateConsoleCredentials": false,
-			"claimed":                  false,
-			"state":                    "",
-			"reused":                   false,
-		},
+		"status": status,
 	})
 
 	return o.kubeCli.Status().Patch(ctx, account, client.RawPatch(types.MergePatchType, mergePatch))
