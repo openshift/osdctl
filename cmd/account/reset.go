@@ -39,8 +39,7 @@ func newCmdReset(streams genericclioptions.IOStreams, flags *genericclioptions.C
 	resetCmd.Flags().BoolVarP(&ops.skipCheck, "skip-check", "y", false,
 		"Skip the prompt check")
 	resetCmd.Flags().BoolVar(&ops.resetLegalEntity, "reset-legalentity", false,
-		`Provides a way to recycle accounts, so that they can be used by other legal entities.
-		This will wipe the legalEntity, claimLink and reused fields.`)
+		`This will wipe the legalEntity, claimLink and reused fields, allowing accounts to be used for different Legal Entities.`)
 
 	// mark this flag hidden because it is not recommended to use
 	_ = resetCmd.Flags().MarkHidden("skip-check")
