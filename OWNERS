@@ -1,16 +1,16 @@
 reviewers:
-- fahlmant
-- clcollins
-- iamkirkbater
 - ariellima
-- yeya24
+- clcollins
+- fahlmant
+- georgettica
+- iamkirkbater
 - rogbas
 - sam-nguyen7
-- nickwyl
 approvers:
+- clcollins
 - fahlmant
+- georgettica
 - rogbas
-- clcollins
 maintainers:
-- rogbas
 - clcollins
+- rogbas
