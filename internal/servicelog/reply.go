@@ -16,6 +16,16 @@ type GoodReply struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
+type ClusterListGoodReply struct {
+	Kind  string `json:"kind"`
+	Page  int    `json:"page"`
+	Size  int    `json:"size"`
+	Total int    `json:"total"`
+	Items []struct {
+		ExternalID string `json:"external_id"`
+	} `json:"items"`
+}
+
 type BadReply struct {
 	ID          string `json:"id"`
 	Kind        string `json:"kind"`

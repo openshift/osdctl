@@ -1,36 +1,32 @@
-package cmd
+package servicelog
 
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/openshift-online/ocm-cli/pkg/arguments"
-	"github.com/openshift-online/ocm-cli/pkg/dump"
-	"github.com/openshift-online/ocm-cli/pkg/ocm"
-	sdk "github.com/openshift-online/ocm-sdk-go"
-	"github.com/openshift/osdctl/internal/servicelog"
-	"github.com/openshift/osdctl/internal/utils"
-	log "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/openshift-online/ocm-cli/pkg/arguments"
+	"github.com/openshift-online/ocm-cli/pkg/dump"
+	sdk "github.com/openshift-online/ocm-sdk-go"
+	"github.com/openshift/osdctl/internal/servicelog"
+	"github.com/openshift/osdctl/internal/utils"
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
 )
 
 var (
-	template                                                string
-	isURL                                                   bool
-	HTMLBody                                                []byte
-	Message                                                 servicelog.Message
-	GoodReply                                               servicelog.GoodReply
-	BadReply                                                servicelog.BadReply
-	templateParams, userParameterNames, userParameterValues []string
+	GoodReply servicelog.GoodReply
+	BadReply  servicelog.BadReply
+	Message   servicelog.Message
+	template  string
 )
 
 const (
 	defaultTemplate = ""
-	targetAPIPath   = "/api/service_logs/v1/cluster_logs" // https://api.openshift.com/?urls.primaryName=Service%20logs#/default/post_api_service_logs_v1_cluster_logs
 	modifiedJSON    = "modified-template.json"
 )
 
@@ -68,9 +64,15 @@ var postCmd = &cobra.Command{
 
 		// Use the OCM client to create the POST request
 		// send it as logservice and validate the response
-		request := createRequest(ocmClient, newData)
-		response := postRequest(request)
+		request := createPostRequest(ocmClient, newData)
+		response := sendRequest(request)
+
 		check(response, dir)
+
+		err := dump.Pretty(os.Stdout, response.Bytes())
+		if err != nil {
+			log.Errorf("cannot print post command: %q", err)
+		}
 	},
 }
 
@@ -226,18 +228,7 @@ func modifyTemplate(dir string) (newData string) {
 	return newData
 }
 
-func createConnection() *sdk.Connection {
-	connection, err := ocm.NewConnection().Build()
-	if err != nil {
-		if strings.Contains(err.Error(), "Not logged in, run the") {
-			log.Fatalf("Failed to create OCM connection: Authetication error, run the 'ocm login' command first.")
-		}
-		log.Fatalf("Failed to create OCM connection: %v", err)
-	}
-	return connection
-}
-
-func createRequest(ocmClient *sdk.Connection, newData string) *sdk.Request {
+func createPostRequest(ocmClient *sdk.Connection, newData string) *sdk.Request {
 	// Create and populate the request:
 	request := ocmClient.Post()
 	err := arguments.ApplyPathArg(request, targetAPIPath)
@@ -252,31 +243,6 @@ func createRequest(ocmClient *sdk.Connection, newData string) *sdk.Request {
 		log.Fatalf("Can't read body: %v", err)
 	}
 	return request
-}
-
-func postRequest(request *sdk.Request) *sdk.Response {
-	response, err := request.Send()
-	if err != nil {
-		log.Fatalf("Can't send request: %v", err)
-	}
-	return response
-}
-
-func check(response *sdk.Response, dir string) {
-	status := response.Status()
-
-	body := response.Bytes()
-
-	if status < 400 {
-		validateGoodResponse(body)
-		log.Info("Message has been successfully sent")
-
-	} else {
-		validateBadResponse(body)
-		cleanup(dir)
-		log.Fatalf("Failed to post message because of %q", BadReply.Reason)
-
-	}
 }
 
 func validateGoodResponse(body []byte) {
@@ -304,15 +270,14 @@ func validateGoodResponse(body []byte) {
 	if description != Message.Description {
 		log.Fatalf("Message sent, but wrong description information was passed (wanted %q, got %q)", Message.Description, description)
 	}
-
-	if err := dump.Pretty(os.Stdout, body); err != nil {
-		log.Fatalf("Server returned invalid JSON reply %q", err)
+	if ok := json.Valid(body); !ok {
+		log.Fatalf("Server returned invalid JSON")
 	}
 }
 
 func validateBadResponse(body []byte) {
-	if err := dump.Pretty(os.Stderr, body); err != nil {
-		log.Errorf("Server returned invalid JSON reply %q", err)
+	if ok := json.Valid(body); !ok {
+		log.Errorf("Server returned invalid JSON")
 	}
 
 	if err := parseBadReply(body); err != nil {
