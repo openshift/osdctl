@@ -27,7 +27,7 @@ jobs:
 
       - name: Download GoReleaser
         run: |
-          curl -sSLf https://github.com/goreleaser/goreleaser/releases/latest/download/goreleaser_Linux_x86_64.tar.gz -o - | tar --extract --gunzip --directory /usr/local/bin goreleaser
+          mkdir ./bin && curl -sSLf https://github.com/goreleaser/goreleaser/releases/latest/download/goreleaser_Linux_x86_64.tar.gz -o - | tar --extract --gunzip --directory ./bin goreleaser
       - name: Check goreleaser validity
         run: |
-          goreleaser check
+          ./bin/goreleaser check
