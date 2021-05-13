@@ -23,6 +23,7 @@ var (
 	BadReply  servicelog.BadReply
 	Message   servicelog.Message
 	template  string
+	isDryRun  bool
 )
 
 const (
@@ -65,8 +66,17 @@ var postCmd = &cobra.Command{
 		// Use the OCM client to create the POST request
 		// send it as logservice and validate the response
 		request := createPostRequest(ocmClient, newData)
-		response := sendRequest(request)
 
+		// If this is a dry-run, print the populated template
+		// but don't proceed further.
+		if isDryRun {
+			if err := printTemplate(newData); err != nil {
+				log.Errorf("Cannot read generated template: %q", err)
+			}
+			return
+		}
+
+		response := sendRequest(request)
 		check(response, dir)
 
 		err := dump.Pretty(os.Stdout, response.Bytes())
@@ -80,6 +90,7 @@ func init() {
 	// define required flags
 	postCmd.Flags().StringVarP(&template, "template", "t", defaultTemplate, "Message template file or URL")
 	postCmd.Flags().StringArrayVarP(&templateParams, "param", "p", templateParams, "Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.")
+	postCmd.Flags().BoolVarP(&isDryRun, "dry-run", "d", false, "Dry-run - print the service log about to be sent but don't send it.")
 }
 
 // parseUserParameters parse all the '-p FOO=BAR' parameters and checks for syntax errors
@@ -226,6 +237,14 @@ func modifyTemplate(dir string) (newData string) {
 		log.Fatalf("Cannot create file %q", err)
 	}
 	return newData
+}
+
+func printTemplate(filePath string) error {
+	contents, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+	return dump.Pretty(os.Stdout, contents)
 }
 
 func createPostRequest(ocmClient *sdk.Connection, newData string) *sdk.Request {
