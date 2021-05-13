@@ -87,7 +87,7 @@ func (o *cliOptions) run() error {
 	}
 
 	if o.output == "env" {
-		fmt.Fprintf(o.IOStreams.Out, "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s AWS_DEFAULT_REGION=%s",
+		fmt.Fprintf(o.IOStreams.Out, "AWS_ACCESS_KEY_ID=%s\nAWS_SECRET_ACCESS_KEY=%s\nAWS_SESSION_TOKEN=%s\nAWS_DEFAULT_REGION=%s\n",
 			*creds.AccessKeyId,
 			*creds.SecretAccessKey,
 			*creds.SessionToken,
