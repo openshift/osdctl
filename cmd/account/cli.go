@@ -2,13 +2,17 @@ package account
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/spf13/cobra"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/klog"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	k8spkg "github.com/openshift/osdctl/pkg/k8s"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 )
 
 // newCmdCli implements the Cli command which generates temporary STS cli credentials for the specified account cr
@@ -71,12 +75,24 @@ func (o *cliOptions) complete(cmd *cobra.Command) error {
 }
 
 func (o *cliOptions) run() error {
-	_, err := o.k8sclusterresourcefactory.GetCloudProvider(o.verbose)
+	awsClient, err := o.k8sclusterresourcefactory.GetCloudProvider(o.verbose)
 	if err != nil {
 		return err
 	}
 
 	creds := o.k8sclusterresourcefactory.Awscloudfactory.Credentials
+
+	if strings.Contains(o.k8sclusterresourcefactory.Awscloudfactory.RoleName, "BYOC") {
+		creds, err = awsprovider.GetAssumeRoleCredentials(awsClient,
+			&o.k8sclusterresourcefactory.Awscloudfactory.ConsoleDuration, aws.String(o.k8sclusterresourcefactory.Awscloudfactory.SessionName),
+			aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s",
+				o.k8sclusterresourcefactory.AccountID,
+				o.k8sclusterresourcefactory.Awscloudfactory.RoleName)))
+		if err != nil {
+			klog.Error("Failed to get jump-role creds for CCS")
+			return err
+		}
+	}
 
 	if o.output == "default" {
 		fmt.Fprintf(o.IOStreams.Out, "Temporary AWS Credentials:\n%s\n", creds)
