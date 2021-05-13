@@ -1,21 +1,33 @@
-REPOSITORY = $(shell go list -m)
-GIT_COMMIT = $(shell git rev-parse --short HEAD)
-
 BUILDFLAGS ?=
-LDFLAGS = -ldflags="-X '${REPOSITORY}/cmd.GitCommit=${GIT_COMMIT}'"
+GORELEASER_BUILD_ARGS = "--rm-dist"
 unexport GOFLAGS
 
 all: format mod build test
 
-format: vet fmt mockgen docs
+format: vet fmt mockgen ci-build docs
 
 fmt:
 	@echo "gofmt"
 	@gofmt -w -s .
 	@git diff --exit-code .
 
+.PHONY: download-goreleaser
+download-goreleaser:
+	mkdir -p ./bin && curl -sSLf https://github.com/goreleaser/goreleaser/releases/latest/download/goreleaser_Linux_x86_64.tar.gz -o - | tar --extract --gunzip --directory ./bin goreleaser
+
+# Need to use --snapshot here because the goReleaser
+# requires more git info that is provided in Prow's clone.
+# Snapshot allows the build without validation of the
+# repository itself
+.PHONY: ci-build
+ci-build: download-goreleaser
+	./bin/goreleaser build $(GORELEASER_BUILD_ARGS) --snapshot
+
 build:
-	go build ${BUILDFLAGS} ${LDFLAGS} -o ./bin/osdctl main.go
+	goreleaser build $(GORELEASER_BUILD_ARGS)
+
+release:
+	goreleaser release --rm-dist
 
 vet:
 	go vet ${BUILDFLAGS} ./...
@@ -24,8 +36,8 @@ mod:
 	go mod tidy
 	@git diff --exit-code -- go.mod
 
-docs: build
-	./bin/osdctl docs ./docs/command
+docs:
+	./dist/osdctl_$(shell  uname | tr [:upper:] [:lower:])_amd64/osdctl ./docs/command
 	@git diff --exit-code -- ./docs/command/
 
 mockgen: ensure-mockgen
