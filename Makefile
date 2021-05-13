@@ -20,8 +20,12 @@ download-goreleaser:
 # Snapshot allows the build without validation of the
 # repository itself
 .PHONY: ci-build
-ci-build: download-goreleaser
+ci-build: download-goreleaser goreleaser-check
 	./bin/goreleaser build $(GORELEASER_BUILD_ARGS) --snapshot
+
+.PHONY: goreleaser-check
+goreleaser-check:
+	./bin/goreleaser check
 
 build:
 	goreleaser build $(GORELEASER_BUILD_ARGS)
