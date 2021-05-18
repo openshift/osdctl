@@ -22,7 +22,7 @@ git clone https://github.com/openshift/osdctl.git
 make build
 ```
 
-Then you can find the `osdctl` binary file in the `./bin` directory.
+Then you can find the `osdctl` binary file in the `./dist` subdirectory matching your architecture.
 
 ### Download from release
 
