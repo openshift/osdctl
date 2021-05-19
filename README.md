@@ -112,6 +112,9 @@ osdctl account console -a test-cr
 
 # generate console URL via AWS Account ID
 osdctl account console -i 1111111111
+
+# The --launch flag will open the url in the browser
+osdctl account console -i 1111111111 --launch
 ```
 
 ### Cleanup Velero managed snapshots
