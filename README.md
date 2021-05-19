@@ -112,6 +112,9 @@ osdctl account console -a test-cr
 
 # generate console URL via AWS Account ID
 osdctl account console -i 1111111111
+
+# The --launch flag will open the url in the browser
+osdctl account console -i 1111111111 --launch
 ```
 
 ### Cleanup Velero managed snapshots
@@ -129,14 +132,14 @@ osdctl account clean-velero-snapshots -p <profile name> -c <config file path>
 
 ### AWS Account IAM User Credentials validation
 
-`check-secrets` command checks the IAM User Secret associated with Account Accout CR.
+`verify-secrets` command verifies the IAM User Secret associated with Account Accout CR.
 
 ```bash
-# no argument, check all account secrets
-osdctl account check-secrets
+# no argument, verify all account secrets
+osdctl account verify-secrets
 
-# specify the Account CR name, then only check the IAM User Secret for that Account.
-osdctl account check-secrets <Account CR Name>
+# specify the Account CR name, then only verify the IAM User Secret for that Account.
+osdctl account verify-secrets <Account CR Name>
 ```
 
 ### Match AWS Account with AWS Account Operator related resources

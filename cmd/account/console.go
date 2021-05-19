@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -30,6 +31,7 @@ func newCmdConsole(streams genericclioptions.IOStreams, flags *genericclioptions
 	ops.k8sclusterresourcefactory.AttachCobraCliFlags(consoleCmd)
 
 	consoleCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
+	consoleCmd.Flags().BoolVar(&ops.launch, "launch", false, "Launch web browser directly")
 
 	return consoleCmd
 }
@@ -39,6 +41,7 @@ type consoleOptions struct {
 	k8sclusterresourcefactory k8spkg.ClusterResourceFactoryOptions
 
 	verbose bool
+	launch  bool
 
 	genericclioptions.IOStreams
 }
@@ -83,6 +86,10 @@ func (o *consoleOptions) run() error {
 		return err
 	}
 	fmt.Fprintf(o.IOStreams.Out, "The AWS Console URL is:\n%s\n", consoleURL)
+
+	if o.launch {
+		return browser.OpenURL(consoleURL)
+	}
 
 	return nil
 }

@@ -13,6 +13,7 @@ require (
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/openshift/aws-account-operator v0.0.0-20200914143350-bbda1c91242b
 	github.com/openshift/hive v1.0.5
+	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.11.1
 	github.com/sirupsen/logrus v1.6.0
