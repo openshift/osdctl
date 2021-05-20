@@ -89,7 +89,7 @@ func (o *cliOptions) run() error {
 				o.k8sclusterresourcefactory.AccountID,
 				o.k8sclusterresourcefactory.Awscloudfactory.RoleName)))
 		if err != nil {
-			klog.Error("Failed to get jump-role creds for CCS")
+			klog.Error("Failed to assume BYOC role. Customer either deleted role or denied SREP access")
 			return err
 		}
 	}
