@@ -16,6 +16,7 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/pkg/k8s"
 )
@@ -37,6 +38,8 @@ func newCmdReset(streams genericclioptions.IOStreams, flags *genericclioptions.C
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 	resetCmd.Flags().BoolVarP(&ops.skipCheck, "skip-check", "y", false,
 		"Skip the prompt check")
+	resetCmd.Flags().BoolVar(&ops.resetLegalEntity, "reset-legalentity", false,
+		`This will wipe the legalEntity, claimLink and reused fields, allowing accounts to be used for different Legal Entities.`)
 
 	// mark this flag hidden because it is not recommended to use
 	_ = resetCmd.Flags().MarkHidden("skip-check")
@@ -49,7 +52,8 @@ type resetOptions struct {
 	accountName      string
 	accountNamespace string
 
-	skipCheck bool
+	skipCheck        bool
+	resetLegalEntity bool
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
@@ -120,19 +124,30 @@ func (o *resetOptions) run() error {
 	account.Spec.ClaimLink = ""
 	account.Spec.ClaimLinkNamespace = ""
 	account.Spec.IAMUserSecret = ""
+	if o.resetLegalEntity {
+		account.Spec.LegalEntity = v1alpha1.LegalEntity{}
+	}
+
 	if err := o.kubeCli.Update(ctx, account, &client.UpdateOptions{}); err != nil {
 		return err
 	}
 
 	// reset fields in status
 	var mergePatch []byte
+
+	status := map[string]interface{}{
+		"rotateCredentials":        false,
+		"rotateConsoleCredentials": false,
+		"claimed":                  false,
+		"state":                    "",
+	}
+
+	if o.resetLegalEntity {
+		status["reused"] = false
+	}
+
 	mergePatch, _ = json.Marshal(map[string]interface{}{
-		"status": map[string]interface{}{
-			"rotateCredentials":        false,
-			"rotateConsoleCredentials": false,
-			"claimed":                  false,
-			"state":                    "",
-		},
+		"status": status,
 	})
 
 	return o.kubeCli.Status().Patch(ctx, account, client.RawPatch(types.MergePatchType, mergePatch))
