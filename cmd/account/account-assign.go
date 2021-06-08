@@ -61,7 +61,7 @@ func newAccountAssignOptions(streams genericclioptions.IOStreams, flags *generic
 
 func (o *accountAssignOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.username == "" {
-		return cmdutil.UsageErrorf(cmd, "RedHat username was not provided")
+		return cmdutil.UsageErrorf(cmd, "Red Hat username was not provided")
 	}
 
 	var err error
@@ -79,10 +79,12 @@ func (o *accountAssignOptions) run() error {
 		accountAssignID string
 		destinationOu   string
 		defaultPayer    = "osd-staging-2"
+		nonDefaultPayer string
 	)
 
-	if o.username != "" && o.payerAccount == "" {
-		o.payerAccount = defaultPayer
+	o.payerAccount = defaultPayer
+	if o.username != "" && o.payerAccount != "" {
+		nonDefaultPayer = o.payerAccount
 	}
 	//Instantiating aws client
 	awsClient, err := awsprovider.NewAwsClient(o.payerAccount, "us-east-1", "")
@@ -139,7 +141,7 @@ func (o *accountAssignOptions) run() error {
 			fmt.Println(err.Error())
 			return err
 		}
-	} else if o.payerAccount == "osd-staging-1" {
+	} else if o.payerAccount == nonDefaultPayer {
 		destinationOu = defaultNonBYOCEnv
 		_, err = awsClient.MoveAccount(inputMove)
 		if err != nil {
