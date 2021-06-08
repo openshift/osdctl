@@ -14,7 +14,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// assignCmd represents the assign command
+// Global variables
+var (
+	defaultBYOCEnv    = "ou-rs3h-i0v69q47"
+	defaultNonBYOCEnv = "ou-0wd6-z6tzkjek"
+	defaultRootId     = "r-0wd6"
+)
+
+// assignCmd assigns an aws account to user under osd-staging-2 by default unless osd-staging-1 is specified
 func newCmdAccountAssign(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
 	ops := newAccountAssignOptions(streams, flags)
 	accountAssignCmd := &cobra.Command{
@@ -70,21 +77,24 @@ func (o *accountAssignOptions) run() error {
 
 	var (
 		accountAssignID string
+		destinationOu   string
+		defaultPayer    = "osd-staging-2"
 	)
 
 	if o.username != "" && o.payerAccount == "" {
-		o.payerAccount = "osd-staging-2"
+		o.payerAccount = defaultPayer
 	}
 	//Instantiating aws client
-	AwsClient, err := awsprovider.NewAwsClient(o.payerAccount, "us-east-1", "")
+	awsClient, err := awsprovider.NewAwsClient(o.payerAccount, "us-east-1", "")
 	if err != nil {
 		return err
 	}
 	//Listing accounts
 	input := &organizations.ListAccountsInput{}
-	accounts, err := AwsClient.ListAccounts(input)
+	accounts, err := awsClient.ListAccounts(input)
 	if err != nil {
 		fmt.Println(err.Error())
+		return err
 	}
 
 	//Lopping through the list to find an unassigned account
@@ -109,33 +119,32 @@ func (o *accountAssignOptions) run() error {
 		},
 	}
 
-	_, err = AwsClient.TagResource(inputTag)
+	_, err = awsClient.TagResource(inputTag)
 	if err != nil {
 		return err
 	}
 
 	//Moving to developers OU
-	inputMove1 := &organizations.MoveAccountInput{
+	inputMove := &organizations.MoveAccountInput{
 
 		AccountId:           aws.String(accountAssignID),
-		DestinationParentId: aws.String("ou-0wd6-z6tzkjek"),
-		SourceParentId:      aws.String("r-0wd6"),
-	}
-	inputMove2 := &organizations.MoveAccountInput{
-		AccountId:           aws.String(accountAssignID),
-		DestinationParentId: aws.String("ou-rs3h-i0v69q47"),
-		SourceParentId:      aws.String("r-0wd6"),
+		DestinationParentId: aws.String(destinationOu),
+		SourceParentId:      aws.String(defaultRootId),
 	}
 
-	if o.payerAccount == "osd-staging-2" {
-		_, err = AwsClient.MoveAccount(inputMove2)
+	if o.payerAccount == defaultPayer {
+		destinationOu = defaultBYOCEnv
+		_, err = awsClient.MoveAccount(inputMove)
 		if err != nil {
+			fmt.Println(err.Error())
 			return err
 		}
 	} else if o.payerAccount == "osd-staging-1" {
-		_, err = AwsClient.MoveAccount(inputMove1)
+		destinationOu = defaultNonBYOCEnv
+		_, err = awsClient.MoveAccount(inputMove)
 		if err != nil {
 			fmt.Println(err.Error())
+			return err
 		}
 	}
 
