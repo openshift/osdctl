@@ -95,7 +95,7 @@ func (o *accountAssignOptions) run() error {
 	}
 	//List accounts that are not in any OU
 	input := &organizations.ListAccountsForParentInput{
-		ParentId: &defaultRootId,
+		ParentId: aws.String(defaultRootId),
 	}
 	accounts, err := awsClient.ListAccountsForParent(input)
 	if err != nil {
@@ -130,6 +130,7 @@ func (o *accountAssignOptions) run() error {
 
 	//Move account to developers OU
 	inputMove := &organizations.MoveAccountInput{
+		AccountId:           aws.String(accountAssignID),
 		DestinationParentId: aws.String(destinationOu),
 		SourceParentId:      aws.String(defaultRootId),
 	}
