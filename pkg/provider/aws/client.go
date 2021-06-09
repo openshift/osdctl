@@ -74,6 +74,7 @@ type Client interface {
 	MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error)
 	DescribeOrganizationalUnit(input *organizations.DescribeOrganizationalUnitInput) (*organizations.DescribeOrganizationalUnitOutput, error)
 	TagResource(input *organizations.TagResourceInput) (*organizations.TagResourceOutput, error)
+	ListTagsForResource(input *organizations.ListTagsForResourceInput) (*organizations.ListTagsForResourceOutput, error)
 
 	// Cost Explorer
 	GetCostAndUsage(input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error)
@@ -259,6 +260,10 @@ func (c *AwsClient) DescribeOrganizationalUnit(input *organizations.DescribeOrga
 
 func (c *AwsClient) TagResource(input *organizations.TagResourceInput) (*organizations.TagResourceOutput, error) {
 	return c.orgClient.TagResource(input)
+}
+
+func (c *AwsClient) ListTagsForResource(input *organizations.ListTagsForResourceInput) (*organizations.ListTagsForResourceOutput, error) {
+	return c.orgClient.ListTagsForResource(input)
 }
 
 func (c *AwsClient) GetCostAndUsage(input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {

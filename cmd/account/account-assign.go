@@ -78,58 +78,58 @@ func (o *accountAssignOptions) run() error {
 	var (
 		accountAssignID string
 		destinationOu   string
-		defaultPayer    = "osd-staging-2"
 		nonDefaultPayer string
+		defaultPayer    = "osd-staging-2"
+		claimTag        = "Claimed"
+		claimTagValue   = "True"
 	)
 
 	o.payerAccount = defaultPayer
 	if o.username != "" && o.payerAccount != "" {
 		nonDefaultPayer = o.payerAccount
 	}
-	//Instantiating aws client
+	//Instantiate aws client
 	awsClient, err := awsprovider.NewAwsClient(o.payerAccount, "us-east-1", "")
 	if err != nil {
 		return err
 	}
-	//Listing accounts
-	input := &organizations.ListAccountsInput{}
-	accounts, err := awsClient.ListAccounts(input)
+	//List accounts that are not in any OU
+	input := &organizations.ListAccountsForParentInput{
+		ParentId: &defaultRootId,
+	}
+	accounts, err := awsClient.ListAccountsForParent(input)
 	if err != nil {
 		fmt.Println(err.Error())
 		return err
 	}
-
-	//Lopping through the list to find an unassigned account
-	for _, a := range accounts.Accounts {
-		if *a.Status == "UNASSIGNED" {
-			accountAssignID = *a.Id
-			break
-		}
-		if err != nil {
-			return err
-		}
-	}
-
-	//Tagging the account with username
+	//Create input for tagging
 	inputTag := &organizations.TagResourceInput{
 		ResourceId: aws.String(accountAssignID),
 		Tags: []*organizations.Tag{
 			{
-				Key:   aws.String(accountAssignID),
+				Key:   aws.String("Owner"),
 				Value: aws.String(o.username),
+			},
+			{
+				Key:   aws.String(claimTag),
+				Value: aws.String(claimTagValue),
 			},
 		},
 	}
 
-	_, err = awsClient.TagResource(inputTag)
-	if err != nil {
-		return err
+	//Loop through the list of accounts and get ID
+	for _, a := range accounts.Accounts {
+		accountAssignID = *a.Id
+		//Tag account
+		_, err = awsClient.TagResource(inputTag)
+		if err != nil {
+			return err
+		}
+		break
 	}
 
-	//Moving to developers OU
+	//Move account to developers OU
 	inputMove := &organizations.MoveAccountInput{
-
-		AccountId:           aws.String(accountAssignID),
 		DestinationParentId: aws.String(destinationOu),
 		SourceParentId:      aws.String(defaultRootId),
 	}
