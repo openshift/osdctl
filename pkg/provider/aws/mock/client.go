@@ -383,6 +383,21 @@ func (mr *MockClientMockRecorder) ListOrganizationalUnitsForParent(input interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOrganizationalUnitsForParent", reflect.TypeOf((*MockClient)(nil).ListOrganizationalUnitsForParent), input)
 }
 
+// MoveAccount mocks base method
+func (m *MockClient) MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MoveAccount", input)
+	ret0, _ := ret[0].(*organizations.MoveAccountOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MoveAccount indicates an expected call of MoveAccount
+func (mr *MockClientMockRecorder) MoveAccount(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveAccount", reflect.TypeOf((*MockClient)(nil).MoveAccount), input)
+}
+
 // DescribeOrganizationalUnit mocks base method
 func (m *MockClient) DescribeOrganizationalUnit(input *organizations.DescribeOrganizationalUnitInput) (*organizations.DescribeOrganizationalUnitOutput, error) {
 	m.ctrl.T.Helper()
@@ -396,6 +411,21 @@ func (m *MockClient) DescribeOrganizationalUnit(input *organizations.DescribeOrg
 func (mr *MockClientMockRecorder) DescribeOrganizationalUnit(input interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeOrganizationalUnit", reflect.TypeOf((*MockClient)(nil).DescribeOrganizationalUnit), input)
+}
+
+// TagResource mocks base method
+func (m *MockClient) TagResource(input *organizations.TagResourceInput) (*organizations.TagResourceOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TagResource", input)
+	ret0, _ := ret[0].(*organizations.TagResourceOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TagResource indicates an expected call of TagResource
+func (mr *MockClientMockRecorder) TagResource(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TagResource", reflect.TypeOf((*MockClient)(nil).TagResource), input)
 }
 
 // GetCostAndUsage mocks base method
