@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/organizations"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	"github.com/spf13/cobra"
 
@@ -36,6 +38,7 @@ func newCmdListAccount(streams genericclioptions.IOStreams, flags *genericcliopt
 	listAccountCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
 	listAccountCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
+	listAccountCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "AWS account ID")
 	listAccountCmd.Flags().StringVarP(&ops.reused, "reuse", "r", "",
 		"Filter account CRs by reused or not. Supported values are true, false. Otherwise it lists all accounts")
 	listAccountCmd.Flags().StringVarP(&ops.claimed, "claim", "c", "",
@@ -48,10 +51,10 @@ func newCmdListAccount(streams genericclioptions.IOStreams, flags *genericcliopt
 // listAccountOptions defines the struct for running list account command
 type listAccountOptions struct {
 	accountNamespace string
-
-	reused  string
-	claimed string
-	state   string
+	accountID        string
+	reused           string
+	claimed          string
+	state            string
 
 	output string
 
@@ -111,11 +114,18 @@ func (o *listAccountOptions) run() error {
 		accounts        awsv1alpha1.AccountList
 		outputAccounts  awsv1alpha1.AccountList
 		resourcePrinter printers.ResourcePrinter
+		accountId       string
 		matched         bool
 		reused          bool
 		claimed         bool
 		err             error
 	)
+
+	if o.accountID != "" {
+		inputListTag := &organizations.ListTagsForResourceInput{
+			ResourceId: aws.String(o.accountID)}
+		_, err = aws
+	}
 	if o.reused != "" {
 		if o.reused == "true" {
 			reused = true

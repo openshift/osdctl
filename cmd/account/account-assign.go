@@ -80,8 +80,8 @@ func (o *accountAssignOptions) run() error {
 		destinationOu   string
 		nonDefaultPayer string
 		defaultPayer    = "osd-staging-2"
-		claimTag        = "Claimed"
-		claimTagValue   = "True"
+		claimTag        = "claimed"
+		claimTagValue   = "true"
 	)
 
 	o.payerAccount = defaultPayer
@@ -107,7 +107,7 @@ func (o *accountAssignOptions) run() error {
 		ResourceId: aws.String(accountAssignID),
 		Tags: []*organizations.Tag{
 			{
-				Key:   aws.String("Owner"),
+				Key:   aws.String("owner"),
 				Value: aws.String(o.username),
 			},
 			{
