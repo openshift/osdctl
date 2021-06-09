@@ -68,7 +68,6 @@ type Client interface {
 	RequestServiceQuotaIncrease(*servicequotas.RequestServiceQuotaIncreaseInput) (*servicequotas.RequestServiceQuotaIncreaseOutput, error)
 
 	// Organizations
-	ListAccounts(input *organizations.ListAccountsInput) (*organizations.ListAccountsOutput, error)
 	ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error)
 	ListOrganizationalUnitsForParent(input *organizations.ListOrganizationalUnitsForParentInput) (*organizations.ListOrganizationalUnitsForParentOutput, error)
 	MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error)
@@ -228,10 +227,6 @@ func (c *AwsClient) DetachRolePolicy(input *iam.DetachRolePolicyInput) (*iam.Det
 
 func (c *AwsClient) ListAttachedRolePolicies(input *iam.ListAttachedRolePoliciesInput) (*iam.ListAttachedRolePoliciesOutput, error) {
 	return c.iamClient.ListAttachedRolePolicies(input)
-}
-
-func (c *AwsClient) ListAccounts(input *organizations.ListAccountsInput) (*organizations.ListAccountsOutput, error) {
-	return c.orgClient.ListAccounts(input)
 }
 
 func (c *AwsClient) ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error) {
