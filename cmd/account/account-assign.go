@@ -18,7 +18,8 @@ import (
 var (
 	defaultBYOCEnv    = "ou-rs3h-i0v69q47"
 	defaultNonBYOCEnv = "ou-0wd6-z6tzkjek"
-	defaultRootId     = "r-0wd6"
+	profileRootId1    = "r-0wd6"
+	profileRootId2    = "r-rs3h"
 )
 
 // assignCmd assigns an aws account to user under osd-staging-2 by default unless osd-staging-1 is specified
@@ -79,14 +80,17 @@ func (o *accountAssignOptions) run() error {
 		accountAssignID string
 		destinationOu   string
 		nonDefaultPayer string
+		rootId          string
 		defaultPayer    = "osd-staging-2"
 		claimTag        = "claimed"
 		claimTagValue   = "true"
 	)
 
 	o.payerAccount = defaultPayer
+	rootId = profileRootId2
 	if o.username != "" && o.payerAccount != "" {
 		nonDefaultPayer = o.payerAccount
+		rootId = profileRootId1
 	}
 	//Instantiate aws client
 	awsClient, err := awsprovider.NewAwsClient(o.payerAccount, "us-east-1", "")
@@ -95,7 +99,7 @@ func (o *accountAssignOptions) run() error {
 	}
 	//List accounts that are not in any OU
 	input := &organizations.ListAccountsForParentInput{
-		ParentId: aws.String(defaultRootId),
+		ParentId: aws.String(rootId),
 	}
 	accounts, err := awsClient.ListAccountsForParent(input)
 	if err != nil {
@@ -132,7 +136,7 @@ func (o *accountAssignOptions) run() error {
 	inputMove := &organizations.MoveAccountInput{
 		AccountId:           aws.String(accountAssignID),
 		DestinationParentId: aws.String(destinationOu),
-		SourceParentId:      aws.String(defaultRootId),
+		SourceParentId:      aws.String(rootId),
 	}
 
 	if o.payerAccount == defaultPayer {
