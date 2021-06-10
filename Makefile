@@ -24,10 +24,10 @@ ci-build: download-goreleaser
 	./bin/goreleaser build $(GORELEASER_BUILD_ARGS) --snapshot
 
 build:
-	goreleaser build $(GORELEASER_BUILD_ARGS)
+	./bin/goreleaser build $(GORELEASER_BUILD_ARGS)
 
 release:
-	goreleaser release --rm-dist
+	./bin/goreleaser release --rm-dist
 
 vet:
 	go vet ${BUILDFLAGS} ./...
