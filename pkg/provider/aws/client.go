@@ -69,6 +69,7 @@ type Client interface {
 
 	// Organizations
 	ListAccounts(input *organizations.ListAccountsInput) (*organizations.ListAccountsOutput, error)
+	ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error)
 	ListOrganizationalUnitsForParent(input *organizations.ListOrganizationalUnitsForParentInput) (*organizations.ListOrganizationalUnitsForParentOutput, error)
 	MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error)
 	DescribeOrganizationalUnit(input *organizations.DescribeOrganizationalUnitInput) (*organizations.DescribeOrganizationalUnitOutput, error)
@@ -230,6 +231,10 @@ func (c *AwsClient) ListAttachedRolePolicies(input *iam.ListAttachedRolePolicies
 
 func (c *AwsClient) ListAccounts(input *organizations.ListAccountsInput) (*organizations.ListAccountsOutput, error) {
 	return c.orgClient.ListAccounts(input)
+}
+
+func (c *AwsClient) ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error) {
+	return c.orgClient.ListAccountsForParent(input)
 }
 
 func (c *AwsClient) MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error) {
