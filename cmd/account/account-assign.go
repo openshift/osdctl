@@ -16,10 +16,10 @@ import (
 
 // Global variables
 var (
-	profileRootId2    = "r-rs3h"
-	defaultBYOCEnv    = "ou-rs3h-i0v69q47"
-	profileRootId1    = "r-0wd6"
-	defaultNonBYOCEnv = "ou-0wd6-z6tzkjek"
+	OSDStaging2RootID = "r-rs3h"
+	OSDStaging2OuID   = "ou-rs3h-i0v69q47"
+	OSDStaging1RootID = "r-0wd6"
+	OSDStaging1OuID   = "ou-0wd6-z6tzkjek"
 )
 
 // assignCmd assigns an aws account to user under osd-staging-2 by default unless osd-staging-1 is specified
@@ -37,7 +37,7 @@ func newCmdAccountAssign(streams genericclioptions.IOStreams, flags *genericclio
 	ops.printFlags.AddFlags(accountAssignCmd)
 	accountAssignCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
 	accountAssignCmd.Flags().StringVarP(&ops.payerAccount, "payer-account", "p", "", "Payer account type")
-	accountAssignCmd.Flags().StringVarP(&ops.username, "username", "u", "", "Red Hat username")
+	accountAssignCmd.Flags().StringVarP(&ops.username, "username", "u", "", "LDAP username")
 
 	return accountAssignCmd
 }
@@ -63,16 +63,17 @@ func newAccountAssignOptions(streams genericclioptions.IOStreams, flags *generic
 
 func (o *accountAssignOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.username == "" {
-		return cmdutil.UsageErrorf(cmd, "Red Hat username was not provided")
+		return cmdutil.UsageErrorf(cmd, "LDAP username was not provided")
 	}
-
+	if o.payerAccount == "" {
+		return cmdutil.UsageErrorf(cmd, "Payer account was not provided")
+	}
 	var err error
 	o.kubeCli, err = k8s.NewClient(o.flags)
 	if err != nil {
 		fmt.Println(err.Error())
 		return err
 	}
-
 	return nil
 }
 
@@ -80,19 +81,16 @@ func (o *accountAssignOptions) run() error {
 
 	var (
 		accountAssignID string
-		destinationOu   string
-		nonDefaultPayer string
-		rootId          string
-		defaultPayer    = "osd-staging-2"
-		claimTag        = "claimed"
-		claimTagValue   = "true"
+		destinationOU   string
+		rootID          string
 	)
 
-	o.payerAccount = defaultPayer
-	rootId = profileRootId2
-	if o.username != "" && o.payerAccount != "" {
-		nonDefaultPayer = o.payerAccount
-		rootId = profileRootId1
+	if o.username != "" && o.payerAccount == "osd-staging-2" {
+		rootID = OSDStaging2RootID
+		destinationOU = OSDStaging2OuID
+	} else if o.username != "" && o.payerAccount == "osd-staging-1" {
+		rootID = OSDStaging1RootID
+		destinationOU = OSDStaging1OuID
 	}
 	//Instantiate aws client
 	awsClient, err := awsprovider.NewAwsClient(o.payerAccount, "us-east-1", "")
@@ -107,6 +105,13 @@ func (o *accountAssignOptions) run() error {
 		fmt.Println(err.Error())
 		return err
 	}
+	if len(accounts.Accounts) == 0 {
+		return fmt.Errorf("No accounts available to assign\n")
+	}
+
+	//Get one account and tag it
+	a := accounts.Accounts[0]
+	accountAssignID = *a.Id
 	//Create input for tagging
 	inputTag := &organizations.TagResourceInput{
 		ResourceId: aws.String(accountAssignID),
@@ -116,49 +121,27 @@ func (o *accountAssignOptions) run() error {
 				Value: aws.String(o.username),
 			},
 			{
-				Key:   aws.String(claimTag),
-				Value: aws.String(claimTagValue),
+				Key:   aws.String("claimed"),
+				Value: aws.String("true"),
 			},
 		},
 	}
-
-	//Loop through the list of accounts and get ID
-	for _, a := range accounts.Accounts {
-		accountAssignID = *a.Id
-		//Tag account
-		_, err = awsClient.TagResource(inputTag)
-		if err != nil {
-			fmt.Println(err.Error())
-			return err
-		}
-		break
+	_, err = awsClient.TagResource(inputTag)
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
 	}
-
 	//Move account to developers OU
 	inputMove := &organizations.MoveAccountInput{
 		AccountId:           aws.String(accountAssignID),
-		DestinationParentId: aws.String(destinationOu),
-		SourceParentId:      aws.String(rootId),
+		DestinationParentId: aws.String(destinationOU),
+		SourceParentId:      aws.String(rootID),
 	}
-
-	if o.payerAccount == defaultPayer {
-		destinationOu = defaultBYOCEnv
-		rootId = profileRootId2
-		_, err = awsClient.MoveAccount(inputMove)
-		if err != nil {
-			fmt.Println(err.Error())
-			return err
-		}
-	} else if o.payerAccount == nonDefaultPayer {
-		destinationOu = defaultNonBYOCEnv
-		rootId = profileRootId1
-		_, err = awsClient.MoveAccount(inputMove)
-		if err != nil {
-			fmt.Println(err.Error())
-			return err
-		}
+	_, err = awsClient.MoveAccount(inputMove)
+	if err != nil {
+		fmt.Println(err.Error())
+		return err
 	}
-
 	if o.output == "" {
 		fmt.Fprintln(o.IOStreams.Out, accountAssignID)
 	}
