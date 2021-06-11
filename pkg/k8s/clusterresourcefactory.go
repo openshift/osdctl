@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"github.com/openshift/osdctl/cmd/common"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
@@ -27,6 +27,7 @@ type ClusterResourceFactoryOptions struct {
 	AccountID        string
 	AccountNamespace string
 	ClusterID        string
+	SupportRoleARN   string
 
 	Awscloudfactory awsprovider.FactoryOptions
 
@@ -96,9 +97,13 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 		return nil, err
 	}
 
+	supportRoleDefined := false
+
 	ctx := context.TODO()
+	var accountClaim *awsv1alpha1.AccountClaim
 	if factory.ClusterID != "" {
-		accountClaim, err := GetAccountClaimFromClusterID(ctx, factory.KubeCli, factory.ClusterID)
+		var err error
+		accountClaim, err = GetAccountClaimFromClusterID(ctx, factory.KubeCli, factory.ClusterID)
 		if err != nil {
 			return nil, err
 		}
@@ -109,6 +114,9 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 			return nil, fmt.Errorf("An unexpected error occured: the AccountClaim has no Account")
 		}
 		factory.AccountName = accountClaim.Spec.AccountLink
+		if accountClaim.Spec.SupportRoleARN != "" {
+			supportRoleDefined = true
+		}
 	}
 	var isBYOC bool
 	var acctSuffix string
@@ -153,7 +161,7 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 
 		if roleArn == "" {
 			klog.Error("Empty SRE Jump Role in ConfigMap")
-			return nil, fmt.Errorf("Empty ConfigMap Value")
+			return nil, fmt.Errorf("Empty ConfigMap Value - CCS-Access-Arn")
 		}
 
 		// Build the role-name for Access:
@@ -165,13 +173,44 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 
 		// Get STS Credentials
 		if verbose {
-			fmt.Printf("Elevating Access to SRE Jump Role for user %s\n", factory.Awscloudfactory.SessionName)
+			klog.Infof("Elevating Access to SRE Jump Role for user %s\n", factory.Awscloudfactory.SessionName)
 		}
 		factory.Awscloudfactory.Credentials, err = awsprovider.GetAssumeRoleCredentials(awsClient,
 			&factory.Awscloudfactory.ConsoleDuration, aws.String(factory.Awscloudfactory.SessionName), aws.String(roleArn))
 		if err != nil {
 			klog.Error("Failed to get jump-role creds for CCS")
 			return nil, err
+		}
+
+		if supportRoleDefined {
+			byocClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+				AccessKeyID:     *factory.Awscloudfactory.Credentials.AccessKeyId,
+				SecretAccessKey: *factory.Awscloudfactory.Credentials.SecretAccessKey,
+				SessionToken:    *factory.Awscloudfactory.Credentials.SessionToken,
+				Region:          factory.Awscloudfactory.Region,
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			roleArn := cm.Data["support-jump-role"]
+			if roleArn == "" {
+				klog.Error("Empty Support Jump Role in AwsAccountOperator Configmap")
+				return nil, fmt.Errorf("Empty Configmap Value - support-jump-role")
+			}
+
+			factory.Awscloudfactory.Credentials, err = awsprovider.GetAssumeRoleCredentials(byocClient,
+				&factory.Awscloudfactory.ConsoleDuration, aws.String(factory.Awscloudfactory.SessionName), aws.String(roleArn))
+			if err != nil {
+				klog.Error("Failed to set support jump-role creds")
+				return nil, err
+			}
+			customerRoleNameSlice := strings.Split(accountClaim.Spec.SupportRoleARN, "/")
+			if len(customerRoleNameSlice) != 2 {
+				klog.Errorf("Error splitting customer role name from provided ARN: %s", accountClaim.Spec.SupportRoleARN)
+				return nil, err
+			}
+			factory.Awscloudfactory.RoleName = customerRoleNameSlice[1]
 		}
 	} else {
 		factory.Awscloudfactory.Credentials, err = awsprovider.GetAssumeRoleCredentials(awsClient, &factory.Awscloudfactory.ConsoleDuration,
