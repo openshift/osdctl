@@ -8,6 +8,7 @@ import (
 	costexplorer "github.com/aws/aws-sdk-go/service/costexplorer"
 	iam "github.com/aws/aws-sdk-go/service/iam"
 	organizations "github.com/aws/aws-sdk-go/service/organizations"
+	resourcegroupstaggingapi "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
 	s3 "github.com/aws/aws-sdk-go/service/s3"
 	servicequotas "github.com/aws/aws-sdk-go/service/servicequotas"
 	sts "github.com/aws/aws-sdk-go/service/sts"
@@ -396,6 +397,51 @@ func (m *MockClient) DescribeOrganizationalUnit(input *organizations.DescribeOrg
 func (mr *MockClientMockRecorder) DescribeOrganizationalUnit(input interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeOrganizationalUnit", reflect.TypeOf((*MockClient)(nil).DescribeOrganizationalUnit), input)
+}
+
+// TagResource mocks base method
+func (m *MockClient) TagResource(input *organizations.TagResourceInput) (*organizations.TagResourceOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TagResource", input)
+	ret0, _ := ret[0].(*organizations.TagResourceOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TagResource indicates an expected call of TagResource
+func (mr *MockClientMockRecorder) TagResource(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TagResource", reflect.TypeOf((*MockClient)(nil).TagResource), input)
+}
+
+// ListTagsForResource mocks base method
+func (m *MockClient) ListTagsForResource(input *organizations.ListTagsForResourceInput) (*organizations.ListTagsForResourceOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListTagsForResource", input)
+	ret0, _ := ret[0].(*organizations.ListTagsForResourceOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListTagsForResource indicates an expected call of ListTagsForResource
+func (mr *MockClientMockRecorder) ListTagsForResource(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTagsForResource", reflect.TypeOf((*MockClient)(nil).ListTagsForResource), input)
+}
+
+// GetResources mocks base method
+func (m *MockClient) GetResources(input *resourcegroupstaggingapi.GetResourcesInput) (*resourcegroupstaggingapi.GetResourcesOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetResources", input)
+	ret0, _ := ret[0].(*resourcegroupstaggingapi.GetResourcesOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetResources indicates an expected call of GetResources
+func (mr *MockClientMockRecorder) GetResources(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResources", reflect.TypeOf((*MockClient)(nil).GetResources), input)
 }
 
 // GetCostAndUsage mocks base method
