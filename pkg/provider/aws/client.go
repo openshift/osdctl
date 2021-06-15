@@ -18,6 +18,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/iam/iamiface"
+	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
+	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi/resourcegroupstaggingapiiface"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/servicequotas"
@@ -74,6 +76,10 @@ type Client interface {
 	MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error)
 	DescribeOrganizationalUnit(input *organizations.DescribeOrganizationalUnitInput) (*organizations.DescribeOrganizationalUnitOutput, error)
 	TagResource(input *organizations.TagResourceInput) (*organizations.TagResourceOutput, error)
+	ListTagsForResource(input *organizations.ListTagsForResourceInput) (*organizations.ListTagsForResourceOutput, error)
+
+	// Resources
+	GetResources(input *resourcegroupstaggingapi.GetResourcesInput) (*resourcegroupstaggingapi.GetResourcesOutput, error)
 
 	// Cost Explorer
 	GetCostAndUsage(input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error)
@@ -87,6 +93,7 @@ type AwsClient struct {
 	s3Client            s3iface.S3API
 	servicequotasClient servicequotasiface.ServiceQuotasAPI
 	orgClient           organizationsiface.OrganizationsAPI
+	resClient           resourcegroupstaggingapiiface.ResourceGroupsTaggingAPIAPI
 	ceClient            costexploreriface.CostExplorerAPI
 }
 
@@ -128,6 +135,7 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 		servicequotasClient: servicequotas.New(sess),
 		orgClient:           organizations.New(sess),
 		ceClient:            costexplorer.New(sess),
+		resClient:           resourcegroupstaggingapi.New(sess),
 	}, nil
 }
 
@@ -150,6 +158,7 @@ func NewAwsClientWithInput(input *AwsClientInput) (Client, error) {
 		servicequotasClient: servicequotas.New(s),
 		orgClient:           organizations.New(s),
 		ceClient:            costexplorer.New(s),
+		resClient:           resourcegroupstaggingapi.New(s),
 	}, nil
 }
 
@@ -259,6 +268,13 @@ func (c *AwsClient) DescribeOrganizationalUnit(input *organizations.DescribeOrga
 
 func (c *AwsClient) TagResource(input *organizations.TagResourceInput) (*organizations.TagResourceOutput, error) {
 	return c.orgClient.TagResource(input)
+}
+func (c *AwsClient) ListTagsForResource(input *organizations.ListTagsForResourceInput) (*organizations.ListTagsForResourceOutput, error) {
+	return c.orgClient.ListTagsForResource(input)
+}
+
+func (c *AwsClient) GetResources(input *resourcegroupstaggingapi.GetResourcesInput) (*resourcegroupstaggingapi.GetResourcesOutput, error) {
+	return c.resClient.GetResources(input)
 }
 
 func (c *AwsClient) GetCostAndUsage(input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {
