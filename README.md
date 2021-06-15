@@ -26,7 +26,7 @@ Then you can find the `osdctl` binary file in the `./dist` subdirectory matching
 
 ### Download from release
 
-TBD
+Release are available on Github
 
 ## Run tests
 
