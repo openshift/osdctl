@@ -59,6 +59,9 @@ func (o *accountListOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.payerAccount == "" {
 		return cmdutil.UsageErrorf(cmd, "Payer account was not provided")
 	}
+	if o.username != "" && o.accountID != "" {
+		return cmdutil.UsageErrorf(cmd, "Cannot provide both username and account ID")
+	}
 	var err error
 	o.kubeCli, err = k8s.NewClient(o.flags)
 	if err != nil {
