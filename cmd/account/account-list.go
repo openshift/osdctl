@@ -30,6 +30,7 @@ func newCmdAccountList(streams genericclioptions.IOStreams, flags *genericcliopt
 	accountListCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
 	accountListCmd.Flags().StringVarP(&ops.username, "user", "u", "", "RH username")
 	accountListCmd.Flags().StringVarP(&ops.payerAccount, "payer-account", "p", "", "Payer account type")
+	accountListCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "Account ID")
 
 	return accountListCmd
 }
@@ -37,6 +38,7 @@ func newCmdAccountList(streams genericclioptions.IOStreams, flags *genericcliopt
 type accountListOptions struct {
 	username     string
 	payerAccount string
+	accountID    string
 	output       string
 
 	flags      *genericclioptions.ConfigFlags
@@ -142,6 +144,20 @@ func (o *accountListOptions) run() error {
 			return err
 		}
 		m[user] = tempAccountIDs
+	}
+	if o.accountID != "" {
+		input := &organizations.ListTagsForResourceInput{
+			ResourceId: &o.accountID,
+		}
+		val, err := awsClient.ListTagsForResource(input)
+		if err != nil {
+			return err
+		}
+		for _, t := range val.Tags {
+			if t.Key == aws.String("owner") {
+				fmt.Fprintln(o.IOStreams.Out, *t.Value)
+			}
+		}
 	}
 
 	if o.output == "" {
