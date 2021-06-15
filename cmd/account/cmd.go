@@ -31,6 +31,7 @@ func NewCmdAccount(streams genericclioptions.IOStreams, flags *genericclioptions
 	accountCmd.AddCommand(newCmdRotateSecret(streams, flags))
 	accountCmd.AddCommand(newCmdGenerateSecret(streams, flags))
 	accountCmd.AddCommand(newCmdAccountAssign(streams, flags))
+	accountCmd.AddCommand(newCmdAccountList(streams, flags))
 
 	return accountCmd
 }
