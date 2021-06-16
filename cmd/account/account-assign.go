@@ -68,12 +68,14 @@ func (o *accountAssignOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.payerAccount == "" {
 		return cmdutil.UsageErrorf(cmd, "Payer account was not provided")
 	}
+
 	var err error
 	o.kubeCli, err = k8s.NewClient(o.flags)
 	if err != nil {
 		fmt.Println(err.Error())
 		return err
 	}
+
 	return nil
 }
 
@@ -125,22 +127,25 @@ func (o *accountAssignOptions) run() error {
 			},
 		},
 	}
+
 	_, err = awsClient.TagResource(inputTag)
 	if err != nil {
 		fmt.Println(err.Error())
 		return err
 	}
-	//Move account to developers OU
+	// Move account to developers OU
 	inputMove := &organizations.MoveAccountInput{
 		AccountId:           aws.String(accountAssignID),
 		DestinationParentId: aws.String(destinationOU),
 		SourceParentId:      aws.String(rootID),
 	}
+
 	_, err = awsClient.MoveAccount(inputMove)
 	if err != nil {
 		fmt.Println(err.Error())
 		return err
 	}
+
 	if o.output == "" {
 		fmt.Fprintln(o.IOStreams.Out, accountAssignID)
 	}
