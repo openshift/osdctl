@@ -138,6 +138,7 @@ func (o *accountAssignOptions) run() error {
 		DestinationParentId: aws.String(destinationOU),
 		SourceParentId:      aws.String(rootID),
 	}
+	
 	_, err = awsClient.MoveAccount(inputMove)
 	if err != nil {
 		fmt.Println(err.Error())
