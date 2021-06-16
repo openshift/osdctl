@@ -22,6 +22,25 @@ var (
 	OSDStaging1OuID   = "ou-0wd6-z6tzkjek"
 )
 
+type accountAssignOptions struct {
+	username     string
+	payerAccount string
+	output       string
+
+	flags      *genericclioptions.ConfigFlags
+	printFlags *printer.PrintFlags
+	genericclioptions.IOStreams
+	kubeCli client.Client
+}
+
+func newAccountAssignOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *accountAssignOptions {
+	return &accountAssignOptions{
+		flags:      flags,
+		printFlags: printer.NewPrintFlags(),
+		IOStreams:  streams,
+	}
+}
+
 // assignCmd assigns an aws account to user under osd-staging-2 by default unless osd-staging-1 is specified
 func newCmdAccountAssign(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
 	ops := newAccountAssignOptions(streams, flags)
@@ -40,25 +59,6 @@ func newCmdAccountAssign(streams genericclioptions.IOStreams, flags *genericclio
 	accountAssignCmd.Flags().StringVarP(&ops.username, "username", "u", "", "LDAP username")
 
 	return accountAssignCmd
-}
-
-type accountAssignOptions struct {
-	username     string
-	payerAccount string
-	output       string
-
-	flags      *genericclioptions.ConfigFlags
-	printFlags *printer.PrintFlags
-	genericclioptions.IOStreams
-	kubeCli client.Client
-}
-
-func newAccountAssignOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *accountAssignOptions {
-	return &accountAssignOptions{
-		flags:      flags,
-		printFlags: printer.NewPrintFlags(),
-		IOStreams:  streams,
-	}
 }
 
 func (o *accountAssignOptions) complete(cmd *cobra.Command, _ []string) error {
@@ -85,10 +85,9 @@ func (o *accountAssignOptions) run() error {
 		rootID          string
 	)
 
-	if o.username != "" && o.payerAccount == "osd-staging-2" {
-		rootID = OSDStaging2RootID
-		destinationOU = OSDStaging2OuID
-	} else if o.username != "" && o.payerAccount == "osd-staging-1" {
+	rootID = OSDStaging2RootID
+	destinationOU = OSDStaging2OuID
+	if o.username != "" && o.payerAccount == "osd-staging-1" {
 		rootID = OSDStaging1RootID
 		destinationOU = OSDStaging1OuID
 	}
@@ -106,7 +105,7 @@ func (o *accountAssignOptions) run() error {
 		return err
 	}
 	if len(accounts.Accounts) == 0 {
-		return fmt.Errorf("No accounts available to assign\n")
+		return fmt.Errorf("no accounts available to assign")
 	}
 
 	//Get one account and tag it
