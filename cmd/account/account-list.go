@@ -28,7 +28,7 @@ func newCmdAccountList(streams genericclioptions.IOStreams, flags *genericcliopt
 	}
 	ops.printFlags.AddFlags(accountListCmd)
 	accountListCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
-	accountListCmd.Flags().StringVarP(&ops.username, "user", "u", "", "RH username")
+	accountListCmd.Flags().StringVarP(&ops.username, "user", "u", "", "LDAP username")
 	accountListCmd.Flags().StringVarP(&ops.payerAccount, "payer-account", "p", "", "Payer account type")
 	accountListCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "Account ID")
 
