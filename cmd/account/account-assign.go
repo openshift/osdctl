@@ -133,7 +133,7 @@ func (o *accountAssignOptions) run() error {
 		fmt.Println(err.Error())
 		return err
 	}
-	//Move account to developers OU
+	// Move account to developers OU
 	inputMove := &organizations.MoveAccountInput{
 		AccountId:           aws.String(accountAssignID),
 		DestinationParentId: aws.String(destinationOU),
