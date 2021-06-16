@@ -86,10 +86,9 @@ func (o *accountAssignOptions) run() error {
 		rootID          string
 	)
 
-	if o.username != "" && o.payerAccount == "osd-staging-2" {
-		rootID = OSDStaging2RootID
-		destinationOU = OSDStaging2OuID
-	} else if o.username != "" && o.payerAccount == "osd-staging-1" {
+	rootID = OSDStaging2RootID
+	destinationOU = OSDStaging2OuID
+	if o.username != "" && o.payerAccount == "osd-staging-1" {
 		rootID = OSDStaging1RootID
 		destinationOU = OSDStaging1OuID
 	}
