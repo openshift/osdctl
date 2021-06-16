@@ -107,7 +107,7 @@ func (o *accountAssignOptions) run() error {
 		return err
 	}
 	if len(accounts.Accounts) == 0 {
-		return fmt.Errorf("No accounts available to assign\n")
+		return fmt.Errorf("No accounts available to assign")
 	}
 
 	//Get one account and tag it
