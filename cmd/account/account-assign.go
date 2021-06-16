@@ -75,6 +75,7 @@ func (o *accountAssignOptions) complete(cmd *cobra.Command, _ []string) error {
 		fmt.Println(err.Error())
 		return err
 	}
+
 	return nil
 }
 
