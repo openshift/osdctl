@@ -143,6 +143,7 @@ func (o *accountAssignOptions) run() error {
 		fmt.Println(err.Error())
 		return err
 	}
+	
 	if o.output == "" {
 		fmt.Fprintln(o.IOStreams.Out, accountAssignID)
 	}
