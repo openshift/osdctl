@@ -2,7 +2,6 @@ package account
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/spf13/cobra"
@@ -82,7 +81,7 @@ func (o *cliOptions) run() error {
 
 	creds := o.k8sclusterresourcefactory.Awscloudfactory.Credentials
 
-	if strings.Contains(o.k8sclusterresourcefactory.Awscloudfactory.RoleName, "BYOC") {
+	if o.k8sclusterresourcefactory.Awscloudfactory.RoleName != "OrganizationAccountAccessRole" {
 		creds, err = awsprovider.GetAssumeRoleCredentials(awsClient,
 			&o.k8sclusterresourcefactory.Awscloudfactory.ConsoleDuration, aws.String(o.k8sclusterresourcefactory.Awscloudfactory.SessionName),
 			aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s",
@@ -103,7 +102,7 @@ func (o *cliOptions) run() error {
 	}
 
 	if o.output == "env" {
-		fmt.Fprintf(o.IOStreams.Out, "AWS_ACCESS_KEY_ID=%s\nAWS_SECRET_ACCESS_KEY=%s\nAWS_SESSION_TOKEN=%s\nAWS_DEFAULT_REGION=%s\n",
+		fmt.Fprintf(o.IOStreams.Out, "AWS_ACCESS_KEY_ID=%s \\\nAWS_SECRET_ACCESS_KEY=%s \\\nAWS_SESSION_TOKEN=%s \\\nAWS_DEFAULT_REGION=%s\n",
 			*creds.AccessKeyId,
 			*creds.SecretAccessKey,
 			*creds.SessionToken,

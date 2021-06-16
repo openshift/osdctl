@@ -11,7 +11,7 @@ require (
 	github.com/openshift-online/ocm-cli v0.1.47
 	github.com/openshift-online/ocm-sdk-go v0.1.152
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
-	github.com/openshift/aws-account-operator v0.0.0-20200914143350-bbda1c91242b
+	github.com/openshift/aws-account-operator/pkg/apis v0.0.0-20210611151019-01b1df7a3e9e
 	github.com/openshift/hive v1.0.5
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
 	github.com/pkg/errors v0.9.1
@@ -24,6 +24,7 @@ require (
 	k8s.io/cli-runtime v0.18.3
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/klog v1.0.0
+	k8s.io/klog/v2 v2.9.0
 	k8s.io/kubectl v0.18.3
 	k8s.io/utils v0.0.0-20200327001022-6496210b90e8
 	sigs.k8s.io/controller-runtime v0.6.0
