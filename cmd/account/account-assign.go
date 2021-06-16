@@ -68,6 +68,7 @@ func (o *accountAssignOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.payerAccount == "" {
 		return cmdutil.UsageErrorf(cmd, "Payer account was not provided")
 	}
+
 	var err error
 	o.kubeCli, err = k8s.NewClient(o.flags)
 	if err != nil {
