@@ -127,6 +127,7 @@ func (o *accountAssignOptions) run() error {
 			},
 		},
 	}
+	
 	_, err = awsClient.TagResource(inputTag)
 	if err != nil {
 		fmt.Println(err.Error())
