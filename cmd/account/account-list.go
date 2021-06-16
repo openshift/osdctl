@@ -15,26 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func newCmdAccountList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newAccountListOptions(streams, flags)
-	accountListCmd := &cobra.Command{
-		Use:               "list",
-		Short:             "List out accounts for username",
-		DisableAutoGenTag: true,
-		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(ops.complete(cmd, args))
-			cmdutil.CheckErr(ops.run())
-		},
-	}
-	ops.printFlags.AddFlags(accountListCmd)
-	accountListCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
-	accountListCmd.Flags().StringVarP(&ops.username, "user", "u", "", "LDAP username")
-	accountListCmd.Flags().StringVarP(&ops.payerAccount, "payer-account", "p", "", "Payer account type")
-	accountListCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "Account ID")
-
-	return accountListCmd
-}
-
 type accountListOptions struct {
 	username     string
 	payerAccount string
@@ -53,6 +33,26 @@ func newAccountListOptions(streams genericclioptions.IOStreams, flags *genericcl
 		printFlags: printer.NewPrintFlags(),
 		IOStreams:  streams,
 	}
+}
+
+func newCmdAccountList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
+	ops := newAccountListOptions(streams, flags)
+	accountListCmd := &cobra.Command{
+		Use:               "list",
+		Short:             "List out accounts for username",
+		DisableAutoGenTag: true,
+		Run: func(cmd *cobra.Command, args []string) {
+			cmdutil.CheckErr(ops.complete(cmd, args))
+			cmdutil.CheckErr(ops.run())
+		},
+	}
+	ops.printFlags.AddFlags(accountListCmd)
+	accountListCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
+	accountListCmd.Flags().StringVarP(&ops.username, "user", "u", "", "LDAP username")
+	accountListCmd.Flags().StringVarP(&ops.payerAccount, "payer-account", "p", "", "Payer account type")
+	accountListCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "Account ID")
+
+	return accountListCmd
 }
 
 func (o *accountListOptions) complete(cmd *cobra.Command, _ []string) error {
@@ -82,11 +82,13 @@ func (o *accountListOptions) run() error {
 	if err != nil {
 		return err
 	}
+
 	if o.payerAccount == "osd-staging-2" {
 		OuID = OSDStaging2OuID
 	} else if o.payerAccount == "osd-staging-1" {
 		OuID = OSDStaging1OuID
 	}
+
 	input := &organizations.ListAccountsForParentInput{
 		ParentId: &OuID,
 	}
@@ -96,6 +98,7 @@ func (o *accountListOptions) run() error {
 	}
 	// Initialize hashmap
 	m := make(map[string][]string)
+
 	if o.username == "" {
 		// Loop through list of accounts and build hashmap of users and accounts
 		for _, a := range accounts.Accounts {
@@ -148,6 +151,7 @@ func (o *accountListOptions) run() error {
 		}
 		m[user] = tempAccountIDs
 	}
+
 	if o.accountID != "" {
 		input := &organizations.ListTagsForResourceInput{
 			ResourceId: &o.accountID,
@@ -168,5 +172,6 @@ func (o *accountListOptions) run() error {
 			fmt.Fprintln(o.IOStreams.Out, key, value)
 		}
 	}
+
 	return nil
 }
