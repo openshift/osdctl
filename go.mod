@@ -6,12 +6,13 @@ require (
 	github.com/aws/aws-sdk-go v1.31.10
 	github.com/deckarep/golang-set v1.7.1
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
-	github.com/golang/mock v1.4.4
+	github.com/golang/mock v1.5.0
 	github.com/onsi/gomega v1.10.1
 	github.com/openshift-online/ocm-cli v0.1.47
 	github.com/openshift-online/ocm-sdk-go v0.1.152
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/openshift/aws-account-operator/pkg/apis v0.0.0-20210611151019-01b1df7a3e9e
+	github.com/openshift/gcp-project-operator v0.0.0-20210616141757-9e53b15c72e4
 	github.com/openshift/hive v1.0.5
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
 	github.com/pkg/errors v0.9.1

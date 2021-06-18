@@ -16,6 +16,7 @@ func NewCmdClusterDeployment(streams genericclioptions.IOStreams, flags *generic
 	}
 
 	cdCmd.AddCommand(newCmdList(streams, flags))
+	cdCmd.AddCommand(newCmdListResources(streams, flags))
 	return cdCmd
 }
 
