@@ -5,21 +5,27 @@ go 1.14
 require (
 	github.com/aws/aws-sdk-go v1.31.10
 	github.com/deckarep/golang-set v1.7.1
+	github.com/emicklei/go-restful v2.11.2+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
-	github.com/golang/mock v1.5.0
+	github.com/golang/mock v1.4.4
 	github.com/onsi/gomega v1.10.1
 	github.com/openshift-online/ocm-cli v0.1.47
 	github.com/openshift-online/ocm-sdk-go v0.1.152
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/openshift/aws-account-operator/pkg/apis v0.0.0-20210611151019-01b1df7a3e9e
-	github.com/openshift/gcp-project-operator v0.0.0-20210616141757-9e53b15c72e4
 	github.com/openshift/hive v1.0.5
+	github.com/operator-framework/operator-sdk v0.17.1 // indirect
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.11.1
 	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
+	github.com/stretchr/testify v1.6.1 // indirect
+	golang.org/x/tools v0.1.0 // indirect
+	google.golang.org/api v0.25.0 // indirect
+	google.golang.org/genproto v0.0.0-20200527145253-8367513e4ece // indirect
+	google.golang.org/grpc v1.29.1 // indirect
 	k8s.io/api v0.18.5
 	k8s.io/apimachinery v0.18.5
 	k8s.io/cli-runtime v0.18.3
