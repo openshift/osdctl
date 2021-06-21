@@ -142,6 +142,7 @@ func (o *accountListOptions) run() error {
 		if err != nil {
 			return err
 		}
+		
 		// Get last 9 digits of ResourceARN and append it to account list
 		for _, a := range accounts.ResourceTagMappingList {
 			tempAccountIDs = append(tempAccountIDs, (*a.ResourceARN)[len(*a.ResourceARN)-9:])
