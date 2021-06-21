@@ -160,6 +160,7 @@ func (o *accountListOptions) run() error {
 		if err != nil {
 			return err
 		}
+		
 		for _, t := range val.Tags {
 			if t.Key == aws.String("owner") {
 				fmt.Fprintln(o.IOStreams.Out, *t.Value)
