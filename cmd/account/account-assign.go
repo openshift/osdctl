@@ -17,7 +17,7 @@ import (
 // Global variables
 var (
 	OSDStaging2RootID = "r-rs3h"
-	OSDStaging2OuID   = "ou-rs3h-i0v69q47"
+	OSDStaging2OuID   = "ou-rs3h-ry0hn2l9"
 	OSDStaging1RootID = "r-0wd6"
 	OSDStaging1OuID   = "ou-0wd6-z6tzkjek"
 )
