@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -91,12 +92,6 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 		}
 	}
 
-	var err error
-	awsClient, err := factory.Awscloudfactory.NewAwsClient()
-	if err != nil {
-		return nil, err
-	}
-
 	supportRoleDefined := false
 
 	ctx := context.TODO()
@@ -118,6 +113,14 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 			supportRoleDefined = true
 		}
 	}
+	factory.Awscloudfactory.Region = accountClaim.Spec.Aws.Regions[0].Name
+
+	var err error
+	awsClient, err := factory.Awscloudfactory.NewAwsClient()
+	if err != nil {
+		return nil, err
+	}
+
 	var isBYOC bool
 	var acctSuffix string
 	if factory.AccountName != "" {
@@ -222,12 +225,11 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 			return nil, err
 		}
 	}
-
 	awsClient, err = awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
 		AccessKeyID:     *factory.Awscloudfactory.Credentials.AccessKeyId,
 		SecretAccessKey: *factory.Awscloudfactory.Credentials.SecretAccessKey,
 		SessionToken:    *factory.Awscloudfactory.Credentials.SessionToken,
-		Region:          factory.Awscloudfactory.Region,
+		Region:          accountClaim.Spec.Aws.Regions[0].Name,
 	})
 	if err != nil {
 		return nil, err
