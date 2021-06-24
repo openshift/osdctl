@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	routev1 "github.com/openshift/api/route/v1"
@@ -26,6 +27,9 @@ import (
 // GitCommit is the short git commit hash from the environment
 var GitCommit string
 
+// Version is the tag version from the environment
+var Version string
+
 func init() {
 	_ = awsv1alpha1.AddToScheme(scheme.Scheme)
 	_ = routev1.AddToScheme(scheme.Scheme)
@@ -38,7 +42,7 @@ func init() {
 func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:               "osdctl",
-		Version:           GitCommit,
+		Version:           fmt.Sprintf("%s, GitCommit: %s", Version, GitCommit),
 		Short:             "OSD CLI",
 		Long:              `CLI tool to provide OSD related utilities`,
 		DisableAutoGenTag: true,
