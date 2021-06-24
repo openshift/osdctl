@@ -76,6 +76,7 @@ func (o *cliOptions) complete(cmd *cobra.Command) error {
 func (o *cliOptions) run() error {
 	awsClient, err := o.k8sclusterresourcefactory.GetCloudProvider(o.verbose)
 	if err != nil {
+
 		return err
 	}
 
@@ -98,7 +99,12 @@ func (o *cliOptions) run() error {
 	}
 
 	if o.output == "json" {
-		fmt.Fprintf(o.IOStreams.Out, "%s\n", creds)
+		fmt.Fprintf(o.IOStreams.Out, "{\n\"AccessKeyId\": %q, \n\"Expiration\": %q, \n\"SecretAccessKey\": %q, \n\"SessionToken\": %q\n}",
+			*creds.AccessKeyId,
+			*creds.Expiration,
+			*creds.SecretAccessKey,
+			*creds.SessionToken,
+		)
 	}
 
 	if o.output == "env" {
