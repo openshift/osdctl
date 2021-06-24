@@ -106,6 +106,9 @@ func (o *accountUnassignOptions) run() error {
 		rootID          string
 	)
 
+	hiveShardList = []string{"hivei01ue1", "hive-stage-1", "hives02ue1", "hive-stage-v3", "hive-integration-v3",
+		"hivep01ue1", "hivep02ue1", "hivep03uw1", "hivep04uw1", "hive-production-v3"}
+
 	// Instantiate Aws client
 	awsClient, err := awsprovider.NewAwsClient(o.payerAccount, "us-east-1", "")
 	if err != nil {
@@ -124,9 +127,6 @@ func (o *accountUnassignOptions) run() error {
 			return err
 		}
 
-		hiveShardList = []string{"hivei01ue1", "hive-stage-1", "hives02ue1", "hive-stage-v3", "hive-integration-v3",
-			"hivep01ue1", "hivep02ue1", "hivep03uw1", "hivep04uw1", "hive-production-v3"}
-
 		for _, t := range tagVal.Tags {
 			if t.Key == aws.String("owner") {
 				for _, i := range hiveShardList {
@@ -141,7 +141,15 @@ func (o *accountUnassignOptions) run() error {
 	}
 
 	if o.username != "" {
+		// Check that username is not a hive
+		for _, j := range hiveShardList {
+			if o.username == j {
+				return fmt.Errorf("non-ccs account provided, only developers account accepted")
+			}
+		}
+
 		accountUsername = o.username
+
 		// Get all accounts from user
 		inputFilterTag := &resourcegroupstaggingapi.GetResourcesInput{
 			TagFilters: []*resourcegroupstaggingapi.TagFilter{
@@ -309,7 +317,6 @@ func (o *accountUnassignOptions) run() error {
 
 			_, err = awsClient.MoveAccount(inputMove)
 			if err != nil {
-				fmt.Println(err.Error())
 				return err
 			}
 		}
