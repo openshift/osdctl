@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/costexplorer"
 	"github.com/aws/aws-sdk-go/service/costexplorer/costexploreriface"
+	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/aws/aws-sdk-go/service/organizations/organizationsiface"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/iam/iamiface"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -63,6 +65,9 @@ type Client interface {
 	DetachRolePolicy(*iam.DetachRolePolicyInput) (*iam.DetachRolePolicyOutput, error)
 	ListAttachedRolePolicies(*iam.ListAttachedRolePoliciesInput) (*iam.ListAttachedRolePoliciesOutput, error)
 
+	//ec2
+	DescribeInstances(*ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error)
+
 	// Service Quotas
 	ListServiceQuotas(*servicequotas.ListServiceQuotasInput) (*servicequotas.ListServiceQuotasOutput, error)
 	RequestServiceQuotaIncrease(*servicequotas.RequestServiceQuotaIncreaseInput) (*servicequotas.RequestServiceQuotaIncreaseOutput, error)
@@ -80,6 +85,7 @@ type Client interface {
 
 type AwsClient struct {
 	iamClient           iamiface.IAMAPI
+	ec2Client           ec2iface.EC2API
 	stsClient           stsiface.STSAPI
 	s3Client            s3iface.S3API
 	servicequotasClient servicequotasiface.ServiceQuotasAPI
@@ -120,6 +126,7 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 
 	return &AwsClient{
 		iamClient:           iam.New(sess),
+		ec2Client:           ec2.New(sess),
 		stsClient:           sts.New(sess),
 		s3Client:            s3.New(sess),
 		servicequotasClient: servicequotas.New(sess),
@@ -142,6 +149,7 @@ func NewAwsClientWithInput(input *AwsClientInput) (Client, error) {
 
 	return &AwsClient{
 		iamClient:           iam.New(s),
+		ec2Client:           ec2.New(s),
 		stsClient:           sts.New(s),
 		s3Client:            s3.New(s),
 		servicequotasClient: servicequotas.New(s),
@@ -256,4 +264,8 @@ func (c *AwsClient) CreateCostCategoryDefinition(input *costexplorer.CreateCostC
 
 func (c *AwsClient) ListCostCategoryDefinitions(input *costexplorer.ListCostCategoryDefinitionsInput) (*costexplorer.ListCostCategoryDefinitionsOutput, error) {
 	return c.ceClient.ListCostCategoryDefinitions(input)
+}
+
+func (c *AwsClient) DescribeInstances(input *ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error) {
+	return c.ec2Client.DescribeInstances(input)
 }

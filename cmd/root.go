@@ -17,6 +17,7 @@ import (
 	"k8s.io/utils/pointer"
 
 	"github.com/openshift/osdctl/cmd/account"
+	"github.com/openshift/osdctl/cmd/cluster"
 	"github.com/openshift/osdctl/cmd/clusterdeployment"
 	"github.com/openshift/osdctl/cmd/cost"
 	"github.com/openshift/osdctl/cmd/federatedrole"
@@ -66,6 +67,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 
 	// add sub commands
 	rootCmd.AddCommand(account.NewCmdAccount(streams, kubeFlags))
+	rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeFlags))
 	rootCmd.AddCommand(clusterdeployment.NewCmdClusterDeployment(streams, kubeFlags))
 	rootCmd.AddCommand(federatedrole.NewCmdFederatedRole(streams, kubeFlags))
 	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeFlags))

@@ -6,6 +6,7 @@ package mock
 
 import (
 	costexplorer "github.com/aws/aws-sdk-go/service/costexplorer"
+	ec2 "github.com/aws/aws-sdk-go/service/ec2"
 	iam "github.com/aws/aws-sdk-go/service/iam"
 	organizations "github.com/aws/aws-sdk-go/service/organizations"
 	s3 "github.com/aws/aws-sdk-go/service/s3"
@@ -321,6 +322,21 @@ func (m *MockClient) ListAttachedRolePolicies(arg0 *iam.ListAttachedRolePolicies
 func (mr *MockClientMockRecorder) ListAttachedRolePolicies(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAttachedRolePolicies", reflect.TypeOf((*MockClient)(nil).ListAttachedRolePolicies), arg0)
+}
+
+// DescribeInstances mocks base method
+func (m *MockClient) DescribeInstances(arg0 *ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescribeInstances", arg0)
+	ret0, _ := ret[0].(*ec2.DescribeInstancesOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeInstances indicates an expected call of DescribeInstances
+func (mr *MockClientMockRecorder) DescribeInstances(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeInstances", reflect.TypeOf((*MockClient)(nil).DescribeInstances), arg0)
 }
 
 // ListServiceQuotas mocks base method
