@@ -112,8 +112,8 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 		if accountClaim.Spec.SupportRoleARN != "" {
 			supportRoleDefined = true
 		}
+		factory.Awscloudfactory.Region = accountClaim.Spec.Aws.Regions[0].Name
 	}
-	factory.Awscloudfactory.Region = accountClaim.Spec.Aws.Regions[0].Name
 
 	var err error
 	awsClient, err := factory.Awscloudfactory.NewAwsClient()
@@ -229,7 +229,7 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 		AccessKeyID:     *factory.Awscloudfactory.Credentials.AccessKeyId,
 		SecretAccessKey: *factory.Awscloudfactory.Credentials.SecretAccessKey,
 		SessionToken:    *factory.Awscloudfactory.Credentials.SessionToken,
-		Region:          accountClaim.Spec.Aws.Regions[0].Name,
+		Region:          factory.Awscloudfactory.Region,
 	})
 	if err != nil {
 		return nil, err
