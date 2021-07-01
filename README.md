@@ -16,9 +16,14 @@ Currently, it mainly supports related work for AWS, especially [aws-account-oper
 
 - Go >= 1.13
 - make
+- [goreleaser](https://github.com/goreleaser)
 
-``` bash
+```shell
+# Goreleaser is required for builds,
+# but can be downloaded with the `make download-goreleaser` target
+
 git clone https://github.com/openshift/osdctl.git
+make download-goreleaser # only needs to be done once
 make build
 ```
 
@@ -27,6 +32,25 @@ Then you can find the `osdctl` binary file in the `./dist` subdirectory matching
 ### Download from release
 
 Release are available on Github
+
+### Creating a release
+
+Repository owners can create a new `osdctl` release with the `make release` target. An API token with `repo` permissions is required. [See: https://goreleaser.com/environment/#api-tokens](https://goreleaser.com/environment/#api-tokens)
+
+The goreleaser config (`.goreleaser.yaml`) will look for the token in `~/.config/goreleaser/token`.
+
+Goreleaser uses the latest Git tag from the repository to create a release. To make a new release, create a new Git tag:
+
+```shell
+# Creating a new osdctl Github release
+
+# Create a git tag to be the basis of the release
+git tag -a vX.Y.Z -m "new release message"
+git push origin vX.Y.Z
+
+# Create the release
+make release
+```
 
 ## Run tests
 
@@ -60,7 +84,7 @@ osdctl account reset test-cr -y
 
 ### AWS Account CR status patch
 
-`set` command enables you to patch Account CR status directly. 
+`set` command enables you to patch Account CR status directly.
 
 There are two ways of status patching:
 
@@ -70,7 +94,7 @@ There are two ways of status patching:
 osdctl account set test-cr --state=Creating -r=true
 ```
 
-2. Using raw data. For patch strategy, only `merge` and `json` are supported. The default is `merge`. 
+2. Using raw data. For patch strategy, only `merge` and `json` are supported. The default is `merge`.
 
 ```bash
 osdctl account set test-cr --patch='{"status":{"state": "Failed", "claimed": false}}'
