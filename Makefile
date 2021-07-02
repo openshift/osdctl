@@ -1,6 +1,10 @@
 BUILDFLAGS ?=
-GORELEASER_BUILD_ARGS = "--rm-dist"
 unexport GOFLAGS
+
+# Add OSDCTL `./bin/` dir to path for goreleaser
+# This will look for goreleaser first in the local bin dir
+# but otherwise can be installed elsewhere on developers machines
+export PATH := bin:$(PATH)
 
 all: format mod build test
 
@@ -15,19 +19,20 @@ fmt:
 download-goreleaser:
 	mkdir -p ./bin && curl -sSLf https://github.com/goreleaser/goreleaser/releases/latest/download/goreleaser_Linux_x86_64.tar.gz -o - | tar --extract --gunzip --directory ./bin goreleaser
 
+# CI build containers don't include goreleaser by default,
+# so they need to get it first, and then run the build
+.PHONY: ci-build
+ci-build: download-goreleaser build
+
 # Need to use --snapshot here because the goReleaser
 # requires more git info that is provided in Prow's clone.
 # Snapshot allows the build without validation of the
 # repository itself
-.PHONY: ci-build
-ci-build: download-goreleaser
-	./bin/goreleaser build $(GORELEASER_BUILD_ARGS) --snapshot
-
 build:
-	./bin/goreleaser build $(GORELEASER_BUILD_ARGS)
+	goreleaser build --rm-dist --snapshot
 
 release:
-	./bin/goreleaser release --rm-dist
+	goreleaser release --rm-dist
 
 vet:
 	go vet ${BUILDFLAGS} ./...
