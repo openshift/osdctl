@@ -10,6 +10,7 @@ import (
 	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
 	"github.com/spf13/cobra"
 
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -21,101 +22,128 @@ import (
 
 // newCmdList implements the list command to list
 func newCmdListResources(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newListResourcesOptions(streams, flags)
+	l := newListResources(streams, flags)
 	lrCmd := &cobra.Command{
 		Use:               "listresources",
 		Short:             "List all resources on a hive cluster related to a given cluster",
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(ops.complete(cmd, args))
-			cmdutil.CheckErr(runListResources(cmd, ops))
+			cmdutil.CheckErr(l.complete(cmd, args))
+			cmdutil.CheckErr(l.RunListResources())
 		},
 	}
-	lrCmd.Flags().StringVarP(&ops.clusterId, "cluster-id", "C", "", "Cluster ID")
+	lrCmd.Flags().StringVarP(&l.ClusterId, "cluster-id", "C", "", "Cluster ID")
+	lrCmd.Flags().BoolVarP(&l.ExternalResourcesOnly, "external", "e", false, "only list external resources (i.e. exclude resources in cluster namespace)")
 
 	return lrCmd
 }
 
 // listOptions defines the struct for running list command
-type listResourcesOptions struct {
+type ListResources struct {
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
-	kubeCli   client.Client
-	clusterId string
+
+	ClusterDeployment     hivev1.ClusterDeployment
+	ClusterId             string
+	P                     Printer
+	ExternalResourcesOnly bool
+	KubeCli               client.Client
+	Cmd                   *cobra.Command
 }
 
-func newListResourcesOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *listResourcesOptions {
-	return &listResourcesOptions{
+//go:generate mockgen -destination ./mock/k8s/client.go -package client sigs.k8s.io/controller-runtime/pkg/client Client
+//go:generate mockgen -destination ./mock/printer/printer.go -package printer -source listresources.go Printer
+type Printer interface {
+	AddRow(row []string)
+	Flush() error
+}
+
+func newListResources(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *ListResources {
+	return &ListResources{
 		flags:     flags,
 		IOStreams: streams,
+		P:         printer.NewTablePrinter(streams.Out, 20, 1, 3, ' '),
 	}
 }
 
-func (o *listResourcesOptions) complete(_ *cobra.Command, _ []string) error {
+func (l *ListResources) complete(cmd *cobra.Command, _ []string) error {
 	var err error
-	o.kubeCli, err = k8s.NewClient(o.flags)
+	l.KubeCli, err = k8s.NewClient(l.flags)
 	if err != nil {
 		return err
 	}
+
+	err = l.getClusterDeployment()
+	if err != nil {
+		return err
+	}
+
+	l.Cmd = cmd
 
 	return nil
 }
 
-func runListResources(cmd *cobra.Command, o *listResourcesOptions) error {
-	if o.clusterId == "" {
-		return cmdutil.UsageErrorf(cmd, "No cluster ID specified, use -C to set one")
+func (l *ListResources) RunListResources() error {
+	if l.ClusterId == "" {
+		return cmdutil.UsageErrorf(l.Cmd, "No cluster ID specified, use -C to set one")
 	}
-	clusterDeployment, err := getClusterDeployment(cmd, o)
-	if err != nil {
-		return err
-	}
+	l.P.AddRow([]string{"Group", "Version", "Kind", "Namespace", "Name"})
+	l.PrintRow(l.ClusterDeployment.ObjectMeta, l.ClusterDeployment.TypeMeta)
 
-	p := printer.NewTablePrinter(o.IOStreams.Out, 20, 1, 3, ' ')
-	p.AddRow([]string{"Group", "Version", "Kind", "Namespace", "Name"})
-	p.AddRow(createRow(clusterDeployment.ObjectMeta, clusterDeployment.TypeMeta))
-
-	if clusterDeployment.Spec.Platform.AWS != nil {
-		accountClaim, err := getAccountClaim(clusterDeployment, cmd, o)
+	if l.ClusterDeployment.Spec.Platform.AWS != nil {
+		accountClaim, err := l.getAccountClaim(l.ClusterDeployment)
 		if err != nil {
 			return err
 		}
-		p.AddRow(createRow(accountClaim.ObjectMeta, accountClaim.TypeMeta))
-		account, err := getAccount(accountClaim, cmd, o)
+		l.PrintRow(accountClaim.ObjectMeta, accountClaim.TypeMeta)
+		account, err := l.getAccount(accountClaim)
 		if err != nil {
 			return err
 		}
-		p.AddRow(createRow(account.ObjectMeta, account.TypeMeta))
+		l.PrintRow(account.ObjectMeta, account.TypeMeta)
+		iamSecret, err := l.getSecret(account)
+		if err != nil {
+			return err
+		}
+		l.PrintRow(iamSecret.ObjectMeta, iamSecret.TypeMeta)
 	}
 
-	if clusterDeployment.Spec.Platform.GCP != nil {
-		projectClaim, err := getProjectClaim(clusterDeployment, cmd, o)
+	if l.ClusterDeployment.Spec.Platform.GCP != nil {
+		projectClaim, err := l.getProjectClaim(l.ClusterDeployment)
 		if err != nil {
 			return err
 		}
-		p.AddRow(createRow(projectClaim.ObjectMeta, projectClaim.TypeMeta))
-		projectReference, err := getProjectReference(projectClaim, cmd, o)
+		l.PrintRow(projectClaim.ObjectMeta, projectClaim.TypeMeta)
+		projectReference, err := l.getProjectReference(projectClaim)
 		fmt.Printf("%s\n", projectReference.Kind)
 		if err != nil {
 			return err
 		}
-		p.AddRow(createRow(projectReference.ObjectMeta, projectReference.TypeMeta))
+		l.PrintRow(projectReference.ObjectMeta, projectReference.TypeMeta)
 	}
 
-	return p.Flush()
+	return l.P.Flush()
 }
 
-func getClusterDeployment(cmd *cobra.Command, o *listResourcesOptions) (hivev1.ClusterDeployment, error) {
+func (l *ListResources) PrintRow(m v1.ObjectMeta, t v1.TypeMeta) {
+	if m.Namespace != l.ClusterDeployment.Namespace || !l.ExternalResourcesOnly {
+		l.P.AddRow(createRow(m, t))
+	}
+}
+
+func (l *ListResources) getClusterDeployment() error {
 	var cds hivev1.ClusterDeploymentList
-	if err := o.kubeCli.List(context.TODO(), &cds, &client.ListOptions{}); err != nil {
-		return hivev1.ClusterDeployment{}, err
+	if err := l.KubeCli.List(context.TODO(), &cds, &client.ListOptions{}); err != nil {
+		return err
 	}
 
 	for _, cd := range cds.Items {
-		if strings.Contains(cd.Namespace, o.clusterId) {
-			return cd, nil
+		if strings.Contains(cd.Namespace, l.ClusterId) {
+			l.ClusterDeployment = cd
+			return nil
 		}
 	}
-	return hivev1.ClusterDeployment{}, cmdutil.UsageErrorf(cmd, "ClusterDeployment not found")
+	return cmdutil.UsageErrorf(l.Cmd, "ClusterDeployment not found")
 }
 
 func createRow(m v1.ObjectMeta, t v1.TypeMeta) []string {
@@ -133,24 +161,24 @@ func getGroupVersion(apiVersion string) (group, version string) {
 	return
 }
 
-func getAccountClaim(cd hivev1.ClusterDeployment, cmd *cobra.Command, o *listResourcesOptions) (awsv1alpha1.AccountClaim, error) {
+func (l *ListResources) getAccountClaim(cd hivev1.ClusterDeployment) (awsv1alpha1.AccountClaim, error) {
 	var accountClaims awsv1alpha1.AccountClaimList
-	if err := o.kubeCli.List(context.TODO(), &accountClaims, &client.ListOptions{Namespace: cd.Namespace}); err != nil {
+	if err := l.KubeCli.List(context.TODO(), &accountClaims, &client.ListOptions{Namespace: cd.Namespace}); err != nil {
 		return awsv1alpha1.AccountClaim{}, err
 	}
 
 	if len(accountClaims.Items) < 1 {
-		return awsv1alpha1.AccountClaim{}, cmdutil.UsageErrorf(cmd, "AccountClaim not found")
+		return awsv1alpha1.AccountClaim{}, cmdutil.UsageErrorf(l.Cmd, "AccountClaim not found")
 	}
 	if len(accountClaims.Items) > 1 {
-		return awsv1alpha1.AccountClaim{}, cmdutil.UsageErrorf(cmd, "more than 1 AccountClaim found")
+		return awsv1alpha1.AccountClaim{}, cmdutil.UsageErrorf(l.Cmd, "more than 1 AccountClaim found")
 	}
 	return accountClaims.Items[0], nil
 }
 
-func getAccount(claim awsv1alpha1.AccountClaim, cmd *cobra.Command, o *listResourcesOptions) (awsv1alpha1.Account, error) {
+func (l *ListResources) getAccount(claim awsv1alpha1.AccountClaim) (awsv1alpha1.Account, error) {
 	var accounts awsv1alpha1.AccountList
-	if err := o.kubeCli.List(context.TODO(), &accounts, &client.ListOptions{Namespace: "aws-account-operator"}); err != nil {
+	if err := l.KubeCli.List(context.TODO(), &accounts, &client.ListOptions{Namespace: "aws-account-operator"}); err != nil {
 		return awsv1alpha1.Account{}, err
 	}
 
@@ -159,28 +187,44 @@ func getAccount(claim awsv1alpha1.AccountClaim, cmd *cobra.Command, o *listResou
 			return acc, nil
 		}
 	}
-	return awsv1alpha1.Account{}, cmdutil.UsageErrorf(cmd, "Account not found")
+	return awsv1alpha1.Account{}, cmdutil.UsageErrorf(l.Cmd, "Account not found")
 }
 
-func getProjectClaim(cd hivev1.ClusterDeployment, cmd *cobra.Command, o *listResourcesOptions) (gcpv1alpha1.ProjectClaim, error) {
+func (o *ListResources) getSecret(account awsv1alpha1.Account) (corev1.Secret, error) {
+
+	// SREP User is not allowed to list Secrets, hence we need to fake one until osdctl can impersonate
+	secret := corev1.Secret{
+		TypeMeta: v1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: "/v1",
+		},
+		ObjectMeta: v1.ObjectMeta{
+			Name:      account.Spec.IAMUserSecret,
+			Namespace: account.Namespace,
+		},
+	}
+	return secret, nil
+}
+
+func (l *ListResources) getProjectClaim(cd hivev1.ClusterDeployment) (gcpv1alpha1.ProjectClaim, error) {
 	var projectClaims gcpv1alpha1.ProjectClaimList
-	if err := o.kubeCli.List(context.TODO(), &projectClaims, &client.ListOptions{Namespace: cd.Namespace}); err != nil {
+	if err := l.KubeCli.List(context.TODO(), &projectClaims, &client.ListOptions{Namespace: cd.Namespace}); err != nil {
 		return gcpv1alpha1.ProjectClaim{}, err
 	}
 
 	if len(projectClaims.Items) < 1 {
-		return gcpv1alpha1.ProjectClaim{}, cmdutil.UsageErrorf(cmd, "ProjectClaim not found")
+		return gcpv1alpha1.ProjectClaim{}, cmdutil.UsageErrorf(l.Cmd, "ProjectClaim not found")
 	}
 	if len(projectClaims.Items) > 1 {
-		return gcpv1alpha1.ProjectClaim{}, cmdutil.UsageErrorf(cmd, "more than 1 ProjectClaim found")
+		return gcpv1alpha1.ProjectClaim{}, cmdutil.UsageErrorf(l.Cmd, "more than 1 ProjectClaim found")
 	}
 
 	return projectClaims.Items[0], nil
 }
 
-func getProjectReference(claim gcpv1alpha1.ProjectClaim, cmd *cobra.Command, o *listResourcesOptions) (gcpv1alpha1.ProjectReference, error) {
+func (l *ListResources) getProjectReference(claim gcpv1alpha1.ProjectClaim) (gcpv1alpha1.ProjectReference, error) {
 	var projectReferences gcpv1alpha1.ProjectReferenceList
-	if err := o.kubeCli.List(context.TODO(), &projectReferences, &client.ListOptions{Namespace: claim.Spec.ProjectReferenceCRLink.Namespace}); err != nil {
+	if err := l.KubeCli.List(context.TODO(), &projectReferences, &client.ListOptions{Namespace: claim.Spec.ProjectReferenceCRLink.Namespace}); err != nil {
 		return gcpv1alpha1.ProjectReference{}, err
 	}
 
@@ -189,5 +233,5 @@ func getProjectReference(claim gcpv1alpha1.ProjectClaim, cmd *cobra.Command, o *
 			return projectReference, nil
 		}
 	}
-	return gcpv1alpha1.ProjectReference{}, cmdutil.UsageErrorf(cmd, "ProjectReference not found")
+	return gcpv1alpha1.ProjectReference{}, cmdutil.UsageErrorf(l.Cmd, "ProjectReference not found")
 }
