@@ -2,6 +2,7 @@ package aao
 
 import (
 	"fmt"
+	"os/exec"
 
 	"github.com/spf13/cobra"
 
@@ -43,6 +44,13 @@ func (o *poolOptions) complete(cmd *cobra.Command) error {
 }
 
 func (o *poolOptions) run() error {
-	fmt.Println("test")
+	cmd := "oc get accounts -o json -n aws-account-operator | jq '.items | map(select(.status.claimed==\"false\" or .status.claimed==null)) | map(select(.status.state!=\"Failed\")) | map(select(.spec.legalEntity==null or .spec.legalEntity.id==\"\" or .spec.legalEntity.id==null)) | length'"
+	output, err := exec.Command("bash", "-c", cmd).Output()
+	if err != nil {
+		fmt.Println(string(output))
+		fmt.Print(err)
+		return err
+	}
+	fmt.Printf("Available Accounts: %s", string(output))
 	return nil
 }
