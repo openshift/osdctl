@@ -19,8 +19,7 @@ import (
 )
 
 const (
-	osdAdminSecret = "-osdmanagedadminsre-secret"
-	secret         = "-secret"
+	secret = "-secret"
 )
 
 // newCmdGetSecrets implements the get secrets command which get
@@ -102,7 +101,7 @@ func (o *getSecretsOptions) run() error {
 		return fmt.Errorf("Account matches for AWS Account ID %s not found\n", o.accountID)
 	}
 
-	secretSuffixes := []string{osdAdminSecret, secret}
+	secretSuffixes := []string{secret}
 	var secret v1.Secret
 	for _, suffix := range secretSuffixes {
 		if err := o.kubeCli.Get(ctx, types.NamespacedName{
