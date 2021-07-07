@@ -90,6 +90,7 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 		if err != nil {
 			return nil, err
 		}
+		factory.Awscloudfactory.Region = "us-east-1"
 	}
 
 	supportRoleDefined := false

@@ -140,6 +140,7 @@ func (o *resetOptions) run() error {
 		"rotateConsoleCredentials": false,
 		"claimed":                  false,
 		"state":                    "",
+		"conditions":               []interface{}{},
 	}
 
 	if o.resetLegalEntity {
