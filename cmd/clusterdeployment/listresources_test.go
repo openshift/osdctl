@@ -119,7 +119,7 @@ func TestListResourcesAwsExternalOnly(t *testing.T) {
 		r.mockClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).SetArg(1, r.accountClaims),
 		r.mockClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).SetArg(1, r.accounts),
 		r.mockPrinter.EXPECT().AddRow([]string{"aws.managed.openshift.io", "v1alpha1", "Account", "aws-account-operator", "fake-account"}),
-		r.mockPrinter.EXPECT().AddRow([]string{"", "v1", "Secret", "aws-account-operator", "fake-secret"}),
+		r.mockPrinter.EXPECT().AddRow([]string{`""`, "v1", "Secret", "aws-account-operator", "fake-secret"}),
 		r.mockPrinter.EXPECT().Flush(),
 	)
 	err := r.l.RunListResources()
@@ -140,7 +140,7 @@ func TestListResourcesAws(t *testing.T) {
 		r.mockPrinter.EXPECT().AddRow([]string{"aws.managed.openshift.io", "v1alpha1", "AccountClaim", r.cd.Namespace, "fake-account-claim"}),
 		r.mockClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).SetArg(1, r.accounts),
 		r.mockPrinter.EXPECT().AddRow([]string{"aws.managed.openshift.io", "v1alpha1", "Account", "aws-account-operator", "fake-account"}),
-		r.mockPrinter.EXPECT().AddRow([]string{"", "v1", "Secret", "aws-account-operator", "fake-secret"}),
+		r.mockPrinter.EXPECT().AddRow([]string{`""`, "v1", "Secret", "aws-account-operator", "fake-secret"}),
 		r.mockPrinter.EXPECT().Flush(),
 	)
 	err := r.l.RunListResources()
