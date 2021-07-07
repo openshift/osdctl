@@ -148,6 +148,9 @@ func (l *ListResources) getClusterDeployment() error {
 
 func createRow(m v1.ObjectMeta, t v1.TypeMeta) []string {
 	group, version := getGroupVersion(t.APIVersion)
+	if group == "" {
+		group = `""`
+	}
 	return []string{group, version, t.Kind, m.Namespace, m.Name}
 }
 
