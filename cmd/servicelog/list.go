@@ -21,6 +21,10 @@ var listCmd = &cobra.Command{
 	// validate only clusterid is provided
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			cmd.Help()
+			return fmt.Errorf("the argument count is not equal to 1, it is %d", len(args))
+		}
 		clusterId := args[0]
 
 		// Create an OCM client to talk to the cluster API
@@ -37,6 +41,7 @@ var listCmd = &cobra.Command{
 		response := sendRequest(request)
 		clusterExternalId, err := extractExternalIdFromResponse(response)
 		if err != nil {
+			cmd.Help()
 			return err
 		}
 
@@ -46,6 +51,7 @@ var listCmd = &cobra.Command{
 
 		err = dump.Pretty(os.Stdout, response.Bytes())
 		if err != nil {
+			cmd.Help()
 			return err
 		}
 
