@@ -19,7 +19,7 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "gets all servicelog messages for a given cluster",
 	// validate only clusterid is provided
-	Args: cobra.ExactArgs(1),
+	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		clusterId := args[0]
 
