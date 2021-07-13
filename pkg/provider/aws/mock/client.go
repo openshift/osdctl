@@ -370,6 +370,36 @@ func (mr *MockClientMockRecorder) RequestServiceQuotaIncrease(arg0 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequestServiceQuotaIncrease", reflect.TypeOf((*MockClient)(nil).RequestServiceQuotaIncrease), arg0)
 }
 
+// CreateAccount mocks base method
+func (m *MockClient) CreateAccount(input *organizations.CreateAccountInput) (*organizations.CreateAccountOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateAccount", input)
+	ret0, _ := ret[0].(*organizations.CreateAccountOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateAccount indicates an expected call of CreateAccount
+func (mr *MockClientMockRecorder) CreateAccount(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccount", reflect.TypeOf((*MockClient)(nil).CreateAccount), input)
+}
+
+// DescribeCreateAccountStatus mocks base method
+func (m *MockClient) DescribeCreateAccountStatus(input *organizations.DescribeCreateAccountStatusInput) (*organizations.DescribeCreateAccountStatusOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescribeCreateAccountStatus", input)
+	ret0, _ := ret[0].(*organizations.DescribeCreateAccountStatusOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeCreateAccountStatus indicates an expected call of DescribeCreateAccountStatus
+func (mr *MockClientMockRecorder) DescribeCreateAccountStatus(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeCreateAccountStatus", reflect.TypeOf((*MockClient)(nil).DescribeCreateAccountStatus), input)
+}
+
 // ListAccounts mocks base method
 func (m *MockClient) ListAccounts(input *organizations.ListAccountsInput) (*organizations.ListAccountsOutput, error) {
 	m.ctrl.T.Helper()
