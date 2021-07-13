@@ -36,6 +36,7 @@ const (
 	nodeLabelKey             = "node-role.kubernetes.io/worker"
 	nodeLabelValue           = ""
 	packetCaptureDurationSec = 60
+	singleNode               = false
 )
 
 // newCmdPacketCapture implements the packet-capture command to run a packet capture
@@ -58,6 +59,7 @@ func newCmdPacketCapture(streams genericclioptions.IOStreams, flags *genericclio
 	packetCaptureCmd.Flags().StringVarP(&ops.namespace, "namespace", "n", packetCaptureNamespace, "Namespace to deploy Daemonset")
 	packetCaptureCmd.Flags().StringVarP(&ops.nodeLabelKey, "node-label-key", "", nodeLabelKey, "Node label key")
 	packetCaptureCmd.Flags().StringVarP(&ops.nodeLabelValue, "node-label-value", "", nodeLabelValue, "Node label value")
+	packetCaptureCmd.Flags().BoolVarP(&ops.singleNode, "single-node", "", singleNode, "Boolean value to deploy a single pod or a deamonset (default true)")
 
 	ops.startTime = time.Now()
 	return packetCaptureCmd
@@ -70,6 +72,7 @@ type packetCaptureOptions struct {
 	nodeLabelKey   string
 	nodeLabelValue string
 	duration       int
+	singleNode     bool
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
@@ -94,6 +97,15 @@ func (o *packetCaptureOptions) complete(cmd *cobra.Command, _ []string) error {
 }
 
 func (o *packetCaptureOptions) run() error {
+	if o.singleNode == false {
+		return o.runDaemonSet()
+	} else {
+		return o.runPod()
+	}
+}
+
+func (o *packetCaptureOptions) runDaemonSet() error {
+
 	log.Println("Ensuring Packet Capture Daemonset")
 	ds, err := ensurePacketCaptureDaemonSet(o)
 	if err != nil {
@@ -114,6 +126,35 @@ func (o *packetCaptureOptions) run() error {
 	}
 	log.Println("Deleting Packet Capture Daemonset")
 	err = deletePacketCaptureDaemonSet(o, ds)
+	if err != nil {
+		log.Fatalf("Error deleting packet capture daemonset %v", err)
+		return err
+	}
+	return nil
+}
+
+func (o *packetCaptureOptions) runPod() error {
+
+	log.Println("Ensuring Packet Capture Daemonset")
+	capturePod, err := ensurePacketCapturePod(o)
+	if err != nil {
+		log.Fatalf("Error ensuring packet capture Pod %v", err)
+		return err
+	}
+	log.Println("Waiting For Packet Capture Pod")
+	err = waitForPacketCapturePod(o, capturePod)
+	if err != nil {
+		log.Fatalf("Error Waiting for daemonset %v", err)
+		return err
+	}
+	log.Println("Copying Files From Packet Capture Pods")
+	err = copyFilesFromPacketCapturePods(o)
+	if err != nil {
+		log.Fatalf("Error copying files %v", err)
+		return err
+	}
+	log.Println("Deleting Packet Capture Pod")
+	err = deletePacketCapturePod(o, capturePod)
 	if err != nil {
 		log.Fatalf("Error deleting packet capture daemonset %v", err)
 		return err
@@ -324,4 +365,141 @@ func copyFilesFromPacketCapturePods(o *packetCaptureOptions) error {
 	}
 
 	return nil
+}
+
+// desiredPacketCapturePod returns the desired Pod read in from manifests
+func desiredPacketCapturePod(o *packetCaptureOptions, key types.NamespacedName) *corev1.Pod {
+	capturePod := &corev1.Pod{}
+	t := true
+	ls := &metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"app": key.Name,
+		},
+	}
+	capturePod.Name = key.Name
+	capturePod.Namespace = key.Namespace
+
+	capturePod.Labels = ls.MatchLabels
+
+	capturePod.Spec.NodeSelector = map[string]string{
+		o.nodeLabelKey: o.nodeLabelValue,
+	}
+
+	capturePod.Spec.Tolerations = []corev1.Toleration{
+		{
+			Effect:   "NoSchedule",
+			Key:      o.nodeLabelKey,
+			Operator: "Exists",
+		},
+	}
+	capturePod.Spec.Volumes = []corev1.Volume{
+		{
+			Name: "capture-output",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+	}
+	capturePod.Spec.HostNetwork = true
+	capturePod.Spec.InitContainers = []corev1.Container{
+		{
+			Name:            "init-capture",
+			Image:           packetCaptureImage,
+			ImagePullPolicy: corev1.PullIfNotPresent,
+			Command:         []string{"/bin/bash", "-c", "tcpdump -G " + strconv.Itoa(o.duration) + " -W 1 -w /tmp/capture-output/capture.pcap -i vxlan_sys_4789 -nn -s0; sync"},
+			SecurityContext: &corev1.SecurityContext{Privileged: &t},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "capture-output",
+					MountPath: "/tmp/capture-output",
+					ReadOnly:  false,
+				},
+			},
+		},
+	}
+	capturePod.Spec.Containers = []corev1.Container{
+		{
+			Name:            "copy",
+			Image:           packetCaptureImage,
+			ImagePullPolicy: corev1.PullIfNotPresent,
+			Command:         []string{"/bin/bash", "-c", "trap : TERM INT; sleep infinity & wait"},
+			SecurityContext: &corev1.SecurityContext{Privileged: &t},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "capture-output",
+					MountPath: "/tmp/capture-output",
+					ReadOnly:  false,
+				},
+			},
+		},
+	}
+
+	return capturePod
+}
+
+// hasPacketCapturePod returns the current daemonset
+func hasPacketCapturePod(o *packetCaptureOptions, key types.NamespacedName) (bool, error) {
+	capturePod := &corev1.Pod{}
+
+	if err := o.kubeCli.Get(context.TODO(), key, capturePod); err != nil {
+		if k8serr.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// deletePacketCapturePod creates the given daemonset resource
+func deletePacketCapturePod(o *packetCaptureOptions, capturePod *corev1.Pod) error {
+	if err := o.kubeCli.Delete(context.TODO(), capturePod); err != nil {
+		return fmt.Errorf("failed to delete Pod %s/%s: %v", capturePod.Namespace, capturePod.Name, err)
+	}
+	return nil
+}
+
+// ensurePacketCapturePod ensures the daemonset exists
+func ensurePacketCapturePod(o *packetCaptureOptions) (*corev1.Pod, error) {
+	key := types.NamespacedName{Name: o.name, Namespace: o.namespace}
+	desired := desiredPacketCapturePod(o, key)
+	havePod, err := hasPacketCapturePod(o, key)
+	if err != nil {
+		log.Fatalf("Error getting current Pod %v", err)
+		return nil, err
+	}
+
+	if havePod {
+		log.Println("Already have packet-capture Pod")
+		return nil, errors.New(fmt.Sprintf("%s Pod already exists in the %s namespace", o.name, o.namespace))
+	}
+
+	err = createPacketCapturePod(o, desired)
+	if err != nil {
+		log.Fatalf("Error creating packet capture Pod %v", err)
+		return nil, err
+	}
+
+	log.Println("Successfully ensured packet capture Pod")
+	return desired, nil
+}
+
+// createPacketCapturePod creates the given Pod resource
+func createPacketCapturePod(o *packetCaptureOptions, capturePod *corev1.Pod) error {
+	if err := o.kubeCli.Create(context.TODO(), capturePod); err != nil {
+		return fmt.Errorf("failed to create Pod %s/%s: %v", capturePod.Namespace, capturePod.Name, err)
+	}
+	return nil
+}
+func waitForPacketCapturePod(o *packetCaptureOptions, capturePod *corev1.Pod) error {
+	pollErr := wait.PollImmediate(10*time.Second, time.Duration(600)*time.Second, func() (bool, error) {
+		var err error
+		tmp := &corev1.Pod{}
+		key := types.NamespacedName{Name: capturePod.Name, Namespace: capturePod.Namespace}
+		if err = o.kubeCli.Get(context.TODO(), key, tmp); err == nil {
+			ready := (tmp.Status.Phase == corev1.PodRunning)
+			return ready, nil
+		}
+		return false, err
+	})
+	return pollErr
 }
