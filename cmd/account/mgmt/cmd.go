@@ -17,6 +17,7 @@ func NewCmdMgmt(streams genericclioptions.IOStreams, flags *genericclioptions.Co
 
 	mgmtCmd.AddCommand(newCmdAccountList(streams, flags))
 	mgmtCmd.AddCommand(newCmdAccountAssign(streams, flags))
+	mgmtCmd.AddCommand(newCmdAccountUnassign(streams, flags))
 
 	return mgmtCmd
 }
