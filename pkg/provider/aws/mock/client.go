@@ -325,6 +325,156 @@ func (mr *MockClientMockRecorder) ListAttachedRolePolicies(arg0 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAttachedRolePolicies", reflect.TypeOf((*MockClient)(nil).ListAttachedRolePolicies), arg0)
 }
 
+// DeleteLoginProfile mocks base method
+func (m *MockClient) DeleteLoginProfile(arg0 *iam.DeleteLoginProfileInput) (*iam.DeleteLoginProfileOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteLoginProfile", arg0)
+	ret0, _ := ret[0].(*iam.DeleteLoginProfileOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteLoginProfile indicates an expected call of DeleteLoginProfile
+func (mr *MockClientMockRecorder) DeleteLoginProfile(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteLoginProfile", reflect.TypeOf((*MockClient)(nil).DeleteLoginProfile), arg0)
+}
+
+// ListSigningCertificates mocks base method
+func (m *MockClient) ListSigningCertificates(arg0 *iam.ListSigningCertificatesInput) (*iam.ListSigningCertificatesOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSigningCertificates", arg0)
+	ret0, _ := ret[0].(*iam.ListSigningCertificatesOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSigningCertificates indicates an expected call of ListSigningCertificates
+func (mr *MockClientMockRecorder) ListSigningCertificates(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSigningCertificates", reflect.TypeOf((*MockClient)(nil).ListSigningCertificates), arg0)
+}
+
+// DeleteSigningCertificate mocks base method
+func (m *MockClient) DeleteSigningCertificate(arg0 *iam.DeleteSigningCertificateInput) (*iam.DeleteSigningCertificateOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteSigningCertificate", arg0)
+	ret0, _ := ret[0].(*iam.DeleteSigningCertificateOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteSigningCertificate indicates an expected call of DeleteSigningCertificate
+func (mr *MockClientMockRecorder) DeleteSigningCertificate(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSigningCertificate", reflect.TypeOf((*MockClient)(nil).DeleteSigningCertificate), arg0)
+}
+
+// ListUserPolicies mocks base method
+func (m *MockClient) ListUserPolicies(arg0 *iam.ListUserPoliciesInput) (*iam.ListUserPoliciesOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListUserPolicies", arg0)
+	ret0, _ := ret[0].(*iam.ListUserPoliciesOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListUserPolicies indicates an expected call of ListUserPolicies
+func (mr *MockClientMockRecorder) ListUserPolicies(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUserPolicies", reflect.TypeOf((*MockClient)(nil).ListUserPolicies), arg0)
+}
+
+// DeleteUserPolicy mocks base method
+func (m *MockClient) DeleteUserPolicy(arg0 *iam.DeleteUserPolicyInput) (*iam.DeleteUserPolicyOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteUserPolicy", arg0)
+	ret0, _ := ret[0].(*iam.DeleteUserPolicyOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteUserPolicy indicates an expected call of DeleteUserPolicy
+func (mr *MockClientMockRecorder) DeleteUserPolicy(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUserPolicy", reflect.TypeOf((*MockClient)(nil).DeleteUserPolicy), arg0)
+}
+
+// ListAttachedUserPolicies mocks base method
+func (m *MockClient) ListAttachedUserPolicies(arg0 *iam.ListAttachedUserPoliciesInput) (*iam.ListAttachedUserPoliciesOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAttachedUserPolicies", arg0)
+	ret0, _ := ret[0].(*iam.ListAttachedUserPoliciesOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAttachedUserPolicies indicates an expected call of ListAttachedUserPolicies
+func (mr *MockClientMockRecorder) ListAttachedUserPolicies(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAttachedUserPolicies", reflect.TypeOf((*MockClient)(nil).ListAttachedUserPolicies), arg0)
+}
+
+// DetachUserPolicy mocks base method
+func (m *MockClient) DetachUserPolicy(arg0 *iam.DetachUserPolicyInput) (*iam.DetachUserPolicyOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DetachUserPolicy", arg0)
+	ret0, _ := ret[0].(*iam.DetachUserPolicyOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DetachUserPolicy indicates an expected call of DetachUserPolicy
+func (mr *MockClientMockRecorder) DetachUserPolicy(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DetachUserPolicy", reflect.TypeOf((*MockClient)(nil).DetachUserPolicy), arg0)
+}
+
+// ListGroupsForUser mocks base method
+func (m *MockClient) ListGroupsForUser(arg0 *iam.ListGroupsForUserInput) (*iam.ListGroupsForUserOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListGroupsForUser", arg0)
+	ret0, _ := ret[0].(*iam.ListGroupsForUserOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListGroupsForUser indicates an expected call of ListGroupsForUser
+func (mr *MockClientMockRecorder) ListGroupsForUser(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListGroupsForUser", reflect.TypeOf((*MockClient)(nil).ListGroupsForUser), arg0)
+}
+
+// RemoveUserFromGroup mocks base method
+func (m *MockClient) RemoveUserFromGroup(arg0 *iam.RemoveUserFromGroupInput) (*iam.RemoveUserFromGroupOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveUserFromGroup", arg0)
+	ret0, _ := ret[0].(*iam.RemoveUserFromGroupOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RemoveUserFromGroup indicates an expected call of RemoveUserFromGroup
+func (mr *MockClientMockRecorder) RemoveUserFromGroup(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveUserFromGroup", reflect.TypeOf((*MockClient)(nil).RemoveUserFromGroup), arg0)
+}
+
+// DeleteUser mocks base method
+func (m *MockClient) DeleteUser(arg0 *iam.DeleteUserInput) (*iam.DeleteUserOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteUser", arg0)
+	ret0, _ := ret[0].(*iam.DeleteUserOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteUser indicates an expected call of DeleteUser
+func (mr *MockClientMockRecorder) DeleteUser(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUser", reflect.TypeOf((*MockClient)(nil).DeleteUser), arg0)
+}
+
 // DescribeInstances mocks base method
 func (m *MockClient) DescribeInstances(arg0 *ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error) {
 	m.ctrl.T.Helper()
@@ -370,18 +520,19 @@ func (mr *MockClientMockRecorder) RequestServiceQuotaIncrease(arg0 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequestServiceQuotaIncrease", reflect.TypeOf((*MockClient)(nil).RequestServiceQuotaIncrease), arg0)
 }
 
-// ListAccountsForParentPages mocks base method
-func (m *MockClient) ListAccountsForParentPages(input *organizations.ListAccountsForParentInput, fn func(*organizations.ListAccountsForParentOutput, bool) bool) error {
+// ListAccounts mocks base method
+func (m *MockClient) ListAccounts(input *organizations.ListAccountsInput) (*organizations.ListAccountsOutput, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListAccountsForParentPages", input, fn)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "ListAccounts", input)
+	ret0, _ := ret[0].(*organizations.ListAccountsOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// ListAccountsForParentPages indicates an expected call of ListAccountsForParentPages
-func (mr *MockClientMockRecorder) ListAccountsForParentPages(input, fn interface{}) *gomock.Call {
+// ListAccounts indicates an expected call of ListAccounts
+func (mr *MockClientMockRecorder) ListAccounts(input interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAccountsForParentPages", reflect.TypeOf((*MockClient)(nil).ListAccountsForParentPages), input, fn)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAccounts", reflect.TypeOf((*MockClient)(nil).ListAccounts), input)
 }
 
 // ListAccountsForParent mocks base method
@@ -444,6 +595,21 @@ func (mr *MockClientMockRecorder) TagResource(input interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TagResource", reflect.TypeOf((*MockClient)(nil).TagResource), input)
 }
 
+// UntagResource mocks base method
+func (m *MockClient) UntagResource(input *organizations.UntagResourceInput) (*organizations.UntagResourceOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UntagResource", input)
+	ret0, _ := ret[0].(*organizations.UntagResourceOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UntagResource indicates an expected call of UntagResource
+func (mr *MockClientMockRecorder) UntagResource(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UntagResource", reflect.TypeOf((*MockClient)(nil).UntagResource), input)
+}
+
 // ListTagsForResource mocks base method
 func (m *MockClient) ListTagsForResource(input *organizations.ListTagsForResourceInput) (*organizations.ListTagsForResourceOutput, error) {
 	m.ctrl.T.Helper()
@@ -457,6 +623,21 @@ func (m *MockClient) ListTagsForResource(input *organizations.ListTagsForResourc
 func (mr *MockClientMockRecorder) ListTagsForResource(input interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTagsForResource", reflect.TypeOf((*MockClient)(nil).ListTagsForResource), input)
+}
+
+// MoveAccount mocks base method
+func (m *MockClient) MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MoveAccount", input)
+	ret0, _ := ret[0].(*organizations.MoveAccountOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MoveAccount indicates an expected call of MoveAccount
+func (mr *MockClientMockRecorder) MoveAccount(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveAccount", reflect.TypeOf((*MockClient)(nil).MoveAccount), input)
 }
 
 // GetResources mocks base method
