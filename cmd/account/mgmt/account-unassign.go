@@ -102,7 +102,7 @@ func (o *accountUnassignOptions) run() error {
 		}
 	}
 
-	c := askForConfirmation("Are you sure you want to unassign the accounts? y/n")
+	c := askForConfirmation("Are you sure you want to unassign the accounts? ")
 	if c {
 		// Delete login profile
 		err := o.deleteLoginProfile(accountUsername)
@@ -130,7 +130,7 @@ func (o *accountUnassignOptions) run() error {
 			return err
 		}
 		// Delete groups
-		err = o.deleteLoginProfile(accountUsername)
+		err = o.deleteGroups(accountUsername)
 		if err != nil {
 			return err
 		}
@@ -202,6 +202,11 @@ func (o *accountUnassignOptions) listAccountsFromUser(user string) ([]string, er
 	if err != nil {
 		return []string{}, err
 	}
+
+	if len(accounts.ResourceTagMappingList) == 0 {
+		return []string{}, ErrNoAccountsForUser
+	}
+
 	var accountIdList []string
 	// Get last 12 digits of ResourceARN and append it to account list
 	for _, a := range accounts.ResourceTagMappingList {
@@ -210,7 +215,7 @@ func (o *accountUnassignOptions) listAccountsFromUser(user string) ([]string, er
 	if err != nil {
 		return []string{}, err
 	}
-	return accountIdList, ErrNoAccountsForUser
+	return accountIdList, nil
 }
 
 func (o *accountUnassignOptions) deleteLoginProfile(user string) error {
