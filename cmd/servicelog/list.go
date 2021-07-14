@@ -16,7 +16,7 @@ import (
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
-	Use:   "list",
+	Use:   "list [flags] [options] cluster-identifier",
 	Short: "gets all servicelog messages for a given cluster",
 	// validate only clusterid is provided
 	Args: cobra.ArbitraryArgs,
