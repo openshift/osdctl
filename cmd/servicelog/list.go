@@ -16,14 +16,14 @@ import (
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
-	Use:   "list [flags] [options] cluster-identifier",
-	Short: "gets all servicelog messages for a given cluster",
-	// validate only clusterid is provided
-	Args: cobra.ArbitraryArgs,
+	Use:           "list [flags] [options] cluster-identifier",
+	Short:         "gets all servicelog messages for a given cluster",
+	Args:          cobra.ArbitraryArgs,
+	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
 			cmd.Help()
-			return fmt.Errorf("the argument count is not equal to 1, it is %d", len(args))
+			return fmt.Errorf("cluster-identifier was not provided. please provide a cluster id, UUID, or name")
 		}
 		clusterId := args[0]
 
