@@ -20,6 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/iam/iamiface"
+	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
+	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi/resourcegroupstaggingapiiface"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/servicequotas"
@@ -73,9 +75,15 @@ type Client interface {
 	RequestServiceQuotaIncrease(*servicequotas.RequestServiceQuotaIncreaseInput) (*servicequotas.RequestServiceQuotaIncreaseOutput, error)
 
 	// Organizations
+	ListAccountsForParentPages(input *organizations.ListAccountsForParentInput, fn func(*organizations.ListAccountsForParentOutput, bool) bool) error
 	ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error)
 	ListOrganizationalUnitsForParent(input *organizations.ListOrganizationalUnitsForParentInput) (*organizations.ListOrganizationalUnitsForParentOutput, error)
 	DescribeOrganizationalUnit(input *organizations.DescribeOrganizationalUnitInput) (*organizations.DescribeOrganizationalUnitOutput, error)
+	TagResource(input *organizations.TagResourceInput) (*organizations.TagResourceOutput, error)
+	ListTagsForResource(input *organizations.ListTagsForResourceInput) (*organizations.ListTagsForResourceOutput, error)
+
+	// Resources
+	GetResources(input *resourcegroupstaggingapi.GetResourcesInput) (*resourcegroupstaggingapi.GetResourcesOutput, error)
 
 	// Cost Explorer
 	GetCostAndUsage(input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error)
@@ -90,6 +98,7 @@ type AwsClient struct {
 	s3Client            s3iface.S3API
 	servicequotasClient servicequotasiface.ServiceQuotasAPI
 	orgClient           organizationsiface.OrganizationsAPI
+	resClient           resourcegroupstaggingapiiface.ResourceGroupsTaggingAPIAPI
 	ceClient            costexploreriface.CostExplorerAPI
 }
 
@@ -132,6 +141,7 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 		servicequotasClient: servicequotas.New(sess),
 		orgClient:           organizations.New(sess),
 		ceClient:            costexplorer.New(sess),
+		resClient:           resourcegroupstaggingapi.New(sess),
 	}, nil
 }
 
@@ -155,6 +165,7 @@ func NewAwsClientWithInput(input *AwsClientInput) (Client, error) {
 		servicequotasClient: servicequotas.New(s),
 		orgClient:           organizations.New(s),
 		ceClient:            costexplorer.New(s),
+		resClient:           resourcegroupstaggingapi.New(s),
 	}, nil
 }
 
@@ -234,6 +245,10 @@ func (c *AwsClient) ListAttachedRolePolicies(input *iam.ListAttachedRolePolicies
 	return c.iamClient.ListAttachedRolePolicies(input)
 }
 
+func (c *AwsClient) ListAccountsForParentPages(input *organizations.ListAccountsForParentInput, fn func(*organizations.ListAccountsForParentOutput, bool) bool) error {
+	return c.orgClient.ListAccountsForParentPages(input, fn)
+}
+
 func (c *AwsClient) ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error) {
 	return c.orgClient.ListAccountsForParent(input)
 }
@@ -252,6 +267,17 @@ func (c *AwsClient) ListOrganizationalUnitsForParent(input *organizations.ListOr
 
 func (c *AwsClient) DescribeOrganizationalUnit(input *organizations.DescribeOrganizationalUnitInput) (*organizations.DescribeOrganizationalUnitOutput, error) {
 	return c.orgClient.DescribeOrganizationalUnit(input)
+}
+
+func (c *AwsClient) TagResource(input *organizations.TagResourceInput) (*organizations.TagResourceOutput, error) {
+	return c.orgClient.TagResource(input)
+}
+func (c *AwsClient) ListTagsForResource(input *organizations.ListTagsForResourceInput) (*organizations.ListTagsForResourceOutput, error) {
+	return c.orgClient.ListTagsForResource(input)
+}
+
+func (c *AwsClient) GetResources(input *resourcegroupstaggingapi.GetResourcesInput) (*resourcegroupstaggingapi.GetResourcesOutput, error) {
+	return c.resClient.GetResources(input)
 }
 
 func (c *AwsClient) GetCostAndUsage(input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {
