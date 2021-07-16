@@ -370,18 +370,19 @@ func (mr *MockClientMockRecorder) RequestServiceQuotaIncrease(arg0 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequestServiceQuotaIncrease", reflect.TypeOf((*MockClient)(nil).RequestServiceQuotaIncrease), arg0)
 }
 
-// ListAccountsForParentPages mocks base method
-func (m *MockClient) ListAccountsForParentPages(input *organizations.ListAccountsForParentInput, fn func(*organizations.ListAccountsForParentOutput, bool) bool) error {
+// ListAccounts mocks base method
+func (m *MockClient) ListAccounts(input *organizations.ListAccountsInput) (*organizations.ListAccountsOutput, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListAccountsForParentPages", input, fn)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "ListAccounts", input)
+	ret0, _ := ret[0].(*organizations.ListAccountsOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// ListAccountsForParentPages indicates an expected call of ListAccountsForParentPages
-func (mr *MockClientMockRecorder) ListAccountsForParentPages(input, fn interface{}) *gomock.Call {
+// ListAccounts indicates an expected call of ListAccounts
+func (mr *MockClientMockRecorder) ListAccounts(input interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAccountsForParentPages", reflect.TypeOf((*MockClient)(nil).ListAccountsForParentPages), input, fn)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAccounts", reflect.TypeOf((*MockClient)(nil).ListAccounts), input)
 }
 
 // ListAccountsForParent mocks base method
@@ -444,6 +445,21 @@ func (mr *MockClientMockRecorder) TagResource(input interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TagResource", reflect.TypeOf((*MockClient)(nil).TagResource), input)
 }
 
+// UntagResource mocks base method
+func (m *MockClient) UntagResource(input *organizations.UntagResourceInput) (*organizations.UntagResourceOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UntagResource", input)
+	ret0, _ := ret[0].(*organizations.UntagResourceOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UntagResource indicates an expected call of UntagResource
+func (mr *MockClientMockRecorder) UntagResource(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UntagResource", reflect.TypeOf((*MockClient)(nil).UntagResource), input)
+}
+
 // ListTagsForResource mocks base method
 func (m *MockClient) ListTagsForResource(input *organizations.ListTagsForResourceInput) (*organizations.ListTagsForResourceOutput, error) {
 	m.ctrl.T.Helper()
@@ -457,6 +473,21 @@ func (m *MockClient) ListTagsForResource(input *organizations.ListTagsForResourc
 func (mr *MockClientMockRecorder) ListTagsForResource(input interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTagsForResource", reflect.TypeOf((*MockClient)(nil).ListTagsForResource), input)
+}
+
+// MoveAccount mocks base method
+func (m *MockClient) MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MoveAccount", input)
+	ret0, _ := ret[0].(*organizations.MoveAccountOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MoveAccount indicates an expected call of MoveAccount
+func (mr *MockClientMockRecorder) MoveAccount(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveAccount", reflect.TypeOf((*MockClient)(nil).MoveAccount), input)
 }
 
 // GetResources mocks base method

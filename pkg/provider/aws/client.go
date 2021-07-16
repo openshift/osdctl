@@ -75,12 +75,14 @@ type Client interface {
 	RequestServiceQuotaIncrease(*servicequotas.RequestServiceQuotaIncreaseInput) (*servicequotas.RequestServiceQuotaIncreaseOutput, error)
 
 	// Organizations
-	ListAccountsForParentPages(input *organizations.ListAccountsForParentInput, fn func(*organizations.ListAccountsForParentOutput, bool) bool) error
+	ListAccounts(input *organizations.ListAccountsInput) (*organizations.ListAccountsOutput, error)
 	ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error)
 	ListOrganizationalUnitsForParent(input *organizations.ListOrganizationalUnitsForParentInput) (*organizations.ListOrganizationalUnitsForParentOutput, error)
 	DescribeOrganizationalUnit(input *organizations.DescribeOrganizationalUnitInput) (*organizations.DescribeOrganizationalUnitOutput, error)
 	TagResource(input *organizations.TagResourceInput) (*organizations.TagResourceOutput, error)
+	UntagResource(input *organizations.UntagResourceInput) (*organizations.UntagResourceOutput, error)
 	ListTagsForResource(input *organizations.ListTagsForResourceInput) (*organizations.ListTagsForResourceOutput, error)
+	MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error)
 
 	// Resources
 	GetResources(input *resourcegroupstaggingapi.GetResourcesInput) (*resourcegroupstaggingapi.GetResourcesOutput, error)
@@ -245,8 +247,8 @@ func (c *AwsClient) ListAttachedRolePolicies(input *iam.ListAttachedRolePolicies
 	return c.iamClient.ListAttachedRolePolicies(input)
 }
 
-func (c *AwsClient) ListAccountsForParentPages(input *organizations.ListAccountsForParentInput, fn func(*organizations.ListAccountsForParentOutput, bool) bool) error {
-	return c.orgClient.ListAccountsForParentPages(input, fn)
+func (c *AwsClient) ListAccounts(input *organizations.ListAccountsInput) (*organizations.ListAccountsOutput, error) {
+	return c.orgClient.ListAccounts(input)
 }
 
 func (c *AwsClient) ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error) {
@@ -278,6 +280,14 @@ func (c *AwsClient) ListTagsForResource(input *organizations.ListTagsForResource
 
 func (c *AwsClient) GetResources(input *resourcegroupstaggingapi.GetResourcesInput) (*resourcegroupstaggingapi.GetResourcesOutput, error) {
 	return c.resClient.GetResources(input)
+}
+
+func (c *AwsClient) UntagResource(input *organizations.UntagResourceInput) (*organizations.UntagResourceOutput, error) {
+	return c.orgClient.UntagResource(input)
+}
+
+func (c *AwsClient) MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error) {
+	return c.orgClient.MoveAccount(input)
 }
 
 func (c *AwsClient) GetCostAndUsage(input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {
