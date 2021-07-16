@@ -2,7 +2,6 @@ package clusterdeployment
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
@@ -115,7 +114,6 @@ func (l *ListResources) RunListResources() error {
 		}
 		l.PrintRow(projectClaim.ObjectMeta, projectClaim.TypeMeta)
 		projectReference, err := l.getProjectReference(projectClaim)
-		fmt.Printf("%s\n", projectReference.Kind)
 		if err != nil {
 			return err
 		}
