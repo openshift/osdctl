@@ -3,7 +3,6 @@ package mgmt
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
@@ -102,8 +101,15 @@ func (o *accountUnassignOptions) run() error {
 		}
 	}
 
-	c := askForConfirmation("Are you sure you want to unassign the accounts? ")
-	if c {
+	fmt.Printf("Are you sure you want to unassign the accounts? [y/n] ")
+	reader := bufio.NewReader(os.Stdin)
+
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return err
+	}
+
+	if response == "y" || response == "Y" {
 		// Delete login profile
 		err := o.deleteLoginProfile(accountUsername)
 		if err != nil {
@@ -161,27 +167,6 @@ func (o *accountUnassignOptions) run() error {
 		}
 	}
 	return nil
-}
-
-func askForConfirmation(s string) bool {
-	reader := bufio.NewReader(os.Stdin)
-
-	for {
-		fmt.Printf("%s [y/n]: ", s)
-
-		response, err := reader.ReadString('\n')
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		response = strings.ToLower(strings.TrimSpace(response))
-
-		if response == "y" {
-			return true
-		} else if response == "n" {
-			return false
-		}
-	}
 }
 
 var ErrNoAccountsForUser error = fmt.Errorf("user has no aws accounts")
