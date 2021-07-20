@@ -333,26 +333,3 @@ func TestUntagAccount(t *testing.T) {
 		t.Errorf("failed to untag aws account")
 	}
 }
-
-func TestMoveAccount(t *testing.T) {
-
-	mocks := setupDefaultMocks(t, []runtime.Object{})
-
-	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
-
-	accountId := "111111111111"
-	rootId := "abc"
-	destId := "abc-nvjrieagbkj"
-
-	mockAWSClient.EXPECT().MoveAccount(gomock.Any()).Return(
-		&organizations.MoveAccountOutput{},
-		nil,
-	)
-
-	o := &accountUnassignOptions{}
-	o.awsClient = mockAWSClient
-	err := o.moveAccount(accountId, rootId, destId)
-	if err != nil {
-		t.Errorf("failed to move aws account")
-	}
-}
