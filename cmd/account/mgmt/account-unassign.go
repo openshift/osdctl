@@ -263,9 +263,7 @@ func (o *accountUnassignOptions) listAccountsFromUser(user string) ([]string, er
 	for _, a := range accounts.ResourceTagMappingList {
 		accountIdList = append(accountIdList, (*a.ResourceARN)[len(*a.ResourceARN)-12:])
 	}
-	if err != nil {
-		return []string{}, err
-	}
+
 	return accountIdList, nil
 }
 

@@ -90,6 +90,31 @@ func TestCheckForHiveNameTage(t *testing.T) {
 	}
 }
 
+func TestUnassignMoveAccount(t *testing.T) {
+
+	mocks := setupDefaultMocks(t, []runtime.Object{})
+
+	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
+
+	accountId := "111111111111"
+	destOu := "abc-vnjfdshs"
+	rootOu := "abc"
+
+	awsOutputMove := &organizations.MoveAccountOutput{}
+
+	mockAWSClient.EXPECT().MoveAccount(gomock.Any()).Return(
+		awsOutputMove,
+		nil,
+	)
+
+	o := &accountUnassignOptions{}
+	o.awsClient = mockAWSClient
+	err := o.moveAccount(accountId, rootOu, destOu)
+	if err != nil {
+		t.Errorf("failed to move account")
+	}
+}
+
 func TestListAccountsFromUser(t *testing.T) {
 
 	var genericAWSError error = fmt.Errorf("Generic AWS Error")
