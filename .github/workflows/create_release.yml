@@ -1,18 +1,18 @@
-# Validate the goReleaser configuration
+# Create a project release automatically on tag creation
 
-name: validate_goreleaser
+name: create_release_on_tag
 
 on:
   push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
+    tags:
+      - "*" # triggers only if push new tag version, like `0.8.4`
 
 jobs:
-  validate_goreleaser:
+  build:
+    name: create_release_on_tag
     runs-on: ubuntu-latest
+    permissions:
+      repository-projects: write
 
     steps:
       - name: Check out code into the Go module directory
@@ -23,7 +23,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v2.1.3
         with:
-          go-version: 1.15.2
+          go-version: 1.16.8
         id: go
 
       - name: Download GoReleaser
@@ -33,3 +33,12 @@ jobs:
       - name: Check goreleaser validity
         run: |
           ./bin/goreleaser check
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@master
+        with:
+          version: latest
+          args: release --rm-dist
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
