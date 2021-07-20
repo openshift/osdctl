@@ -16,11 +16,15 @@ import (
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "gets all servicelog messages for a given cluster",
-	// validate only clusterid is provided
-	Args: cobra.ExactArgs(1),
+	Use:           "list [flags] [options] cluster-identifier",
+	Short:         "gets all servicelog messages for a given cluster",
+	Args:          cobra.ArbitraryArgs,
+	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			cmd.Help()
+			return fmt.Errorf("cluster-identifier was not provided. please provide a cluster id, UUID, or name")
+		}
 		clusterId := args[0]
 
 		// Create an OCM client to talk to the cluster API
@@ -37,6 +41,7 @@ var listCmd = &cobra.Command{
 		response := sendRequest(request)
 		clusterExternalId, err := extractExternalIdFromResponse(response)
 		if err != nil {
+			cmd.Help()
 			return err
 		}
 
@@ -46,6 +51,7 @@ var listCmd = &cobra.Command{
 
 		err = dump.Pretty(os.Stdout, response.Bytes())
 		if err != nil {
+			cmd.Help()
 			return err
 		}
 
