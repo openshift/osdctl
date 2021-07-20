@@ -82,9 +82,19 @@ func (o *healthOptions) complete(cmd *cobra.Command, _ []string) error {
 func (o *healthOptions) run() error {
 
 	// This call gets the availability zone of the cluster, as well as the expected number of nodes.
-	az, clusterName, nodesExpected, err := ocmDescribe(o.k8sclusterresourcefactory.ClusterID)
+	az, clusterName, compute, infra, master, ascMin, ascMax, err := ocmDescribe(o.k8sclusterresourcefactory.ClusterID)
 	if az != nil {
-		fmt.Fprintf(o.IOStreams.Out, "\nThe expected number of nodes in availability zone(s) %s is : %v \n", az, nodesExpected)
+		fmt.Fprintf(o.IOStreams.Out, "\nThe expected number of nodes in availability zone(s) %s: ", az)
+		fmt.Fprintf(o.IOStreams.Out, "\nMaster: %v ", master)
+		fmt.Fprintf(o.IOStreams.Out, "\nInfra: %v ", infra)
+		if ascMin != 0 {
+			fmt.Fprintf(o.IOStreams.Out, "\nAutoscaled Compute: %v - %v ", ascMin, ascMax)
+		}
+		if compute != 0 {
+			fmt.Fprintf(o.IOStreams.Out, "\nCompute: %v ", compute)
+		}
+		fmt.Fprintf(o.IOStreams.Out, "\n \n")
+
 	}
 	if err != nil {
 		return err
@@ -137,14 +147,16 @@ func (o *healthOptions) run() error {
 
 	totalRunning := 0
 
-	//Here we count the number of customer's running instances in the cluster in the given region. To decide if the instance belongs to the cluster we are checking the Name Tag on the instance.
+	//Here we count the number of customer's running worker, infra and master instances in the cluster in the given region. To decide if the instance belongs to the cluster we are checking the Name Tag on the instance.
 	for idx := range instances.Reservations {
 		for _, inst := range instances.Reservations[idx].Instances {
 			tags := GetTags(inst)
 			for _, t := range tags {
 				if *t.Key == "Name" {
 					if strings.HasPrefix(*t.Value, clusterName) && *inst.State.Name == "running" {
-						totalRunning += 1
+						if strings.Contains(*t.Value, "worker") || strings.Contains(*t.Value, "infra") || strings.Contains(*t.Value, "master") {
+							totalRunning += 1
+						}
 					}
 				}
 			}
@@ -152,7 +164,7 @@ func (o *healthOptions) run() error {
 		}
 
 	}
-	fmt.Fprintf(o.IOStreams.Out, "\nThe number of running instances that belong to this cluster in region %s is : %v \n", reg, totalRunning)
+	fmt.Fprintf(o.IOStreams.Out, "\nThe number of running worker, infra and master instances that belong to this cluster in region %s is : %v \n", reg, totalRunning)
 
 	if err != nil {
 		log.Fatalf("Error getting instances %v", err)
@@ -164,7 +176,7 @@ func (o *healthOptions) run() error {
 //This command implements the ocm describe clsuter call via osm-sdk.
 //This call requires the ocm API Token https://cloud.redhat.com/openshift/token be available in the OCM_TOKEN env variable.
 //Example: export OCM_TOKEN=$(jq -r .refresh_token ~/.ocm.json)
-func ocmDescribe(clusterID string) ([]string, string, int, error) {
+func ocmDescribe(clusterID string) ([]string, string, int, int, int, int, int, error) {
 	// Create a context:
 	ctx := context.Background()
 	//The ocm
@@ -197,12 +209,13 @@ func ocmDescribe(clusterID string) ([]string, string, int, error) {
 	fmt.Printf("\nCloud provider: %s\n", cloudProviderMessage)
 
 	if cloudProvider != "aws" {
-		return nil, "", 0, fmt.Errorf("This command is only supported for AWS clusters. The command is not supported for %s clusters.", cloudProviderMessage)
-
+		return nil, "", 0, 0, 0, 0, 0, fmt.Errorf("This command is only supported for AWS clusters. The command is not supported for %s clusters.", cloudProviderMessage)
 	}
-	totalNodes := cluster.Nodes().Compute() + cluster.Nodes().Infra() + cluster.Nodes().Master()
 
-	return cluster.Nodes().AvailabilityZones(), cluster.Name(), totalNodes, err
+	autoscaleMin := cluster.Nodes().AutoscaleCompute().MinReplicas()
+	autoscaleMax := cluster.Nodes().AutoscaleCompute().MaxReplicas()
+
+	return cluster.Nodes().AvailabilityZones(), cluster.Name(), cluster.Nodes().Compute(), cluster.Nodes().Infra(), cluster.Nodes().Master(), autoscaleMin, autoscaleMax, err
 }
 
 func GetTags(instance *ec2.Instance) []*ec2.Tag {
