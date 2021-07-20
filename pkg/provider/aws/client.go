@@ -30,6 +30,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/sts/stsiface"
 
 	"github.com/pkg/errors"
+	klog "k8s.io/klog/v2"
 )
 
 // AwsClientInput input for new aws client
@@ -135,8 +136,7 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 		}
 	}
 
-	return &AwsClient{
-		iamClient:           iam.New(sess),
+	awsClient := &AwsClient{iamClient: iam.New(sess),
 		ec2Client:           ec2.New(sess),
 		stsClient:           sts.New(sess),
 		s3Client:            s3.New(sess),
@@ -144,7 +144,24 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 		orgClient:           organizations.New(sess),
 		ceClient:            costexplorer.New(sess),
 		resClient:           resourcegroupstaggingapi.New(sess),
-	}, nil
+	}
+
+	// Validate the creds
+	_, err = awsClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
+	if aerr, ok := err.(awserr.Error); ok {
+		switch aerr.Code() {
+		case "InvalidClientTokenId":
+			if profile != "" {
+				klog.Error(fmt.Sprintf("Profile %s provided has invalid credentials. Please validate them and try again. Note this does not indicate a problem with the cluster's credentials", profile))
+			} else {
+				klog.Error("Credentials provided to osdctl are invalid. Please validate them and try again. Note this does not indicate a problem with the cluster's credentials")
+			}
+			return nil, errors.Wrap(err, "Could not create AWS session")
+		default:
+			return nil, errors.Wrap(err, "Could not create AWS session")
+		}
+	}
+	return awsClient, nil
 }
 
 // NewAwsClientWithInput creates an AWS client with input credentials
