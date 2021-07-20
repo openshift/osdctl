@@ -80,10 +80,24 @@ func (o *accountUnassignOptions) run() error {
 		return err
 	}
 
+	if o.payerAccount == "osd-staging-1" {
+		rootID = OSDStaging1RootID
+		destinationOU = OSDStaging1OuID
+	} else if o.payerAccount == "osd-staging-2" {
+		rootID = OSDStaging2RootID
+		destinationOU = OSDStaging2OuID
+	} else {
+		return fmt.Errorf("invalid payer account provided")
+	}
+
 	o.awsClient = awsClient
 
 	if o.accountID != "" {
 
+		err := o.checkForHiveNameTag(o.accountID)
+		if err != nil {
+			return err
+		}
 		accountIdList = append(accountIdList, o.accountID)
 
 	}
@@ -91,7 +105,7 @@ func (o *accountUnassignOptions) run() error {
 	if o.username != "" {
 		// Check that username is not a hive
 		if strings.HasPrefix(o.username, "hive") {
-			return fmt.Errorf("non-ccs account provided, only developers account accepted")
+			return ErrHiveNameProvided
 		}
 
 		accountUsername = o.username
@@ -110,41 +124,7 @@ func (o *accountUnassignOptions) run() error {
 	}
 
 	if response == "y" || response == "Y" {
-		// Delete login profile
-		err := o.deleteLoginProfile(accountUsername)
-		if err != nil {
-			return err
-		}
-		// Delete access keys
-		err = o.deleteAccessKeys(accountUsername)
-		if err != nil {
-			return err
-		}
-		// Delete signing certificates
-		err = o.deleteSigningCert(accountUsername)
-		if err != nil {
-			return err
-		}
-		// Delete policies
-		err = o.deletePolicies(accountUsername)
-		if err != nil {
-			return err
-		}
-		// Delete attached policies
-		err = o.deleteAttachedPolicies(accountUsername)
-		if err != nil {
-			return err
-		}
-		// Delete groups
-		err = o.deleteGroups(accountUsername)
-		if err != nil {
-			return err
-		}
-		// Delete user
-		err = o.deleteUser(accountUsername)
-		if err != nil {
-			return err
-		}
+
 		// loop through accounts list and untag and move them back into root OU
 		for _, id := range accountIdList {
 
@@ -153,18 +133,104 @@ func (o *accountUnassignOptions) run() error {
 				return err
 			}
 
-			destinationOU = "r-rs3h-ry0hn2l9"
-			rootID = "r-rs3h"
-			if o.payerAccount == "osd-staging-1" {
-				destinationOU = "ou-0wd6-z6tzkjek"
-				rootID = "ou-0wd6"
-			}
-
 			err = o.moveAccount(id, rootID, destinationOU)
 			if err != nil {
 				return err
 			}
 		}
+
+		if accountUsername != "" {
+			// Delete login profile
+			err := o.deleteLoginProfile(accountUsername)
+			if err != nil {
+				return err
+			}
+			// Delete access keys
+			err = o.deleteAccessKeys(accountUsername)
+			if err != nil {
+				return err
+			}
+			// Delete signing certificates
+			err = o.deleteSigningCert(accountUsername)
+			if err != nil {
+				return err
+			}
+			// Delete policies
+			err = o.deletePolicies(accountUsername)
+			if err != nil {
+				return err
+			}
+			// Delete attached policies
+			err = o.deleteAttachedPolicies(accountUsername)
+			if err != nil {
+				return err
+			}
+			// Delete groups
+			err = o.deleteGroups(accountUsername)
+			if err != nil {
+				return err
+			}
+			// Delete user
+			err = o.deleteUser(accountUsername)
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+	return nil
+}
+
+var ErrHiveNameProvided error = fmt.Errorf("non-ccs account provided, only developers account accepted")
+var ErrAccountPartiallyTagged error = fmt.Errorf("account is only partially tagged")
+
+func (o *accountUnassignOptions) checkForHiveNameTag(id string) error {
+
+	inputListTags := &organizations.ListTagsForResourceInput{
+		ResourceId: &id,
+	}
+	tags, err := o.awsClient.ListTagsForResource(inputListTags)
+	if err != nil {
+		return err
+	}
+
+	if len(tags.Tags) == 0 {
+		return ErrNoTagsOnAccount
+	}
+
+	for _, t := range tags.Tags {
+		if *t.Key == "owner" && strings.HasPrefix(*t.Value, "hive") {
+			return ErrHiveNameProvided
+		}
+	}
+	return nil
+}
+
+func (o *accountUnassignOptions) untagAccount(id string) error {
+	inputUntag := &organizations.UntagResourceInput{
+		ResourceId: &id,
+		TagKeys: []*string{
+			aws.String("owner"),
+			aws.String("claimed"),
+		},
+	}
+	_, err := o.awsClient.UntagResource(inputUntag)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (o *accountUnassignOptions) moveAccount(id string, rootID string, destinationOU string) error {
+	inputMove := &organizations.MoveAccountInput{
+		AccountId:           aws.String(id),
+		DestinationParentId: aws.String(rootID),
+		SourceParentId:      aws.String(destinationOU),
+	}
+
+	_, err := o.awsClient.MoveAccount(inputMove)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -334,35 +400,6 @@ func (o *accountUnassignOptions) deleteUser(user string) error {
 		UserName: &user,
 	}
 	_, err := o.awsClient.DeleteUser(inputDelUser)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (o *accountUnassignOptions) untagAccount(id string) error {
-	inputUntag := &organizations.UntagResourceInput{
-		ResourceId: &id,
-		TagKeys: []*string{
-			aws.String("owner"),
-			aws.String("claimed"),
-		},
-	}
-	_, err := o.awsClient.UntagResource(inputUntag)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (o *accountUnassignOptions) moveAccount(id string, rootID string, destinationOU string) error {
-	inputMove := &organizations.MoveAccountInput{
-		AccountId:           aws.String(id),
-		DestinationParentId: aws.String(rootID),
-		SourceParentId:      aws.String(destinationOU),
-	}
-
-	_, err := o.awsClient.MoveAccount(inputMove)
 	if err != nil {
 		return err
 	}
