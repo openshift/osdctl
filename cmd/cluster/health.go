@@ -13,6 +13,7 @@ import (
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	k8spkg "github.com/openshift/osdctl/pkg/k8s"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/klog"
@@ -170,8 +171,12 @@ func ocmDescribe(clusterID string) ([]string, string, int, error) {
 	//The ocm
 	token := os.Getenv("OCM_TOKEN")
 	if token == "" {
-		fmt.Fprintf(os.Stderr, "We don't have ocm token reading code yet. Run this before using this command:\n  export OCM_TOKEN=$(jq -r .refresh_token ~/.ocm.json)\n")
-		os.Exit(1)
+		ocmToken, err := utils.GetOCMAccessToken()
+		if err != nil {
+			log.Fatalf("OCM token not set. Please configure it using the OCM_TOKEN evnironment variable or the ocm cli")
+			os.Exit(1)
+		}
+		token = *ocmToken
 	}
 	connection, err := sdk.NewConnectionBuilder().
 		Tokens(token).
