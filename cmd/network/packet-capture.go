@@ -58,7 +58,7 @@ func newCmdPacketCapture(streams genericclioptions.IOStreams, flags *genericclio
 	packetCaptureCmd.Flags().StringVarP(&ops.namespace, "namespace", "n", packetCaptureNamespace, "Namespace to deploy Daemonset")
 	packetCaptureCmd.Flags().StringVarP(&ops.nodeLabelKey, "node-label-key", "", nodeLabelKey, "Node label key")
 	packetCaptureCmd.Flags().StringVarP(&ops.nodeLabelValue, "node-label-value", "", nodeLabelValue, "Node label value")
-	packetCaptureCmd.Flags().BoolVarP(&ops.singleNode, "single-node", "", singleNode, "Boolean value to deploy a single pod or a deamonset (default true)")
+	packetCaptureCmd.Flags().BoolVarP(&ops.singleNode, "single-node", "", singleNode, "Boolean value to deploy a single pod or a deamonset (default false)")
 
 	ops.startTime = time.Now()
 	return packetCaptureCmd
