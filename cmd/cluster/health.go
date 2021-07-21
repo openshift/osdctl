@@ -84,7 +84,9 @@ func (o *healthOptions) run() error {
 	// This call gets the availability zone of the cluster, as well as the expected number of nodes.
 	az, clusterName, nodesExpected, err := ocmDescribe(o.k8sclusterresourcefactory.ClusterID)
 	if az != nil {
-		fmt.Fprintf(o.IOStreams.Out, "\nThe expected number of nodes in availability zone(s) %s is : %v \n", az, nodesExpected)
+		fmt.Printf("AZs:        %s\n", az)
+		fmt.Printf("Nodes\n")
+		fmt.Printf("  Expected: %v\n", nodesExpected)
 	}
 	if err != nil {
 		return err
@@ -131,8 +133,6 @@ func (o *healthOptions) run() error {
 		return err
 	}
 
-	log.Println("Getting instances info:")
-
 	instances, err := awsJumpClient.DescribeInstances(&ec2.DescribeInstancesInput{})
 
 	totalRunning := 0
@@ -152,7 +152,7 @@ func (o *healthOptions) run() error {
 		}
 
 	}
-	fmt.Fprintf(o.IOStreams.Out, "\nThe number of running instances that belong to this cluster in region %s is : %v \n", reg, totalRunning)
+	fmt.Printf("  Running:  %v\n", totalRunning)
 
 	if err != nil {
 		log.Fatalf("Error getting instances %v", err)
@@ -193,8 +193,9 @@ func ocmDescribe(clusterID string) ([]string, string, int, error) {
 	cloudProvider := cluster.CloudProvider().ID()
 	cloudProviderMessage := strings.ToUpper(cloudProvider)
 
-	fmt.Printf("\nCluster %s - %s\n", cluster.Name(), cluster.ID())
-	fmt.Printf("\nCloud provider: %s\n", cloudProviderMessage)
+	fmt.Printf("ID:         %s\n", cluster.ID())
+	fmt.Printf("Name:       %s\n", cluster.Name())
+	fmt.Printf("Provider:   %s\n", cloudProviderMessage)
 
 	if cloudProvider != "aws" {
 		return nil, "", 0, fmt.Errorf("This command is only supported for AWS clusters. The command is not supported for %s clusters.", cloudProviderMessage)
