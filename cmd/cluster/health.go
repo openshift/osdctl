@@ -15,8 +15,10 @@ import (
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v2"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/klog"
+
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
@@ -80,12 +82,26 @@ func (o *healthOptions) complete(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
+type ClusterHealthCondensedObject struct {
+	ID       string   `yaml:"ID"`
+	Name     string   `yaml:"Name"`
+	Provider string   `yaml:"Provider"`
+	AZs      []string `yaml:"AZs"`
+	Nodes    struct {
+		Expected int `yaml:"Expected"`
+		Running  int `yaml:"Running"`
+	} `yaml:"Nodes"`
+}
+
+var healthObject = ClusterHealthCondensedObject{}
+
 func (o *healthOptions) run() error {
 
 	// This call gets the availability zone of the cluster, as well as the expected number of nodes.
 	az, clusterName, nodesExpected, err := ocmDescribe(o.k8sclusterresourcefactory.ClusterID)
 	if az != nil {
-		fmt.Fprintf(o.IOStreams.Out, "\nThe expected number of nodes in availability zone(s) %s is : %v \n", az, nodesExpected)
+		healthObject.AZs = az
+		healthObject.Nodes.Expected = nodesExpected
 	}
 	if err != nil {
 		return err
@@ -132,10 +148,7 @@ func (o *healthOptions) run() error {
 		return err
 	}
 
-	log.Println("Getting instances info:")
-
 	instances, err := awsJumpClient.DescribeInstances(&ec2.DescribeInstancesInput{})
-
 	totalRunning := 0
 
 	//Here we count the number of customer's running instances in the cluster in the given region. To decide if the instance belongs to the cluster we are checking the Name Tag on the instance.
@@ -153,12 +166,19 @@ func (o *healthOptions) run() error {
 		}
 
 	}
-	fmt.Fprintf(o.IOStreams.Out, "\nThe number of running instances that belong to this cluster in region %s is : %v \n", reg, totalRunning)
+	healthObject.Nodes.Running = totalRunning
 
 	if err != nil {
 		log.Fatalf("Error getting instances %v", err)
 		return err
 	}
+
+	d, err := yaml.Marshal(&healthObject)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+	fmt.Printf(string(d))
+
 	return nil
 }
 
@@ -202,8 +222,9 @@ func ocmDescribe(clusterID string) ([]string, string, int, error) {
 	cloudProvider := cluster.CloudProvider().ID()
 	cloudProviderMessage := strings.ToUpper(cloudProvider)
 
-	fmt.Printf("\nCluster %s - %s\n", cluster.Name(), cluster.ID())
-	fmt.Printf("\nCloud provider: %s\n", cloudProviderMessage)
+	healthObject.ID = cluster.ID()
+	healthObject.Name = cluster.Name()
+	healthObject.Provider = cloudProviderMessage
 
 	if cloudProvider != "aws" {
 		return nil, "", 0, fmt.Errorf("This command is only supported for AWS clusters. The command is not supported for %s clusters.", cloudProviderMessage)
