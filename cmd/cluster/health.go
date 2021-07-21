@@ -169,6 +169,10 @@ func ocmDescribe(clusterID string) ([]string, string, int, error) {
 	ctx := context.Background()
 	//The ocm
 	token := os.Getenv("OCM_TOKEN")
+	if token == "" {
+		fmt.Fprintf(os.Stderr, "We don't have ocm token reading code yet. Run this before using this command:\n  export OCM_TOKEN=$(jq -r .refresh_token ~/.ocm.json)\n")
+		os.Exit(1)
+	}
 	connection, err := sdk.NewConnectionBuilder().
 		Tokens(token).
 		Build()
