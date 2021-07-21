@@ -3,7 +3,6 @@ package network
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -99,9 +98,8 @@ func (o *packetCaptureOptions) complete(cmd *cobra.Command, _ []string) error {
 func (o *packetCaptureOptions) run() error {
 	if o.singleNode == false {
 		return o.runDaemonSet()
-	} else {
-		return o.runPod()
 	}
+	return o.runPod()
 }
 
 func (o *packetCaptureOptions) runDaemonSet() error {
@@ -134,7 +132,6 @@ func (o *packetCaptureOptions) runDaemonSet() error {
 }
 
 func (o *packetCaptureOptions) runPod() error {
-
 	log.Println("Ensuring Packet Capture Daemonset")
 	capturePod, err := ensurePacketCapturePod(o)
 	if err != nil {
@@ -174,7 +171,7 @@ func ensurePacketCaptureDaemonSet(o *packetCaptureOptions) (*appsv1.DaemonSet, e
 
 	if haveDs {
 		log.Println("Already have packet-capture daemonset")
-		return nil, errors.New(fmt.Sprintf("%s daemonset already exists in the %s namespace", o.name, o.namespace))
+		return nil, fmt.Errorf("%s daemonset already exists in the %s namespace", o.name, o.namespace)
 	}
 
 	err = createPacketCaptureDaemonSet(o, desired)
@@ -378,13 +375,10 @@ func desiredPacketCapturePod(o *packetCaptureOptions, key types.NamespacedName) 
 	}
 	capturePod.Name = key.Name
 	capturePod.Namespace = key.Namespace
-
 	capturePod.Labels = ls.MatchLabels
-
 	capturePod.Spec.NodeSelector = map[string]string{
 		o.nodeLabelKey: o.nodeLabelValue,
 	}
-
 	capturePod.Spec.Tolerations = []corev1.Toleration{
 		{
 			Effect:   "NoSchedule",
@@ -433,7 +427,6 @@ func desiredPacketCapturePod(o *packetCaptureOptions, key types.NamespacedName) 
 			},
 		},
 	}
-
 	return capturePod
 }
 
@@ -470,7 +463,7 @@ func ensurePacketCapturePod(o *packetCaptureOptions) (*corev1.Pod, error) {
 
 	if havePod {
 		log.Println("Already have packet-capture Pod")
-		return nil, errors.New(fmt.Sprintf("%s Pod already exists in the %s namespace", o.name, o.namespace))
+		return nil, fmt.Errorf("%s Pod already exists in the %s namespace", o.name, o.namespace)
 	}
 
 	err = createPacketCapturePod(o, desired)
@@ -490,6 +483,8 @@ func createPacketCapturePod(o *packetCaptureOptions, capturePod *corev1.Pod) err
 	}
 	return nil
 }
+
+// waitForPacketCapturePod creates the given Pod resource
 func waitForPacketCapturePod(o *packetCaptureOptions, capturePod *corev1.Pod) error {
 	pollErr := wait.PollImmediate(10*time.Second, time.Duration(600)*time.Second, func() (bool, error) {
 		var err error
