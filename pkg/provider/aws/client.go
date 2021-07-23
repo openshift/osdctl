@@ -85,6 +85,8 @@ type Client interface {
 	RequestServiceQuotaIncrease(*servicequotas.RequestServiceQuotaIncreaseInput) (*servicequotas.RequestServiceQuotaIncreaseOutput, error)
 
 	// Organizations
+	CreateAccount(input *organizations.CreateAccountInput) (*organizations.CreateAccountOutput, error)
+	DescribeCreateAccountStatus(input *organizations.DescribeCreateAccountStatusInput) (*organizations.DescribeCreateAccountStatusOutput, error)
 	ListAccounts(input *organizations.ListAccountsInput) (*organizations.ListAccountsOutput, error)
 	ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error)
 	ListOrganizationalUnitsForParent(input *organizations.ListOrganizationalUnitsForParentInput) (*organizations.ListOrganizationalUnitsForParentOutput, error)
@@ -311,6 +313,14 @@ func (c *AwsClient) ListServiceQuotas(input *servicequotas.ListServiceQuotasInpu
 
 func (c *AwsClient) RequestServiceQuotaIncrease(input *servicequotas.RequestServiceQuotaIncreaseInput) (*servicequotas.RequestServiceQuotaIncreaseOutput, error) {
 	return c.servicequotasClient.RequestServiceQuotaIncrease(input)
+}
+
+func (c *AwsClient) CreateAccount(input *organizations.CreateAccountInput) (*organizations.CreateAccountOutput, error) {
+	return c.orgClient.CreateAccount(input)
+}
+
+func (c *AwsClient) DescribeCreateAccountStatus(input *organizations.DescribeCreateAccountStatusInput) (*organizations.DescribeCreateAccountStatusOutput, error) {
+	return c.orgClient.DescribeCreateAccountStatus(input)
 }
 
 func (c *AwsClient) ListOrganizationalUnitsForParent(input *organizations.ListOrganizationalUnitsForParentInput) (*organizations.ListOrganizationalUnitsForParentOutput, error) {
