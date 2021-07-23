@@ -1,7 +1,6 @@
 package servicelog
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -9,7 +8,7 @@ import (
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
-	"github.com/openshift/osdctl/internal/servicelog"
+	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -25,7 +24,6 @@ var listCmd = &cobra.Command{
 			cmd.Help()
 			return fmt.Errorf("cluster-identifier was not provided. please provide a cluster id, UUID, or name")
 		}
-		clusterId := args[0]
 
 		// Create an OCM client to talk to the cluster API
 		// the user has to be logged in (e.g. 'ocm login')
@@ -36,25 +34,19 @@ var listCmd = &cobra.Command{
 			}
 		}()
 
-		// Use the OCM client to create the POST request
-		request := createClusterRequest(ocmClient, clusterId)
-		response := sendRequest(request)
-		clusterExternalId, err := extractExternalIdFromResponse(response)
-		if err != nil {
-			cmd.Help()
-			return err
-		}
+		// Use the OCM client to retrieve clusters
+		clusters := getClusters(ocmClient, args)
 
 		// send it as logservice and validate the response
-		request = createListRequest(ocmClient, clusterExternalId, serviceLogListAllMessagesFlag)
-		response = sendRequest(request)
+		for _, cluster := range clusters {
+			response := sendRequest(createListRequest(ocmClient, cluster.ExternalID(), serviceLogListAllMessagesFlag))
 
-		err = dump.Pretty(os.Stdout, response.Bytes())
-		if err != nil {
-			cmd.Help()
-			return err
+			err := dump.Pretty(os.Stdout, response.Bytes())
+			if err != nil {
+				cmd.Help()
+				return err
+			}
 		}
-
 		return nil
 	},
 }
@@ -68,44 +60,18 @@ func init() {
 	listCmd.Flags().BoolVarP(&serviceLogListAllMessagesFlag, "all-messages", "A", serviceLogListAllMessagesFlag, "Toggle if we should see all of the messages or only SRE-P specific ones")
 }
 
-func extractExternalIdFromResponse(response *sdk.Response) (string, error) {
-	status := response.Status()
-	body := response.Bytes()
-
-	if status >= 400 {
-		validateBadResponse(body)
-		log.Fatalf("Failed to list message because of %q", BadReply.Reason)
-		return "", nil
+func getClusters(ocmClient *sdk.Connection, clusterIds []string) []*v1.Cluster {
+	for i, id := range clusterIds {
+		clusterIds[i] = fmt.Sprintf(`display_name like '%[1]s' or name like '%[1]s' or id like '%[1]s' or external_id like '%[1]s'`, id)
+		clusterIds[i] = strings.TrimSpace(clusterIds[i])
 	}
 
-	validateGoodResponse(body)
-	clusterListGoodReply := servicelog.ClusterListGoodReply{}
-	err := json.Unmarshal(body, &clusterListGoodReply)
+	clusters, err := applyFilters(ocmClient, []string{strings.Join(clusterIds, " or ")})
 	if err != nil {
-		err = fmt.Errorf("cannot parse good clusterlist response: %w", err)
-		return "", err
+		log.Fatalf("Error while retrieving cluster(s) from ocm: %[1]s", err)
 	}
 
-	if clusterListGoodReply.Total != 1 || len(clusterListGoodReply.Items) != 1 {
-		return "", fmt.Errorf("could not find an exact match for the clustername")
-	}
-
-	return clusterListGoodReply.Items[0].ExternalID, nil
-}
-
-func createClusterRequest(ocmClient *sdk.Connection, clusterId string) *sdk.Request {
-
-	searchString := fmt.Sprintf(`search=display_name like '%[1]s' or name like '%[1]s' or id like '%[1]s' or external_id like '%[1]s'`, clusterId)
-	searchString = strings.TrimSpace(searchString)
-	request := ocmClient.Get()
-	err := arguments.ApplyPathArg(request, "/api/clusters_mgmt/v1/clusters/")
-	if err != nil {
-		log.Fatalf("Can't parse API path '%s': %v\n", targetAPIPath, err)
-	}
-
-	arguments.ApplyParameterFlag(request, []string{searchString})
-
-	return request
+	return clusters
 }
 
 func createListRequest(ocmClient *sdk.Connection, clusterId string, allMessages bool) *sdk.Request {

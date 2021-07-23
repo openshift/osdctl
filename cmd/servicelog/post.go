@@ -1,34 +1,37 @@
 package servicelog
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/url"
 	"os"
-	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
+	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/internal/utils"
+	"github.com/openshift/osdctl/pkg/printer"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
 var (
-	GoodReply servicelog.GoodReply
-	BadReply  servicelog.BadReply
-	Message   servicelog.Message
-	template  string
-	isDryRun  bool
+	Message         servicelog.Message
+	template        string
+	filterFiles     []string // Path to filter file
+	filtersFromFile string   // Contents of filterFiles
+	isDryRun        bool
+	skipPrompts     bool
 )
 
 const (
 	defaultTemplate = ""
-	modifiedJSON    = "modified-template.json"
 )
 
 // postCmd represents the post command
@@ -38,21 +41,17 @@ var postCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 
 		parseUserParameters() // parse all the '-p' user flags
+		readFilterFile()      // parse the ocm filters in file provided via '-f' flag
+		readTemplate()        // parse the given JSON template provided via '-t' flag
 
-		readTemplate() // parse the given JSON template provided via '-t' flag
-
-		// For every '-p' flag, replace its related placeholder in the template
-		for k, v := range templateParams {
-			replaceFlags(userParameterValues[k], "", userParameterNames[k], userParameterNames[k], "p", v)
+		// For every '-p' flag, replace its related placeholder in the template & filterFiles
+		for k := range userParameterNames {
+			replaceFlags(userParameterNames[k], userParameterValues[k])
 		}
 
-		// Check if there are any remaining placeholders in the template that are not replaced by a parameter
-		checkLeftovers()
-
-		dir := tempDir()
-		defer cleanup(dir)
-
-		newData := modifyTemplate(dir)
+		// Check if there are any remaining placeholders in the template that are not replaced by a parameter,
+		// excluding '${CLUSTER_UUID}' which will be replaced for each cluster later
+		checkLeftovers([]string{"${CLUSTER_UUID}"})
 
 		// Create an OCM client to talk to the cluster API
 		// the user has to be logged in (e.g. 'ocm login')
@@ -63,25 +62,48 @@ var postCmd = &cobra.Command{
 			}
 		}()
 
-		// Use the OCM client to create the POST request
-		// send it as logservice and validate the response
-		request := createPostRequest(ocmClient, newData)
-
-		// If this is a dry-run, print the populated template
-		// but don't proceed further.
-		if isDryRun {
-			if err := printTemplate(newData); err != nil {
-				log.Errorf("Cannot read generated template: %q", err)
+		// Retrieve matching clusters
+		if filtersFromFile != "" {
+			if len(filterParams) != 0 {
+				log.Warnf("Search queries were passed using both the '-q' and '-f' flags. This will apply logical AND between the queries, potentially resulting in no matches")
 			}
+			filters := strings.Join(strings.Split(strings.TrimSpace(filtersFromFile), "\n"), " ")
+			filterParams = append(filterParams, filters)
+		}
+
+		clusters, err := applyFilters(ocmClient, filterParams)
+
+		if err != nil {
+			log.Fatalf("Cannot retrieve clusters: %q", err)
+		} else if len(clusters) < 1 {
+			log.Fatalf("No clusters match the given parameters.")
+		}
+
+		log.Infoln("The following clusters match the given parameters:")
+		if err := printClusters(clusters); err != nil {
+			log.Fatalf("Could not print matching clusters: %q", err)
+		}
+
+		log.Infoln("The following template will be sent:")
+		if err := printTemplate(); err != nil {
+			log.Errorf("Cannot read generated template: %q", err)
+		}
+
+		// If this is a dry-run, don't proceed further.
+		if isDryRun {
 			return
 		}
 
-		response := sendRequest(request)
-		check(response, dir)
+		if !skipPrompts {
+			if err = confirmSend(); err != nil {
+				log.Errorf("Error confirming message: %q", err)
+			}
+		}
 
-		err := dump.Pretty(os.Stdout, response.Bytes())
-		if err != nil {
-			log.Errorf("cannot print post command: %q", err)
+		for _, cluster := range clusters {
+			request, clusterMessage := createPostRequest(ocmClient, cluster.ExternalID())
+			response := sendRequest(request)
+			check(response, clusterMessage)
 		}
 	},
 }
@@ -91,54 +113,79 @@ func init() {
 	postCmd.Flags().StringVarP(&template, "template", "t", defaultTemplate, "Message template file or URL")
 	postCmd.Flags().StringArrayVarP(&templateParams, "param", "p", templateParams, "Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.")
 	postCmd.Flags().BoolVarP(&isDryRun, "dry-run", "d", false, "Dry-run - print the service log about to be sent but don't send it.")
+	postCmd.Flags().StringArrayVarP(&filterParams, "query", "q", filterParams, "Specify a search query (eg. -q \"name like foo\") for a bulk-post to matching clusters.")
+	postCmd.Flags().BoolVarP(&skipPrompts, "yes", "y", false, "Skips all prompts.")
+	postCmd.Flags().StringArrayVarP(&filterFiles, "query-file", "f", filterFiles, "File containing search queries to apply. All lines in the file will be concatenated into a single query. If this flag is called multiple times, all every file's search query will be combined with logical AND.")
 }
 
 // parseUserParameters parse all the '-p FOO=BAR' parameters and checks for syntax errors
 func parseUserParameters() {
-	for k, v := range templateParams {
+	var queries []string // interpret all '-p CLUSTER_UUID' parameters as queries to be made to the ocmClient
+	for _, v := range templateParams {
 		if !strings.Contains(v, "=") {
 			log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
 		}
 
-		userParameterNames = append(userParameterNames, fmt.Sprintf("${%v}", strings.Split(v, "=")[0]))
-		userParameterValues = append(userParameterValues, strings.Split(v, "=")[1])
-
-		if userParameterValues[k] == "" {
+		param := strings.Split(v, "=")
+		if param[0] == "" || param[1] == "" {
 			log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
 		}
+
+		if param[0] != "CLUSTER_UUID" {
+			userParameterNames = append(userParameterNames, fmt.Sprintf("${%v}", param[0]))
+			userParameterValues = append(userParameterValues, param[1])
+		} else {
+			queries = append(queries, generateQuery(param[1]))
+		}
+	}
+
+	if len(queries) != 0 {
+		if len(filterParams) != 0 {
+			log.Warnf("At least one $CLUSTER_UUID parameter was passed with the '-q' flag. This will apply logical AND between the search query and the cluster(s) given, potentially resulting in no matches")
+		}
+		filterParams = append(filterParams, strings.Join(queries, " or "))
 	}
 }
 
-// accessTemplate checks if the provided template is currently accessible and returns an error
-func accessTemplate(template string) (err error) {
-
-	if template == "" {
-		log.Errorf("Template file is not provided. Use '-t' to fix this.")
+func confirmSend() error {
+	fmt.Print("Continue? (y/N): ")
+	reader := bufio.NewReader(os.Stdin)
+	responseBytes, _, err := reader.ReadLine()
+	if err != nil {
 		return err
 	}
+	response := strings.ToUpper(string(responseBytes))
 
-	if utils.FileExists(template) {
-		return err
+	if response != "Y" && response != "YES" {
+		if response != "N" && response != "NO" && response != "" {
+			log.Fatal("Invalid response, expected 'YES' or 'Y' (case-insensitive). ")
+		}
+		log.Fatalf("Exiting...")
 	}
+	return nil
+}
 
-	if utils.FolderExists(template) {
-		log.Errorf("the provided template %q is a directory, not a file!", template)
+// accessTemplate returns the contents of a local file or url, and any errors encountered
+func accessFile(filePath string) ([]byte, error) {
+	if utils.FileExists(filePath) {
+		file, err := ioutil.ReadFile(filePath) // template is file on the disk
+		if err != nil {
+			return file, fmt.Errorf("Cannot read the file.\nError: %q\n", err)
+		}
+		return file, nil
 	}
-
-	if utils.IsValidUrl(template) {
-		urlPage, _ := url.Parse(template)
+	if utils.FolderExists(filePath) {
+		return nil, fmt.Errorf("the provided path %q is a directory, not a file!", filePath)
+	}
+	if utils.IsValidUrl(filePath) {
+		urlPage, _ := url.Parse(filePath)
 		if err := utils.IsOnline(*urlPage); err != nil {
-			log.Errorf("host %q is not accessible", template)
+			return nil, fmt.Errorf("host %q is not accessible", filePath)
 		} else {
-			HTMLBody, err = utils.CurlThis(urlPage.String())
-			if err == nil {
-				isURL = true
-			}
-			return err
+			return utils.CurlThis(urlPage.String())
 		}
 	}
-	return fmt.Errorf("cannot read the template %q", template)
-
+	return nil, fmt.Errorf("cannot read the file %q", filePath)
 }
 
 // parseTemplate reads the template file into a JSON struct
@@ -146,166 +193,133 @@ func parseTemplate(jsonFile []byte) error {
 	return json.Unmarshal(jsonFile, &Message)
 }
 
-func parseGoodReply(jsonFile []byte) error {
-	return json.Unmarshal(jsonFile, &GoodReply)
-}
-
-func parseBadReply(jsonFile []byte) error {
-	return json.Unmarshal(jsonFile, &BadReply)
-}
-
+// readTemplate loads the template into the Message variable
 func readTemplate() {
-	if err := accessTemplate(template); err == nil { // check if this URL or file and if we can access it
-		var file []byte
-		if isURL {
-			// template is URL on the web
-			file = HTMLBody
-		} else {
-			// template is file on the disk
-			file, err = ioutil.ReadFile(template) // this works only for files
-			if err != nil {
-				log.Fatalf("Cannot not read the file.\nError: %q\n", err)
-			}
-		}
+	if template == defaultTemplate {
+		log.Fatalf("Template file is not provided. Use '-t' to fix this.")
+	}
 
-		if err = parseTemplate(file); err != nil {
-			log.Fatalf("Cannot not parse the JSON template.\nError: %q\n", err)
-		}
-	} else {
+	file, err := accessFile(template)
+	if err != nil { // check if this URL or file and if we can access it
 		log.Fatal(err)
 	}
-}
 
-func checkLeftovers() {
-	unusedParameters, found := Message.FindLeftovers()
-	if found {
-		for _, v := range unusedParameters {
-			regex := strings.NewReplacer("${", "", "}", "")
-			log.Errorf("The selected template is using '%s' parameter, but '--%s' flag is not set for this one. Use '-%s %v=\"FOOBAR\"' to fix this.", v, "param", "p", regex.Replace(v))
-		}
-		if numberOfMissingParameters := len(unusedParameters); numberOfMissingParameters == 1 {
-			log.Fatal("Please define this missing parameter properly.")
-		} else {
-			log.Fatalf("Please define all %v missing parameters properly.", numberOfMissingParameters)
-		}
+	if err = parseTemplate(file); err != nil {
+		log.Fatalf("Cannot not parse the JSON template.\nError: %q\n", err)
 	}
 }
 
-func replaceFlags(flagName, flagDefaultValue, flagParameter, flagLongName, flagShorthand, parameter string) {
-	if err := strings.Compare(flagName, flagDefaultValue); err == 0 {
-		// The user didn't set the flag. Check if the template is using the flag.
-		if found := Message.SearchFlag(flagParameter); found == true {
-			log.Fatalf("The selected template is using '%s' parameter, but '%s' flag was not set. Use '-%s' to fix this.", flagParameter, flagLongName, flagShorthand)
-		}
-	} else {
-		// The user set the flag. Check if the template is using the flag.
-		if found := Message.SearchFlag(flagParameter); found == false {
-			log.Fatalf("The selected template is not using '%s' parameter, but '--%s' flag was set. Do not use '-%s %s' to fix this.", flagParameter, "param", flagShorthand, parameter)
-		}
-		Message.ReplaceWithFlag(flagParameter, flagName)
+func readFilterFile() {
+	if len(filterFiles) < 1 {
+		// No filterFiles specified in args
+		return
 	}
-}
 
-func tempDir() (dir string) {
-	if dirPath, err := os.Getwd(); err != nil {
-		log.Error(err)
-	} else {
-		dir, err = ioutil.TempDir(dirPath, "servicelog-")
+	for _, filterFile := range filterFiles {
+		fileContents, err := accessFile(filterFile)
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		if filtersFromFile == "" {
+			filtersFromFile = "(" + strings.TrimSpace(string(fileContents)) + ")"
+		} else {
+			filtersFromFile = filtersFromFile + " and (" + strings.TrimSpace(string(fileContents)) + ")"
+		}
 	}
-	return dir
 }
 
-func modifyTemplate(dir string) (newData string) {
-	// Write the modified file
-	newData = filepath.Join(dir, modifiedJSON)
-	if err := utils.CreateFile(newData); err == nil {
-		file, err := os.Create(newData)
-		if err != nil {
-			log.Fatalf("Cannot overwrite file %q", err)
+// Simple helper to determine if a string is present in a slice
+func contains(a []string, s string) bool {
+	for _, v := range a {
+		if v == s {
+			return true
 		}
-		defer file.Close()
-
-		// Create the corrected JSON
-		s, _ := json.MarshalIndent(Message, "", "\t")
-		if _, err := file.WriteString(string(s)); err != nil {
-			log.Fatalf("Cannot write the new modified template %q", err)
-		}
-	} else {
-		log.Fatalf("Cannot create file %q", err)
 	}
-	return newData
+	return false
 }
 
-func printTemplate(filePath string) error {
-	contents, err := ioutil.ReadFile(filePath)
+func FindLeftovers(s string) (matches []string) {
+	r := regexp.MustCompile(`\${[^{}]*}`)
+	matches = r.FindAllString(s, -1)
+	return matches
+}
+
+func checkLeftovers(excludes []string) {
+	unusedParameters, _ := Message.FindLeftovers()
+	unusedParameters = append(unusedParameters, FindLeftovers(filtersFromFile)...)
+
+	var numberOfMissingParameters int
+	for _, v := range unusedParameters {
+		// Ignore parameters in the exclude list, ie ${CLUSTER_UUID}, which will be replaced later for each cluster a servicelog is sent to
+		if !contains(excludes, v) {
+			numberOfMissingParameters++
+			regex := strings.NewReplacer("${", "", "}", "")
+			log.Errorf("The one of the template files is using '%s' parameter, but '--param' flag is not set for this one. Use '-p %v=\"FOOBAR\"' to fix this.", v, regex.Replace(v))
+		}
+	}
+	if numberOfMissingParameters == 1 {
+		log.Fatal("Please define this missing parameter properly.")
+	} else if numberOfMissingParameters > 1 {
+		log.Fatalf("Please define all %v missing parameters properly.", numberOfMissingParameters)
+	}
+}
+
+func replaceFlags(flagName string, flagValue string) {
+	if flagValue == "" {
+		log.Fatalf("The selected template is using '%[1]s' parameter, but '%[1]s' flag was not set. Use '-p %[1]s=\"FOOBAR\"' to fix this.", flagName)
+	}
+
+	found := false
+	if Message.SearchFlag(flagName) {
+		found = true
+		Message.ReplaceWithFlag(flagName, flagValue)
+	}
+	if strings.Contains(filtersFromFile, flagName) {
+		found = true
+		filtersFromFile = strings.ReplaceAll(filtersFromFile, flagName, flagValue)
+	}
+
+	if !found {
+		log.Fatalf("The selected template is not using '%s' parameter, but '--param' flag was set. Do not use '-p %s=%s' to fix this.", flagName, flagName, flagValue)
+	}
+}
+
+func printClusters(clusters []*v1.Cluster) (err error) {
+	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+	table.AddRow([]string{"Name", "ID", "State", "Version", "Cloud Provider", "Region"})
+	for _, cluster := range clusters {
+		table.AddRow([]string{cluster.DisplayName(), cluster.ID(), string(cluster.State()), cluster.OpenshiftVersion(), cluster.CloudProvider().ID(), cluster.Region().ID()})
+	}
+
+	// Add empty row for readability
+	table.AddRow([]string{})
+	return table.Flush()
+}
+
+func printTemplate() (err error) {
+	exampleMessage, err := json.Marshal(Message)
 	if err != nil {
 		return err
 	}
-	return dump.Pretty(os.Stdout, contents)
+	return dump.Pretty(os.Stdout, exampleMessage)
 }
 
-func createPostRequest(ocmClient *sdk.Connection, newData string) *sdk.Request {
+func createPostRequest(ocmClient *sdk.Connection, clusterId string) (request *sdk.Request, clusterMessage servicelog.Message) {
 	// Create and populate the request:
-	request := ocmClient.Post()
+	request = ocmClient.Post()
 	err := arguments.ApplyPathArg(request, targetAPIPath)
 	if err != nil {
 		log.Fatalf("Can't parse API path '%s': %v\n", targetAPIPath, err)
 	}
-	var empty []string
-	arguments.ApplyParameterFlag(request, empty)
-	arguments.ApplyHeaderFlag(request, empty)
-	err = arguments.ApplyBodyFlag(request, newData)
+
+	clusterMessage = Message
+	clusterMessage.ReplaceWithFlag("${CLUSTER_UUID}", clusterId)
+	messageBytes, err := json.Marshal(clusterMessage)
 	if err != nil {
-		log.Fatalf("Can't read body: %v", err)
-	}
-	return request
-}
-
-func validateGoodResponse(body []byte) {
-	if err := parseGoodReply(body); err != nil {
-		log.Fatalf("Cannot not parse the JSON template.\nError: %q\n", err)
+		log.Fatalf("Cannot marshal template to json: %s", err)
 	}
 
-	severity := GoodReply.Severity
-	if severity != Message.Severity {
-		log.Fatalf("Message sent, but wrong severity information was passed (wanted %q, got %q)", Message.Severity, severity)
-	}
-	serviceName := GoodReply.ServiceName
-	if serviceName != Message.ServiceName {
-		log.Fatalf("Message sent, but wrong service_name information was passed (wanted %q, got %q)", Message.ServiceName, serviceName)
-	}
-	clusteruuid := GoodReply.ClusterUUID
-	if clusteruuid != Message.ClusterUUID {
-		log.Fatalf("Message sent, but to different cluster (wanted %q, got %q)", Message.ClusterUUID, clusteruuid)
-	}
-	summary := GoodReply.Summary
-	if summary != Message.Summary {
-		log.Fatalf("Message sent, but wrong summary information was passed (wanted %q, got %q)", Message.Summary, summary)
-	}
-	description := GoodReply.Description
-	if description != Message.Description {
-		log.Fatalf("Message sent, but wrong description information was passed (wanted %q, got %q)", Message.Description, description)
-	}
-	if ok := json.Valid(body); !ok {
-		log.Fatalf("Server returned invalid JSON")
-	}
-}
-
-func validateBadResponse(body []byte) {
-	if ok := json.Valid(body); !ok {
-		log.Errorf("Server returned invalid JSON")
-	}
-
-	if err := parseBadReply(body); err != nil {
-		log.Fatalf("Cannot parse the error JSON message %q", err)
-	}
-}
-
-func cleanup(dir string) {
-	if err := os.RemoveAll(dir); err != nil {
-		log.Errorf("Cannot clean up %q", err)
-	}
+	request.Bytes(messageBytes)
+	return request, clusterMessage
 }
