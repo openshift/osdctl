@@ -201,38 +201,18 @@ func (o *accountAssignOptions) buildAccount(seedVal int64) (string, error) {
 
 	orgOutput, orgErr := o.createAccount(seedVal)
 	if orgErr != nil {
-		// If email already exists retry up to 100 times
-		if orgErr == ErrEmailAlreadyExist {
-			err := retry(100, 2*time.Second, func() (err error) {
-				orgOutput, err = o.createAccount(seedVal)
-				return
-			})
-			if err != nil {
-				return "", err
+
+		// If email already exists retry until a new email is generated
+		for orgErr == ErrEmailAlreadyExist {
+			orgOutput, orgErr = o.createAccount(seedVal)
+			if orgErr == nil {
+				return *orgOutput.CreateAccountStatus.AccountId, nil
 			}
 		}
 		return "", orgErr
 	}
 
-	fmt.Println("account created successfully")
-
 	return *orgOutput.CreateAccountStatus.AccountId, nil
-}
-
-func retry(attempts int, sleep time.Duration, callback func() error) (err error) {
-	for i := 0; ; i++ {
-		err = callback()
-		if err == nil {
-			return
-		}
-
-		if i >= (attempts - 1) {
-			break
-		}
-		time.Sleep(sleep)
-
-	}
-	return fmt.Errorf("after %d attempts, last error: %s", attempts, err)
 }
 
 var ErrAwsAccountLimitExceeded error = fmt.Errorf("ErrAwsAccountLimitExceeded")
@@ -245,7 +225,7 @@ func (o *accountAssignOptions) createAccount(seedVal int64) (*organizations.Desc
 
 	rand.Seed(seedVal)
 	randStr := RandomString(6)
-	accountName := "osd-creds-mgmt" + "+" + randStr
+	accountName := "osd-creds-mgmt+" + randStr
 	email := accountName + "@redhat.com"
 
 	createInput := &organizations.CreateAccountInput{

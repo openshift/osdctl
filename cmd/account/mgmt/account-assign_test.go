@@ -96,16 +96,27 @@ func TestFindUntaggedAccount(t *testing.T) {
 			if test.name == "test for new account created" {
 				rand.Seed(seed)
 				randStr := RandomString(6)
-				accountName := "osd-creds-mgmt" + "+" + randStr
+				accountName := "osd-creds-mgmt+" + randStr
 				email := accountName + "@redhat.com"
-				awsOutputCreate := &organizations.CreateAccountOutput{}
+				createId := "car-random1234"
+
 				mockAWSClient.EXPECT().CreateAccount(&organizations.CreateAccountInput{
-					AccountName: aws.String(accountName),
-					Email:       aws.String(email),
-				}).Return(
-					awsOutputCreate,
-					nil,
-				)
+					AccountName: &accountName,
+					Email:       &email,
+				}).Return(&organizations.CreateAccountOutput{
+					CreateAccountStatus: &organizations.CreateAccountStatus{Id: &createId},
+				}, nil)
+
+				expectedOutput := "SUCCEEDED"
+
+				awsDescribeOutput := &organizations.DescribeCreateAccountStatusOutput{
+					CreateAccountStatus: &organizations.CreateAccountStatus{
+						State: &expectedOutput,
+					}}
+
+				mockAWSClient.EXPECT().DescribeCreateAccountStatus(&organizations.DescribeCreateAccountStatusInput{
+					CreateAccountRequestId: &createId,
+				}).Return(awsDescribeOutput, nil)
 			}
 
 			if test.tags != nil {
@@ -153,9 +164,9 @@ func TestCreateAccount(t *testing.T) {
 	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
 
 	seed := int64(1)
-
+	rand.Seed(seed)
 	randStr := RandomString(6)
-	accountName := "osd-creds-mgmt" + "+" + randStr
+	accountName := "osd-creds-mgmt+" + randStr
 	email := accountName + "@redhat.com"
 
 	createId := "car-random1234"
@@ -167,7 +178,12 @@ func TestCreateAccount(t *testing.T) {
 		CreateAccountStatus: &organizations.CreateAccountStatus{Id: &createId},
 	}, nil)
 
-	awsDescribeOutput := &organizations.DescribeCreateAccountStatusOutput{}
+	expectedOutput := "SUCCEEDED"
+
+	awsDescribeOutput := &organizations.DescribeCreateAccountStatusOutput{
+		CreateAccountStatus: &organizations.CreateAccountStatus{
+			State: &expectedOutput,
+		}}
 
 	mockAWSClient.EXPECT().DescribeCreateAccountStatus(&organizations.DescribeCreateAccountStatusInput{
 		CreateAccountRequestId: &createId,
@@ -179,7 +195,7 @@ func TestCreateAccount(t *testing.T) {
 	if err != nil {
 		t.Error("failed to create account")
 	}
-	if returnVal.CreateAccountStatus.State != aws.String("SUCCEEDED") {
+	if returnVal.CreateAccountStatus.State != &expectedOutput {
 		t.Error("failed to create account")
 	}
 }
