@@ -2,9 +2,12 @@ package mgmt
 
 import (
 	"fmt"
+	"math/rand"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/organizations"
+
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
@@ -29,6 +32,9 @@ type accountAssignOptions struct {
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
 }
+
+type AccountCreate func(seedVal int64) (*organizations.DescribeCreateAccountStatusOutput, error)
+type AccountBuild func(seedVal int64, accountCreateFunc AccountCreate) (string, error)
 
 func newAccountAssignOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *accountAssignOptions {
 	return &accountAssignOptions{
@@ -83,7 +89,7 @@ func (o *accountAssignOptions) run() error {
 		rootID = OSDStaging2RootID
 		destinationOU = OSDStaging2OuID
 	} else {
-		return fmt.Errorf("Invalid payer account provided")
+		return fmt.Errorf("invalid payer account provided")
 	}
 	//Instantiate aws client
 	awsClient, err := awsprovider.NewAwsClient(o.payerAccount, "us-east-1", "")
@@ -92,7 +98,8 @@ func (o *accountAssignOptions) run() error {
 	}
 
 	o.awsClient = awsClient
-	accountAssignID, err = o.findUntaggedAccount(rootID)
+	seed := time.Now().UnixNano()
+	accountAssignID, err = o.findUntaggedAccount(seed, rootID, buildAccount)
 	if err != nil {
 		return err
 	}
@@ -113,9 +120,11 @@ func (o *accountAssignOptions) run() error {
 }
 
 var ErrNoUntaggedAccounts = fmt.Errorf("no untagged accounts available")
-var ErrNoAccountsInRoot = fmt.Errorf("no accounts available")
 
-func (o *accountAssignOptions) findUntaggedAccount(rootOu string) (string, error) {
+func (o *accountAssignOptions) findUntaggedAccount(seedVal int64, rootOu string, buildAccountFunc AccountBuild) (string, error) {
+
+	var accountAssignID string
+
 	//List accounts that are not in any OU
 	input := &organizations.ListAccountsForParentInput{
 		ParentId: &rootOu,
@@ -124,12 +133,18 @@ func (o *accountAssignOptions) findUntaggedAccount(rootOu string) (string, error
 	if err != nil {
 		return "", err
 	}
+
 	if len(accounts.Accounts) == 0 {
-		return "", ErrNoAccountsInRoot
+		fmt.Println("No accounts available to assign")
+
+		accountAssignID, err := buildAccountFunc(seedVal, o.createAccount)
+		if err != nil {
+			return "", err
+		}
+		return accountAssignID, nil
 	}
 
 	// Loop through accounts and check that it's untagged and assign ID to user
-	var accountAssignID string
 	for _, a := range accounts.Accounts {
 
 		inputListTags := &organizations.ListTagsForResourceInput{
@@ -181,6 +196,100 @@ func (o *accountAssignOptions) tagAccount(accountIdInput string) error {
 		return err
 	}
 	return nil
+}
+
+func buildAccount(seedVal int64, accountCreateFunc AccountCreate) (string, error) {
+
+	fmt.Println("Creating account")
+	var newAccountId string
+
+	orgOutput, orgErr := accountCreateFunc(seedVal)
+	if orgErr != nil {
+
+		// If email already exists retry until a new email is generated
+		for orgErr == ErrEmailAlreadyExist {
+			orgOutput, orgErr = accountCreateFunc(seedVal)
+			if orgErr == nil {
+				newAccountId = *orgOutput.CreateAccountStatus.AccountId
+				return newAccountId, nil
+			}
+		}
+		return "", orgErr
+	}
+
+	newAccountId = *orgOutput.CreateAccountStatus.AccountId
+	return newAccountId, nil
+}
+
+var ErrAwsAccountLimitExceeded error = fmt.Errorf("ErrAwsAccountLimitExceeded")
+var ErrEmailAlreadyExist error = fmt.Errorf("ErrEmailAlreadyExist")
+var ErrAwsInternalFailure error = fmt.Errorf("ErrAwsInternalFailure")
+var ErrAwsTooManyRequests error = fmt.Errorf("ErrAwsTooManyRequests")
+var ErrAwsFailedCreateAccount error = fmt.Errorf("ErrAwsFailedCreateAccount")
+
+func (o *accountAssignOptions) createAccount(seedVal int64) (*organizations.DescribeCreateAccountStatusOutput, error) {
+
+	rand.Seed(seedVal)
+	randStr := RandomString(6)
+	accountName := "osd-creds-mgmt+" + randStr
+	email := accountName + "@redhat.com"
+
+	createInput := &organizations.CreateAccountInput{
+		AccountName: aws.String(accountName),
+		Email:       aws.String(email),
+	}
+
+	createOutput, err := o.awsClient.CreateAccount(createInput)
+	if err != nil {
+		return &organizations.DescribeCreateAccountStatusOutput{}, err
+	}
+
+	describeStatusInput := &organizations.DescribeCreateAccountStatusInput{
+		CreateAccountRequestId: createOutput.CreateAccountStatus.Id,
+	}
+
+	var accountStatus *organizations.DescribeCreateAccountStatusOutput
+	for {
+		status, err := o.awsClient.DescribeCreateAccountStatus(describeStatusInput)
+		if err != nil {
+			return &organizations.DescribeCreateAccountStatusOutput{}, err
+		}
+
+		accountStatus = status
+		createStatus := *status.CreateAccountStatus.State
+
+		if createStatus == "FAILED" {
+			var returnErr error
+			switch *status.CreateAccountStatus.FailureReason {
+			case "ACCOUNT_LIMIT_EXCEEDED":
+				returnErr = ErrAwsAccountLimitExceeded
+			case "EMAIL_ALREADY_EXISTS":
+				returnErr = ErrEmailAlreadyExist
+			case "INTERNAL_FAILURE":
+				returnErr = ErrAwsInternalFailure
+			default:
+				returnErr = ErrAwsFailedCreateAccount
+			}
+
+			return &organizations.DescribeCreateAccountStatusOutput{}, returnErr
+		}
+
+		if createStatus != "IN_PROGRESS" {
+			break
+		}
+	}
+
+	return accountStatus, nil
+}
+
+func RandomString(n int) string {
+	var letters = []byte("abcdefghijklmnopqrstuvwxyz0123456789")
+
+	s := make([]byte, n)
+	for i := range s {
+		s[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(s)
 }
 
 func (o *accountAssignOptions) moveAccount(accountIdInput string, destOuInput string, rootIdInput string) error {

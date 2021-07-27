@@ -2,6 +2,7 @@ package mgmt
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -53,11 +54,11 @@ func TestFindUntaggedAccount(t *testing.T) {
 			expectedAWSError: nil,
 		},
 		{
-			name:              "test for no accounts available in root",
+			name:              "test for new account created",
 			accountsList:      []string{},
-			expectedAccountId: "",
+			expectedAccountId: "111111111111",
 			tags:              nil,
-			expectErr:         ErrNoAccountsInRoot,
+			expectErr:         nil,
 			expectedAWSError:  nil,
 		},
 		{
@@ -77,6 +78,9 @@ func TestFindUntaggedAccount(t *testing.T) {
 
 			mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
 			rootOuId := "abc"
+			seed := int64(1)
+			o := &accountAssignOptions{}
+			o.awsClient = mockAWSClient
 
 			awsOutputAccounts := &organizations.ListAccountsForParentOutput{}
 
@@ -89,6 +93,33 @@ func TestFindUntaggedAccount(t *testing.T) {
 					accountsList = append(accountsList, account)
 				}
 				awsOutputAccounts.Accounts = accountsList
+			}
+
+			if test.name == "test for new account created" {
+				rand.Seed(seed)
+				randStr := RandomString(6)
+				accountName := "osd-creds-mgmt+" + randStr
+				email := accountName + "@redhat.com"
+				createId := "car-random1234"
+
+				mockAWSClient.EXPECT().CreateAccount(&organizations.CreateAccountInput{
+					AccountName: &accountName,
+					Email:       &email,
+				}).Return(&organizations.CreateAccountOutput{
+					CreateAccountStatus: &organizations.CreateAccountStatus{Id: &createId},
+				}, nil)
+
+				expectedOutput := "SUCCEEDED"
+
+				awsDescribeOutput := &organizations.DescribeCreateAccountStatusOutput{
+					CreateAccountStatus: &organizations.CreateAccountStatus{
+						State: &expectedOutput,
+					}}
+
+				mockAWSClient.EXPECT().DescribeCreateAccountStatus(&organizations.DescribeCreateAccountStatusInput{
+					CreateAccountRequestId: &createId,
+				}).Return(awsDescribeOutput, nil)
+
 			}
 
 			if test.tags != nil {
@@ -117,9 +148,7 @@ func TestFindUntaggedAccount(t *testing.T) {
 				test.expectedAWSError,
 			)
 
-			o := &accountAssignOptions{}
-			o.awsClient = mockAWSClient
-			returnValue, err := o.findUntaggedAccount(rootOuId)
+			returnValue, err := o.findUntaggedAccount(seed, rootOuId, buildAccount)
 			if test.expectErr != err {
 				t.Errorf("expected error %s and got %s", test.expectErr, err)
 			}
@@ -127,6 +156,48 @@ func TestFindUntaggedAccount(t *testing.T) {
 				t.Errorf("expected %s is %s", test.expectedAccountId, returnValue)
 			}
 		})
+	}
+}
+
+func TestCreateAccount(t *testing.T) {
+	mocks := setupDefaultMocks(t, []runtime.Object{})
+
+	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
+
+	seed := int64(1)
+	rand.Seed(seed)
+	randStr := RandomString(6)
+	accountName := "osd-creds-mgmt+" + randStr
+	email := accountName + "@redhat.com"
+
+	createId := "car-random1234"
+
+	mockAWSClient.EXPECT().CreateAccount(&organizations.CreateAccountInput{
+		AccountName: &accountName,
+		Email:       &email,
+	}).Return(&organizations.CreateAccountOutput{
+		CreateAccountStatus: &organizations.CreateAccountStatus{Id: &createId},
+	}, nil)
+
+	expectedOutput := "SUCCEEDED"
+
+	awsDescribeOutput := &organizations.DescribeCreateAccountStatusOutput{
+		CreateAccountStatus: &organizations.CreateAccountStatus{
+			State: &expectedOutput,
+		}}
+
+	mockAWSClient.EXPECT().DescribeCreateAccountStatus(&organizations.DescribeCreateAccountStatusInput{
+		CreateAccountRequestId: &createId,
+	}).Return(awsDescribeOutput, nil)
+
+	o := &accountAssignOptions{}
+	o.awsClient = mockAWSClient
+	returnVal, err := o.createAccount(seed)
+	if err != nil {
+		t.Error("failed to create account")
+	}
+	if returnVal.CreateAccountStatus.State != &expectedOutput {
+		t.Error("failed to create account")
 	}
 }
 
