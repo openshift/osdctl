@@ -19,6 +19,7 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
+//This command requires the ocm API Token https://cloud.redhat.com/openshift/token be available in the OCM_TOKEN env variable.
 // healthOptions defines the struct for running health command
 type healthOptions struct {
 	k8sclusterresourcefactory k8spkg.ClusterResourceFactoryOptions
@@ -82,16 +83,17 @@ func (o *healthOptions) complete(cmd *cobra.Command, _ []string) error {
 func (o *healthOptions) run() error {
 
 	// This call gets the availability zone of the cluster, as well as the expected number of nodes.
-	az, clusterName, compute, infra, master, ascMin, ascMax, err := ocmDescribe(o.k8sclusterresourcefactory.ClusterID)
-	if az != nil {
-		fmt.Fprintf(o.IOStreams.Out, "\nThe expected number of nodes in availability zone(s) %s: ", az)
-		fmt.Fprintf(o.IOStreams.Out, "\nMaster: %v ", master)
-		fmt.Fprintf(o.IOStreams.Out, "\nInfra: %v ", infra)
-		if ascMin != 0 {
-			fmt.Fprintf(o.IOStreams.Out, "\nAutoscaled Compute: %v - %v ", ascMin, ascMax)
+	//az, clusterName, compute, infra, master, ascMin, ascMax, err := ocmDescribe(o.k8sclusterresourcefactory.ClusterID)
+	clusterInfo, err := ocmDescribe(o.k8sclusterresourcefactory.ClusterID)
+	if clusterInfo.AZs != nil {
+		fmt.Fprintf(o.IOStreams.Out, "\nThe expected number of nodes in availability zone(s) %s: ", clusterInfo.AZs)
+		fmt.Fprintf(o.IOStreams.Out, "\nMaster: %v ", clusterInfo.Nodes.Master)
+		fmt.Fprintf(o.IOStreams.Out, "\nInfra: %v ", clusterInfo.Nodes.Infra)
+		if clusterInfo.Nodes.AutoscaleMin != 0 {
+			fmt.Fprintf(o.IOStreams.Out, "\nAutoscaled Compute: %v - %v ", clusterInfo.Nodes.AutoscaleMin, clusterInfo.Nodes.AutoscaleMax)
 		}
-		if compute != 0 {
-			fmt.Fprintf(o.IOStreams.Out, "\nCompute: %v ", compute)
+		if clusterInfo.Nodes.Compute != 0 {
+			fmt.Fprintf(o.IOStreams.Out, "\nCompute: %v ", clusterInfo.Nodes.Compute)
 		}
 		fmt.Fprintf(o.IOStreams.Out, "\n \n")
 
@@ -121,7 +123,7 @@ func (o *healthOptions) run() error {
 	}
 
 	// Extracting region from the availability zone.
-	reg := az[0]
+	reg := clusterInfo.AZs[0]
 	length := len(reg)
 	lastChar := reg[length-1 : length]
 	for _, r := range lastChar {
@@ -146,6 +148,8 @@ func (o *healthOptions) run() error {
 	instances, err := awsJumpClient.DescribeInstances(&ec2.DescribeInstancesInput{})
 
 	totalRunning := 0
+	totalStopped := 0
+	totalCluster := 0
 
 	//Here we count the number of customer's running worker, infra and master instances in the cluster in the given region. To decide if the instance belongs to the cluster we are checking the Name Tag on the instance.
 	for idx := range instances.Reservations {
@@ -153,9 +157,13 @@ func (o *healthOptions) run() error {
 			tags := GetTags(inst)
 			for _, t := range tags {
 				if *t.Key == "Name" {
-					if strings.HasPrefix(*t.Value, clusterName) && *inst.State.Name == "running" {
-						if strings.Contains(*t.Value, "worker") || strings.Contains(*t.Value, "infra") || strings.Contains(*t.Value, "master") {
+					if strings.HasPrefix(*t.Value, clusterInfo.Name) && (strings.Contains(*t.Value, "worker") || strings.Contains(*t.Value, "infra") || strings.Contains(*t.Value, "master")) {
+						totalCluster += 1
+						if *inst.State.Name == "running" {
 							totalRunning += 1
+						}
+						if *inst.State.Name == "stopped" {
+							totalStopped += 1
 						}
 					}
 				}
@@ -164,7 +172,10 @@ func (o *healthOptions) run() error {
 		}
 
 	}
-	fmt.Fprintf(o.IOStreams.Out, "\nThe number of running worker, infra and master instances that belong to this cluster in region %s is : %v \n", reg, totalRunning)
+	fmt.Fprintf(o.IOStreams.Out, "\nInstances found that belong to this cluster in region %s: \n", reg)
+	fmt.Fprintf(o.IOStreams.Out, "Total: %v \n", totalCluster)
+	fmt.Fprintf(o.IOStreams.Out, "Running : %v \n", totalRunning)
+	fmt.Fprintf(o.IOStreams.Out, "Stopped : %v \n", totalStopped)
 
 	if err != nil {
 		log.Fatalf("Error getting instances %v", err)
@@ -173,10 +184,23 @@ func (o *healthOptions) run() error {
 	return nil
 }
 
+type clusterStats struct {
+	Name  string   `yaml:"Name"`
+	AZs   []string `yaml:"AZs"`
+	Nodes struct {
+		Compute      int `yaml:"Compute"`
+		Infra        int `yaml:"Infra"`
+		Master       int `yaml:"Master"`
+		AutoscaleMin int `yaml:"AutoscaleMin"`
+		AutoscaleMax int `yaml:"AutoscaleMax"`
+	} `yaml:"Nodes"`
+}
+
 //This command implements the ocm describe clsuter call via osm-sdk.
 //This call requires the ocm API Token https://cloud.redhat.com/openshift/token be available in the OCM_TOKEN env variable.
 //Example: export OCM_TOKEN=$(jq -r .refresh_token ~/.ocm.json)
-func ocmDescribe(clusterID string) ([]string, string, int, int, int, int, int, error) {
+func ocmDescribe(clusterID string) (clusterStats, error) {
+	var clusterInfo = clusterStats{}
 	// Create a context:
 	ctx := context.Background()
 	//The ocm
@@ -204,18 +228,31 @@ func ocmDescribe(clusterID string) ([]string, string, int, int, int, int, int, e
 	cluster := response.Body()
 	cloudProvider := cluster.CloudProvider().ID()
 	cloudProviderMessage := strings.ToUpper(cloudProvider)
+	clusterInfo.Name = cluster.Name()
 
 	fmt.Printf("\nCluster %s - %s\n", cluster.Name(), cluster.ID())
 	fmt.Printf("\nCloud provider: %s\n", cloudProviderMessage)
 
 	if cloudProvider != "aws" {
-		return nil, "", 0, 0, 0, 0, 0, fmt.Errorf("This command is only supported for AWS clusters. The command is not supported for %s clusters.", cloudProviderMessage)
+		clusterInfo.AZs = nil
+		clusterInfo.Name = ""
+		clusterInfo.Nodes.Compute = 0
+		clusterInfo.Nodes.Infra = 0
+		clusterInfo.Nodes.Master = 0
+		clusterInfo.Nodes.AutoscaleMin = 0
+		clusterInfo.Nodes.AutoscaleMax = 0
+
+		return clusterInfo, fmt.Errorf("This command is only supported for AWS clusters. The command is not supported for %s clusters.", cloudProviderMessage)
 	}
 
-	autoscaleMin := cluster.Nodes().AutoscaleCompute().MinReplicas()
-	autoscaleMax := cluster.Nodes().AutoscaleCompute().MaxReplicas()
+	clusterInfo.AZs = cluster.Nodes().AvailabilityZones()
+	clusterInfo.Nodes.Compute = cluster.Nodes().Compute()
+	clusterInfo.Nodes.Infra = cluster.Nodes().Infra()
+	clusterInfo.Nodes.Master = cluster.Nodes().Master()
+	clusterInfo.Nodes.AutoscaleMin = cluster.Nodes().AutoscaleCompute().MinReplicas()
+	clusterInfo.Nodes.AutoscaleMax = cluster.Nodes().AutoscaleCompute().MaxReplicas()
 
-	return cluster.Nodes().AvailabilityZones(), cluster.Name(), cluster.Nodes().Compute(), cluster.Nodes().Infra(), cluster.Nodes().Master(), autoscaleMin, autoscaleMax, err
+	return clusterInfo, err
 }
 
 func GetTags(instance *ec2.Instance) []*ec2.Tag {
