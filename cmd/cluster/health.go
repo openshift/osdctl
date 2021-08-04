@@ -13,9 +13,12 @@ import (
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	k8spkg "github.com/openshift/osdctl/pkg/k8s"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v2"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/klog"
+
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
@@ -80,6 +83,19 @@ func (o *healthOptions) complete(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
+type ClusterHealthCondensedObject struct {
+	ID       string   `yaml:"ID"`
+	Name     string   `yaml:"Name"`
+	Provider string   `yaml:"Provider"`
+	AZs      []string `yaml:"AZs"`
+	Nodes    struct {
+		Expected int `yaml:"Expected"`
+		Running  int `yaml:"Running"`
+	} `yaml:"Nodes"`
+}
+
+var healthObject = ClusterHealthCondensedObject{}
+
 func (o *healthOptions) run() error {
 
 	// This call gets the availability zone of the cluster, as well as the expected number of nodes.
@@ -143,10 +159,7 @@ func (o *healthOptions) run() error {
 		return err
 	}
 
-	log.Println("Getting instances info:")
-
 	instances, err := awsJumpClient.DescribeInstances(&ec2.DescribeInstancesInput{})
-
 	totalRunning := 0
 	totalStopped := 0
 	totalCluster := 0
@@ -172,15 +185,24 @@ func (o *healthOptions) run() error {
 		}
 
 	}
+
 	fmt.Fprintf(o.IOStreams.Out, "\nInstances found that belong to this cluster in region %s: \n", reg)
 	fmt.Fprintf(o.IOStreams.Out, "Total: %v \n", totalCluster)
 	fmt.Fprintf(o.IOStreams.Out, "Running : %v \n", totalRunning)
 	fmt.Fprintf(o.IOStreams.Out, "Stopped : %v \n", totalStopped)
 
+
 	if err != nil {
 		log.Fatalf("Error getting instances %v", err)
 		return err
 	}
+
+	d, err := yaml.Marshal(&healthObject)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+	fmt.Printf(string(d))
+
 	return nil
 }
 
@@ -205,6 +227,14 @@ func ocmDescribe(clusterID string) (clusterStats, error) {
 	ctx := context.Background()
 	//The ocm
 	token := os.Getenv("OCM_TOKEN")
+	if token == "" {
+		ocmToken, err := utils.GetOCMAccessToken()
+		if err != nil {
+			log.Fatalf("OCM token not set. Please configure it using the OCM_TOKEN evnironment variable or the ocm cli")
+			os.Exit(1)
+		}
+		token = *ocmToken
+	}
 	connection, err := sdk.NewConnectionBuilder().
 		Tokens(token).
 		Build()
@@ -230,8 +260,9 @@ func ocmDescribe(clusterID string) (clusterStats, error) {
 	cloudProviderMessage := strings.ToUpper(cloudProvider)
 	clusterInfo.Name = cluster.Name()
 
-	fmt.Printf("\nCluster %s - %s\n", cluster.Name(), cluster.ID())
-	fmt.Printf("\nCloud provider: %s\n", cloudProviderMessage)
+	healthObject.ID = cluster.ID()
+	healthObject.Name = cluster.Name()
+	healthObject.Provider = cloudProviderMessage
 
 	if cloudProvider != "aws" {
 		clusterInfo.AZs = nil
