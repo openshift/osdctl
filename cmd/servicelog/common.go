@@ -34,9 +34,9 @@ func createConnection() *sdk.Connection {
 	return connection
 }
 
-// generateClusterQuery returns an OCM search query to identify a cluster
+// generateQuery returns an OCM search query to retrieve all clusters matching an expression (ie- "foo%")
 func generateQuery(clusterIdentifier string) string {
-	return "id is '" + clusterIdentifier + "' or external_id is '" + clusterIdentifier + "' or display_name i  s '" + clusterIdentifier + "'"
+	return strings.TrimSpace(fmt.Sprintf("id like '%[1]s' or external_id like '%[1]s' or display_name like '%[1]s'", clusterIdentifier))
 }
 
 // getFilteredClusters retrieves clusters in OCM which match the filters given

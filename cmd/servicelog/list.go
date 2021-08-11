@@ -62,8 +62,7 @@ func init() {
 
 func getClusters(ocmClient *sdk.Connection, clusterIds []string) []*v1.Cluster {
 	for i, id := range clusterIds {
-		clusterIds[i] = fmt.Sprintf(`display_name like '%[1]s' or name like '%[1]s' or id like '%[1]s' or external_id like '%[1]s'`, id)
-		clusterIds[i] = strings.TrimSpace(clusterIds[i])
+		clusterIds[i] = generateQuery(id)
 	}
 
 	clusters, err := applyFilters(ocmClient, []string{strings.Join(clusterIds, " or ")})

@@ -115,7 +115,7 @@ func init() {
 	postCmd.Flags().BoolVarP(&isDryRun, "dry-run", "d", false, "Dry-run - print the service log about to be sent but don't send it.")
 	postCmd.Flags().StringArrayVarP(&filterParams, "query", "q", filterParams, "Specify a search query (eg. -q \"name like foo\") for a bulk-post to matching clusters.")
 	postCmd.Flags().BoolVarP(&skipPrompts, "yes", "y", false, "Skips all prompts.")
-	postCmd.Flags().StringArrayVarP(&filterFiles, "query-file", "f", filterFiles, "File containing search queries to apply. All lines in the file will be concatenated into a single query. If this flag is called multiple times, all every file's search query will be combined with logical AND.")
+	postCmd.Flags().StringArrayVarP(&filterFiles, "query-file", "f", filterFiles, "File containing search queries to apply. All lines in the file will be concatenated into a single query. If this flag is called multiple times, every file's search query will be combined with logical AND.")
 }
 
 // parseUserParameters parse all the '-p FOO=BAR' parameters and checks for syntax errors
