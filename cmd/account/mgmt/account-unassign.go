@@ -405,6 +405,6 @@ func (o *accountUnassignOptions) deleteUser(user string) error {
 		return err
 	}
 
-	fmt.Printf("user %s successfully deleted", user)
+	fmt.Printf("user %s successfully deleted\n", user)
 	return nil
 }
