@@ -207,31 +207,6 @@ func (o *rotateSecretOptions) run() error {
 
 	fmt.Printf("Succesfully rotated secrets for %s\n", osdManagedAdminUsername)
 
-	// Update osdManagedAdminSRE secret
-	// Username is osdManagedAdminSRE-aaabbb
-	osdManagedAdminSREUsername := common.OSDManagedAdminIAM + "SRE" + "-" + accountIDSuffixLabel
-	createAccessKeyOutputSRE, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{
-		UserName: aws.String(osdManagedAdminSREUsername),
-	})
-	if err != nil {
-		return err
-	}
-
-	// Place new credentials into body for secret
-	newOsdManagedAdminSRESecretData := map[string][]byte{
-		"aws_user_name":         []byte(*createAccessKeyOutputSRE.AccessKey.UserName),
-		"aws_access_key_id":     []byte(*createAccessKeyOutputSRE.AccessKey.AccessKeyId),
-		"aws_secret_access_key": []byte(*createAccessKeyOutputSRE.AccessKey.SecretAccessKey),
-	}
-
-	// Update existing osdManagedAdmin secret
-	err = common.UpdateSecret(o.kubeCli, o.accountCRName+"-osdmanagedadminsre-secret", common.AWSAccountNamespace, newOsdManagedAdminSRESecretData)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Succesfully rotated secrets for %s\n", osdManagedAdminSREUsername)
-
 	// Only update osdCcsAdmin credential if specified
 	if o.updateCcsCreds {
 		// Ony update if the Account CR is actually CCS

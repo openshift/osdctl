@@ -70,7 +70,6 @@ For the detailed usage of each command, please refer to [here](./docs/command).
 osdctl account reset test-cr
 Reset account test-cr? (Y/N) y
 
-Deleting secret test-cr-osdmanagedadminsre-secret
 Deleting secret test-cr-secret
 Deleting secret test-cr-sre-cli-credentials
 Deleting secret test-cr-sre-console-url
@@ -186,7 +185,6 @@ osdctl account get legal-entity -i <Account ID>
 # Get Secrets information by AWS Account ID
 osdctl account get secrets -i <Account ID>
 
-test-cr-osdmanagedadminsre-secret
 test-cr-secret
 ```
 
