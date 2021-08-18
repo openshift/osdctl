@@ -3,8 +3,9 @@ package aws
 import (
 	"encoding/json"
 	"fmt"
-	"k8s.io/klog"
 	"time"
+
+	"k8s.io/klog"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"

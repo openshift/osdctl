@@ -1802,8 +1802,8 @@ github.com/openshift/cluster-api-provider-openstack v0.0.0-20200526112135-319a35
 github.com/openshift/cluster-api-provider-ovirt v0.1.1-0.20200504092944-27473ea1ae43/go.mod h1:Vl/bvZulLw6PdUADIFWGfoTWH1O4L1B80eN7BtLYEuo=
 github.com/openshift/cluster-autoscaler-operator v0.0.0-20190521201101-62768a6ba480/go.mod h1:/XmV44Fh28Vo3Ye93qFrxAbcFJ/Uy+7LPD+jGjmfJYc=
 github.com/openshift/cluster-version-operator v3.11.1-0.20190629164025-08cac1c02538+incompatible/go.mod h1:0BbpR1mrN0F2ZRae5N1XHcytmkvVPaeKgSQwRRBWugc=
-github.com/openshift/gcp-project-operator v0.0.0-20210629201005-5ca75d2a5229 h1:TuFna7oYfO8WXi2Yn37bAsZXjocU9btrZYGh9iG12uw=
-github.com/openshift/gcp-project-operator v0.0.0-20210629201005-5ca75d2a5229/go.mod h1:uRHPXMMwiVBYQuU6LhPPxIPuviT2UCs5H+huZecOXfs=
+github.com/openshift/gcp-project-operator v0.0.0-20210818135501-58ea50451037 h1:CJAy9YlhmToXZSJfQAK7VwBi8ueNEhZ4XvaH/oMAQ7E=
+github.com/openshift/gcp-project-operator v0.0.0-20210818135501-58ea50451037/go.mod h1:uRHPXMMwiVBYQuU6LhPPxIPuviT2UCs5H+huZecOXfs=
 github.com/openshift/generic-admission-server v1.14.0/go.mod h1:GD9KN/W4KxqRQGVMbqQHpHzb2XcQVvLCaBaSciqXvfM=
 github.com/openshift/hive v1.0.5 h1:QWqdPR2H+Hb4FqgBBeX7EkQrpf04SPm+re1BW5uki00=
 github.com/openshift/hive v1.0.5/go.mod h1:X2NIeZ7/2yXEXYPIgsKkLDmu3bFm+fnTn331uAR1QVE=
