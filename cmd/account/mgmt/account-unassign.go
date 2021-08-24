@@ -145,32 +145,32 @@ func (o *accountUnassignOptions) run() error {
 	// Delete login profile
 	err = o.deleteLoginProfile(accountUsername)
 	if err != nil {
-		return err
+		fmt.Println(err)
 	}
 	// Delete access keys
 	err = o.deleteAccessKeys(accountUsername)
 	if err != nil {
-		return err
+		fmt.Println(err)
 	}
 	// Delete signing certificates
 	err = o.deleteSigningCert(accountUsername)
 	if err != nil {
-		return err
+		fmt.Println(err)
 	}
 	// Delete policies
 	err = o.deletePolicies(accountUsername)
 	if err != nil {
-		return err
+		fmt.Println(err)
 	}
 	// Delete attached policies
 	err = o.deleteAttachedPolicies(accountUsername)
 	if err != nil {
-		return err
+		fmt.Println(err)
 	}
 	// Delete groups
 	err = o.deleteGroups(accountUsername)
 	if err != nil {
-		return err
+		fmt.Println(err)
 	}
 	// Delete user
 	err = o.deleteUser(accountUsername)
