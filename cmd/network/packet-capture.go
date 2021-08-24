@@ -35,7 +35,7 @@ const (
 	nodeLabelKey             = "node-role.kubernetes.io/worker"
 	nodeLabelValue           = ""
 	packetCaptureDurationSec = 60
-	singleNode               = false
+	singlePod                = false
 )
 
 // newCmdPacketCapture implements the packet-capture command to run a packet capture
@@ -58,7 +58,7 @@ func newCmdPacketCapture(streams genericclioptions.IOStreams, flags *genericclio
 	packetCaptureCmd.Flags().StringVarP(&ops.namespace, "namespace", "n", packetCaptureNamespace, "Namespace to deploy Daemonset")
 	packetCaptureCmd.Flags().StringVarP(&ops.nodeLabelKey, "node-label-key", "", nodeLabelKey, "Node label key")
 	packetCaptureCmd.Flags().StringVarP(&ops.nodeLabelValue, "node-label-value", "", nodeLabelValue, "Node label value")
-	packetCaptureCmd.Flags().BoolVarP(&ops.singleNode, "single-node", "", singleNode, "Boolean value to deploy a single pod or a deamonset (default false)")
+	packetCaptureCmd.Flags().BoolVarP(&ops.singlePod, "single-pod", "", singlePod, "toogle deployment as single pod (default: deploy a daemonset)")
 
 	ops.startTime = time.Now()
 	return packetCaptureCmd
@@ -71,7 +71,7 @@ type packetCaptureOptions struct {
 	nodeLabelKey   string
 	nodeLabelValue string
 	duration       int
-	singleNode     bool
+	singlePod      bool
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
@@ -96,7 +96,7 @@ func (o *packetCaptureOptions) complete(cmd *cobra.Command, _ []string) error {
 }
 
 func (o *packetCaptureOptions) run() error {
-	if o.singleNode {
+	if o.singlePod {
 		return o.runPod()
 	}
 	return o.runDaemonSet()
