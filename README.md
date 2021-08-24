@@ -125,6 +125,42 @@ test-cr             Creating            111111111111        2020-06-18 10:38:40 
 osdctl account list account-claim --state=Ready
 ```
 
+### AWS Account Mgmt Assign
+
+`assign` command assigns a developer account to a user
+
+```bash
+osdctl account mgmt assign -u <LDAP username> -p <profile name>
+```
+
+### AWS Account Mgmt list
+
+`list` command lists the owner of an AWS account given an account id, or the account id(s) given an LDAP username. 
+If neither an account id or username is provided, it lists all the accounts from the developers OU
+
+```bash
+# list LDAP username
+osdctl account mgmt list -i 111111111111 -p <profile name>
+
+# list account(s) from user
+osdctl account mgmt list -u <LDAP username> -p <profile name>
+
+# list all accounts in the developer OU
+osdctl account mgmt list -p <profile name>
+```
+
+### AWS Account Mgmt Unassign
+
+`unassign` command takes either an LDAP username or account ID and removes any IAM users, Roles, and Policies
+
+```bash
+# unassigns all accounts from user
+osdctl account mgmt unassign -u <LDAP username> -p <profile name>
+
+# cleans up specified account along with its user
+osdctl account mgmt unassign -i <account ID> -p <profile name>
+```
+
 ### AWS Account Console URL generate
 
 `console` command generates an AWS console URL for the specified Account CR or AWS Account ID.
