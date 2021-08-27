@@ -15,6 +15,35 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+func TestListUsersFromAccount(t *testing.T) {
+
+	mocks := setupDefaultMocks(t, []runtime.Object{})
+
+	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
+
+	accountId := "111111111111"
+
+	awsOutput := &iam.ListUsersOutput{
+		Users: []*iam.User{
+			{
+				UserName: aws.String("user")},
+		}}
+
+	mockAWSClient.EXPECT().ListUsers(gomock.Any()).Return(
+		awsOutput,
+		nil,
+	)
+
+	o := &accountUnassignOptions{}
+	o.awsClient = mockAWSClient
+	returnVal, err := o.listUsersFromAccount(mockAWSClient, accountId)
+	if err != nil {
+		t.Errorf("failed to list iam users")
+	}
+	if len(returnVal) < 1 {
+		t.Errorf("empty iam users list")
+	}
+}
 func TestCheckForHiveNameTage(t *testing.T) {
 	var genericAWSError error = fmt.Errorf("Generic AWS Error")
 
@@ -368,6 +397,44 @@ func TestDeleteAttachedPolicies(t *testing.T) {
 	err := o.deleteAttachedPolicies(userName)
 	if err != nil {
 		t.Errorf("failed to detach policies")
+	}
+}
+
+func TestDeleteRoles(t *testing.T) {
+	mocks := setupDefaultMocks(t, []runtime.Object{})
+
+	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
+
+	roleName := aws.String("randomRoleName")
+
+	awsRolesOutput := &iam.ListRolesOutput{
+		Roles: []*iam.Role{
+			{
+				RoleName: roleName,
+			},
+		},
+	}
+
+	mockAWSClient.EXPECT().ListRoles(gomock.Any()).Return(
+		awsRolesOutput,
+		nil,
+	)
+
+	awsDeleteRolesOutput := &iam.DeleteRoleOutput{}
+	mockAWSClient.EXPECT().DeleteRole(
+		&iam.DeleteRoleInput{
+			RoleName: roleName,
+		},
+	).Return(
+		awsDeleteRolesOutput,
+		nil,
+	)
+
+	o := &accountUnassignOptions{}
+	o.awsClient = mockAWSClient
+	err := o.deleteRoles(mockAWSClient)
+	if err != nil {
+		t.Errorf("failed to delete roles")
 	}
 }
 
