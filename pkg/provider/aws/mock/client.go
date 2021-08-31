@@ -595,6 +595,36 @@ func (mr *MockClientMockRecorder) ListAccounts(input interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAccounts", reflect.TypeOf((*MockClient)(nil).ListAccounts), input)
 }
 
+// ListParents mocks base method
+func (m *MockClient) ListParents(input *organizations.ListParentsInput) (*organizations.ListParentsOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListParents", input)
+	ret0, _ := ret[0].(*organizations.ListParentsOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListParents indicates an expected call of ListParents
+func (mr *MockClientMockRecorder) ListParents(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListParents", reflect.TypeOf((*MockClient)(nil).ListParents), input)
+}
+
+// ListRoots mocks base method
+func (m *MockClient) ListRoots(input *organizations.ListRootsInput) (*organizations.ListRootsOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListRoots", input)
+	ret0, _ := ret[0].(*organizations.ListRootsOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListRoots indicates an expected call of ListRoots
+func (mr *MockClientMockRecorder) ListRoots(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRoots", reflect.TypeOf((*MockClient)(nil).ListRoots), input)
+}
+
 // ListAccountsForParent mocks base method
 func (m *MockClient) ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error) {
 	m.ctrl.T.Helper()
