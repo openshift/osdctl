@@ -7,6 +7,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/organizations"
+	"github.com/aws/aws-sdk-go/service/sts"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 
 	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
 	"github.com/golang/mock/gomock"
@@ -14,6 +16,51 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 )
+
+func TestAssumeRoleForAccount(t *testing.T) {
+	mocks := setupDefaultMocks(t, []runtime.Object{})
+
+	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
+
+	accountId := "111111111111"
+	accessKeyID := aws.String("randAccessKeyId")
+	secretAccessKey := aws.String("randSecretAccessKey")
+	sessionToken := aws.String("randSessionToken")
+
+	awsAssumeRoleOutput := &sts.AssumeRoleOutput{
+		Credentials: &sts.Credentials{
+			AccessKeyId:     accessKeyID,
+			SecretAccessKey: secretAccessKey,
+			SessionToken:    sessionToken,
+		},
+	}
+
+	mockAWSClient.EXPECT().AssumeRole(gomock.Any()).Return(
+		awsAssumeRoleOutput,
+		nil,
+	)
+
+	newAWSClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+		AccessKeyID:     *awsAssumeRoleOutput.Credentials.AccessKeyId,
+		SecretAccessKey: *awsAssumeRoleOutput.Credentials.SecretAccessKey,
+		SessionToken:    *awsAssumeRoleOutput.Credentials.SessionToken,
+		Region:          "us-east-1",
+	})
+
+	if err != nil {
+		t.Errorf("failed to instantiate new client")
+	}
+
+	o := &accountUnassignOptions{}
+	o.awsClient = mockAWSClient
+	returnVal, err := o.assumeRoleForAccount(accountId)
+	if err != nil {
+		t.Errorf("failed to assume role")
+	}
+	if returnVal != newAWSClient {
+		t.Errorf("expected return value %s got %s", newAWSClient, returnVal)
+	}
+}
 
 func TestListUsersFromAccount(t *testing.T) {
 

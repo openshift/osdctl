@@ -48,6 +48,17 @@ type accountUnassignOptions struct {
 	genericclioptions.IOStreams
 }
 
+type accountCleanOptions interface {
+	deleteLoginProfile() error
+	deleteAccessKeys(user string) error
+	deleteSigningCert(user string) error
+	deletePolicies(user string) error
+	deleteAttachedPolicies(user string) error
+	deleteRoles(newAWSClient awsprovider.Client) error
+	deleteGroups(user string) error
+	deleteUser(user string) error
+}
+
 func newAccountUnassignOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *accountUnassignOptions {
 	return &accountUnassignOptions{
 		flags:      flags,
@@ -334,6 +345,25 @@ func (o *accountUnassignOptions) listAccountsFromUser(user string) ([]string, er
 	}
 
 	return accountIdList, nil
+}
+
+type accountDeleteOperations func(string) error
+
+func cleanAccount(c accountCleanOptions, user string) {
+
+	operations := []accountDeleteOperations{
+		c.deleteLoginProfile(user),
+		c.deleteAccessKeys(user),
+		c.deleteSigningCert(user),
+		c.deletePolicies(user),
+	}
+
+	for _, operation := range operations {
+		err := operation(user)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
 }
 
 func (o *accountUnassignOptions) deleteLoginProfile(user string) error {
