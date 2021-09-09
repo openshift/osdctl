@@ -19,12 +19,11 @@ func newCmdList(streams genericclioptions.IOStreams) *cobra.Command {
 		Use:   "list",
 		Short: "List the cost of each OU under given OU",
 		Run: func(cmd *cobra.Command, args []string) {
-
+			cmdutil.CheckErr(ops.checkArgs(cmd, args))
 			awsClient, err := opsCost.initAWSClients()
 			cmdutil.CheckErr(err)
 
 			OU := getOU(awsClient, ops.ou)
-
 			if err := listCostsUnderOU(OU, awsClient, ops); err != nil {
 				log.Fatalln("Error listing costs under OU:", err)
 			}
@@ -33,6 +32,8 @@ func newCmdList(streams genericclioptions.IOStreams) *cobra.Command {
 	listCmd.Flags().StringVar(&ops.ou, "ou", "", "get OU ID")
 	// list supported time args
 	listCmd.Flags().StringVarP(&ops.time, "time", "t", "", "set time. One of 'LM', 'MTD', 'TYD', '3M', '6M', '1Y'")
+	listCmd.Flags().StringVar(&ops.start, "start", "", "set start date range")
+	listCmd.Flags().StringVar(&ops.end, "end", "", "set end date range")
 	listCmd.Flags().BoolVar(&ops.csv, "csv", false, "output result as csv")
 
 	if err := listCmd.MarkFlagRequired("ou"); err != nil {
@@ -46,11 +47,33 @@ func newCmdList(streams genericclioptions.IOStreams) *cobra.Command {
 	return listCmd
 }
 
+func (o *listOptions) checkArgs(cmd *cobra.Command, _ []string) error {
+	// check that only time or start/end is provided
+	if o.start == "" && o.end == "" && o.time == "" {
+		return cmdutil.UsageErrorf(cmd, "Please provide a date range or a predefined time")
+	}
+	if o.start != "" && o.end != "" && o.time != "" {
+		return cmdutil.UsageErrorf(cmd, "Please provide either a date range or a predefined time")
+	}
+	if o.start != "" && o.end == "" {
+		return cmdutil.UsageErrorf(cmd, "Please provide end of date range")
+	}
+	if o.start == "" && o.end != "" {
+		return cmdutil.UsageErrorf(cmd, "Please provide start of date range")
+	}
+	if o.ou == "" {
+		return cmdutil.UsageErrorf(cmd, "Please provide OU")
+	}
+	return nil
+}
+
 //Store flag options for get command
 type listOptions struct {
-	ou   string
-	time string
-	csv  bool
+	ou    string
+	time  string
+	start string
+	end   string
+	csv   bool
 
 	genericclioptions.IOStreams
 }
@@ -72,7 +95,8 @@ func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovide
 	var unit string
 	var isChildNode bool
 
-	if err := getOUCostRecursive(&cost, &unit, OU, awsClient, &ops.time); err != nil {
+	o := &getOptions{}
+	if err := o.getOUCostRecursive(&cost, &unit, OU, awsClient); err != nil {
 		return err
 	}
 
@@ -84,7 +108,7 @@ func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovide
 		cost = 0
 		isChildNode = true
 
-		if err := getOUCostRecursive(&cost, &unit, childOU, awsClient, &ops.time); err != nil {
+		if err := o.getOUCostRecursive(&cost, &unit, childOU, awsClient); err != nil {
 			return err
 		}
 		printCostList(cost, unit, childOU, ops, isChildNode)
