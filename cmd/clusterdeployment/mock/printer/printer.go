@@ -5,46 +5,47 @@
 package printer
 
 import (
-	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
+
+	gomock "github.com/golang/mock/gomock"
 )
 
-// MockPrinter is a mock of Printer interface
+// MockPrinter is a mock of Printer interface.
 type MockPrinter struct {
 	ctrl     *gomock.Controller
 	recorder *MockPrinterMockRecorder
 }
 
-// MockPrinterMockRecorder is the mock recorder for MockPrinter
+// MockPrinterMockRecorder is the mock recorder for MockPrinter.
 type MockPrinterMockRecorder struct {
 	mock *MockPrinter
 }
 
-// NewMockPrinter creates a new mock instance
+// NewMockPrinter creates a new mock instance.
 func NewMockPrinter(ctrl *gomock.Controller) *MockPrinter {
 	mock := &MockPrinter{ctrl: ctrl}
 	mock.recorder = &MockPrinterMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockPrinter) EXPECT() *MockPrinterMockRecorder {
 	return m.recorder
 }
 
-// AddRow mocks base method
+// AddRow mocks base method.
 func (m *MockPrinter) AddRow(row []string) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "AddRow", row)
 }
 
-// AddRow indicates an expected call of AddRow
+// AddRow indicates an expected call of AddRow.
 func (mr *MockPrinterMockRecorder) AddRow(row interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRow", reflect.TypeOf((*MockPrinter)(nil).AddRow), row)
 }
 
-// Flush mocks base method
+// Flush mocks base method.
 func (m *MockPrinter) Flush() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Flush")
@@ -52,7 +53,7 @@ func (m *MockPrinter) Flush() error {
 	return ret0
 }
 
-// Flush indicates an expected call of Flush
+// Flush indicates an expected call of Flush.
 func (mr *MockPrinterMockRecorder) Flush() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Flush", reflect.TypeOf((*MockPrinter)(nil).Flush))
