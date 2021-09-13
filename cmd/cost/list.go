@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -64,18 +65,36 @@ func (o *listOptions) checkArgs(cmd *cobra.Command, _ []string) error {
 	if o.ou == "" {
 		return cmdutil.UsageErrorf(cmd, "Please provide OU")
 	}
+	output, err := outputflag.GetOutput(cmd)
+	if err != nil {
+		return err
+	}
+	o.output = output
 	return nil
 }
 
 //Store flag options for get command
 type listOptions struct {
-	ou    string
-	time  string
-	start string
-	end   string
-	csv   bool
+	ou     string
+	time   string
+	start  string
+	end    string
+	csv    bool
+	output string
 
 	genericclioptions.IOStreams
+}
+
+type listCostResponse struct {
+	OuId    string  `json:"ouid" yaml:"ouid"`
+	OuName  string  `json:"ouname" yaml:"ouname"`
+	CostUSD float64 `json:"costUSD" yaml:"costUSD"`
+}
+
+func (f listCostResponse) String() string {
+
+	return fmt.Sprintf("  OuId: %s\n  OuName: %s\n  Cost: %f\n", f.OuId, f.OuName, f.CostUSD)
+
 }
 
 func newListOptions(streams genericclioptions.IOStreams) *listOptions {
@@ -95,7 +114,12 @@ func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovide
 	var unit string
 	var isChildNode bool
 
-	o := &getOptions{}
+	o := &getOptions{
+		time:  ops.time,
+		start: ops.start,
+		end:   ops.end,
+		ou:    ops.ou,
+	}
 	if err := o.getOUCostRecursive(&cost, &unit, OU, awsClient); err != nil {
 		return err
 	}
@@ -117,19 +141,29 @@ func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovide
 	return nil
 }
 
-func printCostList(cost float64, unit string, OU *organizations.OrganizationalUnit, ops *listOptions, isChildNode bool) {
+func printCostList(cost float64, unit string, OU *organizations.OrganizationalUnit, ops *listOptions, isChildNode bool) error {
+
+	resp := listCostResponse{
+		OuId:    *OU.Id,
+		OuName:  *OU.Name,
+		CostUSD: cost,
+	}
+
 	if !isChildNode {
 		if ops.csv {
 			fmt.Printf("OU,Name,Cost (%s)\n", unit)
+			return nil
 		} else {
-			fmt.Printf("Costs of OU %s '%s' and its child OUs:\n\n", *OU.Id, *OU.Name)
-			fmt.Printf("%-20s%-30s%-20s\n", "OU ID", "OU Name", "Cost")
+			fmt.Println("Costs of OU and its child OUs:")
 		}
 	}
 
 	if ops.csv {
 		fmt.Printf("%v,%v,%.2f\n", *OU.Id, *OU.Name, cost)
-	} else {
-		fmt.Printf("%-20s%-30s%.2f\n", *OU.Id, *OU.Name, cost)
+		return nil
 	}
+
+	outputflag.PrintResponse(ops.output, resp)
+
+	return nil
 }

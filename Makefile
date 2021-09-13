@@ -4,7 +4,10 @@ unexport GOFLAGS
 # Add OSDCTL `./bin/` dir to path for goreleaser
 # This will look for goreleaser first in the local bin dir
 # but otherwise can be installed elsewhere on developers machines
-export PATH := bin:$(PATH)
+BASE_DIR=$(shell pwd)
+export PATH:=$(BASE_DIR)/bin:$(PATH)
+SHELL := env PATH=$(PATH) /bin/bash
+
 
 all: format mod build test
 
@@ -15,9 +18,11 @@ fmt:
 	@gofmt -w -s .
 	@git diff --exit-code .
 
+OS := $(shell go env GOOS | sed 's/[a-z]/\U&/')
+ARCH := $(shell go env GOARCH)
 .PHONY: download-goreleaser
 download-goreleaser:
-	mkdir -p ./bin && curl -sSLf https://github.com/goreleaser/goreleaser/releases/latest/download/goreleaser_Linux_x86_64.tar.gz -o - | tar --extract --gunzip --directory ./bin goreleaser
+	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser@latest
 
 # CI build containers don't include goreleaser by default,
 # so they need to get it first, and then run the build
@@ -32,7 +37,7 @@ build:
 	goreleaser build --rm-dist --snapshot
 
 release:
-	goreleaser release --rm-dist
+	./bin/goreleaser release --rm-dist
 
 vet:
 	go vet ${BUILDFLAGS} ./...
@@ -50,7 +55,7 @@ mockgen: ensure-mockgen
 	@git diff --exit-code -- ./pkg/provider/aws/mock
 
 ensure-mockgen:
-	go get github.com/golang/mock/mockgen@v1.5.0
+	GOBIN=${BASE_DIR}/bin/  go install github.com/golang/mock/mockgen@v1.5.0
 
 test:
 	go test ${BUILDFLAGS} ./... -covermode=atomic -coverpkg=./...
