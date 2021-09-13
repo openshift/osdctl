@@ -179,6 +179,29 @@ func (o *rotateSecretOptions) run() error {
 	// Username is osdManagedAdmin-aaabbb
 	osdManagedAdminUsername := common.OSDManagedAdminIAM + "-" + accountIDSuffixLabel
 
+	// List and delete any existing access keys
+	inputListAccessKeys := &iam.ListAccessKeysInput{
+		UserName: &osdManagedAdminUsername,
+	}
+
+	accessKeys, err := awsClient.ListAccessKeys(inputListAccessKeys)
+	if err != nil {
+		return err
+	}
+
+	for _, k := range accessKeys.AccessKeyMetadata {
+
+		inputDelKey := &iam.DeleteAccessKeyInput{
+			AccessKeyId: k.AccessKeyId,
+			UserName:    &osdManagedAdminUsername,
+		}
+		_, err = awsClient.DeleteAccessKey(inputDelKey)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Create new access key
 	createAccessKeyOutput, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{
 		UserName: aws.String(osdManagedAdminUsername),
 	})
