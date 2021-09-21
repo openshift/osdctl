@@ -15,6 +15,9 @@ fmt:
 	@gofmt -w -s .
 	@git diff --exit-code .
 
+# https://stackoverflow.com/a/324782
+ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+
 OS := $(shell go env GOOS | sed 's/[a-z]/\U&/')
 .PHONY: download-goreleaser
 download-goreleaser:
@@ -30,10 +33,10 @@ ci-build: download-goreleaser build
 # Snapshot allows the build without validation of the
 # repository itself
 build:
-	goreleaser build --rm-dist --snapshot
+	${ROOT_DIR}/bin/goreleaser build --rm-dist --snapshot
 
 release:
-	goreleaser release --rm-dist
+	${ROOT_DIR}/bin/goreleaser release --rm-dist
 
 vet:
 	go vet ${BUILDFLAGS} ./...
