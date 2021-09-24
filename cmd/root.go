@@ -32,6 +32,8 @@ var GitCommit string
 // Version is the tag version from the environment
 var Version string
 
+var output string
+
 func init() {
 	_ = awsv1alpha1.AddToScheme(scheme.Scheme)
 	_ = routev1.AddToScheme(scheme.Scheme)
@@ -52,6 +54,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	}
 
 	rootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
+	rootCmd.PersistentFlags().StringVarP(&output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
 
 	// Reuse kubectl global flags to provide namespace, context and credential options.
 	// We are not using NewConfigFlags here to avoid adding too many flags
