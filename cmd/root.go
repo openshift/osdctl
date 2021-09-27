@@ -32,6 +32,7 @@ var GitCommit string
 // Version is the tag version from the environment
 var Version string
 
+// Global variable to save output flag
 var output string
 
 func init() {
