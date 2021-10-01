@@ -1,6 +1,7 @@
 package mgmt
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -19,10 +20,23 @@ type accountListOptions struct {
 	username     string
 	payerAccount string
 	accountID    string
+	output       string
 
 	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
+}
+
+type listResponse struct {
+	Username string   `json:"username"`
+	Accounts []string `json:"accounts"`
+}
+
+func (f listResponse) String() string {
+	for i := range f.Accounts {
+		return fmt.Sprintf("  Username: %s\n  Accounts: %s\n", f.Username, f.Accounts[i])
+	}
+	return ""
 }
 
 func newAccountListOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *accountListOptions {
@@ -58,6 +72,10 @@ func (o *accountListOptions) complete(cmd *cobra.Command, _ []string) error {
 	}
 	if o.username != "" && o.accountID != "" {
 		return cmdutil.UsageErrorf(cmd, "Cannot provide both username and account ID")
+	}
+	o.output = GetOutput(cmd)
+	if o.output != "" && o.output != "json" {
+		return cmdutil.UsageErrorf(cmd, "Account mgmt assign output only accepts json or no value")
 	}
 	return nil
 }
@@ -111,7 +129,21 @@ func (o *accountListOptions) run() error {
 	}
 
 	for key, value := range o.m {
-		fmt.Fprintln(o.IOStreams.Out, key, value)
+		resp := listResponse{
+			Username: key,
+			Accounts: value,
+		}
+
+		if o.output == "json" {
+			accountsToJson, err := json.MarshalIndent(resp, "", "    ")
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(accountsToJson))
+		} else {
+			fmt.Fprintln(o.IOStreams.Out, key, value)
+		}
+
 	}
 
 	return nil

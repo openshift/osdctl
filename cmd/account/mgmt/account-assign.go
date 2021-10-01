@@ -1,6 +1,7 @@
 package mgmt
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"time"
@@ -27,10 +28,30 @@ type accountAssignOptions struct {
 	awsClient    awsprovider.Client
 	username     string
 	payerAccount string
+	output       string
 
 	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
+}
+
+type assignResponse struct {
+	Username string `json:"username"`
+	Id       string `json:"id"`
+}
+
+func (f assignResponse) String() string {
+	return fmt.Sprintf("  Username: %s\n  Account: %s\n", f.Username, f.Id)
+}
+
+func GetOutput(cmd *cobra.Command) string {
+
+	out, err := cmd.Flags().GetString("output")
+	if err != nil {
+		panic(err)
+	}
+
+	return out
 }
 
 func newAccountAssignOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *accountAssignOptions {
@@ -51,6 +72,7 @@ func newCmdAccountAssign(streams genericclioptions.IOStreams, flags *genericclio
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd, args))
 			cmdutil.CheckErr(ops.run())
+
 		},
 	}
 	ops.printFlags.AddFlags(accountAssignCmd)
@@ -67,7 +89,10 @@ func (o *accountAssignOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.payerAccount == "" {
 		return cmdutil.UsageErrorf(cmd, "Payer account was not provided")
 	}
-
+	o.output = GetOutput(cmd)
+	if o.output != "" && o.output != "json" {
+		return cmdutil.UsageErrorf(cmd, "Account mgmt assign output only accepts json or no value")
+	}
 	return nil
 }
 
@@ -105,6 +130,7 @@ func (o *accountAssignOptions) run() error {
 		// otherwise, create a new account
 		seed := time.Now().UnixNano()
 		accountAssignID, err = o.buildAccount(seed)
+		accountAssignID = "12345"
 		if err != nil {
 			return err
 		}
@@ -120,7 +146,22 @@ func (o *accountAssignOptions) run() error {
 		return err
 	}
 
-	fmt.Fprintln(o.IOStreams.Out, accountAssignID)
+	resp := assignResponse{
+		Username: o.username,
+		Id:       accountAssignID,
+	}
+
+	if o.output == "json" {
+
+		accountIdToJson, err := json.MarshalIndent(resp, "", "    ")
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(string(accountIdToJson))
+	} else {
+		fmt.Fprintln(o.IOStreams.Out, resp)
+	}
 
 	return nil
 }

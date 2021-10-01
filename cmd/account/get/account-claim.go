@@ -133,6 +133,7 @@ func (o *getAccountClaimOptions) run() error {
 		return p.Flush()
 	}
 
+	// Printing out runtime objects
 	resourcePrinter, err := o.printFlags.ToPrinter(o.output)
 	if err != nil {
 		return err
