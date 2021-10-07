@@ -33,10 +33,9 @@ type listResponse struct {
 }
 
 func (f listResponse) String() string {
-	for i := range f.Accounts {
-		return fmt.Sprintf("  Username: %s\n  Accounts: %s\n", f.Username, f.Accounts[i])
-	}
-	return ""
+
+	return fmt.Sprintf("  Username: %s\n  Accounts: %s\n", f.Username, f.Accounts)
+
 }
 
 func newAccountListOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *accountListOptions {
@@ -141,7 +140,7 @@ func (o *accountListOptions) run() error {
 			}
 			fmt.Println(string(accountsToJson))
 		} else {
-			fmt.Fprintln(o.IOStreams.Out, key, value)
+			fmt.Fprintln(o.IOStreams.Out, resp)
 		}
 
 	}
