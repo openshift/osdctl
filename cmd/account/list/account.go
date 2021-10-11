@@ -33,7 +33,6 @@ func newCmdListAccount(streams genericclioptions.IOStreams, flags *genericcliopt
 	}
 
 	ops.printFlags.AddFlags(listAccountCmd)
-	listAccountCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
 	listAccountCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 	listAccountCmd.Flags().StringVarP(&ops.reused, "reuse", "r", "",
@@ -52,8 +51,7 @@ type listAccountOptions struct {
 	reused  string
 	claimed string
 	state   string
-
-	output string
+	output  string
 
 	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
@@ -82,6 +80,8 @@ func (o *listAccountOptions) complete(cmd *cobra.Command, _ []string) error {
 	default:
 		return cmdutil.UsageErrorf(cmd, "unsupported account state "+o.state)
 	}
+
+	o.output = GetOutput(cmd)
 
 	switch o.reused {
 	case "", "true", "false":

@@ -10,6 +10,7 @@ import (
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v2"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
@@ -73,8 +74,8 @@ func (o *accountListOptions) complete(cmd *cobra.Command, _ []string) error {
 		return cmdutil.UsageErrorf(cmd, "Cannot provide both username and account ID")
 	}
 	o.output = GetOutput(cmd)
-	if o.output != "" && o.output != "json" {
-		return cmdutil.UsageErrorf(cmd, "Account mgmt assign output only accepts json or no value")
+	if o.output != "" && o.output != "json" && o.output != "yaml" {
+		return cmdutil.UsageErrorf(cmd, "Invalid output value")
 	}
 	return nil
 }
@@ -134,11 +135,23 @@ func (o *accountListOptions) run() error {
 		}
 
 		if o.output == "json" {
+
 			accountsToJson, err := json.MarshalIndent(resp, "", "    ")
 			if err != nil {
 				return err
 			}
+
 			fmt.Println(string(accountsToJson))
+
+		} else if o.output == "yaml" {
+
+			accountIdToYaml, err := yaml.Marshal(resp)
+			if err != nil {
+				return err
+			}
+
+			fmt.Println(string(accountIdToYaml))
+
 		} else {
 			fmt.Fprintln(o.IOStreams.Out, resp)
 		}

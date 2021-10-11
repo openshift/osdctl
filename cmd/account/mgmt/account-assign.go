@@ -3,11 +3,13 @@ package mgmt
 import (
 	"encoding/json"
 	"fmt"
+
 	"math/rand"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/organizations"
+	"gopkg.in/yaml.v2"
 
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
@@ -90,8 +92,8 @@ func (o *accountAssignOptions) complete(cmd *cobra.Command, _ []string) error {
 		return cmdutil.UsageErrorf(cmd, "Payer account was not provided")
 	}
 	o.output = GetOutput(cmd)
-	if o.output != "" && o.output != "json" {
-		return cmdutil.UsageErrorf(cmd, "Account mgmt assign output only accepts json or no value")
+	if o.output != "" && o.output != "json" && o.output != "yaml" {
+		return cmdutil.UsageErrorf(cmd, "Invalid output value")
 	}
 	return nil
 }
@@ -159,6 +161,16 @@ func (o *accountAssignOptions) run() error {
 		}
 
 		fmt.Println(string(accountIdToJson))
+
+	} else if o.output == "yaml" {
+
+		accountIdToYaml, err := yaml.Marshal(resp)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(string(accountIdToYaml))
+
 	} else {
 		fmt.Fprintln(o.IOStreams.Out, resp)
 	}
