@@ -173,7 +173,7 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 			klog.Error("Unexpected error parsing the account CR suffix")
 			return nil, fmt.Errorf("Unexpected error parsing the account CR suffix")
 		}
-		factory.Awscloudfactory.RoleName = fmt.Sprintf("BYOCAdminAccess-%s", acctSuffix)
+		factory.Awscloudfactory.RoleName = fmt.Sprintf("ManagedOpenShift-Support-%s", acctSuffix)
 
 		// Get STS Credentials
 		if verbose {

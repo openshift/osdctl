@@ -146,8 +146,8 @@ func (o *rotateSecretOptions) run() error {
 			return err
 		}
 
-		// Role chain to assume BYOCAdminAccessRole-{uid}
-		roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, "BYOCAdminAccess-"+accountIDSuffixLabel))
+		// Role chain to assume ManagedOpenShift-Support-{uid}
+		roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, "ManagedOpenShift-Support-"+accountIDSuffixLabel))
 		credentials, err = awsprovider.GetAssumeRoleCredentials(srepRoleClient, aws.Int64(900),
 			callerIdentityOutput.UserId, roleArn)
 		if err != nil {

@@ -275,8 +275,8 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 		return err
 	}
 
-	// Role chain to assume BYOCAdminAccessRole-{uid}
-	roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", account.Spec.AwsAccountID, "BYOCAdminAccess-"+accountIDSuffixLabel))
+	// Role chain to assume ManagedOpenShift-Support-{uid}
+	roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", account.Spec.AwsAccountID, "ManagedOpenShift-Support-"+accountIDSuffixLabel))
 	credentials, err := awsprovider.GetAssumeRoleCredentials(srepRoleClient, aws.Int64(900),
 		callerIdentityOutput.UserId, roleArn)
 	if err != nil {
