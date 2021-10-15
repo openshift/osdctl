@@ -17,7 +17,7 @@ require (
 	github.com/openshift-online/ocm-sdk-go v0.1.152
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/openshift/aws-account-operator/pkg/apis v0.0.0-20210611151019-01b1df7a3e9e
-	github.com/openshift/gcp-project-operator v0.0.0-20210818135501-58ea50451037
+	github.com/openshift/gcp-project-operator v0.0.0-20210906153132-ce9b2425f1a7
 	github.com/openshift/hive v1.0.5
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
 	github.com/pkg/errors v0.9.1
