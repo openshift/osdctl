@@ -15,10 +15,15 @@ fmt:
 	@gofmt -w -s .
 	@git diff --exit-code .
 
-OS := $(shell go env GOOS | sed 's/[a-z]/\U&/')
+OS := $(shell go env GOOS)
 .PHONY: download-goreleaser
 download-goreleaser:
-	mkdir -p ./bin && curl -sSLf https://github.com/goreleaser/goreleaser/releases/latest/download/goreleaser_${OS}_x86_64.tar.gz -o - | tar --extract --gunzip --directory ./bin goreleaser
+	@if [ "${OS}" = "darwin" ]; then\
+		mkdir -p ./bin && curl -sSLf https://github.com/goreleaser/goreleaser/releases/latest/download/goreleaser_Darwin_all.tar.gz -o - | tar --extract --gunzip --directory ./bin goreleaser;\
+	fi
+	@if [ "${OS}" = "linux" ]; then\
+    		mkdir -p ./bin && curl -sSLf https://github.com/goreleaser/goreleaser/releases/latest/download/goreleaser_Linux_x86_64.tar.gz -o - | tar --extract --gunzip --directory ./bin goreleaser;\
+    fi
 
 # CI build containers don't include goreleaser by default,
 # so they need to get it first, and then run the build
