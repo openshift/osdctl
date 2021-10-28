@@ -51,7 +51,7 @@ mockgen: ensure-mockgen
 	@git diff --exit-code -- ./pkg/provider/aws/mock
 
 ensure-mockgen:
-	go get github.com/golang/mock/mockgen@v1.4.4
+	go get github.com/golang/mock/mockgen@v1.5.0
 
 test:
 	go test ${BUILDFLAGS} ./... -covermode=atomic -coverpkg=./...
