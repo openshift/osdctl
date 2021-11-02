@@ -260,6 +260,15 @@ aws_account_operator_total_accounts_crs_claimed{name="aws-account-operator"} => 
 ......
 ```
 
+### Get cluster policy and policy-diff
+
+`policy` command saves the crs files in /tmp/crs- directory for given `x.y.z` release version. `policy-diff` command, in addition, compares the files of directories and outputs the diff.
+
+```bash
+osdctl sts policy <OCP version>
+osdctl sts policy-diff <old version> <new version>
+```
+
 ### Hive ClusterDeployment CR list
 
 ```bash
