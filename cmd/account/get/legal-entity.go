@@ -17,7 +17,6 @@ import (
 
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/pkg/k8s"
-	"github.com/openshift/osdctl/pkg/printer"
 )
 
 // newCmdGetLegalEntity implements the get legal-entity command which get
@@ -58,15 +57,14 @@ type getLegalEntityOptions struct {
 	accountNamespace string
 	output           string
 
-	flags      *genericclioptions.ConfigFlags
-	printFlags *printer.PrintFlags
+	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
 	kubeCli client.Client
 }
 
 type legalEntityResponse struct {
-	Name string `json:"name",yaml:"name"`
-	Id   string `json:"id",yaml:""id`
+	Name string `json:"name" yaml:"name"`
+	Id   string `json:"id" yaml:"id"`
 }
 
 func (f legalEntityResponse) String() string {
