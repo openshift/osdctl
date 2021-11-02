@@ -29,8 +29,8 @@ type accountListOptions struct {
 }
 
 type listResponse struct {
-	Username string   `json:"username"`
-	Accounts []string `json:"accounts"`
+	Username string   `json:"username",yaml:"username"`
+	Accounts []string `json:"accounts",yaml:"accounts"`
 }
 
 func (f listResponse) String() string {

@@ -65,8 +65,8 @@ type getLegalEntityOptions struct {
 }
 
 type legalEntityResponse struct {
-	Name string `json:"name"`
-	Id   string `json:"id"`
+	Name string `json:"name",yaml:"name"`
+	Id   string `json:"id",yaml:""id`
 }
 
 func (f legalEntityResponse) String() string {

@@ -87,9 +87,9 @@ type listOptions struct {
 }
 
 type listCostResponse struct {
-	OuId    string  `json:"ouid"`
-	OuName  string  `json:"ouname"`
-	CostUSD float64 `json:"costUSD"`
+	OuId    string  `json:"ouid",yaml:"ouid"`
+	OuName  string  `json:"ouname",yaml:"ouname"`
+	CostUSD float64 `json:"costUSD",yaml:"costUSD"`
 }
 
 func (f listCostResponse) String() string {

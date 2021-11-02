@@ -38,8 +38,8 @@ type accountAssignOptions struct {
 }
 
 type assignResponse struct {
-	Username string `json:"username"`
-	Id       string `json:"id"`
+	Username string `json:"username",yaml:"username"`
+	Id       string `json:"id",yaml:"id"`
 }
 
 func (f assignResponse) String() string {
