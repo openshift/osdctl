@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"gopkg.in/yaml.v2"
-
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
+	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v2"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
@@ -39,16 +39,6 @@ func newCmdGetLegalEntity(streams genericclioptions.IOStreams, flags *genericcli
 	getLegalEntityCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "AWS account ID")
 
 	return getLegalEntityCmd
-}
-
-func GetOutput(cmd *cobra.Command) string {
-
-	out, err := cmd.Flags().GetString("output")
-	if err != nil {
-		panic(err)
-	}
-
-	return out
 }
 
 // getLegalEntityOptions defines the struct for running get legal-entity command
@@ -85,12 +75,12 @@ func (o *getLegalEntityOptions) complete(cmd *cobra.Command, _ []string) error {
 		return cmdutil.UsageErrorf(cmd, accountIDRequired)
 	}
 
-	o.output = GetOutput(cmd)
-	if o.output != "" && o.output != "json" && o.output != "yaml" {
-		return cmdutil.UsageErrorf(cmd, "Invalid output value")
+	output, err := outputflag.GetOutput(cmd)
+	if err != nil {
+		return err
 	}
+	o.output = output
 
-	var err error
 	o.kubeCli, err = k8s.NewClient(o.flags)
 	if err != nil {
 		return err

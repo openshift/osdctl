@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/organizations"
+	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	"gopkg.in/yaml.v2"
 
 	"github.com/openshift/osdctl/pkg/printer"
@@ -46,16 +47,6 @@ func (f assignResponse) String() string {
 	return fmt.Sprintf("  Username: %s\n  Account: %s\n", f.Username, f.Id)
 }
 
-func GetOutput(cmd *cobra.Command) string {
-
-	out, err := cmd.Flags().GetString("output")
-	if err != nil {
-		panic(err)
-	}
-
-	return out
-}
-
 func newAccountAssignOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *accountAssignOptions {
 	return &accountAssignOptions{
 		flags:      flags,
@@ -91,10 +82,11 @@ func (o *accountAssignOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.payerAccount == "" {
 		return cmdutil.UsageErrorf(cmd, "Payer account was not provided")
 	}
-	o.output = GetOutput(cmd)
-	if o.output != "" && o.output != "json" && o.output != "yaml" {
-		return cmdutil.UsageErrorf(cmd, "Invalid output value")
+	output, err := outputflag.GetOutput(cmd)
+	if err != nil {
+		return err
 	}
+	o.output = output
 	return nil
 }
 

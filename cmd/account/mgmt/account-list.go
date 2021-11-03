@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
+	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
@@ -73,10 +74,11 @@ func (o *accountListOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.username != "" && o.accountID != "" {
 		return cmdutil.UsageErrorf(cmd, "Cannot provide both username and account ID")
 	}
-	o.output = GetOutput(cmd)
-	if o.output != "" && o.output != "json" && o.output != "yaml" {
-		return cmdutil.UsageErrorf(cmd, "Invalid output value")
+	output, err := outputflag.GetOutput(cmd)
+	if err != nil {
+		return err
 	}
+	o.output = output
 	return nil
 }
 

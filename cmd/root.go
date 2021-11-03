@@ -55,7 +55,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	}
 
 	rootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
-	rootCmd.PersistentFlags().StringVarP(&Output, "output", "o", "", "Output format. One of: json | yaml | text (default)")
+	rootCmd.PersistentFlags().StringVarP(&Output, "output", "o", "", "Invalid output format: Valid formats are ['', 'json', 'yaml']")
 
 	// Reuse kubectl global flags to provide namespace, context and credential options.
 	// We are not using NewConfigFlags here to avoid adding too many flags

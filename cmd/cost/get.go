@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"time"
 
-	"gopkg.in/yaml.v2"
-
+	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v2"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -61,10 +61,11 @@ func (o *getOptions) checkArgs(cmd *cobra.Command, _ []string) error {
 	if o.ou == "" {
 		return cmdutil.UsageErrorf(cmd, "Please provide OU")
 	}
-	o.output = GetOutput(cmd)
-	if o.output != "" && o.output != "json" && o.output != "yaml" {
-		return cmdutil.UsageErrorf(cmd, "Invalid output value")
+	output, err := outputflag.GetOutput(cmd)
+	if err != nil {
+		return err
 	}
+	o.output = output
 	return nil
 }
 
