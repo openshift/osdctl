@@ -1,15 +1,15 @@
-## osdctl options
+## osdctl account mgmt
 
-Print the list of flags inherited by all commands
+AWS Account Management
 
 ```
-osdctl options
+osdctl account mgmt [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for options
+  -h, --help   help for mgmt
 ```
 
 ### Options inherited from parent commands
@@ -33,5 +33,8 @@ osdctl options
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl account](osdctl_account.md)	 - AWS Account related utilities
+* [osdctl account mgmt assign](osdctl_account_mgmt_assign.md)	 - Assign account to user
+* [osdctl account mgmt list](osdctl_account_mgmt_list.md)	 - List out accounts for username
+* [osdctl account mgmt unassign](osdctl_account_mgmt_unassign.md)	 - Unassign account to user
 

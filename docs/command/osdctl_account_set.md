@@ -2,10 +2,6 @@
 
 Set AWS Account CR status
 
-### Synopsis
-
-Set AWS Account CR status
-
 ```
 osdctl account set <account name> [flags]
 ```

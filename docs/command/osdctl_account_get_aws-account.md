@@ -2,10 +2,6 @@
 
 Get AWS Account ID
 
-### Synopsis
-
-Get AWS Account ID
-
 ```
 osdctl account get aws-account [flags]
 ```

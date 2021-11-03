@@ -2,10 +2,6 @@
 
 Get resources
 
-### Synopsis
-
-Get resources
-
 ```
 osdctl account get [flags]
 ```

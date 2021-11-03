@@ -2,10 +2,6 @@
 
 List cluster deployment crs
 
-### Synopsis
-
-List cluster deployment crs
-
 ```
 osdctl clusterdeployment list [flags]
 ```

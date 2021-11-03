@@ -1,15 +1,15 @@
-## osdctl options
+## osdctl cluster
 
-Print the list of flags inherited by all commands
+Provides vitals of an AWS cluster
 
 ```
-osdctl options
+osdctl cluster [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for options
+  -h, --help   help for cluster
 ```
 
 ### Options inherited from parent commands
@@ -34,4 +34,5 @@ osdctl options
 ### SEE ALSO
 
 * [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl cluster health](osdctl_cluster_health.md)	 - Describes health of cluster nodes and provides other cluster vitals.
 

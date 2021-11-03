@@ -1,15 +1,16 @@
-## osdctl options
+## osdctl sts policy
 
-Print the list of flags inherited by all commands
+Get OCP STS policy
 
 ```
-osdctl options
+osdctl sts policy [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for options
+  -h, --help                     help for policy
+  -r, --release-version string   
 ```
 
 ### Options inherited from parent commands
@@ -33,5 +34,5 @@ osdctl options
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl sts](osdctl_sts.md)	 - STS related utilities
 

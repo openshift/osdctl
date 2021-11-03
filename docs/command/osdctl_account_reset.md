@@ -2,10 +2,6 @@
 
 Reset AWS Account CR
 
-### Synopsis
-
-Reset AWS Account CR
-
 ```
 osdctl account reset <account name> [flags]
 ```

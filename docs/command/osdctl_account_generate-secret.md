@@ -2,10 +2,6 @@
 
 Generate IAM credentials secret
 
-### Synopsis
-
-Generate IAM credentials secret
-
 ```
 osdctl account generate-secret <IAM User name> [flags]
 ```

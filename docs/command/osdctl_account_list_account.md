@@ -2,10 +2,6 @@
 
 List AWS Account CR
 
-### Synopsis
-
-List AWS Account CR
-
 ```
 osdctl account list account [flags]
 ```

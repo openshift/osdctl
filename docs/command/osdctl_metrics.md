@@ -2,10 +2,6 @@
 
 Display metrics of aws-account-operator
 
-### Synopsis
-
-Display metrics of aws-account-operator
-
 ```
 osdctl metrics [flags]
 ```

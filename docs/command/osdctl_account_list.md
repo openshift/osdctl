@@ -2,10 +2,6 @@
 
 List resources
 
-### Synopsis
-
-List resources
-
 ```
 osdctl account list [flags]
 ```

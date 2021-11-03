@@ -2,10 +2,6 @@
 
 Get total cost of a given OU
 
-### Synopsis
-
-Get total cost of a given OU
-
 ```
 osdctl cost get [flags]
 ```
@@ -13,11 +9,13 @@ osdctl cost get [flags]
 ### Options
 
 ```
-      --csv           output result as csv
-  -h, --help          help for get
-      --ou string     get OU ID
-  -r, --recursive     recurse through OUs
-  -t, --time string   set time. One of 'LM', 'MTD', 'TYD', '3M', '6M', '1Y'
+      --csv            output result as csv
+      --end string     set end date range
+  -h, --help           help for get
+      --ou string      get OU ID
+  -r, --recursive      recurse through OUs
+      --start string   set start date range
+  -t, --time string    set time. One of 'LM', 'MTD', 'TYD', '3M', '6M', '1Y'
 ```
 
 ### Options inherited from parent commands

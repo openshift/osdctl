@@ -2,10 +2,6 @@
 
 List the cost of each OU under given OU
 
-### Synopsis
-
-List the cost of each OU under given OU
-
 ```
 osdctl cost list [flags]
 ```
@@ -13,10 +9,12 @@ osdctl cost list [flags]
 ### Options
 
 ```
-      --csv           output result as csv
-  -h, --help          help for list
-      --ou string     get OU ID
-  -t, --time string   set time. One of 'LM', 'MTD', 'TYD', '3M', '6M', '1Y'
+      --csv            output result as csv
+      --end string     set end date range
+  -h, --help           help for list
+      --ou string      get OU ID
+      --start string   set start date range
+  -t, --time string    set time. One of 'LM', 'MTD', 'TYD', '3M', '6M', '1Y'
 ```
 
 ### Options inherited from parent commands

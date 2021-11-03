@@ -2,10 +2,6 @@
 
 Describe AWS service-quotas
 
-### Synopsis
-
-Describe AWS service-quotas
-
 ```
 osdctl account servicequotas describe [flags]
 ```

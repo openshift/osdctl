@@ -2,10 +2,6 @@
 
 List AWS Account Claim CR
 
-### Synopsis
-
-List AWS Account Claim CR
-
 ```
 osdctl account list account-claim [flags]
 ```

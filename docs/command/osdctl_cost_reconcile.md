@@ -2,10 +2,6 @@
 
 Checks if there's a cost category for every OU. If an OU is missing a cost category, creates the cost category
 
-### Synopsis
-
-Checks if there's a cost category for every OU. If an OU is missing a cost category, creates the cost category
-
 ```
 osdctl cost reconcile [flags]
 ```
