@@ -1,11 +1,8 @@
 package cost
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
-
-	"gopkg.in/yaml.v2"
 
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
@@ -166,27 +163,7 @@ func printCostList(cost float64, unit string, OU *organizations.OrganizationalUn
 		return nil
 	}
 
-	if ops.output == "json" {
-
-		costToJson, err := json.MarshalIndent(resp, "", "    ")
-		if err != nil {
-			return err
-		}
-
-		fmt.Println(string(costToJson))
-
-	} else if ops.output == "yaml" {
-
-		costToYaml, err := yaml.Marshal(resp)
-		if err != nil {
-			return err
-		}
-
-		fmt.Println(string(costToYaml))
-
-	} else {
-		fmt.Fprintln(ops.IOStreams.Out, resp)
-	}
+	outputflag.PrintResponse(ops.output, resp)
 
 	return nil
 }

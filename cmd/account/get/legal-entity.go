@@ -2,13 +2,11 @@ package get
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
@@ -110,27 +108,7 @@ func (o *getLegalEntityOptions) run() error {
 				Id:   account.Spec.LegalEntity.ID,
 			}
 
-			if o.output == "json" {
-
-				accountsToJson, err := json.MarshalIndent(resp, "", "    ")
-				if err != nil {
-					return err
-				}
-
-				fmt.Println(string(accountsToJson))
-
-			} else if o.output == "yaml" {
-
-				accountIdToYaml, err := yaml.Marshal(resp)
-				if err != nil {
-					return err
-				}
-
-				fmt.Println(string(accountIdToYaml))
-
-			} else {
-				fmt.Fprintln(o.IOStreams.Out, resp)
-			}
+			outputflag.PrintResponse(o.output, resp)
 		}
 	}
 

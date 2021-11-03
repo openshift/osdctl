@@ -1,7 +1,6 @@
 package mgmt
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -11,7 +10,7 @@ import (
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
@@ -136,27 +135,7 @@ func (o *accountListOptions) run() error {
 			Accounts: value,
 		}
 
-		if o.output == "json" {
-
-			accountsToJson, err := json.MarshalIndent(resp, "", "    ")
-			if err != nil {
-				return err
-			}
-
-			fmt.Println(string(accountsToJson))
-
-		} else if o.output == "yaml" {
-
-			accountIdToYaml, err := yaml.Marshal(resp)
-			if err != nil {
-				return err
-			}
-
-			fmt.Println(string(accountIdToYaml))
-
-		} else {
-			fmt.Fprintln(o.IOStreams.Out, resp)
-		}
+		outputflag.PrintResponse(o.output, resp)
 
 	}
 

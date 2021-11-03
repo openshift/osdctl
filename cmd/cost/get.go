@@ -1,7 +1,6 @@
 package cost
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
@@ -10,7 +9,6 @@ import (
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -92,16 +90,6 @@ func (f getCostResponse) String() string {
 
 	return fmt.Sprintf("  OuId: %s\n  OuName: %s\n  Cost: %f\n", f.OuId, f.OuName, f.CostUSD)
 
-}
-
-func GetOutput(cmd *cobra.Command) string {
-
-	out, err := cmd.Flags().GetString("output")
-	if err != nil {
-		panic(err)
-	}
-
-	return out
 }
 
 func newGetOptions(streams genericclioptions.IOStreams) *getOptions {
@@ -387,27 +375,7 @@ func (o *getOptions) printCostGet(cost float64, unit string, ops *getOptions, OU
 		fmt.Println("Cost of all accounts under OU:")
 	}
 
-	if o.output == "json" {
-
-		costToJson, err := json.MarshalIndent(resp, "", "    ")
-		if err != nil {
-			return err
-		}
-
-		fmt.Println(string(costToJson))
-
-	} else if o.output == "yaml" {
-
-		costToYaml, err := yaml.Marshal(resp)
-		if err != nil {
-			return err
-		}
-
-		fmt.Println(string(costToYaml))
-
-	} else {
-		fmt.Fprintln(o.IOStreams.Out, resp)
-	}
+	outputflag.PrintResponse(o.output, resp)
 
 	return nil
 }

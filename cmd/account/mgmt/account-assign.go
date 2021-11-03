@@ -1,7 +1,6 @@
 package mgmt
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"math/rand"
@@ -10,7 +9,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/organizations"
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
-	"gopkg.in/yaml.v2"
 
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
@@ -145,27 +143,7 @@ func (o *accountAssignOptions) run() error {
 		Id:       accountAssignID,
 	}
 
-	if o.output == "json" {
-
-		accountIdToJson, err := json.MarshalIndent(resp, "", "    ")
-		if err != nil {
-			return err
-		}
-
-		fmt.Println(string(accountIdToJson))
-
-	} else if o.output == "yaml" {
-
-		accountIdToYaml, err := yaml.Marshal(resp)
-		if err != nil {
-			return err
-		}
-
-		fmt.Println(string(accountIdToYaml))
-
-	} else {
-		fmt.Fprintln(o.IOStreams.Out, resp)
-	}
+	outputflag.PrintResponse(o.output, resp)
 
 	return nil
 }
