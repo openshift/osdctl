@@ -5,15 +5,16 @@ import (
 	"fmt"
 
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
+	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	"github.com/spf13/cobra"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/pkg/k8s"
-	"github.com/openshift/osdctl/pkg/printer"
 )
 
 // newCmdGetLegalEntity implements the get legal-entity command which get
@@ -42,10 +43,22 @@ func newCmdGetLegalEntity(streams genericclioptions.IOStreams, flags *genericcli
 type getLegalEntityOptions struct {
 	accountID        string
 	accountNamespace string
+	output           string
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
 	kubeCli client.Client
+}
+
+type legalEntityResponse struct {
+	Name string `json:"name" yaml:"name"`
+	Id   string `json:"id" yaml:"id"`
+}
+
+func (f legalEntityResponse) String() string {
+
+	return fmt.Sprintf("  Name: %s\n  Id: %s\n", f.Name, f.Id)
+
 }
 
 func newGetLegalEntityOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *getLegalEntityOptions {
@@ -60,7 +73,12 @@ func (o *getLegalEntityOptions) complete(cmd *cobra.Command, _ []string) error {
 		return cmdutil.UsageErrorf(cmd, accountIDRequired)
 	}
 
-	var err error
+	output, err := outputflag.GetOutput(cmd)
+	if err != nil {
+		return err
+	}
+	o.output = output
+
 	o.kubeCli, err = k8s.NewClient(o.flags)
 	if err != nil {
 		return err
@@ -72,7 +90,10 @@ func (o *getLegalEntityOptions) complete(cmd *cobra.Command, _ []string) error {
 func (o *getLegalEntityOptions) run() error {
 	ctx := context.TODO()
 
-	var accounts awsv1alpha1.AccountList
+	var (
+		accounts awsv1alpha1.AccountList
+	)
+
 	if err := o.kubeCli.List(ctx, &accounts, &client.ListOptions{
 		Namespace: o.accountNamespace,
 	}); err != nil {
@@ -81,10 +102,13 @@ func (o *getLegalEntityOptions) run() error {
 
 	for _, account := range accounts.Items {
 		if account.Spec.AwsAccountID == o.accountID {
-			p := printer.NewTablePrinter(o.IOStreams.Out, 20, 1, 3, ' ')
-			p.AddRow([]string{"LegalEntity Name", "LegalEntity ID"})
-			p.AddRow([]string{account.Spec.LegalEntity.Name, account.Spec.LegalEntity.ID})
-			return p.Flush()
+
+			resp := legalEntityResponse{
+				Name: account.Spec.LegalEntity.Name,
+				Id:   account.Spec.LegalEntity.ID,
+			}
+
+			outputflag.PrintResponse(o.output, resp)
 		}
 	}
 

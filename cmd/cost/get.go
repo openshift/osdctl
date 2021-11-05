@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
 
@@ -58,6 +59,11 @@ func (o *getOptions) checkArgs(cmd *cobra.Command, _ []string) error {
 	if o.ou == "" {
 		return cmdutil.UsageErrorf(cmd, "Please provide OU")
 	}
+	output, err := outputflag.GetOutput(cmd)
+	if err != nil {
+		return err
+	}
+	o.output = output
 	return nil
 }
 
@@ -69,8 +75,21 @@ type getOptions struct {
 	start     string
 	end       string
 	csv       bool
+	output    string
 
 	genericclioptions.IOStreams
+}
+
+type getCostResponse struct {
+	OuId    string  `json:"ouid" yaml:"ouid"`
+	OuName  string  `json:"ouname" yaml:"ouname"`
+	CostUSD float64 `json:"costUSD" yaml:"costUSD"`
+}
+
+func (f getCostResponse) String() string {
+
+	return fmt.Sprintf("  OuId: %s\n  OuName: %s\n  Cost: %f\n", f.OuId, f.OuName, f.CostUSD)
+
 }
 
 func newGetOptions(streams genericclioptions.IOStreams) *getOptions {
@@ -102,7 +121,7 @@ func (o *getOptions) run() error {
 		}
 	}
 
-	printCostGet(cost, unit, o, OU)
+	o.printCostGet(cost, unit, o, OU)
 	return nil
 }
 
@@ -340,14 +359,23 @@ func getTimePeriod(timePtr *string) (string, string) {
 	return start, end
 }
 
-func printCostGet(cost float64, unit string, ops *getOptions, OU *organizations.OrganizationalUnit) {
+func (o *getOptions) printCostGet(cost float64, unit string, ops *getOptions, OU *organizations.OrganizationalUnit) error {
+
+	resp := getCostResponse{
+		OuId:    *OU.Id,
+		OuName:  *OU.Name,
+		CostUSD: cost,
+	}
+
 	if ops.csv { //If csv option specified, print result in csv
 		fmt.Printf("\n%s,%f (%s)\n\n", *OU.Name, cost, unit)
-	} else if ops.recursive {
-		//fmt.Printf("\nCost of %s OU recursively is: %f %s\n\n", *OU.Name, cost, unit)
-		fmt.Printf("\nCost of all accounts under OU (%s, %s):\n%f %s\n\n", *OU.Id, *OU.Name, cost, unit)
-	} else {
-		//fmt.Printf("\nCost of %s OU is: %f %s\n\n", *OU.Name, cost, unit)
-		fmt.Printf("\nCost of OU: (%s, %s):\n%f %s\n\n", *OU.Id, *OU.Name, cost, unit)
+		return nil
 	}
+	if ops.recursive {
+		fmt.Println("Cost of all accounts under OU:")
+	}
+
+	outputflag.PrintResponse(o.output, resp)
+
+	return nil
 }

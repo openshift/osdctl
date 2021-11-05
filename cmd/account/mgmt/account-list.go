@@ -6,9 +6,11 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
+	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
+
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
@@ -19,10 +21,22 @@ type accountListOptions struct {
 	username     string
 	payerAccount string
 	accountID    string
+	output       string
 
 	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
+}
+
+type listResponse struct {
+	Username string   `json:"username" yaml:"username"`
+	Accounts []string `json:"accounts" yaml:"accounts"`
+}
+
+func (f listResponse) String() string {
+
+	return fmt.Sprintf("  Username: %s\n  Accounts: %s\n", f.Username, f.Accounts)
+
 }
 
 func newAccountListOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *accountListOptions {
@@ -59,6 +73,11 @@ func (o *accountListOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.username != "" && o.accountID != "" {
 		return cmdutil.UsageErrorf(cmd, "Cannot provide both username and account ID")
 	}
+	output, err := outputflag.GetOutput(cmd)
+	if err != nil {
+		return err
+	}
+	o.output = output
 	return nil
 }
 
@@ -111,7 +130,13 @@ func (o *accountListOptions) run() error {
 	}
 
 	for key, value := range o.m {
-		fmt.Fprintln(o.IOStreams.Out, key, value)
+		resp := listResponse{
+			Username: key,
+			Accounts: value,
+		}
+
+		outputflag.PrintResponse(o.output, resp)
+
 	}
 
 	return nil
