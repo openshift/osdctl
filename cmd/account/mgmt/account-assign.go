@@ -2,13 +2,11 @@ package mgmt
 
 import (
 	"fmt"
-
 	"math/rand"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/organizations"
-	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
@@ -29,20 +27,10 @@ type accountAssignOptions struct {
 	awsClient    awsprovider.Client
 	username     string
 	payerAccount string
-	output       string
 
 	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
-}
-
-type assignResponse struct {
-	Username string `json:"username" yaml:"username"`
-	Id       string `json:"id" yaml:"id"`
-}
-
-func (f assignResponse) String() string {
-	return fmt.Sprintf("  Username: %s\n  Account: %s\n", f.Username, f.Id)
 }
 
 func newAccountAssignOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *accountAssignOptions {
@@ -63,7 +51,6 @@ func newCmdAccountAssign(streams genericclioptions.IOStreams, flags *genericclio
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd, args))
 			cmdutil.CheckErr(ops.run())
-
 		},
 	}
 	ops.printFlags.AddFlags(accountAssignCmd)
@@ -80,11 +67,7 @@ func (o *accountAssignOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.payerAccount == "" {
 		return cmdutil.UsageErrorf(cmd, "Payer account was not provided")
 	}
-	output, err := outputflag.GetOutput(cmd)
-	if err != nil {
-		return err
-	}
-	o.output = output
+
 	return nil
 }
 
@@ -122,7 +105,6 @@ func (o *accountAssignOptions) run() error {
 		// otherwise, create a new account
 		seed := time.Now().UnixNano()
 		accountAssignID, err = o.buildAccount(seed)
-		accountAssignID = "12345"
 		if err != nil {
 			return err
 		}
@@ -138,12 +120,7 @@ func (o *accountAssignOptions) run() error {
 		return err
 	}
 
-	resp := assignResponse{
-		Username: o.username,
-		Id:       accountAssignID,
-	}
-
-	outputflag.PrintResponse(o.output, resp)
+	fmt.Fprintln(o.IOStreams.Out, accountAssignID)
 
 	return nil
 }
