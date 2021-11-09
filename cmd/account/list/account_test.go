@@ -10,10 +10,18 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
+type Flags struct {
+	configFlags *genericclioptions.ConfigFlags
+	output      string
+}
+
 func TestGetAccountCmdComplete(t *testing.T) {
 	g := NewGomegaWithT(t)
 	streams := genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr}
-	kubeFlags := genericclioptions.NewConfigFlags(false)
+	var flags Flags
+	flags.configFlags = genericclioptions.NewConfigFlags(false)
+	flags.output = "text"
+
 	testCases := []struct {
 		title       string
 		option      *listAccountOptions
@@ -32,7 +40,7 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "empty state",
 			option: &listAccountOptions{
 				state: "",
-				flags: kubeFlags,
+				flags: flags.configFlags,
 			},
 			errExpected: false,
 		},
@@ -40,7 +48,7 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "all state",
 			option: &listAccountOptions{
 				state: "all",
-				flags: kubeFlags,
+				flags: flags.configFlags,
 			},
 			errExpected: false,
 		},
@@ -48,7 +56,7 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "Ready state",
 			option: &listAccountOptions{
 				state: "Ready",
-				flags: kubeFlags,
+				flags: flags.configFlags,
 			},
 			errExpected: false,
 		},
@@ -80,7 +88,7 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "good reused true",
 			option: &listAccountOptions{
 				reused: "true",
-				flags:  kubeFlags,
+				flags:  flags.configFlags,
 			},
 			errExpected: false,
 		},
@@ -88,7 +96,7 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "good claim",
 			option: &listAccountOptions{
 				claimed: "false",
-				flags:   kubeFlags,
+				flags:   flags.configFlags,
 			},
 			errExpected: false,
 		},
@@ -98,7 +106,7 @@ func TestGetAccountCmdComplete(t *testing.T) {
 				state:   "Ready",
 				reused:  "true",
 				claimed: "false",
-				flags:   kubeFlags,
+				flags:   flags.configFlags,
 			},
 			errExpected: false,
 		},
@@ -106,7 +114,7 @@ func TestGetAccountCmdComplete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
-			cmd := newCmdListAccount(streams, kubeFlags)
+			cmd := newCmdListAccount(streams, flags.configFlags)
 			err := tc.option.complete(cmd, nil)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())
