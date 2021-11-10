@@ -76,7 +76,7 @@ var postCmd = &cobra.Command{
 		if clustersFile != "" {
 			contents, err := accessFile(clustersFile)
 			if err != nil {
-				log.Fatalf("Cannot reqd file %s: %q", clustersFile, err)
+				log.Fatalf("Cannot read file %s: %q", clustersFile, err)
 			}
 			err = parseClustersFile(contents)
 			if err != nil {
