@@ -23,11 +23,13 @@ import (
 
 var (
 	Message         servicelog.Message
+	ClustersFile    servicelog.ClustersFile
 	template        string
 	filterFiles     []string // Path to filter file
 	filtersFromFile string   // Contents of filterFiles
 	isDryRun        bool
 	skipPrompts     bool
+	clustersFile    string
 )
 
 const (
@@ -69,6 +71,23 @@ var postCmd = &cobra.Command{
 			}
 			filters := strings.Join(strings.Split(strings.TrimSpace(filtersFromFile), "\n"), " ")
 			filterParams = append(filterParams, filters)
+		}
+
+		if clustersFile != "" {
+			contents, err := accessFile(clustersFile)
+			if err != nil {
+				log.Fatalf("Cannot read file %s: %q", clustersFile, err)
+			}
+			err = parseClustersFile(contents)
+			if err != nil {
+				log.Fatalf("Cannot parse file %s: %q", clustersFile, err)
+			}
+			query := []string{}
+			for i := range ClustersFile.Clusters {
+				cluster := ClustersFile.Clusters[i]
+				query = append(query, generateQuery(cluster))
+			}
+			filterParams = query
 		}
 
 		clusters, err := applyFilters(ocmClient, filterParams)
@@ -116,6 +135,7 @@ func init() {
 	postCmd.Flags().StringArrayVarP(&filterParams, "query", "q", filterParams, "Specify a search query (eg. -q \"name like foo\") for a bulk-post to matching clusters.")
 	postCmd.Flags().BoolVarP(&skipPrompts, "yes", "y", false, "Skips all prompts.")
 	postCmd.Flags().StringArrayVarP(&filterFiles, "query-file", "f", filterFiles, "File containing search queries to apply. All lines in the file will be concatenated into a single query. If this flag is called multiple times, every file's search query will be combined with logical AND.")
+	postCmd.Flags().StringVarP(&clustersFile, "clusters-file", "c", clustersFile, "Read a list of clusters to post the servicelog to")
 }
 
 // parseUserParameters parse all the '-p FOO=BAR' parameters and checks for syntax errors
@@ -186,6 +206,11 @@ func accessFile(filePath string) ([]byte, error) {
 		}
 	}
 	return nil, fmt.Errorf("cannot read the file %q", filePath)
+}
+
+// parseClustersFile reads the clustrs file into a JSON struct
+func parseClustersFile(jsonFile []byte) error {
+	return json.Unmarshal(jsonFile, &ClustersFile)
 }
 
 // parseTemplate reads the template file into a JSON struct

@@ -284,3 +284,54 @@ osdctl federatedrole apply -u <URL>
 # apply via local file
 osdctl federatedrole apply -f <yaml file>
 ```
+
+### Send a servicelog to a cluster
+
+#### List servicelogs
+
+```bash
+# list current servicelogs
+CLUSTERID= # can be internal/external/name, but should be unique enough
+osdctl servicelog list ${CLUSTERID}
+
+# show all servicelogs (not only ones sent by SREP)
+CLUSTERID= # can be internal/external/name, but should be unique enough
+osdctl servicelog list ${CLUSTERID} --all-messages
+```
+
+#### Post servicelogs
+
+```bash
+EXTERNAL_ID= # an external id for a cluster
+TEMPLATE= # file or url in which the template exists in
+osdctl servicelog post --param=CLUSTER_UUID=${EXTERNAL_ID} --template=${TEMPLATE} --dry-run
+
+QUERIES_HERE= # queries that can be run on ocm's `clusters` resoruce
+TEMPLATE= # file or url in which the template exists in
+osdctl servicelog post --template=${TEMPLATE} --query=${QUERIES_HERE} --dry-run
+
+QUERIES_HERE= # queries that can be run on ocm's `clusters` resoruce
+# to test the queries you can run:
+# ocm list clusters --parameter search="${QUERIES_HERE}"
+cat << EOF > query_file.txt
+${QUERIES_HERE}
+EOF
+TEMPLATE= # file or url in which the template exists in
+osdctl servicelog post --template=${TEMPLATE} --query-file=query_file.txt --dry-run
+
+EXTERNAL_ID= # an external id for a cluster
+ANOTHER_EXTERNAL_ID= # similar, but shows how to  have multiple clusters as input
+# clusters_list.json will have the custom list of clusters to iterate on
+cat << EOF > clusters_list.json
+{
+  "clusters": [
+    "${EXTERNAL_ID}",
+    "${ANOTHER_EXTERNAL_ID}"
+  ]
+}
+EOF
+# post servicelog to a custom set of clusters
+# EXTERNAL_ID is inferred here from the `--clusters-file`
+TEMPLATE= # file or url in which the template exists in
+osdctl servicelog post --clusters-file=clusters_list.json --template=${TEMPLATE} --dry-run
+```

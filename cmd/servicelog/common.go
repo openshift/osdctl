@@ -50,7 +50,8 @@ func applyFilters(ocmClient *sdk.Connection, filters []string) ([]*v1.Cluster, e
 	}
 
 	requestSize := 50
-	request := ocmClient.ClustersMgmt().V1().Clusters().List().Search(strings.Join(filters, " and ")).Size(requestSize)
+	full_filters := strings.Join(filters, " and ")
+	request := ocmClient.ClustersMgmt().V1().Clusters().List().Search(full_filters).Size(requestSize)
 	response, err := request.Send()
 	if err != nil {
 		return nil, err
