@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	sdk "github.com/openshift-online/ocm-sdk-go"
+	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	k8spkg "github.com/openshift/osdctl/pkg/k8s"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -23,6 +25,8 @@ import (
 )
 
 // healthOptions defines the struct for running health command
+// This command requires the ocm API Token https://cloud.redhat.com/openshift/token be available in the OCM_TOKEN env variable.
+
 type healthOptions struct {
 	k8sclusterresourcefactory k8spkg.ClusterResourceFactoryOptions
 	output                    string
@@ -87,10 +91,18 @@ type ClusterHealthCondensedObject struct {
 	Name     string   `yaml:"Name"`
 	Provider string   `yaml:"Provider"`
 	AZs      []string `yaml:"AZs"`
-	Nodes    struct {
-		Expected int `yaml:"Expected"`
-		Running  int `yaml:"Running"`
-	} `yaml:"Nodes"`
+	Expected struct {
+		Master int         `yaml:"Master"`
+		Infra  int         `yaml:"Infra"`
+		Worker interface{} `yaml:"Worker"`
+	} `yaml:"Expected nodes"`
+	Actual struct {
+		Total          int `yaml:"Total"`
+		Stopped        int `yaml:"Stopped"`
+		RunningMasters int `yaml:"Running Masters"`
+		RunningInfra   int `yaml:"Running Infra"`
+		RunningWorker  int `yaml:"Running Worker"`
+	} `yaml:"Actual nodes"`
 }
 
 var healthObject = ClusterHealthCondensedObject{}
@@ -98,10 +110,20 @@ var healthObject = ClusterHealthCondensedObject{}
 func (o *healthOptions) run() error {
 
 	// This call gets the availability zone of the cluster, as well as the expected number of nodes.
-	az, clusterName, nodesExpected, err := ocmDescribe(o.k8sclusterresourcefactory.ClusterID)
-	if az != nil {
-		healthObject.AZs = az
-		healthObject.Nodes.Expected = nodesExpected
+	//az, clusterName, compute, infra, master, ascMin, ascMax, err := ocmDescribe(o.k8sclusterresourcefactory.ClusterID)
+	cluster, err := ocmDescribe(o.k8sclusterresourcefactory.ClusterID)
+
+	if cluster.Nodes().AvailabilityZones() != nil {
+
+		if cluster.Nodes().AutoscaleCompute().MinReplicas() != 0 {
+			min := strconv.Itoa(cluster.Nodes().AutoscaleCompute().MinReplicas())
+			max := strconv.Itoa(cluster.Nodes().AutoscaleCompute().MaxReplicas())
+			healthObject.Expected.Worker = string(fmt.Sprintf("%v - %v", min, max))
+		}
+		if cluster.Nodes().Compute() != 0 {
+			healthObject.Expected.Worker = int(cluster.Nodes().Compute())
+		}
+
 	}
 	if err != nil {
 		return err
@@ -128,7 +150,7 @@ func (o *healthOptions) run() error {
 	}
 
 	// Extracting region from the availability zone.
-	reg := az[0]
+	reg := cluster.Nodes().AvailabilityZones()[0]
 	length := len(reg)
 	lastChar := reg[length-1 : length]
 	for _, r := range lastChar {
@@ -149,16 +171,44 @@ func (o *healthOptions) run() error {
 	}
 
 	instances, err := awsJumpClient.DescribeInstances(&ec2.DescribeInstancesInput{})
-	totalRunning := 0
+	runningMasters := 0
+	runningInfra := 0
+	runningWorkers := 0
+	totalStopped := 0
+	totalCluster := 0
 
-	//Here we count the number of customer's running instances in the cluster in the given region. To decide if the instance belongs to the cluster we are checking the Name Tag on the instance.
+	//Here we count the number of customer's running worker, infra and master instances in the cluster in the given region. To decide if the instance belongs to the cluster we are checking the Name Tag on the instance.
 	for idx := range instances.Reservations {
 		for _, inst := range instances.Reservations[idx].Instances {
 			tags := GetTags(inst)
 			for _, t := range tags {
 				if *t.Key == "Name" {
-					if strings.HasPrefix(*t.Value, clusterName) && *inst.State.Name == "running" {
-						totalRunning += 1
+					if strings.HasPrefix(*t.Value, cluster.Name()) && strings.Contains(*t.Value, "master") {
+						totalCluster += 1
+						if *inst.State.Name == "running" {
+							runningMasters += 1
+						}
+						if *inst.State.Name == "stopped" {
+							totalStopped += 1
+						}
+
+					} else if strings.HasPrefix(*t.Value, cluster.Name()) && strings.Contains(*t.Value, "infra") {
+						totalCluster += 1
+						if *inst.State.Name == "running" {
+							runningInfra += 1
+						}
+						if *inst.State.Name == "stopped" {
+							totalStopped += 1
+						}
+					} else if strings.HasPrefix(*t.Value, cluster.Name()) && strings.Contains(*t.Value, "worker") {
+						totalCluster += 1
+						if *inst.State.Name == "running" {
+							runningWorkers += 1
+						}
+						if *inst.State.Name == "stopped" {
+							totalStopped += 1
+						}
+
 					}
 				}
 			}
@@ -166,18 +216,24 @@ func (o *healthOptions) run() error {
 		}
 
 	}
-	healthObject.Nodes.Running = totalRunning
+
+	healthObject.Actual.Stopped = totalStopped
+	healthObject.Actual.RunningMasters = runningMasters
+	healthObject.Actual.RunningInfra = runningInfra
+	healthObject.Actual.RunningWorker = runningWorkers
+	healthObject.Actual.Total = totalCluster
 
 	if err != nil {
 		log.Fatalf("Error getting instances %v", err)
 		return err
 	}
 
-	d, err := yaml.Marshal(&healthObject)
+	healthOutput, err := yaml.Marshal(&healthObject)
 	if err != nil {
 		log.Fatalf("error: %v", err)
 	}
-	fmt.Printf(string(d))
+	fmt.Fprintf(o.IOStreams.Out, "\n \n")
+	fmt.Printf(string(healthOutput))
 
 	return nil
 }
@@ -185,7 +241,7 @@ func (o *healthOptions) run() error {
 //This command implements the ocm describe clsuter call via osm-sdk.
 //This call requires the ocm API Token https://cloud.redhat.com/openshift/token be available in the OCM_TOKEN env variable.
 //Example: export OCM_TOKEN=$(jq -r .refresh_token ~/.ocm.json)
-func ocmDescribe(clusterID string) ([]string, string, int, error) {
+func ocmDescribe(clusterID string) (*v1.Cluster, error) {
 	// Create a context:
 	ctx := context.Background()
 	//The ocm
@@ -225,14 +281,14 @@ func ocmDescribe(clusterID string) ([]string, string, int, error) {
 	healthObject.ID = cluster.ID()
 	healthObject.Name = cluster.Name()
 	healthObject.Provider = cloudProviderMessage
+	healthObject.AZs = cluster.Nodes().AvailabilityZones()
+	healthObject.Expected.Infra = cluster.Nodes().Infra()
+	healthObject.Expected.Master = cluster.Nodes().Master()
 
 	if cloudProvider != "aws" {
-		return nil, "", 0, fmt.Errorf("This command is only supported for AWS clusters. The command is not supported for %s clusters.", cloudProviderMessage)
-
+		return cluster, fmt.Errorf("This command is only supported for AWS clusters. The command is not supported for %s clusters.", cloudProviderMessage)
 	}
-	totalNodes := cluster.Nodes().Compute() + cluster.Nodes().Infra() + cluster.Nodes().Master()
-
-	return cluster.Nodes().AvailabilityZones(), cluster.Name(), totalNodes, err
+	return cluster, err
 }
 
 func GetTags(instance *ec2.Instance) []*ec2.Tag {
