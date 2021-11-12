@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
@@ -12,7 +13,7 @@ const (
 )
 
 // NewCmdGet implements the get command to get AWS Account related resources
-func NewCmdGet(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+func NewCmdGet(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	getCmd := &cobra.Command{
 		Use:               "get",
 		Short:             "Get resources",
@@ -21,10 +22,10 @@ func NewCmdGet(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 		Run:               help,
 	}
 
-	getCmd.AddCommand(newCmdGetAccount(streams, flags, client))
-	getCmd.AddCommand(newCmdGetAccountClaim(streams, flags, client))
-	getCmd.AddCommand(newCmdGetLegalEntity(streams, flags, client))
-	getCmd.AddCommand(newCmdGetSecrets(streams, flags, client))
+	getCmd.AddCommand(newCmdGetAccount(streams, flags, client, globalOpts))
+	getCmd.AddCommand(newCmdGetAccountClaim(streams, flags, client, globalOpts))
+	getCmd.AddCommand(newCmdGetLegalEntity(streams, flags, client, globalOpts))
+	getCmd.AddCommand(newCmdGetSecrets(streams, flags, client, globalOpts))
 	getCmd.AddCommand(newCmdGetAWSAccount(streams, flags, client))
 
 	return getCmd

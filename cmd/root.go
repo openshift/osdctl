@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"flag"
 	"fmt"
 
 	routev1 "github.com/openshift/api/route/v1"
@@ -13,7 +12,6 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/kubectl/pkg/util/templates"
-	"k8s.io/utils/pointer"
 
 	"github.com/openshift/osdctl/cmd/aao"
 	"github.com/openshift/osdctl/cmd/account"
@@ -24,6 +22,7 @@ import (
 	"github.com/openshift/osdctl/cmd/network"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/cmd/sts"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/k8s"
 )
 
@@ -32,8 +31,6 @@ var GitCommit string
 
 // Version is the tag version from the environment
 var Version string
-
-var Output string
 
 func init() {
 	_ = awsv1alpha1.AddToScheme(scheme.Scheme)
@@ -44,6 +41,7 @@ func init() {
 
 // NewCmdRoot represents the base command when called without any subcommands
 func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
+	globalOpts := &globalflags.GlobalOptions{}
 	rootCmd := &cobra.Command{
 		Use:               "osdctl",
 		Version:           fmt.Sprintf("%s, GitCommit: %s", Version, GitCommit),
@@ -53,34 +51,21 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 		Run:               help,
 	}
 
-	rootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
-	rootCmd.PersistentFlags().StringVarP(&Output, "output", "o", "", "Invalid output format: Valid formats are ['', 'json', 'yaml']")
+	globalflags.AddGlobalFlags(rootCmd, globalOpts)
+	kubeFlags := globalflags.GetFlags(rootCmd)
 
-	// Reuse kubectl global flags to provide namespace, context and credential options.
-	// We are not using NewConfigFlags here to avoid adding too many flags
-	kubeFlags := &genericclioptions.ConfigFlags{
-		KubeConfig:  pointer.StringPtr(""),
-		ClusterName: pointer.StringPtr(""),
-		Context:     pointer.StringPtr(""),
-		APIServer:   pointer.StringPtr(""),
-		Timeout:     pointer.StringPtr("0"),
-		Insecure:    pointer.BoolPtr(false),
-		Impersonate: pointer.StringPtr(""),
-	}
-	kubeFlags.AddFlags(rootCmd.PersistentFlags())
-
-	client := k8s.NewClient(kubeFlags)
+	kubeClient := k8s.NewClient(kubeFlags)
 
 	// add sub commands
 	rootCmd.AddCommand(aao.NewCmdAao(streams, kubeFlags))
-	rootCmd.AddCommand(account.NewCmdAccount(streams, kubeFlags, client))
-	rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeFlags))
-	rootCmd.AddCommand(clusterdeployment.NewCmdClusterDeployment(streams, kubeFlags, client))
-	rootCmd.AddCommand(federatedrole.NewCmdFederatedRole(streams, kubeFlags, client))
-	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeFlags, client))
-	rootCmd.AddCommand(newCmdMetrics(streams, kubeFlags, client))
+	rootCmd.AddCommand(account.NewCmdAccount(streams, kubeFlags, kubeClient, globalOpts))
+	rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeFlags, globalOpts))
+	rootCmd.AddCommand(clusterdeployment.NewCmdClusterDeployment(streams, kubeFlags, kubeClient))
+	rootCmd.AddCommand(federatedrole.NewCmdFederatedRole(streams, kubeFlags, kubeClient))
+	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeFlags, kubeClient))
+	rootCmd.AddCommand(newCmdMetrics(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(servicelog.NewCmdServiceLog())
-	rootCmd.AddCommand(sts.NewCmdSts(streams, kubeFlags, client))
+	rootCmd.AddCommand(sts.NewCmdSts(streams, kubeFlags, kubeClient))
 
 	// add docs command
 	rootCmd.AddCommand(newCmdDocs(streams))
@@ -93,7 +78,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(newCmdOptions(streams))
 
 	//Add cost command to use AWS Cost Manager
-	rootCmd.AddCommand(cost.NewCmdCost(streams))
+	rootCmd.AddCommand(cost.NewCmdCost(streams, globalOpts))
 
 	return rootCmd
 }

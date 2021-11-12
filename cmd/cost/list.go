@@ -5,6 +5,7 @@ import (
 	"log"
 
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -14,8 +15,8 @@ import (
 )
 
 // listCmd represents the list command
-func newCmdList(streams genericclioptions.IOStreams) *cobra.Command {
-	ops := newListOptions(streams)
+func newCmdList(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newListOptions(streams, globalOpts)
 	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "List the cost of each OU under given OU",
@@ -65,11 +66,9 @@ func (o *listOptions) checkArgs(cmd *cobra.Command, _ []string) error {
 	if o.ou == "" {
 		return cmdutil.UsageErrorf(cmd, "Please provide OU")
 	}
-	output, err := outputflag.GetOutput(cmd)
-	if err != nil {
-		return err
-	}
-	o.output = output
+
+	o.output = o.GlobalOptions.Output
+
 	return nil
 }
 
@@ -83,6 +82,7 @@ type listOptions struct {
 	output string
 
 	genericclioptions.IOStreams
+	GlobalOptions *globalflags.GlobalOptions
 }
 
 type listCostResponse struct {
@@ -97,9 +97,10 @@ func (f listCostResponse) String() string {
 
 }
 
-func newListOptions(streams genericclioptions.IOStreams) *listOptions {
+func newListOptions(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *listOptions {
 	return &listOptions{
-		IOStreams: streams,
+		IOStreams:     streams,
+		GlobalOptions: globalOpts,
 	}
 }
 

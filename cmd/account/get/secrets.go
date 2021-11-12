@@ -7,14 +7,15 @@ import (
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	"github.com/spf13/cobra"
 
+	"github.com/openshift/osdctl/cmd/common"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
+	"github.com/openshift/osdctl/pkg/printer"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/openshift/osdctl/cmd/common"
 )
 
 const (
@@ -23,8 +24,8 @@ const (
 
 // newCmdGetSecrets implements the get secrets command which get
 // the name of secrets related to the specified AWS Account ID
-func newCmdGetSecrets(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
-	ops := newGetSecretsOptions(streams, flags, client)
+func newCmdGetSecrets(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newGetSecretsOptions(streams, flags, client, globalOpts)
 	getSecretsCmd := &cobra.Command{
 		Use:               "secrets",
 		Short:             "Get AWS Account CR related secrets",
@@ -47,20 +48,21 @@ func newCmdGetSecrets(streams genericclioptions.IOStreams, flags *genericcliopti
 type getSecretsOptions struct {
 	accountID        string
 	accountNamespace string
-	secretName       string
+	output           string
 
-	output string
-
-	flags *genericclioptions.ConfigFlags
+	flags      *genericclioptions.ConfigFlags
+	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
-	kubeCli client.Client
+	kubeCli       client.Client
+	GlobalOptions *globalflags.GlobalOptions
 }
 
-func newGetSecretsOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *getSecretsOptions {
+func newGetSecretsOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *getSecretsOptions {
 	return &getSecretsOptions{
-		flags:     flags,
-		IOStreams: streams,
-		kubeCli:   client,
+		flags:         flags,
+		IOStreams:     streams,
+		kubeCli:       client,
+		GlobalOptions: globalOpts,
 	}
 }
 
@@ -69,6 +71,7 @@ func (o *getSecretsOptions) complete(cmd *cobra.Command, _ []string) error {
 		return cmdutil.UsageErrorf(cmd, accountIDRequired)
 	}
 
+	o.output = o.GlobalOptions.Output
 	return nil
 }
 
@@ -106,7 +109,16 @@ func (o *getSecretsOptions) run() error {
 				return err
 			}
 		}
-		fmt.Fprintln(o.IOStreams.Out, secret.Name)
+		if o.output == "" {
+			fmt.Fprintln(o.IOStreams.Out, secret.Name)
+		}
+
+		resourcePrinter, err := o.printFlags.ToPrinter(o.output)
+		if err != nil {
+			return err
+		}
+
+		return resourcePrinter.PrintObj(&secret, o.Out)
 	}
 
 	return nil

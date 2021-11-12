@@ -6,6 +6,7 @@ import (
 
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/spf13/cobra"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -18,8 +19,8 @@ import (
 
 // newCmdGetLegalEntity implements the get legal-entity command which get
 // the legal entity information related to the specified AWS Account ID
-func newCmdGetLegalEntity(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
-	ops := newGetLegalEntityOptions(streams, flags, client)
+func newCmdGetLegalEntity(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newGetLegalEntityOptions(streams, flags, client, globalOpts)
 	getLegalEntityCmd := &cobra.Command{
 		Use:               "legal-entity",
 		Short:             "Get AWS Account Legal Entity",
@@ -46,7 +47,8 @@ type getLegalEntityOptions struct {
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
-	kubeCli client.Client
+	kubeCli       client.Client
+	GlobalOptions *globalflags.GlobalOptions
 }
 
 type legalEntityResponse struct {
@@ -60,11 +62,12 @@ func (f legalEntityResponse) String() string {
 
 }
 
-func newGetLegalEntityOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *getLegalEntityOptions {
+func newGetLegalEntityOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *getLegalEntityOptions {
 	return &getLegalEntityOptions{
-		flags:     flags,
-		IOStreams: streams,
-		kubeCli:   client,
+		flags:         flags,
+		IOStreams:     streams,
+		kubeCli:       client,
+		GlobalOptions: globalOpts,
 	}
 }
 
@@ -73,12 +76,7 @@ func (o *getLegalEntityOptions) complete(cmd *cobra.Command, _ []string) error {
 		return cmdutil.UsageErrorf(cmd, accountIDRequired)
 	}
 
-	output, err := outputflag.GetOutput(cmd)
-	if err != nil {
-		return err
-	}
-	o.output = output
-
+	o.output = o.GlobalOptions.Output
 	return nil
 }
 

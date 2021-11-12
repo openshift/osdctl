@@ -1,17 +1,19 @@
 package cost
 
 import (
+	"log"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/openshift/osdctl/cmd/common"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"log"
 )
 
 // costCmd represents the cost command
-func NewCmdCost(streams genericclioptions.IOStreams) *cobra.Command {
+func NewCmdCost(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	opsCost = newCostOptions(streams)
 	costCmd := &cobra.Command{
 		Use:   "cost",
@@ -28,10 +30,10 @@ platforms may be added in the future)`,
 	costCmd.PersistentFlags().StringVarP(&opsCost.region, "aws-region", "g", common.DefaultRegion, "specify AWS region")
 
 	//Add commands
-	costCmd.AddCommand(newCmdGet(streams))
+	costCmd.AddCommand(newCmdGet(streams, globalOpts))
 	costCmd.AddCommand(newCmdReconcile(streams))
 	costCmd.AddCommand(newCmdCreate(streams))
-	costCmd.AddCommand(newCmdList(streams))
+	costCmd.AddCommand(newCmdList(streams, globalOpts))
 
 	return costCmd
 }

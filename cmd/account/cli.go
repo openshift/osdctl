@@ -6,17 +6,17 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/spf13/cobra"
 
+	"github.com/openshift/osdctl/internal/utils/globalflags"
+	k8spkg "github.com/openshift/osdctl/pkg/k8s"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/klog"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-
-	k8spkg "github.com/openshift/osdctl/pkg/k8s"
-	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 )
 
 // newCmdCli implements the Cli command which generates temporary STS cli credentials for the specified account cr
-func newCmdCli(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newCliOptions(streams, flags)
+func newCmdCli(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newCliOptions(streams, flags, globalOpts)
 	cliCmd := &cobra.Command{
 		Use:               "cli",
 		Short:             "Generate temporary AWS CLI credentials on demand",
@@ -30,7 +30,6 @@ func newCmdCli(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 
 	ops.k8sclusterresourcefactory.AttachCobraCliFlags(cliCmd)
 
-	cliCmd.Flags().StringVarP(&ops.output, "out", "o", "default", "Output format [default | json | env]")
 	cliCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 
 	return cliCmd
@@ -44,14 +43,16 @@ type cliOptions struct {
 	verbose bool
 
 	genericclioptions.IOStreams
+	GlobalOptions *globalflags.GlobalOptions
 }
 
-func newCliOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cliOptions {
+func newCliOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cliOptions {
 	return &cliOptions{
 		k8sclusterresourcefactory: k8spkg.ClusterResourceFactoryOptions{
 			Flags: flags,
 		},
-		IOStreams: streams,
+		IOStreams:     streams,
+		GlobalOptions: globalOpts,
 	}
 }
 
@@ -69,6 +70,8 @@ func (o *cliOptions) complete(cmd *cobra.Command) error {
 			return err
 		}
 	}
+
+	o.output = o.GlobalOptions.Output
 
 	return nil
 }
@@ -94,7 +97,7 @@ func (o *cliOptions) run() error {
 		}
 	}
 
-	if o.output == "default" {
+	if o.output == "" {
 		fmt.Fprintf(o.IOStreams.Out, "Temporary AWS Credentials:\n%s\n", creds)
 	}
 
