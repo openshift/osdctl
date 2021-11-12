@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/osdctl/cmd/common"
+	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/printer"
 )
@@ -32,7 +33,6 @@ func newCmdGetAccount(streams genericclioptions.IOStreams, flags *genericcliopti
 	}
 
 	ops.printFlags.AddFlags(getAccountCmd)
-	getAccountCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
 	getAccountCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 	getAccountCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "AWS account ID")
@@ -80,6 +80,12 @@ func (o *getAccountOptions) complete(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+
+	output, err := outputflag.GetOutput(cmd)
+	if err != nil {
+		return err
+	}
+	o.output = output
 
 	return nil
 }

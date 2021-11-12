@@ -6,12 +6,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/spf13/cobra"
 
+	outputflag "github.com/openshift/osdctl/cmd/getoutput"
+	k8spkg "github.com/openshift/osdctl/pkg/k8s"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/klog"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-
-	k8spkg "github.com/openshift/osdctl/pkg/k8s"
-	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 )
 
 // newCmdCli implements the Cli command which generates temporary STS cli credentials for the specified account cr
@@ -30,7 +30,6 @@ func newCmdCli(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 
 	ops.k8sclusterresourcefactory.AttachCobraCliFlags(cliCmd)
 
-	cliCmd.Flags().StringVarP(&ops.output, "out", "o", "default", "Output format [default | json | env]")
 	cliCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 
 	return cliCmd
@@ -70,6 +69,12 @@ func (o *cliOptions) complete(cmd *cobra.Command) error {
 		}
 	}
 
+	output, err := outputflag.GetOutput(cmd)
+	if err != nil {
+		return err
+	}
+	o.output = output
+
 	return nil
 }
 
@@ -94,7 +99,7 @@ func (o *cliOptions) run() error {
 		}
 	}
 
-	if o.output == "default" {
+	if o.output == "" {
 		fmt.Fprintf(o.IOStreams.Out, "Temporary AWS Credentials:\n%s\n", creds)
 	}
 

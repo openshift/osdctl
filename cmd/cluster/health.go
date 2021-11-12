@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	k8spkg "github.com/openshift/osdctl/pkg/k8s"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -49,7 +50,6 @@ func newCmdHealth(streams genericclioptions.IOStreams, flags *genericclioptions.
 		},
 	}
 	ops.k8sclusterresourcefactory.AttachCobraCliFlags(healthCmd)
-	healthCmd.Flags().StringVarP(&ops.output, "out", "o", "default", "Output format [default | json | env]")
 	healthCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 
 	return healthCmd
@@ -83,7 +83,14 @@ func (o *healthOptions) complete(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
+	output, err := outputflag.GetOutput(cmd)
+	if err != nil {
+		return err
+	}
+	o.output = output
+
 	return nil
+
 }
 
 type ClusterHealthCondensedObject struct {

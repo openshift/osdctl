@@ -15,8 +15,8 @@ func GetOutput(cmd *cobra.Command) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if out != "" && out != "json" && out != "yaml" {
-		return "", cmdutil.UsageErrorf(cmd, "Invalid output format: Valid formats are ['', 'json', 'yaml']")
+	if out != "" && out != "json" && out != "yaml" && out != "env" {
+		return "", cmdutil.UsageErrorf(cmd, "Invalid output format: Valid formats are ['', 'json', 'yaml', 'env']")
 	}
 	return out, nil
 }

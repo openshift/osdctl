@@ -7,15 +7,15 @@ import (
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	"github.com/spf13/cobra"
 
+	"github.com/openshift/osdctl/cmd/common"
+	outputflag "github.com/openshift/osdctl/cmd/getoutput"
+	"github.com/openshift/osdctl/pkg/k8s"
+	"github.com/openshift/osdctl/pkg/printer"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/cli-runtime/pkg/printers"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/openshift/osdctl/cmd/common"
-	"github.com/openshift/osdctl/pkg/k8s"
-	"github.com/openshift/osdctl/pkg/printer"
 )
 
 // newCmdListAccount implements the list account command to list account crs
@@ -33,7 +33,6 @@ func newCmdListAccount(streams genericclioptions.IOStreams, flags *genericcliopt
 	}
 
 	ops.printFlags.AddFlags(listAccountCmd)
-	listAccountCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output format. One of: json|yaml|jsonpath=...|jsonpath-file=... see jsonpath template [http://kubernetes.io/docs/user-guide/jsonpath].")
 	listAccountCmd.Flags().StringVar(&ops.accountNamespace, "account-namespace", common.AWSAccountNamespace,
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 	listAccountCmd.Flags().StringVarP(&ops.reused, "reuse", "r", "",
@@ -100,6 +99,12 @@ func (o *listAccountOptions) complete(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+
+	output, err := outputflag.GetOutput(cmd)
+	if err != nil {
+		return err
+	}
+	o.output = output
 
 	return nil
 }

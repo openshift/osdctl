@@ -48,9 +48,6 @@ func newCmdGetSecrets(streams genericclioptions.IOStreams, flags *genericcliopti
 type getSecretsOptions struct {
 	accountID        string
 	accountNamespace string
-	secretName       string
-
-	output string
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
