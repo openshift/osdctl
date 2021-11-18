@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/organizations"
+	"github.com/aws/aws-sdk-go/service/sts"
 
 	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
 	"github.com/golang/mock/gomock"
@@ -15,6 +16,69 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+func TestAssumeRoleForAccount(t *testing.T) {
+	mocks := setupDefaultMocks(t, []runtime.Object{})
+
+	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
+
+	accountId := "111111111111"
+	accessKeyID := aws.String("randAccessKeyId")
+	secretAccessKey := aws.String("randSecretAccessKey")
+	sessionToken := aws.String("randSessionToken")
+
+	awsAssumeRoleOutput := &sts.AssumeRoleOutput{
+		Credentials: &sts.Credentials{
+			AccessKeyId:     accessKeyID,
+			SecretAccessKey: secretAccessKey,
+			SessionToken:    sessionToken,
+		},
+	}
+
+	mockAWSClient.EXPECT().AssumeRole(gomock.Any()).Return(
+		awsAssumeRoleOutput,
+		nil,
+	)
+
+	o := &accountUnassignOptions{}
+	o.awsClient = mockAWSClient
+	returnVal, err := o.assumeRoleForAccount(accountId)
+	if err != nil {
+		t.Errorf("failed to assume role")
+	}
+	if returnVal == nil {
+		t.Error("no awsclient returned")
+	}
+}
+
+func TestListUsersFromAccount(t *testing.T) {
+
+	mocks := setupDefaultMocks(t, []runtime.Object{})
+
+	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
+
+	accountId := "111111111111"
+
+	awsOutput := &iam.ListUsersOutput{
+		Users: []*iam.User{
+			{
+				UserName: aws.String("user")},
+		}}
+
+	mockAWSClient.EXPECT().ListUsers(gomock.Any()).Return(
+		awsOutput,
+		nil,
+	)
+
+	o := &accountUnassignOptions{}
+	o.awsClient = mockAWSClient
+	returnVal, err := listUsersFromAccount(mockAWSClient, accountId)
+	if err != nil {
+		t.Errorf("failed to list iam users")
+	}
+	if len(returnVal) < 1 {
+		t.Errorf("empty iam users list")
+	}
+}
 func TestCheckForHiveNameTage(t *testing.T) {
 	var genericAWSError error = fmt.Errorf("Generic AWS Error")
 
@@ -327,7 +391,39 @@ func TestDeletePolicies(t *testing.T) {
 
 	o := &accountUnassignOptions{}
 	o.awsClient = mockAWSClient
-	err := o.deletePolicies(userName)
+	err := o.deleteUserPolicies(userName)
+	if err != nil {
+		t.Errorf("failed to delete user policies")
+	}
+}
+
+func TestDeleteAccountPolicies(t *testing.T) {
+
+	mocks := setupDefaultMocks(t, []runtime.Object{})
+
+	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
+	scope := aws.String("Local")
+
+	expectedPolicyArn := "ExpectedPolicyArn"
+	mockAWSClient.EXPECT().ListPolicies(
+		&iam.ListPoliciesInput{Scope: scope},
+	).Return(
+		&iam.ListPoliciesOutput{
+			Policies: []*iam.Policy{
+				{Arn: &expectedPolicyArn},
+			},
+		},
+		nil,
+	)
+	mockAWSClient.EXPECT().DeletePolicy(
+		&iam.DeletePolicyInput{
+			PolicyArn: &expectedPolicyArn,
+		},
+	).Return(
+		nil, nil,
+	)
+
+	err := deleteAccountPolicies(mockAWSClient)
 	if err != nil {
 		t.Errorf("failed to delete user policies")
 	}
@@ -368,6 +464,62 @@ func TestDeleteAttachedPolicies(t *testing.T) {
 	err := o.deleteAttachedPolicies(userName)
 	if err != nil {
 		t.Errorf("failed to detach policies")
+	}
+}
+
+func TestDeleteRoles(t *testing.T) {
+	mocks := setupDefaultMocks(t, []runtime.Object{})
+
+	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
+
+	roleName := aws.String("randomRoleName")
+
+	awsRolesOutput := &iam.ListRolesOutput{
+		Roles: []*iam.Role{
+			{
+				RoleName: roleName,
+			},
+		},
+	}
+
+	mockAWSClient.EXPECT().ListRoles(gomock.Any()).Return(
+		awsRolesOutput,
+		nil,
+	)
+
+	awsListAttachedRolePolOutput := &iam.ListAttachedRolePoliciesOutput{
+		AttachedPolicies: []*iam.AttachedPolicy{
+			{
+				PolicyArn: aws.String("randomPol"),
+			},
+		},
+	}
+
+	mockAWSClient.EXPECT().ListAttachedRolePolicies(gomock.Any()).Return(
+		awsListAttachedRolePolOutput,
+		nil,
+	)
+
+	mockAWSClient.EXPECT().DetachRolePolicy(gomock.Any()).Return(
+		&iam.DetachRolePolicyOutput{},
+		nil,
+	)
+
+	awsDeleteRolesOutput := &iam.DeleteRoleOutput{}
+	mockAWSClient.EXPECT().DeleteRole(
+		&iam.DeleteRoleInput{
+			RoleName: roleName,
+		},
+	).Return(
+		awsDeleteRolesOutput,
+		nil,
+	)
+
+	o := &accountUnassignOptions{}
+	o.awsClient = mockAWSClient
+	err := deleteRoles(mockAWSClient)
+	if err != nil {
+		t.Errorf("failed to delete roles")
 	}
 }
 
