@@ -24,8 +24,8 @@ import (
 )
 
 // newCmdGenerateSecret implements the generate-secret command which generates an new set of IAM User credentials
-func newCmdGenerateSecret(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newGenerateSecretOptions(streams, flags)
+func newCmdGenerateSecret(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newGenerateSecretOptions(streams, flags, client)
 	generateSecretCmd := &cobra.Command{
 		Use:               "generate-secret <IAM User name>",
 		Short:             "Generate IAM credentials secret",
@@ -73,10 +73,11 @@ type generateSecretOptions struct {
 	kubeCli client.Client
 }
 
-func newGenerateSecretOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *generateSecretOptions {
+func newGenerateSecretOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *generateSecretOptions {
 	return &generateSecretOptions{
 		flags:     flags,
 		IOStreams: streams,
+		kubeCli:   client,
 	}
 }
 
@@ -104,15 +105,6 @@ func (o *generateSecretOptions) complete(cmd *cobra.Command, args []string) erro
 
 	if o.accountName != "" && o.accountID != "" {
 		return cmdutil.UsageErrorf(cmd, "AWS account CR name and AWS account ID cannot be set at the same time")
-	}
-
-	// only initialize kubernetes client when account name is set
-	if o.accountName != "" {
-		var err error
-		o.kubeCli, err = k8s.NewClient(o.flags)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil

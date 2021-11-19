@@ -15,13 +15,12 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/printer"
 )
 
 // newCmdList implements the list command to list
-func newCmdListResources(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	l := newListResources(streams, flags)
+func newCmdListResources(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	l := newListResources(streams, flags, client)
 	lrCmd := &cobra.Command{
 		Use:               "listresources",
 		Short:             "List all resources on a hive cluster related to a given cluster",
@@ -57,20 +56,17 @@ type Printer interface {
 	Flush() error
 }
 
-func newListResources(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *ListResources {
+func newListResources(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *ListResources {
 	return &ListResources{
 		flags:     flags,
 		IOStreams: streams,
 		P:         printer.NewTablePrinter(streams.Out, 20, 1, 3, ' '),
+		KubeCli:   client,
 	}
 }
 
 func (l *ListResources) complete(cmd *cobra.Command, _ []string) error {
 	var err error
-	l.KubeCli, err = k8s.NewClient(l.flags)
-	if err != nil {
-		return err
-	}
 
 	err = l.getClusterDeployment()
 	if err != nil {

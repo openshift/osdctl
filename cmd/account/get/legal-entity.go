@@ -14,7 +14,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/osdctl/cmd/common"
-	"github.com/openshift/osdctl/pkg/k8s"
 )
 
 // newCmdGetLegalEntity implements the get legal-entity command which get
@@ -79,11 +78,6 @@ func (o *getLegalEntityOptions) complete(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	o.output = output
-
-	o.kubeCli, err = k8s.NewClient(o.flags)
-	if err != nil {
-		return err
-	}
 
 	return nil
 }

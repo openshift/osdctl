@@ -85,11 +85,7 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 
 	// only initialize kubernetes client when account name is set or cluster ID is set
 	if factory.AccountName != "" || factory.ClusterID != "" {
-		var err error
-		factory.KubeCli, err = NewClient(factory.Flags)
-		if err != nil {
-			return nil, err
-		}
+		factory.KubeCli = NewClient(factory.Flags)
 		factory.Awscloudfactory.Region = "us-east-1"
 	}
 

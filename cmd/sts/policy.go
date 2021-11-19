@@ -10,8 +10,6 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/openshift/osdctl/pkg/k8s"
 )
 
 type policyOptions struct {
@@ -22,15 +20,16 @@ type policyOptions struct {
 	kubeCli client.Client
 }
 
-func newPolicyOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *policyOptions {
+func newPolicyOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *policyOptions {
 	return &policyOptions{
 		flags:     flags,
 		IOStreams: streams,
+		kubeCli:   client,
 	}
 }
 
-func newCmdPolicy(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newPolicyOptions(streams, flags)
+func newCmdPolicy(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newPolicyOptions(streams, flags, client)
 	policyCmd := &cobra.Command{
 		Use:               "policy",
 		Short:             "Get OCP STS policy",
@@ -55,15 +54,6 @@ func (o *policyOptions) complete(cmd *cobra.Command, args []string) error {
 	re := regexp.MustCompile(`^[0-9]{1}\.[0-9]{1,2}\.[0-9]{1,2}$`)
 	if !re.MatchString(args[0]) {
 		return cmdutil.UsageErrorf(cmd, "Release version have to be in the x.y.z format ")
-	}
-
-	// only initialize kubernetes client when versions are set
-	if o.ReleaseVersion != "" {
-		var err error
-		o.kubeCli, err = k8s.NewClient(o.flags)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
