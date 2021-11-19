@@ -18,8 +18,8 @@ import (
 )
 
 // newCmdSet implements the set command which sets fields in account cr status
-func newCmdSet(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newSetOptions(streams, flags)
+func newCmdSet(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newSetOptions(streams, flags, client)
 	setCmd := &cobra.Command{
 		Use:               "set <account name>",
 		Short:             "Set AWS Account CR status",
@@ -62,10 +62,11 @@ type setOptions struct {
 	kubeCli client.Client
 }
 
-func newSetOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *setOptions {
+func newSetOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *setOptions {
 	return &setOptions{
 		flags:     flags,
 		IOStreams: streams,
+		kubeCli:   client,
 	}
 }
 
@@ -86,12 +87,6 @@ func (o *setOptions) complete(cmd *cobra.Command, args []string) error {
 	// throw error
 	default:
 		return cmdutil.UsageErrorf(cmd, "unsupported account state "+o.state)
-	}
-
-	var err error
-	o.kubeCli, err = k8s.NewClient(o.flags)
-	if err != nil {
-		return err
 	}
 
 	return nil

@@ -23,8 +23,6 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/openshift/osdctl/pkg/k8s"
 )
 
 const (
@@ -39,8 +37,8 @@ const (
 )
 
 // newCmdPacketCapture implements the packet-capture command to run a packet capture
-func newCmdPacketCapture(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newPacketCaptureOptions(streams, flags)
+func newCmdPacketCapture(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newPacketCaptureOptions(streams, flags, client)
 	packetCaptureCmd := &cobra.Command{
 		Use:               "packet-capture",
 		Aliases:           []string{"pcap"},
@@ -79,7 +77,7 @@ type packetCaptureOptions struct {
 	startTime time.Time
 }
 
-func newPacketCaptureOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *packetCaptureOptions {
+func newPacketCaptureOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *packetCaptureOptions {
 	return &packetCaptureOptions{
 		flags:     flags,
 		IOStreams: streams,
@@ -87,11 +85,6 @@ func newPacketCaptureOptions(streams genericclioptions.IOStreams, flags *generic
 }
 
 func (o *packetCaptureOptions) complete(cmd *cobra.Command, _ []string) error {
-	var err error
-	o.kubeCli, err = k8s.NewClient(o.flags)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 

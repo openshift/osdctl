@@ -10,13 +10,12 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/printer"
 )
 
 // newCmdListAccount implements the list account command to list account claim crs
-func newCmdListAccountClaim(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newListAccountClaimOptions(streams, flags)
+func newCmdListAccountClaim(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newListAccountClaimOptions(streams, flags, client)
 	listAccountClaimCmd := &cobra.Command{
 		Use:               "account-claim",
 		Short:             "List AWS Account Claim CR",
@@ -42,10 +41,11 @@ type listAccountClaimOptions struct {
 	kubeCli client.Client
 }
 
-func newListAccountClaimOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *listAccountClaimOptions {
+func newListAccountClaimOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *listAccountClaimOptions {
 	return &listAccountClaimOptions{
 		flags:     flags,
 		IOStreams: streams,
+		kubeCli:   client,
 	}
 }
 
@@ -60,12 +60,6 @@ func (o *listAccountClaimOptions) complete(cmd *cobra.Command, _ []string) error
 	// throw error
 	default:
 		return cmdutil.UsageErrorf(cmd, "unsupported account claim state "+o.state)
-	}
-
-	var err error
-	o.kubeCli, err = k8s.NewClient(o.flags)
-	if err != nil {
-		return err
 	}
 
 	return nil

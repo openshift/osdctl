@@ -14,13 +14,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/osdctl/cmd/common"
-	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/printer"
 )
 
 // newCmdListAccount implements the list account command to list account crs
-func newCmdListAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newListAccountOptions(streams, flags)
+func newCmdListAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newListAccountOptions(streams, flags, client)
 	listAccountCmd := &cobra.Command{
 		Use:               "account",
 		Short:             "List AWS Account CR",
@@ -61,11 +60,12 @@ type listAccountOptions struct {
 	kubeCli client.Client
 }
 
-func newListAccountOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *listAccountOptions {
+func newListAccountOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *listAccountOptions {
 	return &listAccountOptions{
 		flags:      flags,
 		printFlags: printer.NewPrintFlags(),
 		IOStreams:  streams,
+		kubeCli:    client,
 	}
 }
 
@@ -93,12 +93,6 @@ func (o *listAccountOptions) complete(cmd *cobra.Command, _ []string) error {
 	case "", "true", "false":
 	default:
 		return cmdutil.UsageErrorf(cmd, "unsupported claimed status filter "+o.claimed)
-	}
-
-	var err error
-	o.kubeCli, err = k8s.NewClient(o.flags)
-	if err != nil {
-		return err
 	}
 
 	return nil

@@ -5,13 +5,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	. "github.com/onsi/gomega"
 
+	mockk8s "github.com/openshift/osdctl/cmd/clusterdeployment/mock/k8s"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 func TestCheckSecretsCmdComplete(t *testing.T) {
 	g := NewGomegaWithT(t)
+	mockCtrl := gomock.NewController(t)
 	streams := genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr}
 	kubeFlags := genericclioptions.NewConfigFlags(false)
 	testCases := []struct {
@@ -48,7 +51,7 @@ func TestCheckSecretsCmdComplete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
-			cmd := newCmdVerifySecrets(streams, kubeFlags)
+			cmd := newCmdVerifySecrets(streams, kubeFlags, mockk8s.NewMockClient(mockCtrl))
 			err := tc.option.complete(cmd, tc.args)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())

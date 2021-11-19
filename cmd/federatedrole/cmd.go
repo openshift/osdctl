@@ -3,10 +3,11 @@ package federatedrole
 import (
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // NewCmdFederatedRole implements the basic federated role command
-func NewCmdFederatedRole(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
+func NewCmdFederatedRole(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
 	getCmd := &cobra.Command{
 		Use:               "federatedrole",
 		Short:             "federated role related commands",
@@ -15,7 +16,7 @@ func NewCmdFederatedRole(streams genericclioptions.IOStreams, flags *genericclio
 		Run:               help,
 	}
 
-	getCmd.AddCommand(newCmdApply(streams, flags))
+	getCmd.AddCommand(newCmdApply(streams, flags, client))
 
 	return getCmd
 }

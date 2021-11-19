@@ -2,6 +2,7 @@ package get
 
 import (
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
@@ -11,7 +12,7 @@ const (
 )
 
 // NewCmdGet implements the get command to get AWS Account related resources
-func NewCmdGet(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
+func NewCmdGet(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
 	getCmd := &cobra.Command{
 		Use:               "get",
 		Short:             "Get resources",
@@ -20,11 +21,11 @@ func NewCmdGet(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 		Run:               help,
 	}
 
-	getCmd.AddCommand(newCmdGetAccount(streams, flags))
-	getCmd.AddCommand(newCmdGetAccountClaim(streams, flags))
-	getCmd.AddCommand(newCmdGetLegalEntity(streams, flags))
-	getCmd.AddCommand(newCmdGetSecrets(streams, flags))
-	getCmd.AddCommand(newCmdGetAWSAccount(streams, flags))
+	getCmd.AddCommand(newCmdGetAccount(streams, flags, client))
+	getCmd.AddCommand(newCmdGetAccountClaim(streams, flags, client))
+	getCmd.AddCommand(newCmdGetLegalEntity(streams, flags, client))
+	getCmd.AddCommand(newCmdGetSecrets(streams, flags, client))
+	getCmd.AddCommand(newCmdGetAWSAccount(streams, flags, client))
 
 	return getCmd
 }

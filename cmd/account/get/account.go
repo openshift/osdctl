@@ -18,8 +18,8 @@ import (
 
 // newCmdGetAccount implements the get account command which get the Account CR
 // related to the specified AWS Account ID or the specified Account Claim CR
-func newCmdGetAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newGetAccountOptions(streams, flags)
+func newCmdGetAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newGetAccountOptions(streams, flags, client)
 	getAccountCmd := &cobra.Command{
 		Use:               "account",
 		Short:             "Get AWS Account CR",
@@ -57,11 +57,12 @@ type getAccountOptions struct {
 	kubeCli client.Client
 }
 
-func newGetAccountOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *getAccountOptions {
+func newGetAccountOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *getAccountOptions {
 	return &getAccountOptions{
 		flags:      flags,
 		printFlags: printer.NewPrintFlags(),
 		IOStreams:  streams,
+		kubeCli:    client,
 	}
 }
 
@@ -73,12 +74,6 @@ func (o *getAccountOptions) complete(cmd *cobra.Command, _ []string) error {
 
 	if o.accountID != "" && o.accountClaimName != "" {
 		return cmdutil.UsageErrorf(cmd, "AWS account ID and AccountClaim CR Name cannot be set at the same time")
-	}
-
-	var err error
-	o.kubeCli, err = k8s.NewClient(o.flags)
-	if err != nil {
-		return err
 	}
 
 	return nil

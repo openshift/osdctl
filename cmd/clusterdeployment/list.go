@@ -11,7 +11,6 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/printer"
 )
 
@@ -47,12 +46,6 @@ func newListOptions(streams genericclioptions.IOStreams, flags *genericclioption
 }
 
 func (o *listOptions) complete(_ *cobra.Command, _ []string) error {
-	var err error
-	o.kubeCli, err = k8s.NewClient(o.flags)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
