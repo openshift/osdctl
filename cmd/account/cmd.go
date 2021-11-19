@@ -8,10 +8,11 @@ import (
 	"github.com/openshift/osdctl/cmd/account/list"
 	"github.com/openshift/osdctl/cmd/account/mgmt"
 	"github.com/openshift/osdctl/cmd/account/servicequotas"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 )
 
 // NewCmdAccount implements the base account command
-func NewCmdAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
+func NewCmdAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	accountCmd := &cobra.Command{
 		Use:               "account",
 		Short:             "AWS Account related utilities",
@@ -20,7 +21,7 @@ func NewCmdAccount(streams genericclioptions.IOStreams, flags *genericclioptions
 		Run:               help,
 	}
 
-	accountCmd.AddCommand(get.NewCmdGet(streams, flags))
+	accountCmd.AddCommand(get.NewCmdGet(streams, flags, globalOpts))
 	accountCmd.AddCommand(list.NewCmdList(streams, flags))
 	accountCmd.AddCommand(servicequotas.NewCmdServiceQuotas(streams, flags))
 	accountCmd.AddCommand(mgmt.NewCmdMgmt(streams, flags))

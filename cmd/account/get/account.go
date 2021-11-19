@@ -12,15 +12,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/osdctl/cmd/common"
-	outputflag "github.com/openshift/osdctl/cmd/getoutput"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/printer"
 )
 
 // newCmdGetAccount implements the get account command which get the Account CR
 // related to the specified AWS Account ID or the specified Account Claim CR
-func newCmdGetAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newGetAccountOptions(streams, flags)
+func newCmdGetAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newGetAccountOptions(streams, flags, globalOpts)
 	getAccountCmd := &cobra.Command{
 		Use:               "account",
 		Short:             "Get AWS Account CR",
@@ -54,14 +54,16 @@ type getAccountOptions struct {
 	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
-	kubeCli client.Client
+	kubeCli       client.Client
+	GlobalOptions *globalflags.GlobalOptions
 }
 
-func newGetAccountOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *getAccountOptions {
+func newGetAccountOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *getAccountOptions {
 	return &getAccountOptions{
-		flags:      flags,
-		printFlags: printer.NewPrintFlags(),
-		IOStreams:  streams,
+		flags:         flags,
+		printFlags:    printer.NewPrintFlags(),
+		IOStreams:     streams,
+		GlobalOptions: globalOpts,
 	}
 }
 
@@ -81,11 +83,9 @@ func (o *getAccountOptions) complete(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	output, err := outputflag.GetOutput(cmd)
-	if err != nil {
-		return err
-	}
-	o.output = output
+	o.output = o.GlobalOptions.Output
+
+	fmt.Printf("Output: %s", o.GlobalOptions.Output)
 
 	return nil
 }

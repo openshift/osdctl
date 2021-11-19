@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"flag"
 	"fmt"
 	"os"
 
@@ -14,7 +13,6 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/kubectl/pkg/util/templates"
-	"k8s.io/utils/pointer"
 
 	"github.com/openshift/osdctl/cmd/aao"
 	"github.com/openshift/osdctl/cmd/account"
@@ -25,6 +23,7 @@ import (
 	"github.com/openshift/osdctl/cmd/network"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/cmd/sts"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 )
 
 // GitCommit is the short git commit hash from the environment
@@ -32,8 +31,6 @@ var GitCommit string
 
 // Version is the tag version from the environment
 var Version string
-
-var Output string
 
 func init() {
 	_ = awsv1alpha1.AddToScheme(scheme.Scheme)
@@ -46,6 +43,7 @@ func init() {
 
 // NewCmdRoot represents the base command when called without any subcommands
 func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
+	globalOpts := &globalflags.GlobalOptions{}
 	rootCmd := &cobra.Command{
 		Use:               "osdctl",
 		Version:           fmt.Sprintf("%s, GitCommit: %s", Version, GitCommit),
@@ -55,25 +53,12 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 		Run:               help,
 	}
 
-	rootCmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
-	rootCmd.PersistentFlags().StringVarP(&Output, "output", "o", "", "Invalid output format: Valid formats are ['', 'json', 'yaml']")
-
-	// Reuse kubectl global flags to provide namespace, context and credential options.
-	// We are not using NewConfigFlags here to avoid adding too many flags
-	kubeFlags := &genericclioptions.ConfigFlags{
-		KubeConfig:  pointer.StringPtr(""),
-		ClusterName: pointer.StringPtr(""),
-		Context:     pointer.StringPtr(""),
-		APIServer:   pointer.StringPtr(""),
-		Timeout:     pointer.StringPtr("0"),
-		Insecure:    pointer.BoolPtr(false),
-		Impersonate: pointer.StringPtr(""),
-	}
-	kubeFlags.AddFlags(rootCmd.PersistentFlags())
+	globalflags.AddGlobalFlags(rootCmd, globalOpts)
+	kubeFlags := globalflags.GetFlags(rootCmd)
 
 	// add sub commands
 	rootCmd.AddCommand(aao.NewCmdAao(streams, kubeFlags))
-	rootCmd.AddCommand(account.NewCmdAccount(streams, kubeFlags))
+	rootCmd.AddCommand(account.NewCmdAccount(streams, kubeFlags, globalOpts))
 	rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeFlags))
 	rootCmd.AddCommand(clusterdeployment.NewCmdClusterDeployment(streams, kubeFlags))
 	rootCmd.AddCommand(federatedrole.NewCmdFederatedRole(streams, kubeFlags))

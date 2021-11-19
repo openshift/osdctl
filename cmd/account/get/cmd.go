@@ -3,6 +3,7 @@ package get
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
@@ -11,7 +12,7 @@ const (
 )
 
 // NewCmdGet implements the get command to get AWS Account related resources
-func NewCmdGet(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
+func NewCmdGet(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	getCmd := &cobra.Command{
 		Use:               "get",
 		Short:             "Get resources",
@@ -20,7 +21,7 @@ func NewCmdGet(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 		Run:               help,
 	}
 
-	getCmd.AddCommand(newCmdGetAccount(streams, flags))
+	getCmd.AddCommand(newCmdGetAccount(streams, flags, globalOpts))
 	getCmd.AddCommand(newCmdGetAccountClaim(streams, flags))
 	getCmd.AddCommand(newCmdGetLegalEntity(streams, flags))
 	getCmd.AddCommand(newCmdGetSecrets(streams, flags))
