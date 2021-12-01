@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/openshift/osdctl/cmd/common"
-	outputflag "github.com/openshift/osdctl/cmd/getoutput"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/printer"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -18,8 +18,8 @@ import (
 
 // newCmdGetAccountClaim implements the get account-claim command which get
 // the Account Claim CR related to the specified AWS Account ID
-func newCmdGetAccountClaim(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newGetAccountClaimOptions(streams, flags)
+func newCmdGetAccountClaim(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newGetAccountClaimOptions(streams, flags, globalOpts)
 	getAccountClaimCmd := &cobra.Command{
 		Use:               "account-claim",
 		Short:             "Get AWS Account Claim CR",
@@ -51,14 +51,16 @@ type getAccountClaimOptions struct {
 	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
-	kubeCli client.Client
+	kubeCli       client.Client
+	GlobalOptions *globalflags.GlobalOptions
 }
 
-func newGetAccountClaimOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *getAccountClaimOptions {
+func newGetAccountClaimOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *getAccountClaimOptions {
 	return &getAccountClaimOptions{
-		flags:      flags,
-		printFlags: printer.NewPrintFlags(),
-		IOStreams:  streams,
+		flags:         flags,
+		printFlags:    printer.NewPrintFlags(),
+		IOStreams:     streams,
+		GlobalOptions: globalOpts,
 	}
 }
 
@@ -76,11 +78,9 @@ func (o *getAccountClaimOptions) complete(cmd *cobra.Command, _ []string) error 
 		return err
 	}
 
-	output, err := outputflag.GetOutput(cmd)
-	if err != nil {
-		return err
-	}
-	o.output = output
+	o.output = o.GlobalOptions.Output
+
+	fmt.Printf("Output: %s", o.GlobalOptions.Output)
 
 	return nil
 }

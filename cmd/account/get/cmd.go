@@ -22,7 +22,7 @@ func NewCmdGet(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 	}
 
 	getCmd.AddCommand(newCmdGetAccount(streams, flags, globalOpts))
-	getCmd.AddCommand(newCmdGetAccountClaim(streams, flags))
+	getCmd.AddCommand(newCmdGetAccountClaim(streams, flags, globalOpts))
 	getCmd.AddCommand(newCmdGetLegalEntity(streams, flags))
 	getCmd.AddCommand(newCmdGetSecrets(streams, flags))
 	getCmd.AddCommand(newCmdGetAWSAccount(streams, flags))

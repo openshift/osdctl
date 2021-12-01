@@ -2,13 +2,14 @@ package list
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	"github.com/spf13/cobra"
 
 	"github.com/openshift/osdctl/cmd/common"
-	outputflag "github.com/openshift/osdctl/cmd/getoutput"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/printer"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,8 +20,8 @@ import (
 )
 
 // newCmdListAccount implements the list account command to list account crs
-func newCmdListAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newListAccountOptions(streams, flags)
+func newCmdListAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newListAccountOptions(streams, flags, globalOpts)
 	listAccountCmd := &cobra.Command{
 		Use:               "account",
 		Short:             "List AWS Account CR",
@@ -57,14 +58,16 @@ type listAccountOptions struct {
 	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
-	kubeCli client.Client
+	kubeCli       client.Client
+	GlobalOptions *globalflags.GlobalOptions
 }
 
-func newListAccountOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *listAccountOptions {
+func newListAccountOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *listAccountOptions {
 	return &listAccountOptions{
-		flags:      flags,
-		printFlags: printer.NewPrintFlags(),
-		IOStreams:  streams,
+		flags:         flags,
+		printFlags:    printer.NewPrintFlags(),
+		IOStreams:     streams,
+		GlobalOptions: globalOpts,
 	}
 }
 
@@ -100,11 +103,9 @@ func (o *listAccountOptions) complete(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	output, err := outputflag.GetOutput(cmd)
-	if err != nil {
-		return err
-	}
-	o.output = output
+	o.output = o.GlobalOptions.Output
+
+	fmt.Printf("Output: %s", o.GlobalOptions.Output)
 
 	return nil
 }
