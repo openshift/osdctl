@@ -28,8 +28,8 @@ const (
 )
 
 // newCmdApply implements the apply command to apply federated role CR
-func newCmdApply(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newApplyOptions(streams, flags)
+func newCmdApply(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newApplyOptions(streams, flags, client)
 	applyCmd := &cobra.Command{
 		Use:               "apply",
 		Short:             "Apply federated role CR",
@@ -60,10 +60,11 @@ type applyOptions struct {
 	kubeCli client.Client
 }
 
-func newApplyOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *applyOptions {
+func newApplyOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *applyOptions {
 	return &applyOptions{
 		flags:     flags,
 		IOStreams: streams,
+		kubeCli:   client,
 	}
 }
 
@@ -74,12 +75,6 @@ func (o *applyOptions) complete(cmd *cobra.Command, _ []string) error {
 
 	if o.file != "" && o.url != "" {
 		return cmdutil.UsageErrorf(cmd, "Flags file and url cannot be set at the same time")
-	}
-
-	var err error
-	o.kubeCli, err = k8s.NewClient(o.flags)
-	if err != nil {
-		return err
 	}
 
 	return nil

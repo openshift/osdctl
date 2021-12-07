@@ -3,7 +3,6 @@ package cmd
 import (
 	"flag"
 	"fmt"
-	"os"
 
 	routev1 "github.com/openshift/api/route/v1"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
@@ -25,6 +24,7 @@ import (
 	"github.com/openshift/osdctl/cmd/network"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/cmd/sts"
+	"github.com/openshift/osdctl/pkg/k8s"
 )
 
 // GitCommit is the short git commit hash from the environment
@@ -40,8 +40,6 @@ func init() {
 	_ = routev1.AddToScheme(scheme.Scheme)
 	_ = hivev1.AddToScheme(scheme.Scheme)
 	_ = gcpv1alpha1.AddToScheme(scheme.Scheme)
-	NewCmdRoot(genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr})
-
 }
 
 // NewCmdRoot represents the base command when called without any subcommands
@@ -71,16 +69,18 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	}
 	kubeFlags.AddFlags(rootCmd.PersistentFlags())
 
+	client := k8s.NewClient(kubeFlags)
+
 	// add sub commands
 	rootCmd.AddCommand(aao.NewCmdAao(streams, kubeFlags))
-	rootCmd.AddCommand(account.NewCmdAccount(streams, kubeFlags))
+	rootCmd.AddCommand(account.NewCmdAccount(streams, kubeFlags, client))
 	rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeFlags))
-	rootCmd.AddCommand(clusterdeployment.NewCmdClusterDeployment(streams, kubeFlags))
-	rootCmd.AddCommand(federatedrole.NewCmdFederatedRole(streams, kubeFlags))
-	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeFlags))
-	rootCmd.AddCommand(newCmdMetrics(streams, kubeFlags))
+	rootCmd.AddCommand(clusterdeployment.NewCmdClusterDeployment(streams, kubeFlags, client))
+	rootCmd.AddCommand(federatedrole.NewCmdFederatedRole(streams, kubeFlags, client))
+	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeFlags, client))
+	rootCmd.AddCommand(newCmdMetrics(streams, kubeFlags, client))
 	rootCmd.AddCommand(servicelog.NewCmdServiceLog())
-	rootCmd.AddCommand(sts.NewCmdSts(streams, kubeFlags))
+	rootCmd.AddCommand(sts.NewCmdSts(streams, kubeFlags, client))
 
 	// add docs command
 	rootCmd.AddCommand(newCmdDocs(streams))

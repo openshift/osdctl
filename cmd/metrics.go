@@ -18,7 +18,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/osdctl/cmd/common"
-	"github.com/openshift/osdctl/pkg/k8s"
 )
 
 const (
@@ -27,8 +26,8 @@ const (
 )
 
 // newCmdMetrics displays the metrics of aws-account-operator
-func newCmdMetrics(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newMetricsOptions(streams, flags)
+func newCmdMetrics(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newMetricsOptions(streams, flags, client)
 	resetCmd := &cobra.Command{
 		Use:               "metrics",
 		Short:             "Display metrics of aws-account-operator",
@@ -66,10 +65,11 @@ type metricsOptions struct {
 	kubeCli client.Client
 }
 
-func newMetricsOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *metricsOptions {
+func newMetricsOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *metricsOptions {
 	return &metricsOptions{
 		flags:     flags,
 		IOStreams: streams,
+		kubeCli:   client,
 	}
 }
 
@@ -77,12 +77,6 @@ func (o *metricsOptions) complete(cmd *cobra.Command) error {
 	// account CR name and account ID cannot be empty at the same time
 	if o.metricsURL == "" && o.routeName == "" {
 		return cmdutil.UsageErrorf(cmd, "Metrics URL and route name cannot be empty at the same time")
-	}
-
-	var err error
-	o.kubeCli, err = k8s.NewClient(o.flags)
-	if err != nil {
-		return err
 	}
 
 	return nil

@@ -15,7 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/osdctl/cmd/common"
-	"github.com/openshift/osdctl/pkg/k8s"
 )
 
 const (
@@ -24,8 +23,8 @@ const (
 
 // newCmdGetSecrets implements the get secrets command which get
 // the name of secrets related to the specified AWS Account ID
-func newCmdGetSecrets(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newGetSecretsOptions(streams, flags)
+func newCmdGetSecrets(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newGetSecretsOptions(streams, flags, client)
 	getSecretsCmd := &cobra.Command{
 		Use:               "secrets",
 		Short:             "Get AWS Account CR related secrets",
@@ -57,22 +56,17 @@ type getSecretsOptions struct {
 	kubeCli client.Client
 }
 
-func newGetSecretsOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *getSecretsOptions {
+func newGetSecretsOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *getSecretsOptions {
 	return &getSecretsOptions{
 		flags:     flags,
 		IOStreams: streams,
+		kubeCli:   client,
 	}
 }
 
 func (o *getSecretsOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.accountID == "" {
 		return cmdutil.UsageErrorf(cmd, accountIDRequired)
-	}
-
-	var err error
-	o.kubeCli, err = k8s.NewClient(o.flags)
-	if err != nil {
-		return err
 	}
 
 	return nil

@@ -25,8 +25,8 @@ const (
 
 // newCmdVerifySecrets implements the verify-secrets command
 // which verifies AWS credentials managed by AWS Account Operator
-func newCmdVerifySecrets(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newVerifySecretsOptions(streams, flags)
+func newCmdVerifySecrets(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newVerifySecretsOptions(streams, flags, client)
 	verifySecretsCmd := &cobra.Command{
 		Use:               "verify-secrets [<account name>]",
 		Short:             "Verify AWS Account CR IAM User credentials",
@@ -59,10 +59,11 @@ type verifySecretsOptions struct {
 	kubeCli client.Client
 }
 
-func newVerifySecretsOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *verifySecretsOptions {
+func newVerifySecretsOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *verifySecretsOptions {
 	return &verifySecretsOptions{
 		flags:     flags,
 		IOStreams: streams,
+		kubeCli:   client,
 	}
 }
 
@@ -73,12 +74,6 @@ func (o *verifySecretsOptions) complete(cmd *cobra.Command, args []string) error
 
 	if len(args) == 1 {
 		o.accountName = args[0]
-	}
-
-	var err error
-	o.kubeCli, err = k8s.NewClient(o.flags)
-	if err != nil {
-		return err
 	}
 
 	return nil

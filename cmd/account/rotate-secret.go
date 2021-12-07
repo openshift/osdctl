@@ -23,8 +23,8 @@ import (
 )
 
 // newCmdRotateSecret implements the rotate-secret command which rotate IAM User credentials
-func newCmdRotateSecret(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newRotateSecretOptions(streams, flags)
+func newCmdRotateSecret(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newRotateSecretOptions(streams, flags, client)
 	rotateSecretCmd := &cobra.Command{
 		Use:               "rotate-secret <IAM User name>",
 		Short:             "Rotate IAM credentials secret",
@@ -52,10 +52,11 @@ type rotateSecretOptions struct {
 	kubeCli client.Client
 }
 
-func newRotateSecretOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *rotateSecretOptions {
+func newRotateSecretOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *rotateSecretOptions {
 	return &rotateSecretOptions{
 		flags:     flags,
 		IOStreams: streams,
+		kubeCli:   client,
 	}
 }
 
@@ -69,12 +70,6 @@ func (o *rotateSecretOptions) complete(cmd *cobra.Command, args []string) error 
 
 	if o.profile == "" {
 		o.profile = "default"
-	}
-
-	var err error
-	o.kubeCli, err = k8s.NewClient(o.flags)
-	if err != nil {
-		return err
 	}
 
 	return nil

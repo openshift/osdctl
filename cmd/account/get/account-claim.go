@@ -12,14 +12,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/osdctl/cmd/common"
-	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/printer"
 )
 
 // newCmdGetAccountClaim implements the get account-claim command which get
 // the Account Claim CR related to the specified AWS Account ID
-func newCmdGetAccountClaim(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newGetAccountClaimOptions(streams, flags)
+func newCmdGetAccountClaim(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newGetAccountClaimOptions(streams, flags, client)
 	getAccountClaimCmd := &cobra.Command{
 		Use:               "account-claim",
 		Short:             "Get AWS Account Claim CR",
@@ -55,11 +54,12 @@ type getAccountClaimOptions struct {
 	kubeCli client.Client
 }
 
-func newGetAccountClaimOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *getAccountClaimOptions {
+func newGetAccountClaimOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *getAccountClaimOptions {
 	return &getAccountClaimOptions{
 		flags:      flags,
 		printFlags: printer.NewPrintFlags(),
 		IOStreams:  streams,
+		kubeCli:    client,
 	}
 }
 
@@ -69,12 +69,6 @@ func (o *getAccountClaimOptions) complete(cmd *cobra.Command, _ []string) error 
 	}
 	if o.accountID != "" && o.accountName != "" {
 		return cmdutil.UsageErrorf(cmd, "AWS account ID and Account CR Name cannot be set at the same time")
-	}
-
-	var err error
-	o.kubeCli, err = k8s.NewClient(o.flags)
-	if err != nil {
-		return err
 	}
 
 	return nil

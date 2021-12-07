@@ -14,13 +14,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/osdctl/cmd/common"
-	"github.com/openshift/osdctl/pkg/k8s"
 )
 
 // newCmdGetLegalEntity implements the get legal-entity command which get
 // the legal entity information related to the specified AWS Account ID
-func newCmdGetLegalEntity(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newGetLegalEntityOptions(streams, flags)
+func newCmdGetLegalEntity(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newGetLegalEntityOptions(streams, flags, client)
 	getLegalEntityCmd := &cobra.Command{
 		Use:               "legal-entity",
 		Short:             "Get AWS Account Legal Entity",
@@ -61,10 +60,11 @@ func (f legalEntityResponse) String() string {
 
 }
 
-func newGetLegalEntityOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *getLegalEntityOptions {
+func newGetLegalEntityOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *getLegalEntityOptions {
 	return &getLegalEntityOptions{
 		flags:     flags,
 		IOStreams: streams,
+		kubeCli:   client,
 	}
 }
 
@@ -78,11 +78,6 @@ func (o *getLegalEntityOptions) complete(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	o.output = output
-
-	o.kubeCli, err = k8s.NewClient(o.flags)
-	if err != nil {
-		return err
-	}
 
 	return nil
 }

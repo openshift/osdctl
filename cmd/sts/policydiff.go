@@ -10,8 +10,6 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/openshift/osdctl/pkg/k8s"
 )
 
 type policyDiffOptions struct {
@@ -23,15 +21,16 @@ type policyDiffOptions struct {
 	kubeCli client.Client
 }
 
-func newPolicyDiffOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *policyDiffOptions {
+func newPolicyDiffOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *policyDiffOptions {
 	return &policyDiffOptions{
 		flags:     flags,
 		IOStreams: streams,
+		kubeCli:   client,
 	}
 }
 
-func newCmdPolicyDiff(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newPolicyDiffOptions(streams, flags)
+func newCmdPolicyDiff(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newPolicyDiffOptions(streams, flags, client)
 	policyDiffCmd := &cobra.Command{
 		Use:               "policy-diff",
 		Short:             "Get diff between two versions of OCP STS policy",
@@ -58,15 +57,6 @@ func (o *policyDiffOptions) complete(cmd *cobra.Command, args []string) error {
 		re := regexp.MustCompile(`^[0-9]{1}\.[0-9]{1,2}\.[0-9]{1,2}$`)
 		if !re.MatchString(s) {
 			return cmdutil.UsageErrorf(cmd, "Release version have to be in the x.y.z format ")
-		}
-	}
-
-	// only initialize kubernetes client when versions are set
-	if o.oldReleaseVersion != "" && o.newReleaseVersion != "" {
-		var err error
-		o.kubeCli, err = k8s.NewClient(o.flags)
-		if err != nil {
-			return err
 		}
 	}
 
