@@ -132,6 +132,11 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 		isBYOC = false
 	}
 
+	if factory.AccountID == "" {
+		klog.Error("No account ID provided or in Account Claim. Please use -i or ensure ID is in Account Claim referenced in -C or the Account referenced in -A")
+		return nil, fmt.Errorf("no account ID provided")
+	}
+
 	callerIdentityOutput, err := awsClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
 	if err != nil {
 		klog.Error("Fail to get caller identity. Could you please validate the credentials?")
