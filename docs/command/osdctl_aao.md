@@ -1,15 +1,15 @@
-## osdctl options
+## osdctl aao
 
-Print the list of flags inherited by all commands
+AWS Account Operator Debugging Utilities
 
 ```
-osdctl options
+osdctl aao [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for options
+  -h, --help   help for aao
 ```
 
 ### Options inherited from parent commands
@@ -34,4 +34,5 @@ osdctl options
 ### SEE ALSO
 
 * [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl aao pool](osdctl_aao_pool.md)	 - Get the status of the AWS Account Operator AccountPool
 

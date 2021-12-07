@@ -2,10 +2,6 @@
 
 AWS Account related utilities
 
-### Synopsis
-
-AWS Account related utilities
-
 ```
 osdctl account [flags]
 ```
@@ -44,6 +40,7 @@ osdctl account [flags]
 * [osdctl account generate-secret](osdctl_account_generate-secret.md)	 - Generate IAM credentials secret
 * [osdctl account get](osdctl_account_get.md)	 - Get resources
 * [osdctl account list](osdctl_account_list.md)	 - List resources
+* [osdctl account mgmt](osdctl_account_mgmt.md)	 - AWS Account Management
 * [osdctl account reset](osdctl_account_reset.md)	 - Reset AWS Account CR
 * [osdctl account rotate-secret](osdctl_account_rotate-secret.md)	 - Rotate IAM credentials secret
 * [osdctl account servicequotas](osdctl_account_servicequotas.md)	 - Interact with AWS service-quotas

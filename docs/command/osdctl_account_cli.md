@@ -2,10 +2,6 @@
 
 Generate temporary AWS CLI credentials on demand
 
-### Synopsis
-
-Generate temporary AWS CLI credentials on demand
-
 ```
 osdctl account cli [flags]
 ```

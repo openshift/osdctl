@@ -2,10 +2,6 @@
 
 Send a servicelog message to a given cluster
 
-### Synopsis
-
-Send a servicelog message to a given cluster
-
 ```
 osdctl servicelog post [flags]
 ```
@@ -13,10 +9,14 @@ osdctl servicelog post [flags]
 ### Options
 
 ```
-  -d, --dry-run             Dry-run - print the service log about to be sent but don't send it.
-  -h, --help                help for post
-  -p, --param stringArray   Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.
-  -t, --template string     Message template file or URL
+  -c, --clusters-file string     Read a list of clusters to post the servicelog to
+  -d, --dry-run                  Dry-run - print the service log about to be sent but don't send it.
+  -h, --help                     help for post
+  -p, --param stringArray        Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.
+  -q, --query stringArray        Specify a search query (eg. -q "name like foo") for a bulk-post to matching clusters.
+  -f, --query-file stringArray   File containing search queries to apply. All lines in the file will be concatenated into a single query. If this flag is called multiple times, every file's search query will be combined with logical AND.
+  -t, --template string          Message template file or URL
+  -y, --yes                      Skips all prompts.
 ```
 
 ### Options inherited from parent commands

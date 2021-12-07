@@ -2,12 +2,8 @@
 
 gets all servicelog messages for a given cluster
 
-### Synopsis
-
-gets all servicelog messages for a given cluster
-
 ```
-osdctl servicelog list [flags]
+osdctl servicelog list [flags] [options] cluster-identifier
 ```
 
 ### Options

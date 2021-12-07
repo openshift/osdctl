@@ -2,10 +2,6 @@
 
 Interact with AWS service-quotas
 
-### Synopsis
-
-Interact with AWS service-quotas
-
 ```
 osdctl account servicequotas [flags]
 ```

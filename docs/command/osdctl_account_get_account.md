@@ -2,10 +2,6 @@
 
 Get AWS Account CR
 
-### Synopsis
-
-Get AWS Account CR
-
 ```
 osdctl account get account [flags]
 ```

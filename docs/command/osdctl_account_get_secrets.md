@@ -2,10 +2,6 @@
 
 Get AWS Account CR related secrets
 
-### Synopsis
-
-Get AWS Account CR related secrets
-
 ```
 osdctl account get secrets [flags]
 ```

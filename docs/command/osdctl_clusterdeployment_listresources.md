@@ -1,15 +1,17 @@
-## osdctl options
+## osdctl clusterdeployment listresources
 
-Print the list of flags inherited by all commands
+List all resources on a hive cluster related to a given cluster
 
 ```
-osdctl options
+osdctl clusterdeployment listresources [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for options
+  -C, --cluster-id string   Cluster ID
+  -e, --external            only list external resources (i.e. exclude resources in cluster namespace)
+  -h, --help                help for listresources
 ```
 
 ### Options inherited from parent commands
@@ -33,5 +35,5 @@ osdctl options
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl clusterdeployment](osdctl_clusterdeployment.md)	 - cluster deployment related utilities
 

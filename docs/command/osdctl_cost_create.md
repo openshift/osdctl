@@ -2,10 +2,6 @@
 
 Create a cost category for the given OU
 
-### Synopsis
-
-Create a cost category for the given OU
-
 ```
 osdctl cost create [flags]
 ```

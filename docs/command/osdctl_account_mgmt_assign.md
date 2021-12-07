@@ -1,15 +1,18 @@
-## osdctl options
+## osdctl account mgmt assign
 
-Print the list of flags inherited by all commands
+Assign account to user
 
 ```
-osdctl options
+osdctl account mgmt assign [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for options
+  -h, --help                   help for assign
+  -p, --payer-account string   Payer account type
+      --template string        Template string or path to template file to use when --output=jsonpath, --output=jsonpath-file.
+  -u, --username string        LDAP username
 ```
 
 ### Options inherited from parent commands
@@ -33,5 +36,5 @@ osdctl options
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl account mgmt](osdctl_account_mgmt.md)	 - AWS Account Management
 

@@ -2,10 +2,6 @@
 
 Rotate IAM credentials secret
 
-### Synopsis
-
-Rotate IAM credentials secret
-
 ```
 osdctl account rotate-secret <IAM User name> [flags]
 ```

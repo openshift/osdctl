@@ -2,10 +2,6 @@
 
 Get AWS Account Claim CR
 
-### Synopsis
-
-Get AWS Account Claim CR
-
 ```
 osdctl account get account-claim [flags]
 ```

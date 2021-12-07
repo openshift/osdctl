@@ -2,10 +2,6 @@
 
 Get AWS Account Legal Entity
 
-### Synopsis
-
-Get AWS Account Legal Entity
-
 ```
 osdctl account get legal-entity [flags]
 ```

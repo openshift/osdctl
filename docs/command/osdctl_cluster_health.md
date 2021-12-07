@@ -1,15 +1,25 @@
-## osdctl options
+## osdctl cluster health
 
-Print the list of flags inherited by all commands
+Describes health of cluster nodes and provides other cluster vitals.
 
 ```
-osdctl options
+osdctl cluster health [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for options
+  -i, --account-id string          The AWS account ID we need to create AWS credentials for -- This argument will not work for CCS accounts
+  -a, --account-name string        The AWS account CR we need to create a temporary AWS console URL for
+      --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
+  -c, --aws-config string          specify AWS config file path
+  -p, --aws-profile string         specify AWS profile
+  -r, --aws-region string          specify AWS region (default "us-east-1")
+  -C, --cluster-id string          The Internal Cluster ID from Hive to create AWS console URL for
+  -d, --duration int               The duration of the console session. Default value is 3600 seconds(1 hour) (default 3600)
+  -h, --help                       help for health
+  -o, --out string                 Output format [default | json | env] (default "default")
+      --verbose                    Verbose output
 ```
 
 ### Options inherited from parent commands
@@ -33,5 +43,5 @@ osdctl options
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl cluster](osdctl_cluster.md)	 - Provides vitals of an AWS cluster
 

@@ -2,10 +2,6 @@
 
 Cleans up S3 buckets whose name start with managed-velero
 
-### Synopsis
-
-Cleans up S3 buckets whose name start with managed-velero
-
 ```
 osdctl account clean-velero-snapshots [flags]
 ```

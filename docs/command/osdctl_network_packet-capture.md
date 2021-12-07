@@ -2,10 +2,6 @@
 
 Start packet capture
 
-### Synopsis
-
-Start packet capture
-
 ```
 osdctl network packet-capture [flags]
 ```
@@ -19,6 +15,7 @@ osdctl network packet-capture [flags]
   -n, --namespace string          Namespace to deploy Daemonset (default "default")
       --node-label-key string     Node label key (default "node-role.kubernetes.io/worker")
       --node-label-value string   Node label value
+      --single-pod                toogle deployment as single pod (default: deploy a daemonset)
 ```
 
 ### Options inherited from parent commands

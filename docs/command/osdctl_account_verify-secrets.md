@@ -2,10 +2,6 @@
 
 Verify AWS Account CR IAM User credentials
 
-### Synopsis
-
-Verify AWS Account CR IAM User credentials
-
 ```
 osdctl account verify-secrets [<account name>] [flags]
 ```

@@ -1,15 +1,19 @@
-## osdctl options
+## osdctl account mgmt unassign
 
-Print the list of flags inherited by all commands
+Unassign account to user
 
 ```
-osdctl options
+osdctl account mgmt unassign [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for options
+  -i, --account-id string      Account ID
+  -h, --help                   help for unassign
+  -p, --payer-account string   Payer account type
+      --template string        Template string or path to template file to use when --output=jsonpath, --output=jsonpath-file.
+  -u, --username string        LDAP username
 ```
 
 ### Options inherited from parent commands
@@ -33,5 +37,5 @@ osdctl options
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl account mgmt](osdctl_account_mgmt.md)	 - AWS Account Management
 

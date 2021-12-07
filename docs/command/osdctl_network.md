@@ -2,10 +2,6 @@
 
 network related utilities
 
-### Synopsis
-
-network related utilities
-
 ```
 osdctl network [flags]
 ```

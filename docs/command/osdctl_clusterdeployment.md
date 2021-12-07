@@ -2,10 +2,6 @@
 
 cluster deployment related utilities
 
-### Synopsis
-
-cluster deployment related utilities
-
 ```
 osdctl clusterdeployment [flags]
 ```
@@ -39,4 +35,5 @@ osdctl clusterdeployment [flags]
 
 * [osdctl](osdctl.md)	 - OSD CLI
 * [osdctl clusterdeployment list](osdctl_clusterdeployment_list.md)	 - List cluster deployment crs
+* [osdctl clusterdeployment listresources](osdctl_clusterdeployment_listresources.md)	 - List all resources on a hive cluster related to a given cluster
 

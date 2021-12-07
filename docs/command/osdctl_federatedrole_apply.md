@@ -2,10 +2,6 @@
 
 Apply federated role CR
 
-### Synopsis
-
-Apply federated role CR
-
 ```
 osdctl federatedrole apply [flags]
 ```

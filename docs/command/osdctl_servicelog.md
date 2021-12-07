@@ -2,10 +2,6 @@
 
 OCM/Hive Service log
 
-### Synopsis
-
-OCM/Hive Service log
-
 ```
 osdctl servicelog [flags]
 ```

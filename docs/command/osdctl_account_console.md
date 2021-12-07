@@ -2,10 +2,6 @@
 
 Generate an AWS console URL on the fly
 
-### Synopsis
-
-Generate an AWS console URL on the fly
-
 ```
 osdctl account console [flags]
 ```
@@ -22,6 +18,7 @@ osdctl account console [flags]
   -C, --cluster-id string          The Internal Cluster ID from Hive to create AWS console URL for
   -d, --duration int               The duration of the console session. Default value is 3600 seconds(1 hour) (default 3600)
   -h, --help                       help for console
+      --launch                     Launch web browser directly
       --verbose                    Verbose output
 ```
 

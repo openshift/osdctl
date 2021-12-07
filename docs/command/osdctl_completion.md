@@ -2,10 +2,6 @@
 
 Output shell completion code for the specified shell (bash or zsh)
 
-### Synopsis
-
-Output shell completion code for the specified shell (bash or zsh)
-
 ```
 osdctl completion SHELL
 ```

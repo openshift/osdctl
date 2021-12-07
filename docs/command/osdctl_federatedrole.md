@@ -2,10 +2,6 @@
 
 federated role related commands
 
-### Synopsis
-
-federated role related commands
-
 ```
 osdctl federatedrole [flags]
 ```

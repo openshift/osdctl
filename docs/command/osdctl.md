@@ -32,7 +32,9 @@ osdctl [flags]
 
 ### SEE ALSO
 
+* [osdctl aao](osdctl_aao.md)	 - AWS Account Operator Debugging Utilities
 * [osdctl account](osdctl_account.md)	 - AWS Account related utilities
+* [osdctl cluster](osdctl_cluster.md)	 - Provides vitals of an AWS cluster
 * [osdctl clusterdeployment](osdctl_clusterdeployment.md)	 - cluster deployment related utilities
 * [osdctl completion](osdctl_completion.md)	 - Output shell completion code for the specified shell (bash or zsh)
 * [osdctl cost](osdctl_cost.md)	 - Cost Management related utilities
@@ -41,4 +43,5 @@ osdctl [flags]
 * [osdctl network](osdctl_network.md)	 - network related utilities
 * [osdctl options](osdctl_options.md)	 - Print the list of flags inherited by all commands
 * [osdctl servicelog](osdctl_servicelog.md)	 - OCM/Hive Service log
+* [osdctl sts](osdctl_sts.md)	 - STS related utilities
 
