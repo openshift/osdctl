@@ -58,6 +58,20 @@ func NewCmdEnv(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 		Args:              cobra.MaximumNArgs(1),
 		DisableAutoGenTag: true,
 		Run:               env.RunCommand,
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			validEnvs := []string{}
+			files, err := os.ReadDir(os.Getenv("HOME") + "/ocenv/")
+			if err != nil {
+				return validEnvs, cobra.ShellCompDirectiveNoFileComp
+			}
+			for _, f := range files {
+				if f.IsDir() && strings.HasPrefix(f.Name(), toComplete) {
+					validEnvs = append(validEnvs, f.Name())
+				}
+			}
+
+			return validEnvs, cobra.ShellCompDirectiveNoFileComp
+		},
 	}
 	envCmd.Flags().BoolVarP(&options.DeleteEnv, "delete", "d", false, "Delete environment")
 	envCmd.Flags().BoolVarP(&options.TempEnv, "temp", "t", false, "Delete environment on exit")
