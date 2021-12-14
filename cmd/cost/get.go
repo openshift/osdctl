@@ -7,6 +7,7 @@ import (
 	"time"
 
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
 
@@ -19,8 +20,8 @@ import (
 )
 
 // getCmd represents the get command
-func newCmdGet(streams genericclioptions.IOStreams) *cobra.Command {
-	ops := newGetOptions(streams)
+func newCmdGet(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newGetOptions(streams, globalOpts)
 	getCmd := &cobra.Command{
 		Use:   "get",
 		Short: "Get total cost of a given OU",
@@ -59,11 +60,9 @@ func (o *getOptions) checkArgs(cmd *cobra.Command, _ []string) error {
 	if o.ou == "" {
 		return cmdutil.UsageErrorf(cmd, "Please provide OU")
 	}
-	output, err := outputflag.GetOutput(cmd)
-	if err != nil {
-		return err
-	}
-	o.output = output
+
+	o.output = o.GlobalOptions.Output
+
 	return nil
 }
 
@@ -78,6 +77,7 @@ type getOptions struct {
 	output    string
 
 	genericclioptions.IOStreams
+	GlobalOptions *globalflags.GlobalOptions
 }
 
 type getCostResponse struct {
@@ -92,9 +92,10 @@ func (f getCostResponse) String() string {
 
 }
 
-func newGetOptions(streams genericclioptions.IOStreams) *getOptions {
+func newGetOptions(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *getOptions {
 	return &getOptions{
-		IOStreams: streams,
+		IOStreams:     streams,
+		GlobalOptions: globalOpts,
 	}
 }
 

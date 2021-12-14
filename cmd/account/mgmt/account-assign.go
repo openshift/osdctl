@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/organizations"
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
@@ -34,6 +35,7 @@ type accountAssignOptions struct {
 	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
+	GlobalOptions *globalflags.GlobalOptions
 }
 
 type assignResponse struct {
@@ -45,17 +47,18 @@ func (f assignResponse) String() string {
 	return fmt.Sprintf("  Username: %s\n  Account: %s\n", f.Username, f.Id)
 }
 
-func newAccountAssignOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *accountAssignOptions {
+func newAccountAssignOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *accountAssignOptions {
 	return &accountAssignOptions{
-		flags:      flags,
-		printFlags: printer.NewPrintFlags(),
-		IOStreams:  streams,
+		flags:         flags,
+		printFlags:    printer.NewPrintFlags(),
+		IOStreams:     streams,
+		GlobalOptions: globalOpts,
 	}
 }
 
 // assignCmd assigns an aws account to user under osd-staging-2 by default unless osd-staging-1 is specified
-func newCmdAccountAssign(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newAccountAssignOptions(streams, flags)
+func newCmdAccountAssign(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newAccountAssignOptions(streams, flags, globalOpts)
 	accountAssignCmd := &cobra.Command{
 		Use:               "assign",
 		Short:             "Assign account to user",
@@ -80,11 +83,9 @@ func (o *accountAssignOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.payerAccount == "" {
 		return cmdutil.UsageErrorf(cmd, "Payer account was not provided")
 	}
-	output, err := outputflag.GetOutput(cmd)
-	if err != nil {
-		return err
-	}
-	o.output = output
+
+	o.output = o.GlobalOptions.Output
+
 	return nil
 }
 

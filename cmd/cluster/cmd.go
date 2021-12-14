@@ -1,12 +1,13 @@
 package cluster
 
 import (
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 // NewCmdClusterHealth implements the base cluster health command
-func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
+func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	clusterCmd := &cobra.Command{
 		Use:               "cluster",
 		Short:             "Provides vitals of an AWS cluster",
@@ -15,7 +16,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 		Run:               help,
 	}
 
-	clusterCmd.AddCommand(newCmdHealth(streams, flags))
+	clusterCmd.AddCommand(newCmdHealth(streams, flags, globalOpts))
 	return clusterCmd
 }
 

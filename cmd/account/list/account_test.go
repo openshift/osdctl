@@ -9,22 +9,16 @@ import (
 	. "github.com/onsi/gomega"
 
 	mockk8s "github.com/openshift/osdctl/cmd/clusterdeployment/mock/k8s"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
-
-type Flags struct {
-	configFlags *genericclioptions.ConfigFlags
-	output      string
-}
 
 func TestGetAccountCmdComplete(t *testing.T) {
 	g := NewGomegaWithT(t)
 	mockCtrl := gomock.NewController(t)
 	streams := genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr}
-	var flags Flags
-	flags.configFlags = genericclioptions.NewConfigFlags(false)
-	flags.output = "text"
-
+	kubeFlags := genericclioptions.NewConfigFlags(false)
+	globalFlags := globalflags.GlobalOptions{Output: ""}
 	testCases := []struct {
 		title       string
 		option      *listAccountOptions
@@ -34,7 +28,9 @@ func TestGetAccountCmdComplete(t *testing.T) {
 		{
 			title: "incorrect state",
 			option: &listAccountOptions{
-				state: "foo",
+				state:         "foo",
+				flags:         kubeFlags,
+				GlobalOptions: &globalFlags,
 			},
 			errExpected: true,
 			errContent:  "unsupported account state foo",
@@ -42,31 +38,36 @@ func TestGetAccountCmdComplete(t *testing.T) {
 		{
 			title: "empty state",
 			option: &listAccountOptions{
-				state: "",
-				flags: flags.configFlags,
+				state:         "",
+				flags:         kubeFlags,
+				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
 		},
 		{
 			title: "all state",
 			option: &listAccountOptions{
-				state: "all",
-				flags: flags.configFlags,
+				state:         "all",
+				flags:         kubeFlags,
+				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
 		},
 		{
 			title: "Ready state",
 			option: &listAccountOptions{
-				state: "Ready",
-				flags: flags.configFlags,
+				state:         "Ready",
+				flags:         kubeFlags,
+				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
 		},
 		{
 			title: "bad reuse",
 			option: &listAccountOptions{
-				reused: "foo",
+				reused:        "foo",
+				flags:         kubeFlags,
+				GlobalOptions: &globalFlags,
 			},
 			errExpected: true,
 			errContent:  "unsupported reused status filter foo",
@@ -74,7 +75,9 @@ func TestGetAccountCmdComplete(t *testing.T) {
 		{
 			title: "bad reused status",
 			option: &listAccountOptions{
-				reused: "foo",
+				reused:        "foo",
+				flags:         kubeFlags,
+				GlobalOptions: &globalFlags,
 			},
 			errExpected: true,
 			errContent:  "unsupported reused status filter foo",
@@ -82,7 +85,9 @@ func TestGetAccountCmdComplete(t *testing.T) {
 		{
 			title: "bad claimed status",
 			option: &listAccountOptions{
-				claimed: "foo",
+				claimed:       "foo",
+				flags:         kubeFlags,
+				GlobalOptions: &globalFlags,
 			},
 			errExpected: true,
 			errContent:  "unsupported claimed status filter foo",
@@ -90,26 +95,29 @@ func TestGetAccountCmdComplete(t *testing.T) {
 		{
 			title: "good reused true",
 			option: &listAccountOptions{
-				reused: "true",
-				flags:  flags.configFlags,
+				reused:        "true",
+				flags:         kubeFlags,
+				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
 		},
 		{
 			title: "good claim",
 			option: &listAccountOptions{
-				claimed: "false",
-				flags:   flags.configFlags,
+				claimed:       "false",
+				flags:         kubeFlags,
+				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
 		},
 		{
 			title: "success",
 			option: &listAccountOptions{
-				state:   "Ready",
-				reused:  "true",
-				claimed: "false",
-				flags:   flags.configFlags,
+				state:         "Ready",
+				reused:        "true",
+				claimed:       "false",
+				flags:         kubeFlags,
+				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
 		},
@@ -117,7 +125,7 @@ func TestGetAccountCmdComplete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
-			cmd := newCmdListAccount(streams, flags.configFlags, mockk8s.NewMockClient(mockCtrl))
+			cmd := newCmdListAccount(streams, tc.option.flags, mockk8s.NewMockClient(mockCtrl), &globalFlags)
 			err := tc.option.complete(cmd, nil)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())

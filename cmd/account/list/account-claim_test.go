@@ -9,6 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	mockk8s "github.com/openshift/osdctl/cmd/clusterdeployment/mock/k8s"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
@@ -17,6 +18,7 @@ func TestGetAccountClaimCmdComplete(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	streams := genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr}
 	kubeFlags := genericclioptions.NewConfigFlags(false)
+	globalFlags := globalflags.GlobalOptions{Output: ""}
 	testCases := []struct {
 		title       string
 		option      *listAccountClaimOptions
@@ -26,7 +28,9 @@ func TestGetAccountClaimCmdComplete(t *testing.T) {
 		{
 			title: "incorrect state",
 			option: &listAccountClaimOptions{
-				state: "foo",
+				state:         "foo",
+				flags:         kubeFlags,
+				GlobalOptions: &globalFlags,
 			},
 			errExpected: true,
 			errContent:  "unsupported account claim state foo",
@@ -34,32 +38,36 @@ func TestGetAccountClaimCmdComplete(t *testing.T) {
 		{
 			title: "empty state",
 			option: &listAccountClaimOptions{
-				state: "",
-				flags: kubeFlags,
+				state:         "",
+				flags:         kubeFlags,
+				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
 		},
 		{
 			title: "error state",
 			option: &listAccountClaimOptions{
-				state: "Error",
-				flags: kubeFlags,
+				state:         "Error",
+				flags:         kubeFlags,
+				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
 		},
 		{
 			title: "pending state",
 			option: &listAccountClaimOptions{
-				state: "Pending",
-				flags: kubeFlags,
+				state:         "Pending",
+				flags:         kubeFlags,
+				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
 		},
 		{
 			title: "ready state",
 			option: &listAccountClaimOptions{
-				state: "Ready",
-				flags: kubeFlags,
+				state:         "Ready",
+				flags:         kubeFlags,
+				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
 		},
@@ -67,7 +75,7 @@ func TestGetAccountClaimCmdComplete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
-			cmd := newCmdListAccountClaim(streams, kubeFlags, mockk8s.NewMockClient(mockCtrl))
+			cmd := newCmdListAccountClaim(streams, kubeFlags, mockk8s.NewMockClient(mockCtrl), &globalFlags)
 			err := tc.option.complete(cmd, nil)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())

@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
@@ -26,6 +27,7 @@ type accountListOptions struct {
 	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
+	GlobalOptions *globalflags.GlobalOptions
 }
 
 type listResponse struct {
@@ -39,16 +41,17 @@ func (f listResponse) String() string {
 
 }
 
-func newAccountListOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *accountListOptions {
+func newAccountListOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *accountListOptions {
 	return &accountListOptions{
-		flags:      flags,
-		printFlags: printer.NewPrintFlags(),
-		IOStreams:  streams,
+		flags:         flags,
+		printFlags:    printer.NewPrintFlags(),
+		IOStreams:     streams,
+		GlobalOptions: globalOpts,
 	}
 }
 
-func newCmdAccountList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newAccountListOptions(streams, flags)
+func newCmdAccountList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newAccountListOptions(streams, flags, globalOpts)
 	accountListCmd := &cobra.Command{
 		Use:               "list",
 		Short:             "List out accounts for username",
@@ -73,11 +76,9 @@ func (o *accountListOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.username != "" && o.accountID != "" {
 		return cmdutil.UsageErrorf(cmd, "Cannot provide both username and account ID")
 	}
-	output, err := outputflag.GetOutput(cmd)
-	if err != nil {
-		return err
-	}
-	o.output = output
+
+	o.output = o.GlobalOptions.Output
+
 	return nil
 }
 

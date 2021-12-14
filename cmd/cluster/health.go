@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	k8spkg "github.com/openshift/osdctl/pkg/k8s"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -33,11 +34,12 @@ type healthOptions struct {
 	verbose                   bool
 
 	genericclioptions.IOStreams
+	GlobalOptions *globalflags.GlobalOptions
 }
 
 // newCmdHealth implements the health command to describe number of running instances in cluster and the expected number of nodes
-func newCmdHealth(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newHealthOptions(streams, flags)
+func newCmdHealth(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newHealthOptions(streams, flags, globalOpts)
 	healthCmd := &cobra.Command{
 		Use:               "health",
 		Short:             "Describes health of cluster nodes and provides other cluster vitals.",
@@ -49,18 +51,18 @@ func newCmdHealth(streams genericclioptions.IOStreams, flags *genericclioptions.
 		},
 	}
 	ops.k8sclusterresourcefactory.AttachCobraCliFlags(healthCmd)
-	healthCmd.Flags().StringVarP(&ops.output, "out", "o", "default", "Output format [default | json | env]")
 	healthCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 
 	return healthCmd
 }
 
-func newHealthOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *healthOptions {
+func newHealthOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *healthOptions {
 	return &healthOptions{
 		k8sclusterresourcefactory: k8spkg.ClusterResourceFactoryOptions{
 			Flags: flags,
 		},
-		IOStreams: streams,
+		IOStreams:     streams,
+		GlobalOptions: globalOpts,
 	}
 }
 
@@ -82,6 +84,8 @@ func (o *healthOptions) complete(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 	}
+
+	o.output = o.GlobalOptions.Output
 
 	return nil
 }

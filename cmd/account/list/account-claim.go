@@ -10,12 +10,13 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/printer"
 )
 
 // newCmdListAccount implements the list account command to list account claim crs
-func newCmdListAccountClaim(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
-	ops := newListAccountClaimOptions(streams, flags, client)
+func newCmdListAccountClaim(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newListAccountClaimOptions(streams, flags, client, globalOpts)
 	listAccountClaimCmd := &cobra.Command{
 		Use:               "account-claim",
 		Short:             "List AWS Account Claim CR",
@@ -34,18 +35,22 @@ func newCmdListAccountClaim(streams genericclioptions.IOStreams, flags *genericc
 
 // listAccountOptions defines the struct for running list account command
 type listAccountClaimOptions struct {
-	state string
+	state  string
+	output string
 
-	flags *genericclioptions.ConfigFlags
+	flags      *genericclioptions.ConfigFlags
+	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
-	kubeCli client.Client
+	kubeCli       client.Client
+	GlobalOptions *globalflags.GlobalOptions
 }
 
-func newListAccountClaimOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *listAccountClaimOptions {
+func newListAccountClaimOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *listAccountClaimOptions {
 	return &listAccountClaimOptions{
-		flags:     flags,
-		IOStreams: streams,
-		kubeCli:   client,
+		flags:         flags,
+		IOStreams:     streams,
+		kubeCli:       client,
+		GlobalOptions: globalOpts,
 	}
 }
 
@@ -62,6 +67,7 @@ func (o *listAccountClaimOptions) complete(cmd *cobra.Command, _ []string) error
 		return cmdutil.UsageErrorf(cmd, "unsupported account claim state "+o.state)
 	}
 
+	o.output = o.GlobalOptions.Output
 	return nil
 }
 
@@ -89,11 +95,17 @@ func (o *listAccountClaimOptions) run() error {
 		})
 
 		// this is used to mark whether there are matched accounts or not
-		matched = true
-	}
+		if matched {
+			if o.output == "" {
+				return p.Flush()
+			}
+			resourcePrinter, err := o.printFlags.ToPrinter(o.output)
+			if err != nil {
+				return err
+			}
 
-	if matched {
-		return p.Flush()
+			return resourcePrinter.PrintObj(&claim, o.Out)
+		}
 	}
 	return nil
 }
