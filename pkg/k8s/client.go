@@ -3,66 +3,75 @@ package k8s
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type StubClient struct {
+type LazyClient struct {
+	client client.Client
+	flags  *genericclioptions.ConfigFlags
 }
 
-func (s *StubClient) err() error {
-	return fmt.Errorf("Not connected to real cluster, please verify KUBECONFIG is correct")
+func (s *LazyClient) err() error {
+	return fmt.Errorf("not connected to real cluster, please verify KUBECONFIG is correct")
 }
 
-func (s *StubClient) Get(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
-	return s.err()
+func (s *LazyClient) Get(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+	return s.getClient().Get(ctx, key, obj)
 }
 
-func (s *StubClient) List(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
-	return s.err()
+func (s *LazyClient) List(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+	return s.getClient().List(ctx, list, opts...)
 }
 
-func (s *StubClient) Create(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
-	return s.err()
+func (s *LazyClient) Create(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
+	return s.getClient().Create(ctx, obj, opts...)
 }
 
-func (s *StubClient) Delete(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
-	return s.err()
+func (s *LazyClient) Delete(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+	return s.getClient().Delete(ctx, obj, opts...)
 }
 
-func (s *StubClient) Update(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
-	return s.err()
+func (s *LazyClient) Update(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
+	return s.getClient().Update(ctx, obj, opts...)
 }
 
-func (s *StubClient) Patch(ctx context.Context, obj runtime.Object, patch client.Patch, opts ...client.PatchOption) error {
-	return s.err()
+func (s *LazyClient) Patch(ctx context.Context, obj runtime.Object, patch client.Patch, opts ...client.PatchOption) error {
+	return s.getClient().Patch(ctx, obj, patch, opts...)
 }
 
-func (s *StubClient) DeleteAllOf(ctx context.Context, obj runtime.Object, opts ...client.DeleteAllOfOption) error {
-	return s.err()
+func (s *LazyClient) DeleteAllOf(ctx context.Context, obj runtime.Object, opts ...client.DeleteAllOfOption) error {
+	return s.getClient().DeleteAllOf(ctx, obj, opts...)
 }
 
-func (s *StubClient) Status() client.StatusWriter {
-	panic(s.err())
+func (s *LazyClient) Status() client.StatusWriter {
+	return s.getClient().Status()
 }
 
 func NewClient(flags *genericclioptions.ConfigFlags) client.Client {
-	configLoader := flags.ToRawKubeConfigLoader()
+	return &LazyClient{nil, flags}
+}
+
+func (s *LazyClient) getClient() client.Client {
+	if s.client == nil {
+		s.initialize()
+	}
+	return s.client
+}
+
+func (s *LazyClient) initialize() {
+	configLoader := s.flags.ToRawKubeConfigLoader()
 	cfg, err := configLoader.ClientConfig()
 	if err != nil {
 		//The stub is to allow commands that don't need a connection to a Kubernetes cluster.
 		//We'll produce a warning and the stub itself will error when a command is trying to use it.
-		log.Printf("Can't load KubeConfig, using stub client: %v", err)
-		return &StubClient{}
+		panic(s.err())
 	}
 
-	cli, err := client.New(cfg, client.Options{})
+	s.client, err = client.New(cfg, client.Options{})
 	if err != nil {
-		log.Printf("Can't load KubeConfig, using stub client: %v", err)
-		return &StubClient{}
+		panic(s.err())
 	}
-	return cli
 }
