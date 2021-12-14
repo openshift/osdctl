@@ -39,9 +39,12 @@ var listCmd = &cobra.Command{
 
 		// send it as logservice and validate the response
 		for _, cluster := range clusters {
-			response := sendRequest(createListRequest(ocmClient, cluster.ExternalID(), serviceLogListAllMessagesFlag))
+			response, err := sendRequest(createListRequest(ocmClient, cluster.ExternalID(), serviceLogListAllMessagesFlag))
+			if err != nil {
+				return err
+			}
 
-			err := dump.Pretty(os.Stdout, response.Bytes())
+			err = dump.Pretty(os.Stdout, response.Bytes())
 			if err != nil {
 				cmd.Help()
 				return err

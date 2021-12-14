@@ -70,62 +70,68 @@ func applyFilters(ocmClient *sdk.Connection, filters []string) ([]*v1.Cluster, e
 	return items, err
 }
 
-func sendRequest(request *sdk.Request) *sdk.Response {
+func sendRequest(request *sdk.Request) (*sdk.Response, error) {
 	response, err := request.Send()
 	if err != nil {
-		log.Fatalf("Can't send request: %v", err)
+		return nil, fmt.Errorf("cannot send request: %q", err)
 	}
-	return response
+	return response, nil
 }
 
 func check(response *sdk.Response, clusterMessage servicelog.Message) {
 	body := response.Bytes()
 	if response.Status() < 400 {
-		validateGoodResponse(body, clusterMessage)
-		log.Infof("Message has been successfully sent to %s\n", clusterMessage.ClusterUUID)
+		_, err := validateGoodResponse(body, clusterMessage)
+		if err != nil {
+			failedClusters[clusterMessage.ClusterUUID] = err.Error()
+		} else {
+			successfulClusters[clusterMessage.ClusterUUID] = fmt.Sprintf("Message has been successfully sent to %s", clusterMessage.ClusterUUID)
+		}
 	} else {
-		badReply := validateBadResponse(body)
-		log.Fatalf("Failed to post message because of %q", badReply.Reason)
+		badReply, err := validateBadResponse(body)
+		if err != nil {
+			failedClusters[clusterMessage.ClusterUUID] = err.Error()
+		} else {
+			failedClusters[clusterMessage.ClusterUUID] = badReply.Reason
+		}
 	}
 }
 
-func validateGoodResponse(body []byte, clusterMessage servicelog.Message) servicelog.GoodReply {
-	var goodReply servicelog.GoodReply
-	if err := json.Unmarshal(body, &goodReply); err != nil {
-		log.Fatalf("Cannot not parse the JSON template.\nError: %q\n", err)
+func validateGoodResponse(body []byte, clusterMessage servicelog.Message) (goodReply *servicelog.GoodReply, err error) {
+	if !json.Valid(body) {
+		return nil, fmt.Errorf("server returned invalid JSON")
+	}
+
+	if err = json.Unmarshal(body, &goodReply); err != nil {
+		return nil, fmt.Errorf("cannot not parse the JSON template.\nError: %q", err)
 	}
 
 	if goodReply.Severity != clusterMessage.Severity {
-		log.Fatalf("Message sent, but wrong severity information was passed (wanted %q, got %q)", clusterMessage.Severity, goodReply.Severity)
+		return nil, fmt.Errorf("message sent, but wrong severity information was passed (wanted %q, got %q)", clusterMessage.Severity, goodReply.Severity)
 	}
 	if goodReply.ServiceName != clusterMessage.ServiceName {
-		log.Fatalf("Message sent, but wrong service_name information was passed (wanted %q, got %q)", clusterMessage.ServiceName, goodReply.ServiceName)
+		return nil, fmt.Errorf("message sent, but wrong service_name information was passed (wanted %q, got %q)", clusterMessage.ServiceName, goodReply.ServiceName)
 	}
 	if goodReply.ClusterUUID != clusterMessage.ClusterUUID {
-		log.Fatalf("Message sent, but to different cluster (wanted %q, got %q)", clusterMessage.ClusterUUID, goodReply.ClusterUUID)
+		return nil, fmt.Errorf("message sent, but to different cluster (wanted %q, got %q)", clusterMessage.ClusterUUID, goodReply.ClusterUUID)
 	}
 	if goodReply.Summary != clusterMessage.Summary {
-		log.Fatalf("Message sent, but wrong summary information was passed (wanted %q, got %q)", clusterMessage.Summary, goodReply.Summary)
+		return nil, fmt.Errorf("message sent, but wrong summary information was passed (wanted %q, got %q)", clusterMessage.Summary, goodReply.Summary)
 	}
 	if goodReply.Description != clusterMessage.Description {
-		log.Fatalf("Message sent, but wrong description information was passed (wanted %q, got %q)", clusterMessage.Description, goodReply.Description)
-	}
-	if !json.Valid(body) {
-		log.Fatalf("Server returned invalid JSON")
+		return nil, fmt.Errorf("message sent, but wrong description information was passed (wanted %q, got %q)", clusterMessage.Description, goodReply.Description)
 	}
 
-	return goodReply
+	return goodReply, nil
 }
 
-func validateBadResponse(body []byte) servicelog.BadReply {
+func validateBadResponse(body []byte) (badReply *servicelog.BadReply, err error) {
 	if ok := json.Valid(body); !ok {
-		log.Errorf("Server returned invalid JSON")
+		return nil, fmt.Errorf("server returned invalid JSON")
+	}
+	if err = json.Unmarshal(body, &badReply); err != nil {
+		return nil, fmt.Errorf("cannot parse the error JSON message %q", err)
 	}
 
-	var badReply servicelog.BadReply
-	if err := json.Unmarshal(body, &badReply); err != nil {
-		log.Fatalf("Cannot parse the error JSON message %q", err)
-	}
-
-	return badReply
+	return badReply, nil
 }

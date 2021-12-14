@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
+	"os/signal"
 	"regexp"
 	"strings"
 
@@ -30,6 +31,10 @@ var (
 	isDryRun        bool
 	skipPrompts     bool
 	clustersFile    string
+
+	// Messaged clusters
+	successfulClusters = make(map[string]string)
+	failedClusters     = make(map[string]string)
 )
 
 const (
@@ -119,11 +124,35 @@ var postCmd = &cobra.Command{
 			}
 		}
 
+		// Handler if the program terminates abruptly
+		go func() {
+			sigchan := make(chan os.Signal, 1)
+			signal.Notify(sigchan, os.Interrupt)
+			<-sigchan
+
+			// perform final cleanup actions
+			log.Error("program abruptly terminated, performing clean-up...")
+			cleanUp(clusters)
+			log.Fatal("servicelog post command terminated")
+		}()
+
 		for _, cluster := range clusters {
-			request, clusterMessage := createPostRequest(ocmClient, cluster.ExternalID())
-			response := sendRequest(request)
-			check(response, clusterMessage)
+			request, err := createPostRequest(ocmClient, cluster.ExternalID())
+			if err != nil {
+				failedClusters[cluster.ExternalID()] = err.Error()
+				continue
+			}
+
+			response, err := sendRequest(request)
+			if err != nil {
+				failedClusters[cluster.ExternalID()] = err.Error()
+				continue
+			}
+
+			check(response, Message)
 		}
+
+		printPostOutput()
 	},
 }
 
@@ -190,12 +219,12 @@ func accessFile(filePath string) ([]byte, error) {
 	if utils.FileExists(filePath) {
 		file, err := ioutil.ReadFile(filePath) // template is file on the disk
 		if err != nil {
-			return file, fmt.Errorf("Cannot read the file.\nError: %q\n", err)
+			return file, fmt.Errorf("cannot read the file.\nError: %q", err)
 		}
 		return file, nil
 	}
 	if utils.FolderExists(filePath) {
-		return nil, fmt.Errorf("the provided path %q is a directory, not a file!", filePath)
+		return nil, fmt.Errorf("the provided path %q is a directory, not a file", filePath)
 	}
 	if utils.IsValidUrl(filePath) {
 		urlPage, _ := url.Parse(filePath)
@@ -330,21 +359,68 @@ func printTemplate() (err error) {
 	return dump.Pretty(os.Stdout, exampleMessage)
 }
 
-func createPostRequest(ocmClient *sdk.Connection, clusterId string) (request *sdk.Request, clusterMessage servicelog.Message) {
+func createPostRequest(ocmClient *sdk.Connection, clusterId string) (request *sdk.Request, err error) {
 	// Create and populate the request:
 	request = ocmClient.Post()
-	err := arguments.ApplyPathArg(request, targetAPIPath)
+	err = arguments.ApplyPathArg(request, targetAPIPath)
 	if err != nil {
-		log.Fatalf("Can't parse API path '%s': %v\n", targetAPIPath, err)
+		return nil, fmt.Errorf("cannot parse API path '%s': %v", targetAPIPath, err)
 	}
 
-	clusterMessage = Message
-	clusterMessage.ReplaceWithFlag("${CLUSTER_UUID}", clusterId)
-	messageBytes, err := json.Marshal(clusterMessage)
+	Message.ClusterUUID = clusterId
+	messageBytes, err := json.Marshal(Message)
 	if err != nil {
-		log.Fatalf("Cannot marshal template to json: %s", err)
+		return nil, fmt.Errorf("cannot marshal template to json: %v", err)
 	}
 
 	request.Bytes(messageBytes)
-	return request, clusterMessage
+	return request, nil
+}
+
+// listMessagedClusters prints all the clusters a service log was tried to be posted.
+func listMessagedClusters(clusters map[string]string) error {
+	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+	table.AddRow([]string{"ID", "Status"})
+
+	for id, status := range clusters {
+		table.AddRow([]string{id, status})
+	}
+
+	// New row for better readability
+	table.AddRow([]string{})
+
+	return table.Flush()
+}
+
+// printPostOutput prints the main servicelog post output.
+func printPostOutput() {
+	output := fmt.Sprintf("Success: %d, Failed: %d\n", len(successfulClusters), len(failedClusters))
+	log.Infoln(output + "\n")
+
+	// Print if any service logs were successfully sent
+	if len(successfulClusters) > 0 {
+		log.Infoln("Successful clusters:")
+		if err := listMessagedClusters(successfulClusters); err != nil {
+			log.Fatalf("Cannot list successful clusters: %q", err)
+		}
+	}
+
+	// Print if there were failures while sending service logs
+	if len(failedClusters) > 0 {
+		log.Infoln("Failed clusters:")
+		if err := listMessagedClusters(failedClusters); err != nil {
+			log.Fatalf("Cannot list failed clusters: %q", err)
+		}
+	}
+}
+
+// cleanUp performs final actions in case of program termination.
+func cleanUp(clusters []*v1.Cluster) {
+	for _, cluster := range clusters {
+		if _, ok := successfulClusters[cluster.ExternalID()]; !ok {
+			failedClusters[cluster.ExternalID()] = "cannot send message due to program interruption"
+		}
+	}
+
+	printPostOutput()
 }
