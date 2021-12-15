@@ -83,7 +83,7 @@ func (o *consoleOptions) run() error {
 		aws.String(o.k8sclusterresourcefactory.Awscloudfactory.SessionName), aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s",
 			o.k8sclusterresourcefactory.AccountID, o.k8sclusterresourcefactory.Awscloudfactory.RoleName)))
 	if err != nil {
-		fmt.Fprintf(o.IOStreams.Out, "Generating console failed. If CCS cluster, customer removed or denied access to the BYOC role.")
+		fmt.Fprintf(o.IOStreams.Out, "Generating console failed. If CCS cluster, customer removed or denied access to the ManagedOpenShiftSupport role.")
 		return err
 	}
 	fmt.Fprintf(o.IOStreams.Out, "The AWS Console URL is:\n%s\n", consoleURL)

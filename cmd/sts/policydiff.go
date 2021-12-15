@@ -42,7 +42,7 @@ func newCmdPolicyDiff(streams genericclioptions.IOStreams, flags *genericcliopti
 		},
 	}
 
-	policyDiffCmd.Flags().StringVarP(&ops.oldReleaseVersion, "old-version", "o", "", "")
+	policyDiffCmd.Flags().StringVarP(&ops.oldReleaseVersion, "previous-version", "p", "", "")
 	policyDiffCmd.Flags().StringVarP(&ops.newReleaseVersion, "new-version", "n", "", "")
 
 	return policyDiffCmd
@@ -50,7 +50,7 @@ func newCmdPolicyDiff(streams genericclioptions.IOStreams, flags *genericcliopti
 
 func (o *policyDiffOptions) complete(cmd *cobra.Command, args []string) error {
 	if len(args) != 2 {
-		return cmdutil.UsageErrorf(cmd, "Old and new release version is required for policy-diff command")
+		return cmdutil.UsageErrorf(cmd, "Previous and new release version is required for policy-diff command")
 	}
 
 	for _, s := range args {
