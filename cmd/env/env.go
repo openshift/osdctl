@@ -114,7 +114,6 @@ func (e *OcEnv) RunCommand(cmd *cobra.Command, args []string) {
 		e.PrintKubeConfigExport()
 		return
 	}
-	e.Migration()
 	e.Start()
 	if e.Options.TempEnv {
 		e.Delete()
@@ -138,40 +137,23 @@ func (e *OcEnv) PrintKubeConfigExport() {
 	fmt.Printf("export KUBECONFIG=%s\n", e.Path+"/kubeconfig.json")
 }
 
-func (e *OcEnv) Migration() {
-	if _, err := os.Stat(e.Path + "/.envrc"); err == nil {
-		fmt.Println("Migrating from .envrc to .ocenv...")
-
-		file, err := os.Open(e.Path + "/.envrc")
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer file.Close()
-
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if strings.HasPrefix(line, "export CLUSTERID=") {
-				e.Options.ClusterId = strings.ReplaceAll(line, "export CLUSTERID=", "")
-				e.Options.ClusterId = strings.ReplaceAll(line, "\"", "")
-			}
-		}
-
-		if err := scanner.Err(); err != nil {
-			log.Fatal(err)
-		}
-
-		e.ensureEnvVariables()
-
-		os.Remove(e.Path + "/.envrc")
-	}
-}
 func (e *OcEnv) Start() {
 	shell := os.Getenv("SHELL")
 
 	fmt.Print("Switching to OpenShift environment " + e.Options.Alias + "\n")
-	fmt.Printf("%s %s\n", shell, e.Path+"/.ocenv")
-	cmd := exec.Command(shell, "--rcfile", e.Path+"/.ocenv")
+	cmd := exec.Command(shell)
+
+	file, err := os.Open(e.Path + "/.ocenv")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	cmd.Env = os.Environ()
+	for scanner.Scan() {
+		line := scanner.Text()
+		cmd.Env = append(cmd.Env, line)
+	}
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -229,7 +211,7 @@ func (e *OcEnv) Delete() {
 
 func (e *OcEnv) ensureEnvDir() {
 	if _, err := os.Stat(e.Path); errors.Is(err, os.ErrNotExist) {
-		err := os.Mkdir(e.Path, os.ModePerm)
+		err := os.MkdirAll(e.Path, os.ModePerm)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -240,18 +222,22 @@ func (e *OcEnv) ensureEnvDir() {
 
 func (e *OcEnv) ensureEnvVariables() {
 	envContent := `
-export KUBECONFIG="` + e.Path + `/kubeconfig.json"
-export OCM_CONFIG="` + e.Path + `/ocm.json"
-export PATH="` + e.Path + `/bin:` + os.Getenv("PATH") + `"
+KUBECONFIG=` + e.Path + `/kubeconfig.json
+OCM_CONFIG=` + e.Path + `/ocm.json
+PATH=` + e.Path + `/bin:` + os.Getenv("PATH") + `
 `
 	if e.Options.ClusterId != "" {
-		envContent = envContent + "export CLUSTERID=" + e.Options.ClusterId + "\n"
+		envContent = envContent + "CLUSTERID=" + e.Options.ClusterId + "\n"
 	}
-	direnvfile, err := os.Create(e.Path + "/.ocenv")
+	direnvfile := e.ensureFile(e.Path + "/.ocenv")
+	_, err := direnvfile.WriteString(envContent)
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = direnvfile.WriteString(envContent)
+	defer direnvfile.Close()
+
+	zshenvfile := e.ensureFile(e.Path + "/.zshenv")
+	_, err = zshenvfile.WriteString("source .ocenv")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -286,13 +272,13 @@ done &
 ` + loginScript + `
 echo $! >> .killpids
 `
-		ocb += `
+	}
+	ocb += `
 ocm-backplane tunnel ` + e.Options.ClusterId + ` &
 echo $! >> .killpids
 sleep 5s
 ocm backplane login ` + e.Options.ClusterId + `
 `
-	}
 	e.createBin("ocb", ocb)
 }
 
