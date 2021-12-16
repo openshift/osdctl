@@ -9,7 +9,8 @@ import (
 type Message struct {
 	Severity      string `json:"severity"`
 	ServiceName   string `json:"service_name"`
-	ClusterUUID   string `json:"cluster_uuid"`
+	ClusterUUID   string `json:"cluster_uuid,omitempty"`
+	ClusterID     string `json:"cluster_id,omitempty"`
 	Summary       string `json:"summary"`
 	Description   string `json:"description"`
 	InternalOnly  bool   `json:"internal_only"`
@@ -26,6 +27,10 @@ func (m *Message) GetServiceName() string {
 
 func (m *Message) GetClusterUUID() string {
 	return m.ClusterUUID
+}
+
+func (m *Message) GetClusterID() string {
+	return m.ClusterID
 }
 
 func (m *Message) GetSummary() string {
@@ -48,6 +53,7 @@ func (m *Message) ReplaceWithFlag(variable, value string) {
 	m.Severity = strings.ReplaceAll(m.Severity, variable, value)
 	m.ServiceName = strings.ReplaceAll(m.ServiceName, variable, value)
 	m.ClusterUUID = strings.ReplaceAll(m.ClusterUUID, variable, value)
+	m.ClusterID = strings.ReplaceAll(m.ClusterID, variable, value)
 	m.Summary = strings.ReplaceAll(m.Summary, variable, value)
 	m.Description = strings.ReplaceAll(m.Description, variable, value)
 	m.EventStreamID = strings.ReplaceAll(m.EventStreamID, variable, value)
@@ -61,6 +67,9 @@ func (m *Message) SearchFlag(placeholder string) (found bool) {
 		return found
 	}
 	if found = strings.Contains(m.ClusterUUID, placeholder); found == true {
+		return found
+	}
+	if found = strings.Contains(m.ClusterID, placeholder); found == true {
 		return found
 	}
 	if found = strings.Contains(m.Summary, placeholder); found == true {
