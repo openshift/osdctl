@@ -357,7 +357,7 @@ You can leave an environment by pressing `ctrl+D`.
 ### OCM Environment Auto-detection
 
 You can let osdctl detect the OCM environment and select a login script based on the environment you're currently logged in.
-This will spare you to pass a script with the `-l` argument each time you log in.
+This will spare you from having to pass a script with the `-l` argument each time you log in.
 To use this feature, provide your login scripts in the config file `~/.osdctl.yaml` like in the following example:
 
 ```
