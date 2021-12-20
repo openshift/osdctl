@@ -373,6 +373,10 @@ func createPostRequest(ocmClient *sdk.Connection, cluster *v1.Cluster) (request 
 
 	Message.ClusterUUID = cluster.ExternalID()
 	Message.ClusterID = cluster.ID()
+	if subscription := cluster.Subscription(); subscription != nil {
+		Message.SubscriptionID = cluster.Subscription().ID()
+	}
+
 	messageBytes, err := json.Marshal(Message)
 	if err != nil {
 		return nil, fmt.Errorf("cannot marshal template to json: %v", err)

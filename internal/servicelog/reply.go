@@ -10,7 +10,6 @@ type GoodReply struct {
 	Severity      string    `json:"severity"`
 	ServiceName   string    `json:"service_name"`
 	ClusterUUID   string    `json:"cluster_uuid"`
-	ClusterID     string    `json:"cluster_id"`
 	Summary       string    `json:"summary"`
 	Description   string    `json:"description"`
 	EventStreamID string    `json:"event_stream_id"`

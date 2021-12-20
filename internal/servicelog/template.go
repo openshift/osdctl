@@ -7,14 +7,15 @@ import (
 
 // Message is the base template structure
 type Message struct {
-	Severity      string `json:"severity"`
-	ServiceName   string `json:"service_name"`
-	ClusterUUID   string `json:"cluster_uuid,omitempty"`
-	ClusterID     string `json:"cluster_id,omitempty"`
-	Summary       string `json:"summary"`
-	Description   string `json:"description"`
-	InternalOnly  bool   `json:"internal_only"`
-	EventStreamID string `json:"event_stream_id"`
+	Severity       string `json:"severity"`
+	ServiceName    string `json:"service_name"`
+	ClusterUUID    string `json:"cluster_uuid,omitempty"`
+	ClusterID      string `json:"cluster_id,omitempty"`
+	Summary        string `json:"summary"`
+	Description    string `json:"description"`
+	InternalOnly   bool   `json:"internal_only"`
+	EventStreamID  string `json:"event_stream_id"`
+	SubscriptionID string `json:"subscription_id,omitempty"`
 }
 
 func (m *Message) GetSeverity() string {
@@ -49,6 +50,10 @@ func (m *Message) GetEventStreamID() string {
 	return m.EventStreamID
 }
 
+func (m *Message) GetSubscriptionID() string {
+	return m.SubscriptionID
+}
+
 func (m *Message) ReplaceWithFlag(variable, value string) {
 	m.Severity = strings.ReplaceAll(m.Severity, variable, value)
 	m.ServiceName = strings.ReplaceAll(m.ServiceName, variable, value)
@@ -57,6 +62,7 @@ func (m *Message) ReplaceWithFlag(variable, value string) {
 	m.Summary = strings.ReplaceAll(m.Summary, variable, value)
 	m.Description = strings.ReplaceAll(m.Description, variable, value)
 	m.EventStreamID = strings.ReplaceAll(m.EventStreamID, variable, value)
+	m.SubscriptionID = strings.ReplaceAll(m.SubscriptionID, variable, value)
 }
 
 func (m *Message) SearchFlag(placeholder string) (found bool) {
@@ -79,6 +85,9 @@ func (m *Message) SearchFlag(placeholder string) (found bool) {
 		return found
 	}
 	if found = strings.Contains(m.EventStreamID, placeholder); found == true {
+		return found
+	}
+	if found = strings.Contains(m.SubscriptionID, placeholder); found == true {
 		return found
 	}
 	return false
