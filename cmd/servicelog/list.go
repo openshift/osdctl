@@ -1,14 +1,17 @@
 package servicelog
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
-	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
-	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	ocm_clustermgmt "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	ocm_servicelog "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -37,33 +40,68 @@ var listCmd = &cobra.Command{
 		// Use the OCM client to retrieve clusters
 		clusters := getClusters(ocmClient, args)
 
+		caughtErrors := make(map[string]error)
 		// send it as logservice and validate the response
 		for _, cluster := range clusters {
-			response, err := sendRequest(createListRequest(ocmClient, cluster.ExternalID(), serviceLogListAllMessagesFlag))
+			response, err := createListRequest(ocmClient, cluster.ExternalID(), serviceLogListAllMessagesFlag).Send()
 			if err != nil {
-				return err
+				caughtErrors[cluster.ID()] = err
+				continue
 			}
 
-			err = dump.Pretty(os.Stdout, response.Bytes())
+			entries := response.Items().Slice()
+			// should sort the servicelogs (default behaviour)
+			if !serviceLogListNoSort {
+				sort.Slice(entries, func(i, j int) bool {
+					return entries[i].Timestamp().Before(entries[j].Timestamp())
+				})
+			}
+			if serviceLogLastEntry {
+				entry := entries[len(entries)-1]
+				printEntry(entry)
+				continue
+			}
+
+			buf := bytes.NewBuffer(nil)
+			// TODO: this hack makes formatting an array to a dictionary for parsing
+			buf.WriteString("{\"entries\":")
+
+			err = ocm_servicelog.MarshalLogEntryList(entries, buf)
 			if err != nil {
 				cmd.Help()
-				return err
+				caughtErrors[cluster.ID()] = err
+				continue
 			}
+			buf.WriteString("}")
+
+			err = dump.Pretty(os.Stdout, buf.Bytes())
+			if err != nil {
+				caughtErrors[cluster.ID()] = err
+				continue
+			}
+		}
+		if len(caughtErrors) != 0 {
+			for k, v := range caughtErrors {
+				fmt.Printf("error %v was caught on cluster %s\n", v, k)
+			}
+			return nil
 		}
 		return nil
 	},
 }
 
 var serviceLogListAllMessagesFlag = false
-
-const listServiceLogAPIPath = "/api/service_logs/v1/clusters/%s/cluster_logs"
+var serviceLogListNoSort = false
+var serviceLogLastEntry = false
 
 func init() {
 	// define required flags
 	listCmd.Flags().BoolVarP(&serviceLogListAllMessagesFlag, "all-messages", "A", serviceLogListAllMessagesFlag, "Toggle if we should see all of the messages or only SRE-P specific ones")
+	listCmd.Flags().BoolVarP(&serviceLogListNoSort, "no-sort", "S", serviceLogListNoSort, "Toggle if we should sort the messages by date")
+	listCmd.Flags().BoolVarP(&serviceLogLastEntry, "last-entry", "l", serviceLogLastEntry, "Toggle if we should print only the last LogEntry")
 }
 
-func getClusters(ocmClient *sdk.Connection, clusterIds []string) []*v1.Cluster {
+func getClusters(ocmClient *sdk.Connection, clusterIds []string) []*ocm_clustermgmt.Cluster {
 	for i, id := range clusterIds {
 		clusterIds[i] = generateQuery(id)
 	}
@@ -76,20 +114,15 @@ func getClusters(ocmClient *sdk.Connection, clusterIds []string) []*v1.Cluster {
 	return clusters
 }
 
-func createListRequest(ocmClient *sdk.Connection, clusterId string, allMessages bool) *sdk.Request {
+func createListRequest(ocmClient *sdk.Connection, clusterId string, allMessages bool) *ocm_servicelog.ClusterLogsListRequest {
 	// Create and populate the request:
-	request := ocmClient.Get()
-	err := arguments.ApplyPathArg(request, targetAPIPath)
-	if err != nil {
-		log.Fatalf("Can't parse API path '%s': %v\n", targetAPIPath, err)
-	}
-	var empty []string
+	request := ocmClient.ServiceLogs().V1().ClusterLogs().List()
 
-	formatMessage := fmt.Sprintf(`search=cluster_uuid = '%s'`, clusterId)
+	formatMessage := fmt.Sprintf(`cluster_uuid = '%s'`, clusterId)
 	if !allMessages {
 		formatMessage += ` and service_name = 'SREManualAction'`
 	}
-	arguments.ApplyParameterFlag(request, []string{formatMessage})
-	arguments.ApplyHeaderFlag(request, empty)
+	request = request.Search(formatMessage)
+
 	return request
 }

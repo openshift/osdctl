@@ -11,19 +11,19 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/openshift-online/ocm-cli/pkg/arguments"
-	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
-	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	ocm_clustermgmt "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	ocm_servicelog "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/internal/utils"
 	"github.com/openshift/osdctl/pkg/printer"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
 var (
-	Message         servicelog.Message
+	Message         = servicelog.NewMessage()
 	ClustersFile    servicelog.ClustersFile
 	template        string
 	filterFiles     []string // Path to filter file
@@ -125,12 +125,14 @@ var postCmd = &cobra.Command{
 		}
 
 		log.Infoln("The following template will be sent:")
-		if err := printTemplate(); err != nil {
+
+		if err := printEntry(Message.LogEntry); err != nil {
 			log.Errorf("Cannot read generated template: %q", err)
 		}
 
 		// If this is a dry-run, don't proceed further.
 		if isDryRun {
+			log.Info("flag '--dry-run' is set, stopping...")
 			return
 		}
 
@@ -159,7 +161,7 @@ var postCmd = &cobra.Command{
 				continue
 			}
 
-			response, err := sendRequest(request)
+			response, err := request.Send()
 			if err != nil {
 				failedClusters[cluster.ExternalID()] = err.Error()
 				continue
@@ -246,11 +248,6 @@ func parseClustersFile(jsonFile []byte) error {
 	return json.Unmarshal(jsonFile, &ClustersFile)
 }
 
-// parseTemplate reads the template file into a JSON struct
-func parseTemplate(jsonFile []byte) error {
-	return json.Unmarshal(jsonFile, &Message)
-}
-
 // readTemplate loads the template into the Message variable
 func readTemplate() {
 	if template == defaultTemplate {
@@ -262,7 +259,7 @@ func readTemplate() {
 		log.Fatal(err)
 	}
 
-	if err = parseTemplate(file); err != nil {
+	if Message.LogEntry, err = ocm_servicelog.UnmarshalLogEntry(file); err != nil {
 		log.Fatalf("Cannot not parse the JSON template.\nError: %q\n", err)
 	}
 }
@@ -331,7 +328,10 @@ func replaceFlags(flagName string, flagValue string) {
 	found := false
 	if Message.SearchFlag(flagName) {
 		found = true
-		Message.ReplaceWithFlag(flagName, flagValue)
+
+		if err := Message.ReplaceWithFlag(flagName, flagValue); err != nil {
+			log.Fatalf("couldn't generate LogEntry resource, error: %q", err)
+		}
 	}
 	if strings.Contains(filtersFromFile, flagName) {
 		found = true
@@ -343,7 +343,7 @@ func replaceFlags(flagName string, flagValue string) {
 	}
 }
 
-func printClusters(clusters []*v1.Cluster) (err error) {
+func printClusters(clusters []*ocm_clustermgmt.Cluster) (err error) {
 	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
 	table.AddRow([]string{"Name", "ID", "State", "Version", "Cloud Provider", "Region"})
 	for _, cluster := range clusters {
@@ -355,34 +355,26 @@ func printClusters(clusters []*v1.Cluster) (err error) {
 	return table.Flush()
 }
 
-func printTemplate() (err error) {
-	exampleMessage, err := json.Marshal(Message)
-	if err != nil {
-		return err
-	}
-	return dump.Pretty(os.Stdout, exampleMessage)
-}
-
-func createPostRequest(ocmClient *sdk.Connection, cluster *v1.Cluster) (request *sdk.Request, err error) {
+func createPostRequest(ocmClient *sdk.Connection, cluster *ocm_clustermgmt.Cluster) (request *ocm_servicelog.ClusterLogsAddRequest, err error) {
 	// Create and populate the request:
-	request = ocmClient.Post()
-	err = arguments.ApplyPathArg(request, targetAPIPath)
-	if err != nil {
-		return nil, fmt.Errorf("cannot parse API path '%s': %v", targetAPIPath, err)
+	request = ocmClient.ServiceLogs().V1().ClusterLogs().Add()
+
+	// make sure the builder is up to date
+	Message.Builder = Message.Builder.Copy(Message.LogEntry)
+
+	// add identifiers
+	Message.Builder.ClusterUUID(cluster.ExternalID())
+	Message.Builder.ClusterID(cluster.ID())
+	if sub, ok := cluster.GetSubscription(); ok {
+		Message.Builder.SubscriptionID(sub.ID())
 	}
 
-	Message.ClusterUUID = cluster.ExternalID()
-	Message.ClusterID = cluster.ID()
-	if subscription := cluster.Subscription(); subscription != nil {
-		Message.SubscriptionID = cluster.Subscription().ID()
+	if err := Message.Refresh(); err != nil {
+		return nil, errors.Wrap(err, "could not refresh in post request")
 	}
 
-	messageBytes, err := json.Marshal(Message)
-	if err != nil {
-		return nil, fmt.Errorf("cannot marshal template to json: %v", err)
-	}
+	request = request.Body(Message.LogEntry)
 
-	request.Bytes(messageBytes)
 	return request, nil
 }
 
@@ -424,7 +416,7 @@ func printPostOutput() {
 }
 
 // cleanUp performs final actions in case of program termination.
-func cleanUp(clusters []*v1.Cluster) {
+func cleanUp(clusters []*ocm_clustermgmt.Cluster) {
 	for _, cluster := range clusters {
 		if _, ok := successfulClusters[cluster.ExternalID()]; !ok {
 			failedClusters[cluster.ExternalID()] = "cannot send message due to program interruption"

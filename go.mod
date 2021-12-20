@@ -8,9 +8,9 @@ require (
 	github.com/golang/mock v1.5.0
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/kr/text v0.2.0 // indirect
-	github.com/onsi/gomega v1.16.0
+	github.com/onsi/gomega v1.18.1
 	github.com/openshift-online/ocm-cli v0.1.59
-	github.com/openshift-online/ocm-sdk-go v0.1.205
+	github.com/openshift-online/ocm-sdk-go v0.1.242
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/openshift/aws-account-operator/pkg/apis v0.0.0-20210611151019-01b1df7a3e9e
 	github.com/openshift/gcp-project-operator v0.0.0-20210906153132-ce9b2425f1a7
