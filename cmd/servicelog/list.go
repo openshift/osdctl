@@ -20,7 +20,7 @@ var listCmd = &cobra.Command{
 	Args:          cobra.ArbitraryArgs,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if len(args) != 1 {
+		if len(args) == 0 {
 			cmd.Help()
 			return fmt.Errorf("cluster-identifier was not provided. please provide a cluster id, UUID, or name")
 		}
