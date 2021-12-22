@@ -51,6 +51,22 @@ var postCmd = &cobra.Command{
 		readFilterFile()      // parse the ocm filters in file provided via '-f' flag
 		readTemplate()        // parse the given JSON template provided via '-t' flag
 
+		if len(args) < 1 && filtersFromFile == "" && clustersFile == "" {
+			log.Fatalf("No cluster identifier has been found.")
+		}
+
+		var queries []string
+		for _, clusterIds := range args {
+			queries = append(queries, generateQuery(clusterIds))
+		}
+
+		if len(queries) > 0 {
+			if len(filterParams) > 0 {
+				log.Warnf("A cluster identifier was passed with the '-q' flag. This will apply logical AND between the search query and the cluster given, potentially resulting in no matches")
+			}
+			filterParams = append(filterParams, strings.Join(queries, " or "))
+		}
+
 		// For every '-p' flag, replace its related placeholder in the template & filterFiles
 		for k := range userParameterNames {
 			replaceFlags(userParameterNames[k], userParameterValues[k])
@@ -137,7 +153,7 @@ var postCmd = &cobra.Command{
 		}()
 
 		for _, cluster := range clusters {
-			request, err := createPostRequest(ocmClient, cluster.ExternalID())
+			request, err := createPostRequest(ocmClient, cluster)
 			if err != nil {
 				failedClusters[cluster.ExternalID()] = err.Error()
 				continue
@@ -169,7 +185,6 @@ func init() {
 
 // parseUserParameters parse all the '-p FOO=BAR' parameters and checks for syntax errors
 func parseUserParameters() {
-	var queries []string // interpret all '-p CLUSTER_UUID' parameters as queries to be made to the ocmClient
 	for _, v := range templateParams {
 		if !strings.Contains(v, "=") {
 			log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
@@ -180,19 +195,8 @@ func parseUserParameters() {
 			log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
 		}
 
-		if param[0] != "CLUSTER_UUID" {
-			userParameterNames = append(userParameterNames, fmt.Sprintf("${%v}", param[0]))
-			userParameterValues = append(userParameterValues, param[1])
-		} else {
-			queries = append(queries, generateQuery(param[1]))
-		}
-	}
-
-	if len(queries) != 0 {
-		if len(filterParams) != 0 {
-			log.Warnf("At least one $CLUSTER_UUID parameter was passed with the '-q' flag. This will apply logical AND between the search query and the cluster(s) given, potentially resulting in no matches")
-		}
-		filterParams = append(filterParams, strings.Join(queries, " or "))
+		userParameterNames = append(userParameterNames, fmt.Sprintf("${%v}", param[0]))
+		userParameterValues = append(userParameterValues, param[1])
 	}
 }
 
@@ -359,7 +363,7 @@ func printTemplate() (err error) {
 	return dump.Pretty(os.Stdout, exampleMessage)
 }
 
-func createPostRequest(ocmClient *sdk.Connection, clusterId string) (request *sdk.Request, err error) {
+func createPostRequest(ocmClient *sdk.Connection, cluster *v1.Cluster) (request *sdk.Request, err error) {
 	// Create and populate the request:
 	request = ocmClient.Post()
 	err = arguments.ApplyPathArg(request, targetAPIPath)
@@ -367,7 +371,12 @@ func createPostRequest(ocmClient *sdk.Connection, clusterId string) (request *sd
 		return nil, fmt.Errorf("cannot parse API path '%s': %v", targetAPIPath, err)
 	}
 
-	Message.ClusterUUID = clusterId
+	Message.ClusterUUID = cluster.ExternalID()
+	Message.ClusterID = cluster.ID()
+	if subscription := cluster.Subscription(); subscription != nil {
+		Message.SubscriptionID = cluster.Subscription().ID()
+	}
+
 	messageBytes, err := json.Marshal(Message)
 	if err != nil {
 		return nil, fmt.Errorf("cannot marshal template to json: %v", err)

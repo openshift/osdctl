@@ -302,9 +302,9 @@ osdctl servicelog list ${CLUSTERID} --all-messages
 #### Post servicelogs
 
 ```bash
-EXTERNAL_ID= # an external id for a cluster
+CLUSTER_ID= # the unique cluster name, or internal, external id for a cluster
 TEMPLATE= # file or url in which the template exists in
-osdctl servicelog post --param=CLUSTER_UUID=${EXTERNAL_ID} --template=${TEMPLATE} --dry-run
+osdctl servicelog post ${CLUSTER_ID} --template=${TEMPLATE} --dry-run
 
 QUERIES_HERE= # queries that can be run on ocm's `clusters` resoruce
 TEMPLATE= # file or url in which the template exists in
@@ -319,14 +319,14 @@ EOF
 TEMPLATE= # file or url in which the template exists in
 osdctl servicelog post --template=${TEMPLATE} --query-file=query_file.txt --dry-run
 
-EXTERNAL_ID= # an external id for a cluster
-ANOTHER_EXTERNAL_ID= # similar, but shows how to  have multiple clusters as input
+CLUSTER_ID= # the unique cluster name, or internal, external id for a cluster
+ANOTHER_CLUSTER_ID= # similar, but shows how to  have multiple clusters as input
 # clusters_list.json will have the custom list of clusters to iterate on
 cat << EOF > clusters_list.json
 {
   "clusters": [
-    "${EXTERNAL_ID}",
-    "${ANOTHER_EXTERNAL_ID}"
+    "${CLUSTER_ID}",
+    "${ANOTHER_CLUSTER_ID}"
   ]
 }
 EOF
