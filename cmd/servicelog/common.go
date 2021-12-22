@@ -36,7 +36,7 @@ func createConnection() *sdk.Connection {
 
 // generateQuery returns an OCM search query to retrieve all clusters matching an expression (ie- "foo%")
 func generateQuery(clusterIdentifier string) string {
-	return strings.TrimSpace(fmt.Sprintf("id like '%[1]s' or external_id like '%[1]s' or display_name like '%[1]s'", clusterIdentifier))
+	return strings.TrimSpace(fmt.Sprintf("(id like '%[1]s' or external_id like '%[1]s' or display_name like '%[1]s')", clusterIdentifier))
 }
 
 // getFilteredClusters retrieves clusters in OCM which match the filters given
@@ -51,6 +51,9 @@ func applyFilters(ocmClient *sdk.Connection, filters []string) ([]*v1.Cluster, e
 
 	requestSize := 50
 	full_filters := strings.Join(filters, " and ")
+
+	log.Infof(`running the command: 'ocm list clusters --parameter=search="%s"'`, full_filters)
+
 	request := ocmClient.ClustersMgmt().V1().Clusters().List().Search(full_filters).Size(requestSize)
 	response, err := request.Send()
 	if err != nil {

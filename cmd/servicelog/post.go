@@ -108,7 +108,7 @@ var postCmd = &cobra.Command{
 				cluster := ClustersFile.Clusters[i]
 				query = append(query, generateQuery(cluster))
 			}
-			filterParams = query
+			filterParams = append(filterParams, strings.Join(query, " or "))
 		}
 
 		clusters, err := applyFilters(ocmClient, filterParams)
@@ -180,7 +180,7 @@ func init() {
 	postCmd.Flags().StringArrayVarP(&filterParams, "query", "q", filterParams, "Specify a search query (eg. -q \"name like foo\") for a bulk-post to matching clusters.")
 	postCmd.Flags().BoolVarP(&skipPrompts, "yes", "y", false, "Skips all prompts.")
 	postCmd.Flags().StringArrayVarP(&filterFiles, "query-file", "f", filterFiles, "File containing search queries to apply. All lines in the file will be concatenated into a single query. If this flag is called multiple times, every file's search query will be combined with logical AND.")
-	postCmd.Flags().StringVarP(&clustersFile, "clusters-file", "c", clustersFile, "Read a list of clusters to post the servicelog to")
+	postCmd.Flags().StringVarP(&clustersFile, "clusters-file", "c", clustersFile, `Read a list of clusters to post the servicelog to. the format of the file is: {"clusters":["$CLUSTERID"]}`)
 }
 
 // parseUserParameters parse all the '-p FOO=BAR' parameters and checks for syntax errors
