@@ -51,7 +51,7 @@ var postCmd = &cobra.Command{
 		readFilterFile()      // parse the ocm filters in file provided via '-f' flag
 		readTemplate()        // parse the given JSON template provided via '-t' flag
 
-		if len(args) < 1 && filtersFromFile == "" && clustersFile == "" {
+		if len(args) == 0 && len(filterParams) == 0 && clustersFile == "" {
 			log.Fatalf("No cluster identifier has been found.")
 		}
 
