@@ -81,6 +81,7 @@ func newPacketCaptureOptions(streams genericclioptions.IOStreams, flags *generic
 	return &packetCaptureOptions{
 		flags:     flags,
 		IOStreams: streams,
+		kubeCli:   client,
 	}
 }
 
