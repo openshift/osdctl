@@ -44,6 +44,10 @@ func newCmdReset(streams genericclioptions.IOStreams, flags *genericclioptions.C
 		"Skip the prompt check")
 	resetCmd.Flags().BoolVar(&ops.resetLegalEntity, "reset-legalentity", false,
 		`This will wipe the legalEntity, claimLink and reused fields, allowing accounts to be used for different Legal Entities.`)
+	resetCmd.Flags().BoolVarP(&ops.editState, "edit-state", "e", false,
+		"Change only the state of an account.")
+	resetCmd.Flags().StringVar(&ops.stateInput, "state", "",
+		"Select the state to change to. Required when using the --edit-state flag. Valid values are Ready or Failed")
 
 	// mark this flag hidden because it is not recommended to use
 	_ = resetCmd.Flags().MarkHidden("skip-check")
@@ -51,12 +55,20 @@ func newCmdReset(streams genericclioptions.IOStreams, flags *genericclioptions.C
 	return resetCmd
 }
 
+type State string
+
+var stateFailed State = "Failed"
+var stateReady State = "Ready"
+
 // resetOptions defines the struct for running reset command
 type resetOptions struct {
 	accountName      string
 	accountNamespace string
 	skipCheck        bool
 	resetLegalEntity bool
+	editState        bool
+	stateInput       string
+	setState         State
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
@@ -75,6 +87,23 @@ func (o *resetOptions) complete(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
 		return cmdutil.UsageErrorf(cmd, "The name of Account CR is required for reset command")
 	}
+
+	if o.editState {
+		if o.stateInput == "" {
+			return cmdutil.UsageErrorf(cmd, "You must provide a state to put the account into. Supported states are Ready or Failed")
+		}
+		stateIn := strings.ToLower(o.stateInput)
+
+		switch stateIn {
+		case "ready":
+			o.setState = stateReady
+		case "failed":
+			o.setState = stateFailed
+		default:
+			return cmdutil.UsageErrorf(cmd, "Unsupported state.  Supported states are Ready or Failed")
+		}
+	}
+
 	o.accountName = args[0]
 
 	return nil
@@ -94,6 +123,26 @@ func (o *resetOptions) run() error {
 
 	ctx := context.TODO()
 
+	account, err := k8s.GetAWSAccount(ctx, o.kubeCli, o.accountNamespace, o.accountName)
+	if err != nil {
+		return err
+	}
+
+	// If marking as failed, skip all of the resetting and just edit the state
+	if o.editState {
+		fmt.Fprintln(o.Out, "Changing state to "+o.setState)
+		//reset fields in status
+		var mergePatch []byte
+
+		status := map[string]interface{}{
+			"state": o.setState,
+		}
+		mergePatch, _ = json.Marshal(map[string]interface{}{
+			"status": status,
+		})
+		return o.kubeCli.Status().Patch(ctx, account, client.RawPatch(types.MergePatchType, mergePatch))
+	}
+
 	//cleanup secrets
 	var secrets v1.SecretList
 	if err := o.kubeCli.List(ctx, &secrets, &client.ListOptions{
@@ -112,10 +161,6 @@ func (o *resetOptions) run() error {
 				return err
 			}
 		}
-	}
-	account, err := k8s.GetAWSAccount(ctx, o.kubeCli, o.accountNamespace, o.accountName)
-	if err != nil {
-		return err
 	}
 	//get accountID for rest
 	accountId := account.Spec.AwsAccountID
