@@ -33,6 +33,7 @@ var (
 	isDryRun        bool
 	skipPrompts     bool
 	clustersFile    string
+	internalOnly    bool
 
 	// Messaged clusters
 	successfulClusters = make(map[string]string)
@@ -186,6 +187,7 @@ func init() {
 	postCmd.Flags().BoolVarP(&skipPrompts, "yes", "y", false, "Skips all prompts.")
 	postCmd.Flags().StringArrayVarP(&filterFiles, "query-file", "f", filterFiles, "File containing search queries to apply. All lines in the file will be concatenated into a single query. If this flag is called multiple times, every file's search query will be combined with logical AND.")
 	postCmd.Flags().StringVarP(&clustersFile, "clusters-file", "c", clustersFile, `Read a list of clusters to post the servicelog to. the format of the file is: {"clusters":["$CLUSTERID"]}`)
+	postCmd.Flags().BoolVarP(&internalOnly, "internal", "i", false, "Internal only service log. Use MESSAGE for template parameter (eg. -p MESSAGE='My super secret message').")
 }
 
 // parseUserParameters parse all the '-p FOO=BAR' parameters and checks for syntax errors
@@ -223,7 +225,7 @@ func confirmSend() error {
 	return nil
 }
 
-// accessTemplate returns the contents of a local file or url, and any errors encountered
+// accessFile returns the contents of a local file or url, and any errors encountered
 func accessFile(filePath string) ([]byte, error) {
 	filePath = filepath.Clean(filePath)
 	if utils.FileExists(filePath) {
@@ -260,6 +262,23 @@ func parseTemplate(jsonFile []byte) error {
 
 // readTemplate loads the template into the Message variable
 func readTemplate() {
+	if internalOnly {
+		// fixed template for internal service logs
+		messageTemplate := []byte(`
+		{
+			"severity": "Info",
+			"service_name": "SREManualAction",
+			"summary": "INTERNAL",
+			"description": "${MESSAGE}",
+			"internal_only": true
+		}
+		`)
+		if err := parseTemplate(messageTemplate); err != nil {
+			log.Fatalf("Cannot not parse the JSON internal message template.\nError: %q\n", err)
+		}
+		return
+	}
+
 	if template == defaultTemplate {
 		log.Fatalf("Template file is not provided. Use '-t' to fix this.")
 	}
@@ -380,6 +399,7 @@ func createPostRequest(ocmClient *sdk.Connection, cluster *v1.Cluster) (request 
 
 	Message.ClusterUUID = cluster.ExternalID()
 	Message.ClusterID = cluster.ID()
+	Message.InternalOnly = internalOnly
 	if subscription := cluster.Subscription(); subscription != nil {
 		Message.SubscriptionID = cluster.Subscription().ID()
 	}
