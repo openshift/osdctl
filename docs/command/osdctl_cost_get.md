@@ -15,7 +15,7 @@ osdctl cost get [flags]
       --ou string      get OU ID
   -r, --recursive      recurse through OUs
       --start string   set start date range
-  -t, --time string    set time. One of 'LM', 'MTD', 'TYD', '3M', '6M', '1Y'
+  -t, --time string    set time. One of 'LM', 'MTD', 'YTD', '3M', '6M', '1Y'
 ```
 
 ### Options inherited from parent commands

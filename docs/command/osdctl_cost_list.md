@@ -14,7 +14,7 @@ osdctl cost list [flags]
   -h, --help           help for list
       --ou string      get OU ID
       --start string   set start date range
-  -t, --time string    set time. One of 'LM', 'MTD', 'TYD', '3M', '6M', '1Y'
+  -t, --time string    set time. One of 'LM', 'MTD', 'YTD', '3M', '6M', '1Y'
 ```
 
 ### Options inherited from parent commands

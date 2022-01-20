@@ -32,7 +32,7 @@ func newCmdGet(streams genericclioptions.IOStreams, globalOpts *globalflags.Glob
 	}
 	getCmd.Flags().StringVar(&ops.ou, "ou", "", "get OU ID")
 	getCmd.Flags().BoolVarP(&ops.recursive, "recursive", "r", false, "recurse through OUs")
-	getCmd.Flags().StringVarP(&ops.time, "time", "t", "", "set time. One of 'LM', 'MTD', 'TYD', '3M', '6M', '1Y'")
+	getCmd.Flags().StringVarP(&ops.time, "time", "t", "", "set time. One of 'LM', 'MTD', 'YTD', '3M', '6M', '1Y'")
 	getCmd.Flags().StringVar(&ops.start, "start", "", "set start date range")
 	getCmd.Flags().StringVar(&ops.end, "end", "", "set end date range")
 	getCmd.Flags().BoolVar(&ops.csv, "csv", false, "output result as csv")
