@@ -10,11 +10,12 @@ import (
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	k8sclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // costCmd represents the cost command
-func NewCmdCost(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	opsCost = newCostOptions(streams)
+func NewCmdCost(streams genericclioptions.IOStreams, kubeCli k8sclient.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	opsCost = newCostOptions(streams, kubeCli)
 	costCmd := &cobra.Command{
 		Use:   "cost",
 		Short: "Cost Management related utilities",
@@ -33,7 +34,7 @@ platforms may be added in the future)`,
 	costCmd.AddCommand(newCmdGet(streams, globalOpts))
 	costCmd.AddCommand(newCmdReconcile(streams))
 	costCmd.AddCommand(newCmdCreate(streams))
-	costCmd.AddCommand(newCmdList(streams, globalOpts))
+	costCmd.AddCommand(newCmdList(streams, kubeCli, globalOpts))
 
 	return costCmd
 }
@@ -50,11 +51,14 @@ type costOptions struct {
 	region          string
 
 	genericclioptions.IOStreams
+
+	kubeCli k8sclient.Client
 }
 
-func newCostOptions(streams genericclioptions.IOStreams) *costOptions {
+func newCostOptions(streams genericclioptions.IOStreams, kubeCli k8sclient.Client) *costOptions {
 	return &costOptions{
 		IOStreams: streams,
+		kubeCli:   kubeCli,
 	}
 }
 

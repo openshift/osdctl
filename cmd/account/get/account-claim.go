@@ -80,46 +80,19 @@ func (o *getAccountClaimOptions) run() error {
 	ctx := context.TODO()
 
 	var (
-		accounts         awsv1alpha1.AccountList
-		accountClaims    awsv1alpha1.AccountClaimList
-		accountCRName    string
 		accountClaimName string
 		accountClaim     awsv1alpha1.AccountClaim
+		err              error
 	)
 
 	if o.accountName != "" {
-		accountCRName = o.accountName
+		accountClaim, err = getAccountClaim(ctx, o.kubeCli, o.accountName)
 	} else {
-		if err := o.kubeCli.List(ctx, &accounts, &client.ListOptions{
-			Namespace: o.accountNamespace,
-		}); err != nil {
-			return err
-		}
-
-		for _, a := range accounts.Items {
-			if a.Spec.AwsAccountID == o.accountID {
-				accountCRName = a.Name
-				break
-			}
-		}
-		if accountCRName == "" {
-			return fmt.Errorf("Account matched for AWS Account ID %s not found\n", o.accountID)
-		}
+		accountClaim, err = GetAccountClaimFromAccountID(ctx, o.kubeCli, o.accountID, o.accountNamespace)
 	}
 
-	if err := o.kubeCli.List(ctx, &accountClaims); err != nil {
-		return nil
-	}
-
-	for _, a := range accountClaims.Items {
-		if a.Spec.AccountLink == accountCRName {
-			accountClaimName = a.Name
-			accountClaim = a
-			break
-		}
-	}
-	if accountClaimName == "" {
-		return fmt.Errorf("AccountClaim matched for Account CR %s not found\n", accountCRName)
+	if err != nil {
+		return err
 	}
 
 	if o.output == "" {
@@ -135,4 +108,39 @@ func (o *getAccountClaimOptions) run() error {
 	}
 
 	return resourcePrinter.PrintObj(&accountClaim, o.Out)
+}
+
+func GetAccountClaimFromAccountID(ctx context.Context, kubeCli client.Client, accountID string, namespace string) (accountClaim awsv1alpha1.AccountClaim, err error) {
+	accounts := awsv1alpha1.AccountList{}
+	err = kubeCli.List(ctx, &accounts, &client.ListOptions{
+		Namespace: namespace,
+	})
+	if err != nil {
+		return
+	}
+
+	for _, a := range accounts.Items {
+		if a.Spec.AwsAccountID == accountID {
+			return getAccountClaim(ctx, kubeCli, a.Name)
+		}
+	}
+	err = fmt.Errorf("account matched for AWS Account ID %s not found", accountID)
+	return
+
+}
+
+func getAccountClaim(ctx context.Context, kubeCli client.Client, accountName string) (accountClaim awsv1alpha1.AccountClaim, err error) {
+	accountClaims := awsv1alpha1.AccountClaimList{}
+	if err = kubeCli.List(ctx, &accountClaims); err != nil {
+		return
+	}
+
+	for _, a := range accountClaims.Items {
+		if a.Spec.AccountLink == accountName {
+			accountClaim = a
+			return
+		}
+	}
+	err = fmt.Errorf("AccountClaim matched for Account CR %s not found\n", accountName)
+	return
 }
