@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 
-	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	accountget "github.com/openshift/osdctl/cmd/account/get"
 	"github.com/openshift/osdctl/cmd/common"
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
@@ -212,10 +212,11 @@ func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovide
 }
 
 type AccountCost struct {
-	AccountID    string
-	Cost         decimal.Decimal
-	Unit         string
-	accountClaim awsv1alpha1.AccountClaim
+	AccountID             string
+	Cost                  decimal.Decimal
+	Unit                  string
+	accountClaimName      string
+	accountClaimNamespace string
 }
 
 type OUCost struct {
@@ -278,8 +279,19 @@ func (o *OUCost) getAccountClaims(kubeCli client.Client) {
 	for i, cost := range o.Costs {
 		accountclaim, err := accountget.GetAccountClaimFromAccountID(context.TODO(), o.options.kubeCli, cost.AccountID, common.AWSAccountNamespace)
 		if err == nil {
-			o.Costs[i].accountClaim = accountclaim
+			o.Costs[i].accountClaimName = accountclaim.Name
+			o.Costs[i].accountClaimNamespace = accountclaim.Namespace
+			continue
 		}
+		if strings.Contains(fmt.Sprint(err), "AccountClaim matched for Account CR") {
+			o.Costs[i].accountClaimName = "AccountClaim CR not found"
+			continue
+		}
+		if strings.Contains(fmt.Sprint(err), "account matched for AWS Account ID") {
+			o.Costs[i].accountClaimName = "Account CR not found"
+			continue
+		}
+		o.Costs[i].accountClaimName = fmt.Sprint(err)
 	}
 }
 
@@ -298,7 +310,7 @@ func (o OUCost) printCostPerAccount(awsClient awsprovider.Client) {
 		}
 		if o.options.csv {
 			if o.options.claims {
-				fmt.Printf("%s,%s,%s,%s,%s,%s\n", accountCost.accountClaim.Namespace, accountCost.accountClaim.Name, *o.OU.Id, accountCost.AccountID, accountCost.Cost.StringFixed(2), accountCost.Unit)
+				fmt.Printf("%s,%s,%s,%s,%s,%s\n", accountCost.accountClaimNamespace, accountCost.accountClaimName, *o.OU.Id, accountCost.AccountID, accountCost.Cost.StringFixed(2), accountCost.Unit)
 				continue
 			}
 			fmt.Printf("%s,%s,%s,%s\n", *o.OU.Id, accountCost.AccountID, accountCost.Cost.StringFixed(2), accountCost.Unit)
