@@ -38,10 +38,6 @@ func newCmdList(streams genericclioptions.IOStreams, globalOpts *globalflags.Glo
 	if err := listCmd.MarkFlagRequired("ou"); err != nil {
 		log.Fatalln("OU flag:", err)
 	}
-	// require explicit time set
-	if err := listCmd.MarkFlagRequired("time"); err != nil {
-		log.Fatalln("time flag:", err)
-	}
 
 	return listCmd
 }
