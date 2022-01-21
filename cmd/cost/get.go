@@ -9,6 +9,7 @@ import (
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/shopspring/decimal"
 	"github.com/spf13/cobra"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -81,14 +82,14 @@ type getOptions struct {
 }
 
 type getCostResponse struct {
-	OuId    string  `json:"ouid" yaml:"ouid"`
-	OuName  string  `json:"ouname" yaml:"ouname"`
-	CostUSD float64 `json:"costUSD" yaml:"costUSD"`
+	OuId    string          `json:"ouid" yaml:"ouid"`
+	OuName  string          `json:"ouname" yaml:"ouname"`
+	CostUSD decimal.Decimal `json:"costUSD" yaml:"costUSD"`
 }
 
 func (f getCostResponse) String() string {
 
-	return fmt.Sprintf("  OuId: %s\n  OuName: %s\n  Cost: %f\n", f.OuId, f.OuName, f.CostUSD)
+	return fmt.Sprintf("  OuId: %s\n  OuName: %s\n  Cost: %s\n", f.OuId, f.OuName, f.CostUSD)
 
 }
 
@@ -109,7 +110,7 @@ func (o *getOptions) run() error {
 	//Get information regarding Organizational Unit
 	OU := getOU(awsClient, o.ou)
 
-	var cost float64
+	var cost decimal.Decimal
 	var unit string
 
 	if o.recursive { //Get cost of given OU by aggregating costs of all (including immediate) accounts under OU
@@ -229,7 +230,7 @@ func getOUsRecursive(OU *organizations.OrganizationalUnit, awsClient awsprovider
 }
 
 //Get cost of given account
-func (o *getOptions) getAccountCost(accountID *string, unit *string, awsClient awsprovider.Client, cost *float64) error {
+func (o *getOptions) getAccountCost(accountID *string, unit *string, awsClient awsprovider.Client, cost *decimal.Decimal) error {
 
 	var start, end, granularity string
 	if o.time != "" {
@@ -270,11 +271,11 @@ func (o *getOptions) getAccountCost(accountID *string, unit *string, awsClient a
 
 	//Loop through month-by-month cost and increment to get total cost
 	for month := 0; month < len(costs.ResultsByTime); month++ {
-		monthCost, err := strconv.ParseFloat(*costs.ResultsByTime[month].Total["NetUnblendedCost"].Amount, 64)
+		monthCost, err := decimal.NewFromString(*costs.ResultsByTime[month].Total["NetUnblendedCost"].Amount)
 		if err != nil {
 			return err
 		}
-		*cost += monthCost
+		*cost = cost.Add(monthCost)
 	}
 
 	//Save unit
@@ -284,7 +285,7 @@ func (o *getOptions) getAccountCost(accountID *string, unit *string, awsClient a
 }
 
 //Get cost of given OU by aggregating costs of only immediate accounts under given OU
-func (o *getOptions) getOUCost(cost *float64, unit *string, OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) error {
+func (o *getOptions) getOUCost(cost *decimal.Decimal, unit *string, OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) error {
 	//Populate accounts
 	accounts, err := getAccounts(OU, awsClient)
 	if err != nil {
@@ -302,7 +303,7 @@ func (o *getOptions) getOUCost(cost *float64, unit *string, OU *organizations.Or
 }
 
 //Get cost of given OU by aggregating costs of all (including immediate) accounts under OU
-func (o *getOptions) getOUCostRecursive(cost *float64, unit *string, OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) error {
+func (o *getOptions) getOUCostRecursive(cost *decimal.Decimal, unit *string, OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) error {
 	//Populate OUs
 	OUs, err := getOUs(OU, awsClient)
 	if err != nil {
@@ -360,7 +361,7 @@ func getTimePeriod(timePtr *string) (string, string) {
 	return start, end
 }
 
-func (o *getOptions) printCostGet(cost float64, unit string, ops *getOptions, OU *organizations.OrganizationalUnit) error {
+func (o *getOptions) printCostGet(cost decimal.Decimal, unit string, ops *getOptions, OU *organizations.OrganizationalUnit) error {
 
 	resp := getCostResponse{
 		OuId:    *OU.Id,
@@ -369,7 +370,7 @@ func (o *getOptions) printCostGet(cost float64, unit string, ops *getOptions, OU
 	}
 
 	if ops.csv { //If csv option specified, print result in csv
-		fmt.Printf("\n%s,%f (%s)\n\n", *OU.Name, cost, unit)
+		fmt.Printf("\n%s,%s (%s)\n\n", *OU.Name, cost.StringFixed(2), unit)
 		return nil
 	}
 	if ops.recursive {
