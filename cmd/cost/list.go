@@ -1,10 +1,14 @@
 package cost
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sort"
 
+	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
+	accountget "github.com/openshift/osdctl/cmd/account/get"
+	"github.com/openshift/osdctl/cmd/common"
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
@@ -14,11 +18,13 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	k8sclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // listCmd represents the list command
-func newCmdList(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newListOptions(streams, globalOpts)
+func newCmdList(streams genericclioptions.IOStreams, kubeCli k8sclient.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newListOptions(streams, kubeCli, globalOpts)
 	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "List the cost of each Account/OU under given OU",
@@ -35,6 +41,7 @@ func newCmdList(streams genericclioptions.IOStreams, globalOpts *globalflags.Glo
 	listCmd.Flags().BoolVar(&ops.csv, "csv", false, "output result as csv")
 	listCmd.Flags().StringVar(&ops.level, "level", "ou", "Cost cummulation level: possible options: ou, account")
 	listCmd.Flags().BoolVar(&ops.sum, "sum", true, "Hide sum rows")
+	listCmd.Flags().BoolVar(&ops.claims, "claims", false, "Find matching AccountClaims in currently logged in cluster (SLOW!)")
 
 	if err := listCmd.MarkFlagRequired("ou"); err != nil {
 		log.Fatalln("OU flag:", err)
@@ -75,9 +82,11 @@ type listOptions struct {
 	level  string
 	csv    bool
 	sum    bool
+	claims bool
 	output string
 
 	genericclioptions.IOStreams
+	kubeCli       client.Client
 	GlobalOptions *globalflags.GlobalOptions
 }
 
@@ -105,9 +114,10 @@ func (f listAccountCostResponse) String() string {
 
 }
 
-func newListOptions(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *listOptions {
+func newListOptions(streams genericclioptions.IOStreams, kubeCli client.Client, globalOpts *globalflags.GlobalOptions) *listOptions {
 	return &listOptions{
 		IOStreams:     streams,
+		kubeCli:       kubeCli,
 		GlobalOptions: globalOpts,
 	}
 }
@@ -149,7 +159,11 @@ func printHeader(ops *listOptions) {
 
 	case "account":
 		if ops.csv {
-			fmt.Println("OU, AccountID,Cost,Unit")
+			header := "OU,AccountID,Cost,Unit"
+			if ops.claims {
+				header = "Namespace,AccountClaimName," + header
+			}
+			fmt.Println(header)
 		}
 	case "ou":
 		if ops.csv {
@@ -198,9 +212,10 @@ func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovide
 }
 
 type AccountCost struct {
-	AccountID string
-	Cost      decimal.Decimal
-	Unit      string
+	AccountID    string
+	Cost         decimal.Decimal
+	Unit         string
+	accountClaim awsv1alpha1.AccountClaim
 }
 
 type OUCost struct {
@@ -259,8 +274,20 @@ func (o OUCost) getSum() (sum decimal.Decimal, unit string, err error) {
 	return
 }
 
+func (o *OUCost) getAccountClaims(kubeCli client.Client) {
+	for i, cost := range o.Costs {
+		accountclaim, err := accountget.GetAccountClaimFromAccountID(context.TODO(), o.options.kubeCli, cost.AccountID, common.AWSAccountNamespace)
+		if err == nil {
+			o.Costs[i].accountClaim = accountclaim
+		}
+	}
+}
+
 func (o OUCost) printCostPerAccount(awsClient awsprovider.Client) {
 	o.getCost(awsClient)
+	if o.options.claims {
+		o.getAccountClaims(o.options.kubeCli)
+	}
 
 	for _, accountCost := range o.Costs {
 		resp := listAccountCostResponse{
@@ -270,6 +297,10 @@ func (o OUCost) printCostPerAccount(awsClient awsprovider.Client) {
 			Unit:      accountCost.Unit,
 		}
 		if o.options.csv {
+			if o.options.claims {
+				fmt.Printf("%s,%s,%s,%s,%s,%s\n", accountCost.accountClaim.Namespace, accountCost.accountClaim.Name, *o.OU.Id, accountCost.AccountID, accountCost.Cost.StringFixed(2), accountCost.Unit)
+				continue
+			}
 			fmt.Printf("%s,%s,%s,%s\n", *o.OU.Id, accountCost.AccountID, accountCost.Cost.StringFixed(2), accountCost.Unit)
 			continue
 		}
@@ -281,7 +312,11 @@ func (o OUCost) printCostPerAccount(awsClient awsprovider.Client) {
 	}
 	if o.options.csv {
 		if o.options.sum {
-			fmt.Printf("%s,%s,%s,%s\n", *o.OU.Id, "SUM", sum.StringFixed(2), unit)
+			output := fmt.Sprintf("%s,%s,%s,%s", *o.OU.Id, "SUM", sum.StringFixed(2), unit)
+			if o.options.claims {
+				output = ",," + output
+			}
+			fmt.Println(output)
 		}
 		return
 	}

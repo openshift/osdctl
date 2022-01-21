@@ -68,7 +68,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(newCmdOptions(streams))
 
 	// Add cost command to use AWS Cost Manager
-	rootCmd.AddCommand(cost.NewCmdCost(streams, globalOpts))
+	rootCmd.AddCommand(cost.NewCmdCost(streams, kubeClient, globalOpts))
 
 	// Add version subcommand. Using the in-build --version flag does not work with cobra
 	// because there is no way to hook a function to the --version flag in cobra.
