@@ -27,13 +27,14 @@ func newCmdList(streams genericclioptions.IOStreams, globalOpts *globalflags.Glo
 			cmdutil.CheckErr(ops.runList())
 		},
 	}
-	listCmd.Flags().StringVar(&ops.ou, "ou", "", "get OU ID")
+	listCmd.Flags().StringArrayVar(&ops.ou, "ou", []string{}, "get OU ID")
 	// list supported time args
 	listCmd.Flags().StringVarP(&ops.time, "time", "t", "", "set time. One of 'LM', 'MTD', 'YTD', '3M', '6M', '1Y'")
 	listCmd.Flags().StringVar(&ops.start, "start", "", "set start date range")
 	listCmd.Flags().StringVar(&ops.end, "end", "", "set end date range")
 	listCmd.Flags().BoolVar(&ops.csv, "csv", false, "output result as csv")
 	listCmd.Flags().StringVar(&ops.level, "level", "ou", "Cost cummulation level: possible options: ou, account")
+	listCmd.Flags().BoolVar(&ops.sum, "sum", true, "Hide sum rows")
 
 	if err := listCmd.MarkFlagRequired("ou"); err != nil {
 		log.Fatalln("OU flag:", err)
@@ -56,7 +57,7 @@ func (o *listOptions) checkArgs(cmd *cobra.Command, _ []string) error {
 	if o.start == "" && o.end != "" {
 		return cmdutil.UsageErrorf(cmd, "Please provide start of date range")
 	}
-	if o.ou == "" {
+	if len(o.ou) == 0 {
 		return cmdutil.UsageErrorf(cmd, "Please provide OU")
 	}
 
@@ -67,12 +68,13 @@ func (o *listOptions) checkArgs(cmd *cobra.Command, _ []string) error {
 
 //Store flag options for get command
 type listOptions struct {
-	ou     string
+	ou     []string
 	time   string
 	start  string
 	end    string
 	level  string
 	csv    bool
+	sum    bool
 	output string
 
 	genericclioptions.IOStreams
@@ -92,6 +94,7 @@ func (f listCostResponse) String() string {
 }
 
 type listAccountCostResponse struct {
+	OU        string          `json:"ou" yaml:"ou"`
 	AccountId string          `json:"accountid" yaml:"accountid"`
 	Unit      string          `json:"unit" yaml:"unit"`
 	Cost      decimal.Decimal `json:"cost" yaml:"cost"`
@@ -113,28 +116,47 @@ func (ops *listOptions) runList() error {
 	awsClient, err := opsCost.initAWSClients()
 	cmdutil.CheckErr(err)
 
-	OU := getOU(awsClient, ops.ou)
+	printHeader(ops)
 
-	var cost decimal.Decimal
-	var unit string
+	for _, ou := range ops.ou {
+		OU := getOU(awsClient, ou)
 
-	if ops.level == "ou" {
-		if err := listCostsUnderOU(OU, awsClient, ops); err != nil {
-			log.Fatalln("Error listing costs under OU:", err)
+		var cost decimal.Decimal
+		var unit string
+
+		if ops.level == "ou" {
+			if err := listCostsUnderOU(OU, awsClient, ops); err != nil {
+				log.Fatalln("Error listing costs under OU:", err)
+			}
+			printCostList(cost, unit, OU, ops, true) // TODO: Update bool here
+			return nil
 		}
-		printCostList(cost, unit, OU, ops, true) // TODO: Update bool here
-		return nil
-	}
 
-	if ops.level == "account" {
-		ouCost := OUCost{
-			OU:      OU,
-			options: ops,
+		if ops.level == "account" {
+			ouCost := OUCost{
+				OU:      OU,
+				options: ops,
+			}
+			ouCost.printCostPerAccount(awsClient) // Get cost per account, print per account
 		}
-		ouCost.printCostPerAccount(awsClient) // Get cost per account, print per account
 	}
 
 	return nil
+}
+
+func printHeader(ops *listOptions) {
+	switch ops.level {
+
+	case "account":
+		if ops.csv {
+			fmt.Println("OU, AccountID,Cost,Unit")
+		}
+	case "ou":
+		if ops.csv {
+			fmt.Printf("OU,Name,Cost,Unit\n")
+			break
+		}
+	}
 }
 
 //List the cost of each OU under given OU
@@ -152,7 +174,7 @@ func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovide
 		time:  ops.time,
 		start: ops.start,
 		end:   ops.end,
-		ou:    ops.ou,
+		ou:    *OU.Id,
 	}
 	if err := o.getOUCostRecursive(&cost, &unit, OU, awsClient); err != nil {
 		return err
@@ -198,7 +220,7 @@ func (o *OUCost) getCost(awsClient awsprovider.Client) error {
 		time:  o.options.time,
 		start: o.options.start,
 		end:   o.options.end,
-		ou:    o.options.ou,
+		ou:    *o.OU.Id,
 	}
 
 	for _, account := range accounts {
@@ -240,17 +262,15 @@ func (o OUCost) getSum() (sum decimal.Decimal, unit string, err error) {
 func (o OUCost) printCostPerAccount(awsClient awsprovider.Client) {
 	o.getCost(awsClient)
 
-	if o.options.csv {
-		fmt.Println("AccountID,Cost,Unit")
-	}
 	for _, accountCost := range o.Costs {
 		resp := listAccountCostResponse{
+			OU:        *o.OU.Id,
 			AccountId: accountCost.AccountID,
 			Cost:      accountCost.Cost,
 			Unit:      accountCost.Unit,
 		}
 		if o.options.csv {
-			fmt.Printf("%s,%s,(%s)\n", accountCost.AccountID, accountCost.Cost.StringFixed(2), accountCost.Unit)
+			fmt.Printf("%s,%s,%s,%s\n", *o.OU.Id, accountCost.AccountID, accountCost.Cost.StringFixed(2), accountCost.Unit)
 			continue
 		}
 		outputflag.PrintResponse(o.options.output, resp)
@@ -260,8 +280,9 @@ func (o OUCost) printCostPerAccount(awsClient awsprovider.Client) {
 		log.Fatalln("Error summing up cost of OU:", err)
 	}
 	if o.options.csv {
-
-		fmt.Printf("%s,%s,(%s)\n", "SUM", sum.StringFixed(2), unit)
+		if o.options.sum {
+			fmt.Printf("%s,%s,%s,%s\n", *o.OU.Id, "SUM", sum.StringFixed(2), unit)
+		}
 		return
 	}
 	printCostList(sum, unit, o.OU, o.options, true)
@@ -276,15 +297,11 @@ func printCostList(cost decimal.Decimal, unit string, OU *organizations.Organiza
 	}
 
 	if !isChildNode {
-		if ops.csv {
-			fmt.Printf("OU,Name,Cost (%s)\n", unit)
-			return
-		}
-		fmt.Println("Costs of OU and its child OUs:")
+		return
 	}
 
 	if ops.csv {
-		fmt.Printf("%v,%v,%s\n", *OU.Id, *OU.Name, cost.StringFixed(2))
+		fmt.Printf("%v,%v,%s,%s\n", *OU.Id, *OU.Name, cost.StringFixed(2), unit)
 		return
 	}
 

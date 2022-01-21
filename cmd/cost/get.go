@@ -31,12 +31,13 @@ func newCmdGet(streams genericclioptions.IOStreams, globalOpts *globalflags.Glob
 			cmdutil.CheckErr(ops.run())
 		},
 	}
-	getCmd.Flags().StringVar(&ops.ou, "ou", "", "get OU ID")
+	getCmd.Flags().StringVar(&ops.ou, "ou", "", "set OU ID")
 	getCmd.Flags().BoolVarP(&ops.recursive, "recursive", "r", false, "recurse through OUs")
 	getCmd.Flags().StringVarP(&ops.time, "time", "t", "", "set time. One of 'LM', 'MTD', 'YTD', '3M', '6M', '1Y'")
 	getCmd.Flags().StringVar(&ops.start, "start", "", "set start date range")
 	getCmd.Flags().StringVar(&ops.end, "end", "", "set end date range")
 	getCmd.Flags().BoolVar(&ops.csv, "csv", false, "output result as csv")
+	getCmd.Flags().BoolVar(&ops.sum, "sum", true, "Hide sum rows")
 
 	return getCmd
 }
@@ -75,6 +76,7 @@ type getOptions struct {
 	start     string
 	end       string
 	csv       bool
+	sum       bool
 	output    string
 
 	genericclioptions.IOStreams
@@ -370,7 +372,7 @@ func (o *getOptions) printCostGet(cost decimal.Decimal, unit string, ops *getOpt
 	}
 
 	if ops.csv { //If csv option specified, print result in csv
-		fmt.Printf("\n%s,%s (%s)\n\n", *OU.Name, cost.StringFixed(2), unit)
+		fmt.Printf("\n%s,%s,%s\n\n", *OU.Name, cost.StringFixed(2), unit)
 		return nil
 	}
 	if ops.recursive {
