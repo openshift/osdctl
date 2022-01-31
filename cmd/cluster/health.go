@@ -66,22 +66,10 @@ func newHealthOptions(streams genericclioptions.IOStreams, flags *genericcliopti
 }
 
 func (o *healthOptions) complete(cmd *cobra.Command, _ []string) error {
-	var err error
 
-	k8svalid, err := o.k8sclusterresourcefactory.ValidateIdentifiers()
-	if !k8svalid {
-		if err != nil {
-			cmdutil.PrintErrorWithCauses(err, o.ErrOut)
-			return err
-		}
-
-	}
-
-	awsvalid, err := o.k8sclusterresourcefactory.Awscloudfactory.ValidateIdentifiers()
-	if !awsvalid {
-		if err != nil {
-			return err
-		}
+	err := CompleteValidation(&o.k8sclusterresourcefactory, o.IOStreams)
+	if err != nil {
+		return err
 	}
 
 	o.output = o.GlobalOptions.Output

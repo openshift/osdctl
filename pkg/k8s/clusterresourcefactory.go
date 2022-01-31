@@ -102,7 +102,7 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 			return nil, fmt.Errorf("Could not find any accountClaims for cluster with ID: %s", factory.ClusterID)
 		}
 		if accountClaim.Spec.AccountLink == "" {
-			return nil, fmt.Errorf("an unexpected error occured: the AccountClaim has no Account")
+			return nil, fmt.Errorf("an unexpected error occurred: the AccountClaim has no Account")
 		}
 		factory.AccountName = accountClaim.Spec.AccountLink
 		if accountClaim.Spec.SupportRoleARN != "" {

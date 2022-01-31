@@ -79,7 +79,7 @@ func TestListUsersFromAccount(t *testing.T) {
 		t.Errorf("empty iam users list")
 	}
 }
-func TestCheckForHiveNameTage(t *testing.T) {
+func TestCheckForHiveNameTags(t *testing.T) {
 	var genericAWSError error = fmt.Errorf("Generic AWS Error")
 
 	testData := []struct {

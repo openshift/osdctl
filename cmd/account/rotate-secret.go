@@ -103,7 +103,7 @@ func (o *rotateSecretOptions) run() error {
 		return err
 	}
 
-	// Ensure AWS calls are succesful with client
+	// Ensure AWS calls are successful with client
 	callerIdentityOutput, err := awsSetupClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
 	if err != nil {
 		return err
@@ -223,11 +223,11 @@ func (o *rotateSecretOptions) run() error {
 		return err
 	}
 
-	fmt.Printf("Succesfully rotated secrets for %s\n", osdManagedAdminUsername)
+	fmt.Printf("Successfully rotated secrets for %s\n", osdManagedAdminUsername)
 
 	// Only update osdCcsAdmin credential if specified
 	if o.updateCcsCreds {
-		// Ony update if the Account CR is actually CCS
+		// Only update if the Account CR is actually CCS
 		if account.Spec.BYOC {
 			// Rotate osdCcsAdmin creds
 			createAccessKeyOutputCCS, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{
@@ -249,7 +249,7 @@ func (o *rotateSecretOptions) run() error {
 				return err
 			}
 
-			fmt.Println("Succesfully rotated secrets for osdCcsAdmin")
+			fmt.Println("Successfully rotated secrets for osdCcsAdmin")
 		} else {
 			// Check yo self
 			fmt.Println("Account is not CCS, skipping osdCcsAdmin credential rotation")

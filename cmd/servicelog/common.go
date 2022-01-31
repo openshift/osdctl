@@ -27,7 +27,7 @@ func createConnection() *sdk.Connection {
 	connection, err := ocm.NewConnection().Build()
 	if err != nil {
 		if strings.Contains(err.Error(), "Not logged in, run the") {
-			log.Fatalf("Failed to create OCM connection: Authetication error, run the 'ocm login' command first.")
+			log.Fatalf("Failed to create OCM connection: Authentication error, run the 'ocm login' command first.")
 		}
 		log.Fatalf("Failed to create OCM connection: %v", err)
 	}

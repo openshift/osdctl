@@ -2,8 +2,10 @@ package cluster
 
 import (
 	"github.com/openshift/osdctl/internal/utils/globalflags"
+	k8spkg "github.com/openshift/osdctl/pkg/k8s"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 // NewCmdClusterHealth implements the base cluster health command
@@ -18,9 +20,29 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 
 	clusterCmd.AddCommand(newCmdHealth(streams, flags, globalOpts))
 	clusterCmd.AddCommand(newCmdloggingCheck(streams, flags, globalOpts))
+	clusterCmd.AddCommand(newCmdOwner(streams, flags, globalOpts))
 	return clusterCmd
 }
 
 func help(cmd *cobra.Command, _ []string) {
 	cmd.Help()
+}
+
+func CompleteValidation(o *k8spkg.ClusterResourceFactoryOptions, io genericclioptions.IOStreams) error {
+	k8svalid, err := o.ValidateIdentifiers()
+	if !k8svalid {
+		if err != nil {
+			cmdutil.PrintErrorWithCauses(err, io.ErrOut)
+			return err
+		}
+
+	}
+
+	awsvalid, err := o.Awscloudfactory.ValidateIdentifiers()
+	if !awsvalid {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
