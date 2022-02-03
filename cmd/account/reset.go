@@ -147,14 +147,17 @@ func (o *resetOptions) run() error {
 		}
 		parentId := *parent.Parents[0].Id
 
-		//move the account from the current OU to rootOU
-		_, err = awsClient.MoveAccount(&organizations.MoveAccountInput{
-			AccountId:           aws.String(accountId),
-			DestinationParentId: aws.String(rootId),
-			SourceParentId:      aws.String(parentId),
-		})
-		if err != nil {
-			return err
+		// To avoid DuplicateAccountException, validate we're not trying to move the account to an OU it's already in.
+		if rootId != parentId {
+			//move the account from the current OU to rootOU
+			_, err = awsClient.MoveAccount(&organizations.MoveAccountInput{
+				AccountId:           aws.String(accountId),
+				DestinationParentId: aws.String(rootId),
+				SourceParentId:      aws.String(parentId),
+			})
+			if err != nil {
+				return err
+			}
 		}
 
 		//reset account Spec
