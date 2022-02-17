@@ -2,6 +2,7 @@ package account
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/pkg/browser"
@@ -86,6 +87,11 @@ func (o *consoleOptions) run() error {
 		fmt.Fprintf(o.IOStreams.Out, "Generating console failed. If CCS cluster, customer removed or denied access to the ManagedOpenShiftSupport role.")
 		return err
 	}
+
+	consoleURL, err = PrependRegionToURL(consoleURL, o.k8sclusterresourcefactory.Awscloudfactory.Region)
+	if err != nil {
+		return fmt.Errorf("could not prepend region to console url: %w", err)
+	}
 	fmt.Fprintf(o.IOStreams.Out, "The AWS Console URL is:\n%s\n", consoleURL)
 
 	if o.launch {
@@ -93,4 +99,35 @@ func (o *consoleOptions) run() error {
 	}
 
 	return nil
+}
+
+func PrependRegionToURL(consoleURL, region string) (string, error) {
+	// Extract the url data
+	u, err := url.Parse(consoleURL)
+	if err != nil {
+		return "", fmt.Errorf("cannot parse consoleURL '%s' : %w", consoleURL, err)
+	}
+	urlValues, _ := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return "", fmt.Errorf("cannot parse the queries '%s' : %w", u.RawQuery, err)
+	}
+
+	// Retrieve the Destination url for modification
+	rawDestinationUrl := urlValues.Get("Destination")
+	destinationURL, err := url.Parse(rawDestinationUrl)
+	if err != nil {
+		return "", fmt.Errorf("cannot parse rawDestinationUrl '%s' : %w", rawDestinationUrl, err)
+	}
+	// Prepend the region to the url
+	destinationURL.Host = fmt.Sprintf("%s.%s", region, destinationURL.Host)
+	prependedDestinationURL := destinationURL.String()
+
+	// override the Destination after it was modified
+	urlValues.Set("Destination", prependedDestinationURL)
+
+	// Wrap up the values into the original url
+	u.RawQuery = urlValues.Encode()
+	consoleURL = u.String()
+
+	return consoleURL, nil
 }
