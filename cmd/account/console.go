@@ -107,7 +107,7 @@ func PrependRegionToURL(consoleURL, region string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot parse consoleURL '%s' : %w", consoleURL, err)
 	}
-	urlValues, _ := url.ParseQuery(u.RawQuery)
+	urlValues, err := url.ParseQuery(u.RawQuery)
 	if err != nil {
 		return "", fmt.Errorf("cannot parse the queries '%s' : %w", u.RawQuery, err)
 	}
