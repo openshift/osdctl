@@ -1,18 +1,14 @@
-# This is an example .goreleaser.yml file with some sane defaults.
-# Make sure to check the documentation at http://goreleaser.com
-env_files:
-  github_token: ~/.config/goreleaser/token
+project_name: osdctl
 
 before:
   hooks:
-    # You may remove this if you don't use go modules.
     - go mod tidy
-    # you may remove this if you don't need go generate
-    # - go generate ./...
 
 builds:
   - env:
       - CGO_ENABLED=0
+      - "GO111MODULE=on" # make sure to use go modules
+      - "GOFLAGS=-mod=readonly -trimpath" # trimpath helps with producing verificable binaries
     goos:
       - linux
       - darwin
@@ -20,6 +16,8 @@ builds:
       - amd64
     ldflags:
       - -s -w -X github.com/openshift/osdctl/cmd.GitCommit={{.ShortCommit}} -X github.com/openshift/osdctl/cmd.Version={{.Version}}
+      - "-extldflags=-zrelro" # binary hardening: For further explanation look here: https://www.redhat.com/en/blog/hardening-elf-binaries-using-relocation-read-only-relro
+      - "-extldflags=-znow"
 
 archives:
   - replacements:
