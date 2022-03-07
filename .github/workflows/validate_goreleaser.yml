@@ -26,10 +26,11 @@ jobs:
           go-version: 1.15.2
         id: go
 
-      - name: Download GoReleaser
-        run: |
-          mkdir ./bin && curl -sSLf https://github.com/goreleaser/goreleaser/releases/latest/download/goreleaser_Linux_x86_64.tar.gz -o - | tar --extract --gunzip --directory ./bin goreleaser
-
-      - name: Check goreleaser validity
-        run: |
-          ./bin/goreleaser check
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v2
+        with:
+          distribution: goreleaser
+          version: 'v1.6.1'
+          args: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
