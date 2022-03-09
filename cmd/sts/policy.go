@@ -3,10 +3,10 @@ package sts
 import (
 	"fmt"
 	"os/exec"
-	"regexp"
 
 	"github.com/spf13/cobra"
 
+	"github.com/coreos/go-semver/semver"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -51,9 +51,9 @@ func (o *policyOptions) complete(cmd *cobra.Command, args []string) error {
 		return cmdutil.UsageErrorf(cmd, "Release version is required for policy command")
 	}
 
-	re := regexp.MustCompile(`^[0-9]{1}\.[0-9]{1,2}\.[0-9]{1,2}$`)
-	if !re.MatchString(args[0]) {
-		return cmdutil.UsageErrorf(cmd, "Release version have to be in the x.y.z format ")
+	_, err := semver.NewVersion(args[0])
+	if err != nil {
+		return cmdutil.UsageErrorf(cmd, "Release version must satisfy the semantic version format: %s", err.Error())
 	}
 
 	return nil
