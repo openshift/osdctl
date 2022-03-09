@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	routev1 "github.com/openshift/api/route/v1"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	gcpv1alpha1 "github.com/openshift/gcp-project-operator/pkg/apis"
@@ -26,12 +24,6 @@ import (
 	"github.com/openshift/osdctl/pkg/k8s"
 )
 
-// GitCommit is the short git commit hash from the environment
-var GitCommit string
-
-// Version is the tag version from the environment
-var Version string
-
 func init() {
 	_ = awsv1alpha1.AddToScheme(scheme.Scheme)
 	_ = routev1.AddToScheme(scheme.Scheme)
@@ -44,7 +36,6 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	globalOpts := &globalflags.GlobalOptions{}
 	rootCmd := &cobra.Command{
 		Use:               "osdctl",
-		Version:           fmt.Sprintf("%s, GitCommit: %s", Version, GitCommit),
 		Short:             "OSD CLI",
 		Long:              `CLI tool to provide OSD related utilities`,
 		DisableAutoGenTag: true,
@@ -77,8 +68,12 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	templates.ActsAsRootCommand(rootCmd, []string{"options"})
 	rootCmd.AddCommand(newCmdOptions(streams))
 
-	//Add cost command to use AWS Cost Manager
+	// Add cost command to use AWS Cost Manager
 	rootCmd.AddCommand(cost.NewCmdCost(streams, globalOpts))
+
+	// Add version subcommand. Using the in-build --version flag does not work with cobra
+	// because there is no way to hook a function to the --version flag in cobra.
+	rootCmd.AddCommand(versionCmd)
 
 	return rootCmd
 }
