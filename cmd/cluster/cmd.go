@@ -10,13 +10,14 @@ import (
 func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	clusterCmd := &cobra.Command{
 		Use:               "cluster",
-		Short:             "Provides vitals of an AWS cluster",
+		Short:             "Provides information for a specified cluster",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run:               help,
 	}
 
 	clusterCmd.AddCommand(newCmdHealth(streams, flags, globalOpts))
+	clusterCmd.AddCommand(newCmdloggingCheck(streams, flags, globalOpts))
 	return clusterCmd
 }
 
