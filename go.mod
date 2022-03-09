@@ -5,9 +5,12 @@ go 1.16
 require (
 	github.com/aws/aws-sdk-go v1.38.35
 	github.com/deckarep/golang-set v1.7.1
+	github.com/docker/docker v20.10.12+incompatible // indirect
 	github.com/golang/mock v1.5.0
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/microcosm-cc/bluemonday v1.0.18 // indirect
+	github.com/moby/term v0.0.0-20210619224110-3f7ff695adc6 // indirect
 	github.com/onsi/gomega v1.16.0
 	github.com/openshift-online/ocm-cli v0.1.59
 	github.com/openshift-online/ocm-sdk-go v0.1.205
