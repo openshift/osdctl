@@ -75,6 +75,9 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	// because there is no way to hook a function to the --version flag in cobra.
 	rootCmd.AddCommand(versionCmd)
 
+	// Add upgradeCmd for upgrading the currently running executable in-place.
+	rootCmd.AddCommand(upgradeCmd)
+
 	return rootCmd
 }
 
