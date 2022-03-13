@@ -34,6 +34,10 @@ var listCmd = &cobra.Command{
 			}
 		}()
 
+		if len(args) != 1 {
+			log.Infof("The amount of arguments passed are: %d and they are '%v'", len(args), args)
+		}
+
 		// Use the OCM client to retrieve clusters
 		clusters := getClusters(ocmClient, args)
 
