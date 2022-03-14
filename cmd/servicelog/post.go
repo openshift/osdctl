@@ -57,7 +57,7 @@ var postCmd = &cobra.Command{
 
 		var queries []string
 		if len(args) != 1 {
-			log.Infof("The amount of arguments passed are: %d and they are '%v'", len(args), args)
+			log.Infof("Too many arguments. Expected 1 got %d", len(args))
 		}
 		for _, clusterIds := range args {
 			queries = append(queries, generateQuery(clusterIds))
