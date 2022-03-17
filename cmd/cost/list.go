@@ -277,10 +277,21 @@ func (o OUCost) getSum() (sum decimal.Decimal, unit string, err error) {
 
 func (o *OUCost) getAccountClaims(kubeCli client.Client) {
 	for i, cost := range o.Costs {
-		accountclaim, err := accountget.GetAccountClaimFromAccountID(context.TODO(), o.options.kubeCli, cost.AccountID, common.AWSAccountNamespace)
+		accountclaims, err := accountget.GetAccountClaimFromAccountID(context.TODO(), o.options.kubeCli, cost.AccountID, common.AWSAccountNamespace)
+		claimnames := ""
+		claimnamespaces := ""
+		for _, claim := range accountclaims {
+			if claimnames != "" {
+				claimnames += "; "
+				claimnamespaces += "; "
+			}
+			claimnames += claim.Name
+			claimnamespaces += claim.Namespace
+
+		}
 		if err == nil {
-			o.Costs[i].accountClaimName = accountclaim.Name
-			o.Costs[i].accountClaimNamespace = accountclaim.Namespace
+			o.Costs[i].accountClaimName = claimnames
+			o.Costs[i].accountClaimNamespace = claimnamespaces
 			continue
 		}
 		if strings.Contains(fmt.Sprint(err), "AccountClaim matched for Account CR") {

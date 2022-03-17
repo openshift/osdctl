@@ -80,15 +80,16 @@ func (o *getAccountClaimOptions) run() error {
 	ctx := context.TODO()
 
 	var (
-		accountClaimName string
-		accountClaim     awsv1alpha1.AccountClaim
-		err              error
+		accountClaims []awsv1alpha1.AccountClaim
+		err           error
 	)
 
 	if o.accountName != "" {
+		var accountClaim awsv1alpha1.AccountClaim
 		accountClaim, err = getAccountClaim(ctx, o.kubeCli, o.accountName)
+		accountClaims = []awsv1alpha1.AccountClaim{accountClaim}
 	} else {
-		accountClaim, err = GetAccountClaimFromAccountID(ctx, o.kubeCli, o.accountID, o.accountNamespace)
+		accountClaims, err = GetAccountClaimFromAccountID(ctx, o.kubeCli, o.accountID, o.accountNamespace)
 	}
 
 	if err != nil {
@@ -98,7 +99,9 @@ func (o *getAccountClaimOptions) run() error {
 	if o.output == "" {
 		p := printer.NewTablePrinter(o.IOStreams.Out, 20, 1, 3, ' ')
 		p.AddRow([]string{"Namespace", "Name"})
-		p.AddRow([]string{accountClaim.Namespace, accountClaimName})
+		for _, accountClaim := range accountClaims {
+			p.AddRow([]string{accountClaim.Namespace, accountClaim.Name})
+		}
 		return p.Flush()
 	}
 
@@ -107,10 +110,17 @@ func (o *getAccountClaimOptions) run() error {
 		return err
 	}
 
-	return resourcePrinter.PrintObj(&accountClaim, o.Out)
+	for _, accountClaim := range accountClaims {
+		err = resourcePrinter.PrintObj(&accountClaim, o.Out)
+		if err != nil {
+			return nil
+		}
+	}
+
+	return nil
 }
 
-func GetAccountClaimFromAccountID(ctx context.Context, kubeCli client.Client, accountID string, namespace string) (accountClaim awsv1alpha1.AccountClaim, err error) {
+func GetAccountClaimFromAccountID(ctx context.Context, kubeCli client.Client, accountID string, namespace string) (accountClaim []awsv1alpha1.AccountClaim, err error) {
 	accounts := awsv1alpha1.AccountList{}
 	err = kubeCli.List(ctx, &accounts, &client.ListOptions{
 		Namespace: namespace,
@@ -119,12 +129,28 @@ func GetAccountClaimFromAccountID(ctx context.Context, kubeCli client.Client, ac
 		return
 	}
 
+	claims := []awsv1alpha1.AccountClaim{}
+
+	errors := []error{}
 	for _, a := range accounts.Items {
 		if a.Spec.AwsAccountID == accountID {
-			return getAccountClaim(ctx, kubeCli, a.Name)
+			claim, claimerr := getAccountClaim(ctx, kubeCli, a.Name)
+			if err != nil {
+				errors = append(errors, claimerr)
+				claim.Name = "ClaimNotFound"
+				claim.Namespace = "ClaimNotFound"
+			}
+			claims = append(claims, claim)
 		}
 	}
-	err = fmt.Errorf("account matched for AWS Account ID %s not found", accountID)
+	if len(claims) == 0 {
+		err = fmt.Errorf("account matched for AWS Account ID %s not found", accountID)
+		return
+	}
+	if len(errors) > 0 {
+		err = fmt.Errorf("%v", errors)
+		return
+	}
 	return
 
 }
