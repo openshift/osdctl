@@ -120,7 +120,7 @@ func (o *getAccountClaimOptions) run() error {
 	return nil
 }
 
-func GetAccountClaimFromAccountID(ctx context.Context, kubeCli client.Client, accountID string, namespace string) (accountClaim []awsv1alpha1.AccountClaim, err error) {
+func GetAccountClaimFromAccountID(ctx context.Context, kubeCli client.Client, accountID string, namespace string) (accountClaims []awsv1alpha1.AccountClaim, err error) {
 	accounts := awsv1alpha1.AccountList{}
 	err = kubeCli.List(ctx, &accounts, &client.ListOptions{
 		Namespace: namespace,
@@ -129,21 +129,19 @@ func GetAccountClaimFromAccountID(ctx context.Context, kubeCli client.Client, ac
 		return
 	}
 
-	claims := []awsv1alpha1.AccountClaim{}
-
 	errors := []error{}
 	for _, a := range accounts.Items {
 		if a.Spec.AwsAccountID == accountID {
 			claim, claimerr := getAccountClaim(ctx, kubeCli, a.Name)
-			if err != nil {
+			if claimerr != nil {
 				errors = append(errors, claimerr)
 				claim.Name = "ClaimNotFound"
 				claim.Namespace = "ClaimNotFound"
 			}
-			claims = append(claims, claim)
+			accountClaims = append(accountClaims, claim)
 		}
 	}
-	if len(claims) == 0 {
+	if len(accountClaims) == 0 {
 		err = fmt.Errorf("account matched for AWS Account ID %s not found", accountID)
 		return
 	}
