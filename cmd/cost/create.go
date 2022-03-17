@@ -2,14 +2,16 @@ package cost
 
 import (
 	"fmt"
+
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
+	"log"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/costexplorer"
 	"github.com/aws/aws-sdk-go/service/organizations"
-	"log"
 
 	"github.com/spf13/cobra"
 )
@@ -60,6 +62,12 @@ func createCostCategory(OUid *string, OU *organizations.OrganizationalUnit, awsC
 		return err
 	}
 
+	accountIdList := []*string{}
+	for i, _ := range accounts {
+		accountIdList = append(accountIdList, &accounts[i].accountId)
+
+	}
+
 	_, err = awsClient.CreateCostCategoryDefinition(&costexplorer.CreateCostCategoryDefinitionInput{
 		Name:        OUid,
 		RuleVersion: aws.String("CostCategoryExpression.v1"),
@@ -68,7 +76,7 @@ func createCostCategory(OUid *string, OU *organizations.OrganizationalUnit, awsC
 				Rule: &costexplorer.Expression{
 					Dimensions: &costexplorer.DimensionValues{
 						Key:    aws.String("LINKED_ACCOUNT"),
-						Values: accounts,
+						Values: accountIdList,
 					},
 				},
 				Value: OUid,

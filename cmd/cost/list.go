@@ -34,6 +34,7 @@ func newCmdList(streams genericclioptions.IOStreams, kubeCli k8sclient.Client, g
 		},
 	}
 	listCmd.Flags().StringArrayVar(&ops.ou, "ou", []string{}, "get OU ID")
+	listCmd.Flags().StringVar(&ops.root, "root", "", "root OU ID. Will ignore OUs if set.")
 	// list supported time args
 	listCmd.Flags().StringVarP(&ops.time, "time", "t", "", "set time. One of 'LM', 'MTD', 'YTD', '3M', '6M', '1Y'")
 	listCmd.Flags().StringVar(&ops.start, "start", "", "set start date range")
@@ -42,10 +43,8 @@ func newCmdList(streams genericclioptions.IOStreams, kubeCli k8sclient.Client, g
 	listCmd.Flags().StringVar(&ops.level, "level", "ou", "Cost cummulation level: possible options: ou, account")
 	listCmd.Flags().BoolVar(&ops.sum, "sum", true, "Hide sum rows")
 	listCmd.Flags().BoolVar(&ops.claims, "claims", false, "Find matching AccountClaims in currently logged in cluster (SLOW!)")
-
-	if err := listCmd.MarkFlagRequired("ou"); err != nil {
-		log.Fatalln("OU flag:", err)
-	}
+	listCmd.Flags().IntVar(&ops.limit, "limit", -1, "Limit number of accounts returned. Limit applied before querying costs, hence doesn't necessarily return the most expensive accounts.")
+	listCmd.Flags().BoolVar(&ops.recursive, "recursive", true, "Query OUs recursively")
 
 	return listCmd
 }
@@ -64,8 +63,8 @@ func (o *listOptions) checkArgs(cmd *cobra.Command, _ []string) error {
 	if o.start == "" && o.end != "" {
 		return cmdutil.UsageErrorf(cmd, "Please provide start of date range")
 	}
-	if len(o.ou) == 0 {
-		return cmdutil.UsageErrorf(cmd, "Please provide OU")
+	if len(o.ou) == 0 && o.root == "" {
+		return cmdutil.UsageErrorf(cmd, "Please provide at least one OU or root OU")
 	}
 
 	o.output = o.GlobalOptions.Output
@@ -75,15 +74,18 @@ func (o *listOptions) checkArgs(cmd *cobra.Command, _ []string) error {
 
 //Store flag options for get command
 type listOptions struct {
-	ou     []string
-	time   string
-	start  string
-	end    string
-	level  string
-	csv    bool
-	sum    bool
-	claims bool
-	output string
+	ou        []string
+	time      string
+	start     string
+	end       string
+	level     string
+	csv       bool
+	sum       bool
+	claims    bool
+	output    string
+	root      string
+	limit     int
+	recursive bool
 
 	genericclioptions.IOStreams
 	kubeCli       client.Client
@@ -126,9 +128,21 @@ func (ops *listOptions) runList() error {
 	awsClient, err := opsCost.initAWSClients()
 	cmdutil.CheckErr(err)
 
-	printHeader(ops)
+	if ops.root != "" {
+		fmt.Println("Root OU set, querying cost of accounts in root UO " + ops.root)
+		ouCost := OUCost{
+			OU:      &organizations.OrganizationalUnit{Id: &ops.root},
+			options: ops,
+		}
 
+		printHeader(ops)
+		ouCost.printCostPerAccount(awsClient) // Get cost per account, print per account
+		return nil
+	}
+
+	printHeader(ops)
 	for _, ou := range ops.ou {
+		fmt.Println("querying cost of accounts in OU " + ou)
 		OU := getOU(awsClient, ou)
 
 		var cost decimal.Decimal
@@ -212,11 +226,11 @@ func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovide
 }
 
 type AccountCost struct {
-	AccountID             string
 	Cost                  decimal.Decimal
 	Unit                  string
 	accountClaimName      string
 	accountClaimNamespace string
+	AccountOU             AccountOU
 }
 
 type OUCost struct {
@@ -227,7 +241,13 @@ type OUCost struct {
 
 func (o *OUCost) getCost(awsClient awsprovider.Client) error {
 
-	accounts, err := getAccountsRecursive(o.OU, awsClient)
+	var accounts []AccountOU
+	var err error
+	if o.options.recursive {
+		accounts, err = getAccountsRecursive(o.OU, awsClient)
+	} else {
+		accounts, err = getAccounts(*o.OU.Id, awsClient)
+	}
 	if err != nil {
 		return err
 	}
@@ -239,17 +259,22 @@ func (o *OUCost) getCost(awsClient awsprovider.Client) error {
 		ou:    *o.OU.Id,
 	}
 
+	count := 0
 	for _, account := range accounts {
+		if o.options.limit > 0 && count >= o.options.limit {
+			break
+		}
 		accCost := AccountCost{
-			AccountID: *account,
+			AccountOU: account,
 			Unit:      "",
 			Cost:      decimal.Zero,
 		}
-		err = ops.getAccountCost(account, &accCost.Unit, awsClient, &accCost.Cost)
+		err = ops.getAccountCost(&account.accountId, &accCost.Unit, awsClient, &accCost.Cost)
 		if err != nil {
 			return err
 		}
 		o.Costs = append(o.Costs, accCost)
+		count++
 	}
 
 	sort.Slice(o.Costs, func(i, j int) bool {
@@ -277,7 +302,7 @@ func (o OUCost) getSum() (sum decimal.Decimal, unit string, err error) {
 
 func (o *OUCost) getAccountClaims(kubeCli client.Client) {
 	for i, cost := range o.Costs {
-		accountclaims, err := accountget.GetAccountClaimFromAccountID(context.TODO(), o.options.kubeCli, cost.AccountID, common.AWSAccountNamespace)
+		accountclaims, err := accountget.GetAccountClaimFromAccountID(context.TODO(), o.options.kubeCli, cost.AccountOU.accountId, common.AWSAccountNamespace)
 		claimnames := ""
 		claimnamespaces := ""
 		for _, claim := range accountclaims {
@@ -287,22 +312,16 @@ func (o *OUCost) getAccountClaims(kubeCli client.Client) {
 			}
 			claimnames += claim.Name
 			claimnamespaces += claim.Namespace
-
 		}
-		if err == nil {
-			o.Costs[i].accountClaimName = claimnames
-			o.Costs[i].accountClaimNamespace = claimnamespaces
-			continue
+		o.Costs[i].accountClaimName = claimnames
+		o.Costs[i].accountClaimNamespace = claimnamespaces
+		if len(accountclaims) == 0 {
+			if strings.Contains(fmt.Sprint(err), "account matched for AWS Account ID") {
+				o.Costs[i].accountClaimName = "AccountCRNotFound"
+				continue
+			}
+			o.Costs[i].accountClaimName = fmt.Sprint(err)
 		}
-		if strings.Contains(fmt.Sprint(err), "AccountClaim matched for Account CR") {
-			o.Costs[i].accountClaimName = "AccountClaim CR not found"
-			continue
-		}
-		if strings.Contains(fmt.Sprint(err), "account matched for AWS Account ID") {
-			o.Costs[i].accountClaimName = "Account CR not found"
-			continue
-		}
-		o.Costs[i].accountClaimName = fmt.Sprint(err)
 	}
 }
 
@@ -314,17 +333,17 @@ func (o OUCost) printCostPerAccount(awsClient awsprovider.Client) {
 
 	for _, accountCost := range o.Costs {
 		resp := listAccountCostResponse{
-			OU:        *o.OU.Id,
-			AccountId: accountCost.AccountID,
+			OU:        accountCost.AccountOU.ouId,
+			AccountId: accountCost.AccountOU.accountId,
 			Cost:      accountCost.Cost,
 			Unit:      accountCost.Unit,
 		}
 		if o.options.csv {
 			if o.options.claims {
-				fmt.Printf("%s,%s,%s,%s,%s,%s\n", accountCost.accountClaimNamespace, accountCost.accountClaimName, *o.OU.Id, accountCost.AccountID, accountCost.Cost.StringFixed(2), accountCost.Unit)
+				fmt.Printf("%s,%s,%s,%s,%s,%s\n", accountCost.accountClaimNamespace, accountCost.accountClaimName, *o.OU.Id, accountCost.AccountOU.accountId, accountCost.Cost.StringFixed(2), accountCost.Unit)
 				continue
 			}
-			fmt.Printf("%s,%s,%s,%s\n", *o.OU.Id, accountCost.AccountID, accountCost.Cost.StringFixed(2), accountCost.Unit)
+			fmt.Printf("%s,%s,%s,%s\n", accountCost.AccountOU.ouId, accountCost.AccountOU.accountId, accountCost.Cost.StringFixed(2), accountCost.Unit)
 			continue
 		}
 		outputflag.PrintResponse(o.options.output, resp)

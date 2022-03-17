@@ -37,7 +37,6 @@ func newCmdGet(streams genericclioptions.IOStreams, globalOpts *globalflags.Glob
 	getCmd.Flags().StringVar(&ops.start, "start", "", "set start date range")
 	getCmd.Flags().StringVar(&ops.end, "end", "", "set end date range")
 	getCmd.Flags().BoolVar(&ops.csv, "csv", false, "output result as csv")
-	getCmd.Flags().BoolVar(&ops.sum, "sum", true, "Hide sum rows")
 
 	return getCmd
 }
@@ -76,7 +75,6 @@ type getOptions struct {
 	start     string
 	end       string
 	csv       bool
-	sum       bool
 	output    string
 
 	genericclioptions.IOStreams
@@ -130,14 +128,14 @@ func (o *getOptions) run() error {
 }
 
 //Get account IDs of immediate accounts under given OU
-func getAccounts(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) ([]*string, error) {
-	var accountSlice []*string
+func getAccounts(ouId string, awsClient awsprovider.Client) ([]AccountOU, error) {
+	var accountSlice []AccountOU
 	var nextToken *string
 
 	//Populate accountSlice with accounts by looping until accounts.NextToken is null
 	for {
 		accounts, err := awsClient.ListAccountsForParent(&organizations.ListAccountsForParentInput{
-			ParentId:  OU.Id,
+			ParentId:  &ouId,
 			NextToken: nextToken,
 		})
 		if err != nil {
@@ -145,21 +143,28 @@ func getAccounts(OU *organizations.OrganizationalUnit, awsClient awsprovider.Cli
 		}
 
 		for i := 0; i < len(accounts.Accounts); i++ {
-			accountSlice = append(accountSlice, accounts.Accounts[i].Id)
+			accountSlice = append(accountSlice, AccountOU{*accounts.Accounts[i].Id, ouId})
 		}
 
 		if accounts.NextToken == nil {
 			break
 		}
 		nextToken = accounts.NextToken //If NextToken != nil, keep looping
+		fmt.Printf("%c[2K\rRead %d accounts.", 27, len(accountSlice))
 	}
+	fmt.Printf("\ndone\n")
 
 	return accountSlice, nil
 }
 
+type AccountOU struct {
+	accountId string
+	ouId      string
+}
+
 //Get the account IDs of all (not only immediate) accounts under OU
-func getAccountsRecursive(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) ([]*string, error) {
-	var accountsIDs []*string
+func getAccountsRecursive(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) ([]AccountOU, error) {
+	var accountsIDs []AccountOU
 
 	//Populate OUs
 	OUs, err := getOUs(OU, awsClient)
@@ -173,7 +178,7 @@ func getAccountsRecursive(OU *organizations.OrganizationalUnit, awsClient awspro
 		accountsIDs = append(accountsIDs, accountsIDsOU...)
 	}
 	//Get account
-	accountsIDsOU, err := getAccounts(OU, awsClient)
+	accountsIDsOU, err := getAccounts(*OU.Id, awsClient)
 	if err != nil {
 		return nil, err
 	}
@@ -289,14 +294,14 @@ func (o *getOptions) getAccountCost(accountID *string, unit *string, awsClient a
 //Get cost of given OU by aggregating costs of only immediate accounts under given OU
 func (o *getOptions) getOUCost(cost *decimal.Decimal, unit *string, OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) error {
 	//Populate accounts
-	accounts, err := getAccounts(OU, awsClient)
+	accounts, err := getAccounts(*OU.Id, awsClient)
 	if err != nil {
 		return err
 	}
 
 	//Increment costs of accounts
 	for _, account := range accounts {
-		if err := o.getAccountCost(account, unit, awsClient, cost); err != nil {
+		if err := o.getAccountCost(&account.accountId, unit, awsClient, cost); err != nil {
 			return err
 		}
 	}
