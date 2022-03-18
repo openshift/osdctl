@@ -113,7 +113,7 @@ func (o *getAccountClaimOptions) run() error {
 	for _, accountClaim := range accountClaims {
 		err = resourcePrinter.PrintObj(&accountClaim, o.Out)
 		if err != nil {
-			return nil
+			return err
 		}
 	}
 
@@ -135,8 +135,8 @@ func GetAccountClaimFromAccountID(ctx context.Context, kubeCli client.Client, ac
 			claim, claimerr := getAccountClaim(ctx, kubeCli, a.Name)
 			if claimerr != nil {
 				errors = append(errors, claimerr)
-				claim.Name = "ClaimNotFound"
-				claim.Namespace = "ClaimNotFound"
+				claim.Name = "AccountClaimNotFound"
+				claim.Namespace = "AccountClaimNotFound"
 			}
 			accountClaims = append(accountClaims, claim)
 		}
