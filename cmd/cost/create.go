@@ -63,7 +63,7 @@ func createCostCategory(OUid *string, OU *organizations.OrganizationalUnit, awsC
 	}
 
 	accountIdList := []*string{}
-	for i, _ := range accounts {
+	for i := range accounts {
 		accountIdList = append(accountIdList, &accounts[i].accountId)
 
 	}

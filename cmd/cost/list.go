@@ -173,7 +173,7 @@ func printHeader(ops *listOptions) {
 
 	case "account":
 		if ops.csv {
-			header := "OU,AccountID,Cost,Unit"
+			header := "OU,Owner,AccountID,Cost,Unit"
 			if ops.claims {
 				header = "Namespace,AccountClaimName," + header
 			}
@@ -231,6 +231,7 @@ type AccountCost struct {
 	accountClaimName      string
 	accountClaimNamespace string
 	AccountOU             AccountOU
+	Owner                 string
 }
 
 type OUCost struct {
@@ -272,6 +273,19 @@ func (o *OUCost) getCost(awsClient awsprovider.Client) error {
 		err = ops.getAccountCost(&account.accountId, &accCost.Unit, awsClient, &accCost.Cost)
 		if err != nil {
 			return err
+		}
+		tagsInput := organizations.ListTagsForResourceInput{
+			ResourceId: &account.accountId,
+		}
+		tagsOutput, err := awsClient.ListTagsForResource(&tagsInput)
+		if err != nil {
+			return err
+		}
+
+		for _, tag := range tagsOutput.Tags {
+			if *tag.Key == "owner" {
+				accCost.Owner = *tag.Value
+			}
 		}
 		o.Costs = append(o.Costs, accCost)
 		count++
@@ -343,7 +357,7 @@ func (o OUCost) printCostPerAccount(awsClient awsprovider.Client) {
 				fmt.Printf("%s,%s,%s,%s,%s,%s\n", accountCost.accountClaimNamespace, accountCost.accountClaimName, *o.OU.Id, accountCost.AccountOU.accountId, accountCost.Cost.StringFixed(2), accountCost.Unit)
 				continue
 			}
-			fmt.Printf("%s,%s,%s,%s\n", accountCost.AccountOU.ouId, accountCost.AccountOU.accountId, accountCost.Cost.StringFixed(2), accountCost.Unit)
+			fmt.Printf("%s,%s,%s,%s,%s\n", accountCost.AccountOU.ouId, accountCost.Owner, accountCost.AccountOU.accountId, accountCost.Cost.StringFixed(2), accountCost.Unit)
 			continue
 		}
 		outputflag.PrintResponse(o.options.output, resp)
