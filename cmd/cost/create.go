@@ -65,7 +65,6 @@ func createCostCategory(OUid *string, OU *organizations.OrganizationalUnit, awsC
 	accountIdList := []*string{}
 	for i := range accounts {
 		accountIdList = append(accountIdList, &accounts[i].accountId)
-
 	}
 
 	_, err = awsClient.CreateCostCategoryDefinition(&costexplorer.CreateCostCategoryDefinitionInput{
