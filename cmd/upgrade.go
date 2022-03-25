@@ -39,7 +39,8 @@ func upgrade(cmd *cobra.Command, args []string) error {
 	currentSemVer := semver.New(Version)
 	latestSemVer := semver.New(latestWithoutPrefix)
 	if !currentSemVer.LessThan(*latestSemVer) {
-		return fmt.Errorf("we are already up to date")
+               fmt.Println("Already up to date, nothing to do!")
+	       return nil
 	}
 	// upgrade necessary
 	client := http.Client{
