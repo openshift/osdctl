@@ -4,13 +4,12 @@ import (
 	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/spf13/cobra"
-
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	k8spkg "github.com/openshift/osdctl/pkg/k8s"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
@@ -79,18 +78,23 @@ func (o *cliOptions) complete(cmd *cobra.Command) error {
 func (o *cliOptions) run() error {
 	awsClient, err := o.k8sclusterresourcefactory.GetCloudProvider(o.verbose)
 	if err != nil {
+		return err
+	}
 
+	partition, err := awsprovider.GetAwsPartition(awsClient)
+	if err != nil {
 		return err
 	}
 
 	creds := o.k8sclusterresourcefactory.Awscloudfactory.Credentials
 
 	if o.k8sclusterresourcefactory.Awscloudfactory.RoleName != "OrganizationAccountAccessRole" {
-		creds, err = awsprovider.GetAssumeRoleCredentials(awsClient,
-			&o.k8sclusterresourcefactory.Awscloudfactory.ConsoleDuration, aws.String(o.k8sclusterresourcefactory.Awscloudfactory.SessionName),
-			aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s",
-				o.k8sclusterresourcefactory.AccountID,
-				o.k8sclusterresourcefactory.Awscloudfactory.RoleName)))
+		creds, err = awsprovider.GetAssumeRoleCredentials(
+			awsClient,
+			&o.k8sclusterresourcefactory.Awscloudfactory.ConsoleDuration,
+			aws.String(o.k8sclusterresourcefactory.Awscloudfactory.SessionName),
+			aws.String(fmt.Sprintf("arn:%s:iam::%s:role/%s", partition, o.k8sclusterresourcefactory.AccountID, o.k8sclusterresourcefactory.Awscloudfactory.RoleName)),
+		)
 		if err != nil {
 			klog.Error("Failed to assume ManagedOpenShiftSupport role. Customer either deleted role or denied SREP access")
 			return err

@@ -22,7 +22,7 @@ OS := $(shell go env GOOS | sed 's/[a-z]/\U&/')
 ARCH := $(shell go env GOARCH)
 .PHONY: download-goreleaser
 download-goreleaser:
-	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser@latest
+	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser@v1.6.3
 
 # CI build containers don't include goreleaser by default,
 # so they need to get it first, and then run the build

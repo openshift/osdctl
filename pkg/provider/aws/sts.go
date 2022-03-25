@@ -2,24 +2,20 @@ package aws
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
-	"k8s.io/klog"
 	"net/http"
 	"net/url"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/arn"
+	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/service/sts"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
+	"k8s.io/klog/v2"
 )
 
 const (
-	// AWS Federation URL
-	federationEndpointURL = "https://signin.aws.amazon.com/federation"
-
-	// AWS Console URL
-	awsConsoleURL = "https://console.aws.amazon.com/"
-
 	// default issuer name
 	defaultIssuer = "Red Hat SRE"
 )
@@ -35,29 +31,80 @@ type sessionPayload struct {
 	SessionToken string `json:"sessionToken"`
 }
 
-// RequestSignInToken makes a HTTP request to retrieve an AWS SignIn Token
-// via the AWS Federation endpoint
+// GetAwsPartition uses sts GetCallerIdentity to determine the AWS partition we're in
+func GetAwsPartition(awsClient Client) (string, error) {
+	callerIdentityOutput, err := awsClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
+	if err != nil {
+		return "", err
+	}
+	userArn, err := arn.Parse(aws.StringValue(callerIdentityOutput.Arn))
+	if err != nil {
+		return "", err
+	}
+
+	return userArn.Partition, nil
+}
+
+// GetFederationEndpointUrl returns the default AWS Sign-In Federation endpoint for a given partition
+func GetFederationEndpointUrl(partition string) (string, error) {
+	switch partition {
+	case endpoints.AwsPartitionID:
+		// us-east-1 endpoint
+		return "https://signin.aws.amazon.com/federation", nil
+	case endpoints.AwsUsGovPartitionID:
+		// us-gov-west-1 endpoint
+		return "https://signin.amazonaws-us-gov.com/federation", nil
+	default:
+		return "", fmt.Errorf("invalid partition %s", partition)
+	}
+}
+
+// GetConsoleUrl returns the default AWS Console base URL for a given partition
+func GetConsoleUrl(partition string) (string, error) {
+	switch partition {
+	case endpoints.AwsPartitionID:
+		// us-east-1 endpoint
+		return "https://console.aws.amazon.com/", nil
+	case endpoints.AwsUsGovPartitionID:
+		// us-gov-west-1 endpoint
+		return "https://console.amazonaws-us-gov.com/", nil
+	default:
+		return "", fmt.Errorf("invalid partition %s", partition)
+	}
+}
+
+// RequestSignInToken makes an HTTP request to retrieve an AWS Sign-In Token via the AWS Federation endpoint
 func RequestSignInToken(awsClient Client, durationSeconds *int64, sessionName, roleArn *string) (string, error) {
 	credentials, err := GetAssumeRoleCredentials(awsClient, durationSeconds, sessionName, roleArn)
 	if err != nil {
 		return "", err
 	}
 
-	signInToken, err := getSignInToken(federationEndpointURL, credentials)
+	partition, err := GetAwsPartition(awsClient)
+	if err != nil {
+		return "", err
+	}
+
+	federationEndpointUrl, err := GetFederationEndpointUrl(partition)
+	if err != nil {
+		return "", err
+	}
+
+	signInToken, err := getSignInToken(federationEndpointUrl, credentials)
 	if err != nil {
 		return "", err
 	}
 
 	if signInToken == "" {
-		return "", errors.New("SigninToken is empty")
+		return "", fmt.Errorf("sign-in token is empty")
 	}
 
-	signedFederationURL, err := formatSignInURL(signInToken)
+	signedFederationURL, err := formatSignInURL(partition, signInToken)
 	if err != nil {
 		return "", err
 	}
 
-	// Return Signin Token
+	// Return Sign-In Token
 	return signedFederationURL.String(), nil
 }
 
@@ -106,11 +153,11 @@ func getSignInToken(baseURL string, creds *sts.Credentials) (string, error) {
 	return token, nil
 }
 
-// requestSignedURL makes a HTTP call to the baseFederationURL to retrieve a signed federated URL for web console login
+// requestSignedURL makes an HTTP call to the baseFederationURL to retrieve a signed federated URL for web console login
 // Takes a logger, and the base URL
-func requestSignedURL(baseURL string, jsonCredentials []byte) (string, error) {
+func requestSignedURL(baseUrl string, jsonCredentials []byte) (string, error) {
 	// Build URL to request SignIn Token via Federation end point
-	baseFederationURL, err := url.Parse(baseURL)
+	baseFederationURL, err := url.Parse(baseUrl)
 	if err != nil {
 		return "", err
 	}
@@ -129,11 +176,10 @@ func requestSignedURL(baseURL string, jsonCredentials []byte) (string, error) {
 		return "", err
 	}
 
-	if res.StatusCode/100 != 2 {
-		klog.Errorf("Failed to request Signin token from: %s, status code %d", baseFederationURL, res.StatusCode)
+	if res.StatusCode != http.StatusOK {
+		klog.Errorf("failed to request Sign-In token from: %s, status code %d", baseFederationURL, res.StatusCode)
 		return "", fmt.Errorf("bad response code %d", res.StatusCode)
 	}
-
 	defer res.Body.Close()
 
 	body, err := ioutil.ReadAll(res.Body)
@@ -150,22 +196,28 @@ func requestSignedURL(baseURL string, jsonCredentials []byte) (string, error) {
 	return resp.SigninToken, nil
 }
 
-// formatSignInURL build and format the signIn URL to be used in the secret
-func formatSignInURL(signInToken string) (*url.URL, error) {
-	issuer := defaultIssuer
+// formatSignInURL builds and format the Sign-In URL
+func formatSignInURL(partition, signInToken string) (*url.URL, error) {
+	federationEndpointUrl, err := GetFederationEndpointUrl(partition)
+	if err != nil {
+		return nil, err
+	}
 
-	signInFederationURL, err := url.Parse(federationEndpointURL)
+	consoleUrl, err := GetConsoleUrl(partition)
+	if err != nil {
+		return nil, err
+	}
+
+	signInFederationURL, err := url.Parse(federationEndpointUrl)
 	if err != nil {
 		return nil, err
 	}
 
 	signinParams := url.Values{}
-
 	signinParams.Add("Action", "login")
-	signinParams.Add("Destination", awsConsoleURL)
-	signinParams.Add("Issuer", issuer)
+	signinParams.Add("Destination", consoleUrl)
+	signinParams.Add("Issuer", defaultIssuer)
 	signinParams.Add("SigninToken", signInToken)
-
 	signInFederationURL.RawQuery = signinParams.Encode()
 
 	return signInFederationURL, nil

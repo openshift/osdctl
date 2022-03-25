@@ -1,10 +1,10 @@
 package aws
 
 import (
-	"k8s.io/klog"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/service/s3"
+	"k8s.io/klog/v2"
 )
 
 // Delete all S3 buckets with the specified prefix

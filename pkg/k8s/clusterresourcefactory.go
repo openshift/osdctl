@@ -4,22 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/arn"
+	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/service/sts"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
+	"github.com/openshift/osdctl/cmd/common"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/klog/v2"
-
-	"github.com/openshift/osdctl/cmd/common"
-	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ClusterResourceFactoryOptions defines the struct for running list account command
@@ -86,7 +85,7 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 	// only initialize kubernetes client when account name is set or cluster ID is set
 	if factory.AccountName != "" || factory.ClusterID != "" {
 		factory.KubeCli = NewClient(factory.Flags)
-		factory.Awscloudfactory.Region = "us-east-1"
+		factory.Awscloudfactory.Region = endpoints.UsEast1RegionID
 	}
 
 	supportRoleDefined := false
@@ -103,7 +102,7 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 			return nil, fmt.Errorf("Could not find any accountClaims for cluster with ID: %s", factory.ClusterID)
 		}
 		if accountClaim.Spec.AccountLink == "" {
-			return nil, fmt.Errorf("An unexpected error occured: the AccountClaim has no Account")
+			return nil, fmt.Errorf("an unexpected error occured: the AccountClaim has no Account")
 		}
 		factory.AccountName = accountClaim.Spec.AccountLink
 		if accountClaim.Spec.SupportRoleARN != "" {
@@ -142,11 +141,21 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 		klog.Error("Fail to get caller identity. Could you please validate the credentials?")
 		return nil, err
 	}
-	if verbose {
-		fmt.Printf("%s\n", callerIdentityOutput)
-	}
 	factory.Awscloudfactory.CallerIdentity = callerIdentityOutput
-	splitArn := strings.Split(*callerIdentityOutput.Arn, "/")
+	roleArn, err := arn.Parse(aws.StringValue(callerIdentityOutput.Arn))
+	if err != nil {
+		return nil, err
+	}
+
+	// Switch the region based on partition
+	switch roleArn.Partition {
+	case endpoints.AwsUsGovPartitionID:
+		factory.Awscloudfactory.Region = endpoints.UsGovWest1RegionID
+	default:
+		factory.Awscloudfactory.Region = endpoints.UsEast1RegionID
+	}
+
+	splitArn := strings.Split(roleArn.Resource, "/")
 	username := splitArn[1]
 	factory.Awscloudfactory.SessionName = fmt.Sprintf("RH-SRE-%s", username)
 
@@ -220,7 +229,8 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 	} else {
 		factory.Awscloudfactory.Credentials, err = awsprovider.GetAssumeRoleCredentials(awsClient, &factory.Awscloudfactory.ConsoleDuration,
 			factory.Awscloudfactory.CallerIdentity.UserId,
-			aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s",
+			aws.String(fmt.Sprintf("arn:%s:iam::%s:role/%s",
+				roleArn.Partition,
 				factory.AccountID,
 				factory.Awscloudfactory.RoleName)))
 		if err != nil {
@@ -239,11 +249,8 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 
 	callerIdentityOutput, err = awsClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
 	if err != nil {
-		klog.Error("Fail to get caller identity. Could you please validate the credentials?")
+		klog.Error("failed to get caller identity. Could you please validate the credentials?")
 		return nil, err
-	}
-	if verbose {
-		fmt.Printf("%s\n", callerIdentityOutput)
 	}
 	factory.Awscloudfactory.CallerIdentity = callerIdentityOutput
 
