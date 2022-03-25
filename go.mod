@@ -33,7 +33,6 @@ require (
 	k8s.io/apimachinery v0.18.5
 	k8s.io/cli-runtime v0.18.3
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.9.0
 	k8s.io/kubectl v0.18.3
 	k8s.io/utils v0.0.0-20200327001022-6496210b90e8
