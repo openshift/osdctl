@@ -3,7 +3,6 @@ package aws
 import (
 	"encoding/json"
 	"errors"
-	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,6 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/golang/mock/gomock"
 	"github.com/openshift/osdctl/pkg/provider/aws/mock"

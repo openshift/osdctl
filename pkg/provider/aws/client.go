@@ -7,19 +7,19 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/aws/aws-sdk-go/service/costexplorer"
-	"github.com/aws/aws-sdk-go/service/costexplorer/costexploreriface"
-	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
-	"github.com/aws/aws-sdk-go/service/organizations"
-	"github.com/aws/aws-sdk-go/service/organizations/organizationsiface"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/costexplorer"
+	"github.com/aws/aws-sdk-go/service/costexplorer/costexploreriface"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/iam/iamiface"
+	"github.com/aws/aws-sdk-go/service/organizations"
+	"github.com/aws/aws-sdk-go/service/organizations/organizationsiface"
 	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
 	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi/resourcegroupstaggingapiiface"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -28,9 +28,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/servicequotas/servicequotasiface"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/aws/aws-sdk-go/service/sts/stsiface"
-
-	"github.com/pkg/errors"
-	klog "k8s.io/klog/v2"
+	"k8s.io/klog/v2"
 )
 
 // AwsClientInput input for new aws client
@@ -122,8 +120,11 @@ type AwsClient struct {
 	ceClient            costexploreriface.CostExplorerAPI
 }
 
-// NewAwsClient creates an AWS client with credentials in the environment
-func NewAwsClient(profile, region, configFile string) (Client, error) {
+func NewAwsSession(profile, region, configFile string) (*session.Session, error) {
+	if profile == "" && configFile == "" {
+		fmt.Println("Config file and profile are not provided. Reading from env vars.")
+	}
+
 	opt := session.Options{
 		Config: aws.Config{
 			Region: aws.String(region),
@@ -131,26 +132,35 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 		Profile: profile,
 	}
 
-	if profile == "" && configFile == "" {
-		fmt.Println("Config file and profile are not provided. Reading from env vars.")
-	} else if configFile != "" { // only set config file if it is not empty
+	// only set config file if it is not empty
+	if configFile != "" {
 		absCfgPath, err := filepath.Abs(configFile)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("could not load config file: %v", err)
 		}
 		opt.SharedConfigFiles = []string{absCfgPath}
 	}
 
 	sess := session.Must(session.NewSessionWithOptions(opt))
-	_, err := sess.Config.Credentials.Get()
-
-	if aerr, ok := err.(awserr.Error); ok {
-		switch aerr.Code() {
-		case "NoCredentialProviders":
-			return nil, errors.Wrap(err, "Could not create AWS session")
-		default:
-			return nil, errors.Wrap(err, "Could not create AWS session")
+	if _, err := sess.Config.Credentials.Get(); err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case "NoCredentialProviders":
+				return nil, fmt.Errorf("could not create AWS session: %v", err)
+			default:
+				return nil, fmt.Errorf("could not create AWS session: %v", err)
+			}
 		}
+	}
+
+	return sess, nil
+}
+
+// NewAwsClient creates an AWS client with credentials in the environment
+func NewAwsClient(profile, region, configFile string) (Client, error) {
+	sess, err := NewAwsSession(profile, region, configFile)
+	if err != nil {
+		return nil, err
 	}
 
 	awsClient := &AwsClient{iamClient: iam.New(sess),
@@ -164,20 +174,21 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 	}
 
 	// Validate the creds
-	_, err = awsClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
-	if aerr, ok := err.(awserr.Error); ok {
-		switch aerr.Code() {
-		case "InvalidClientTokenId":
-			if profile != "" {
-				klog.Error(fmt.Sprintf("Profile %s provided has invalid credentials. Please validate them and try again. Note this does not indicate a problem with the cluster's credentials", profile))
-			} else {
-				klog.Error("Credentials provided to osdctl are invalid. Please validate them and try again. Note this does not indicate a problem with the cluster's credentials")
+	if _, err := awsClient.GetCallerIdentity(nil); err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case "InvalidClientTokenId":
+				if region == endpoints.UsGovEast1RegionID || region == endpoints.UsGovWest1RegionID {
+					return nil, fmt.Errorf("failed `aws sts get-caller-identity` validation: %v", err)
+				}
+				klog.Infoln("credentials provided invalid, trying GovCloud by setting region to us-gov-west-1.")
+				return NewAwsClient(profile, endpoints.UsGovWest1RegionID, configFile)
+			default:
+				return nil, fmt.Errorf("failed `aws sts get-caller-identity` validation: %v", err)
 			}
-			return nil, errors.Wrap(err, "Could not create AWS session")
-		default:
-			return nil, errors.Wrap(err, "Could not create AWS session")
 		}
 	}
+
 	return awsClient, nil
 }
 
