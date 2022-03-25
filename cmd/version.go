@@ -18,9 +18,13 @@ const (
 
 var (
 	// GitCommit is the short git commit hash from the environment
+	// Will be set during build process via GoReleaser
+	// See also: https://pkg.go.dev/cmd/link
 	GitCommit string
 
 	// Version is the tag version from the environment
+	// Will be set during build process via GoReleaser
+	// See also: https://pkg.go.dev/cmd/link
 	Version string
 )
 

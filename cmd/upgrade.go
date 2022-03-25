@@ -35,12 +35,11 @@ func upgrade(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	latestWithoutPrefix := strings.TrimPrefix(latest, "v")
-	// check if an upgrade is necessary
 	currentSemVer := semver.New(Version)
 	latestSemVer := semver.New(latestWithoutPrefix)
 	if !currentSemVer.LessThan(*latestSemVer) {
-               fmt.Println("Already up to date, nothing to do!")
-	       return nil
+		fmt.Println("Already up to date, nothing to do!")
+		return nil
 	}
 	// upgrade necessary
 	client := http.Client{
