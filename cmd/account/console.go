@@ -80,9 +80,17 @@ func (o *consoleOptions) run() error {
 		return err
 	}
 
-	consoleURL, err := awsprovider.RequestSignInToken(awsClient, &o.k8sclusterresourcefactory.Awscloudfactory.ConsoleDuration,
-		aws.String(o.k8sclusterresourcefactory.Awscloudfactory.SessionName), aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s",
-			o.k8sclusterresourcefactory.AccountID, o.k8sclusterresourcefactory.Awscloudfactory.RoleName)))
+	partition, err := awsprovider.GetAwsPartition(awsClient)
+	if err != nil {
+		return err
+	}
+
+	consoleURL, err := awsprovider.RequestSignInToken(
+		awsClient,
+		&o.k8sclusterresourcefactory.Awscloudfactory.ConsoleDuration,
+		aws.String(o.k8sclusterresourcefactory.Awscloudfactory.SessionName),
+		aws.String(fmt.Sprintf("arn:%s:iam::%s:role/%s", partition, o.k8sclusterresourcefactory.AccountID, o.k8sclusterresourcefactory.Awscloudfactory.RoleName)),
+	)
 	if err != nil {
 		fmt.Fprintf(o.IOStreams.Out, "Generating console failed. If CCS cluster, customer removed or denied access to the ManagedOpenShiftSupport role.")
 		return err

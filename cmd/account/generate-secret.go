@@ -7,20 +7,19 @@ import (
 	"path/filepath"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/sts"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
+	"github.com/openshift/osdctl/cmd/common"
+	"github.com/openshift/osdctl/pkg/k8s"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/openshift/osdctl/cmd/common"
-	"github.com/openshift/osdctl/pkg/k8s"
-	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 )
 
 // newCmdGenerateSecret implements the generate-secret command which generates an new set of IAM User credentials
@@ -111,11 +110,8 @@ func (o *generateSecretOptions) complete(cmd *cobra.Command, args []string) erro
 }
 
 func (o *generateSecretOptions) run() error {
-
 	if o.ccs {
-		err := o.generateCcsSecret()
-
-		return err
+		return o.generateCcsSecret()
 	}
 
 	ctx := context.TODO()
@@ -135,7 +131,7 @@ func (o *generateSecretOptions) run() error {
 		if account.Spec.AwsAccountID != "" {
 			accountID = account.Spec.AwsAccountID
 		} else {
-			return fmt.Errorf("Account CR is missing AWS Account ID")
+			return fmt.Errorf("account CR is missing AWS Account ID")
 		}
 	} else {
 		accountID = o.accountID
@@ -147,8 +143,13 @@ func (o *generateSecretOptions) run() error {
 		return err
 	}
 
+	arn, err := arn.Parse(aws.StringValue(callerIdentityOutput.Arn))
+	if err != nil {
+		return err
+	}
+
 	// Assume
-	roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, awsv1alpha1.AccountOperatorIAMRole))
+	roleArn := aws.String(fmt.Sprintf("arn:%s:iam::%s:role/%s", arn.Partition, accountID, awsv1alpha1.AccountOperatorIAMRole))
 	credentials, err := awsprovider.GetAssumeRoleCredentials(awsSetupClient, aws.Int64(900),
 		callerIdentityOutput.UserId, roleArn)
 	if err != nil {
@@ -227,7 +228,7 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 		return err
 	}
 
-	// Ensure AWS calls are succesful with client
+	// Ensure AWS calls are successful with client
 	callerIdentityOutput, err := awsSetupClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
 	if err != nil {
 		return err
@@ -284,7 +285,6 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 	})
 
 	// Create new set of Access Keys for osdCcsAdmin
-
 	newKey, err := awsAssumedRoleClient.CreateAccessKey(&iam.CreateAccessKeyInput{
 		UserName: aws.String(common.OSDCcsAdminIAM),
 	})
@@ -304,5 +304,4 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 	}
 
 	return nil
-
 }

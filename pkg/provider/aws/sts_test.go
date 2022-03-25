@@ -3,6 +3,7 @@ package aws
 import (
 	"encoding/json"
 	"errors"
+	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -28,6 +29,123 @@ func setupDefaultMocks(t *testing.T) *mockSuite {
 
 	mocks.mockAWSClient = mock.NewMockClient(mocks.mockCtrl)
 	return mocks
+}
+
+func TestGetAwsPartition(t *testing.T) {
+	g := NewGomegaWithT(t)
+	tests := []struct {
+		title        string
+		setupAWSMock func(r *mock.MockClientMockRecorder)
+		errExpected  bool
+		expected     string
+	}{
+		{
+			title: "AWS partition",
+			setupAWSMock: func(r *mock.MockClientMockRecorder) {
+				r.GetCallerIdentity(gomock.Any()).Return(&sts.GetCallerIdentityOutput{
+					Arn: aws.String("arn:aws:iam::123456789012:user/username"),
+				}, nil)
+			},
+			errExpected: false,
+			expected:    endpoints.AwsPartitionID,
+		},
+		{
+			title: "AWS GovCloud partition",
+			setupAWSMock: func(r *mock.MockClientMockRecorder) {
+				r.GetCallerIdentity(gomock.Any()).Return(&sts.GetCallerIdentityOutput{
+					Arn: aws.String("arn:aws-us-gov:iam::123456789012:user/username"),
+				}, nil)
+			},
+			errExpected: false,
+			expected:    endpoints.AwsUsGovPartitionID,
+		},
+		{
+			title: "Invalid arn",
+			setupAWSMock: func(r *mock.MockClientMockRecorder) {
+				r.GetCallerIdentity(gomock.Any()).Return(&sts.GetCallerIdentityOutput{
+					Arn: aws.String("hello"),
+				}, nil)
+			},
+			errExpected: true,
+			expected:    "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.title, func(t *testing.T) {
+			mocks := setupDefaultMocks(t)
+			tc.setupAWSMock(mocks.mockAWSClient.EXPECT())
+
+			// This is necessary for the mocks to report failures like methods not being called an expected number of times.
+			// after mocks is defined
+			defer mocks.mockCtrl.Finish()
+
+			partition, err := GetAwsPartition(mocks.mockAWSClient)
+			if tc.errExpected {
+				g.Expect(err).Should(HaveOccurred())
+			} else {
+				g.Expect(partition).Should(Equal(tc.expected))
+			}
+		})
+	}
+}
+
+func TestGetFederationEndpointUrl(t *testing.T) {
+	g := NewGomegaWithT(t)
+	tests := []struct {
+		title       string
+		partition   string
+		errExpected bool
+	}{
+		{
+			title:       "AWS partition",
+			partition:   endpoints.AwsPartitionID,
+			errExpected: false,
+		},
+		{
+			title:       "Invalid partition",
+			partition:   "hello",
+			errExpected: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.title, func(t *testing.T) {
+			_, err := GetFederationEndpointUrl(tc.partition)
+			if tc.errExpected {
+				g.Expect(err).Should(HaveOccurred())
+			}
+		})
+	}
+}
+
+func TestGetConsoleUrl(t *testing.T) {
+	g := NewGomegaWithT(t)
+	tests := []struct {
+		title       string
+		partition   string
+		errExpected bool
+	}{
+		{
+			title:       "AWS GovCloud partition",
+			partition:   endpoints.AwsUsGovPartitionID,
+			errExpected: false,
+		},
+		{
+			title:       "Invalid partition",
+			partition:   "hello",
+			errExpected: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.title, func(t *testing.T) {
+			_, err := GetConsoleUrl(tc.partition)
+			if tc.errExpected {
+				g.Expect(err).Should(HaveOccurred())
+			}
+		})
+	}
 }
 
 func TestGetAssumeRoleCredentials(t *testing.T) {
@@ -104,29 +222,31 @@ func TestGetAssumeRoleCredentials(t *testing.T) {
 
 func TestFormatSignInURL(t *testing.T) {
 	g := NewGomegaWithT(t)
-	base := "https://signin.aws.amazon.com/federation?Action=login&Destination=https%3A%2F%2Fconsole.aws.amazon.com%2F&Issuer=Red+Hat+SRE&SigninToken="
 	testCases := []struct {
 		title       string
+		partition   string
 		signInToken string
-		output      string
+		base        string
 	}{
 		{
 			title:       "signInToken foo",
+			partition:   endpoints.AwsPartitionID,
 			signInToken: "foo",
-			output:      base + "foo",
+			base:        "https://signin.aws.amazon.com/federation?Action=login&Destination=https%3A%2F%2Fconsole.aws.amazon.com%2F&Issuer=Red+Hat+SRE&SigninToken=",
 		},
 		{
 			title:       "signInToken bar",
+			partition:   endpoints.AwsUsGovPartitionID,
 			signInToken: "bar",
-			output:      base + "bar",
+			base:        "https://signin.amazonaws-us-gov.com/federation?Action=login&Destination=https%3A%2F%2Fconsole.amazonaws-us-gov.com%2F&Issuer=Red+Hat+SRE&SigninToken=",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
-			u, err := formatSignInURL(tc.signInToken)
+			u, err := formatSignInURL(tc.partition, tc.signInToken)
 			g.Expect(err).ShouldNot(HaveOccurred())
-			g.Expect(u.String()).Should(Equal(tc.output))
+			g.Expect(u.String()).Should(Equal(tc.base + tc.signInToken))
 		})
 	}
 }
