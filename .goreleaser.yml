@@ -15,7 +15,14 @@ builds:
     goarch:
       - amd64
     ldflags:
-      - -s -w -X github.com/openshift/osdctl/cmd.GitCommit={{.ShortCommit}} -X github.com/openshift/osdctl/cmd.Version={{.Version}}
+      # the following line will inject the current git commit and git tag in the binary during the build process.
+      # .ShortCommit and .Version are template variables that will be set during the GoReleaser run
+      # The "-X" go flag injects the strings into the two global variables GitCommit and Version
+      # See also: https://pkg.go.dev/cmd/link
+      - -s
+      - -w 
+      - -X github.com/openshift/osdctl/cmd.GitCommit={{.ShortCommit}}
+      - -X github.com/openshift/osdctl/cmd.Version={{.Version}}
       - "-extldflags=-zrelro" # binary hardening: For further explanation look here: https://www.redhat.com/en/blog/hardening-elf-binaries-using-relocation-read-only-relro
       - "-extldflags=-znow"
 

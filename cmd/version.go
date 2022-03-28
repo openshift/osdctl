@@ -5,16 +5,26 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 )
 
+const (
+	versionAPIEndpoint     = "https://api.github.com/repos/openshift/osdctl/releases/latest"
+	versionAddressTemplate = "https://github.com/openshift/osdctl/releases/download/v%s/osdctl_%s_%s_%s.tar.gz" // version, version, GOOS, GOARCH
+)
+
 var (
 	// GitCommit is the short git commit hash from the environment
+	// Will be set during build process via GoReleaser
+	// See also: https://pkg.go.dev/cmd/link
 	GitCommit string
 
 	// Version is the tag version from the environment
+	// Will be set during build process via GoReleaser
+	// See also: https://pkg.go.dev/cmd/link
 	Version string
 )
 
@@ -46,7 +56,7 @@ func version(cmd *cobra.Command, args []string) error {
 	ver, err := json.MarshalIndent(&versionResponse{
 		Commit:  GitCommit,
 		Version: Version,
-		Latest:  latest,
+		Latest:  strings.TrimPrefix(latest, "v"),
 	}, "", "  ")
 	if err != nil {
 		return err
@@ -59,12 +69,11 @@ func version(cmd *cobra.Command, args []string) error {
 // Interesting Note: GitHub only shows the latest "stable" tag. This means, that
 // tags with a suffix like *-rc.1 are not returned. We will always show the latest stable on master branch.
 func getLatestVersion() (latest string, err error) {
-	url := "https://api.github.com/repos/openshift/osdctl/releases/latest"
 	client := http.Client{
 		Timeout: time.Second * 2,
 	}
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, versionAPIEndpoint, nil)
 	if err != nil {
 		return latest, err
 	}
