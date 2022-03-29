@@ -49,8 +49,8 @@ func upgrade(cmd *cobra.Command, args []string) error {
 	addr := fmt.Sprintf(versionAddressTemplate,
 		latestWithoutPrefix,
 		latestWithoutPrefix,
-		parseGOOS(runtime.GOOS),
-		parseGOARCH(runtime.GOARCH))
+		runtime.GOOS,
+		runtime.GOARCH)
 
 	req, err := http.NewRequest(http.MethodGet, addr, nil)
 	if err != nil {
@@ -120,26 +120,4 @@ func upgrade(cmd *cobra.Command, args []string) error {
 		}
 	}
 	return nil
-}
-
-func parseGOOS(goos string) string {
-	switch goos {
-	case "linux":
-		return "Linux"
-	case "darwin":
-		return "Darwin"
-	case "windows":
-		return "Windows"
-	default:
-		return ""
-	}
-}
-
-func parseGOARCH(goarch string) string {
-	switch goarch {
-	case "amd64":
-		return "x86_64"
-	default:
-		return ""
-	}
 }

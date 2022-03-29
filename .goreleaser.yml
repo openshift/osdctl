@@ -30,12 +30,6 @@ builds:
       - "-extldflags=-zrelro" # binary hardening: For further explanation look here: https://www.redhat.com/en/blog/hardening-elf-binaries-using-relocation-read-only-relro
       - "-extldflags=-znow"
 
-archives:
-  - replacements:
-      darwin: Darwin
-      linux: Linux
-      amd64: x86_64
-
 checksum:
   name_template: 'sha256sum.txt'
   algorithm: sha256
