@@ -237,14 +237,18 @@ func listUsersFromAccount(newAWSClient awsprovider.Client, account_id string) ([
 
 	listInput := &iam.ListUsersInput{}
 
-	users, err := newAWSClient.ListUsers(listInput)
+	var users []*iam.User
+	err := newAWSClient.ListUsersPages(listInput, func(page *iam.ListUsersOutput, lastPage bool) bool {
+		users = append(users, page.Users...)
+		return *page.IsTruncated
+	})
 	if err != nil {
 		return []string{}, err
 	}
 
 	var userList []string
 
-	for _, u := range users.Users {
+	for _, u := range users {
 		userList = append(userList, *u.UserName)
 	}
 
@@ -259,16 +263,20 @@ func (o *accountUnassignOptions) checkForHiveNameTag(id string) (string, error) 
 	inputListTags := &organizations.ListTagsForResourceInput{
 		ResourceId: &id,
 	}
-	tags, err := o.awsClient.ListTagsForResource(inputListTags)
+	var tags []*organizations.Tag
+	err := o.awsClient.ListTagsForResourcePages(inputListTags, func(page *organizations.ListTagsForResourceOutput, lastPage bool) bool {
+		tags = append(tags, page.Tags...)
+		return page.NextToken != nil
+	})
 	if err != nil {
 		return "", err
 	}
 
-	if len(tags.Tags) == 0 {
+	if len(tags) == 0 {
 		return "", ErrNoTagsOnAccount
 	}
 
-	for _, t := range tags.Tags {
+	for _, t := range tags {
 		if *t.Key == "owner" && strings.HasPrefix(*t.Value, "hive") {
 			return "", ErrHiveNameProvided
 		}
@@ -401,11 +409,15 @@ func (o *accountUnassignOptions) deleteUserPolicies(user string) error {
 	inputListPolicies := &iam.ListUserPoliciesInput{
 		UserName: &user,
 	}
-	policies, err := o.awsClient.ListUserPolicies(inputListPolicies)
+	var policyNames []*string
+	err := o.awsClient.ListUserPoliciesPages(inputListPolicies, func(page *iam.ListUserPoliciesOutput, lastPage bool) bool {
+		policyNames = append(policyNames, page.PolicyNames...)
+		return *page.IsTruncated
+	})
 	if err != nil {
 		return err
 	}
-	for _, p := range policies.PolicyNames {
+	for _, p := range policyNames {
 		inputDelPolicies := &iam.DeleteUserPolicyInput{
 			PolicyName: p,
 			UserName:   &user,
@@ -468,12 +480,17 @@ func deleteAccountPolicies(newAWSClient awsprovider.Client) error {
 		Scope: aws.String("Local"),
 	}
 
-	policies, err := newAWSClient.ListPolicies(listAcctPoliciesInput)
+	var policies []*iam.Policy
+	err := newAWSClient.ListPoliciesPages(listAcctPoliciesInput, func(
+		page *iam.ListPoliciesOutput, lastPage bool) bool {
+		policies = append(policies, page.Policies...)
+		return *page.IsTruncated
+	})
 	if err != nil {
 		return err
 	}
 
-	for _, pol := range policies.Policies {
+	for _, pol := range policies {
 		_, err := newAWSClient.DeletePolicy(&iam.DeletePolicyInput{
 			PolicyArn: pol.Arn,
 		})
@@ -487,12 +504,16 @@ func deleteAccountPolicies(newAWSClient awsprovider.Client) error {
 func deleteRoles(newAWSClient awsprovider.Client) error {
 
 	listRoleInput := &iam.ListRolesInput{}
-	roles, err := newAWSClient.ListRoles(listRoleInput)
+	var roles []*iam.Role
+	err := newAWSClient.ListRolesPages(listRoleInput, func(page *iam.ListRolesOutput, lastPage bool) bool {
+		roles = append(roles, page.Roles...)
+		return *page.IsTruncated
+	})
 	if err != nil {
 		return err
 	}
 	// delete all roles except OrganizationAccountAccessRole
-	for _, rolename := range roles.Roles {
+	for _, rolename := range roles {
 
 		if *rolename.RoleName == "OrganizationAccountAccessRole" || strings.Contains(*rolename.RoleName, "AWSServiceRole") {
 			continue

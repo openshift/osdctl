@@ -59,6 +59,7 @@ type Client interface {
 	GetUser(*iam.GetUserInput) (*iam.GetUserOutput, error)
 	CreateUser(*iam.CreateUserInput) (*iam.CreateUserOutput, error)
 	ListUsers(*iam.ListUsersInput) (*iam.ListUsersOutput, error)
+	ListUsersPages(*iam.ListUsersInput, func(*iam.ListUsersOutput, bool) bool) error
 	AttachUserPolicy(*iam.AttachUserPolicyInput) (*iam.AttachUserPolicyOutput, error)
 	CreatePolicy(*iam.CreatePolicyInput) (*iam.CreatePolicyOutput, error)
 	DeletePolicy(*iam.DeletePolicyInput) (*iam.DeletePolicyOutput, error)
@@ -69,13 +70,16 @@ type Client interface {
 	ListSigningCertificates(*iam.ListSigningCertificatesInput) (*iam.ListSigningCertificatesOutput, error)
 	DeleteSigningCertificate(*iam.DeleteSigningCertificateInput) (*iam.DeleteSigningCertificateOutput, error)
 	ListUserPolicies(*iam.ListUserPoliciesInput) (*iam.ListUserPoliciesOutput, error)
+	ListUserPoliciesPages(*iam.ListUserPoliciesInput, func(*iam.ListUserPoliciesOutput, bool) bool) error
 	ListPolicies(*iam.ListPoliciesInput) (*iam.ListPoliciesOutput, error)
+	ListPoliciesPages(*iam.ListPoliciesInput, func(*iam.ListPoliciesOutput, bool) bool) error
 	DeleteUserPolicy(*iam.DeleteUserPolicyInput) (*iam.DeleteUserPolicyOutput, error)
 	ListAttachedUserPolicies(*iam.ListAttachedUserPoliciesInput) (*iam.ListAttachedUserPoliciesOutput, error)
 	DetachUserPolicy(*iam.DetachUserPolicyInput) (*iam.DetachUserPolicyOutput, error)
 	ListGroupsForUser(*iam.ListGroupsForUserInput) (*iam.ListGroupsForUserOutput, error)
 	RemoveUserFromGroup(*iam.RemoveUserFromGroupInput) (*iam.RemoveUserFromGroupOutput, error)
 	ListRoles(*iam.ListRolesInput) (*iam.ListRolesOutput, error)
+	ListRolesPages(*iam.ListRolesInput, func(*iam.ListRolesOutput, bool) bool) error
 	DeleteRole(*iam.DeleteRoleInput) (*iam.DeleteRoleOutput, error)
 	DeleteUser(*iam.DeleteUserInput) (*iam.DeleteUserOutput, error)
 
@@ -93,11 +97,13 @@ type Client interface {
 	ListParents(input *organizations.ListParentsInput) (*organizations.ListParentsOutput, error)
 	ListRoots(input *organizations.ListRootsInput) (*organizations.ListRootsOutput, error)
 	ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error)
+	ListAccountsForParentPages(input *organizations.ListAccountsForParentInput, fn func(*organizations.ListAccountsForParentOutput, bool) bool) error
 	ListOrganizationalUnitsForParent(input *organizations.ListOrganizationalUnitsForParentInput) (*organizations.ListOrganizationalUnitsForParentOutput, error)
 	DescribeOrganizationalUnit(input *organizations.DescribeOrganizationalUnitInput) (*organizations.DescribeOrganizationalUnitOutput, error)
 	TagResource(input *organizations.TagResourceInput) (*organizations.TagResourceOutput, error)
 	UntagResource(input *organizations.UntagResourceInput) (*organizations.UntagResourceOutput, error)
 	ListTagsForResource(input *organizations.ListTagsForResourceInput) (*organizations.ListTagsForResourceOutput, error)
+	ListTagsForResourcePages(input *organizations.ListTagsForResourceInput, fn func(*organizations.ListTagsForResourceOutput, bool) bool) error
 	MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error)
 
 	// Resources
@@ -268,8 +274,16 @@ func (c *AwsClient) ListUsers(input *iam.ListUsersInput) (*iam.ListUsersOutput, 
 	return c.iamClient.ListUsers(input)
 }
 
+func (c *AwsClient) ListUsersPages(input *iam.ListUsersInput, fn func(*iam.ListUsersOutput, bool) bool) error {
+	return c.iamClient.ListUsersPages(input, fn)
+}
+
 func (c *AwsClient) ListPolicies(input *iam.ListPoliciesInput) (*iam.ListPoliciesOutput, error) {
 	return c.iamClient.ListPolicies(input)
+}
+
+func (c *AwsClient) ListPoliciesPages(input *iam.ListPoliciesInput, fn func(*iam.ListPoliciesOutput, bool) bool) error {
+	return c.iamClient.ListPoliciesPages(input, fn)
 }
 
 func (c *AwsClient) AttachUserPolicy(input *iam.AttachUserPolicyInput) (*iam.AttachUserPolicyOutput, error) {
@@ -312,6 +326,10 @@ func (c *AwsClient) ListUserPolicies(input *iam.ListUserPoliciesInput) (*iam.Lis
 	return c.iamClient.ListUserPolicies(input)
 }
 
+func (c *AwsClient) ListUserPoliciesPages(input *iam.ListUserPoliciesInput, fn func(*iam.ListUserPoliciesOutput, bool) bool) error {
+	return c.iamClient.ListUserPoliciesPages(input, fn)
+}
+
 func (c *AwsClient) DeleteUserPolicy(input *iam.DeleteUserPolicyInput) (*iam.DeleteUserPolicyOutput, error) {
 	return c.iamClient.DeleteUserPolicy(input)
 }
@@ -336,6 +354,10 @@ func (c *AwsClient) ListRoles(input *iam.ListRolesInput) (*iam.ListRolesOutput, 
 	return c.iamClient.ListRoles(input)
 }
 
+func (c *AwsClient) ListRolesPages(input *iam.ListRolesInput, fn func(*iam.ListRolesOutput, bool) bool) error {
+	return c.iamClient.ListRolesPages(input, fn)
+}
+
 func (c *AwsClient) DeleteRole(input *iam.DeleteRoleInput) (*iam.DeleteRoleOutput, error) {
 	return c.iamClient.DeleteRole(input)
 }
@@ -356,6 +378,10 @@ func (c *AwsClient) ListRoots(input *organizations.ListRootsInput) (*organizatio
 }
 func (c *AwsClient) ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error) {
 	return c.orgClient.ListAccountsForParent(input)
+}
+
+func (c *AwsClient) ListAccountsForParentPages(input *organizations.ListAccountsForParentInput, fn func(*organizations.ListAccountsForParentOutput, bool) bool) error {
+	return c.orgClient.ListAccountsForParentPages(input, fn)
 }
 
 func (c *AwsClient) ListServiceQuotas(input *servicequotas.ListServiceQuotasInput) (*servicequotas.ListServiceQuotasOutput, error) {
@@ -392,6 +418,10 @@ func (c *AwsClient) UntagResource(input *organizations.UntagResourceInput) (*org
 
 func (c *AwsClient) ListTagsForResource(input *organizations.ListTagsForResourceInput) (*organizations.ListTagsForResourceOutput, error) {
 	return c.orgClient.ListTagsForResource(input)
+}
+
+func (c *AwsClient) ListTagsForResourcePages(input *organizations.ListTagsForResourceInput, fn func(*organizations.ListTagsForResourceOutput, bool) bool) error {
+	return c.orgClient.ListTagsForResourcePages(input, fn)
 }
 
 func (c *AwsClient) MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error) {

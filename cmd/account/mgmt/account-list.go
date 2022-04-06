@@ -210,19 +210,23 @@ func (o *accountListOptions) listAllAccounts(OuIdInput string) (map[string][]str
 	input := &organizations.ListAccountsForParentInput{
 		ParentId: &OuIdInput,
 	}
-	accounts, err := o.awsClient.ListAccountsForParent(input)
+	var accounts []*organizations.Account
+	err := o.awsClient.ListAccountsForParentPages(input, func(page *organizations.ListAccountsForParentOutput, lastPage bool) bool {
+		accounts = append(accounts, page.Accounts...)
+		return page.Accounts != nil
+	})
 	if err != nil {
 		return m, err
 	}
 
-	if len(accounts.Accounts) == 0 {
+	if len(accounts) == 0 {
 		return map[string][]string{}, ErrNoAccountsForParent
 	}
 
 	// Loop through list of accounts and build hashmap of users and accounts
 	var user string
 
-	for _, a := range accounts.Accounts {
+	for _, a := range accounts {
 
 		inputListTags := &organizations.ListTagsForResourceInput{
 			ResourceId: a.Id,
@@ -252,7 +256,7 @@ func (o *accountListOptions) listAllAccounts(OuIdInput string) (map[string][]str
 			m[user] = []string{*a.Id}
 		}
 	}
-	if len(m) == 0 && len(accounts.Accounts) != 0 {
+	if len(m) == 0 && len(accounts) != 0 {
 		return map[string][]string{}, ErrAccountsWithNoOwner
 	}
 	return m, nil

@@ -159,29 +159,37 @@ func (o *accountAssignOptions) findUntaggedAccount(rootOu string) (string, error
 	input := &organizations.ListAccountsForParentInput{
 		ParentId: &rootOu,
 	}
-	accounts, err := o.awsClient.ListAccountsForParent(input)
+	var accounts []*organizations.ListAccountsForParentOutput
+	err := o.awsClient.ListAccountsForParentPages(input, func(page *organizations.ListAccountsForParentOutput, lastPage bool) bool {
+		accounts = append(accounts, page.Accounts...)
+		return page.NextToken != nil
+	})
 	if err != nil {
 		return "", err
 	}
 
-	if len(accounts.Accounts) == 0 {
+	if len(accounts) == 0 {
 		return "", ErrNoUntaggedAccounts
 	}
 
 	// Loop through accounts and check that it's untagged and assign ID to user
-	for _, a := range accounts.Accounts {
+	for _, a := range accounts {
 
 		inputListTags := &organizations.ListTagsForResourceInput{
 			ResourceId: a.Id,
 		}
-		tags, err := o.awsClient.ListTagsForResource(inputListTags)
+		var tags []*organizations.Tag
+		err := o.awsClient.ListTagsForResourcePages(inputListTags, func(output *organizations.ListTagsForResourceOutput, lastPage bool) bool {
+			tags = append(tags, output.Tags...)
+			return output.NextToken != nil {
+		})
 		if err != nil {
 			return "", err
 		}
 
 		hasNoOwnerClaimedTag := true
 
-		for _, t := range tags.Tags {
+		for _, t := range tags {
 			if *t.Key == "owner" || *t.Key == "claimed" {
 				hasNoOwnerClaimedTag = false
 				break
