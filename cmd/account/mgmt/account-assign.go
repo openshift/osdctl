@@ -123,7 +123,7 @@ func (o *accountAssignOptions) run() error {
 		// otherwise, create a new account
 		seed := time.Now().UnixNano()
 		accountAssignID, err = o.buildAccount(seed)
-		accountAssignID = "12345"
+
 		if err != nil {
 			return err
 		}
