@@ -43,7 +43,7 @@ const (
 
 // postCmd represents the post command
 var postCmd = &cobra.Command{
-	Use:   "post",
+	Use:   "post CLUSTER_ID",
 	Short: "Send a servicelog message to a given cluster",
 	Run: func(cmd *cobra.Command, args []string) {
 
