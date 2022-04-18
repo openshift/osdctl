@@ -193,7 +193,7 @@ func parseUserParameters() {
 			log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
 		}
 
-		param := strings.Split(v, "=")
+		param := strings.SplitN(v, "=", 2)
 		if param[0] == "" || param[1] == "" {
 			log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
 		}
