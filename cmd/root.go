@@ -9,7 +9,6 @@ import (
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/kubectl/pkg/util/templates"
 
 	"github.com/openshift/osdctl/cmd/aao"
 	"github.com/openshift/osdctl/cmd/account"
@@ -67,7 +66,6 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(newCmdCompletion(streams))
 
 	// add options command to list global flags
-	templates.ActsAsRootCommand(rootCmd, []string{"options"})
 	rootCmd.AddCommand(newCmdOptions(streams))
 
 	// Add cost command to use AWS Cost Manager
