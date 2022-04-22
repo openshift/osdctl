@@ -60,6 +60,9 @@ func (o *accountUnassignOptions) complete(cmd *cobra.Command, _ []string) error 
 	if o.username == "" && o.accountID == "" {
 		return cmdutil.UsageErrorf(cmd, "Please provide either an username or account ID")
 	}
+	if o.username != "" && o.accountID != "" {
+		return cmdutil.UsageErrorf(cmd, "Please provider only a username or an account ID, not both.")
+	}
 	return nil
 }
 func (o *accountUnassignOptions) run() error {
