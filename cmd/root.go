@@ -39,7 +39,6 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 		Short:             "OSD CLI",
 		Long:              `CLI tool to provide OSD related utilities`,
 		DisableAutoGenTag: true,
-		Run:               help,
 	}
 
 	globalflags.AddGlobalFlags(rootCmd, globalOpts)
