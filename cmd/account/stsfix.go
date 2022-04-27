@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -88,12 +89,15 @@ func (o *stsFixOptions) run() error {
 		}
 	}
 
+	fmt.Fprintln(o.Out, fmt.Sprintf("Resetting account %s", o.accountName))
+
 	ctx := context.TODO()
 
 	// get account CR
 	account, err := k8s.GetAWSAccount(ctx, o.kubeCli, o.accountNamespace, o.accountName)
 	if err != nil {
-		return err
+		fmt.Println(fmt.Sprintf("Could not get account %s", err))
+		os.Exit(99)
 	}
 
 	// get claimlink details from account CR for accountClaim
@@ -103,23 +107,26 @@ func (o *stsFixOptions) run() error {
 	// get AccountClaim CR
 	accountClaim, err := k8s.GetAWSAccountClaim(ctx, o.kubeCli, accClaimNamespace, accClaimName)
 	if err != nil {
-		return err
+		fmt.Println(fmt.Sprintf("Error Getting Accountclaim: %s", err))
+		os.Exit(100)
 	}
 
 	accountReadyError := o.readyAccount(ctx, account)
 	if accountReadyError != nil {
-		// do we want to continue here?
+		fmt.Println(fmt.Sprintf("Error Setting Account %s to Ready: %s", o.accountName, accountReadyError))
+		os.Exit(101)
 	}
 
 	accClaimReadyError := o.readyAccountClaim(ctx, accountClaim)
 	if accClaimReadyError != nil {
-		// how do we want to handle this?
+		fmt.Println(fmt.Sprintf("Error Setting AccountClaim %s to Ready: %s", accountClaim.Name, accClaimReadyError))
+		os.Exit(102)
 	}
 	return nil
 }
 
 func (o *stsFixOptions) readyAccount(ctx context.Context, account *awsv1alpha1.Account) error {
-	fmt.Fprintln(o.Out, "Changing Account state to "+o.setState)
+	fmt.Fprintln(o.Out, fmt.Sprintf("Changing Account %s state to %s", account.Name, o.setState))
 	//reset fields in status
 	var mergePatch []byte
 
@@ -133,7 +140,7 @@ func (o *stsFixOptions) readyAccount(ctx context.Context, account *awsv1alpha1.A
 }
 
 func (o *stsFixOptions) readyAccountClaim(ctx context.Context, accountClaim *awsv1alpha1.AccountClaim) error {
-	fmt.Fprintln(o.Out, "Changing AccountClaim state to "+o.setState)
+	fmt.Fprintln(o.Out, fmt.Sprintf("Changing AccountClaim %s/%s state to %s", accountClaim.Namespace, accountClaim.Name, o.setState))
 	//reset fields in status
 	var mergePatch []byte
 
