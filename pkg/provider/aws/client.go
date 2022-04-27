@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/costexplorer"
 	"github.com/aws/aws-sdk-go/service/costexplorer/costexploreriface"
@@ -28,7 +27,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/servicequotas/servicequotasiface"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/aws/aws-sdk-go/service/sts/stsiface"
-	"k8s.io/klog/v2"
 )
 
 // AwsClientInput input for new aws client
@@ -178,13 +176,10 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case "InvalidClientTokenId":
-				if region == endpoints.UsGovEast1RegionID || region == endpoints.UsGovWest1RegionID {
-					return nil, fmt.Errorf("failed `aws sts get-caller-identity` validation: %v", err)
-				}
-				klog.Infoln("credentials provided invalid, trying GovCloud by setting region to us-gov-west-1.")
-				return NewAwsClient(profile, endpoints.UsGovWest1RegionID, configFile)
+				return nil, fmt.Errorf("`aws sts get-caller-identity --profile %s --region %s` failed - "+
+					"ensure the credentials in the profile are valid and the region is in the AWS partition you expect", profile, region)
 			default:
-				return nil, fmt.Errorf("failed `aws sts get-caller-identity` validation: %v", err)
+				return nil, err
 			}
 		}
 	}
