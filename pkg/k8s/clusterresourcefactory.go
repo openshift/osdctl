@@ -147,14 +147,6 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 		return nil, err
 	}
 
-	// Switch the region based on partition
-	switch roleArn.Partition {
-	case endpoints.AwsUsGovPartitionID:
-		factory.Awscloudfactory.Region = endpoints.UsGovWest1RegionID
-	default:
-		factory.Awscloudfactory.Region = endpoints.UsEast1RegionID
-	}
-
 	splitArn := strings.Split(roleArn.Resource, "/")
 	username := splitArn[1]
 	factory.Awscloudfactory.SessionName = fmt.Sprintf("RH-SRE-%s", username)
