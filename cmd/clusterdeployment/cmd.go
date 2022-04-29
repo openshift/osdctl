@@ -13,7 +13,6 @@ func NewCmdClusterDeployment(streams genericclioptions.IOStreams, flags *generic
 		Short:             "cluster deployment related utilities",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
-		Run:               help,
 	}
 
 	cdCmd.AddCommand(newCmdList(streams, flags))

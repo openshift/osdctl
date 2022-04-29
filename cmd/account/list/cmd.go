@@ -14,7 +14,6 @@ func NewCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.Co
 		Short:             "List resources",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
-		Run:               help,
 	}
 
 	listCmd.AddCommand(newCmdListAccount(streams, flags, client, globalOpts))

@@ -13,7 +13,6 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 		Short:             "Provides information for a specified cluster",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
-		Run:               help,
 	}
 
 	clusterCmd.AddCommand(newCmdHealth(streams, flags, globalOpts))
