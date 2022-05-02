@@ -13,7 +13,6 @@ func NewCmdFederatedRole(streams genericclioptions.IOStreams, flags *genericclio
 		Short:             "federated role related commands",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
-		Run:               help,
 	}
 
 	getCmd.AddCommand(newCmdApply(streams, flags, client))

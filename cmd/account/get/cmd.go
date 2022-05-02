@@ -19,7 +19,6 @@ func NewCmdGet(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 		Short:             "Get resources",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
-		Run:               help,
 	}
 
 	getCmd.AddCommand(newCmdGetAccount(streams, flags, client, globalOpts))

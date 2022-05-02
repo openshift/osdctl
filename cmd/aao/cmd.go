@@ -12,7 +12,6 @@ func NewCmdAao(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 		Short:             "AWS Account Operator Debugging Utilities",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
-		Run:               help,
 	}
 
 	aaoCmd.AddCommand(newCmdPool(streams, flags))

@@ -13,7 +13,6 @@ func NewCmdSts(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 		Short:             "STS related utilities",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
-		Run:               help,
 	}
 
 	clusterCmd.AddCommand(newCmdPolicyDiff(streams, flags, client))

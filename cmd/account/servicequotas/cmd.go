@@ -12,7 +12,6 @@ func NewCmdServiceQuotas(streams genericclioptions.IOStreams, flags *genericclio
 		Short:             "Interact with AWS service-quotas",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
-		Run:               help,
 		Aliases:           []string{"service-quotas", "service-quota"},
 	}
 

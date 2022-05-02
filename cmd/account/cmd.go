@@ -19,7 +19,6 @@ func NewCmdAccount(streams genericclioptions.IOStreams, flags *genericclioptions
 		Short:             "AWS Account related utilities",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
-		Run:               help,
 	}
 
 	accountCmd.AddCommand(get.NewCmdGet(streams, flags, client, globalOpts))

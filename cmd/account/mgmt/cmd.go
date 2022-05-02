@@ -13,7 +13,6 @@ func NewCmdMgmt(streams genericclioptions.IOStreams, flags *genericclioptions.Co
 		Short:             "AWS Account Management",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
-		Run:               help,
 	}
 
 	mgmtCmd.AddCommand(newCmdAccountList(streams, flags, globalOpts))

@@ -13,7 +13,6 @@ func NewCmdNetwork(streams genericclioptions.IOStreams, flags *genericclioptions
 		Short:             "network related utilities",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
-		Run:               help,
 	}
 
 	netCmd.AddCommand(newCmdPacketCapture(streams, flags, client))
