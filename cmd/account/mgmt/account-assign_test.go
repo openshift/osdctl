@@ -8,10 +8,84 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/golang/mock/gomock"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/provider/aws/mock"
 
 	"k8s.io/apimachinery/pkg/runtime"
 )
+
+func TestIsOwned(t *testing.T) {
+	var genericAWSError error = fmt.Errorf("Generic AWS error")
+	testData := []struct {
+		testname         string
+		tags             organizations.ListTagsForResourceOutput
+		expectedIsOwned  bool
+		expectErr        error
+		expectedAWSError error
+	}{
+		{
+			testname: "test for unowned account",
+			tags: organizations.ListTagsForResourceOutput{
+				Tags: []*organizations.Tag{},
+			},
+			expectedIsOwned:  false,
+			expectErr:        nil,
+			expectedAWSError: nil,
+		},
+		{
+			testname: "test for owned account",
+			tags: organizations.ListTagsForResourceOutput{
+				Tags: []*organizations.Tag{
+					{
+						Key:   aws.String("claimed"),
+						Value: aws.String("true"),
+					},
+				},
+			},
+			expectedIsOwned:  true,
+			expectErr:        nil,
+			expectedAWSError: nil,
+		},
+		{
+			testname: "test for owned account, encounter aws error",
+			tags: organizations.ListTagsForResourceOutput{
+				Tags: []*organizations.Tag{
+					{
+						Key:   aws.String("claimed"),
+						Value: aws.String("true"),
+					},
+				},
+			},
+			expectedIsOwned:  false,
+			expectErr:        genericAWSError,
+			expectedAWSError: genericAWSError,
+		},
+	}
+	for _, test := range testData {
+		t.Run(test.testname, func(t *testing.T) {
+			mocks := setupDefaultMocks(t, []runtime.Object{})
+			mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
+			accountID := "11111"
+
+			mockAWSClient.EXPECT().ListTagsForResource(
+				&organizations.ListTagsForResourceInput{
+					ResourceId: aws.String(accountID),
+				},
+			).Return(&test.tags, test.expectedAWSError)
+
+			var awsC awsprovider.Client = mockAWSClient
+			isOwned, err := isOwned(accountID, &awsC)
+
+			if isOwned != test.expectedIsOwned {
+				t.Errorf("expected isOwned to be %v, got %v", test.expectedIsOwned, isOwned)
+			}
+
+			if err != test.expectErr {
+				t.Errorf("expected error to be %v, got %v", test.expectErr, err)
+			}
+		})
+	}
+}
 
 func TestFindUntaggedAccount(t *testing.T) {
 	var genericAWSError error = fmt.Errorf("Generic AWS error")

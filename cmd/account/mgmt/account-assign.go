@@ -30,6 +30,7 @@ type accountAssignOptions struct {
 	awsClient    awsprovider.Client
 	username     string
 	payerAccount string
+	accountID    string
 	output       string
 
 	flags      *genericclioptions.ConfigFlags
@@ -66,13 +67,12 @@ func newCmdAccountAssign(streams genericclioptions.IOStreams, flags *genericclio
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd, args))
 			cmdutil.CheckErr(ops.run())
-
 		},
 	}
 	ops.printFlags.AddFlags(accountAssignCmd)
 	accountAssignCmd.Flags().StringVarP(&ops.payerAccount, "payer-account", "p", "", "Payer account type")
 	accountAssignCmd.Flags().StringVarP(&ops.username, "username", "u", "", "LDAP username")
-
+	accountAssignCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "(optional) Specific AWS account ID to assign")
 	return accountAssignCmd
 }
 
@@ -106,6 +106,7 @@ func (o *accountAssignOptions) run() error {
 	} else {
 		return fmt.Errorf("invalid payer account provided")
 	}
+
 	//Instantiate aws client
 	awsClient, err := awsprovider.NewAwsClient(o.payerAccount, "us-east-1", "")
 	if err != nil {
@@ -113,7 +114,22 @@ func (o *accountAssignOptions) run() error {
 	}
 
 	o.awsClient = awsClient
-	accountAssignID, err = o.findUntaggedAccount(rootID)
+
+	// We support passing in an aws account ID to be assigned, or retrieving one for the user.
+	if o.accountID != "" {
+		accountAssignID = o.accountID
+		// ensure that the account we're assigning is not already owned
+		isOwned, err := isOwned(accountAssignID, &o.awsClient)
+		if err != nil {
+			return err
+		}
+		if isOwned {
+			return fmt.Errorf("the account you are attempting to assign is already owned, please use the 'unassign' command to unassign the account, or use 'assign' without a specific aws account id to be assigned one at random")
+		}
+
+	} else {
+		accountAssignID, err = o.findUntaggedAccount(rootID)
+	}
 
 	if err != nil {
 		// If the error returned is not because of a lack of accounts, return the error
@@ -170,25 +186,12 @@ func (o *accountAssignOptions) findUntaggedAccount(rootOu string) (string, error
 
 	// Loop through accounts and check that it's untagged and assign ID to user
 	for _, a := range accounts.Accounts {
-
-		inputListTags := &organizations.ListTagsForResourceInput{
-			ResourceId: a.Id,
-		}
-		tags, err := o.awsClient.ListTagsForResource(inputListTags)
+		isOwned, err := isOwned(*a.Id, &o.awsClient)
 		if err != nil {
 			return "", err
 		}
 
-		hasNoOwnerClaimedTag := true
-
-		for _, t := range tags.Tags {
-			if *t.Key == "owner" || *t.Key == "claimed" {
-				hasNoOwnerClaimedTag = false
-				break
-			}
-		}
-
-		if hasNoOwnerClaimedTag {
+		if !isOwned {
 			accountAssignID = *a.Id
 			break
 		}
@@ -200,10 +203,28 @@ func (o *accountAssignOptions) findUntaggedAccount(rootOu string) (string, error
 	return accountAssignID, nil
 }
 
-func (o *accountAssignOptions) tagAccount(accountIdInput string) error {
+func isOwned(accountID string, awsClient *awsprovider.Client) (bool, error) {
+	inputListTags := &organizations.ListTagsForResourceInput{
+		ResourceId: aws.String(accountID),
+	}
+	tags, err := (*awsClient).ListTagsForResource(inputListTags)
+	if err != nil {
+		return false, err
+	}
+
+	for _, t := range tags.Tags {
+		if *t.Key == "owner" || *t.Key == "claimed" {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (o *accountAssignOptions) tagAccount(accountId string) error {
 
 	inputTag := &organizations.TagResourceInput{
-		ResourceId: aws.String(accountIdInput),
+		ResourceId: aws.String(accountId),
 		Tags: []*organizations.Tag{
 			{
 				Key:   aws.String("owner"),
