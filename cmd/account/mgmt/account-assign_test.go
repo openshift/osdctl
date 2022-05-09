@@ -94,6 +94,8 @@ func TestFindUntaggedAccount(t *testing.T) {
 		name              string
 		accountsList      []string
 		tags              map[string]string
+		suspendCheck      bool
+		accountStatus     string
 		expectedAccountId string
 		expectErr         error
 		expectedAWSError  error
@@ -103,6 +105,8 @@ func TestFindUntaggedAccount(t *testing.T) {
 			accountsList:      []string{"111111111111"},
 			expectedAccountId: "111111111111",
 			tags:              map[string]string{},
+			suspendCheck:      true,
+			accountStatus:     organizations.AccountStatusActive,
 			expectErr:         nil,
 			expectedAWSError:  nil,
 		},
@@ -113,6 +117,7 @@ func TestFindUntaggedAccount(t *testing.T) {
 			tags: map[string]string{
 				"claimed": "true",
 			},
+			suspendCheck:     false,
 			expectErr:        ErrNoUntaggedAccounts,
 			expectedAWSError: nil,
 		},
@@ -124,6 +129,7 @@ func TestFindUntaggedAccount(t *testing.T) {
 				"owner":   "randuser",
 				"claimed": "true",
 			},
+			suspendCheck:     false,
 			expectErr:        ErrNoUntaggedAccounts,
 			expectedAWSError: nil,
 		},
@@ -132,8 +138,19 @@ func TestFindUntaggedAccount(t *testing.T) {
 			accountsList:      []string{},
 			expectedAccountId: "",
 			tags:              nil,
+			suspendCheck:      false,
 			expectErr:         genericAWSError,
 			expectedAWSError:  genericAWSError,
+		},
+		{
+			name:              "test for suspended account error",
+			accountsList:      []string{"111111111111"},
+			expectedAccountId: "",
+			tags:              map[string]string{},
+			suspendCheck:      true,
+			accountStatus:     organizations.AccountStatusSuspended,
+			expectErr:         ErrNoUntaggedAccounts,
+			expectedAWSError:  nil,
 		},
 	}
 
@@ -178,6 +195,21 @@ func TestFindUntaggedAccount(t *testing.T) {
 					}).Return(
 					awsOutputTags,
 					test.expectedAWSError,
+				)
+			}
+
+			if test.suspendCheck {
+				mockAWSClient.EXPECT().DescribeAccount(
+					&organizations.DescribeAccountInput{
+						AccountId: &test.accountsList[0],
+					},
+				).Return(
+					&organizations.DescribeAccountOutput{
+						Account: &organizations.Account{
+							Id:     aws.String(test.accountsList[0]),
+							Status: aws.String(test.accountStatus),
+						},
+					}, nil,
 				)
 			}
 

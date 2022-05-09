@@ -296,6 +296,21 @@ func (mr *MockClientMockRecorder) DeleteUserPolicy(arg0 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUserPolicy", reflect.TypeOf((*MockClient)(nil).DeleteUserPolicy), arg0)
 }
 
+// DescribeAccount mocks base method.
+func (m *MockClient) DescribeAccount(input *organizations.DescribeAccountInput) (*organizations.DescribeAccountOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescribeAccount", input)
+	ret0, _ := ret[0].(*organizations.DescribeAccountOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeAccount indicates an expected call of DescribeAccount.
+func (mr *MockClientMockRecorder) DescribeAccount(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeAccount", reflect.TypeOf((*MockClient)(nil).DescribeAccount), input)
+}
+
 // DescribeCreateAccountStatus mocks base method.
 func (m *MockClient) DescribeCreateAccountStatus(input *organizations.DescribeCreateAccountStatusInput) (*organizations.DescribeCreateAccountStatusOutput, error) {
 	m.ctrl.T.Helper()
