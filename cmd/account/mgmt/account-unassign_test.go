@@ -13,7 +13,9 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/openshift/osdctl/pkg/provider/aws/mock"
 
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 func TestAssumeRoleForAccount(t *testing.T) {
@@ -601,5 +603,20 @@ func TestUntagAccount(t *testing.T) {
 	err := o.untagAccount(accountId)
 	if err != nil {
 		t.Errorf("failed to untag aws account")
+	}
+}
+
+func TestConflictingOptions(t *testing.T) {
+	s := genericclioptions.IOStreams{}
+	f := genericclioptions.ConfigFlags{}
+	g := globalflags.GlobalOptions{}
+	cmd := newCmdAccountAssign(s, &f, &g)
+	o := &accountUnassignOptions{}
+	o.payerAccount = "fake account"
+	o.accountID = "123456"
+	o.username = "testuser"
+	err := o.complete(cmd, []string{})
+	if err == nil {
+		t.Errorf("An error should have been raised")
 	}
 }
