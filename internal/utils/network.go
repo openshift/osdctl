@@ -26,7 +26,7 @@ func IsOnline(url url.URL) error {
 	}
 
 	// Non-200 http statuses are considered error
-	return fmt.Errorf("timeout or uknown HTTP error, while trying to access %q", url.String())
+	return fmt.Errorf("timeout or unknown HTTP error, while trying to access %q", url.String())
 }
 
 // IsValidUrl tests a string to determine if it is a well-structured url or not.

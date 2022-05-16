@@ -216,7 +216,7 @@ func (o *resetOptions) getAwsClientFromSecret(secretName string, namespace strin
 		Region:          "us-east-1",
 	})
 	if err != nil {
-		fmt.Printf(" error occured when calling NewAwsClientWithInput")
+		fmt.Printf(" error occurred when calling NewAwsClientWithInput")
 		return awsClient, err
 	}
 	return awsClient, nil

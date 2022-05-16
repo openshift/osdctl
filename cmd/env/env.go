@@ -160,12 +160,12 @@ func (e *OcEnv) Start() {
 	cmd.Dir = e.Path
 	_ = cmd.Run() // add error checking
 
-	e.killChilds()
+	e.killChildren()
 
 	fmt.Printf("Exited OpenShift environment\n")
 
 }
-func (e *OcEnv) killChilds() {
+func (e *OcEnv) killChildren() {
 	file, err := os.Open(e.Path + "/.killpids")
 
 	if err != nil {

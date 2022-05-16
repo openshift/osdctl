@@ -191,7 +191,7 @@ osdctl account clean-velero-snapshots -p <profile name> -c <config file path>
 
 ### AWS Account IAM User Credentials validation
 
-`verify-secrets` command verifies the IAM User Secret associated with Account Accout CR.
+`verify-secrets` command verifies the IAM User Secret associated with Account Account CR.
 
 ```bash
 # no argument, verify all account secrets
@@ -231,7 +231,7 @@ test-cr-secret
 osdctl get aws-account -a <Account CR Name>
 
 # Get AWS Account ID by Account Claim CR Name and Namespace
-osdctl get aws-account -c <Claim Name> -n <Claim Namepace>
+osdctl get aws-account -c <Claim Name> -n <Claim Namespace>
 ```
 
 ### Rotate AWS IAM Credentials
@@ -306,11 +306,11 @@ CLUSTER_ID= # the unique cluster name, or internal, external id for a cluster
 TEMPLATE= # file or url in which the template exists in
 osdctl servicelog post ${CLUSTER_ID} --template=${TEMPLATE} --dry-run
 
-QUERIES_HERE= # queries that can be run on ocm's `clusters` resoruce
+QUERIES_HERE= # queries that can be run on ocm's `clusters` resource
 TEMPLATE= # file or url in which the template exists in
 osdctl servicelog post --template=${TEMPLATE} --query=${QUERIES_HERE} --dry-run
 
-QUERIES_HERE= # queries that can be run on ocm's `clusters` resoruce
+QUERIES_HERE= # queries that can be run on ocm's `clusters` resource
 # to test the queries you can run:
 # ocm list clusters --parameter search="${QUERIES_HERE}"
 cat << EOF > query_file.txt

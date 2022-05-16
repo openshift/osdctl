@@ -14,7 +14,12 @@ import (
 func main() {
 
 	flags := pflag.NewFlagSet("osdctl", pflag.ExitOnError)
-	flag.CommandLine.Parse([]string{})
+	err := flag.CommandLine.Parse([]string{})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
 	pflag.CommandLine = flags
 
 	command := cmd.NewCmdRoot(genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr})
