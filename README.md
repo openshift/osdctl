@@ -446,5 +446,5 @@ $ osdctl env --kubeconfig <(pbpaste) mycluster
 #### OSD network verifier
 1. Egress test - [SOP](https://github.com/openshift/ops-sop/blob/master/v4/knowledge_base/osd-network-verifier.md)
 ```
-$ osdctl network verify-egress --subnet-id=$(SUBNET-ID) 
+$ osdctl network verify-egress --subnet-id=$(SUBNET-ID) --region=$(REGION)
 ```
