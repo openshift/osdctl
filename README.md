@@ -441,3 +441,10 @@ Log in with a kubeconfig from clipboard (Mac):
 ```
 $ osdctl env --kubeconfig <(pbpaste) mycluster
 ```
+
+### Network Utilities
+#### OSD Network verifier
+1. Egress test - [SOP](https://github.com/openshift/ops-sop/blob/master/v4/knowledge_base/osd-network-verifier.md)
+```
+$ osdctl network verify-egress --subnet-id=$(SUBNET-ID) 
+```
