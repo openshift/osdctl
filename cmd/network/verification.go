@@ -34,7 +34,7 @@ func getDefaultRegion() string {
 	if present {
 		return val
 	}
-        return regionDefault
+	return regionDefault
 
 }
 func NewCmdValidateEgress() *cobra.Command {
