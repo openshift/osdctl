@@ -33,9 +33,9 @@ func getDefaultRegion() string {
 	val, present := os.LookupEnv(regionEnvVarStr)
 	if present {
 		return val
-	} else {
-		return regionDefault
 	}
+        return regionDefault
+
 }
 func NewCmdValidateEgress() *cobra.Command {
 	config := egressConfig{}
