@@ -63,7 +63,7 @@ osdctl network verify-egress --subnet-id $(SUBNET_ID) --image-id $(IMAGE_ID)`,
 				os.Exit(1)
 			}
 
-			logger.Warn(ctx, "Using region: %s", config.region)
+			logger.Info(ctx, "Using region: %s", config.region)
 			creds := credentials.NewStaticCredentialsProvider(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), os.Getenv("AWS_SESSION_TOKEN"))
 			cli, err := cloudclient.NewClient(ctx, logger, creds, config.region, config.instanceType, config.cloudTags)
 			if err != nil {
