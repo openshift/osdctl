@@ -97,6 +97,7 @@ type Client interface {
 	UntagResource(input *organizations.UntagResourceInput) (*organizations.UntagResourceOutput, error)
 	ListTagsForResource(input *organizations.ListTagsForResourceInput) (*organizations.ListTagsForResourceOutput, error)
 	MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error)
+	DescribeAccount(input *organizations.DescribeAccountInput) (*organizations.DescribeAccountOutput, error)
 
 	// Resources
 	GetResources(input *resourcegroupstaggingapi.GetResourcesInput) (*resourcegroupstaggingapi.GetResourcesOutput, error)
@@ -391,6 +392,10 @@ func (c *AwsClient) ListTagsForResource(input *organizations.ListTagsForResource
 
 func (c *AwsClient) MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error) {
 	return c.orgClient.MoveAccount(input)
+}
+
+func (c *AwsClient) DescribeAccount(input *organizations.DescribeAccountInput) (*organizations.DescribeAccountOutput, error) {
+	return c.orgClient.DescribeAccount(input)
 }
 
 func (c *AwsClient) GetResources(input *resourcegroupstaggingapi.GetResourcesInput) (*resourcegroupstaggingapi.GetResourcesOutput, error) {

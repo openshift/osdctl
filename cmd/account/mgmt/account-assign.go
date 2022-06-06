@@ -73,6 +73,7 @@ func newCmdAccountAssign(streams genericclioptions.IOStreams, flags *genericclio
 	accountAssignCmd.Flags().StringVarP(&ops.payerAccount, "payer-account", "p", "", "Payer account type")
 	accountAssignCmd.Flags().StringVarP(&ops.username, "username", "u", "", "LDAP username")
 	accountAssignCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "(optional) Specific AWS account ID to assign")
+
 	return accountAssignCmd
 }
 
@@ -114,7 +115,6 @@ func (o *accountAssignOptions) run() error {
 	}
 
 	o.awsClient = awsClient
-
 	// We support passing in an aws account ID to be assigned, or retrieving one for the user.
 	if o.accountID != "" {
 		accountAssignID = o.accountID
@@ -125,6 +125,14 @@ func (o *accountAssignOptions) run() error {
 		}
 		if isOwned {
 			return fmt.Errorf("the account you are attempting to assign is already owned, please use the 'unassign' command to unassign the account, or use 'assign' without a specific aws account id to be assigned one at random")
+		}
+
+		isSuspended, err := isSuspended(accountAssignID, o.awsClient)
+		if err != nil {
+			return err
+		}
+		if isSuspended {
+			return fmt.Errorf("the account you are attempting to assign is suspended, please use another account, or use 'assign' without a specific aws account id to be assigned one at random")
 		}
 
 	} else {
@@ -192,8 +200,14 @@ func (o *accountAssignOptions) findUntaggedAccount(rootOu string) (string, error
 		}
 
 		if !isOwned {
-			accountAssignID = *a.Id
-			break
+			isSuspended, err := isSuspended(*a.Id, o.awsClient)
+			if err != nil {
+				return "", err
+			}
+			if !isSuspended {
+				accountAssignID = *a.Id
+				break
+			}
 		}
 	}
 
@@ -216,6 +230,24 @@ func isOwned(accountID string, awsClient *awsprovider.Client) (bool, error) {
 		if *t.Key == "owner" || *t.Key == "claimed" {
 			return true, nil
 		}
+	}
+
+	return false, nil
+}
+
+func isSuspended(accountIdInput string, awsClient awsprovider.Client) (bool, error) {
+	accountInfo, err := awsClient.DescribeAccount(
+		&organizations.DescribeAccountInput{
+			AccountId: &accountIdInput,
+		},
+	)
+
+	if err != nil {
+		return false, err
+	}
+
+	if *accountInfo.Account.Status == organizations.AccountStatusSuspended {
+		return true, nil
 	}
 
 	return false, nil
