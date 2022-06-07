@@ -25,6 +25,7 @@ type egressConfig struct {
 	cloudTags    map[string]string
 	debug        bool
 	region       string
+	awsProfile      string
 	timeout      time.Duration
 	kmsKeyID     string
 }
@@ -58,7 +59,8 @@ osdctl network verify-egress --subnet-id $(SUBNET_ID) --image-id $(IMAGE_ID)`,
 	validateEgressCmd.Flags().StringVar(&config.vpcSubnetID, "subnet-id", "", "source subnet ID")
 	validateEgressCmd.Flags().StringVar(&config.cloudImageID, "image-id", "", "(optional) cloud image for the compute instance")
 	validateEgressCmd.Flags().StringVar(&config.instanceType, "instance-type", "t3.micro", "(optional) compute instance type")
-	validateEgressCmd.Flags().StringVar(&config.region, "region", getDefaultRegion(), fmt.Sprintf("(optional) compute instance region. If absent, environment var %[1]v will be used, if set", regionEnvVarStr, regionDefault))
+	validateEgressCmd.Flags().StringVar(&config.region, "region", getDefaultRegion(), fmt.Sprintf("(optional) compute instance region. If absent, environment var %[1]v will be used", regionEnvVarStr, regionDefault))
+	validateEgressCmd.Flags().StringVar(&config.region, "profile", "", fmt.Sprintf("(optional) AWS profile. If present, any credentials passed with CLI will be ignored."))
 	validateEgressCmd.Flags().StringToStringVar(&config.cloudTags, "cloud-tags", defaultTags, "(optional) comma-seperated list of tags to assign to cloud resources e.g. --cloud-tags key1=value1,key2=value2")
 	validateEgressCmd.Flags().BoolVar(&config.debug, "debug", false, "(optional) if true, enable additional debug-level logging")
 	validateEgressCmd.Flags().DurationVar(&config.timeout, "timeout", 1*time.Second, "(optional) timeout for individual egress verification requests")
@@ -88,7 +90,12 @@ func runEgressTest(config egressConfig) {
 			}
 
 			logger.Info(ctx, "Using region: %s", config.region)
-			creds := credentials.NewStaticCredentialsProvider(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), os.Getenv("AWS_SESSION_TOKEN"))
+			var creds interface{}
+			if config.awsProfile != "" {
+				creds = config.awsProfile
+			} else {
+				creds = credentials.NewStaticCredentialsProvider(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), os.Getenv("AWS_SESSION_TOKEN"))
+			}
 			cli, err := cloudclient.NewClient(ctx, logger, creds, config.region, config.instanceType, config.cloudTags)
 			if err != nil {
 				logger.Error(ctx, err.Error())
