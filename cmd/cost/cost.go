@@ -2,6 +2,7 @@ package cost
 
 import (
 	"log"
+	"regexp"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/organizations"
@@ -88,6 +89,17 @@ func (opsCost *costOptions) initAWSClients() (awsprovider.Client, error) {
 
 //Gets information regarding Organizational Unit
 func getOU(org awsprovider.Client, OUid string) *organizations.OrganizationalUnit {
+	// if we're passed the root OU, skip querying and pass the ou id back
+	rootRegex, _ := regexp.Compile("r-[a-z]{4}")
+	if rootRegex.MatchString(OUid) {
+		ou := &organizations.OrganizationalUnit{
+			Id:   aws.String(OUid),
+			Name: aws.String("root"),
+		}
+		return ou
+	}
+
+	// Otherwise get the OU from AWS
 	result, err := org.DescribeOrganizationalUnit(&organizations.DescribeOrganizationalUnitInput{
 		OrganizationalUnitId: aws.String(OUid),
 	})

@@ -299,6 +299,8 @@ func (o *getOptions) getOUCost(cost *decimal.Decimal, unit *string, OU *organiza
 		return err
 	}
 
+	fmt.Println("Retrieving account cost. This can take a while depending on the amount of accounts queried above...")
+
 	//Increment costs of accounts
 	for _, account := range accounts {
 		if err := o.getAccountCost(&account.accountId, unit, awsClient, cost); err != nil {
