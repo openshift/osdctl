@@ -93,6 +93,7 @@ func runEgressTest(config egressConfig) {
 			var creds interface{}
 			if config.awsProfile != "" {
 				creds = config.awsProfile
+				logger.Info(ctx, "Using AWS profile: %s", config.awsProfile)
 			} else {
 				creds = credentials.NewStaticCredentialsProvider(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), os.Getenv("AWS_SESSION_TOKEN"))
 			}
