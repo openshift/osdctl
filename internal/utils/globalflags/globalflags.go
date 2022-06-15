@@ -8,7 +8,7 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-// Defines a set of Global Options available to all commands
+// GlobalOptions defines all available commands
 type GlobalOptions struct {
 	Output string
 }
@@ -16,7 +16,7 @@ type GlobalOptions struct {
 // AddGlobalFlags adds the Global Flags to the root command
 func AddGlobalFlags(cmd *cobra.Command, opts *GlobalOptions) {
 	cmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
-	cmd.PersistentFlags().StringVarP(&opts.Output, "output", "o", "", "Invalid output format: Valid formats are ['', 'json', 'yaml']")
+	cmd.PersistentFlags().StringVarP(&opts.Output, "output", "o", "", "Valid formats are ['', 'json', 'yaml', 'env']")
 }
 
 // GetFlags adds the kubeFlags we care about and adds the flags from the provided command
