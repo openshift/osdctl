@@ -139,6 +139,8 @@ func parseGOARCH(goarch string) string {
 	switch goarch {
 	case "amd64":
 		return "x86_64"
+	case "arm64":
+		return "arm64"
 	default:
 		return ""
 	}
