@@ -13,10 +13,10 @@ import (
 )
 
 var (
-	defaultTags      = map[string]string{"osd-network-verifier": "owned", "red-hat-managed": "true", 
+	defaultTags = map[string]string{"osd-network-verifier": "owned", "red-hat-managed": "true",
 		"Name": "osd-network-verifier"}
-	regionEnvVarStr  = "AWS_REGION"
-	regionDefault    = "us-east-1"
+	regionEnvVarStr = "AWS_REGION"
+	regionDefault   = "us-east-1"
 )
 
 type egressConfig struct {
