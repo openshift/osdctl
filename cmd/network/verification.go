@@ -25,9 +25,9 @@ type egressConfig struct {
 	instanceType string
 	cloudTags    map[string]string
 	debug        bool
-	region       string
-	awsProfile   string
-	timeout      time.Duration
+	region  string
+	profile string
+	timeout time.Duration
 	kmsKeyID     string
 }
 
@@ -92,9 +92,9 @@ func runEgressTest(config egressConfig) {
 
 	logger.Info(ctx, "Using region: %s", config.region)
 	var creds interface{}
-	if config.awsProfile != "" {
-		creds = config.awsProfile
-		logger.Info(ctx, "Using AWS profile: %s", config.awsProfile)
+	if config.profile != "" {
+		creds = config.profile
+		logger.Info(ctx, "Using AWS profile: %s", config.profile)
 	} else {
 		creds = credentials.NewStaticCredentialsProvider(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), os.Getenv("AWS_SESSION_TOKEN"))
 	}
