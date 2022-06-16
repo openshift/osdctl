@@ -25,9 +25,9 @@ type egressConfig struct {
 	instanceType string
 	cloudTags    map[string]string
 	debug        bool
-	region  string
-	profile string
-	timeout time.Duration
+	region       string
+	profile      string
+	timeout      time.Duration
 	kmsKeyID     string
 }
 
