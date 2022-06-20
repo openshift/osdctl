@@ -60,7 +60,24 @@ func (o *loggingCheckOptions) complete(cmd *cobra.Command, args []string) error 
 		return cmdutil.UsageErrorf(cmd, "Provide exactly one cluster ID")
 	}
 
-	o.clusterID = args[0]
+	// Create an OCM client to talk to the cluster API
+	// the user has to be logged in (e.g. 'ocm login')
+	ocmClient := utils.CreateConnection()
+	defer func() {
+		if err := ocmClient.Close(); err != nil {
+			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
+		}
+	}()
+
+	if len(args) != 1 {
+		return fmt.Errorf("too many arguments. Expected 1 got %d", len(args))
+	}
+	clusters := utils.GetClusters(ocmClient, args)
+	if len(clusters) != 1 {
+		return fmt.Errorf("unexpected number of clusters matched input. Expected 1 got %d", len(clusters))
+
+	}
+	o.clusterID = clusters[0].ID()
 	o.output = o.GlobalOptions.Output
 
 	return nil

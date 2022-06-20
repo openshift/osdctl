@@ -18,6 +18,7 @@ import (
 	"github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/internal/utils"
 	"github.com/openshift/osdctl/pkg/printer"
+	ocmutils "github.com/openshift/osdctl/pkg/utils"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -60,7 +61,7 @@ var postCmd = &cobra.Command{
 			log.Infof("Too many arguments. Expected 1 got %d", len(args))
 		}
 		for _, clusterIds := range args {
-			queries = append(queries, generateQuery(clusterIds))
+			queries = append(queries, ocmutils.GenerateQuery(clusterIds))
 		}
 
 		if len(queries) > 0 {
@@ -81,7 +82,7 @@ var postCmd = &cobra.Command{
 
 		// Create an OCM client to talk to the cluster API
 		// the user has to be logged in (e.g. 'ocm login')
-		ocmClient := createConnection()
+		ocmClient := ocmutils.CreateConnection()
 		defer func() {
 			if err := ocmClient.Close(); err != nil {
 				log.Errorf("Cannot close the ocmClient (possible memory leak): %q", err)
@@ -109,12 +110,12 @@ var postCmd = &cobra.Command{
 			query := []string{}
 			for i := range ClustersFile.Clusters {
 				cluster := ClustersFile.Clusters[i]
-				query = append(query, generateQuery(cluster))
+				query = append(query, ocmutils.GenerateQuery(cluster))
 			}
 			filterParams = append(filterParams, strings.Join(query, " or "))
 		}
 
-		clusters, err := applyFilters(ocmClient, filterParams)
+		clusters, err := ocmutils.ApplyFilters(ocmClient, filterParams)
 
 		if err != nil {
 			log.Fatalf("Cannot retrieve clusters: %q", err)
