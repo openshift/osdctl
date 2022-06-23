@@ -49,7 +49,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	// add sub commands
 	rootCmd.AddCommand(aao.NewCmdAao(streams, kubeFlags))
 	rootCmd.AddCommand(account.NewCmdAccount(streams, kubeFlags, kubeClient, globalOpts))
-	rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeFlags, globalOpts))
+	rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeFlags, kubeClient, globalOpts))
 	rootCmd.AddCommand(clusterdeployment.NewCmdClusterDeployment(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(env.NewCmdEnv(streams, kubeFlags))
 	rootCmd.AddCommand(federatedrole.NewCmdFederatedRole(streams, kubeFlags, kubeClient))
