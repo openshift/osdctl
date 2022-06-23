@@ -69,9 +69,6 @@ func (o *loggingCheckOptions) complete(cmd *cobra.Command, args []string) error 
 		}
 	}()
 
-	if len(args) != 1 {
-		return fmt.Errorf("too many arguments. Expected 1 got %d", len(args))
-	}
 	clusters := utils.GetClusters(ocmClient, args)
 	if len(clusters) != 1 {
 		return fmt.Errorf("unexpected number of clusters matched input. Expected 1 got %d", len(clusters))
