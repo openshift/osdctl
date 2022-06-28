@@ -117,10 +117,10 @@ func (o *getAccountOptions) run() error {
 			return err
 		}
 
-		for _, a := range accounts.Items {
+		for i, a := range accounts.Items {
 			if a.Spec.AwsAccountID == o.accountID {
 				accountCRName = a.Name
-				account = &a
+				account = &accounts.Items[i]
 				break
 			}
 		}

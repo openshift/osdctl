@@ -1,6 +1,7 @@
 package servicequotas
 
 import (
+	"fmt"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
@@ -21,5 +22,8 @@ func NewCmdServiceQuotas(streams genericclioptions.IOStreams, flags *genericclio
 }
 
 func help(cmd *cobra.Command, _ []string) {
-	cmd.Help()
+	err := cmd.Help()
+	if err != nil {
+		fmt.Println("Error while calling cmd.Help()", err.Error())
+	}
 }

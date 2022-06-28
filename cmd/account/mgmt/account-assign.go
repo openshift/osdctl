@@ -168,7 +168,10 @@ func (o *accountAssignOptions) run() error {
 		Id:       accountAssignID,
 	}
 
-	outputflag.PrintResponse(o.output, resp)
+	err = outputflag.PrintResponse(o.output, resp)
+	if err != nil {
+		fmt.Println("Error while calling PrintResponse(): ", err.Error())
+	}
 
 	return nil
 }
@@ -365,7 +368,7 @@ func RandomString(n int) string {
 
 	s := make([]byte, n)
 	for i := range s {
-		s[i] = letters[rand.Intn(len(letters))]
+		s[i] = letters[rand.Intn(len(letters))] //#nosec G404 -- math/rand is not used for a secret here, hence it's okay
 	}
 	return string(s)
 }

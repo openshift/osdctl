@@ -1,13 +1,14 @@
 package list
 
 import (
+	"fmt"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// NewCmdGet implements the get command to get AWS Account related resources
+// NewCmdList implements the list command
 func NewCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	listCmd := &cobra.Command{
 		Use:               "list",
@@ -23,5 +24,8 @@ func NewCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.Co
 }
 
 func help(cmd *cobra.Command, _ []string) {
-	cmd.Help()
+	err := cmd.Help()
+	if err != nil {
+		fmt.Println("Error while calling cmd.Help(): ", err.Error())
+	}
 }

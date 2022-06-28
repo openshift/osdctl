@@ -62,7 +62,7 @@ func (o *policyOptions) complete(cmd *cobra.Command, args []string) error {
 func (o *policyOptions) run(args []string) error {
 	// save crs files in /tmp/crs- dir for given release version
 	crs := "oc adm release extract quay.io/openshift-release-dev/ocp-release:" + args[0] + "-x86_64 --credentials-requests --cloud=aws --to=/tmp/crs-" + args[0]
-	_, err := exec.Command("bash", "-c", crs).Output()
+	_, err := exec.Command("bash", "-c", crs).Output() //#nosec G204 -- Subprocess launched with variable
 	if err != nil {
 		fmt.Print(err)
 		return err

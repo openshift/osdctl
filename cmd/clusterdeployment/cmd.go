@@ -1,6 +1,7 @@
 package clusterdeployment
 
 import (
+	"fmt"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -21,5 +22,8 @@ func NewCmdClusterDeployment(streams genericclioptions.IOStreams, flags *generic
 }
 
 func help(cmd *cobra.Command, _ []string) {
-	cmd.Help()
+	err := cmd.Help()
+	if err != nil {
+		fmt.Println("Error while calling cmd.Help()", err.Error())
+	}
 }

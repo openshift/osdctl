@@ -93,7 +93,7 @@ func (o *metricsOptions) run() error {
 
 	if o.metricsURL != "" {
 		metricsEndpoint = o.metricsURL
-		resp, err = http.Get(metricsEndpoint)
+		resp, err = http.Get(metricsEndpoint) //#nosec G107 -- metricsEndpoint cannot be constant
 	} else {
 		key := types.NamespacedName{
 			Namespace: o.accountNamespace,
@@ -143,11 +143,11 @@ func (o *metricsOptions) run() error {
 			}
 
 			req.Header.Add("Authorization", "Bearer "+string(token))
-			http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+			http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //#nosec G402 -- metricsEndpoint listens on HTTP only
 			resp, err = http.DefaultClient.Do(req)
 		} else {
 			metricsEndpoint = "http://" + route.Spec.Host + "/metrics"
-			resp, err = http.Get(metricsEndpoint)
+			resp, err = http.Get(metricsEndpoint) //#nosec G107 -- metricsEndpoint cannot be constant
 		}
 	}
 

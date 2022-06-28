@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -94,7 +95,11 @@ func (e *OcEnv) RunCommand(cmd *cobra.Command, args []string) {
 		e.Options.Alias = args[0]
 	}
 	if e.Options.ClusterId == "" && e.Options.Alias == "" {
-		cmd.Help()
+		err := cmd.Help()
+		if err != nil {
+			fmt.Println("could not print help")
+			return
+		}
 		log.Fatal("ClusterId or Alias required")
 	}
 
@@ -141,13 +146,21 @@ func (e *OcEnv) Start() {
 	shell := os.Getenv("SHELL")
 
 	fmt.Print("Switching to OpenShift environment " + e.Options.Alias + "\n")
-	cmd := exec.Command(shell)
+	// ignore the following line in linter, only way to fix this is via setting a
+	// constant string for the exec.Command
+	cmd := exec.Command(shell) //#nosec G204 -- shell cannot be constant
 
-	file, err := os.Open(e.Path + "/.ocenv")
+	path := filepath.Clean(e.Path + "/.ocenv")
+	file, err := os.Open(path)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			fmt.Println("Error closing file: ", path)
+			return
+		}
+	}()
 	scanner := bufio.NewScanner(file)
 	cmd.Env = os.Environ()
 	for scanner.Scan() {
@@ -165,8 +178,10 @@ func (e *OcEnv) Start() {
 	fmt.Printf("Exited OpenShift environment\n")
 
 }
+
 func (e *OcEnv) killChildren() {
-	file, err := os.Open(e.Path + "/.killpids")
+	path := filepath.Join(e.Path, "/.killpds")
+	file, err := os.Open(path) //#nosec G304 -- Potential file inclusion via variable
 
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -175,7 +190,13 @@ func (e *OcEnv) killChildren() {
 		}
 		log.Fatalf("Failed to read file .killpids: %v", err)
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			fmt.Println("Error while closing file: ", path)
+			return
+		}
+	}(file)
 
 	scanner := bufio.NewScanner(file)
 
@@ -198,15 +219,21 @@ func (e *OcEnv) killChildren() {
 		}
 	}
 
-	err = os.Remove(e.Path + "/.killpids")
+	err = os.Remove(path)
 	if err != nil {
 		log.Printf("failed to delete .killpids, you may need to clean it up manually: %v\n", err)
+		return
 	}
 
 }
 func (e *OcEnv) Delete() {
 	fmt.Printf("Cleaning up OpenShift environment %s\n", e.Options.Alias)
-	os.RemoveAll(e.Path)
+	err := os.RemoveAll(e.Path)
+	if err != nil {
+		fmt.Println("Error while calling os.RemoveAll", err.Error())
+		return
+	}
+	return
 }
 
 func (e *OcEnv) ensureEnvDir() {
@@ -234,14 +261,27 @@ PATH=` + e.Path + `/bin:` + os.Getenv("PATH") + `
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer direnvfile.Close()
+	defer func(direnvfile *os.File) {
+		err := direnvfile.Close()
+		if err != nil {
+			fmt.Println("Error while calling direnvFile.Close(): ", err.Error())
+			return
+		}
+	}(direnvfile)
 
 	zshenvfile := e.ensureFile(e.Path + "/.zshenv")
 	_, err = zshenvfile.WriteString("source .ocenv")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer direnvfile.Close()
+	defer func(direnvfile *os.File) {
+		err := direnvfile.Close()
+		if err != nil {
+			fmt.Println("Error while calling direnvFile.Close(): ", err.Error())
+			return
+		}
+	}(direnvfile)
+	return
 }
 
 func (e *OcEnv) createBins() {
@@ -319,16 +359,23 @@ func (e *OcEnv) getLoginScript() string {
 }
 
 func (e *OcEnv) createBin(cmd, content string) {
-	filepath := e.binPath() + "/" + cmd
-	scriptfile := e.ensureFile(filepath)
-	defer scriptfile.Close()
+	path := filepath.Join(e.binPath(), cmd)
+	scriptfile := e.ensureFile(path)
+	defer func(scriptfile *os.File) {
+		err := scriptfile.Close()
+		if err != nil {
+			fmt.Println("Error closing file: ", path)
+			return
+		}
+	}(scriptfile)
 	_, err := scriptfile.WriteString(content)
 	if err != nil {
-		panic(fmt.Errorf("error writing to file %s: %v", filepath, err))
+		panic(fmt.Errorf("error writing to file %s: %v", path, err))
 	}
-	err = os.Chmod(filepath, 0744)
+	err = os.Chmod(path, 0700) //#nosec G302 -- Expect file permissions to be 0600 or less, not applicable here, because it's an executable
 	if err != nil {
-		log.Fatalf("Can't update permissions on file %s: %v", filepath, err)
+		log.Fatalf("Can't update permissions on file %s: %v", path, err)
+		return
 	}
 }
 
@@ -340,16 +387,18 @@ func (e *OcEnv) createKubeconfig() {
 			return
 		}
 
-		err = ioutil.WriteFile(e.Path+"/kubeconfig.json", input, 0644)
+		path := filepath.Join(e.Path, "/kubeconfig.json")
+		err = ioutil.WriteFile(path, input, 0600)
 		if err != nil {
-			panic(fmt.Errorf("error creating %s: %v", e.Path+"/kubeconfig.json", err))
+			panic(fmt.Errorf("error creating %s: %v", path, err))
 		}
 	}
 }
 
 func (e *OcEnv) ensureFile(filename string) (file *os.File) {
+	filename = filepath.Clean(filename)
 	if _, err := os.Stat(filename); errors.Is(err, os.ErrNotExist) {
-		file, err = os.Create(filename)
+		file, err = os.Create(filename) //#nosec G304 -- Potential file inclusion via variable
 		if err != nil {
 			log.Fatalf("Can't create file %s: %v", filename, err)
 		}

@@ -1,6 +1,7 @@
 package get
 
 import (
+	"fmt"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -31,5 +32,9 @@ func NewCmdGet(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 }
 
 func help(cmd *cobra.Command, _ []string) {
-	cmd.Help()
+	err := cmd.Help()
+	if err != nil {
+		fmt.Println("Error while calling cmd.Help(): ", err.Error())
+		return
+	}
 }

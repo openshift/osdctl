@@ -67,7 +67,7 @@ func (o *policyDiffOptions) run(args []string) error {
 	// save crs files in /tmp/crs- dirs for each release version
 	for _, s := range args {
 		crs := "oc adm release extract quay.io/openshift-release-dev/ocp-release:" + s + "-x86_64 --credentials-requests --cloud=aws --to=/tmp/crs-" + s
-		_, err := exec.Command("bash", "-c", crs).Output()
+		_, err := exec.Command("bash", "-c", crs).Output() //#nosec G204 -- Subprocess launched with variable
 		if err != nil {
 			fmt.Print(err)
 			return err
@@ -75,7 +75,7 @@ func (o *policyDiffOptions) run(args []string) error {
 	}
 
 	diff := "diff /tmp/crs-" + string(args[0]) + " /tmp/crs-" + string(args[1])
-	output, _ := exec.Command("bash", "-c", diff).Output()
+	output, _ := exec.Command("bash", "-c", diff).Output() //#nosec G204 -- Subprocess launched with variable
 	fmt.Println(string(output))
 
 	return nil

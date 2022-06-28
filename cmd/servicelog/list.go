@@ -20,7 +20,11 @@ var listCmd = &cobra.Command{
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
-			cmd.Help()
+			err := cmd.Help()
+			if err != nil {
+				return fmt.Errorf("error calling cmd.Help(): %w", err)
+
+			}
 			return fmt.Errorf("cluster-identifier was not provided. please provide a cluster id, UUID, or name")
 		}
 
@@ -49,7 +53,10 @@ var listCmd = &cobra.Command{
 
 			err = dump.Pretty(os.Stdout, response.Bytes())
 			if err != nil {
-				cmd.Help()
+				err := cmd.Help()
+				if err != nil {
+					return err
+				}
 				return err
 			}
 		}

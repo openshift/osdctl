@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	routev1 "github.com/openshift/api/route/v1"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	gcpv1alpha1 "github.com/openshift/gcp-project-operator/pkg/apis"
@@ -81,5 +82,8 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 }
 
 func help(cmd *cobra.Command, _ []string) {
-	cmd.Help()
+	err := cmd.Help()
+	if err != nil {
+		fmt.Println("Error while printing help: ", err.Error())
+	}
 }

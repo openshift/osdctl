@@ -89,7 +89,10 @@ func (o *completionOptions) run(cmd *cobra.Command, args []string) error {
 // Followed the trick https://github.com/kubernetes/kubectl/blob/master/pkg/cmd/completion/completion.go#L145.
 func genCompletionZsh(out io.Writer, osdctl *cobra.Command) error {
 	zshHead := "#compdef osdctl\n"
-	out.Write([]byte(zshHead))
+	_, err := out.Write([]byte(zshHead))
+	if err != nil {
+		return err
+	}
 
 	zshInitialization := `
 __osdctl_bash_source() {
@@ -191,11 +194,20 @@ __osdctl_convert_bash_to_zsh() {
 	-e "s/\\\$(type${RWORD}/\$(__osdctl_type/g" \
 	<<'BASH_COMPLETION_EOF'
 `
-	out.Write([]byte(zshInitialization))
+	_, err = out.Write([]byte(zshInitialization))
+	if err != nil {
+		return err
+	}
 
 	buf := new(bytes.Buffer)
-	osdctl.GenBashCompletion(buf)
-	out.Write(buf.Bytes())
+	err = osdctl.GenBashCompletion(buf)
+	if err != nil {
+		return err
+	}
+	_, err = out.Write(buf.Bytes())
+	if err != nil {
+		return err
+	}
 
 	zshTail := `
 BASH_COMPLETION_EOF
@@ -203,6 +215,9 @@ BASH_COMPLETION_EOF
 
 __osdctl_bash_source <(__osdctl_convert_bash_to_zsh)
 `
-	out.Write([]byte(zshTail))
+	_, err = out.Write([]byte(zshTail))
+	if err != nil {
+		return err
+	}
 	return nil
 }

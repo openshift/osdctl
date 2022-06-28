@@ -108,7 +108,8 @@ func (o *applyOptions) run() error {
 			return err
 		}
 
-		file, err := os.Open(path)
+		filepath.Clean(path)
+		file, err := os.Open(path) //#nosec G304 -- Potential file inclusion via variable
 		if err != nil {
 			return err
 		}

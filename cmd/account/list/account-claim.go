@@ -81,7 +81,7 @@ func (o *listAccountClaimOptions) run() error {
 	var matched bool
 	p := printer.NewTablePrinter(o.IOStreams.Out, 20, 1, 3, ' ')
 	p.AddRow([]string{"Namespace", "Name", "State", "Account", "AWS OU"})
-	for _, claim := range claims.Items {
+	for i, claim := range claims.Items {
 		if o.state != "" && string(claim.Status.State) != o.state {
 			continue
 		}
@@ -104,7 +104,7 @@ func (o *listAccountClaimOptions) run() error {
 				return err
 			}
 
-			return resourcePrinter.PrintObj(&claim, o.Out)
+			return resourcePrinter.PrintObj(&claims.Items[i], o.Out)
 		}
 	}
 	return nil

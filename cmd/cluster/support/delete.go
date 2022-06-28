@@ -105,7 +105,11 @@ func (o *deleteOptions) run() error {
 	}
 
 	// confirmSend prompt to confirm
-	confirmSend()
+	err = confirmSend()
+	if err != nil {
+		fmt.Println("failed to confirmSend(): ", err.Error())
+		return err
+	}
 
 	// Get cluster resource
 	clusterResource := connection.ClustersMgmt().V1().Clusters().Cluster(o.clusterID)

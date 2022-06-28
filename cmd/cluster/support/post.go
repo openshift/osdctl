@@ -124,7 +124,11 @@ func (o *postOptions) run() error {
 	}
 
 	// confirmSend prompt to confirm
-	confirmSend()
+	err = confirmSend()
+	if err != nil {
+		fmt.Println("failed to confirmSend(): ", err.Error())
+		return err
+	}
 
 	// Get cluster resource
 	clusterResource := connection.ClustersMgmt().V1().Clusters().Cluster(o.clusterID)
@@ -166,7 +170,10 @@ func createPostRequest(ocmClient *sdk.Connection, cluster *v1.Cluster) (request 
 	}
 
 	// pass template as `--body` of API call
-	arguments.ApplyBodyFlag(request, template)
+	err = arguments.ApplyBodyFlag(request, template)
+	if err != nil {
+		return nil, fmt.Errorf("cannot apply body flag '%s'", err)
+	}
 
 	return request, nil
 }
@@ -194,7 +201,7 @@ func accessFile(filePath string) ([]byte, error) {
 
 	// when template is file on disk
 	if utils.FileExists(filePath) {
-		file, err := ioutil.ReadFile(filePath)
+		file, err := ioutil.ReadFile(filePath) //#nosec G304 -- filePath cannot be constant
 		if err != nil {
 			return file, fmt.Errorf("cannot read the file.\nError: %q", err)
 		}
