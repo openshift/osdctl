@@ -49,7 +49,7 @@ AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (also AWS_SESSION_TOKEN for STS credent
 are set correctly before execution.
 
 # Verify that essential openshift domains are reachable from a given SUBNET_ID
-osdctl network verify-egress --subnet-id $(SUBNET_ID) --image-id $(IMAGE_ID)`,
+osdctl network verify-egress --subnet-id $(SUBNET_ID) --region $(AWS_REGION)`,
 		Run: func(cmd *cobra.Command, args []string) {
 			runEgressTest(config)
 			},
