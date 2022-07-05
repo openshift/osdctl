@@ -13,9 +13,9 @@ import (
 )
 
 var (
-	defaultTags            = map[string]string{"osd-network-verifier": "owned", "red-hat-managed": "true", "Name": "osd-network-verifier"}
-	regionEnvVarStr string = "AWS_REGION"
-	regionDefault   string = "us-east-1"
+	defaultTags     = map[string]string{"osd-network-verifier": "owned", "red-hat-managed": "true", "Name": "osd-network-verifier"}
+	regionEnvVarStr = "AWS_REGION"
+	regionDefault   = "us-east-1"
 )
 
 type egressConfig struct {
@@ -52,7 +52,7 @@ are set correctly before execution.
 osdctl network verify-egress --subnet-id $(SUBNET_ID) --region $(AWS_REGION)`,
 		Run: func(cmd *cobra.Command, args []string) {
 			runEgressTest(config)
-			},
+		},
 	}
 
 	validateEgressCmd.Flags().StringVar(&config.vpcSubnetID, "subnet-id", "", "source subnet ID")
@@ -75,32 +75,32 @@ osdctl network verify-egress --subnet-id $(SUBNET_ID) --region $(AWS_REGION)`,
 
 func runEgressTest(config egressConfig) {
 
-			// ctx
-			ctx := context.TODO()
+	// ctx
+	ctx := context.TODO()
 
-			// Create logger
-			builder := ocmlog.NewStdLoggerBuilder()
-			builder.Debug(config.debug)
-			logger, err := builder.Build()
-			if err != nil {
-				fmt.Printf("Unable to build logger: %s\n", err.Error())
-				os.Exit(1)
-			}
+	// Create logger
+	builder := ocmlog.NewStdLoggerBuilder()
+	builder.Debug(config.debug)
+	logger, err := builder.Build()
+	if err != nil {
+		fmt.Printf("Unable to build logger: %s\n", err.Error())
+		os.Exit(1)
+	}
 
-			logger.Info(ctx, "Using region: %s", config.region)
-			creds := credentials.NewStaticCredentialsProvider(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), os.Getenv("AWS_SESSION_TOKEN"))
-			cli, err := cloudclient.NewClient(ctx, logger, creds, config.region, config.instanceType, config.cloudTags)
-			if err != nil {
-				logger.Error(ctx, err.Error())
-				os.Exit(1)
-			}
+	logger.Info(ctx, "Using region: %s", config.region)
+	creds := credentials.NewStaticCredentialsProvider(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), os.Getenv("AWS_SESSION_TOKEN"))
+	cli, err := cloudclient.NewClient(ctx, logger, creds, config.region, config.instanceType, config.cloudTags)
+	if err != nil {
+		logger.Error(ctx, err.Error())
+		os.Exit(1)
+	}
 
-			out := cli.ValidateEgress(ctx, config.vpcSubnetID, config.cloudImageID, config.kmsKeyID, config.timeout)
-			out.Summary()
-			if !out.IsSuccessful() {
-				logger.Error(ctx, "Failure!")
-				os.Exit(1)
-			}
+	out := cli.ValidateEgress(ctx, config.vpcSubnetID, config.cloudImageID, config.kmsKeyID, config.timeout)
+	out.Summary()
+	if !out.IsSuccessful() {
+		logger.Error(ctx, "Failure!")
+		os.Exit(1)
+	}
 
 	logger.Info(ctx, "Success")
 
