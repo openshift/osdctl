@@ -1,7 +1,6 @@
 package support
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -86,30 +85,18 @@ func (o *postOptions) complete(cmd *cobra.Command, args []string) error {
 
 func (o *postOptions) run() error {
 
-	ctx := context.Background()
-
 	// Parse the given JSON template provided via '-t' flag
 	// and load it into the LimitedSupport variable
 	readTemplate()
 
-	// Create an OCM client to talk to the cluster API
-	token := os.Getenv("OCM_TOKEN")
-	if token == "" {
-		ocmToken, err := ctlutil.GetOCMAccessToken()
-		if err != nil {
-			log.Fatalf("OCM token not set. Please configure by using the OCM_TOKEN environment variable or the ocm cli")
+	//create connection to sdk
+	connection := ctlutil.CreateConnection()
+	defer func() {
+		if err := connection.Close(); err != nil {
+			fmt.Printf("Cannot close the connection: %q\n", err)
 			os.Exit(1)
 		}
-		token = *ocmToken
-	}
-	connection, err := sdk.NewConnectionBuilder().
-		Tokens(token).
-		Build()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't build connection: %v\n", err)
-		os.Exit(1)
-	}
-	defer connection.Close()
+	}()
 
 	// Print limited support template to be sent
 	fmt.Printf("The following limited support reason will be sent to %s:\n", o.clusterID)
@@ -124,16 +111,18 @@ func (o *postOptions) run() error {
 	}
 
 	// confirmSend prompt to confirm
-	confirmSend()
+	err := confirmSend()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "There was an issue with the confirmation: %v\n", err)
+		os.Exit(1)
+	}
 
-	// Get cluster resource
-	clusterResource := connection.ClustersMgmt().V1().Clusters().Cluster(o.clusterID)
-	clusterResponse, err := clusterResource.Get().SendContext(ctx)
+	//getting the cluster
+	cluster, err := ctlutil.GetCluster(connection, o.clusterID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't retrieve cluster: %v\n", err)
 		os.Exit(1)
 	}
-	cluster := clusterResponse.Body()
 
 	// postRequest calls createPostRequest and take in client and clustersmgmt/v1.cluster object
 	postRequest, err := createPostRequest(connection, cluster)
@@ -166,8 +155,10 @@ func createPostRequest(ocmClient *sdk.Connection, cluster *v1.Cluster) (request 
 	}
 
 	// pass template as `--body` of API call
-	arguments.ApplyBodyFlag(request, template)
-
+	err = arguments.ApplyBodyFlag(request, template)
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse template '%s': %v", template, err)
+	}
 	return request, nil
 }
 

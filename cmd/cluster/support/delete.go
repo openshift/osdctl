@@ -1,7 +1,6 @@
 package support
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -78,26 +77,14 @@ func (o *deleteOptions) complete(cmd *cobra.Command, args []string) error {
 
 func (o *deleteOptions) run() error {
 
-	ctx := context.Background()
-
 	// Create an OCM client to talk to the cluster API
-	token := os.Getenv("OCM_TOKEN")
-	if token == "" {
-		ocmToken, err := ctlutil.GetOCMAccessToken()
-		if err != nil {
-			log.Fatalf("OCM token not set. Please configure by using the OCM_TOKEN environment variable or the ocm cli")
+	connection := ctlutil.CreateConnection()
+	defer func() {
+		if err := connection.Close(); err != nil {
+			fmt.Printf("Cannot close the connection: %q\n", err)
 			os.Exit(1)
 		}
-		token = *ocmToken
-	}
-	connection, err := sdk.NewConnectionBuilder().
-		Tokens(token).
-		Build()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't build connection: %v\n", err)
-		os.Exit(1)
-	}
-	defer connection.Close()
+	}()
 
 	// Stop here if dry-run
 	if isDryRun {
@@ -105,16 +92,18 @@ func (o *deleteOptions) run() error {
 	}
 
 	// confirmSend prompt to confirm
-	confirmSend()
+	err := confirmSend()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "There was an issue with the confirmation: %v\n", err)
+		os.Exit(1)
+	}
 
-	// Get cluster resource
-	clusterResource := connection.ClustersMgmt().V1().Clusters().Cluster(o.clusterID)
-	clusterResponse, err := clusterResource.Get().SendContext(ctx)
+	//getting the cluster
+	cluster, err := ctlutil.GetCluster(connection, o.clusterID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't retrieve cluster: %v\n", err)
 		os.Exit(1)
 	}
-	cluster := clusterResponse.Body()
 
 	deleteRequest, err := createDeleteRequest(connection, cluster, o.limitedSupportReasonID)
 	if err != nil {

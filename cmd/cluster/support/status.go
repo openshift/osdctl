@@ -1,30 +1,17 @@
 package support
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"os"
 
-	sdk "github.com/openshift-online/ocm-sdk-go"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/printer"
-	"github.com/openshift/osdctl/pkg/utils"
+	ctlutil "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
-	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
-
-type limitedSupportReasonItem struct {
-	ID      string
-	Summary string
-	Details string
-}
-
-// supportcheck defines the struct for running supportCheck command
-// This command requires the ocm API Token https://cloud.redhat.com/openshift/token to be available in the OCM_TOKEN env variable.
 
 type statusOptions struct {
 	output    string
@@ -72,51 +59,29 @@ func (o *statusOptions) complete(cmd *cobra.Command, args []string) error {
 }
 
 func (o *statusOptions) run() error {
-	// Create a context:
-	ctx := context.Background()
-	// Ocm token
-	token := os.Getenv("OCM_TOKEN")
-	if token == "" {
-		ocmToken, err := utils.GetOCMAccessToken()
-		if err != nil {
-			log.Fatalf("OCM token not set. Please configure by using the OCM_TOKEN environment variable or the ocm cli")
+
+	//create connection to sdk
+	connection := ctlutil.CreateConnection()
+	defer func() {
+		if err := connection.Close(); err != nil {
+			fmt.Printf("Cannot close the connection: %q\n", err)
 			os.Exit(1)
 		}
-		token = *ocmToken
-	}
-	connection, err := sdk.NewConnectionBuilder().
-		Tokens(token).
-		Build()
+	}()
+
+	//getting the cluster
+	cluster, err := ctlutil.GetCluster(connection, o.clusterID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't build connection: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Can't retrieve cluster: %v\n", err)
 		os.Exit(1)
 	}
-	defer connection.Close()
 
-	// Get the client for the resource that manages the collection of clusters:
-	collection := connection.ClustersMgmt().V1().Clusters()
-	// Get cluster resource
-	resource := collection.Cluster(o.clusterID).LimitedSupportReasons()
-	// Send the request to retrieve the list of limited support reasons:
-	response, err := resource.List().SendContext(ctx)
+	//getting the limited support reasons for the cluster
+	clusterLimitedSupportReasons, err := ctlutil.GetClusterLimitedSupportReasons(connection, cluster.ID())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't retrieve cluster limited support reasons: %v\n", err)
 		os.Exit(1)
 	}
-
-	reasons, _ := response.GetItems()
-
-	var clusterLimitedSupportReasons []*limitedSupportReasonItem
-
-	reasons.Each(func(limitedSupportReason *cmv1.LimitedSupportReason) bool {
-		clusterLimitedSupportReason := limitedSupportReasonItem{
-			ID:      limitedSupportReason.ID(),
-			Summary: limitedSupportReason.Summary(),
-			Details: limitedSupportReason.Details(),
-		}
-		clusterLimitedSupportReasons = append(clusterLimitedSupportReasons, &clusterLimitedSupportReason)
-		return true
-	})
 
 	// No reasons found, cluster is fully supported
 	if len(clusterLimitedSupportReasons) == 0 {
