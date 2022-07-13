@@ -89,13 +89,13 @@ func runEgressTest(config egressConfig) {
 
 	logger.Info(ctx, "Using region: %s", config.region)
 	creds := credentials.NewStaticCredentialsProvider(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), os.Getenv("AWS_SESSION_TOKEN"))
-	client, err := cloudclient.NewClient(ctx, logger, creds, config.region, config.instanceType, config.cloudTags)
+	verifierClient, err := cloudclient.NewClient(ctx, logger, creds, config.region, config.instanceType, config.cloudTags)
 	if err != nil {
 		logger.Error(ctx, err.Error())
 		os.Exit(1)
 	}
 
-	out := client.ValidateEgress(ctx, config.vpcSubnetID, config.cloudImageID, config.kmsKeyID, config.timeout)
+	out := verifierClient.ValidateEgress(ctx, config.vpcSubnetID, config.cloudImageID, config.kmsKeyID, config.timeout)
 	out.Summary()
 	if !out.IsSuccessful() {
 		logger.Error(ctx, "Failure!")
