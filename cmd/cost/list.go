@@ -260,7 +260,11 @@ func (o OUCost) getSum() (sum decimal.Decimal, unit string, err error) {
 }
 
 func (o OUCost) printCostPerAccount(awsClient awsprovider.Client) {
-	o.getCost(awsClient)
+	err := o.getCost(awsClient)
+	if err != nil {
+		fmt.Println("Error while calling getCost(): ", err.Error())
+		return
+	}
 
 	for _, accountCost := range o.Costs {
 		resp := listAccountCostResponse{
@@ -273,7 +277,11 @@ func (o OUCost) printCostPerAccount(awsClient awsprovider.Client) {
 			fmt.Printf("%s,%s,%s,%s\n", *o.OU.Id, accountCost.AccountID, accountCost.Cost.StringFixed(2), accountCost.Unit)
 			continue
 		}
-		outputflag.PrintResponse(o.options.output, resp)
+		err := outputflag.PrintResponse(o.options.output, resp)
+		if err != nil {
+			fmt.Println("Error while printing response: ", err.Error())
+			return
+		}
 	}
 	sum, unit, err := o.getSum() // Sum up account costs
 	if err != nil {
@@ -305,5 +313,9 @@ func printCostList(cost decimal.Decimal, unit string, OU *organizations.Organiza
 		return
 	}
 
-	outputflag.PrintResponse(ops.output, resp)
+	err := outputflag.PrintResponse(ops.output, resp)
+	if err != nil {
+		fmt.Println("Error while printing response: ", err.Error())
+		return
+	}
 }

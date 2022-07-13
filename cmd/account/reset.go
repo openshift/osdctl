@@ -101,10 +101,10 @@ func (o *resetOptions) run() error {
 	}); err != nil {
 		return err
 	}
-	for _, secret := range secrets.Items {
+	for i, secret := range secrets.Items {
 		if strings.HasPrefix(secret.Name, o.accountName) {
 			fmt.Fprintln(o.Out, "Deleting secret "+secret.Name)
-			if err := o.kubeCli.Delete(ctx, &secret, &client.DeleteOptions{}); err != nil {
+			if err := o.kubeCli.Delete(ctx, &secrets.Items[i], &client.DeleteOptions{}); err != nil {
 
 				if apierrors.IsNotFound(err) {
 					continue

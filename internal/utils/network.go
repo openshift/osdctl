@@ -45,7 +45,9 @@ func IsValidUrl(toTest string) bool {
 }
 
 func CurlThis(webpage string) (body []byte, err error) {
-	resp, err := http.Get(webpage)
+	// For the following line we have to disable the gosec linter, otherwise G107 will get thrown
+	// G107 is about handling non const URLs. We are reading a URL from a file. This can be malicious.
+	resp, err := http.Get(webpage) //#nosec G107 -- url cannot be constant
 	defer func() {
 		err = resp.Body.Close()
 	}()

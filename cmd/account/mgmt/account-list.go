@@ -136,7 +136,11 @@ func (o *accountListOptions) run() error {
 			Accounts: value,
 		}
 
-		outputflag.PrintResponse(o.output, resp)
+		err := outputflag.PrintResponse(o.output, resp)
+		if err != nil {
+			fmt.Println("Error while printing response: ", err.Error())
+			return err
+		}
 
 	}
 

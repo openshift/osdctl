@@ -94,8 +94,8 @@ func (o *deleteOptions) run() error {
 	// confirmSend prompt to confirm
 	err := confirmSend()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "There was an issue with the confirmation: %v\n", err)
-		os.Exit(1)
+		fmt.Println("failed to confirmSend(): ", err.Error())
+		return err
 	}
 
 	//getting the cluster

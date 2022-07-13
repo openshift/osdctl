@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"github.com/spf13/cobra"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -15,7 +16,11 @@ func newCmdOptions(streams genericclioptions.IOStreams) *cobra.Command {
 		DisableAutoGenTag:     true,
 		DisableFlagsInUseLine: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Usage()
+			err := cmd.Usage()
+			if err != nil {
+				fmt.Println("Error while calling cmd.Usage(): ", err.Error())
+				return
+			}
 		},
 	}
 

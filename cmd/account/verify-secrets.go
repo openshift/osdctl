@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	verifySecretsUsage = "The verify-secrets command should have only 0 or 1 arguments"
+	verifySecretsUsage = "The verify-secrets command should have only 0 or 1 arguments" //#nosec G101 -- not a secret
 )
 
 // newCmdVerifySecrets implements the verify-secrets command

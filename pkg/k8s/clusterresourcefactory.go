@@ -13,6 +13,7 @@ import (
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	"github.com/openshift/osdctl/cmd/common"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -41,7 +42,7 @@ func (factory *ClusterResourceFactoryOptions) AttachCobraCliFlags(cmd *cobra.Com
 		"The namespace to keep AWS accounts. The default value is aws-account-operator.")
 	cmd.Flags().StringVarP(&factory.AccountName, "account-name", "a", "", "The AWS account CR we need to create a temporary AWS console URL for")
 	cmd.Flags().StringVarP(&factory.AccountID, "account-id", "i", "", "The AWS account ID we need to create AWS credentials for -- This argument will not work for CCS accounts")
-	cmd.Flags().StringVarP(&factory.ClusterID, "cluster-id", "C", "", "The Internal Cluster ID from Hive to create AWS console URL for")
+	cmd.Flags().StringVarP(&factory.ClusterID, "cluster-id", "C", "", "The Internal Cluster ID/External Cluster ID/ Cluster Name from Hive to create AWS console URL for")
 
 	factory.Awscloudfactory.AttachCobraCliFlags(cmd)
 }
@@ -93,6 +94,21 @@ func (factory *ClusterResourceFactoryOptions) GetCloudProvider(verbose bool) (aw
 	ctx := context.TODO()
 	var accountClaim *awsv1alpha1.AccountClaim
 	if factory.ClusterID != "" {
+		// Create an OCM client to talk to the cluster API
+		// the user has to be logged in (e.g. 'ocm login')
+		ocmClient := utils.CreateConnection()
+		defer func() {
+			if err := ocmClient.Close(); err != nil {
+				fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
+			}
+		}()
+
+		clusters := utils.GetClusters(ocmClient, []string{factory.ClusterID})
+		if len(clusters) != 1 {
+			return nil, fmt.Errorf("unexpected number of clusters matched input. Expected 1 got %d", len(clusters))
+
+		}
+		factory.ClusterID = clusters[0].ID()
 		var err error
 		accountClaim, err = GetAccountClaimFromClusterID(ctx, factory.KubeCli, factory.ClusterID)
 		if err != nil {

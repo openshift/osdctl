@@ -302,7 +302,7 @@ func TestGetSignInToken(t *testing.T) {
 			title: "Server returns 200 but bad body format",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(200)
-				w.Write([]byte("foo"))
+				w.Write([]byte("foo")) //#nosec G104 -- Errors unhandled, just a test
 			},
 			creds:       testCreds,
 			token:       "",
@@ -320,7 +320,7 @@ func TestGetSignInToken(t *testing.T) {
 
 				resp := awsSignInTokenResponse{SigninToken: creds.SessionID + creds.SessionKey + creds.SessionToken}
 				data, _ := json.Marshal(resp)
-				w.Write(data)
+				w.Write(data) //#nosec G104 -- Errors unhandled, just a test
 			},
 			creds:       testCreds,
 			token:       "foobarbuz",
@@ -393,7 +393,7 @@ func TestRequestSignedURL(t *testing.T) {
 			title: "Server returns 200 but bad body format",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(200)
-				w.Write([]byte("foo"))
+				w.Write([]byte("foo")) //#nosec G104 -- Errors unhandled, just a test
 			},
 			creds:       testCreds,
 			token:       "",
@@ -411,7 +411,7 @@ func TestRequestSignedURL(t *testing.T) {
 
 				resp := awsSignInTokenResponse{SigninToken: *creds.AccessKeyId + *creds.SecretAccessKey + *creds.SessionToken}
 				data, _ := json.Marshal(resp)
-				w.Write(data)
+				w.Write(data) //#nosec G104 -- just a test file
 			},
 			creds:       testCreds,
 			token:       "foobarbuz",

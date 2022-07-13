@@ -119,7 +119,11 @@ func (o *ownerOptions) run() error {
 
 		if response.Total() != 1 {
 			fmt.Println("Found users:")
-			v1.MarshalAccountList(response.Items().Slice(), os.Stdout)
+			err := v1.MarshalAccountList(response.Items().Slice(), os.Stdout)
+			if err != nil {
+				fmt.Println("error while marshalling account list: ", err.Error())
+				return err
+			}
 			// newline is required as MarshalAccountList doesn't enter a newline once the object is written down
 			fmt.Println()
 			return fmt.Errorf("given username '%s' is not unique, found '%d' matches", accountName, response.Total())

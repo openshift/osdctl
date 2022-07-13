@@ -1,6 +1,7 @@
 package servicelog
 
 import (
+	"fmt"
 	"github.com/spf13/cobra"
 )
 
@@ -9,7 +10,11 @@ func NewCmdServiceLog() *cobra.Command {
 		Use:   "servicelog",
 		Short: "OCM/Hive Service log",
 		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Help()
+			err := cmd.Help()
+			if err != nil {
+				fmt.Println("Error calling cmd.Help(): ", err.Error())
+				return
+			}
 		},
 	}
 

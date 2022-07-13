@@ -179,6 +179,7 @@ func RefreshIAMPolicy(awsClient Client, federatedRole *awsv1alpha1.AWSFederatedR
 
 	// Detach all removed polices from role
 	for _, policyArn := range policyArnsToDetach {
+		policyArn := policyArn // fix for implicit memory aliasing
 		if _, err := awsClient.DetachRolePolicy(&iam.DetachRolePolicyInput{
 			PolicyArn: &policyArn,
 			RoleName:  &roleName,
@@ -195,6 +196,7 @@ func RefreshIAMPolicy(awsClient Client, federatedRole *awsv1alpha1.AWSFederatedR
 
 	// Attach all needed polices to role
 	for _, policyArn := range policyArnsToAttach {
+		policyArn := policyArn // fix for implicit memory aliasing
 		if _, err := awsClient.AttachRolePolicy(&iam.AttachRolePolicyInput{
 			RoleName:  &roleName,
 			PolicyArn: &policyArn,

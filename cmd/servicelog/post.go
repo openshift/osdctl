@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -224,8 +225,10 @@ func confirmSend() error {
 
 // accessTemplate returns the contents of a local file or url, and any errors encountered
 func accessFile(filePath string) ([]byte, error) {
+	filePath = filepath.Clean(filePath)
 	if utils.FileExists(filePath) {
-		file, err := ioutil.ReadFile(filePath) // template is file on the disk
+		// template is file on the disk
+		file, err := ioutil.ReadFile(filePath) //#nosec G304 -- Potential file inclusion via variable
 		if err != nil {
 			return file, fmt.Errorf("cannot read the file.\nError: %q", err)
 		}

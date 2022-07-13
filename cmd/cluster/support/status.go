@@ -96,7 +96,11 @@ func (o *statusOptions) run() error {
 	}
 	// Add empty row for readability
 	table.AddRow([]string{})
-	table.Flush()
+	err = table.Flush()
+	if err != nil {
+		fmt.Println("error while flushing table: ", err.Error())
+		return err
+	}
 
 	return nil
 }

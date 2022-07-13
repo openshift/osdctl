@@ -1,6 +1,7 @@
 package aao
 
 import (
+	"fmt"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
@@ -20,5 +21,8 @@ func NewCmdAao(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 }
 
 func help(cmd *cobra.Command, _ []string) {
-	cmd.Help()
+	err := cmd.Help()
+	if err != nil {
+		fmt.Println("Error while calling cmd.Help()", err.Error())
+	}
 }

@@ -94,16 +94,21 @@ func upgrade(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		defer os.RemoveAll(dir)
+		defer func(path string) {
+			err := os.RemoveAll(path)
+			if err != nil {
+				fmt.Println("Error removing directory ", path)
+			}
+		}(dir)
 
 		tmpFilePath := filepath.Join(dir, rootName)
 
-		tmpFile, err := os.OpenFile(tmpFilePath, os.O_CREATE|os.O_RDWR, 0755)
+		tmpFile, err := os.OpenFile(tmpFilePath, os.O_CREATE|os.O_RDWR, 0700) //#nosec G304|G302 -- tmpFilePath cannot be constant
 		if err != nil {
 			return err
 		}
 
-		_, err = io.Copy(tmpFile, tr)
+		_, err = io.Copy(tmpFile, tr) //#nosec G110 -- source is trusted, so decompression bomb is unlikely
 		if err != nil {
 			return err
 		}
@@ -114,7 +119,7 @@ func upgrade(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		os.Rename(tmpFilePath, filepath.Join(filepath.Dir(exe), rootName))
+		err = os.Rename(tmpFilePath, filepath.Join(filepath.Dir(exe), rootName))
 		if err != nil {
 			return err
 		}
