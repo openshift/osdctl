@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"fmt"
 	"github.com/openshift/osdctl/cmd/cluster/support"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	k8spkg "github.com/openshift/osdctl/pkg/k8s"
@@ -10,7 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// NewCmdCluster implements the base cluster health command
+// NewCmdCluster implements the cluster utility
 func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	clusterCmd := &cobra.Command{
 		Use:               "cluster",
@@ -28,7 +29,10 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 }
 
 func help(cmd *cobra.Command, _ []string) {
-	cmd.Help()
+	err := cmd.Help()
+	if err != nil {
+		fmt.Println("Error while calling cmd.Help(): ", err.Error())
+	}
 }
 
 func CompleteValidation(o *k8spkg.ClusterResourceFactoryOptions, io genericclioptions.IOStreams) error {

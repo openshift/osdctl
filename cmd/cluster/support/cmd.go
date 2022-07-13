@@ -1,6 +1,7 @@
 package support
 
 import (
+	"fmt"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -28,5 +29,9 @@ func NewCmdSupport(streams genericclioptions.IOStreams, flags *genericclioptions
 }
 
 func help(cmd *cobra.Command, _ []string) {
-	cmd.Help()
+	err := cmd.Help()
+	if err != nil {
+		fmt.Println("error in support command: ", err.Error())
+		return
+	}
 }

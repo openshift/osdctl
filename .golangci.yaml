@@ -1,0 +1,17 @@
+run:
+  # Our CI expects a vendor directory, hence we have to use -mod=readonly here as well.
+  modules-download-mode: readonly
+
+issues:
+  # on default, golangci-lint excludes gosec. Hence, we have to
+  # explicitly disable the exclude-use-default: https://github.com/golangci/golangci-lint/issues/1504
+  exclude-use-default: false
+
+# individual linter configs go here
+linters-settings:
+
+# default linters are enabled `golangci-lint help linters`
+linters:
+  disable-all: true
+  enable:
+    - gosec

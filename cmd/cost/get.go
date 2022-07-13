@@ -125,7 +125,11 @@ func (o *getOptions) run() error {
 		}
 	}
 
-	o.printCostGet(cost, unit, o, OU)
+	err = o.printCostGet(cost, unit, o, OU)
+	if err != nil {
+		log.Println("Error calling printCostGet(): ", err.Error())
+		return err
+	}
 	return nil
 }
 
@@ -379,7 +383,11 @@ func (o *getOptions) printCostGet(cost decimal.Decimal, unit string, ops *getOpt
 		fmt.Println("Cost of all accounts under OU:")
 	}
 
-	outputflag.PrintResponse(o.output, resp)
+	err := outputflag.PrintResponse(o.output, resp)
+	if err != nil {
+		fmt.Println("Error calling PrintResponse(): ", err.Error())
+		return err
+	}
 
 	return nil
 }

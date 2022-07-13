@@ -40,6 +40,7 @@ func FileExists(path string) bool {
 // along with any necessary parents, and returns nil,
 // or else returns an error.
 func CreateFile(filepath string) error {
+	filepath = osFile.Clean(filepath)
 	// Avoid file truncate and return error instead
 	if FileExists(filepath) {
 		return fmt.Errorf("file %s already exists", filepath)
@@ -51,12 +52,15 @@ func CreateFile(filepath string) error {
 			return fmt.Errorf("failed to create directory %v", directory)
 		}
 	}
-
-	file, err := os.Create(filepath)
+	file, err := os.Create(filepath) //#nosec G304 -- ignore potential file inclusion via variable
 	if err != nil {
 		return fmt.Errorf("failed to create file %v: %w", filepath, err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			fmt.Println("Error closing file", filepath)
+		}
+	}()
 
 	return nil
 }

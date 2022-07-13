@@ -208,7 +208,8 @@ func (o *generateSecretOptions) run() error {
 		if err != nil {
 			return err
 		}
-		return ioutil.WriteFile(outputPath, []byte(secret), 0644)
+		// set permission to 0600 to ensure, only owner has access
+		return ioutil.WriteFile(outputPath, []byte(secret), 0600)
 	}
 
 	return nil

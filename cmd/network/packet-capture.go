@@ -277,16 +277,19 @@ func desiredPacketCaptureDaemonSet(o *packetCaptureOptions, key types.Namespaced
 }
 
 func copyFilesFromPod(o *packetCaptureOptions, pod *corev1.Pod) error {
-	os.MkdirAll(outputDir, 0755)
+	err := os.MkdirAll(outputDir, 0750)
+	if err != nil {
+		return err
+	}
 	fileName := fmt.Sprintf("%s-%s.pcap", pod.Spec.NodeName, o.startTime.UTC().Format("20060102T150405"))
-	cmd := exec.Command("oc", "cp", pod.Namespace+"/"+pod.Name+":/tmp/capture-output/capture.pcap", outputDir+"/"+fileName)
+	cmd := exec.Command("oc", "cp", pod.Namespace+"/"+pod.Name+":/tmp/capture-output/capture.pcap", outputDir+"/"+fileName) //#nosec G204 -- Subprocess launched with a potential tainted input or cmd arguments
 	var stdBuffer bytes.Buffer
 	mw := io.MultiWriter(os.Stdout, &stdBuffer)
 
 	cmd.Stdout = mw
 	cmd.Stderr = mw
 
-	err := cmd.Run()
+	err = cmd.Run()
 
 	if err != nil {
 		log.Println(stdBuffer.String())
@@ -301,9 +304,9 @@ func waitForPacketCaptureDaemonset(o *packetCaptureOptions, ds *appsv1.DaemonSet
 		tmp := &appsv1.DaemonSet{}
 		key := types.NamespacedName{Name: ds.Name, Namespace: ds.Namespace}
 		if err = o.kubeCli.Get(context.TODO(), key, tmp); err == nil {
-			ready := (tmp.Status.NumberReady > 0 &&
+			ready := tmp.Status.NumberReady > 0 &&
 				tmp.Status.NumberAvailable == tmp.Status.NumberReady &&
-				tmp.Status.NumberReady == tmp.Status.DesiredNumberScheduled)
+				tmp.Status.NumberReady == tmp.Status.DesiredNumberScheduled
 			return ready, nil
 		}
 		return false, err
@@ -338,17 +341,17 @@ func copyFilesFromPacketCapturePods(o *packetCaptureOptions) error {
 	}); err != nil {
 		return err
 	}
-	for _, pod := range pods.Items {
+	for i, pod := range pods.Items {
 		if len(pod.Status.ContainerStatuses) == 0 {
 			continue
 		}
-		err := waitForPacketCaptureContainerRunning(o, &pod)
+		err := waitForPacketCaptureContainerRunning(o, &pods.Items[i])
 		if err != nil {
 			log.Fatalf("Error waiting for pods %v", err)
 			return err
 		}
 		log.Printf("Copying files from %s\n", pod.Name)
-		err = copyFilesFromPod(o, &pod)
+		err = copyFilesFromPod(o, &pods.Items[i])
 		if err != nil {
 			log.Fatalf("error copying files %v", err)
 			return err
@@ -485,7 +488,7 @@ func waitForPacketCapturePod(o *packetCaptureOptions, capturePod *corev1.Pod) er
 		tmp := &corev1.Pod{}
 		key := types.NamespacedName{Name: capturePod.Name, Namespace: capturePod.Namespace}
 		if err = o.kubeCli.Get(context.TODO(), key, tmp); err == nil {
-			ready := (tmp.Status.Phase == corev1.PodRunning)
+			ready := tmp.Status.Phase == corev1.PodRunning
 			return ready, nil
 		}
 		return false, err

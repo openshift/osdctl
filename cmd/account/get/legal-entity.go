@@ -101,12 +101,19 @@ func (o *getLegalEntityOptions) run() error {
 				Id:   account.Spec.LegalEntity.ID,
 			}
 
-			outputflag.PrintResponse(o.output, resp)
+			err := outputflag.PrintResponse(o.output, resp)
+			if err != nil {
+				fmt.Println("Error while printing response: ", err.Error())
+				return err
+			}
 		}
 	}
 
 	// matched account not found
-	fmt.Fprintf(o.IOStreams.Out, "Account matched for AWS Account ID %s not found\n", o.accountID)
+	_, err := fmt.Fprintf(o.IOStreams.Out, "Account matched for AWS Account ID %s not found\n", o.accountID)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
