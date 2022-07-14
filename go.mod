@@ -3,30 +3,30 @@ module github.com/openshift/osdctl
 go 1.16
 
 require (
-	github.com/aws/aws-sdk-go v1.38.35
+	github.com/aws/aws-sdk-go v1.42.20
+	github.com/aws/aws-sdk-go-v2/credentials v1.12.2
 	github.com/coreos/go-semver v0.3.0
 	github.com/deckarep/golang-set v1.7.1
-	github.com/golang/mock v1.5.0
+	github.com/golang/mock v1.6.0
 	github.com/imdario/mergo v0.3.12 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/onsi/gomega v1.16.0
 	github.com/openshift-online/ocm-cli v0.1.59
-	github.com/openshift-online/ocm-sdk-go v0.1.205
+	github.com/openshift-online/ocm-sdk-go v0.1.224
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/openshift/aws-account-operator/pkg/apis v0.0.0-20210611151019-01b1df7a3e9e
 	github.com/openshift/gcp-project-operator v0.0.0-20210906153132-ce9b2425f1a7
 	github.com/openshift/hive v1.0.5
+	github.com/openshift/osd-network-verifier v0.0.0-20220518154805-047e42cfe29f
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.28.0
 	github.com/shopspring/decimal v1.2.0
 	github.com/sirupsen/logrus v1.6.0
-	github.com/spf13/cobra v1.1.3
+	github.com/spf13/cobra v1.4.0
 	github.com/spf13/pflag v1.0.5
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.16.0 // indirect
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba // indirect
-	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.18.5

@@ -17,6 +17,7 @@ func NewCmdNetwork(streams genericclioptions.IOStreams, flags *genericclioptions
 	}
 
 	netCmd.AddCommand(newCmdPacketCapture(streams, flags, client))
+	netCmd.AddCommand(NewCmdValidateEgress())
 	return netCmd
 }
 
