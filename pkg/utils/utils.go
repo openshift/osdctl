@@ -133,20 +133,18 @@ func GetClusterLimitedSupportReasons(connection *sdk.Connection, clusterID strin
 		return nil, fmt.Errorf("Failed to get limited Support Reasons: %s", err)
 	}
 
-	lmtReason := limitedSupportReasons.Items()
+	lmtReason := limitedSupportReasons.Items().Slice()
 
 	var clusterLmtSprReasons []*lmtSprReasonItem
 
-	lmtReason.Each(func(lmtSprReason *cmv1.LimitedSupportReason) bool {
+	for _, reason := range lmtReason {
 		clusterLmtSprReason := lmtSprReasonItem{
-			ID:      lmtSprReason.ID(),
-			Summary: lmtSprReason.Summary(),
-			Details: lmtSprReason.Details(),
+			ID:      reason.ID(),
+			Summary: reason.Summary(),
+			Details: reason.Details(),
 		}
 		clusterLmtSprReasons = append(clusterLmtSprReasons, &clusterLmtSprReason)
-
-		return true
-	})
+	}
 
 	return clusterLmtSprReasons, nil
 }
