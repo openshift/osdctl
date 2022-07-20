@@ -2,12 +2,17 @@ package cluster
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"time"
 
+	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	"github.com/openshift/osdctl/cmd/servicelog"
+	sl "github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -20,6 +25,7 @@ type statusOptions struct {
 	output    string
 	verbose   bool
 	clusterID string
+	days      int
 
 	genericclioptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
@@ -31,8 +37,8 @@ type limitedSupportReasonItem struct {
 	Details string
 }
 
-// newCmdcontext implements the context command to show the current context of a cluster
-func newCmdcontext(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+// newCmdContext implements the context command to show the current context of a cluster
+func newCmdContext(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	ops := newStatusOptions(streams, flags, globalOpts)
 	statusCmd := &cobra.Command{
 		Use:               "context",
@@ -45,6 +51,7 @@ func newCmdcontext(streams genericclioptions.IOStreams, flags *genericclioptions
 		},
 	}
 	statusCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
+	statusCmd.Flags().IntVarP(&ops.days, "days", "d", 30, "Command will display X days of Error SLs sent to the cluster. Days is set to 30 by default")
 
 	return statusCmd
 }
@@ -59,6 +66,10 @@ func newStatusOptions(streams genericclioptions.IOStreams, flags *genericcliopti
 func (o *statusOptions) complete(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
 		return cmdutil.UsageErrorf(cmd, "Provide exactly one cluster ID")
+	}
+
+	if o.days < 1 {
+		return fmt.Errorf("Cannot have a days value lower than 1")
 	}
 
 	// Create OCM client to talk to cluster API
@@ -82,16 +93,9 @@ func (o *statusOptions) complete(cmd *cobra.Command, args []string) error {
 func (o *statusOptions) run() error {
 	// Create a context:
 	ctx := context.Background()
+
 	// Ocm token
-	token := os.Getenv("OCM_TOKEN")
-	if token == "" {
-		ocmToken, err := utils.GetOCMAccessToken()
-		if err != nil {
-			log.Fatalf("OCM token not set. Please configure by using the OCM_TOKEN environment variable or the ocm cli")
-			os.Exit(1)
-		}
-		token = *ocmToken
-	}
+	token := getOCMToken()
 	connection, err := sdk.NewConnectionBuilder().
 		Tokens(token).
 		Build()
@@ -102,22 +106,47 @@ func (o *statusOptions) run() error {
 	defer connection.Close()
 
 	// Get limited support reasons for a cluster
-	collection := connection.ClustersMgmt().V1().Clusters()
-	resource := collection.Cluster(o.clusterID).LimitedSupportReasons()
-	response, err := resource.List().SendContext(ctx)
+	lsResponse, err := getLimitedSupportReasons(connection, ctx, o.clusterID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't retrieve cluster limited support reasons: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Check support status of cluster
-	checkSupportStatus(response)
+	printSupportStatus(lsResponse)
+
+	// Retrieve and Print the Servicelogs for this cluster
+	err = o.printServiceLogs()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Can't retrieve service logs: %v\n", err)
+		os.Exit(1)
+	}
 
 	return nil
 }
 
-// checkSupportStatus reports if a cluster is in limited support or fully supported.
-func checkSupportStatus(response *cmv1.LimitedSupportReasonsListResponse) error {
+func getOCMToken() string {
+	token := os.Getenv("OCM_TOKEN")
+	if token == "" {
+		ocmToken, err := utils.GetOCMAccessToken()
+		if err != nil {
+			log.Fatalf("OCM token not set. Please configure by using the OCM_TOKEN environment variable or the ocm cli")
+			os.Exit(1)
+		}
+		token = *ocmToken
+	}
+	return token
+}
+
+func getLimitedSupportReasons(connection *sdk.Connection, ctx context.Context, clusterID string) (*cmv1.LimitedSupportReasonsListResponse, error) {
+	collection := connection.ClustersMgmt().V1().Clusters()
+	resource := collection.Cluster(clusterID).LimitedSupportReasons()
+	lsResponse, err := resource.List().SendContext(ctx)
+	return lsResponse, err
+}
+
+// printSupportStatus reports if a cluster is in limited support or fully supported.
+func printSupportStatus(response *cmv1.LimitedSupportReasonsListResponse) error {
 	reasons, _ := response.GetItems()
 	var clusterLimitedSupportReasons []*limitedSupportReasonItem
 	reasons.Each(func(limitedSupportReason *cmv1.LimitedSupportReason) bool {
@@ -129,6 +158,10 @@ func checkSupportStatus(response *cmv1.LimitedSupportReasonsListResponse) error 
 		clusterLimitedSupportReasons = append(clusterLimitedSupportReasons, &clusterLimitedSupportReason)
 		return true
 	})
+
+	fmt.Println("============================================================")
+	fmt.Println("Limited Support Status")
+	fmt.Println("============================================================")
 
 	// No reasons found, cluster is fully supported
 	if len(clusterLimitedSupportReasons) == 0 {
@@ -146,4 +179,64 @@ func checkSupportStatus(response *cmv1.LimitedSupportReasonsListResponse) error 
 	table.Flush()
 
 	return nil
+}
+
+func (o *statusOptions) printServiceLogs() error {
+
+	// Get the SLs for the cluster
+	slResponse, err := servicelog.FetchServiceLogs(o.clusterID)
+	if err != nil {
+		return err
+	}
+
+	var serviceLogs sl.ServiceLogShortList
+	err = json.Unmarshal(slResponse.Bytes(), &serviceLogs)
+	if err != nil {
+		fmt.Printf("Failed to unmarshal the SL response %q\n", err)
+		return err
+	}
+
+	// Parsing the relevant servicelogs
+	// - We only care about Error Severity SLs
+	// - We only care about SLs sent in the past 'o.days' days
+	var errorServiceLogs []sl.ServiceLogShort
+	for _, serviceLog := range serviceLogs.Items {
+		if serviceLog.Severity != "Error" {
+			continue
+		}
+
+		// If the days since the SL was sent exceeds o.days days, we're not interested
+		if (time.Since(serviceLog.CreatedAt).Hours() / 24) > float64(o.days) {
+			continue
+		}
+
+		errorServiceLogs = append(errorServiceLogs, serviceLog)
+	}
+
+	fmt.Println("============================================================")
+	fmt.Println("Service Logs with Error Severity sent in the past", o.days, "Days")
+	fmt.Println("============================================================")
+
+	if o.verbose {
+		marshalledSLs, err := json.MarshalIndent(errorServiceLogs, "", "  ")
+		if err != nil {
+			return err
+		}
+		dump.Pretty(os.Stdout, marshalledSLs)
+	} else {
+		// Non verbose only prints the summaries
+		for i, errorServiceLog := range errorServiceLogs {
+			fmt.Printf("%d. %s \n", i, errorServiceLog.Summary)
+		}
+	}
+
+	return nil
+}
+
+func sendRequest(request *sdk.Request) (*sdk.Response, error) {
+	response, err := request.Send()
+	if err != nil {
+		return nil, fmt.Errorf("cannot send request: %q", err)
+	}
+	return response, nil
 }
