@@ -9,7 +9,6 @@ import (
 
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
-	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/internal/support"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	ctlutil "github.com/openshift/osdctl/pkg/utils"
@@ -105,7 +104,7 @@ func (o *deleteOptions) run() error {
 		os.Exit(1)
 	}
 
-	deleteRequest, err := createDeleteRequest(connection, cluster, o.limitedSupportReasonID)
+	deleteRequest, err := createDeleteRequest(connection, cluster.ID(), o.limitedSupportReasonID)
 	if err != nil {
 		fmt.Printf("failed post call %q\n", err)
 	}
@@ -123,11 +122,11 @@ func (o *deleteOptions) run() error {
 }
 
 // createDeleteRequest sets the delete API and returns a request
-func createDeleteRequest(ocmClient *sdk.Connection, cluster *v1.Cluster, reasonID string) (request *sdk.Request, err error) {
+func createDeleteRequest(client SDKConnectionClient, clusterID string, reasonID string) (request *sdk.Request, err error) {
 
-	targetAPIPath := "/api/clusters_mgmt/v1/clusters/" + cluster.ID() + "/limited_support_reasons/" + reasonID
+	targetAPIPath := "/api/clusters_mgmt/v1/clusters/" + clusterID + "/limited_support_reasons/" + reasonID
 
-	request = ocmClient.Delete()
+	request = client.Delete()
 	err = arguments.ApplyPathArg(request, targetAPIPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse API path '%s': %v", targetAPIPath, err)

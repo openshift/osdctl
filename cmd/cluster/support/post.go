@@ -12,7 +12,6 @@ import (
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
-	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/internal/support"
 	"github.com/openshift/osdctl/internal/utils"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
@@ -87,7 +86,10 @@ func (o *postOptions) run() error {
 
 	// Parse the given JSON template provided via '-t' flag
 	// and load it into the LimitedSupport variable
-	readTemplate()
+	err := readTemplate()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	//create connection to sdk
 	connection := ctlutil.CreateConnection()
@@ -111,7 +113,7 @@ func (o *postOptions) run() error {
 	}
 
 	// confirmSend prompt to confirm
-	err := confirmSend()
+	err = confirmSend()
 	if err != nil {
 		fmt.Println("failed to confirmSend(): ", err.Error())
 		return err
@@ -125,7 +127,7 @@ func (o *postOptions) run() error {
 	}
 
 	// postRequest calls createPostRequest and take in client and clustersmgmt/v1.cluster object
-	postRequest, err := createPostRequest(connection, cluster)
+	postRequest, err := createPostRequest(connection, cluster.ID())
 	if err != nil {
 		fmt.Printf("failed to create post request %q\n", err)
 	}
@@ -144,11 +146,11 @@ func (o *postOptions) run() error {
 
 // createPostRequest create and populates the limited support post call
 // swagger code gen: https://api.openshift.com/?urls.primaryName=Clusters%20management%20service#/default/post_api_clusters_mgmt_v1_clusters__cluster_id__limited_support_reasons
-func createPostRequest(ocmClient *sdk.Connection, cluster *v1.Cluster) (request *sdk.Request, err error) {
+func createPostRequest(client SDKConnectionClient, clusterID string) (request *sdk.Request, err error) {
 
-	targetAPIPath := "/api/clusters_mgmt/v1/clusters/" + cluster.ID() + "/limited_support_reasons"
+	targetAPIPath := "/api/clusters_mgmt/v1/clusters/" + clusterID + "/limited_support_reasons"
 
-	request = ocmClient.Post()
+	request = client.Post()
 	err = arguments.ApplyPathArg(request, targetAPIPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot parse API path '%s': %v", targetAPIPath, err)
@@ -163,21 +165,22 @@ func createPostRequest(ocmClient *sdk.Connection, cluster *v1.Cluster) (request 
 }
 
 // readTemplate loads the template into the LimitedSupport variable
-func readTemplate() {
+func readTemplate() (err error) {
 
 	if template == defaultTemplate {
-		log.Fatalf("Template file is not provided. Use '-t' to fix this.")
+		return fmt.Errorf("Template file is not provided. Use '-t' to fix this.")
 	}
 
 	// check if this URL or file and if we can access it
 	file, err := accessFile(template)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("Cannot access file '%s'", err)
 	}
 
 	if err = parseTemplate(file); err != nil {
-		log.Fatalf("Cannot not parse the JSON template.\nError: %q\n", err)
+		return fmt.Errorf("Cannot not parse the JSON template.\nError: %q\n", err)
 	}
+	return nil
 }
 
 // accessTemplate returns the contents of a local file or url, and any errors encountered
