@@ -36,8 +36,6 @@ func ApplyFilters(ocmClient *sdk.Connection, filters []string) ([]*v1.Cluster, e
 	requestSize := 50
 	full_filters := strings.Join(filters, " and ")
 
-	fmt.Printf("running the command: 'ocm list clusters --parameter=search=\"%s\"'\n", full_filters)
-
 	request := ocmClient.ClustersMgmt().V1().Clusters().List().Search(full_filters).Size(requestSize)
 	response, err := request.Send()
 	if err != nil {

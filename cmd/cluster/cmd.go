@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"fmt"
+
 	"github.com/openshift/osdctl/cmd/cluster/support"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	k8spkg "github.com/openshift/osdctl/pkg/k8s"
@@ -21,10 +22,10 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 	}
 
 	clusterCmd.AddCommand(newCmdHealth(streams, flags, globalOpts))
-	clusterCmd.AddCommand(newCmdloggingCheck(streams, flags, globalOpts))
+	clusterCmd.AddCommand(newCmdLoggingCheck(streams, flags, globalOpts))
 	clusterCmd.AddCommand(newCmdOwner(streams, flags, globalOpts))
 	clusterCmd.AddCommand(support.NewCmdSupport(streams, flags, client, globalOpts))
-	clusterCmd.AddCommand(newCmdcontext(streams, flags, globalOpts))
+	clusterCmd.AddCommand(newCmdContext(streams, flags, globalOpts))
 
 	return clusterCmd
 }
