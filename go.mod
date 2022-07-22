@@ -3,7 +3,8 @@ module github.com/openshift/osdctl
 go 1.16
 
 require (
-	github.com/aws/aws-sdk-go v1.44.66
+	github.com/PagerDuty/go-pagerduty v1.5.1
+	github.com/aws/aws-sdk-go v1.42.20
 	github.com/aws/aws-sdk-go-v2/credentials v1.12.2
 	github.com/coreos/go-semver v0.3.0
 	github.com/deckarep/golang-set v1.7.1

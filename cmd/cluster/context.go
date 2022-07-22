@@ -8,12 +8,14 @@ import (
 	"os"
 	"time"
 
+	pd "github.com/PagerDuty/go-pagerduty"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	sl "github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
+	"github.com/openshift/osdctl/pkg/config"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -22,10 +24,12 @@ import (
 )
 
 type statusOptions struct {
-	output    string
-	verbose   bool
-	clusterID string
-	days      int
+	output     string
+	verbose    bool
+	clusterID  string
+	baseDomain string
+	days       int
+	oauthtoken string
 
 	genericclioptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
@@ -40,7 +44,7 @@ type limitedSupportReasonItem struct {
 // newCmdContext implements the context command to show the current context of a cluster
 func newCmdContext(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	ops := newStatusOptions(streams, flags, globalOpts)
-	statusCmd := &cobra.Command{
+	contextCmd := &cobra.Command{
 		Use:               "context",
 		Short:             "Shows the context of a specified cluster",
 		Args:              cobra.ExactArgs(1),
@@ -50,10 +54,11 @@ func newCmdContext(streams genericclioptions.IOStreams, flags *genericclioptions
 			cmdutil.CheckErr(ops.run())
 		},
 	}
-	statusCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
-	statusCmd.Flags().IntVarP(&ops.days, "days", "d", 30, "Command will display X days of Error SLs sent to the cluster. Days is set to 30 by default")
+	contextCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
+	contextCmd.Flags().IntVarP(&ops.days, "days", "d", 30, "Command will display X days of Error SLs sent to the cluster. Days is set to 30 by default")
+	contextCmd.Flags().StringVarP(&ops.oauthtoken, "oauthtoken", "t", "", "Pass in PD oauthtoken directly. If not passed in, by default will read token from ~/.config/pagerduty-cli/config.json")
 
-	return statusCmd
+	return contextCmd
 }
 
 func newStatusOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *statusOptions {
@@ -85,6 +90,7 @@ func (o *statusOptions) complete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unexpected number of clusters matched input. Expected 1 got %d", len(clusters))
 	}
 	o.clusterID = clusters[0].ID()
+	o.baseDomain = clusters[0].DNS().BaseDomain()
 	o.output = o.GlobalOptions.Output
 
 	return nil
@@ -113,12 +119,23 @@ func (o *statusOptions) run() error {
 	}
 
 	// Check support status of cluster
-	printSupportStatus(lsResponse)
+	err = printSupportStatus(lsResponse)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Can't print support status: %v\n", err)
+		os.Exit(1)
+	}
 
-	// Retrieve and Print the Servicelogs for this cluster
+	// Print the Servicelogs for this cluster
 	err = o.printServiceLogs()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't retrieve service logs: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Can't print service logs: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Print all triggered and acknowledged pd alerts
+	err = o.printPDAlerts()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Can't print pagerduty alerts: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -166,6 +183,7 @@ func printSupportStatus(response *cmv1.LimitedSupportReasonsListResponse) error 
 	// No reasons found, cluster is fully supported
 	if len(clusterLimitedSupportReasons) == 0 {
 		fmt.Printf("Cluster is fully supported\n")
+		fmt.Println()
 		return nil
 	}
 
@@ -229,14 +247,62 @@ func (o *statusOptions) printServiceLogs() error {
 			fmt.Printf("%d. %s \n", i, errorServiceLog.Summary)
 		}
 	}
+	fmt.Println()
 
 	return nil
 }
 
-func sendRequest(request *sdk.Request) (*sdk.Response, error) {
-	response, err := request.Send()
-	if err != nil {
-		return nil, fmt.Errorf("cannot send request: %q", err)
+func (o *statusOptions) printPDAlerts() error {
+	var oauthtoken string
+	if o.oauthtoken != "" {
+		oauthtoken = o.oauthtoken
+	} else {
+		pdConfig := config.LoadPDConfig("/.config/pagerduty-cli/config.json")
+		oauthtoken = pdConfig.MySubdomain[0].AccessToken
 	}
-	return response, nil
+	client := pd.NewOAuthClient(oauthtoken)
+
+	ctx := context.TODO()
+	lsResponse, err := client.ListServicesWithContext(ctx, pd.ListServiceOptions{Query: o.baseDomain})
+
+	if err != nil {
+		fmt.Printf("Failed to ListServicesWithContext %q\n", err)
+		return err
+	}
+
+	if len(lsResponse.Services) != 1 {
+		return fmt.Errorf("unexpected number of services matched input. Expected 1 got %d", len(lsResponse.Services))
+	}
+
+	serviceID := lsResponse.Services[0].ID
+	liResponse, err := client.ListIncidentsWithContext(
+		ctx,
+		pd.ListIncidentsOptions{
+			ServiceIDs: []string{serviceID},
+			Statuses:   []string{"triggered", "acknowledged"},
+		},
+	)
+	if err != nil {
+		fmt.Printf("Failed to ListIncidentsWithContext %q\n", err)
+		return err
+	}
+
+	fmt.Println("============================================================")
+	fmt.Println("Pagerduty alerts for the Cluster")
+	fmt.Println("============================================================")
+	fmt.Printf("Link to PD Service: https://redhat.pagerduty.com/service-directory/%s\n", serviceID)
+	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+	table.AddRow([]string{"Urgency", "Title", "Created At"})
+	for _, incident := range liResponse.Incidents {
+		table.AddRow([]string{incident.Urgency, incident.Title, incident.CreatedAt})
+	}
+	// Add empty row for readability
+	table.AddRow([]string{})
+	err = table.Flush()
+	if err != nil {
+		fmt.Println("error while flushing table: ", err.Error())
+		return err
+	}
+
+	return err
 }
