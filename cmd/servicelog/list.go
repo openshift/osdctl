@@ -56,6 +56,7 @@ func run(cmd *cobra.Command, clusterID string) error {
 }
 
 var serviceLogListAllMessagesFlag = false
+var serviceLogListInternalOnlyFlag = false
 
 func FetchServiceLogs(clusterID string) (*sdk.Response, error) {
 	// Create OCM client to talk to cluster API
@@ -76,15 +77,16 @@ func FetchServiceLogs(clusterID string) (*sdk.Response, error) {
 	serviceLogListAllMessagesFlag := false
 
 	// Now get the SLs for the cluster
-	return sendRequest(CreateListSLRequest(ocmClient, cluster.ExternalID(), serviceLogListAllMessagesFlag))
+	return sendRequest(CreateListSLRequest(ocmClient, cluster.ExternalID(), serviceLogListAllMessagesFlag, serviceLogListInternalOnlyFlag))
 }
 
 func init() {
 	// define required flags
 	listCmd.Flags().BoolVarP(&serviceLogListAllMessagesFlag, "all-messages", "A", serviceLogListAllMessagesFlag, "Toggle if we should see all of the messages or only SRE-P specific ones")
+	listCmd.Flags().BoolVarP(&serviceLogListInternalOnlyFlag, "internal", "i", serviceLogListInternalOnlyFlag, "Toggle if we should see internal messages")
 }
 
-func CreateListSLRequest(ocmClient *sdk.Connection, clusterId string, allMessages bool) *sdk.Request {
+func CreateListSLRequest(ocmClient *sdk.Connection, clusterId string, allMessages bool, internalMessages bool) *sdk.Request {
 	// Create and populate the request:
 	request := ocmClient.Get()
 	err := arguments.ApplyPathArg(request, targetAPIPath)
@@ -96,6 +98,9 @@ func CreateListSLRequest(ocmClient *sdk.Connection, clusterId string, allMessage
 	formatMessage := fmt.Sprintf(`search=cluster_uuid = '%s'`, clusterId)
 	if !allMessages {
 		formatMessage += ` and service_name = 'SREManualAction'`
+	}
+	if internalMessages {
+		formatMessage += ` and internal_only = 'true'`
 	}
 	arguments.ApplyParameterFlag(request, []string{formatMessage})
 	arguments.ApplyHeaderFlag(request, empty)
