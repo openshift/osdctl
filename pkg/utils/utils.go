@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	sdk "github.com/openshift-online/ocm-sdk-go"
@@ -27,6 +28,23 @@ func GetOCMAccessToken() (*string, error) {
 	accessToken := strings.TrimSuffix(string(ocmOutput), "\n")
 
 	return &accessToken, nil
+}
+
+var clusterKeyRE = regexp.MustCompile(`^(\w|-)+$`)
+
+func IsValidKey(clusterKey string) bool {
+	return clusterKeyRE.MatchString(clusterKey)
+}
+
+func IsValidClusterKey(clusterKey string) (err error) {
+	if !IsValidKey(clusterKey) {
+		return fmt.Errorf(
+			"Cluster name, identifier or external identifier '%s' isn't valid: it "+
+				"must contain only letters, digits, dashes and underscores",
+			clusterKey,
+		)
+	}
+	return nil
 }
 
 //GetCluster Function allows to get a single cluster with any identifier (displayname, ID, or external ID)

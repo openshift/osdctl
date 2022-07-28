@@ -89,6 +89,14 @@ func (o *postOptions) run() error {
 	// and load it into the LimitedSupport variable
 	readTemplate()
 
+	// Check that the cluster key (name, identifier or external identifier) given by the user
+	// is reasonably safe so that there is no risk of SQL injection
+	err := ctlutil.IsValidClusterKey(o.clusterID)
+	if err != nil {
+		return err
+	}
+
+	//if the cluster key is on the right format
 	//create connection to sdk
 	connection := ctlutil.CreateConnection()
 	defer func() {
@@ -111,7 +119,7 @@ func (o *postOptions) run() error {
 	}
 
 	// confirmSend prompt to confirm
-	err := confirmSend()
+	err = confirmSend()
 	if err != nil {
 		fmt.Println("failed to confirmSend(): ", err.Error())
 		return err
@@ -144,7 +152,9 @@ func (o *postOptions) run() error {
 
 // createPostRequest create and populates the limited support post call
 // swagger code gen: https://api.openshift.com/?urls.primaryName=Clusters%20management%20service#/default/post_api_clusters_mgmt_v1_clusters__cluster_id__limited_support_reasons
-func createPostRequest(ocmClient *sdk.Connection, cluster *v1.Cluster) (request *sdk.Request, err error) {
+//SDKConnection is an interface that is satisfied by the sdk.Connection and by our mock connection
+//this facilitates unit test and allow us to mock Post() and Delete() api calls
+func createPostRequest(ocmClient SDKConnection, cluster *v1.Cluster) (request *sdk.Request, err error) {
 
 	targetAPIPath := "/api/clusters_mgmt/v1/clusters/" + cluster.ID() + "/limited_support_reasons"
 

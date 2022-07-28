@@ -77,6 +77,13 @@ func (o *deleteOptions) complete(cmd *cobra.Command, args []string) error {
 
 func (o *deleteOptions) run() error {
 
+	// Check that the cluster key (name, identifier or external identifier) given by the user
+	// is reasonably safe so that there is no risk of SQL injection
+	err := ctlutil.IsValidClusterKey(o.clusterID)
+	if err != nil {
+		return err
+	}
+
 	// Create an OCM client to talk to the cluster API
 	connection := ctlutil.CreateConnection()
 	defer func() {
@@ -92,7 +99,7 @@ func (o *deleteOptions) run() error {
 	}
 
 	// confirmSend prompt to confirm
-	err := confirmSend()
+	err = confirmSend()
 	if err != nil {
 		fmt.Println("failed to confirmSend(): ", err.Error())
 		return err
@@ -123,7 +130,9 @@ func (o *deleteOptions) run() error {
 }
 
 // createDeleteRequest sets the delete API and returns a request
-func createDeleteRequest(ocmClient *sdk.Connection, cluster *v1.Cluster, reasonID string) (request *sdk.Request, err error) {
+//SDKConnection is an interface that is satisfied by the sdk.Connection and by our mock connection
+//this facilitates unit test and allow us to mock Post() and Delete() api calls
+func createDeleteRequest(ocmClient SDKConnection, cluster *v1.Cluster, reasonID string) (request *sdk.Request, err error) {
 
 	targetAPIPath := "/api/clusters_mgmt/v1/clusters/" + cluster.ID() + "/limited_support_reasons/" + reasonID
 

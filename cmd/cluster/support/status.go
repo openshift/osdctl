@@ -60,6 +60,13 @@ func (o *statusOptions) complete(cmd *cobra.Command, args []string) error {
 
 func (o *statusOptions) run() error {
 
+	// Check that the cluster key (name, identifier or external identifier) given by the user
+	// is reasonably safe so that there is no risk of SQL injection
+	err := ctlutil.IsValidClusterKey(o.clusterID)
+	if err != nil {
+		return err
+	}
+
 	//create connection to sdk
 	connection := ctlutil.CreateConnection()
 	defer func() {
