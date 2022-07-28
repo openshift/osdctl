@@ -227,6 +227,15 @@ func confirmSend() error {
 
 // accessFile returns the contents of a local file or url, and any errors encountered
 func accessFile(filePath string) ([]byte, error) {
+
+	if utils.IsValidUrl(filePath) {
+		urlPage, _ := url.Parse(filePath)
+		if err := utils.IsOnline(*urlPage); err != nil {
+			return nil, fmt.Errorf("host %q is not accessible", filePath)
+		}
+		return utils.CurlThis(urlPage.String())
+	}
+
 	filePath = filepath.Clean(filePath)
 	if utils.FileExists(filePath) {
 		// template is file on the disk
@@ -238,14 +247,6 @@ func accessFile(filePath string) ([]byte, error) {
 	}
 	if utils.FolderExists(filePath) {
 		return nil, fmt.Errorf("the provided path %q is a directory, not a file", filePath)
-	}
-	if utils.IsValidUrl(filePath) {
-		urlPage, _ := url.Parse(filePath)
-		if err := utils.IsOnline(*urlPage); err != nil {
-			return nil, fmt.Errorf("host %q is not accessible", filePath)
-		} else {
-			return utils.CurlThis(urlPage.String())
-		}
 	}
 	return nil, fmt.Errorf("cannot read the file %q", filePath)
 }
