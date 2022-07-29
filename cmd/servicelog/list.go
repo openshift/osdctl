@@ -44,12 +44,18 @@ func complete(cmd *cobra.Command, args []string) error {
 
 func run(cmd *cobra.Command, clusterID string) error {
 	response, err := FetchServiceLogs(clusterID)
-	err = dump.Pretty(os.Stdout, response.Bytes())
 	if err != nil {
+		// If the response has errored, likely the input was bad, so show usage
 		err := cmd.Help()
 		if err != nil {
 			return err
 		}
+		return err
+	}
+
+	err = dump.Pretty(os.Stdout, response.Bytes())
+	if err != nil {
+		// If outputing the data errored, there's likely an internal error, so just return the error
 		return err
 	}
 	return nil
