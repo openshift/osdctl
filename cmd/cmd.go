@@ -57,7 +57,6 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(env.NewCmdEnv(streams, kubeFlags))
 	rootCmd.AddCommand(federatedrole.NewCmdFederatedRole(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeFlags, kubeClient))
-	rootCmd.AddCommand(newCmdMetrics(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(servicelog.NewCmdServiceLog())
 	rootCmd.AddCommand(sts.NewCmdSts(streams, kubeFlags, kubeClient))
 
