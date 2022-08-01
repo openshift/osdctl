@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+
 	routev1 "github.com/openshift/api/route/v1"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	gcpv1alpha1 "github.com/openshift/gcp-project-operator/pkg/apis"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/openshift/osdctl/cmd/aao"
 	"github.com/openshift/osdctl/cmd/account"
+	"github.com/openshift/osdctl/cmd/capability"
 	"github.com/openshift/osdctl/cmd/cluster"
 	"github.com/openshift/osdctl/cmd/clusterdeployment"
 	"github.com/openshift/osdctl/cmd/cost"
@@ -77,6 +79,8 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 
 	// Add upgradeCmd for upgrading the currently running executable in-place.
 	rootCmd.AddCommand(upgradeCmd)
+
+	rootCmd.AddCommand(capability.NewCmdCapability())
 
 	return rootCmd
 }
