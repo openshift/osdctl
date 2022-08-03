@@ -48,7 +48,7 @@ func (o *addOptions) complete(cmd *cobra.Command, args []string) error {
 			break
 		}
 		if i == len(availableCapabilities)-1 {
-			return fmt.Errorf("invalid capability specified. Avaialbe capabilites are hibernation, autoscaling, ovn and upgradeChannelChange")
+			return fmt.Errorf("invalid capability specified. Available capabilites are hibernation, autoscaling, ovn and upgradeChannelChange")
 		}
 	}
 
