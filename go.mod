@@ -18,7 +18,6 @@ require (
 	github.com/openshift/hive v1.0.5
 	github.com/openshift/osd-network-verifier v0.0.0-20220518154805-047e42cfe29f
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4
-	github.com/pkg/errors v0.9.1
 	github.com/prometheus/common v0.28.0
 	github.com/shopspring/decimal v1.2.0
 	github.com/sirupsen/logrus v1.6.0

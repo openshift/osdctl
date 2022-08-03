@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 
 	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -96,7 +95,7 @@ func (o *applyOptions) run() error {
 		}
 
 		if resp.StatusCode/100 != 2 {
-			return errors.New(fmt.Sprintf("Failed to GET %s, status code %d", o.url, resp.StatusCode))
+			return fmt.Errorf("failed to GET %s, status code %d", o.url, resp.StatusCode)
 		}
 
 		defer resp.Body.Close()
@@ -148,15 +147,15 @@ func (o *applyOptions) run() error {
 		if federatedAccount.Spec.AWSFederatedRole.Namespace == federatedRole.Namespace &&
 			federatedAccount.Spec.AWSFederatedRole.Name == federatedRole.Name {
 			if accountID, ok = federatedAccount.Labels[awsAccountIDLabel]; !ok {
-				return errors.New(fmt.Sprintf(
-					"Unable to get AWS AccountID label for AWS federated account access CR %s/%s",
-					federatedAccount.Namespace, federatedAccount.Name))
+				return fmt.Errorf(
+					"unable to get AWS AccountID label for AWS federated account access CR %s/%s",
+					federatedAccount.Namespace, federatedAccount.Name)
 			}
 
 			if uid, ok = federatedAccount.Labels[uidLabel]; !ok {
-				return errors.New(fmt.Sprintf(
-					"Unable to get UID label for AWS federated account access CR %s/%s",
-					federatedAccount.Namespace, federatedAccount.Name))
+				return fmt.Errorf(
+					"unable to get UID label for AWS federated account access CR %s/%s",
+					federatedAccount.Namespace, federatedAccount.Name)
 			}
 
 			var awsClient awsprovider.Client
@@ -165,16 +164,16 @@ func (o *applyOptions) run() error {
 					federatedAccount.Spec.AWSCustomerCredentialSecret.Namespace,
 					federatedAccount.Spec.AWSCustomerCredentialSecret.Name)
 				if err != nil {
-					return errors.Wrap(err, fmt.Sprintf(
-						"Failed to get AWS credentials for AWS federated account access CR %s/%s",
-						federatedAccount.Namespace, federatedAccount.Name))
+					return fmt.Errorf(
+						"failed to get AWS credentials for AWS federated account access CR %s/%s: %w",
+						federatedAccount.Namespace, federatedAccount.Name, err)
 				}
 
 				awsClient, err = awsprovider.NewAwsClientWithInput(creds)
 				if err != nil {
-					return errors.Wrap(err, fmt.Sprintf(
-						"Failed to create AWS Setup Client for AWS federated account access CR %s/%s",
-						federatedAccount.Namespace, federatedAccount.Name))
+					return fmt.Errorf(
+						"failed to create AWS Setup Client for AWS federated account access CR %s/%s: %w",
+						federatedAccount.Namespace, federatedAccount.Name, err)
 				}
 				awsClients[federatedAccount.Namespace] = awsClient
 			}
@@ -183,8 +182,8 @@ func (o *applyOptions) run() error {
 				federatedAccount.Namespace, federatedAccount.Name))
 
 			if err := awsprovider.RefreshIAMPolicy(awsClient, &federatedRole, accountID, uid); err != nil {
-				return errors.Wrap(err, fmt.Sprintf("Failed to apply IAM policy for AWS federated account access CR %s/%s",
-					federatedAccount.Namespace, federatedAccount.Name))
+				return fmt.Errorf("failed to apply IAM policy for AWS federated account access CR %s/%s: %w",
+					federatedAccount.Namespace, federatedAccount.Name, err)
 			}
 		}
 	}
