@@ -91,7 +91,7 @@ func TestAddComplete(t *testing.T) {
 		{
 			Name:          "Providing invalid capability",
 			ErrorExpected: true,
-			ErrorReason:   "invalid capability specified. Avaialbe capabilites are hibernation, autoscaling, ovn and upgradeChannelChange",
+			ErrorReason:   "invalid capability specified. Available capabilites are hibernation, autoscaling, ovn and upgradeChannelChange",
 			Args:          []string{"invalid"},
 			AddOptions:    addOptions{OrganizationID: "myOrganization"},
 		},
@@ -171,7 +171,7 @@ func TestRemoveComplete(t *testing.T) {
 		{
 			Name:          "Providing invalid capability",
 			ErrorExpected: true,
-			ErrorReason:   "invalid capability specified. Avaialbe capabilites are hibernation, autoscaling, ovn and upgradeChannelChange",
+			ErrorReason:   "invalid capability specified. Available capabilites are hibernation, autoscaling, ovn and upgradeChannelChange",
 			Args:          []string{"invalid"},
 			RemoveOptions: removeOptions{OrganizationID: "myOrganization"},
 		},

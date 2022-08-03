@@ -47,7 +47,7 @@ func (o *removeOptions) complete(cmd *cobra.Command, args []string) error {
 			break
 		}
 		if i == len(availableCapabilities)-1 {
-			return fmt.Errorf("invalid capability specified. Avaialbe capabilites are hibernation, autoscaling, ovn and upgradeChannelChange")
+			return fmt.Errorf("invalid capability specified. Available capabilites are hibernation, autoscaling, ovn and upgradeChannelChange")
 		}
 	}
 
@@ -77,7 +77,7 @@ func (o *removeOptions) run(cmd *cobra.Command, capability string) error {
 	// Build the base of the request path
 	var base string
 	if o.OrganizationID != "" {
-		// If the organization
+		// If the organizationID is set
 		base = organizationPath + "/" + o.OrganizationID
 	} else {
 		// If organization ID isn't spcified, we know subscription ID is
