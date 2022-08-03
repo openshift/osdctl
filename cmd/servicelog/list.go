@@ -80,8 +80,6 @@ func FetchServiceLogs(clusterID string) (*sdk.Response, error) {
 	}
 	cluster := clusters[0]
 
-	serviceLogListAllMessagesFlag := false
-
 	// Now get the SLs for the cluster
 	return sendRequest(CreateListSLRequest(ocmClient, cluster.ExternalID(), serviceLogListAllMessagesFlag, serviceLogListInternalOnlyFlag))
 }
