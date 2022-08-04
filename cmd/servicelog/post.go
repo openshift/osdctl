@@ -374,7 +374,7 @@ func printClusters(clusters []*v1.Cluster) (err error) {
 	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
 	table.AddRow([]string{"Name", "ID", "State", "Version", "Cloud Provider", "Region"})
 	for _, cluster := range clusters {
-		table.AddRow([]string{cluster.DisplayName(), cluster.ID(), string(cluster.State()), cluster.OpenshiftVersion(), cluster.CloudProvider().ID(), cluster.Region().ID()})
+		table.AddRow([]string{cluster.Name(), cluster.ID(), string(cluster.State()), cluster.OpenshiftVersion(), cluster.CloudProvider().ID(), cluster.Region().ID()})
 	}
 
 	// Add empty row for readability
