@@ -11,7 +11,7 @@ SHELL := env PATH=$(PATH) /bin/bash
 
 all: format mod build test
 
-format: vet fmt mockgen ci-build docs
+format: vet mod fmt mockgen ci-build docs
 
 fmt:
 	@echo "gofmt"
