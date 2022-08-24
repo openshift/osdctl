@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -64,12 +65,13 @@ func newCmdPacketCapture(streams genericclioptions.IOStreams, flags *genericclio
 
 // packetCaptureOptions defines the struct for running packet-capture command
 type packetCaptureOptions struct {
-	name           string
-	namespace      string
-	nodeLabelKey   string
-	nodeLabelValue string
-	duration       int
-	singlePod      bool
+	name             string
+	namespace        string
+	nodeLabelKey     string
+	nodeLabelValue   string
+	duration         int
+	singlePod        bool
+	captureInterface string
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
@@ -97,6 +99,12 @@ func (o *packetCaptureOptions) run() error {
 }
 
 func (o *packetCaptureOptions) runDaemonSet() error {
+	log.Println("Confirming the interface for capturing")
+	err := setCaptureInterface(o)
+	if err != nil {
+		log.Fatalf("Error setting the interface for capture")
+		return err
+	}
 
 	log.Println("Ensuring Packet Capture Daemonset")
 	ds, err := ensurePacketCaptureDaemonSet(o)
@@ -126,6 +134,13 @@ func (o *packetCaptureOptions) runDaemonSet() error {
 }
 
 func (o *packetCaptureOptions) runPod() error {
+	log.Println("Confirming the interface for capturing")
+	err := setCaptureInterface(o)
+	if err != nil {
+		log.Fatalf("Error setting the interface for capture")
+		return err
+	}
+
 	log.Println("Ensuring Packet Capture Daemonset")
 	capturePod, err := ensurePacketCapturePod(o)
 	if err != nil {
@@ -245,7 +260,7 @@ func desiredPacketCaptureDaemonSet(o *packetCaptureOptions, key types.Namespaced
 			Name:            "init-capture",
 			Image:           packetCaptureImage,
 			ImagePullPolicy: corev1.PullIfNotPresent,
-			Command:         []string{"/bin/bash", "-c", "tcpdump -G " + strconv.Itoa(o.duration) + " -W 1 -w /tmp/capture-output/capture.pcap -i vxlan_sys_4789 -nn -s0; sync"},
+			Command:         []string{"/bin/bash", "-c", "tcpdump -G " + strconv.Itoa(o.duration) + " -W 1 -w /tmp/capture-output/capture.pcap -i " + o.captureInterface + " -nn -s0; sync"},
 			SecurityContext: &corev1.SecurityContext{Privileged: &t},
 			VolumeMounts: []corev1.VolumeMount{
 				{
@@ -397,7 +412,7 @@ func desiredPacketCapturePod(o *packetCaptureOptions, key types.NamespacedName) 
 			Name:            "init-capture",
 			Image:           packetCaptureImage,
 			ImagePullPolicy: corev1.PullIfNotPresent,
-			Command:         []string{"/bin/bash", "-c", "tcpdump -G " + strconv.Itoa(o.duration) + " -W 1 -w /tmp/capture-output/capture.pcap -i vxlan_sys_4789 -nn -s0; sync"},
+			Command:         []string{"/bin/bash", "-c", "tcpdump -G " + strconv.Itoa(o.duration) + " -W 1 -w /tmp/capture-output/capture.pcap -i " + o.captureInterface + " -nn -s0; sync"},
 			SecurityContext: &corev1.SecurityContext{Privileged: &t},
 			VolumeMounts: []corev1.VolumeMount{
 				{
@@ -494,4 +509,18 @@ func waitForPacketCapturePod(o *packetCaptureOptions, capturePod *corev1.Pod) er
 		return false, err
 	})
 	return pollErr
+}
+
+func setCaptureInterface(o *packetCaptureOptions) error {
+	ds := &appsv1.DaemonSet{}
+	if err := o.kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: "openshift-ovn-kubernetes", Name: "ovnkube-master"}, ds); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to determine the network type: %s", err)
+	}
+
+	if ds.Status.DesiredNumberScheduled > 0 {
+		o.captureInterface = "genev_sys_6081"
+		return nil
+	}
+	o.captureInterface = "vxlan_sys_4789"
+	return nil
 }
