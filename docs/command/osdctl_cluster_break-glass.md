@@ -1,9 +1,10 @@
-## osdctl cluster
+## osdctl access
 
-Provides vitals of an AWS cluster
+Obtain emergency credentials to access the given cluster
+
 
 ```
-osdctl cluster [flags]
+osdctl cluster break-glass <cluster identifier> [flags]
 ```
 
 ### Options
@@ -33,6 +34,5 @@ osdctl cluster [flags]
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
-* [osdctl cluster health](osdctl_cluster_health.md)	 - Describes health of cluster nodes and provides other cluster vitals.
-* [osdctl cluster break-glass](osdctl_cluster_break-glass.md)    - Emergency access to a cluster
+* [osdctl cluster](osdctl_cluster.md)	 - Provides vitals of an AWS cluster
+* [osdctl cluster break-glass cleanup](osdctl_cluster_break-glass_cleanup.md)    - Drop emergency access to a cluster

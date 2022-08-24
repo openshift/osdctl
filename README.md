@@ -285,6 +285,19 @@ osdctl federatedrole apply -u <URL>
 osdctl federatedrole apply -f <yaml file>
 ```
 
+### Cluster break-glass access
+#### Access cluster
+```bash
+# Login to the cluster's hive shard
+osdctl cluster break-glass <cluster identifier> --as backplane-cluster-admin
+```
+
+#### Drop cluster access
+```bash
+osdctl cluster break-glass cleanup <cluster identifier>
+# Non-PrivateLink - remove any Kubeconfig files saved locally in /tmp/
+```
+
 ### Send a servicelog to a cluster
 
 #### List servicelogs

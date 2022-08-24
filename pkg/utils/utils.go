@@ -12,6 +12,7 @@ import (
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	amv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 type lmtSprReasonItem struct {
@@ -261,4 +262,35 @@ func ConfirmSend() error {
 		log.Fatalf("Exiting...")
 	}
 	return nil
+}
+
+// streamPrintln appends a newline then prints the given msg using the provided IOStreams
+func StreamPrintln(stream genericclioptions.IOStreams, msg string) {
+	stream.Out.Write([]byte(fmt.Sprintln(msg)))
+}
+
+// streamPrint prints the given msg using the provided IOStreams
+func StreamPrint(stream genericclioptions.IOStreams, msg string) {
+	stream.Out.Write([]byte(msg))
+}
+
+// streamPrint prints the given error msg using the provided IOStreams
+func StreamErrorln(stream genericclioptions.IOStreams, msg string) {
+	stream.ErrOut.Write([]byte(fmt.Sprintln(msg)))
+}
+
+// StreamRead retrieves input from the provided IOStreams up to (and including) the delimiter given
+func StreamRead(stream genericclioptions.IOStreams, delim byte) (string, error) {
+	reader := bufio.NewReader(stream.In)
+	return reader.ReadString(delim)
+}
+
+// Contains returns true if the given key is present in the provided list
+func Contains(list []string, key string) bool {
+	for _, item := range list {
+		if item == key {
+			return true
+		}
+	}
+	return false
 }
