@@ -45,9 +45,11 @@ type OcEnv struct {
 	Config  config.Config
 }
 
+var Config_Filepath = "/.osdctl.yaml"
+
 func NewCmdEnv(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
 	options := Options{}
-	config := config.Load()
+	config := config.LoadYaml(Config_Filepath)
 
 	env := OcEnv{
 		Options: &options,
