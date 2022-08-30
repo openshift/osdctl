@@ -11,6 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/cloudtrail"
+	"github.com/aws/aws-sdk-go/service/cloudtrail/cloudtrailiface"
 	"github.com/aws/aws-sdk-go/service/costexplorer"
 	"github.com/aws/aws-sdk-go/service/costexplorer/costexploreriface"
 	"github.com/aws/aws-sdk-go/service/ec2"
@@ -111,6 +113,9 @@ type Client interface {
 	GetCostAndUsage(input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error)
 	CreateCostCategoryDefinition(input *costexplorer.CreateCostCategoryDefinitionInput) (*costexplorer.CreateCostCategoryDefinitionOutput, error)
 	ListCostCategoryDefinitions(input *costexplorer.ListCostCategoryDefinitionsInput) (*costexplorer.ListCostCategoryDefinitionsOutput, error)
+
+	// Cloudtrail
+	LookupEvents(input *cloudtrail.LookupEventsInput) (*cloudtrail.LookupEventsOutput, error)
 }
 
 type AwsClient struct {
@@ -122,6 +127,7 @@ type AwsClient struct {
 	orgClient           organizationsiface.OrganizationsAPI
 	resClient           resourcegroupstaggingapiiface.ResourceGroupsTaggingAPIAPI
 	ceClient            costexploreriface.CostExplorerAPI
+	cloudTrailClient    cloudtrailiface.CloudTrailAPI
 }
 
 func NewAwsSession(profile, region, configFile string) (*session.Session, error) {
@@ -172,6 +178,7 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 		orgClient:           organizations.New(sess),
 		ceClient:            costexplorer.New(sess),
 		resClient:           resourcegroupstaggingapi.New(sess),
+		cloudTrailClient:    cloudtrail.New(sess),
 	}
 
 	// Validate the creds
@@ -211,6 +218,7 @@ func NewAwsClientWithInput(input *AwsClientInput) (Client, error) {
 		orgClient:           organizations.New(s),
 		ceClient:            costexplorer.New(s),
 		resClient:           resourcegroupstaggingapi.New(s),
+		cloudTrailClient:    cloudtrail.New(s),
 	}, nil
 }
 
@@ -438,4 +446,8 @@ func (c *AwsClient) WaitUntilInstanceRunning(input *ec2.DescribeInstancesInput) 
 
 func (c *AwsClient) WaitUntilInstanceStopped(input *ec2.DescribeInstancesInput) error {
 	return c.ec2Client.WaitUntilInstanceStopped(input)
+}
+
+func (c *AwsClient) LookupEvents(input *cloudtrail.LookupEventsInput) (*cloudtrail.LookupEventsOutput, error) {
+	return c.cloudTrailClient.LookupEvents(input)
 }

@@ -5,38 +5,39 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 	"time"
 
 	pd "github.com/PagerDuty/go-pagerduty"
+	"github.com/aws/aws-sdk-go/service/cloudtrail"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	sl "github.com/openshift/osdctl/internal/servicelog"
-	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/config"
+	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-type statusOptions struct {
+type contextOptions struct {
 	output     string
 	verbose    bool
+	full       bool
 	clusterID  string
 	baseDomain string
 	days       int
 	oauthtoken string
 	externalID string
 	infraID    string
-
-	genericclioptions.IOStreams
-	GlobalOptions *globalflags.GlobalOptions
+	awsProfile string
 }
 
 // newCmdContext implements the context command to show the current context of a cluster
-func newCmdContext(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newStatusOptions(streams, flags, globalOpts)
+func newCmdContext() *cobra.Command {
+	ops := newContextOptions()
 	contextCmd := &cobra.Command{
 		Use:               "context",
 		Short:             "Shows the context of a specified cluster",
@@ -47,21 +48,22 @@ func newCmdContext(streams genericclioptions.IOStreams, flags *genericclioptions
 			cmdutil.CheckErr(ops.run())
 		},
 	}
+
+	contextCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Cluster ID")
+	contextCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", "", "AWS Profile")
 	contextCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
-	contextCmd.Flags().IntVarP(&ops.days, "days", "d", 30, "Command will display X days of Error SLs sent to the cluster. Days is set to 30 by default")
+	contextCmd.Flags().BoolVarP(&ops.full, "full", "", false, "Run full suite of checks.")
+	contextCmd.Flags().IntVarP(&ops.days, "days", "z", 30, "Command will display X days of Error SLs sent to the cluster. Days is set to 30 by default")
 	contextCmd.Flags().StringVarP(&ops.oauthtoken, "oauthtoken", "t", "", "Pass in PD oauthtoken directly. If not passed in, by default will read token from ~/.config/pagerduty-cli/config.json")
 
 	return contextCmd
 }
 
-func newStatusOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *statusOptions {
-	return &statusOptions{
-		IOStreams:     streams,
-		GlobalOptions: globalOpts,
-	}
+func newContextOptions() *contextOptions {
+	return &contextOptions{}
 }
 
-func (o *statusOptions) complete(cmd *cobra.Command, args []string) error {
+func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
 		return cmdutil.UsageErrorf(cmd, "Provide exactly one cluster ID")
 	}
@@ -86,15 +88,20 @@ func (o *statusOptions) complete(cmd *cobra.Command, args []string) error {
 	o.baseDomain = clusters[0].DNS().BaseDomain()
 	o.externalID = clusters[0].ExternalID()
 	o.infraID = clusters[0].InfraID()
-	o.output = o.GlobalOptions.Output
 
 	return nil
 }
 
-func (o *statusOptions) run() error {
+func (o *contextOptions) run() error {
 
 	connection := utils.CreateConnection()
 	defer connection.Close()
+
+	err := printClusterInfo(o.clusterID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Can't print cluster info: %v\n", err)
+		os.Exit(1)
+	}
 
 	limitedSupportReasons, err := utils.GetClusterLimitedSupportReasons(connection, o.clusterID)
 	if err != nil {
@@ -127,8 +134,38 @@ func (o *statusOptions) run() error {
 	err = o.printOtherLinks()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't print other links: %v\n", err)
-		os.Exit(1)
 	}
+
+	if o.full {
+		err = o.printCloudTrailLogs()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Can't print cloudtrail: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		fmt.Println()
+		fmt.Println("============================================================")
+		fmt.Println("CloudTrail events for the Cluster")
+		fmt.Println("============================================================")
+		println("Not polling cloudtrail logs, use --full flag to do so (must be logged into the correct hive to work).")
+	}
+	return nil
+}
+
+func printClusterInfo(clusterID string) error {
+
+	fmt.Println("============================================================")
+	fmt.Println("Cluster Info")
+	fmt.Println("============================================================")
+
+	cmd := "ocm describe cluster " + clusterID
+	output, err := exec.Command("bash", "-c", cmd).Output()
+	if err != nil {
+		fmt.Println(string(output))
+		fmt.Print(err)
+		return err
+	}
+	fmt.Println(string(output))
 
 	return nil
 }
@@ -159,7 +196,7 @@ func printSupportStatus(limitedSupportReasons []*utils.LimitedSupportReasonItem)
 	return nil
 }
 
-func (o *statusOptions) printServiceLogs() error {
+func (o *contextOptions) printServiceLogs() error {
 
 	// Get the SLs for the cluster
 	slResponse, err := servicelog.FetchServiceLogs(o.clusterID)
@@ -175,14 +212,9 @@ func (o *statusOptions) printServiceLogs() error {
 	}
 
 	// Parsing the relevant servicelogs
-	// - We only care about Error Severity SLs
 	// - We only care about SLs sent in the past 'o.days' days
 	var errorServiceLogs []sl.ServiceLogShort
 	for _, serviceLog := range serviceLogs.Items {
-		if serviceLog.Severity != "Error" {
-			continue
-		}
-
 		// If the days since the SL was sent exceeds o.days days, we're not interested
 		if (time.Since(serviceLog.CreatedAt).Hours() / 24) > float64(o.days) {
 			continue
@@ -192,7 +224,7 @@ func (o *statusOptions) printServiceLogs() error {
 	}
 
 	fmt.Println("============================================================")
-	fmt.Println("Service Logs with Error Severity sent in the past", o.days, "Days")
+	fmt.Println("Service Logs sent in the past", o.days, "Days")
 	fmt.Println("============================================================")
 
 	if o.verbose {
@@ -212,7 +244,7 @@ func (o *statusOptions) printServiceLogs() error {
 	return nil
 }
 
-func (o *statusOptions) printPDAlerts() error {
+func (o *contextOptions) printPDAlerts() error {
 	var oauthtoken string
 	if o.oauthtoken != "" {
 		oauthtoken = o.oauthtoken
@@ -273,7 +305,7 @@ func (o *statusOptions) printPDAlerts() error {
 	return err
 }
 
-func (o *statusOptions) printOtherLinks() error {
+func (o *contextOptions) printOtherLinks() error {
 	fmt.Println("============================================================")
 	fmt.Println("Splunk audit logs for the Cluster (set the time in Splunk)")
 	fmt.Println("============================================================")
@@ -283,6 +315,64 @@ func (o *statusOptions) printOtherLinks() error {
 	fmt.Println("OHSS tickets for the Cluster")
 	fmt.Println("============================================================")
 	fmt.Printf("Link to OHSS tickets: https://issues.redhat.com/issues/?jql=project%%20%%3D%%20OHSS%%20and%%20(%%22Cluster%%20ID%%22%%20~%%20%%20%%22%s%%22%%20OR%%20%%22Cluster%%20ID%%22%%20~%%20%%22%s%%22)\n\n", o.clusterID, o.externalID)
+
+	return nil
+}
+
+func (o *contextOptions) printCloudTrailLogs() error {
+
+	awsJumpClient, err := osdCloud.GenerateAWSClientForCluster(o.awsProfile, o.clusterID)
+	if err != nil {
+		return err
+	}
+
+	foundEvents := []*cloudtrail.Event{}
+	var eventSearchInput = cloudtrail.LookupEventsInput{}
+
+	println("Pulling and filtering the past 40 pages of Cloudtrail data")
+	for counter := 0; counter <= 40; counter++ {
+		print(".")
+		cloudTrailEvents, err := awsJumpClient.LookupEvents(&eventSearchInput)
+		if err != nil {
+			return err
+		}
+
+		foundEvents = append(foundEvents, cloudTrailEvents.Events...)
+
+		// for pagination
+		eventSearchInput.NextToken = cloudTrailEvents.NextToken
+		if cloudTrailEvents.NextToken == nil {
+			break
+		}
+	}
+	fmt.Println()
+	fmt.Println("============================================================")
+	fmt.Println("CloudTrail events for the Cluster")
+	fmt.Println("============================================================")
+
+	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+	table.AddRow([]string{"EventId", "EventName", "Username", "EventTime"})
+	for _, event := range foundEvents {
+		if strings.Contains(*event.EventName, "Get") || strings.Contains(*event.EventName, "List") || strings.Contains(*event.EventName, "Describe") || strings.Contains(*event.EventName, "AssumeRole") {
+			continue
+		}
+		if event.Username == nil {
+			table.AddRow([]string{*event.EventId, *event.EventName, "", event.EventTime.String()})
+		} else {
+			if strings.Contains(*event.Username, "RH-SRE-") {
+				continue
+			}
+			table.AddRow([]string{*event.EventId, *event.EventName, *event.Username, event.EventTime.String()})
+		}
+
+	}
+	// Add empty row for readability
+	table.AddRow([]string{})
+	err = table.Flush()
+	if err != nil {
+		fmt.Println("error while flushing table: ", err.Error())
+		return err
+	}
 
 	return nil
 }

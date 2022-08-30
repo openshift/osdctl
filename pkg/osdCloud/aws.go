@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/aws/aws-sdk-go/service/sts"
 
+	sdk "github.com/openshift-online/ocm-sdk-go"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
 )
@@ -257,4 +258,102 @@ func CreateAWSClient(clusterID string) (aws.Client, error) {
 	input := aws.AwsClientInput{AccessKeyID: awsCredentials.AccessKeyId, SecretAccessKey: awsCredentials.SecretAccessKey, SessionToken: awsCredentials.SessionToken, Region: *cloudCredentials.Region}
 
 	return aws.NewAwsClientWithInput(&input)
+}
+
+func GenerateCCSClusterAWSClient(ocmClient *sdk.Connection, awsClient aws.Client, clusterID string, clusterRegion string, partition string, sessionName string) (aws.Client, error) {
+	// Determine the right jump role
+	targetRoleArnString, err := utils.GetSupportRoleArnForCluster(ocmClient, clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	targetRoleArn, err := arn.Parse(targetRoleArnString)
+	if err != nil {
+		return nil, err
+	}
+
+	targetRoleArn.Partition = partition
+
+	// Start the jump role chain. Result should be credentials for the ManagedOpenShift Support role for the target cluster
+	assumedRoleCreds, err := GenerateSupportRoleCredentials(awsClient, targetRoleArn.AccountID, clusterRegion, sessionName, targetRoleArn.String())
+	if err != nil {
+		return nil, err
+	}
+
+	awsClientCCS, err := aws.NewAwsClientWithInput(&aws.AwsClientInput{
+		AccessKeyID:     *assumedRoleCreds.AccessKeyId,
+		SecretAccessKey: *assumedRoleCreds.SecretAccessKey,
+		SessionToken:    *assumedRoleCreds.SessionToken,
+		Region:          clusterRegion,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return awsClientCCS, nil
+}
+
+func GenerateNonCCSClusterAWSClient(ocmClient *sdk.Connection, awsClient aws.Client, clusterID string, clusterRegion string, partition string, sessionName string) (aws.Client, error) {
+	accountID, err := utils.GetAWSAccountIdForCluster(ocmClient, clusterID)
+	if err != nil {
+		return nil, err
+	}
+	// If the cluster is non-CCS, or an AWS Account ID was provided with -i, try and use OrganizationAccountAccessRole
+	assumedRoleCreds, err := GenerateOrganizationAccountAccessCredentials(awsClient, accountID, sessionName, partition)
+	if err != nil {
+		fmt.Printf("Could not build AWS Client for OrganizationAccountAccessRole: %s\n", err)
+		return nil, err
+	}
+
+	awsClientNonCCS, err := aws.NewAwsClientWithInput(&aws.AwsClientInput{
+		AccessKeyID:     *assumedRoleCreds.AccessKeyId,
+		SecretAccessKey: *assumedRoleCreds.SecretAccessKey,
+		SessionToken:    *assumedRoleCreds.SessionToken,
+		Region:          clusterRegion,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return awsClientNonCCS, nil
+}
+
+func GenerateAWSClientForCluster(awsProfile string, clusterID string) (aws.Client, error) {
+
+	ocmClient := utils.CreateConnection()
+	defer ocmClient.Close()
+
+	clusterResp, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(clusterID).Get().Send()
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	cluster := clusterResp.Body()
+	clusterRegion := cluster.Region().ID()
+
+	// Builds the base client using the provided creds (via profile or env vars)
+	awsClient, err := aws.NewAwsClient(awsProfile, clusterRegion, "")
+	if err != nil {
+		fmt.Printf("Could not build AWS Client: %s\n", err)
+		return nil, err
+	}
+
+	// Get the right partition for the final ARN
+	partition, err := aws.GetAwsPartition(awsClient)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate a session name using the SRE's kerberos ID
+	sessionName, err := GenerateRoleSessionName(awsClient)
+	if err != nil {
+		fmt.Printf("Could not generate Session Name: %s\n", err)
+		return nil, err
+	}
+
+	if cluster.CCS().Enabled() {
+		awsClient, err = GenerateCCSClusterAWSClient(ocmClient, awsClient, clusterID, clusterRegion, partition, sessionName)
+	} else {
+		awsClient, err = GenerateNonCCSClusterAWSClient(ocmClient, awsClient, clusterID, clusterRegion, partition, sessionName)
+	}
+
+	return awsClient, err
 }
