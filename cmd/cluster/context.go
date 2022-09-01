@@ -244,7 +244,7 @@ func (o *statusOptions) printServiceLogs() error {
 	} else {
 		// Non verbose only prints the summaries
 		for i, errorServiceLog := range errorServiceLogs {
-			fmt.Printf("%d. %s \n", i, errorServiceLog.Summary)
+			fmt.Printf("%d. %s (%s)\n", i, errorServiceLog.Summary, errorServiceLog.CreatedAt.Format(time.RFC3339))
 		}
 	}
 	fmt.Println()
@@ -258,6 +258,12 @@ func (o *statusOptions) printPDAlerts() error {
 		oauthtoken = o.oauthtoken
 	} else {
 		pdConfig := config.LoadPDConfig("/.config/pagerduty-cli/config.json")
+		if len(pdConfig.MySubdomain) == 0 {
+			return fmt.Errorf("unable to parse PagerDuty config")
+		}
+		if len(pdConfig.MySubdomain[0].AccessToken) == 0 {
+			return fmt.Errorf("unable to locate oauth accesstoken in PagerDuty config")
+		}
 		oauthtoken = pdConfig.MySubdomain[0].AccessToken
 	}
 	client := pd.NewOAuthClient(oauthtoken)
