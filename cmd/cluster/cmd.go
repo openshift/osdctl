@@ -26,6 +26,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 	clusterCmd.AddCommand(newCmdOwner(streams, flags, globalOpts))
 	clusterCmd.AddCommand(support.NewCmdSupport(streams, flags, client, globalOpts))
 	clusterCmd.AddCommand(newCmdContext(streams, flags, globalOpts))
+	clusterCmd.AddCommand(newCmdTransferOwner(streams, flags, globalOpts))
 
 	return clusterCmd
 }
