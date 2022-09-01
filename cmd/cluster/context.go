@@ -244,7 +244,7 @@ func (o *statusOptions) printServiceLogs() error {
 	} else {
 		// Non verbose only prints the summaries
 		for i, errorServiceLog := range errorServiceLogs {
-			fmt.Printf("%d. %s \n", i, errorServiceLog.Summary)
+			fmt.Printf("%d. %s (%s)\n", i, errorServiceLog.Summary, errorServiceLog.CreatedAt.Format(time.RFC3339))
 		}
 	}
 	fmt.Println()
