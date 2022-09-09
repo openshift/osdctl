@@ -102,7 +102,16 @@ func (o *cliOptions) run() error {
 	}
 
 	if o.output == "" {
-		fmt.Fprintf(o.IOStreams.Out, "Temporary AWS Credentials:\n%s\n", creds)
+		fmt.Println("Temporary AWS Credentials:")
+	}
+
+	if o.output == "env" || o.output == "" {
+		fmt.Fprintf(o.IOStreams.Out, "AWS_ACCESS_KEY_ID=%s \nAWS_SECRET_ACCESS_KEY=%s \nAWS_SESSION_TOKEN=%s \nAWS_DEFAULT_REGION=%s\n",
+			*creds.AccessKeyId,
+			*creds.SecretAccessKey,
+			*creds.SessionToken,
+			o.k8sclusterresourcefactory.Awscloudfactory.Region,
+		)
 	}
 
 	if o.output == "json" {
@@ -114,14 +123,6 @@ func (o *cliOptions) run() error {
 		)
 	}
 
-	if o.output == "env" {
-		fmt.Fprintf(o.IOStreams.Out, "AWS_ACCESS_KEY_ID=%s \nAWS_SECRET_ACCESS_KEY=%s \nAWS_SESSION_TOKEN=%s \nAWS_DEFAULT_REGION=%s\n",
-			*creds.AccessKeyId,
-			*creds.SecretAccessKey,
-			*creds.SessionToken,
-			o.k8sclusterresourcefactory.Awscloudfactory.Region,
-		)
-	}
 
 	return nil
 }
