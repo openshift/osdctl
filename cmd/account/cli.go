@@ -123,6 +123,5 @@ func (o *cliOptions) run() error {
 		)
 	}
 
-
 	return nil
 }
