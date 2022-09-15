@@ -4,21 +4,20 @@ go 1.16
 
 require (
 	github.com/PagerDuty/go-pagerduty v1.5.1
-	github.com/aws/aws-sdk-go v1.42.20
+	github.com/aws/aws-sdk-go v1.44.66
 	github.com/aws/aws-sdk-go-v2/credentials v1.12.2
 	github.com/coreos/go-semver v0.3.0
 	github.com/deckarep/golang-set v1.7.1
 	github.com/golang/mock v1.6.0
 	github.com/onsi/gomega v1.20.0
-	github.com/openshift-online/ocm-cli v0.1.64
-	github.com/openshift-online/ocm-sdk-go v0.1.273
+	github.com/openshift-online/ocm-cli v0.1.65-0.20220913083421-16b44c698a1f
+	github.com/openshift-online/ocm-sdk-go v0.1.287
 	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
 	github.com/openshift/aws-account-operator/pkg/apis v0.0.0-20210611151019-01b1df7a3e9e
 	github.com/openshift/gcp-project-operator v0.0.0-20210906153132-ce9b2425f1a7
 	github.com/openshift/hive v1.0.5
 	github.com/openshift/osd-network-verifier v0.0.0-20220518154805-047e42cfe29f
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
-	github.com/prometheus/common v0.37.0 // indirect
 	github.com/shopspring/decimal v1.2.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/cobra v1.5.0
