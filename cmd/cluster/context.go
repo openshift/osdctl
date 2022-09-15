@@ -30,6 +30,8 @@ type statusOptions struct {
 	baseDomain string
 	days       int
 	oauthtoken string
+	externalID string
+	infraID string
 
 	genericclioptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
@@ -91,6 +93,9 @@ func (o *statusOptions) complete(cmd *cobra.Command, args []string) error {
 	}
 	o.clusterID = clusters[0].ID()
 	o.baseDomain = clusters[0].DNS().BaseDomain()
+	o.externalID = clusters[0].ExternalID()
+	//o.infraID = clusters[0].InfraID()
+	o.infraID = "FIXME"
 	o.output = o.GlobalOptions.Output
 
 	return nil
@@ -136,6 +141,13 @@ func (o *statusOptions) run() error {
 	err = o.printPDAlerts()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't print pagerduty alerts: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Print other helpful links
+	err = o.printOtherLinks()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Can't print other links: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -311,4 +323,18 @@ func (o *statusOptions) printPDAlerts() error {
 	}
 
 	return err
+}
+
+func (o *statusOptions) printOtherLinks() error {
+	fmt.Println("============================================================")
+	fmt.Println("Splunk audit logs for the Cluster (set the time in Splunk)")
+	fmt.Println("============================================================")
+	fmt.Printf("Link to Splunk audit logs: https://osdsecuritylogs.splunkcloud.com/en-US/app/search/search?q=search%%20index%%3D%%22openshift_managed_audit%%22%%20clusterid%%3D%%22%s%%22\n\n", o.infraID)
+
+	fmt.Println("============================================================")
+	fmt.Println("OHSS tickets for the Cluster")
+	fmt.Println("============================================================")
+	fmt.Printf("Link to OHSS tickets: https://issues.redhat.com/issues/?jql=project%%20%%3D%%20OHSS%%20and%%20(%%22Cluster%%20ID%%22%%20~%%20%%20%%22%s%%22%%20OR%%20%%22Cluster%%20ID%%22%%20~%%20%%22%s%%22)\n\n", o.clusterID, o.externalID)
+
+	return nil
 }
