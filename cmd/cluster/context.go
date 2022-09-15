@@ -94,8 +94,7 @@ func (o *statusOptions) complete(cmd *cobra.Command, args []string) error {
 	o.clusterID = clusters[0].ID()
 	o.baseDomain = clusters[0].DNS().BaseDomain()
 	o.externalID = clusters[0].ExternalID()
-	//o.infraID = clusters[0].InfraID()
-	o.infraID = "FIXME"
+	o.infraID = clusters[0].InfraID()
 	o.output = o.GlobalOptions.Output
 
 	return nil
