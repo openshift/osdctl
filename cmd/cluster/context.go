@@ -31,7 +31,7 @@ type statusOptions struct {
 	days       int
 	oauthtoken string
 	externalID string
-	infraID string
+	infraID    string
 
 	genericclioptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
