@@ -17,6 +17,11 @@ Currently, it mainly supports related work for AWS, especially [aws-account-oper
 - Go >= 1.13
 - make
 - [goreleaser](https://github.com/goreleaser)
+- `GOPROXY` contains `proxy.golang.org`
+  ```shell
+  # Google`s default proxy can be added globally:
+  go env -w GOPROXY="$(go env GOPROXY),https://proxy.golang.org"
+  ```
 
 ```shell
 # Goreleaser is required for builds,
