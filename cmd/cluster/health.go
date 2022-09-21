@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
@@ -41,7 +40,7 @@ func newCmdHealth(streams genericclioptions.IOStreams, flags *genericclioptions.
 	ops := newHealthOptions(streams, flags, globalOpts)
 	healthCmd := &cobra.Command{
 		Use:               "health",
-		Short:             "Describes health of cluster nodes and provides other cluster vitals.",
+		Short:             "Describes health of cluster nodes and provides other cluster vitals. Requires being logged into the cluster's corresponding hive cluster.",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -51,7 +50,7 @@ func newCmdHealth(streams genericclioptions.IOStreams, flags *genericclioptions.
 	}
 	ops.k8sclusterresourcefactory.AttachCobraCliFlags(healthCmd)
 	healthCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
-
+	healthCmd.MarkFlagRequired("cluster-id")
 	return healthCmd
 }
 
@@ -140,15 +139,7 @@ func (o *healthOptions) run() error {
 		}
 	}
 
-	// Extracting region from the availability zone.
-	reg := cluster.Nodes().AvailabilityZones()[0]
-	length := len(reg)
-	lastChar := reg[length-1 : length]
-	for _, r := range lastChar {
-		if unicode.IsLetter(r) {
-			reg = reg[0 : length-1]
-		}
-	}
+	reg := cluster.Region().ID()
 
 	//This call creates a client that is connected to the customer's account and we will use it to get the information on customer's running instances etc.
 	awsJumpClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
