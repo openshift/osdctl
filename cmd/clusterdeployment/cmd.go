@@ -16,7 +16,7 @@ func NewCmdClusterDeployment(streams genericclioptions.IOStreams, flags *generic
 		DisableAutoGenTag: true,
 	}
 
-	cdCmd.AddCommand(newCmdList(streams, flags))
+	cdCmd.AddCommand(newCmdList(streams, flags, client))
 	cdCmd.AddCommand(newCmdListResources(streams, flags, client))
 	return cdCmd
 }

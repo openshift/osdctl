@@ -15,8 +15,8 @@ import (
 )
 
 // newCmdList implements the list command to list cluster deployment crs
-func newCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newListOptions(streams, flags)
+func newCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newListOptions(streams, flags, client)
 	listCmd := &cobra.Command{
 		Use:               "list",
 		Short:             "List cluster deployment crs",
@@ -38,10 +38,11 @@ type listOptions struct {
 	kubeCli client.Client
 }
 
-func newListOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *listOptions {
+func newListOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *listOptions {
 	return &listOptions{
 		flags:     flags,
 		IOStreams: streams,
+		kubeCli:   client,
 	}
 }
 
