@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
+	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
 	. "github.com/openshift/osdctl/cmd/clusterdeployment"
 	mockk8s "github.com/openshift/osdctl/cmd/clusterdeployment/mock/k8s"
 	mockprinter "github.com/openshift/osdctl/cmd/clusterdeployment/mock/printer"
@@ -12,8 +12,8 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/onsi/gomega"
-	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
-	hiveaws "github.com/openshift/hive/pkg/apis/hive/v1/aws"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	hiveaws "github.com/openshift/hive/apis/hive/v1/aws"
 )
 
 type resources struct {

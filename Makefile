@@ -43,7 +43,7 @@ vet:
 	go vet ${BUILDFLAGS} ./...
 
 mod:
-	go mod tidy
+	go mod tidy -compat=1.17
 	@git diff --exit-code -- go.mod
 
 docs:

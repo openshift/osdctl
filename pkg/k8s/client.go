@@ -3,8 +3,9 @@ package k8s
 import (
 	"context"
 	"fmt"
-
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -14,35 +15,43 @@ type LazyClient struct {
 	flags  *genericclioptions.ConfigFlags
 }
 
+func (s *LazyClient) Scheme() *runtime.Scheme {
+	return s.client.Scheme()
+}
+
+func (s *LazyClient) RESTMapper() meta.RESTMapper {
+	return s.client.RESTMapper()
+}
+
 func (s *LazyClient) err() error {
 	return fmt.Errorf("not connected to real cluster, please verify KUBECONFIG is correct")
 }
 
-func (s *LazyClient) Get(ctx context.Context, key client.ObjectKey, obj runtime.Object) error {
+func (s *LazyClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
 	return s.getClient().Get(ctx, key, obj)
 }
 
-func (s *LazyClient) List(ctx context.Context, list runtime.Object, opts ...client.ListOption) error {
+func (s *LazyClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 	return s.getClient().List(ctx, list, opts...)
 }
 
-func (s *LazyClient) Create(ctx context.Context, obj runtime.Object, opts ...client.CreateOption) error {
+func (s *LazyClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
 	return s.getClient().Create(ctx, obj, opts...)
 }
 
-func (s *LazyClient) Delete(ctx context.Context, obj runtime.Object, opts ...client.DeleteOption) error {
+func (s *LazyClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 	return s.getClient().Delete(ctx, obj, opts...)
 }
 
-func (s *LazyClient) Update(ctx context.Context, obj runtime.Object, opts ...client.UpdateOption) error {
+func (s *LazyClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 	return s.getClient().Update(ctx, obj, opts...)
 }
 
-func (s *LazyClient) Patch(ctx context.Context, obj runtime.Object, patch client.Patch, opts ...client.PatchOption) error {
+func (s *LazyClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 	return s.getClient().Patch(ctx, obj, patch, opts...)
 }
 
-func (s *LazyClient) DeleteAllOf(ctx context.Context, obj runtime.Object, opts ...client.DeleteAllOfOption) error {
+func (s *LazyClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
 	return s.getClient().DeleteAllOf(ctx, obj, opts...)
 }
 
