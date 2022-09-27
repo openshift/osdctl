@@ -17,6 +17,11 @@ Currently, it mainly supports related work for AWS, especially [aws-account-oper
 - Go >= 1.13
 - make
 - [goreleaser](https://github.com/goreleaser)
+- `GOPROXY` contains `proxy.golang.org`
+  ```shell
+  # Google`s default proxy can be added globally:
+  go env -w GOPROXY="$(go env GOPROXY),https://proxy.golang.org"
+  ```
 
 ```shell
 # Goreleaser is required for builds,
@@ -283,6 +288,19 @@ osdctl federatedrole apply -u <URL>
 
 # apply via local file
 osdctl federatedrole apply -f <yaml file>
+```
+
+### Cluster break-glass access
+#### Access cluster
+```bash
+# Login to the cluster's hive shard
+osdctl cluster break-glass <cluster identifier> --as backplane-cluster-admin
+```
+
+#### Drop cluster access
+```bash
+osdctl cluster break-glass cleanup <cluster identifier>
+# Non-PrivateLink - remove any Kubeconfig files saved locally in /tmp/
 ```
 
 ### Send a servicelog to a cluster

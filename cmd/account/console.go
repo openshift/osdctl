@@ -3,14 +3,19 @@ package account
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/arn"
+	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/klog/v2"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
+	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
 	k8spkg "github.com/openshift/osdctl/pkg/k8s"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 )
@@ -75,7 +80,8 @@ func (o *consoleOptions) complete(cmd *cobra.Command) error {
 }
 
 func (o *consoleOptions) run() error {
-	awsClient, err := o.k8sclusterresourcefactory.GetCloudProvider(o.verbose)
+
+	awsClient, err := awsprovider.NewAwsClient(o.k8sclusterresourcefactory.Awscloudfactory.Profile, o.k8sclusterresourcefactory.Awscloudfactory.Region, o.k8sclusterresourcefactory.Awscloudfactory.ConfigFile)
 	if err != nil {
 		return err
 	}
@@ -84,6 +90,23 @@ func (o *consoleOptions) run() error {
 	if err != nil {
 		return err
 	}
+
+	callerIdentityOutput, err := awsClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
+	if err != nil {
+		klog.Error("Fail to get caller identity. Could you please validate the credentials?")
+		return err
+	}
+	o.k8sclusterresourcefactory.Awscloudfactory.CallerIdentity = callerIdentityOutput
+	roleArn, err := arn.Parse(aws.StringValue(callerIdentityOutput.Arn))
+	if err != nil {
+		return err
+	}
+
+	splitArn := strings.Split(roleArn.Resource, "/")
+	username := splitArn[1]
+	o.k8sclusterresourcefactory.Awscloudfactory.SessionName = fmt.Sprintf("RH-SRE-%s", username)
+
+	o.k8sclusterresourcefactory.Awscloudfactory.RoleName = awsv1alpha1.AccountOperatorIAMRole
 
 	consoleURL, err := awsprovider.RequestSignInToken(
 		awsClient,

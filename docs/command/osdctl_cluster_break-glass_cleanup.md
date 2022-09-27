@@ -1,9 +1,9 @@
-## osdctl cluster
+## osdctl access
+Relinquish emergency access from the given cluster. If the cluster is PrivateLink, it deletes all jump pods in the cluster's namespace (because of this, you must be logged into the hive shard when dropping access for PrivateLink clusters). For non-PrivateLink clusters, the $KUBECONFIG environment variable is unset, if applicable.
 
-Provides vitals of an AWS cluster
 
 ```
-osdctl cluster [flags]
+osdctl cluster break-glass cleanup <cluster identifier> [flags]
 ```
 
 ### Options
@@ -33,6 +33,4 @@ osdctl cluster [flags]
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
-* [osdctl cluster health](osdctl_cluster_health.md)	 - Describes health of cluster nodes and provides other cluster vitals.
-* [osdctl cluster break-glass](osdctl_cluster_break-glass.md)    - Emergency access to a cluster
+* [osdctl cluster break-glass](osdctl_cluster_break-glass.md)	 - Request or obtain emergency break-glass access for a cluster

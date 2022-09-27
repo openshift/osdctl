@@ -1,12 +1,9 @@
 package cluster
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"os"
 
-	sdk "github.com/openshift-online/ocm-sdk-go"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -82,25 +79,7 @@ func (o *loggingCheckOptions) complete(cmd *cobra.Command, args []string) error 
 
 func (o *loggingCheckOptions) run() error {
 
-	// Create a context:
-	ctx := context.Background()
-	//The ocm
-	token := os.Getenv("OCM_TOKEN")
-	if token == "" {
-		ocmToken, err := utils.GetOCMAccessToken()
-		if err != nil {
-			log.Fatalf("OCM token not set. Please configure it using the OCM_TOKEN evnironment variable or the ocm cli")
-			os.Exit(1)
-		}
-		token = *ocmToken
-	}
-	connection, err := sdk.NewConnectionBuilder().
-		Tokens(token).
-		Build()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't build connection: %v\n", err)
-		os.Exit(1)
-	}
+	connection := utils.CreateConnection()
 	defer connection.Close()
 
 	// Get the client for the resource that manages the collection of clusters:
@@ -108,7 +87,7 @@ func (o *loggingCheckOptions) run() error {
 	// Get the labels externally available for the cluster
 	resource := collection.Cluster(o.clusterID).ExternalConfiguration().Labels()
 	// Send the request to retrieve the list of external cluster labels:
-	response, err := resource.List().SendContext(ctx)
+	response, err := resource.List().Send()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't retrieve cluster labels: %v\n", err)
 		os.Exit(1)
