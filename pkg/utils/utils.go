@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 
@@ -15,23 +14,10 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
-type lmtSprReasonItem struct {
+type LimitedSupportReasonItem struct {
 	ID      string
 	Summary string
 	Details string
-}
-
-func GetOCMAccessToken() (*string, error) {
-	// Get ocm access token
-	ocmCmd := exec.Command("ocm", "token")
-	ocmCmd.Stderr = os.Stderr
-	ocmOutput, err := ocmCmd.Output()
-	if err != nil { // Throw error if ocm not in PATH, or ocm command exit non-zero.
-		return nil, fmt.Errorf("failed running ocm token: %v", err)
-	}
-	accessToken := strings.TrimSuffix(string(ocmOutput), "\n")
-
-	return &accessToken, nil
 }
 
 var clusterKeyRE = regexp.MustCompile(`^(\w|-)+$`)
@@ -51,7 +37,7 @@ func IsValidClusterKey(clusterKey string) (err error) {
 	return nil
 }
 
-//GetCluster Function allows to get a single cluster with any identifier (displayname, ID, or external ID)
+// GetCluster Function allows to get a single cluster with any identifier (displayname, ID, or external ID)
 func GetCluster(connection *sdk.Connection, key string) (cluster *cmv1.Cluster, err error) {
 	// Prepare the resources that we will be using:
 	subsResource := connection.AccountsMgmt().V1().Subscriptions()
@@ -143,7 +129,7 @@ func GetCluster(connection *sdk.Connection, key string) (cluster *cmv1.Cluster, 
 	return
 }
 
-func GetClusterLimitedSupportReasons(connection *sdk.Connection, clusterID string) ([]*lmtSprReasonItem, error) {
+func GetClusterLimitedSupportReasons(connection *sdk.Connection, clusterID string) ([]*LimitedSupportReasonItem, error) {
 
 	limitedSupportReasons, err := connection.ClustersMgmt().V1().
 		Clusters().
@@ -157,10 +143,10 @@ func GetClusterLimitedSupportReasons(connection *sdk.Connection, clusterID strin
 
 	lmtReason := limitedSupportReasons.Items().Slice()
 
-	var clusterLmtSprReasons []*lmtSprReasonItem
+	var clusterLmtSprReasons []*LimitedSupportReasonItem
 
 	for _, reason := range lmtReason {
-		clusterLmtSprReason := lmtSprReasonItem{
+		clusterLmtSprReason := LimitedSupportReasonItem{
 			ID:      reason.ID(),
 			Summary: reason.Summary(),
 			Details: reason.Details(),
@@ -171,7 +157,7 @@ func GetClusterLimitedSupportReasons(connection *sdk.Connection, clusterID strin
 	return clusterLmtSprReasons, nil
 }
 
-//GetSubscription Function allows to get a single subscription with any identifier (displayname, ID, internal or external ID)
+// GetSubscription Function allows to get a single subscription with any identifier (displayname, ID, internal or external ID)
 func GetSubscription(connection *sdk.Connection, key string) (subscription *amv1.Subscription, err error) {
 	// Prepare the resources that we will be using:
 	subsResource := connection.AccountsMgmt().V1().Subscriptions()
@@ -209,7 +195,7 @@ func GetSubscription(connection *sdk.Connection, key string) (subscription *amv1
 	return
 }
 
-//GetAccount Function allows to get a single account with any identifier (username, ID)
+// GetAccount Function allows to get a single account with any identifier (username, ID)
 func GetAccount(connection *sdk.Connection, key string) (account *amv1.Account, err error) {
 	// Prepare the resources that we will be using:
 	accsResource := connection.AccountsMgmt().V1().Accounts()
