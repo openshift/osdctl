@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
-	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	k8spkg "github.com/openshift/osdctl/pkg/k8s"
@@ -224,32 +222,15 @@ func (o *healthOptions) run() error {
 //This call requires the ocm API Token https://cloud.redhat.com/openshift/token be available in the OCM_TOKEN env variable.
 //Example: export OCM_TOKEN=$(jq -r .refresh_token ~/.ocm.json)
 func ocmDescribe(clusterID string) (*v1.Cluster, error) {
-	// Create a context:
-	ctx := context.Background()
-	//The ocm
-	token := os.Getenv("OCM_TOKEN")
-	if token == "" {
-		ocmToken, err := utils.GetOCMAccessToken()
-		if err != nil {
-			log.Fatalf("OCM token not set. Please configure it using the OCM_TOKEN evnironment variable or the ocm cli")
-			os.Exit(1)
-		}
-		token = *ocmToken
-	}
-	connection, err := sdk.NewConnectionBuilder().
-		Tokens(token).
-		Build()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't build connection: %v\n", err)
-		os.Exit(1)
-	}
+	connection := utils.CreateConnection()
 	defer connection.Close()
 
 	// Get the client for the resource that manages the collection of clusters:
 	collection := connection.ClustersMgmt().V1().Clusters()
 	resource := collection.Cluster(clusterID)
+
 	// Send the request to retrieve the cluster:
-	response, err := resource.Get().SendContext(ctx)
+	response, err := resource.Get().Send()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't retrieve cluster: %v\n", err)
 		os.Exit(1)

@@ -4,14 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
 	pd "github.com/PagerDuty/go-pagerduty"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
-	sdk "github.com/openshift-online/ocm-sdk-go"
-	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	sl "github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
@@ -35,12 +32,6 @@ type statusOptions struct {
 
 	genericclioptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
-}
-
-type limitedSupportReasonItem struct {
-	ID      string
-	Summary string
-	Details string
 }
 
 // newCmdContext implements the context command to show the current context of a cluster
@@ -101,29 +92,18 @@ func (o *statusOptions) complete(cmd *cobra.Command, args []string) error {
 }
 
 func (o *statusOptions) run() error {
-	// Create a context:
-	ctx := context.Background()
 
-	// Ocm token
-	token := getOCMToken()
-	connection, err := sdk.NewConnectionBuilder().
-		Tokens(token).
-		Build()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't build connection: %v\n", err)
-		os.Exit(1)
-	}
+	connection := utils.CreateConnection()
 	defer connection.Close()
 
-	// Get limited support reasons for a cluster
-	lsResponse, err := getLimitedSupportReasons(connection, ctx, o.clusterID)
+	limitedSupportReasons, err := utils.GetClusterLimitedSupportReasons(connection, o.clusterID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't retrieve cluster limited support reasons: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Check support status of cluster
-	err = printSupportStatus(lsResponse)
+	err = printSupportStatus(limitedSupportReasons)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't print support status: %v\n", err)
 		os.Exit(1)
@@ -153,46 +133,15 @@ func (o *statusOptions) run() error {
 	return nil
 }
 
-func getOCMToken() string {
-	token := os.Getenv("OCM_TOKEN")
-	if token == "" {
-		ocmToken, err := utils.GetOCMAccessToken()
-		if err != nil {
-			log.Fatalf("OCM token not set. Please configure by using the OCM_TOKEN environment variable or the ocm cli")
-			os.Exit(1)
-		}
-		token = *ocmToken
-	}
-	return token
-}
-
-func getLimitedSupportReasons(connection *sdk.Connection, ctx context.Context, clusterID string) (*cmv1.LimitedSupportReasonsListResponse, error) {
-	collection := connection.ClustersMgmt().V1().Clusters()
-	resource := collection.Cluster(clusterID).LimitedSupportReasons()
-	lsResponse, err := resource.List().SendContext(ctx)
-	return lsResponse, err
-}
-
 // printSupportStatus reports if a cluster is in limited support or fully supported.
-func printSupportStatus(response *cmv1.LimitedSupportReasonsListResponse) error {
-	reasons, _ := response.GetItems()
-	var clusterLimitedSupportReasons []*limitedSupportReasonItem
-	reasons.Each(func(limitedSupportReason *cmv1.LimitedSupportReason) bool {
-		clusterLimitedSupportReason := limitedSupportReasonItem{
-			ID:      limitedSupportReason.ID(),
-			Summary: limitedSupportReason.Summary(),
-			Details: limitedSupportReason.Details(),
-		}
-		clusterLimitedSupportReasons = append(clusterLimitedSupportReasons, &clusterLimitedSupportReason)
-		return true
-	})
+func printSupportStatus(limitedSupportReasons []*utils.LimitedSupportReasonItem) error {
 
 	fmt.Println("============================================================")
 	fmt.Println("Limited Support Status")
 	fmt.Println("============================================================")
 
 	// No reasons found, cluster is fully supported
-	if len(clusterLimitedSupportReasons) == 0 {
+	if len(limitedSupportReasons) == 0 {
 		fmt.Printf("Cluster is fully supported\n")
 		fmt.Println()
 		return nil
@@ -200,7 +149,7 @@ func printSupportStatus(response *cmv1.LimitedSupportReasonsListResponse) error 
 
 	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
 	table.AddRow([]string{"Reason ID", "Summary", "Details"})
-	for _, clusterLimitedSupportReason := range clusterLimitedSupportReasons {
+	for _, clusterLimitedSupportReason := range limitedSupportReasons {
 		table.AddRow([]string{clusterLimitedSupportReason.ID, clusterLimitedSupportReason.Summary, clusterLimitedSupportReason.Details})
 	}
 	// Add empty row for readability

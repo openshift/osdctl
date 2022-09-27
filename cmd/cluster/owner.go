@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"html/template"
 	"os"
-	"strings"
 
-	"github.com/openshift-online/ocm-cli/pkg/ocm"
-	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
+	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
@@ -60,24 +58,8 @@ func (o *ownerOptions) complete(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func createConnection() (*sdk.Connection, error) {
-	connection, err := ocm.NewConnection().Build()
-	if err != nil {
-		baseErrString := "Failed to create OCM connection"
-		if strings.Contains(err.Error(), "Not logged in, run the") {
-			return nil, fmt.Errorf("%s: user is not logged in, please re-login and try again", baseErrString)
-		}
-
-		return nil, fmt.Errorf("%s: %w", baseErrString, err)
-	}
-	return connection, nil
-}
-
 func (o *ownerOptions) run() error {
-	connection, err := createConnection()
-	if err != nil {
-		return fmt.Errorf("could not createConnection: %w", err)
-	}
+	connection := utils.CreateConnection()
 
 	var (
 		accountName = o.userName
