@@ -3,8 +3,8 @@ package clusterdeployment
 import (
 	"context"
 
-	configv1 "github.com/openshift/api/config/v1"
-	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
+	hiveapiv1 "github.com/openshift/hive/apis/hive/v1"
+	hivev1 "github.com/openshift/hive/pkg/constants"
 	"github.com/spf13/cobra"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -15,8 +15,8 @@ import (
 )
 
 // newCmdList implements the list command to list cluster deployment crs
-func newCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newListOptions(streams, flags)
+func newCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+	ops := newListOptions(streams, flags, client)
 	listCmd := &cobra.Command{
 		Use:               "list",
 		Short:             "List cluster deployment crs",
@@ -38,10 +38,11 @@ type listOptions struct {
 	kubeCli client.Client
 }
 
-func newListOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *listOptions {
+func newListOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *listOptions {
 	return &listOptions{
 		flags:     flags,
 		IOStreams: streams,
+		kubeCli:   client,
 	}
 }
 
@@ -51,7 +52,7 @@ func (o *listOptions) complete(_ *cobra.Command, _ []string) error {
 
 func (o *listOptions) run() error {
 	ctx := context.TODO()
-	var cds hivev1.ClusterDeploymentList
+	var cds hiveapiv1.ClusterDeploymentList
 	if err := o.kubeCli.List(ctx, &cds, &client.ListOptions{}); err != nil {
 		return err
 	}
@@ -81,13 +82,8 @@ func (o *listOptions) run() error {
 			region = ""
 		}
 
-		if cd.Status.ClusterVersionStatus != nil {
-			for _, history := range cd.Status.ClusterVersionStatus.History {
-				if history.State == configv1.CompletedUpdate {
-					version = history.Version
-					break
-				}
-			}
+		if vmm, ok := cd.Labels[hivev1.VersionMajorMinorPatchLabel]; ok {
+			version = vmm
 		}
 
 		p.AddRow([]string{cd.Namespace, cd.Name, cd.Status.APIURL, version, platform, region})

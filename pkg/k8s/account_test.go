@@ -6,7 +6,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
-	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
+	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -56,8 +56,9 @@ func TestGetAWSAccount(t *testing.T) {
 					APIVersion: "aws.managed.openshift.io/v1alpha1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bar",
-					Namespace: "foo",
+					Name:            "bar",
+					Namespace:       "foo",
+					ResourceVersion: "999",
 				},
 			},
 		},
@@ -113,9 +114,10 @@ func TestGetAccountClaimFromClusterID(t *testing.T) {
 			errExpected: false,
 			expectedAccount: awsv1alpha1.AccountClaim{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bar",
-					Namespace: "uhc-production-aaabbbccc",
-					Labels:    map[string]string{"api.openshift.com/id": "aaabbbccc"},
+					Name:            "bar",
+					Namespace:       "uhc-production-aaabbbccc",
+					Labels:          map[string]string{"api.openshift.com/id": "aaabbbccc"},
+					ResourceVersion: "999",
 				},
 			},
 		},
@@ -175,8 +177,9 @@ func TestGetAWSAccountClaim(t *testing.T) {
 					APIVersion: "aws.managed.openshift.io/v1alpha1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bar",
-					Namespace: "foo",
+					Name:            "bar",
+					Namespace:       "foo",
+					ResourceVersion: "999",
 				},
 			},
 		},

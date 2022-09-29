@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
-	gcpv1alpha1 "github.com/openshift/gcp-project-operator/pkg/apis/gcp/v1alpha1"
-	hivev1 "github.com/openshift/hive/pkg/apis/hive/v1"
+	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
+	gcpv1alpha1 "github.com/openshift/gcp-project-operator/api/v1alpha1"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"github.com/spf13/cobra"
 
 	corev1 "k8s.io/api/core/v1"
