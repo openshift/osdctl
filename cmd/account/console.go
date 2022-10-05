@@ -3,26 +3,21 @@ package account
 import (
 	"fmt"
 	"net/url"
-	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/arn"
-	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 
-	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/klog/v2"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
-	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
-	k8spkg "github.com/openshift/osdctl/pkg/k8s"
-	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
+	awsSdk "github.com/aws/aws-sdk-go/aws"
+	osdCloud "github.com/openshift/osdctl/pkg/osdCloud"
+	"github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/openshift/osdctl/pkg/utils"
 )
 
 // newCmdConsole implements the Console command which Consoles the specified account cr
-func newCmdConsole(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newConsoleOptions(streams, flags)
+func newCmdConsole() *cobra.Command {
+	ops := newConsoleOptions()
 	consoleCmd := &cobra.Command{
 		Use:               "console",
 		Short:             "Generate an AWS console URL on the fly",
@@ -34,46 +29,58 @@ func newCmdConsole(streams genericclioptions.IOStreams, flags *genericclioptions
 		},
 	}
 
-	ops.k8sclusterresourcefactory.AttachCobraCliFlags(consoleCmd)
-
 	consoleCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 	consoleCmd.Flags().BoolVar(&ops.launch, "launch", false, "Launch web browser directly")
+	consoleCmd.Flags().Int64VarP(&ops.consoleDuration, "duration", "d", 3600, "The duration of the console session. "+
+		"Default value is 3600 seconds(1 hour)")
+	consoleCmd.Flags().StringVarP(&ops.awsAccountID, "accountId", "i", "", "AWS Account ID")
+	consoleCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", "", "AWS Profile")
+	consoleCmd.Flags().StringVarP(&ops.region, "region", "r", "", "Region")
+	consoleCmd.Flags().StringVarP(&ops.clusterID, "clusterID", "C", "", "Cluster ID")
 
 	return consoleCmd
 }
 
 // consoleOptions defines the struct for running Console command
 type consoleOptions struct {
-	k8sclusterresourcefactory k8spkg.ClusterResourceFactoryOptions
-
 	verbose bool
 	launch  bool
 
-	genericclioptions.IOStreams
+	awsAccountID string
+	awsProfile   string
+	region       string
+	clusterID    string
+
+	consoleDuration int64
 }
 
-func newConsoleOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *consoleOptions {
-	return &consoleOptions{
-		k8sclusterresourcefactory: k8spkg.ClusterResourceFactoryOptions{
-			Flags: flags,
-		},
-		IOStreams: streams,
-	}
+func newConsoleOptions() *consoleOptions {
+	return &consoleOptions{}
 }
 
 func (o *consoleOptions) complete(cmd *cobra.Command) error {
-	k8svalid, err := o.k8sclusterresourcefactory.ValidateIdentifiers()
-	if !k8svalid {
+
+	var err error
+
+	ocmClient := utils.CreateConnection()
+
+	if o.awsAccountID == "" && o.clusterID == "" {
+		return fmt.Errorf("please specify -i or -C")
+	}
+
+	if o.awsAccountID != "" && o.clusterID != "" {
+		return fmt.Errorf("-i and -c are mutually exclusive, please only specify one")
+	}
+
+	if o.clusterID != "" {
+		o.awsAccountID, err = utils.GetAWSAccountIdForCluster(ocmClient, o.clusterID)
 		if err != nil {
 			return err
 		}
 	}
 
-	awsvalid, err := o.k8sclusterresourcefactory.Awscloudfactory.ValidateIdentifiers()
-	if !awsvalid {
-		if err != nil {
-			return err
-		}
+	if o.region == "" {
+		o.region = "us-east-1"
 	}
 
 	return nil
@@ -81,49 +88,79 @@ func (o *consoleOptions) complete(cmd *cobra.Command) error {
 
 func (o *consoleOptions) run() error {
 
-	awsClient, err := awsprovider.NewAwsClient(o.k8sclusterresourcefactory.Awscloudfactory.Profile, o.k8sclusterresourcefactory.Awscloudfactory.Region, o.k8sclusterresourcefactory.Awscloudfactory.ConfigFile)
+	isCCS := false
+	var err error
+
+	ocmClient := utils.CreateConnection()
+
+	// If a cluster ID was provided, determine if the cluster is CCS
+	if o.clusterID != "" {
+		isCCS, err = utils.IsClusterCCS(ocmClient, o.clusterID)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Build the base AWS client using the provide credentials (profile or env vars)
+	awsClient, err := aws.NewAwsClient(o.awsProfile, o.region, "")
 	if err != nil {
+		fmt.Printf("Could not build AWS Client: %s\n", err)
 		return err
 	}
 
-	partition, err := awsprovider.GetAwsPartition(awsClient)
+	// Generate a session name using the SRE's kerberos ID
+	sessionName, err := osdCloud.GenerateRoleSessionName(awsClient)
 	if err != nil {
+		fmt.Printf("Could not generate Session Name: %s\n", err)
 		return err
 	}
 
-	callerIdentityOutput, err := awsClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
-	if err != nil {
-		klog.Error("Fail to get caller identity. Could you please validate the credentials?")
-		return err
+	// By default, the target role arn is OrganizationAccountAccessRole (works for -i and non-CCS clusters)
+	targetRoleArn := aws.GenerateRoleARN(o.awsAccountID, osdCloud.OrganizationAccountAccessRole)
+
+	if isCCS {
+		// If a cluster is provided and it's CCS, the target role is the Managed Support role arn
+		targetRoleArn, err = utils.GetSupportRoleArnForCluster(ocmClient, o.clusterID)
+		if err != nil {
+			return err
+		}
+
+		// The AWS client used to generate the URL should be the jump role for CCS clusters
+		jumpRoleCreds, err := osdCloud.GenerateJumpRoleCredentials(awsClient, o.awsAccountID, o.region, sessionName)
+		if err != nil {
+			return err
+		}
+
+		awsClient, err = aws.NewAwsClientWithInput(
+			&aws.AwsClientInput{
+				AccessKeyID:     *jumpRoleCreds.AccessKeyId,
+				SecretAccessKey: *jumpRoleCreds.SecretAccessKey,
+				SessionToken:    *jumpRoleCreds.SessionToken,
+				Region:          *awsSdk.String(o.region),
+			},
+		)
+		if err != nil {
+			return err
+		}
+
 	}
-	o.k8sclusterresourcefactory.Awscloudfactory.CallerIdentity = callerIdentityOutput
-	roleArn, err := arn.Parse(aws.StringValue(callerIdentityOutput.Arn))
-	if err != nil {
-		return err
-	}
 
-	splitArn := strings.Split(roleArn.Resource, "/")
-	username := splitArn[1]
-	o.k8sclusterresourcefactory.Awscloudfactory.SessionName = fmt.Sprintf("RH-SRE-%s", username)
-
-	o.k8sclusterresourcefactory.Awscloudfactory.RoleName = awsv1alpha1.AccountOperatorIAMRole
-
-	consoleURL, err := awsprovider.RequestSignInToken(
+	consoleURL, err := aws.RequestSignInToken(
 		awsClient,
-		&o.k8sclusterresourcefactory.Awscloudfactory.ConsoleDuration,
-		aws.String(o.k8sclusterresourcefactory.Awscloudfactory.SessionName),
-		aws.String(fmt.Sprintf("arn:%s:iam::%s:role/%s", partition, o.k8sclusterresourcefactory.AccountID, o.k8sclusterresourcefactory.Awscloudfactory.RoleName)),
+		&o.consoleDuration,
+		awsSdk.String(sessionName),
+		awsSdk.String(targetRoleArn),
 	)
 	if err != nil {
-		fmt.Fprintf(o.IOStreams.Out, "Generating console failed. If CCS cluster, customer removed or denied access to the ManagedOpenShiftSupport role.")
+		fmt.Printf("Generating console failed: %s\n", err)
 		return err
 	}
 
-	consoleURL, err = PrependRegionToURL(consoleURL, o.k8sclusterresourcefactory.Awscloudfactory.Region)
+	consoleURL, err = PrependRegionToURL(consoleURL, o.region)
 	if err != nil {
 		return fmt.Errorf("could not prepend region to console url: %w", err)
 	}
-	fmt.Fprintf(o.IOStreams.Out, "The AWS Console URL is:\n%s\n", consoleURL)
+	fmt.Printf("The AWS Console URL is:\n%s\n", consoleURL)
 
 	if o.launch {
 		return browser.OpenURL(consoleURL)

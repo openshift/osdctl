@@ -1,10 +1,12 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
 
+	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/openshift-online/ocm-cli/pkg/ocm"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
@@ -69,4 +71,58 @@ func CreateConnection() *sdk.Connection {
 		log.Fatalf("Failed to create OCM connection: %v", err)
 	}
 	return connection
+}
+
+func GetSupportRoleArnForCluster(ocmClient *sdk.Connection, clusterID string) (string, error) {
+	liveResponse, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(clusterID).Resources().Live().Get().Send()
+	if err != nil {
+		return "", err
+	}
+
+	respBody := liveResponse.Body().Resources()
+	if awsAccountClaim, ok := respBody["aws_account_claim"]; ok {
+
+		var claimJson map[string]interface{}
+		json.Unmarshal([]byte(awsAccountClaim), &claimJson)
+
+		if spec, ok := claimJson["spec"]; ok {
+
+			if supportRoleArn, ok := spec.(map[string]interface{})["supportRoleARN"]; ok {
+				return supportRoleArn.(string), nil
+			}
+		}
+
+		return "", fmt.Errorf("unable to get role arn from claim JSON")
+	}
+
+	return "", fmt.Errorf("cluster does not have AccountClaim")
+}
+
+func GetAWSAccountIdForCluster(ocmClient *sdk.Connection, clusterID string) (string, error) {
+
+	roleArn, err := GetSupportRoleArnForCluster(ocmClient, clusterID)
+	if err != nil {
+		return "", err
+	}
+
+	awsRoleArn, err := arn.Parse(roleArn)
+	if err != nil {
+		return "", err
+	}
+	return awsRoleArn.AccountID, nil
+}
+
+func IsClusterCCS(ocmClient *sdk.Connection, clusterID string) (bool, error) {
+
+	clusterResponse, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(clusterID).Get().Send()
+	if err != nil {
+		return false, err
+	}
+
+	cluster := clusterResponse.Body()
+	if cluster.CCS().Enabled() {
+		return true, nil
+	}
+
+	return false, nil
 }

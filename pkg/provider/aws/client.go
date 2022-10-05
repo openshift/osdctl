@@ -120,9 +120,6 @@ type AwsClient struct {
 }
 
 func NewAwsSession(profile, region, configFile string) (*session.Session, error) {
-	if profile == "" && configFile == "" {
-		fmt.Println("Config file and profile are not provided. Reading from env vars.")
-	}
 
 	opt := session.Options{
 		Config: aws.Config{
