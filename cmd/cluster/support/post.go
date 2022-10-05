@@ -118,10 +118,9 @@ func (o *postOptions) run() error {
 		return nil
 	}
 
-	// confirmSend prompt to confirm
-	err = confirmSend()
+	// ConfirmSend prompt to confirm
+	err = ctlutil.ConfirmSend()
 	if err != nil {
-		fmt.Println("failed to confirmSend(): ", err.Error())
 		return err
 	}
 

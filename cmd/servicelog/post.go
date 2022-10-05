@@ -1,7 +1,6 @@
 package servicelog
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -19,7 +18,9 @@ import (
 	"github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/internal/utils"
 	"github.com/openshift/osdctl/pkg/printer"
+	ctlutil "github.com/openshift/osdctl/pkg/utils"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -141,8 +142,9 @@ var postCmd = &cobra.Command{
 		}
 
 		if !skipPrompts {
-			if err = confirmSend(); err != nil {
-				log.Errorf("Error confirming message: %q", err)
+			err = ctlutil.ConfirmSend()
+			if err != nil {
+				log.Fatal(err)
 			}
 		}
 
@@ -205,24 +207,6 @@ func parseUserParameters() {
 		userParameterNames = append(userParameterNames, fmt.Sprintf("${%v}", param[0]))
 		userParameterValues = append(userParameterValues, param[1])
 	}
-}
-
-func confirmSend() error {
-	fmt.Print("Continue? (y/N): ")
-	reader := bufio.NewReader(os.Stdin)
-	responseBytes, _, err := reader.ReadLine()
-	if err != nil {
-		return err
-	}
-	response := strings.ToUpper(string(responseBytes))
-
-	if response != "Y" && response != "YES" {
-		if response != "N" && response != "NO" && response != "" {
-			log.Fatal("Invalid response, expected 'YES' or 'Y' (case-insensitive). ")
-		}
-		log.Fatalf("Exiting...")
-	}
-	return nil
 }
 
 // accessFile returns the contents of a local file or url, and any errors encountered

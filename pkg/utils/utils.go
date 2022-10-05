@@ -3,8 +3,6 @@ package utils
 import (
 	"bufio"
 	"fmt"
-	"log"
-	"os"
 	"regexp"
 	"strings"
 
@@ -232,22 +230,23 @@ func GetAccount(connection *sdk.Connection, key string) (account *amv1.Account, 
 }
 
 func ConfirmSend() error {
-
 	fmt.Print("Continue? (y/N): ")
-	reader := bufio.NewReader(os.Stdin)
-	responseBytes, _, err := reader.ReadLine()
+
+	var response string
+	_, err := fmt.Scanln(&response)
 	if err != nil {
 		return err
 	}
-	response := strings.ToUpper(string(responseBytes))
 
-	if response != "Y" && response != "YES" {
-		if response != "N" && response != "NO" && response != "" {
-			log.Fatal("Invalid response, expected 'YES' or 'Y' (case-insensitive). ")
-		}
-		log.Fatalf("Exiting...")
+	switch strings.ToLower(response) {
+	case "y", "yes":
+		return nil
+	case "n", "no":
+		return fmt.Errorf("Exiting...")
+	default:
+		fmt.Println("Invalid input. Expecting (y)es or (N)o")
+		return ConfirmSend()
 	}
-	return nil
 }
 
 // streamPrintln appends a newline then prints the given msg using the provided IOStreams

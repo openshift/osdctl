@@ -93,7 +93,10 @@ func validateOrgID(orgID string) error {
 func (o *transferOwnerOptions) run() error {
 	fmt.Print("Before making changes in OCM, the cluster must have the pull secret updated to be the new owner's. ")
 	fmt.Print("See: https://github.com/openshift/ops-sop/blob/master/v4/howto/replace-pull-secret.md\n")
-	utils.ConfirmSend()
+	err := utils.ConfirmSend()
+	if err != nil {
+		return err
+	}
 
 	// Create an OCM client to talk to the cluster API
 	// the user has to be logged in (e.g. 'ocm login')
@@ -159,7 +162,10 @@ func (o *transferOwnerOptions) run() error {
 	ok = validateOldOwner(o, subscription, oldOwnerAccount)
 	if !ok {
 		fmt.Print("can't validate this is old owners cluster, this could be because of a previously failed run\n")
-		utils.ConfirmSend()
+		err = utils.ConfirmSend()
+		if err != nil {
+			return err
+		}
 	}
 
 	orgChanged := o.oldOrganizationId != o.newOrganizationId

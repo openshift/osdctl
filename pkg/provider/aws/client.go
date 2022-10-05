@@ -79,6 +79,11 @@ type Client interface {
 
 	//ec2
 	DescribeInstances(*ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error)
+	StopInstances(*ec2.StopInstancesInput) (*ec2.StopInstancesOutput, error)
+	ModifyInstanceAttribute(*ec2.ModifyInstanceAttributeInput) (*ec2.ModifyInstanceAttributeOutput, error)
+	StartInstances(*ec2.StartInstancesInput) (*ec2.StartInstancesOutput, error)
+	WaitUntilInstanceStopped(*ec2.DescribeInstancesInput) error
+	WaitUntilInstanceRunning(*ec2.DescribeInstancesInput) error
 
 	// Service Quotas
 	ListServiceQuotas(*servicequotas.ListServiceQuotasInput) (*servicequotas.ListServiceQuotasOutput, error)
@@ -413,4 +418,24 @@ func (c *AwsClient) ListCostCategoryDefinitions(input *costexplorer.ListCostCate
 
 func (c *AwsClient) DescribeInstances(input *ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error) {
 	return c.ec2Client.DescribeInstances(input)
+}
+
+func (c *AwsClient) StopInstances(input *ec2.StopInstancesInput) (*ec2.StopInstancesOutput, error) {
+	return c.ec2Client.StopInstances(input)
+}
+
+func (c *AwsClient) ModifyInstanceAttribute(input *ec2.ModifyInstanceAttributeInput) (*ec2.ModifyInstanceAttributeOutput, error) {
+	return c.ec2Client.ModifyInstanceAttribute(input)
+}
+
+func (c *AwsClient) StartInstances(input *ec2.StartInstancesInput) (*ec2.StartInstancesOutput, error) {
+	return c.ec2Client.StartInstances(input)
+}
+
+func (c *AwsClient) WaitUntilInstanceRunning(input *ec2.DescribeInstancesInput) error {
+	return c.ec2Client.WaitUntilInstanceRunning(input)
+}
+
+func (c *AwsClient) WaitUntilInstanceStopped(input *ec2.DescribeInstancesInput) error {
+	return c.ec2Client.WaitUntilInstanceStopped(input)
 }
