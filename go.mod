@@ -5,7 +5,6 @@ go 1.17
 require (
 	github.com/PagerDuty/go-pagerduty v1.5.1
 	github.com/aws/aws-sdk-go v1.44.66
-	github.com/aws/aws-sdk-go-v2/credentials v1.12.2
 	github.com/coreos/go-semver v0.3.0
 	github.com/deckarep/golang-set v1.7.1
 	github.com/golang/mock v1.6.0
@@ -17,7 +16,7 @@ require (
 	github.com/openshift/gcp-project-operator v0.0.0-20220920194256-df38e31387a7
 	github.com/openshift/hive v1.1.17-0.20220921183516-849ebe80fa61
 	github.com/openshift/hive/apis v0.0.0
-	github.com/openshift/osd-network-verifier v0.0.0-20220518154805-047e42cfe29f
+	github.com/openshift/osd-network-verifier v0.0.0-20221004143407-ffba9f3c9174
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/shopspring/decimal v1.2.0
 	github.com/sirupsen/logrus v1.9.0
@@ -36,12 +35,12 @@ require (
 )
 
 require (
-	cloud.google.com/go/compute v1.6.0 // indirect
 	github.com/AlecAivazis/survey/v2 v2.3.5 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.16.4 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.10.3 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.12.2 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.12.5 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.11 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.5 // indirect
@@ -70,7 +69,6 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v4 v4.4.2 // indirect
 	github.com/golang/glog v1.0.0 // indirect
-	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/btree v1.0.1 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
@@ -79,7 +77,6 @@ require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/googleapis/gax-go/v2 v2.3.0 // indirect
 	github.com/gorilla/css v1.0.0 // indirect
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
@@ -119,18 +116,14 @@ require (
 	github.com/stretchr/testify v1.7.2 // indirect
 	github.com/xlab/treeprint v0.0.0-20181112141820-a009c3971eca // indirect
 	gitlab.com/c0b/go-ordered-json v0.0.0-20201030195603-febf46534d5a // indirect
-	go.opencensus.io v0.23.0 // indirect
 	go.starlark.net v0.0.0-20200306205701-8dd3e2ee1dd5 // indirect
 	golang.org/x/net v0.0.0-20220728211354-c7608f3a8462 // indirect
-	golang.org/x/oauth2 v0.0.0-20220411215720-9780585627b5 // indirect
+	golang.org/x/oauth2 v0.0.0-20220608161450-d0670ef3b1eb // indirect
 	golang.org/x/sys v0.0.0-20220731174439-a90be440212d // indirect
 	golang.org/x/term v0.0.0-20220722155259-a9ba230a4035 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
-	google.golang.org/api v0.77.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20220414192740-2d67ff6cf2b4 // indirect
-	google.golang.org/grpc v1.46.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect

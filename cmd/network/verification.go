@@ -1,14 +1,16 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	ocmlog "github.com/openshift-online/ocm-sdk-go/logging"
-	"github.com/openshift/osd-network-verifier/pkg/cloudclient"
+	"github.com/openshift/osd-network-verifier/cmd/utils"
+	"github.com/openshift/osd-network-verifier/pkg/proxy"
+	"github.com/openshift/osd-network-verifier/pkg/verifier"
 	"github.com/spf13/cobra"
 )
 
@@ -19,14 +21,20 @@ var (
 )
 
 type egressConfig struct {
-	vpcSubnetID  string
-	cloudImageID string
-	instanceType string
-	cloudTags    map[string]string
-	debug        bool
-	region       string
-	timeout      time.Duration
-	kmsKeyID     string
+	vpcSubnetID     string
+	cloudImageID    string
+	instanceType    string
+	securityGroupId string
+	cloudTags       map[string]string
+	debug           bool
+	region          string
+	timeout         time.Duration
+	kmsKeyID        string
+	httpProxy       string
+	httpsProxy      string
+	CaCert          string
+	noTls           bool
+	awsProfile      string
 }
 
 func getDefaultRegion() string {
@@ -63,6 +71,12 @@ osdctl network verify-egress --subnet-id $(SUBNET_ID) --region $(AWS_REGION)`,
 	validateEgressCmd.Flags().BoolVar(&config.debug, "debug", false, "(optional) if true, enable additional debug-level logging")
 	validateEgressCmd.Flags().DurationVar(&config.timeout, "timeout", 1*time.Second, "(optional) timeout for individual egress verification requests")
 	validateEgressCmd.Flags().StringVar(&config.kmsKeyID, "kms-key-id", "", "(optional) ID of KMS key used to encrypt root volumes of compute instances. Defaults to cloud account default key")
+	validateEgressCmd.Flags().StringVarP(&config.awsProfile, "profile", "p", "", "(optional) AWS Profile")
+	validateEgressCmd.Flags().StringVar(&config.securityGroupId, "security-group", "", "(optional) Security group to use for EC2 instance")
+	validateEgressCmd.Flags().StringVar(&config.httpProxy, "http-proxy", "", "(optional) http-proxy to be used upon http requests being made by verifier, format: http://user:pass@x.x.x.x:8978")
+	validateEgressCmd.Flags().StringVar(&config.httpsProxy, "https-proxy", "", "(optional) https-proxy to be used upon https requests being made by verifier, format: https://user:pass@x.x.x.x:8978")
+	validateEgressCmd.Flags().StringVar(&config.CaCert, "cacert", "", "(optional) path to cacert file to be used upon https requests being made by verifier")
+	validateEgressCmd.Flags().BoolVar(&config.noTls, "no-tls", false, "(optional) if true, ignore all ssl certificate validations on client-side.")
 
 	if err := validateEgressCmd.MarkFlagRequired("subnet-id"); err != nil {
 		validateEgressCmd.PrintErr(err)
@@ -87,21 +101,65 @@ func runEgressTest(config egressConfig) {
 		os.Exit(1)
 	}
 
+	// Set Region
+	if config.region == "" {
+		config.region = "us-east-1"
+	}
+
+	// Set Up Proxy
+	if config.CaCert != "" {
+		// Read in the cert file
+		cert, err := os.ReadFile(config.CaCert)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		// store string form of it
+		// this was agreed with sda that they'll be communicating it as a string.
+		config.CaCert = bytes.NewBuffer(cert).String()
+	}
+
+	p := proxy.ProxyConfig{
+		HttpProxy:  config.httpProxy,
+		HttpsProxy: config.httpsProxy,
+		Cacert:     config.CaCert,
+		NoTls:      config.noTls,
+	}
+
+	if len(config.cloudTags) == 0 {
+		config.cloudTags = defaultTags
+	}
+
 	logger.Info(ctx, "Using region: %s", config.region)
-	creds := credentials.NewStaticCredentialsProvider(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), os.Getenv("AWS_SESSION_TOKEN"))
-	verifierClient, err := cloudclient.NewClient(ctx, logger, creds, config.region, config.instanceType, config.cloudTags)
+
+	vei := verifier.ValidateEgressInput{
+		Ctx:          context.TODO(),
+		SubnetID:     config.vpcSubnetID,
+		CloudImageID: config.cloudImageID,
+		Timeout:      config.timeout,
+		Tags:         config.cloudTags,
+		InstanceType: config.instanceType,
+		Proxy:        p,
+	}
+
+	vei.AWS = verifier.AwsEgressConfig{
+		KmsKeyID:        config.kmsKeyID,
+		SecurityGroupId: config.securityGroupId,
+	}
+
+	awsVerifier, err := utils.GetAwsVerifier(config.region, config.awsProfile, config.debug)
 	if err != nil {
-		logger.Error(ctx, err.Error())
+		fmt.Printf("could not build awsVerifier %v", err)
 		os.Exit(1)
 	}
 
-	out := verifierClient.ValidateEgress(ctx, config.vpcSubnetID, config.cloudImageID, config.kmsKeyID, config.timeout)
-	out.Summary()
+	out := verifier.ValidateEgress(awsVerifier, vei)
+	out.Summary(config.debug)
+
 	if !out.IsSuccessful() {
-		logger.Error(ctx, "Failure!")
+		awsVerifier.Logger.Error(context.TODO(), "Failure!")
 		os.Exit(1)
 	}
 
-	logger.Info(ctx, "Success")
-
+	logger.Info(context.TODO(), "Success")
 }
