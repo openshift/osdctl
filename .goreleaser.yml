@@ -15,9 +15,6 @@ builds:
     goarch:
       - amd64
       - arm64
-    ignore:
-      - goos: linux
-        goarch: arm64
     ldflags:
       # the following line will inject the current git commit and git tag in the binary during the build process.
       # .ShortCommit and .Version are template variables that will be set during the GoReleaser run
