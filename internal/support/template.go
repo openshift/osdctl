@@ -1,6 +1,7 @@
 package support
 
 import (
+	"strings"
 	"time"
 )
 
@@ -29,8 +30,32 @@ type BadReply struct {
 
 // LimitedSupport is the base limited_support_reasons template
 type LimitedSupport struct {
-	ID         string `json:"id"`
-	TemplateID string `json:"template_id,omitempty"`
-	Summary    string `json:"summary"`
-	Details    string `json:"details"`
+	ID            string `json:"id,omitempty"`
+	TemplateID    string `json:"template_id,omitempty"`
+	Summary       string `json:"summary"`
+	Details       string `json:"details"`
+	DetectionType string `json:"detection_type"`
+}
+
+func (l *LimitedSupport) GetSummary() string {
+	return l.Summary
+}
+
+func (l *LimitedSupport) GetDescription() string {
+	return l.Details
+}
+
+func (l *LimitedSupport) ReplaceWithFlag(variable, value string) {
+	l.Summary = strings.ReplaceAll(l.Summary, variable, value)
+	l.Details = strings.ReplaceAll(l.Details, variable, value)
+}
+
+func (l *LimitedSupport) SearchFlag(placeholder string) (found bool) {
+	if found = strings.Contains(l.Summary, placeholder); found {
+		return found
+	}
+	if found = strings.Contains(l.Details, placeholder); found {
+		return found
+	}
+	return false
 }
