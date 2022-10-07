@@ -3,6 +3,7 @@ package account
 import (
 	"fmt"
 
+	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/aws/aws-sdk-go/service/sts"
 	osdCloud "github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
@@ -96,6 +97,12 @@ func (o *cliOptions) run() error {
 		return err
 	}
 
+	// Get the right partition for the final ARN
+	partition, err := aws.GetAwsPartition(awsClient)
+	if err != nil {
+		return err
+	}
+
 	// Generate a session name using the SRE's kerberos ID
 	sessionName, err := osdCloud.GenerateRoleSessionName(awsClient)
 	if err != nil {
@@ -108,13 +115,20 @@ func (o *cliOptions) run() error {
 		// If the cluster is CCS, the target role needs to be determined, and the jump role chain needs to be executed
 
 		// Determine the right jump role
-		targetRole, err := utils.GetSupportRoleArnForCluster(ocmClient, o.clusterID)
+		targetRoleArnString, err := utils.GetSupportRoleArnForCluster(ocmClient, o.clusterID)
 		if err != nil {
 			return err
 		}
 
+		targetRoleArn, err := arn.Parse(targetRoleArnString)
+		if err != nil {
+			return err
+		}
+
+		targetRoleArn.Partition = partition
+
 		// Start the jump role chain. Result should be credentials for the ManagedOpenShift Support role for the target cluster
-		assumedRoleCreds, err = osdCloud.GenerateSupportRoleCredentials(awsClient, o.awsAccountID, o.region, sessionName, targetRole)
+		assumedRoleCreds, err = osdCloud.GenerateSupportRoleCredentials(awsClient, o.awsAccountID, o.region, sessionName, targetRoleArn.String())
 		if err != nil {
 			return err
 		}
@@ -122,7 +136,7 @@ func (o *cliOptions) run() error {
 	} else {
 
 		// If the cluster is non-CCS, or an AWS Account ID was provided with -i, try and use OrganizationAccountAccessRole
-		assumedRoleCreds, err = osdCloud.GenerateOrganizationAccountAccessCredentials(awsClient, o.awsAccountID, sessionName)
+		assumedRoleCreds, err = osdCloud.GenerateOrganizationAccountAccessCredentials(awsClient, o.awsAccountID, sessionName, partition)
 		if err != nil {
 			fmt.Printf("Could not build AWS Client for OrganizationAccountAccessRole: %s\n", err)
 			return err

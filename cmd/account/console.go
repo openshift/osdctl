@@ -10,6 +10,7 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	awsSdk "github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/arn"
 	osdCloud "github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -108,6 +109,12 @@ func (o *consoleOptions) run() error {
 		return err
 	}
 
+	// Get the right partition for the final ARN
+	partition, err := aws.GetAwsPartition(awsClient)
+	if err != nil {
+		return err
+	}
+
 	// Generate a session name using the SRE's kerberos ID
 	sessionName, err := osdCloud.GenerateRoleSessionName(awsClient)
 	if err != nil {
@@ -116,11 +123,11 @@ func (o *consoleOptions) run() error {
 	}
 
 	// By default, the target role arn is OrganizationAccountAccessRole (works for -i and non-CCS clusters)
-	targetRoleArn := aws.GenerateRoleARN(o.awsAccountID, osdCloud.OrganizationAccountAccessRole)
+	targetRoleArnString := aws.GenerateRoleARN(o.awsAccountID, osdCloud.OrganizationAccountAccessRole)
 
 	if isCCS {
 		// If a cluster is provided and it's CCS, the target role is the Managed Support role arn
-		targetRoleArn, err = utils.GetSupportRoleArnForCluster(ocmClient, o.clusterID)
+		targetRoleArnString, err = utils.GetSupportRoleArnForCluster(ocmClient, o.clusterID)
 		if err != nil {
 			return err
 		}
@@ -142,14 +149,20 @@ func (o *consoleOptions) run() error {
 		if err != nil {
 			return err
 		}
-
 	}
+
+	targetRoleArn, err := arn.Parse(targetRoleArnString)
+	if err != nil {
+		return err
+	}
+
+	targetRoleArn.Partition = partition
 
 	consoleURL, err := aws.RequestSignInToken(
 		awsClient,
 		&o.consoleDuration,
 		awsSdk.String(sessionName),
-		awsSdk.String(targetRoleArn),
+		awsSdk.String(targetRoleArn.String()),
 	)
 	if err != nil {
 		fmt.Printf("Generating console failed: %s\n", err)
