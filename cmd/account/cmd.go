@@ -2,6 +2,7 @@ package account
 
 import (
 	"fmt"
+
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,8 +29,8 @@ func NewCmdAccount(streams genericclioptions.IOStreams, flags *genericclioptions
 	accountCmd.AddCommand(mgmt.NewCmdMgmt(streams, flags, globalOpts))
 	accountCmd.AddCommand(newCmdReset(streams, flags, client))
 	accountCmd.AddCommand(newCmdSet(streams, flags, client))
-	accountCmd.AddCommand(newCmdConsole(streams, flags))
-	accountCmd.AddCommand(newCmdCli(streams, flags, globalOpts))
+	accountCmd.AddCommand(newCmdConsole())
+	accountCmd.AddCommand(newCmdCli())
 	accountCmd.AddCommand(newCmdCleanVeleroSnapshots(streams))
 	accountCmd.AddCommand(newCmdVerifySecrets(streams, flags, client))
 	accountCmd.AddCommand(newCmdRotateSecret(streams, flags, client))

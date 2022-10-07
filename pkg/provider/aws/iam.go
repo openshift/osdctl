@@ -207,3 +207,7 @@ func RefreshIAMPolicy(awsClient Client, federatedRole *awsv1alpha1.AWSFederatedR
 
 	return nil
 }
+
+func GenerateRoleARN(accountId, roleName string) string {
+	return fmt.Sprintf("arn:aws:iam::%s:role/%s", accountId, roleName)
+}
