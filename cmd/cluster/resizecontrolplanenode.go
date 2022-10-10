@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
-	"github.com/openshift/osdctl/pkg/clustercloud"
+	"github.com/openshift/osdctl/pkg/osdCloud"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -263,7 +263,7 @@ func patchMachineType(machine string, machineType string) error {
 }
 
 func (o *resizeControlPlaneNodeOptions) run() error {
-	awsClient, err := clustercloud.CreateAWSClient(o.clusterID)
+	awsClient, err := osdCloud.CreateAWSClient(o.clusterID)
 	if err != nil {
 		return err
 	}
