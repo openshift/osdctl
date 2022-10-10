@@ -126,3 +126,66 @@ func IsClusterCCS(ocmClient *sdk.Connection, clusterID string) (bool, error) {
 
 	return false, nil
 }
+
+// Returns the hive shard corresponding to a cluster
+// e.g. https://api.<hive_cluster>.byo5.p1.openshiftapps.com:6443
+func GetHiveShard(clusterID string) (string, error) {
+	connection := CreateConnection()
+	defer connection.Close()
+
+	shardPath, err := connection.ClustersMgmt().V1().Clusters().
+		Cluster(clusterID).
+		ProvisionShard().
+		Get().
+		Send()
+
+	if err != nil {
+		return "", err
+	}
+
+	var shard string
+
+	if shardPath != nil {
+		shard = shardPath.Body().HiveConfig().Server()
+	}
+
+	if shard == "" {
+		return "", fmt.Errorf("Unable to retrieve shard for cluster %s", clusterID)
+	}
+
+	return shard, nil
+}
+
+// Returns the backplane url corresponding to a cluster e.g.
+// https://api-backplane.apps.<hive_cluster>.p1.openshiftapps.com/backplane/cloud/credentials/<cluster_id>
+func GetBackplaneURL(clusterID string) (string, error) {
+	hiveBaseUrl, err := GetHiveShard(clusterID)
+	if err != nil {
+		return "", err
+	}
+
+	// Convert shard URL in form of
+	// https://api.<hive_cluster>.byo5.p1.openshiftapps.com:6443
+	// to backplane URL in form of
+	// https://api-backplane.apps.<hive_cluster>.p1.openshiftapps.com/backplane/cloud/credentials/<cluster_id>
+	tmpUrl := strings.TrimPrefix(hiveBaseUrl, "https://api.")
+	tmpUrl = strings.TrimSuffix(tmpUrl, ":6443")
+	tmpUrl = "https://api-backplane.apps." + tmpUrl + "/backplane/cloud/credentials/" + clusterID
+
+	return tmpUrl, nil
+}
+
+// Returns the token created from ocm login to the api server
+func GetOCMApiServerToken() (*string, error) {
+	connection := CreateConnection()
+	defer connection.Close()
+
+	accessToken, _, err := connection.Tokens()
+	if err != nil {
+		return nil, fmt.Errorf("Unable to get OCM Api server token: %s", err)
+	}
+
+	accessToken = strings.TrimSuffix(accessToken, "\n")
+
+	return &accessToken, nil
+}

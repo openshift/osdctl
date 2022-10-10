@@ -746,6 +746,21 @@ func (mr *MockClientMockRecorder) ListUsers(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUsers", reflect.TypeOf((*MockClient)(nil).ListUsers), arg0)
 }
 
+// ModifyInstanceAttribute mocks base method.
+func (m *MockClient) ModifyInstanceAttribute(arg0 *ec2.ModifyInstanceAttributeInput) (*ec2.ModifyInstanceAttributeOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ModifyInstanceAttribute", arg0)
+	ret0, _ := ret[0].(*ec2.ModifyInstanceAttributeOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ModifyInstanceAttribute indicates an expected call of ModifyInstanceAttribute.
+func (mr *MockClientMockRecorder) ModifyInstanceAttribute(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModifyInstanceAttribute", reflect.TypeOf((*MockClient)(nil).ModifyInstanceAttribute), arg0)
+}
+
 // MoveAccount mocks base method.
 func (m *MockClient) MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error) {
 	m.ctrl.T.Helper()
@@ -791,6 +806,36 @@ func (mr *MockClientMockRecorder) RequestServiceQuotaIncrease(arg0 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequestServiceQuotaIncrease", reflect.TypeOf((*MockClient)(nil).RequestServiceQuotaIncrease), arg0)
 }
 
+// StartInstances mocks base method.
+func (m *MockClient) StartInstances(arg0 *ec2.StartInstancesInput) (*ec2.StartInstancesOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StartInstances", arg0)
+	ret0, _ := ret[0].(*ec2.StartInstancesOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StartInstances indicates an expected call of StartInstances.
+func (mr *MockClientMockRecorder) StartInstances(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartInstances", reflect.TypeOf((*MockClient)(nil).StartInstances), arg0)
+}
+
+// StopInstances mocks base method.
+func (m *MockClient) StopInstances(arg0 *ec2.StopInstancesInput) (*ec2.StopInstancesOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StopInstances", arg0)
+	ret0, _ := ret[0].(*ec2.StopInstancesOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StopInstances indicates an expected call of StopInstances.
+func (mr *MockClientMockRecorder) StopInstances(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopInstances", reflect.TypeOf((*MockClient)(nil).StopInstances), arg0)
+}
+
 // TagResource mocks base method.
 func (m *MockClient) TagResource(input *organizations.TagResourceInput) (*organizations.TagResourceOutput, error) {
 	m.ctrl.T.Helper()
@@ -819,4 +864,32 @@ func (m *MockClient) UntagResource(input *organizations.UntagResourceInput) (*or
 func (mr *MockClientMockRecorder) UntagResource(input interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UntagResource", reflect.TypeOf((*MockClient)(nil).UntagResource), input)
+}
+
+// WaitUntilInstanceRunning mocks base method.
+func (m *MockClient) WaitUntilInstanceRunning(arg0 *ec2.DescribeInstancesInput) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WaitUntilInstanceRunning", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WaitUntilInstanceRunning indicates an expected call of WaitUntilInstanceRunning.
+func (mr *MockClientMockRecorder) WaitUntilInstanceRunning(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitUntilInstanceRunning", reflect.TypeOf((*MockClient)(nil).WaitUntilInstanceRunning), arg0)
+}
+
+// WaitUntilInstanceStopped mocks base method.
+func (m *MockClient) WaitUntilInstanceStopped(arg0 *ec2.DescribeInstancesInput) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WaitUntilInstanceStopped", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WaitUntilInstanceStopped indicates an expected call of WaitUntilInstanceStopped.
+func (mr *MockClientMockRecorder) WaitUntilInstanceStopped(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitUntilInstanceStopped", reflect.TypeOf((*MockClient)(nil).WaitUntilInstanceStopped), arg0)
 }

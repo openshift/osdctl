@@ -218,7 +218,7 @@ func (o *healthOptions) run() error {
 	return nil
 }
 
-//This command implements the ocm describe clsuter call via osm-sdk.
+//This command implements the ocm describe clsuter call via ocm-sdk.
 //This call requires the ocm API Token https://cloud.redhat.com/openshift/token be available in the OCM_TOKEN env variable.
 //Example: export OCM_TOKEN=$(jq -r .refresh_token ~/.ocm.json)
 func ocmDescribe(clusterID string) (*v1.Cluster, error) {
