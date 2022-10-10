@@ -23,29 +23,6 @@ const (
 	OrganizationAccountAccessRole = "OrganizationAccountAccessRole"
 )
 
-// Creates a client for an assumed OrganizationAccountAccessRole
-func CreateOrganizationAccountAccessClient(client aws.Client, accountId, region, sessionName, partiton string) (aws.Client, error) {
-
-	assumeRoleCredentials, err := GenerateOrganizationAccountAccessCredentials(client, accountId, sessionName, partiton)
-	if err != nil {
-		return nil, err
-	}
-
-	organizationAccountAccessClient, err := aws.NewAwsClientWithInput(
-		&aws.AwsClientInput{
-			AccessKeyID:     *assumeRoleCredentials.AccessKeyId,
-			SecretAccessKey: *assumeRoleCredentials.SecretAccessKey,
-			SessionToken:    *assumeRoleCredentials.SessionToken,
-			Region:          *awsSdk.String(region),
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return organizationAccountAccessClient, nil
-}
-
 // Uses the provided IAM Client to try and assume OrganizationAccountAccessRole for the given AWS Account
 // This only works when the provided client is a user from the root account of an organization and the AWS account provided is a linked accounts within that organization
 func GenerateOrganizationAccountAccessCredentials(client aws.Client, accountId, sessionName, partition string) (*sts.Credentials, error) {
