@@ -22,7 +22,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 		DisableAutoGenTag: true,
 	}
 
-	clusterCmd.AddCommand(newCmdHealth(streams, flags, globalOpts))
+	clusterCmd.AddCommand(newCmdHealth())
 	clusterCmd.AddCommand(newCmdLoggingCheck(streams, flags, globalOpts))
 	clusterCmd.AddCommand(newCmdOwner(streams, flags, globalOpts))
 	clusterCmd.AddCommand(support.NewCmdSupport(streams, flags, client, globalOpts))
