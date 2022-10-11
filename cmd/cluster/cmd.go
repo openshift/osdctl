@@ -26,7 +26,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 	clusterCmd.AddCommand(newCmdLoggingCheck(streams, flags, globalOpts))
 	clusterCmd.AddCommand(newCmdOwner(streams, flags, globalOpts))
 	clusterCmd.AddCommand(support.NewCmdSupport(streams, flags, client, globalOpts))
-	clusterCmd.AddCommand(newCmdContext(streams, flags, globalOpts))
+	clusterCmd.AddCommand(newCmdContext())
 	clusterCmd.AddCommand(newCmdTransferOwner(streams, flags, globalOpts))
 	clusterCmd.AddCommand(access.NewCmdAccess(streams, flags))
 	clusterCmd.AddCommand(newCmdResizeControlPlaneNode(streams, flags, globalOpts))

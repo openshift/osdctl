@@ -7,6 +7,7 @@ package mock
 import (
 	reflect "reflect"
 
+	cloudtrail "github.com/aws/aws-sdk-go/service/cloudtrail"
 	costexplorer "github.com/aws/aws-sdk-go/service/costexplorer"
 	ec2 "github.com/aws/aws-sdk-go/service/ec2"
 	iam "github.com/aws/aws-sdk-go/service/iam"
@@ -744,6 +745,21 @@ func (m *MockClient) ListUsers(arg0 *iam.ListUsersInput) (*iam.ListUsersOutput, 
 func (mr *MockClientMockRecorder) ListUsers(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUsers", reflect.TypeOf((*MockClient)(nil).ListUsers), arg0)
+}
+
+// LookupEvents mocks base method.
+func (m *MockClient) LookupEvents(input *cloudtrail.LookupEventsInput) (*cloudtrail.LookupEventsOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LookupEvents", input)
+	ret0, _ := ret[0].(*cloudtrail.LookupEventsOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LookupEvents indicates an expected call of LookupEvents.
+func (mr *MockClientMockRecorder) LookupEvents(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupEvents", reflect.TypeOf((*MockClient)(nil).LookupEvents), input)
 }
 
 // ModifyInstanceAttribute mocks base method.
