@@ -9,16 +9,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
-	k8spkg "github.com/openshift/osdctl/pkg/k8s"
+	"github.com/openshift/osdctl/pkg/osdCloud"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 )
 
 // newCmdDescribe implements servicequotas describe
-func newCmdDescribe(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newDescribeOptions(streams, flags)
+func newCmdDescribe() *cobra.Command {
+	ops := newDescribeOptions()
 	describeCmd := &cobra.Command{
 		Use:               "describe",
 		Short:             "Describe AWS service-quotas",
@@ -31,13 +30,10 @@ func newCmdDescribe(streams genericclioptions.IOStreams, flags *genericclioption
 		Aliases: []string{"describe-quotas", "describe-quota"},
 	}
 
-	ops.k8sclusterresourcefactory.AttachCobraCliFlags(describeCmd)
-
 	describeCmd.Flags().StringVarP(&ops.queryServiceCode, "service-code", "", "ec2", "Query for ServiceCode")
 	describeCmd.Flags().StringVarP(&ops.queryQuotaCode, "quota-code", "q", "L-1216C47A", "Query for QuotaCode")
-
-	describeCmd.Flags().BoolVarP(&ops.allRegions, "all-regions", "", false, "Loop through all supported regions")
-
+	describeCmd.Flags().StringVarP(&ops.clusterID, "clusterID", "C", "", "Cluster ID")
+	describeCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", "", "AWS Profile")
 	describeCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 
 	return describeCmd
@@ -45,66 +41,26 @@ func newCmdDescribe(streams genericclioptions.IOStreams, flags *genericclioption
 
 // describeOptions defines the struct for running list account command
 type describeOptions struct {
-	k8sclusterresourcefactory k8spkg.ClusterResourceFactoryOptions
-
 	queryServiceCode string
 	queryQuotaCode   string
+	clusterID        string
+	awsProfile       string
 
-	verbose    bool
-	allRegions bool
-
-	genericclioptions.IOStreams
+	verbose bool
 }
 
-func newDescribeOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *describeOptions {
-	return &describeOptions{
-		k8sclusterresourcefactory: k8spkg.ClusterResourceFactoryOptions{
-			Flags: flags,
-		},
-		IOStreams: streams,
-	}
+func newDescribeOptions() *describeOptions {
+	return &describeOptions{}
 }
 
 func (o *describeOptions) complete(cmd *cobra.Command) error {
-	if valid, err := o.k8sclusterresourcefactory.ValidateIdentifiers(); !valid {
-		if err != nil {
-			return err
-		}
-	}
-
-	if valid, err := o.k8sclusterresourcefactory.Awscloudfactory.ValidateIdentifiers(); !valid {
-		if err != nil {
-			return err
-		}
-	}
-
-	if _, err := GetSupportedRegions(o.k8sclusterresourcefactory.Awscloudfactory.Region, o.allRegions); err != nil {
-		return err
-	}
 
 	return nil
 }
 
 func (o *describeOptions) run() error {
-	regions, error := GetSupportedRegions(o.k8sclusterresourcefactory.Awscloudfactory.Region, o.allRegions)
-	if error != nil {
-		return error
-	}
 
-	for _, region := range regions {
-		if err := o.runOnceByRegion(region); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (o *describeOptions) runOnceByRegion(region string) error {
-	// override region in factory class
-	o.k8sclusterresourcefactory.Awscloudfactory.Region = region
-
-	awsClient, err := o.k8sclusterresourcefactory.GetCloudProvider(o.verbose)
+	awsClient, err := osdCloud.GenerateAWSClientForCluster(o.awsProfile, o.clusterID)
 	if err != nil {
 		return err
 	}
@@ -148,4 +104,5 @@ func (o *describeOptions) runOnceByRegion(region string) error {
 	}
 
 	return nil
+
 }
