@@ -30,7 +30,7 @@ type loggingCheckOptions struct {
 func newCmdLoggingCheck(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	ops := newloggingCheckOptions(streams, flags, globalOpts)
 	loggingCheckCmd := &cobra.Command{
-		Use:               "loggingCheck",
+		Use:               "logging-check",
 		Short:             "Shows the logging support status of a specified cluster",
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
