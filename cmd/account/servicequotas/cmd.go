@@ -2,6 +2,7 @@ package servicequotas
 
 import (
 	"fmt"
+
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
@@ -16,7 +17,7 @@ func NewCmdServiceQuotas(streams genericclioptions.IOStreams, flags *genericclio
 		Aliases:           []string{"service-quotas", "service-quota"},
 	}
 
-	baseCmd.AddCommand(newCmdDescribe(streams, flags))
+	baseCmd.AddCommand(newCmdDescribe())
 
 	return baseCmd
 }
