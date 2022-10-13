@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 
 	awsSdk "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/aws/aws-sdk-go/service/sts"
+	"github.com/spf13/viper"
 
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	"github.com/openshift/osdctl/pkg/provider/aws"
@@ -21,6 +21,8 @@ const (
 	RhSreCcsAccessRolename        = "RH-SRE-CCS-Access"
 	RhTechnicalSupportAccess      = "RH-Technical-Support-Access"
 	OrganizationAccountAccessRole = "OrganizationAccountAccessRole"
+	ProdJumproleConfigKey         = "prod_jumprole_account_id"
+	StageJumproleConfigKey        = "stage_jumprole_account_id"
 )
 
 // Uses the provided IAM Client to try and assume OrganizationAccountAccessRole for the given AWS Account
@@ -125,9 +127,19 @@ func GenerateJumpRoleCredentials(client aws.Client, awsAccountID, region, sessio
 		return nil, err
 	}
 
+	jumpRoleKey := ProdJumproleConfigKey
+	currentEnv := utils.GetCurrentOCMEnv(utils.CreateConnection())
+	if currentEnv == "stage" || currentEnv == "integration" {
+		jumpRoleKey = StageJumproleConfigKey
+	}
+
+	if !viper.IsSet(jumpRoleKey) {
+		return nil, fmt.Errorf("key %s is not set in config file", jumpRoleKey)
+	}
 	// Assume jump role
 	// This will be different between stage and prod. There's probably a better way to do this that isn't hardcoding
-	jumproleAccountID := os.Getenv("JUMPROLE_ACCOUNT_ID")
+	jumproleAccountID := viper.GetString(jumpRoleKey)
+
 	jumpRoleArn := aws.GenerateRoleARN(jumproleAccountID, RhTechnicalSupportAccess)
 	jumpAssumeRoleOutput, err := sreCcsAccessRoleClient.AssumeRole(
 		&sts.AssumeRoleInput{
