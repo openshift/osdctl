@@ -22,7 +22,6 @@ import (
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"k8s.io/utils/strings/slices"
 )
 
 type contextOptions struct {
@@ -346,26 +345,57 @@ func printHistoricalPDAlertSummary(pdClient *pd.Client, ctx context.Context, ser
 	}
 	println()
 
-	incidentCounter := make(map[string]int)
+	type occurrenceTracker struct {
+		incidentCount  int
+		lastOccurrence string
+	}
+
+	incidentCounter := make(map[string]*occurrenceTracker)
 
 	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
-	table.AddRow([]string{"Type", "Count"})
+	table.AddRow([]string{"Type", "Count", "Last Occurrence"})
 
 	var incidentKeys []string
 	for _, incident := range incidents {
 		title := strings.Split(incident.Title, " ")[0]
-		incidentCounter[title]++
-		if !slices.Contains(incidentKeys, title) {
+		if _, found := incidentCounter[title]; found {
+			incidentCounter[title].incidentCount++
+
+			// Compare current incident timestamp vs our previous 'latest occurrence', and save the most recent.
+			currentLastOccurence, err := time.Parse(time.RFC3339, incidentCounter[title].lastOccurrence)
+			if err != nil {
+				fmt.Printf("Failed to parse time %q\n", err)
+				return err
+			}
+
+			incidentCreatedAt, err := time.Parse(time.RFC3339, incident.CreatedAt)
+			if err != nil {
+				fmt.Printf("Failed to parse time %q\n", err)
+				return err
+			}
+
+			// We want to see when the latest occurrence was
+			if incidentCreatedAt.After(currentLastOccurence) {
+				incidentCounter[title].lastOccurrence = incident.CreatedAt
+			}
+
+		} else {
+			// First time encountering this incident type
+			incidentCounter[title] = &occurrenceTracker{
+				incidentCount:  1,
+				lastOccurrence: incident.CreatedAt,
+			}
+
 			incidentKeys = append(incidentKeys, title)
 		}
 	}
 
 	sort.SliceStable(incidentKeys, func(i, j int) bool {
-		return incidentCounter[incidentKeys[i]] > incidentCounter[incidentKeys[j]]
+		return incidentCounter[incidentKeys[i]].incidentCount > incidentCounter[incidentKeys[j]].incidentCount
 	})
 
 	for _, k := range incidentKeys {
-		table.AddRow([]string{k, strconv.Itoa(incidentCounter[k])})
+		table.AddRow([]string{k, strconv.Itoa(incidentCounter[k].incidentCount), incidentCounter[k].lastOccurrence})
 	}
 
 	// Add empty row for readability
