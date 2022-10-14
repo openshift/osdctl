@@ -9,7 +9,7 @@ export PATH:=$(BASE_DIR)/bin:$(PATH)
 SHELL := env PATH=$(PATH) /bin/bash
 
 
-all: format mod build test
+all: format mod build test lint
 
 format: vet mod fmt mockgen ci-build docs
 
@@ -59,3 +59,6 @@ ensure-mockgen:
 
 test:
 	go test ${BUILDFLAGS} ./... -covermode=atomic -coverpkg=./...
+
+lint:
+	golangci-lint run
