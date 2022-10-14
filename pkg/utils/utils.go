@@ -35,6 +35,21 @@ func IsValidClusterKey(clusterKey string) (err error) {
 	return nil
 }
 
+func GetCurrentOCMEnv(connection *sdk.Connection) string {
+
+	// Default to production
+	currentEnv := "production"
+
+	url := connection.URL()
+	if strings.Contains(url, "stage") {
+		currentEnv = "stage"
+	}
+	if strings.Contains(url, "integration") {
+		currentEnv = "integration"
+	}
+	return currentEnv
+}
+
 // GetCluster Function allows to get a single cluster with any identifier (displayname, ID, or external ID)
 func GetCluster(connection *sdk.Connection, key string) (cluster *cmv1.Cluster, err error) {
 	// Prepare the resources that we will be using:

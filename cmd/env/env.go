@@ -14,7 +14,7 @@ import (
 	"syscall"
 
 	ocmconfig "github.com/openshift-online/ocm-cli/pkg/config"
-	"github.com/openshift/osdctl/pkg/config"
+	config "github.com/openshift/osdctl/pkg/envConfig"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )

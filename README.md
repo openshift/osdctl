@@ -63,6 +63,16 @@ make release
 make test
 ```
 
+## Config File
+
+A config file is created at ~/.config/osdctl if it does not already exist when running any command.
+The config file is yaml formatted.
+As as example:
+```
+key1: value1
+key2: value2
+```
+
 ## Usage
 
 For the detailed usage of each command, please refer to [here](./docs/command).
