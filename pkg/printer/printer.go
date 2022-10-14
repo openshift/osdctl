@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+
+	"github.com/fatih/color"
 )
 
 // printer use to output something on screen with table format.
@@ -34,3 +36,7 @@ func (p *printer) ClearScreen() {
 	fmt.Fprint(os.Stdout, "\033[2J")
 	fmt.Fprint(os.Stdout, "\033[H")
 }
+
+var PrintfGreen func(format string, a ...interface{}) = color.New(color.FgGreen).PrintfFunc()
+
+var PrintlnGreen func(a ...interface{}) = color.New(color.FgGreen).PrintlnFunc()
