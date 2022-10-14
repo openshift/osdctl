@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/osdCloud"
+	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -87,17 +88,18 @@ func (o *resizeControlPlaneNodeOptions) complete(cmd *cobra.Command, _ []string)
 	return nil
 }
 
-type drainDialogResponse int64
+type optionsDialogResponse int64
 
 const (
-	Undefined drainDialogResponse = 0
-	Skip                          = 1
-	Force                         = 2
-	Cancel                        = 3
+	Undefined optionsDialogResponse = 0
+	Retry                           = 1
+	Skip                            = 2
+	Force                           = 3
+	Cancel                          = 4
 )
 
-func drainRecoveryDialog() (drainDialogResponse, error) {
-	fmt.Println("Do you want to skip drain, force drain or cancel this command? (skip/force/cancel):")
+func retryCancelDialog(procedure string) (optionsDialogResponse, error) {
+	fmt.Printf("Do you want to retry %s or cancel this command? (retry/cancel):\n", procedure)
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -109,6 +111,103 @@ func drainRecoveryDialog() (drainDialogResponse, error) {
 	response := strings.ToUpper(string(responseBytes))
 
 	switch response {
+	case "RETRY":
+		return Retry, nil
+	case "CANCEL":
+		return Cancel, nil
+	default:
+		fmt.Println("Invalid response, expected 'retry' or 'cancel' (case-insensitive).")
+		return retryCancelDialog(procedure)
+	}
+
+}
+
+func withRetryCancelOption(fn func() error, procedure string) (err error) {
+	err = fn()
+	if err == nil {
+		return nil
+	}
+	dialogResponse, err := retryCancelDialog(procedure)
+	if err != nil {
+		return err
+	}
+
+	switch dialogResponse {
+	case Retry:
+		return withRetryCancelOption(fn, procedure)
+	case Cancel:
+		return fmt.Errorf("Exiting...")
+	default:
+		// This would be a programming error
+		return fmt.Errorf("Unhandled enumerator in withRetryCancelOption")
+	}
+}
+
+func retrySkipCancelDialog(procedure string) (optionsDialogResponse, error) {
+	fmt.Printf("Do you want to retry %[1]s, skip %[1]s or cancel this command? (retry/skip/cancel):\n", procedure)
+
+	reader := bufio.NewReader(os.Stdin)
+
+	responseBytes, _, err := reader.ReadLine()
+	if err != nil {
+		return Undefined, fmt.Errorf("reader.ReadLine() resulted in an error: %s", err)
+	}
+
+	response := strings.ToUpper(string(responseBytes))
+
+	switch response {
+	case "RETRY":
+		return Retry, nil
+	case "SKIP":
+		return Skip, nil
+	case "CANCEL":
+		return Cancel, nil
+	default:
+		fmt.Println("Invalid response, expected 'retry', 'skip' or 'cancel' (case-insensitive).")
+		return retrySkipCancelDialog(procedure)
+	}
+
+}
+
+func withRetrySkipCancelOption(fn func() error, procedure string) (err error) {
+	err = fn()
+	if err == nil {
+		return nil
+	}
+	dialogResponse, err := retrySkipCancelDialog(procedure)
+	if err != nil {
+		return err
+	}
+
+	switch dialogResponse {
+	case Retry:
+		return withRetrySkipCancelOption(fn, procedure)
+	case Skip:
+		fmt.Printf("Skipping %s...\n", procedure)
+	case Cancel:
+		return fmt.Errorf("Exiting...")
+	default:
+		// This would be a programming error
+		return fmt.Errorf("Unhandled enumerator in withRetrySkipCancelOption")
+	}
+	return nil
+}
+
+func retrySkipForceCancelDialog(procedure string) (optionsDialogResponse, error) {
+	fmt.Printf("Do you want to retry %s, skip %s, force %s or cancel this command? (retry/skip/force/cancel):\n", procedure, procedure, procedure)
+
+	reader := bufio.NewReader(os.Stdin)
+
+	responseBytes, _, err := reader.ReadLine()
+	if err != nil {
+		return Undefined, fmt.Errorf("reader.ReadLine() resulted in an error: %s", err)
+	}
+
+	response := strings.ToUpper(string(responseBytes))
+
+	switch response {
+	case "RETRY":
+		return Retry, nil
 	case "SKIP":
 		return Skip, nil
 	case "FORCE":
@@ -116,34 +215,44 @@ func drainRecoveryDialog() (drainDialogResponse, error) {
 	case "CANCEL":
 		return Cancel, nil
 	default:
-		fmt.Println("Invalid response, expected 'skip', 'force' or 'cancel' (case-insensitive).")
-		return drainRecoveryDialog()
+		fmt.Println("Invalid response, expected 'retry', 'skip', 'force' or 'cancel' (case-insensitive).")
+		return retrySkipForceCancelDialog(procedure)
 	}
 }
 
+func forceDrainNode(nodeID string) error {
+	printer.PrintlnGreen("Force draining node... This might take a minute or two...")
+	cmd := fmt.Sprintf("oc adm drain %s --ignore-daemonsets --delete-emptydir-data --force", nodeID)
+	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Failed to force drain:\n%s", strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
 func drainNode(nodeID string) error {
-	fmt.Println("Draining node", nodeID)
+	printer.PrintlnGreen("Draining node", nodeID)
 
 	// TODO: replace subprocess call with API call
 	cmd := fmt.Sprintf("oc adm drain %s --ignore-daemonsets --delete-emptydir-data", nodeID)
-	output, err := exec.Command("bash", "-c", cmd).Output()
+	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 
 	if err != nil {
-		fmt.Println("Failed to drain node:", strings.TrimSpace(string(output)))
+		fmt.Println("Failed to drain node:")
+		fmt.Println(strings.TrimSpace(string(output)))
 
-		dialogResponse, err := drainRecoveryDialog()
+		dialogResponse, err := retrySkipForceCancelDialog("draining node")
 		if err != nil {
 			return err
 		}
 
 		switch dialogResponse {
+		case Retry:
+			return drainNode(nodeID)
 		case Skip:
 			fmt.Println("Skipping node drain")
 		case Force:
-			// TODO: replace subprocess call with API call
-			fmt.Println("Force draining node... This might take a minute or two...")
-			cmd := fmt.Sprintf("oc adm drain %s --ignore-daemonsets --delete-emptydir-data --force", nodeID)
-			err = exec.Command("bash", "-c", cmd).Run()
+			err = withRetrySkipCancelOption(func() error { return forceDrainNode(nodeID) }, "force draining")
 			if err != nil {
 				return err
 			}
@@ -155,7 +264,7 @@ func drainNode(nodeID string) error {
 }
 
 func stopNode(awsClient *awsprovider.Client, nodeID string) error {
-	fmt.Printf("Stopping ec2 instance %s. This might take a minute or two...\n", nodeID)
+	printer.PrintfGreen("Stopping ec2 instance %s. This might take a minute or two...\n", nodeID)
 
 	stopInstancesInput := &ec2.StopInstancesInput{InstanceIds: []*string{aws.String(nodeID)}}
 
@@ -176,7 +285,7 @@ func stopNode(awsClient *awsprovider.Client, nodeID string) error {
 }
 
 func modifyInstanceAttribute(awsClient *awsprovider.Client, nodeID string, newMachineType string) error {
-	fmt.Println("Modifying machine type of instance:", nodeID, "to", newMachineType)
+	printer.PrintlnGreen("Modifying machine type of instance:", nodeID, "to", newMachineType)
 
 	modifyInstanceAttributeInput := &ec2.ModifyInstanceAttributeInput{InstanceId: &nodeID, InstanceType: &ec2.AttributeValue{Value: &newMachineType}}
 
@@ -188,7 +297,7 @@ func modifyInstanceAttribute(awsClient *awsprovider.Client, nodeID string, newMa
 }
 
 func startNode(awsClient *awsprovider.Client, nodeID string) error {
-	fmt.Printf("Starting instance %s. This might take a minute or two...\n", nodeID)
+	printer.PrintfGreen("Starting instance %s. This might take a minute or two...\n", nodeID)
 
 	startInstancesInput := &ec2.StartInstancesInput{InstanceIds: []*string{aws.String(nodeID)}}
 	startInstanceOutput, err := (*awsClient).StartInstances(startInstancesInput)
@@ -208,13 +317,16 @@ func startNode(awsClient *awsprovider.Client, nodeID string) error {
 }
 
 func uncordonNode(nodeID string) error {
-	fmt.Println("Uncordoning node", nodeID)
-
+	printer.PrintlnGreen("Uncordoning node", nodeID)
 	// TODO: replace subprocess call with API call
 	cmd := fmt.Sprintf("oc adm uncordon %s", nodeID)
-	_, err := exec.Command("bash", "-c", cmd).Output()
+	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 
-	return err
+	if err != nil {
+		fmt.Printf("Failed to uncordon node: %s", strings.TrimSpace(string(output)))
+		return err
+	}
+	return nil
 }
 
 // Start and stop calls require the internal AWS instance ID
@@ -253,16 +365,17 @@ func getNodeAwsInstanceData(node string, awsClient *awsprovider.Client) (string,
 }
 
 func patchMachineType(machine string, machineType string) error {
-	fmt.Println("Patching machine type of machine", machine, "to", machineType)
+	printer.PrintlnGreen("Patching machine type of machine", machine, "to", machineType)
 	cmd := `oc -n openshift-machine-api patch machine ` + machine + ` --patch "{\"spec\":{\"providerSpec\":{\"value\":{\"instanceType\":\"` + machineType + `\"}}}}" --type merge --as backplane-cluster-admin`
-	err := exec.Command("bash", "-c", cmd).Run()
+	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Could not patch machine type: %s", err)
+		return fmt.Errorf("Could not patch machine type:\n%s", strings.TrimSpace(string(output)))
 	}
 	return nil
 }
 
 func (o *resizeControlPlaneNodeOptions) run() error {
+
 	awsClient, err := osdCloud.CreateAWSClient(o.clusterID)
 	if err != nil {
 		return err
@@ -272,42 +385,50 @@ func (o *resizeControlPlaneNodeOptions) run() error {
 	if err != nil {
 		return err
 	}
+	fmt.Println() // Add an empty line for better output formatting
 
 	// drain node with oc adm drain <node> --ignore-daemonsets --delete-emptydir-data
+	// drainNode has its own retry dialog.
 	err = drainNode(o.node)
 	if err != nil {
 		return err
 	}
+	fmt.Println() // Add an empty line for better output formatting
 
 	// Stop the node instance
-	err = stopNode(&awsClient, nodeAwsID)
+	err = withRetryCancelOption(func() error { return stopNode(&awsClient, nodeAwsID) }, "stopping node")
 	if err != nil {
 		return err
 	}
+	fmt.Println() // Add an empty line for better output formatting
 
 	// Once stopped, change the instance type
-	err = modifyInstanceAttribute(&awsClient, nodeAwsID, o.newMachineType)
+	err = withRetryCancelOption(func() error { return modifyInstanceAttribute(&awsClient, nodeAwsID, o.newMachineType) }, "modify instance attribute")
 	if err != nil {
 		return err
 	}
+	fmt.Println() // Add an empty line for better output formatting
 
 	// Start the node instance
-	err = startNode(&awsClient, nodeAwsID)
+	err = withRetryCancelOption(func() error { return startNode(&awsClient, nodeAwsID) }, "starting node")
 	if err != nil {
 		return err
 	}
+	fmt.Println() // Add an empty line for better output formatting
 
 	// uncordon node with oc adm uncordon <node>
-	err = uncordonNode(o.node)
+	err = withRetrySkipCancelOption(func() error { return uncordonNode(o.node) }, "uncordoning node")
 	if err != nil {
 		return err
 	}
+	fmt.Println() // Add an empty line for better output formatting
 
 	fmt.Println("To continue, please confirm that the node is up and running and that the cluster is in the desired state to proceed.")
 	err = utils.ConfirmSend()
 	if err != nil {
 		return err
 	}
+	fmt.Println() // Add an empty line for better output formatting
 
 	fmt.Println("To finish the node resize, it is suggested to update the machine spec. This requires ***elevated privileges***. Do you want to proceed?")
 	err = utils.ConfirmSend()
@@ -315,10 +436,12 @@ func (o *resizeControlPlaneNodeOptions) run() error {
 		fmt.Println("Node resized, machine type not patched. Exiting...")
 		return err
 	}
+	fmt.Println() // Add an empty line for better output formatting
 
 	// Patch node machine to update .spec
-	err = patchMachineType(machineName, o.newMachineType)
+	err = withRetryCancelOption(func() error { return patchMachineType(machineName, o.newMachineType) }, "patch machine type")
 	if err != nil {
+		fmt.Println("Control plane node resized but could not patch machine .spec.")
 		return err
 	}
 

@@ -7,6 +7,7 @@ require (
 	github.com/aws/aws-sdk-go v1.44.66
 	github.com/coreos/go-semver v0.3.0
 	github.com/deckarep/golang-set v1.7.1
+	github.com/fatih/color v1.13.0
 	github.com/golang/mock v1.6.0
 	github.com/onsi/gomega v1.20.0
 	github.com/openshift-online/ocm-cli v0.1.65-0.20220913083421-16b44c698a1f
@@ -60,7 +61,6 @@ require (
 	github.com/emicklei/go-restful v2.15.0+incompatible // indirect
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d // indirect
-	github.com/fatih/color v1.13.0 // indirect
 	github.com/go-errors/errors v1.0.1 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
