@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/openshift/osdctl/cmd"
+	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/spf13/pflag"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -13,8 +14,14 @@ import (
 
 func main() {
 
+	err := osdctlConfig.EnsureConfigFile()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
 	flags := pflag.NewFlagSet("osdctl", pflag.ExitOnError)
-	err := flag.CommandLine.Parse([]string{})
+	err = flag.CommandLine.Parse([]string{})
 	if err != nil {
 		fmt.Println("Error parsing commandline flags: ", err.Error())
 		return

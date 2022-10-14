@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,7 +16,7 @@ import (
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	sl "github.com/openshift/osdctl/internal/servicelog"
-	"github.com/openshift/osdctl/pkg/config"
+	config "github.com/openshift/osdctl/pkg/envConfig"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -147,7 +149,7 @@ func (o *contextOptions) run() error {
 		fmt.Println("============================================================")
 		fmt.Println("CloudTrail events for the Cluster")
 		fmt.Println("============================================================")
-		println("Not polling cloudtrail logs, use --full flag to do so (must be logged into the correct hive to work).")
+		fmt.Println("Not polling cloudtrail logs, use --full flag to do so (must be logged into the correct hive to work).")
 	}
 	return nil
 }
@@ -244,36 +246,37 @@ func (o *contextOptions) printServiceLogs() error {
 	return nil
 }
 
-func (o *contextOptions) printPDAlerts() error {
-	var oauthtoken string
-	if o.oauthtoken != "" {
-		oauthtoken = o.oauthtoken
-	} else {
+func GetPagerdutyClient(oauthtoken string) (*pd.Client, error) {
+	if oauthtoken == "" {
 		pdConfig := config.LoadPDConfig("/.config/pagerduty-cli/config.json")
 		if len(pdConfig.MySubdomain) == 0 {
-			return fmt.Errorf("unable to parse PagerDuty config")
+			return nil, fmt.Errorf("unable to parse PagerDuty config")
 		}
 		if len(pdConfig.MySubdomain[0].AccessToken) == 0 {
-			return fmt.Errorf("unable to locate oauth accesstoken in PagerDuty config")
+			return nil, fmt.Errorf("unable to locate oauth accesstoken in PagerDuty config")
 		}
 		oauthtoken = pdConfig.MySubdomain[0].AccessToken
 	}
-	client := pd.NewOAuthClient(oauthtoken)
+	return pd.NewOAuthClient(oauthtoken), nil
+}
 
-	ctx := context.TODO()
-	lsResponse, err := client.ListServicesWithContext(ctx, pd.ListServiceOptions{Query: o.baseDomain})
+func getPDSeviceID(pdClient *pd.Client, ctx context.Context, baseDomain string) (string, error) {
+	lsResponse, err := pdClient.ListServicesWithContext(ctx, pd.ListServiceOptions{Query: baseDomain})
 
 	if err != nil {
 		fmt.Printf("Failed to ListServicesWithContext %q\n", err)
-		return err
+		return "", err
 	}
 
 	if len(lsResponse.Services) != 1 {
-		return fmt.Errorf("unexpected number of services matched input. Expected 1 got %d", len(lsResponse.Services))
+		return "", fmt.Errorf("unexpected number of services matched input. Expected 1 got %d", len(lsResponse.Services))
 	}
 
-	serviceID := lsResponse.Services[0].ID
-	liResponse, err := client.ListIncidentsWithContext(
+	return lsResponse.Services[0].ID, nil
+}
+
+func printCurrentPDAlerts(pdClient *pd.Client, ctx context.Context, serviceID string) error {
+	liResponse, err := pdClient.ListIncidentsWithContext(
 		ctx,
 		pd.ListIncidentsOptions{
 			ServiceIDs: []string{serviceID},
@@ -286,7 +289,7 @@ func (o *contextOptions) printPDAlerts() error {
 	}
 
 	fmt.Println("============================================================")
-	fmt.Println("Pagerduty alerts for the Cluster")
+	fmt.Println("Current Pagerduty Alerts for the Cluster")
 	fmt.Println("============================================================")
 	fmt.Printf("Link to PD Service: https://redhat.pagerduty.com/service-directory/%s\n", serviceID)
 	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
@@ -301,8 +304,148 @@ func (o *contextOptions) printPDAlerts() error {
 		fmt.Println("error while flushing table: ", err.Error())
 		return err
 	}
+	return nil
+}
 
-	return err
+func printHistoricalPDAlertSummary(pdClient *pd.Client, ctx context.Context, serviceID string) error {
+
+	fmt.Println()
+	fmt.Println("============================================================")
+	fmt.Println("Historical Pagerduty Alert Summary")
+	fmt.Println("============================================================")
+	fmt.Printf("Link to PD Service: https://redhat.pagerduty.com/service-directory/%s\n", serviceID)
+
+	var currentOffset uint
+	var limit uint = 100
+	var incidents []pd.Incident
+	print("\nPulling historical pd data")
+	for currentOffset = 0; true; currentOffset += limit {
+		print(".")
+		// pd defaults pulling the past month of data, which is enough for us to work with
+		liResponse, err := pdClient.ListIncidentsWithContext(
+			ctx,
+			pd.ListIncidentsOptions{
+				ServiceIDs: []string{serviceID},
+				Statuses:   []string{"resolved", "triggered", "acknowledged"},
+				Offset:     currentOffset,
+				Limit:      limit,
+				SortBy:     "created_at:desc",
+			},
+		)
+
+		if err != nil {
+			return err
+		}
+
+		if len(liResponse.Incidents) == 0 {
+			break
+		}
+
+		incidents = append(incidents, liResponse.Incidents...)
+	}
+	println()
+
+	type occurrenceTracker struct {
+		incidentCount  int
+		lastOccurrence string
+	}
+
+	incidentCounter := make(map[string]*occurrenceTracker)
+
+	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+	table.AddRow([]string{"Type", "Count", "Last Occurrence"})
+
+	var incidentKeys []string
+	for _, incident := range incidents {
+		title := strings.Split(incident.Title, " ")[0]
+		if _, found := incidentCounter[title]; found {
+			incidentCounter[title].incidentCount++
+
+			// Compare current incident timestamp vs our previous 'latest occurrence', and save the most recent.
+			currentLastOccurence, err := time.Parse(time.RFC3339, incidentCounter[title].lastOccurrence)
+			if err != nil {
+				fmt.Printf("Failed to parse time %q\n", err)
+				return err
+			}
+
+			incidentCreatedAt, err := time.Parse(time.RFC3339, incident.CreatedAt)
+			if err != nil {
+				fmt.Printf("Failed to parse time %q\n", err)
+				return err
+			}
+
+			// We want to see when the latest occurrence was
+			if incidentCreatedAt.After(currentLastOccurence) {
+				incidentCounter[title].lastOccurrence = incident.CreatedAt
+			}
+
+		} else {
+			// First time encountering this incident type
+			incidentCounter[title] = &occurrenceTracker{
+				incidentCount:  1,
+				lastOccurrence: incident.CreatedAt,
+			}
+
+			incidentKeys = append(incidentKeys, title)
+		}
+	}
+
+	sort.SliceStable(incidentKeys, func(i, j int) bool {
+		return incidentCounter[incidentKeys[i]].incidentCount > incidentCounter[incidentKeys[j]].incidentCount
+	})
+
+	for _, k := range incidentKeys {
+		table.AddRow([]string{k, strconv.Itoa(incidentCounter[k].incidentCount), incidentCounter[k].lastOccurrence})
+	}
+
+	// Add empty row for readability
+	table.AddRow([]string{})
+	err := table.Flush()
+	if err != nil {
+		fmt.Println("error while flushing table: ", err.Error())
+		return err
+	}
+
+	totalIncidents := len(incidents)
+	oldestIncidentTimestamp, err := time.Parse(time.RFC3339, incidents[totalIncidents-1].CreatedAt)
+	if err != nil {
+		fmt.Printf("Failed to parse time %q\n", err)
+		return err
+	}
+	oldestIncidentTimeInDays := int(time.Since(oldestIncidentTimestamp).Hours() / 24)
+	fmt.Println("Total number of incidents [", totalIncidents, "] in [", oldestIncidentTimeInDays, "] days")
+
+	return nil
+}
+
+func (o *contextOptions) printPDAlerts() error {
+
+	pdClient, err := GetPagerdutyClient(o.oauthtoken)
+	if err != nil {
+		fmt.Println("error getting pd client: ", err.Error())
+		return err
+	}
+
+	ctx := context.TODO()
+	serviceID, err := getPDSeviceID(pdClient, ctx, o.baseDomain)
+	if err != nil {
+		fmt.Println("error getting pd service id: ", err.Error())
+		return err
+	}
+
+	err = printCurrentPDAlerts(pdClient, ctx, serviceID)
+	if err != nil {
+		fmt.Println("error calling printCurrentPDAlerts: ", err.Error())
+		return err
+	}
+
+	err = printHistoricalPDAlertSummary(pdClient, ctx, serviceID)
+	if err != nil {
+		fmt.Println("error calling printHistoricalPDAlertSummary: ", err.Error())
+		return err
+	}
+
+	return nil
 }
 
 func (o *contextOptions) printOtherLinks() error {
@@ -329,7 +472,7 @@ func (o *contextOptions) printCloudTrailLogs() error {
 	foundEvents := []*cloudtrail.Event{}
 	var eventSearchInput = cloudtrail.LookupEventsInput{}
 
-	println("Pulling and filtering the past 40 pages of Cloudtrail data")
+	fmt.Println("Pulling and filtering the past 40 pages of Cloudtrail data")
 	for counter := 0; counter <= 40; counter++ {
 		print(".")
 		cloudTrailEvents, err := awsJumpClient.LookupEvents(&eventSearchInput)
