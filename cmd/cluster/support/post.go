@@ -104,7 +104,7 @@ func (o *postOptions) run() error {
 
 	// For every '-p' flag, replace it's related placeholder in the template
 	for k := range userParameterNames {
-		replaceFlags(userParameterNames[k], userParameterValues[k])
+		replaceWithFlags(userParameterNames[k], userParameterValues[k])
 	}
 
 	//if the cluster key is on the right format
@@ -301,7 +301,7 @@ func parseUserParameters() {
 	}
 }
 
-func replaceFlags(flagName string, flagValue string) {
+func replaceWithFlags(flagName string, flagValue string) {
 	if flagValue == "" {
 		log.Fatalf("The selected template is using '%[1]s' parameter, but '%[1]s' flag was not set. Use '-p %[1]s=\"FOOBAR\"' to fix this.", flagName)
 	}
