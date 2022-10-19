@@ -233,6 +233,9 @@ func (o *rotateSecretOptions) run() error {
 		"aws_secret_access_key": []byte(*createAccessKeyOutput.AccessKey.SecretAccessKey),
 	}
 
+	// Escalte to backplane cluster admin
+	o.flags.Impersonate = pointer.StringPtr("backplane-cluster-admin")
+
 	// Update existing osdManagedAdmin secret
 	err = common.UpdateSecret(o.kubeCli, o.accountCRName+"-secret", common.AWSAccountNamespace, newOsdManagedAdminSecretData)
 	if err != nil {

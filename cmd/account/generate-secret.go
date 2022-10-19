@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -312,6 +313,9 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 	if err != nil {
 		return err
 	}
+
+	// Escalte to backplane cluster admin
+	o.flags.Impersonate = pointer.StringPtr("backplane-cluster-admin")
 
 	secret := k8s.NewAWSSecret(
 		o.secretName,
