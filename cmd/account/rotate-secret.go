@@ -11,12 +11,14 @@ import (
 	"github.com/spf13/cobra"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/pointer"
 
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	awsv1alpha1 "github.com/openshift/aws-account-operator/pkg/apis/aws/v1alpha1"
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/pkg/k8s"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
@@ -141,9 +143,29 @@ func (o *rotateSecretOptions) run() error {
 			return err
 		}
 
+		// Get the Jump ARN value
+		JumpARN := cm.Data["support-jump-role"]
+		if JumpARN == "" {
+			return fmt.Errorf("Jump Access ARN is missing from configmap")
+		}
+		// Assume the ARN
+		jumpRoleCreds, err := awsprovider.GetAssumeRoleCredentials(srepRoleClient, aws.Int64(900), callerIdentityOutput.UserId, &JumpARN)
+		if err != nil {
+			return err
+		}
+		// Create client with the Jump role
+		jumpRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+			AccessKeyID:     *jumpRoleCreds.AccessKeyId,
+			SecretAccessKey: *jumpRoleCreds.SecretAccessKey,
+			SessionToken:    *jumpRoleCreds.SessionToken,
+			Region:          "us-east-1",
+		})
+		if err != nil {
+			return err
+		}
 		// Role chain to assume ManagedOpenShift-Support-{uid}
 		roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, "ManagedOpenShift-Support-"+accountIDSuffixLabel))
-		credentials, err = awsprovider.GetAssumeRoleCredentials(srepRoleClient, aws.Int64(900),
+		credentials, err = awsprovider.GetAssumeRoleCredentials(jumpRoleClient, aws.Int64(900),
 			callerIdentityOutput.UserId, roleArn)
 		if err != nil {
 			return err

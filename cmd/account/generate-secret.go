@@ -269,9 +269,29 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 		return err
 	}
 
+	// Get the Jump ARN value
+	JumpARN := cm.Data["support-jump-role"]
+	if JumpARN == "" {
+		return fmt.Errorf("Jump Access ARN is missing from configmap")
+	}
+	// Assume the ARN
+	jumpRoleCreds, err := awsprovider.GetAssumeRoleCredentials(srepRoleClient, aws.Int64(900), callerIdentityOutput.UserId, &JumpARN)
+	if err != nil {
+		return err
+	}
+	// Create client with the Jump role
+	jumpRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+		AccessKeyID:     *jumpRoleCreds.AccessKeyId,
+		SecretAccessKey: *jumpRoleCreds.SecretAccessKey,
+		SessionToken:    *jumpRoleCreds.SessionToken,
+		Region:          "us-east-1",
+	})
+	if err != nil {
+		return err
+	}
 	// Role chain to assume ManagedOpenShift-Support-{uid}
 	roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", account.Spec.AwsAccountID, "ManagedOpenShift-Support-"+accountIDSuffixLabel))
-	credentials, err := awsprovider.GetAssumeRoleCredentials(srepRoleClient, aws.Int64(900),
+	credentials, err := awsprovider.GetAssumeRoleCredentials(jumpRoleClient, aws.Int64(900),
 		callerIdentityOutput.UserId, roleArn)
 	if err != nil {
 		return err
