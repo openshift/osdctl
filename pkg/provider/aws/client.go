@@ -81,6 +81,9 @@ type Client interface {
 
 	//ec2
 	DescribeInstances(*ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error)
+	DescribeRouteTables(*ec2.DescribeRouteTablesInput) (*ec2.DescribeRouteTablesOutput, error)
+	DescribeSubnets(*ec2.DescribeSubnetsInput) (*ec2.DescribeSubnetsOutput, error)
+	DescribeVpcs(*ec2.DescribeVpcsInput) (*ec2.DescribeVpcsOutput, error)
 	StopInstances(*ec2.StopInstancesInput) (*ec2.StopInstancesOutput, error)
 	ModifyInstanceAttribute(*ec2.ModifyInstanceAttributeInput) (*ec2.ModifyInstanceAttributeOutput, error)
 	StartInstances(*ec2.StartInstancesInput) (*ec2.StartInstancesOutput, error)
@@ -426,6 +429,18 @@ func (c *AwsClient) ListCostCategoryDefinitions(input *costexplorer.ListCostCate
 
 func (c *AwsClient) DescribeInstances(input *ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error) {
 	return c.ec2Client.DescribeInstances(input)
+}
+
+func (c *AwsClient) DescribeRouteTables(input *ec2.DescribeRouteTablesInput) (*ec2.DescribeRouteTablesOutput, error) {
+	return c.ec2Client.DescribeRouteTables(input)
+}
+
+func (c *AwsClient) DescribeSubnets(input *ec2.DescribeSubnetsInput) (*ec2.DescribeSubnetsOutput, error) {
+	return c.ec2Client.DescribeSubnets(input)
+}
+
+func (c *AwsClient) DescribeVpcs(input *ec2.DescribeVpcsInput) (*ec2.DescribeVpcsOutput, error) {
+	return c.ec2Client.DescribeVpcs(input)
 }
 
 func (c *AwsClient) StopInstances(input *ec2.StopInstancesInput) (*ec2.StopInstancesOutput, error) {
