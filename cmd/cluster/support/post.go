@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
@@ -23,9 +24,10 @@ import (
 )
 
 var (
-	LimitedSupport support.LimitedSupport
-	template       string
-	isDryRun       bool
+	LimitedSupport                                          support.LimitedSupport
+	template                                                string
+	isDryRun                                                bool
+	templateParams, userParameterNames, userParameterValues []string
 )
 
 const (
@@ -58,6 +60,7 @@ func newCmdpost(streams genericclioptions.IOStreams, flags *genericclioptions.Co
 	// Define required flags
 	postCmd.Flags().StringVarP(&template, "template", "t", defaultTemplate, "Message template file or URL")
 	postCmd.Flags().BoolVarP(&isDryRun, "dry-run", "d", false, "Dry-run - print the limited support reason about to be sent but don't send it.")
+	postCmd.Flags().StringArrayVarP(&templateParams, "param", "p", templateParams, "Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.")
 	postCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 
 	return postCmd
@@ -89,11 +92,19 @@ func (o *postOptions) run() error {
 	// and load it into the LimitedSupport variable
 	readTemplate()
 
+	// Parse all the '-p' user flags
+	parseUserParameters()
+
 	// Check that the cluster key (name, identifier or external identifier) given by the user
 	// is reasonably safe so that there is no risk of SQL injection
 	err := ctlutil.IsValidClusterKey(o.clusterID)
 	if err != nil {
 		return err
+	}
+
+	// For every '-p' flag, replace it's related placeholder in the template
+	for k := range userParameterNames {
+		replaceWithFlags(userParameterNames[k], userParameterValues[k])
 	}
 
 	//if the cluster key is on the right format
@@ -163,11 +174,12 @@ func createPostRequest(ocmClient SDKConnection, cluster *v1.Cluster) (request *s
 		return nil, fmt.Errorf("cannot parse API path '%s': %v", targetAPIPath, err)
 	}
 
-	// pass template as `--body` of API call
-	err = arguments.ApplyBodyFlag(request, template)
+	messageBytes, err := json.Marshal(LimitedSupport)
 	if err != nil {
-		return nil, fmt.Errorf("cannot apply body flag '%s'", err)
+		return nil, fmt.Errorf("cannot marshal template to json: %v", err)
 	}
+
+	request.Bytes(messageBytes)
 	return request, nil
 }
 
@@ -269,4 +281,38 @@ func check(response *sdk.Response, limitedSupport support.LimitedSupport) error 
 		return fmt.Errorf("failed to validate bad response: %v", err)
 	}
 	return fmt.Errorf("bad response reason is: %s", badReply.Reason)
+}
+
+// parseUserParameters parse all the '-p FOO=BAR' parameters and checks for syntax errors
+func parseUserParameters() {
+	for _, v := range templateParams {
+		if !strings.Contains(v, "=") {
+			log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
+		}
+
+		param := strings.SplitN(v, "=", 2)
+		if param[0] == "" || param[1] == "" {
+			log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
+		}
+
+		userParameterNames = append(userParameterNames, fmt.Sprintf("${%v}", param[0]))
+		userParameterValues = append(userParameterValues, param[1])
+	}
+}
+
+func replaceWithFlags(flagName string, flagValue string) {
+	if flagValue == "" {
+		log.Fatalf("The selected template is using '%[1]s' parameter, but '%[1]s' flag was not set. Use '-p %[1]s=\"FOOBAR\"' to fix this.", flagName)
+	}
+
+	found := false
+
+	if LimitedSupport.SearchFlag(flagName) {
+		found = true
+		LimitedSupport.ReplaceWithFlag(flagName, flagValue)
+	}
+
+	if !found {
+		log.Fatalf("The selected template is not using '%s' parameter, but '--param' flag was set. Do not use '-p %s=%s' to fix this.", flagName, flagName, flagValue)
+	}
 }
