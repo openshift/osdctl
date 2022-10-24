@@ -46,8 +46,9 @@ mod:
 	go mod tidy
 	@git diff --exit-code -- go.mod
 
+.PHONY: docs
 docs:
-	./dist/osdctl_$(shell  uname | tr [:upper:] [:lower:])_amd64/osdctl ./docs/command
+	./dist/osdctl_$(shell  uname | tr [:upper:] [:lower:])_amd64/osdctl docs ./docs/command
 	@git diff --exit-code -- ./docs/command/
 
 mockgen: ensure-mockgen

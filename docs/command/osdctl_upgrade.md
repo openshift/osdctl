@@ -1,20 +1,19 @@
-## osdctl account mgmt unassign
+## osdctl upgrade
 
-Unassign account to user
+Upgrade osdctl
+
+### Synopsis
+
+Fetch latest osdctl from GitHub and replace the running binary
 
 ```
-osdctl account mgmt unassign [flags]
+osdctl upgrade [flags]
 ```
 
 ### Options
 
 ```
-  -i, --account-id string      Account ID
-  -h, --help                   help for unassign
-  -p, --payer-account string   Payer account type
-      --show-managed-fields    If true, keep the managedFields when printing objects in JSON or YAML format.
-      --template string        Template string or path to template file to use when --output=jsonpath, --output=jsonpath-file.
-  -u, --username string        LDAP username
+  -h, --help   help for upgrade
 ```
 
 ### Options inherited from parent commands
@@ -39,5 +38,5 @@ osdctl account mgmt unassign [flags]
 
 ### SEE ALSO
 
-* [osdctl account mgmt](osdctl_account_mgmt.md)	 - AWS Account Management
+* [osdctl](osdctl.md)	 - OSD CLI
 

@@ -1,27 +1,25 @@
-## osdctl metrics
+## osdctl capability remove
 
-Display metrics of aws-account-operator
+Removes a specific capability to a specific OCM organization.
+Available capabilities: hibernation, autoscaling, ovn, upgradeChannelChange
 
 ```
-osdctl metrics [flags]
+osdctl capability remove [capability] -g [organization ID] [flags]
 ```
 
 ### Options
 
 ```
-      --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
-  -h, --help                       help for metrics
-      --https                      Use HTTPS to access metrics or not. By default we use HTTP scheme.
-  -m, --metrics-url string         The URL of aws-account-operator metrics endpoint. Used only for debug purpose! Only HTTP scheme is supported.
-  -r, --route string               The route created for aws-account-operator (default "aws-account-operator")
-      --sa string                  The service account name for aws-account-operator (default "aws-account-operator")
+  -h, --help                     help for remove
+  -g, --organization-id string   Specify an OCM Organization to apply a capability to
+  -b, --subscription-id string   Specify a Subscription to apply a capability to
 ```
 
 ### Options inherited from parent commands
 
 ```
       --alsologtostderr                  log to standard error as well as files
-      --as string                        Username to impersonate for the operation
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
       --context string                   The name of the kubeconfig context to use
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -29,6 +27,7 @@ osdctl metrics [flags]
       --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                   If non-empty, write log files in this directory
       --logtostderr                      log to standard error instead of files
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
       --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
@@ -38,5 +37,5 @@ osdctl metrics [flags]
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl capability](osdctl_capability.md)	 - Manage capabilites for OCM Organizations
 

@@ -1,20 +1,18 @@
-## osdctl account mgmt unassign
+## osdctl cluster resize-control-plane-node
 
-Unassign account to user
+Resize a control plane node. Requires previous login to the api server via `ocm login` and being tunneled to the backplane.
 
 ```
-osdctl account mgmt unassign [flags]
+osdctl cluster resize-control-plane-node [flags]
 ```
 
 ### Options
 
 ```
-  -i, --account-id string      Account ID
-  -h, --help                   help for unassign
-  -p, --payer-account string   Payer account type
-      --show-managed-fields    If true, keep the managedFields when printing objects in JSON or YAML format.
-      --template string        Template string or path to template file to use when --output=jsonpath, --output=jsonpath-file.
-  -u, --username string        LDAP username
+  -c, --cluster-id string     The internal ID of the cluster to perform actions on
+  -h, --help                  help for resize-control-plane-node
+      --machine-type string   The target AWS machine type to resize to (e.g. m5.2xlarge)
+      --node string           The control plane node to resize (e.g. ip-127.0.0.1.eu-west-2.compute.internal)
 ```
 
 ### Options inherited from parent commands
@@ -39,5 +37,5 @@ osdctl account mgmt unassign [flags]
 
 ### SEE ALSO
 
-* [osdctl account mgmt](osdctl_account_mgmt.md)	 - AWS Account Management
+* [osdctl cluster](osdctl_cluster.md)	 - Provides information for a specified cluster
 

@@ -1,20 +1,16 @@
-## osdctl account mgmt unassign
+## osdctl cluster owner
 
-Unassign account to user
+List the clusters owned by the user (can be specified to any user, not only yourself)
 
 ```
-osdctl account mgmt unassign [flags]
+osdctl cluster owner [flags]
 ```
 
 ### Options
 
 ```
-  -i, --account-id string      Account ID
-  -h, --help                   help for unassign
-  -p, --payer-account string   Payer account type
-      --show-managed-fields    If true, keep the managedFields when printing objects in JSON or YAML format.
-      --template string        Template string or path to template file to use when --output=jsonpath, --output=jsonpath-file.
-  -u, --username string        LDAP username
+  -h, --help             help for owner
+  -u, --user-id string   user to check the cluster owner on
 ```
 
 ### Options inherited from parent commands
@@ -39,5 +35,5 @@ osdctl account mgmt unassign [flags]
 
 ### SEE ALSO
 
-* [osdctl account mgmt](osdctl_account_mgmt.md)	 - AWS Account Management
+* [osdctl cluster](osdctl_cluster.md)	 - Provides information for a specified cluster
 

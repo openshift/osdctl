@@ -1,20 +1,18 @@
-## osdctl account mgmt unassign
+## osdctl cluster support post
 
-Unassign account to user
+Send limited support reason to a given cluster
 
 ```
-osdctl account mgmt unassign [flags]
+osdctl cluster support post CLUSTER_ID [flags]
 ```
 
 ### Options
 
 ```
-  -i, --account-id string      Account ID
-  -h, --help                   help for unassign
-  -p, --payer-account string   Payer account type
-      --show-managed-fields    If true, keep the managedFields when printing objects in JSON or YAML format.
-      --template string        Template string or path to template file to use when --output=jsonpath, --output=jsonpath-file.
-  -u, --username string        LDAP username
+  -d, --dry-run           Dry-run - print the limited support reason about to be sent but don't send it.
+  -h, --help              help for post
+  -t, --template string   Message template file or URL
+      --verbose           Verbose output
 ```
 
 ### Options inherited from parent commands
@@ -39,5 +37,5 @@ osdctl account mgmt unassign [flags]
 
 ### SEE ALSO
 
-* [osdctl account mgmt](osdctl_account_mgmt.md)	 - AWS Account Management
+* [osdctl cluster support](osdctl_cluster_support.md)	 - Cluster Support
 
