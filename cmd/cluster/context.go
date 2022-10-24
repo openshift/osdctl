@@ -450,14 +450,11 @@ func (o *contextOptions) printPDAlerts() error {
 
 func (o *contextOptions) printOtherLinks() error {
 	fmt.Println("============================================================")
-	fmt.Println("Splunk audit logs for the Cluster (set the time in Splunk)")
+	fmt.Println("External resources containing related cluster data")
 	fmt.Println("============================================================")
-	fmt.Printf("Link to Splunk audit logs: https://osdsecuritylogs.splunkcloud.com/en-US/app/search/search?q=search%%20index%%3D%%22openshift_managed_audit%%22%%20clusterid%%3D%%22%s%%22\n\n", o.infraID)
-
-	fmt.Println("============================================================")
-	fmt.Println("OHSS tickets for the Cluster")
-	fmt.Println("============================================================")
+	fmt.Printf("Link to Splunk audit logs (set time in Splunk): https://osdsecuritylogs.splunkcloud.com/en-US/app/search/search?q=search%%20index%%3D%%22openshift_managed_audit%%22%%20clusterid%%3D%%22%s%%22\n\n", o.infraID)
 	fmt.Printf("Link to OHSS tickets: https://issues.redhat.com/issues/?jql=project%%20%%3D%%20OHSS%%20and%%20(%%22Cluster%%20ID%%22%%20~%%20%%20%%22%s%%22%%20OR%%20%%22Cluster%%20ID%%22%%20~%%20%%22%s%%22)\n\n", o.clusterID, o.externalID)
+	fmt.Printf("Link to CCX dashboard: https://kraken.psi.redhat.com/clusters/%s\n\n", o.externalID)
 
 	return nil
 }
