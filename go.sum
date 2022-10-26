@@ -1431,8 +1431,8 @@ github.com/openshift/machine-api-operator v0.2.1-0.20220331125846-eb5fce743ada/g
 github.com/openshift/machine-api-operator v0.2.1-0.20220601192856-d7fb6b5b87ef/go.mod h1:FBgKM8rkLjF2V6ZfvvscpUSFsdXzEOFAiKccqjkxgBg=
 github.com/openshift/machine-api-provider-gcp v0.0.0/go.mod h1:lgTHPL+8qZt/bvkrkxYXroErVmFy4gXn/BhidMI6FQs=
 github.com/openshift/machine-config-operator v0.0.0/go.mod h1:4IzikyGmUVQwlohScKeaAr5n2YzcWXkZvTMGGxDcU2Q=
-github.com/openshift/osd-network-verifier v0.0.0-20221013153547-6e1f127c37ee h1:WWKPHHCer7cyBrkrxpSmfQr7Mvo6HRrnFG+Iyf+rOXA=
-github.com/openshift/osd-network-verifier v0.0.0-20221013153547-6e1f127c37ee/go.mod h1:5oWqXBqQO4+Y1/9EdM/dIaH5sx8SdOtK2cXMIIGUmwc=
+github.com/openshift/osd-network-verifier v0.1.0 h1:vwAFR7j/ZeGLn6rSCUJC7rCbcUm2JCRwMBkJ7qvRzKw=
+github.com/openshift/osd-network-verifier v0.1.0/go.mod h1:5oWqXBqQO4+Y1/9EdM/dIaH5sx8SdOtK2cXMIIGUmwc=
 github.com/openshift/rosa v1.2.5/go.mod h1:4cCAxzdFLlOMRAELN//oWG75iPwoPowg5NzekCYqNVU=
 github.com/opentracing-contrib/go-observer v0.0.0-20170622124052-a52f23424492/go.mod h1:Ngi6UdF0k5OKD5t5wlmGhe/EDKPoUM3BXZSSfIuJbis=
 github.com/opentracing/basictracer-go v1.0.0/go.mod h1:QfBfYuafItcjQuMwinw9GhYKwFXS9KnPs5lxoYwgW74=

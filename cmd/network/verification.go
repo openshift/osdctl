@@ -57,7 +57,7 @@ AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (also AWS_SESSION_TOKEN for STS credent
 are set correctly before execution.
 
 # Verify that essential openshift domains are reachable from a given SUBNET_ID
-osdctl network verify-egress --subnet-id $(SUBNET_ID) --region $(AWS_REGION)`,
+osdctl network verify-egress --subnet-id $(SUBNET_ID) --security-group $(SECURITY_GROUP) --region $(AWS_REGION)`,
 		Run: func(cmd *cobra.Command, args []string) {
 			runEgressTest(config)
 		},
@@ -72,7 +72,7 @@ osdctl network verify-egress --subnet-id $(SUBNET_ID) --region $(AWS_REGION)`,
 	validateEgressCmd.Flags().DurationVar(&config.timeout, "timeout", 1*time.Second, "(optional) timeout for individual egress verification requests")
 	validateEgressCmd.Flags().StringVar(&config.kmsKeyID, "kms-key-id", "", "(optional) ID of KMS key used to encrypt root volumes of compute instances. Defaults to cloud account default key")
 	validateEgressCmd.Flags().StringVarP(&config.awsProfile, "profile", "p", "", "(optional) AWS Profile")
-	validateEgressCmd.Flags().StringVar(&config.securityGroupId, "security-group", "", "(optional) Security group to use for EC2 instance")
+	validateEgressCmd.Flags().StringVar(&config.securityGroupId, "security-group", "", "Security group to use for EC2 instance")
 	validateEgressCmd.Flags().StringVar(&config.httpProxy, "http-proxy", "", "(optional) http-proxy to be used upon http requests being made by verifier, format: http://user:pass@x.x.x.x:8978")
 	validateEgressCmd.Flags().StringVar(&config.httpsProxy, "https-proxy", "", "(optional) https-proxy to be used upon https requests being made by verifier, format: https://user:pass@x.x.x.x:8978")
 	validateEgressCmd.Flags().StringVar(&config.CaCert, "cacert", "", "(optional) path to cacert file to be used upon https requests being made by verifier")
@@ -80,7 +80,9 @@ osdctl network verify-egress --subnet-id $(SUBNET_ID) --region $(AWS_REGION)`,
 
 	if err := validateEgressCmd.MarkFlagRequired("subnet-id"); err != nil {
 		validateEgressCmd.PrintErr(err)
-		os.Exit(1)
+	}
+	if err := validateEgressCmd.MarkFlagRequired("security-group"); err != nil {
+		validateEgressCmd.PrintErr(err)
 	}
 
 	return validateEgressCmd
