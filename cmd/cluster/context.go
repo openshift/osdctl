@@ -16,11 +16,11 @@ import (
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	sl "github.com/openshift/osdctl/internal/servicelog"
-	config "github.com/openshift/osdctl/pkg/envConfig"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
@@ -36,6 +36,10 @@ type contextOptions struct {
 	infraID    string
 	awsProfile string
 }
+
+const (
+	PagerDutyOauthTokenConfigKey = "pd_oauth_token"
+)
 
 // newCmdContext implements the context command to show the current context of a cluster
 func newCmdContext() *cobra.Command {
@@ -248,14 +252,10 @@ func (o *contextOptions) printServiceLogs() error {
 
 func GetPagerdutyClient(oauthtoken string) (*pd.Client, error) {
 	if oauthtoken == "" {
-		pdConfig := config.LoadPDConfig("/.config/pagerduty-cli/config.json")
-		if len(pdConfig.MySubdomain) == 0 {
-			return nil, fmt.Errorf("unable to parse PagerDuty config")
+		if !viper.IsSet(PagerDutyOauthTokenConfigKey) {
+			return nil, fmt.Errorf("key %s is not set in config file", PagerDutyOauthTokenConfigKey)
 		}
-		if len(pdConfig.MySubdomain[0].AccessToken) == 0 {
-			return nil, fmt.Errorf("unable to locate oauth accesstoken in PagerDuty config")
-		}
-		oauthtoken = pdConfig.MySubdomain[0].AccessToken
+		oauthtoken = viper.GetString(PagerDutyOauthTokenConfigKey)
 	}
 	return pd.NewOAuthClient(oauthtoken), nil
 }
@@ -318,7 +318,7 @@ func printHistoricalPDAlertSummary(pdClient *pd.Client, ctx context.Context, ser
 	var currentOffset uint
 	var limit uint = 100
 	var incidents []pd.Incident
-	print("\nPulling historical pd data")
+	fmt.Println("Pulling historical pd data")
 	for currentOffset = 0; true; currentOffset += limit {
 		print(".")
 		// pd defaults pulling the past month of data, which is enough for us to work with
@@ -388,6 +388,12 @@ func printHistoricalPDAlertSummary(pdClient *pd.Client, ctx context.Context, ser
 
 			incidentKeys = append(incidentKeys, title)
 		}
+	}
+
+	if len(incidentKeys) == 0 {
+		fmt.Println("No historical pagerduty data")
+		fmt.Println()
+		return nil
 	}
 
 	sort.SliceStable(incidentKeys, func(i, j int) bool {
@@ -490,13 +496,13 @@ func (o *contextOptions) printCloudTrailLogs() error {
 	}
 	fmt.Println()
 	fmt.Println("============================================================")
-	fmt.Println("CloudTrail events for the Cluster")
+	fmt.Println("Potentially interesting CloudTrail events for the Cluster")
 	fmt.Println("============================================================")
 
 	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
 	table.AddRow([]string{"EventId", "EventName", "Username", "EventTime"})
 	for _, event := range foundEvents {
-		if strings.Contains(*event.EventName, "Get") || strings.Contains(*event.EventName, "List") || strings.Contains(*event.EventName, "Describe") || strings.Contains(*event.EventName, "AssumeRole") {
+		if skippableEvent(*event.EventName) {
 			continue
 		}
 		if event.Username == nil {
@@ -518,4 +524,25 @@ func (o *contextOptions) printCloudTrailLogs() error {
 	}
 
 	return nil
+}
+
+// These are a list of skippable aws event types, as they won't indicate any modification on the customer's side.
+func skippableEvent(eventName string) bool {
+	skippableList := []string{
+		"Get",
+		"List",
+		"Describe",
+		"AssumeRole",
+		"Encrypt",
+		"Decrypt",
+		"LookupEvents",
+		"GenerateDataKey",
+	}
+
+	for _, skipword := range skippableList {
+		if strings.Contains(eventName, skipword) {
+			return true
+		}
+	}
+	return false
 }
