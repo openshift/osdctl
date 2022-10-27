@@ -64,13 +64,14 @@ func (o *cpdOptions) run() error {
 
 	// If the cluster is GCP, give instructions on how to get console access
 	if clusterInfo.CloudProvider().ID() == "gcp" {
-
+		fmt.Printf("This command doesn't support GCP yet. Needs manual investigation\n Get the project ID from this command on hive: oc getprojectclaim -n uhc-production-$CLUSTER_INT_ID\nThen use this URL to access the GCP console: https://console.cloud.google.com/home/dashboard?project=${GCP_PROJECT_ID}\n")
 		return nil
 	}
 
 	// Get AWS credentials for the cluster
 	awsClient, err := osdCloud.GenerateAWSClientForCluster(o.awsProfile, o.clusterID)
 	if err != nil {
+		fmt.Println("PLEASE CONFIRM YOUR CREDENTIALS ARE CORRECT. If you're absolutely sure they are, send this Service Log https://github.com/openshift/managed-notifications/blob/master/osd/aws/ROSA_AWS_invalid_permissions.json")
 		fmt.Println(err)
 		return err
 	}
