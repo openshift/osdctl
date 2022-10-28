@@ -1,20 +1,24 @@
-## osdctl account mgmt unassign
+## osdctl env
 
-Unassign account to user
+Create an environment to interact with a cluster
 
 ```
-osdctl account mgmt unassign [flags]
+osdctl env [flags] [env-alias]
 ```
 
 ### Options
 
 ```
-  -i, --account-id string      Account ID
-  -h, --help                   help for unassign
-  -p, --payer-account string   Payer account type
-      --show-managed-fields    If true, keep the managedFields when printing objects in JSON or YAML format.
-      --template string        Template string or path to template file to use when --output=jsonpath, --output=jsonpath-file.
-  -u, --username string        LDAP username
+  -a, --api string            OpenShift API URL for individual cluster login
+  -c, --cluster-id string     Cluster ID
+  -d, --delete                Delete environment
+  -k, --export-kubeconfig     Output export kubeconfig statement, to use environment outside of the env directory
+  -h, --help                  help for env
+  -l, --login-script string   OCM login script to execute in a loop in ocb every 30 seconds
+  -p, --password string       Password for individual cluster login
+  -r, --reset                 Reset environment
+  -t, --temp                  Delete environment on exit
+  -u, --username string       Username for individual cluster login
 ```
 
 ### Options inherited from parent commands
@@ -39,5 +43,5 @@ osdctl account mgmt unassign [flags]
 
 ### SEE ALSO
 
-* [osdctl account mgmt](osdctl_account_mgmt.md)	 - AWS Account Management
+* [osdctl](osdctl.md)	 - OSD CLI
 

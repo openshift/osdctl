@@ -1,20 +1,21 @@
-## osdctl account mgmt unassign
+## osdctl cluster transfer-owner
 
-Unassign account to user
+Transfer cluster ownership to a new user (to be done by Region Lead)
 
 ```
-osdctl account mgmt unassign [flags]
+osdctl cluster transfer-owner [flags]
 ```
 
 ### Options
 
 ```
-  -i, --account-id string      Account ID
-  -h, --help                   help for unassign
-  -p, --payer-account string   Payer account type
-      --show-managed-fields    If true, keep the managedFields when printing objects in JSON or YAML format.
-      --template string        Template string or path to template file to use when --output=jsonpath, --output=jsonpath-file.
-  -u, --username string        LDAP username
+  -C, --cluster-id string            The Internal Cluster ID/External Cluster ID/ Cluster Name
+  -d, --dry-run                      Dry-run - show all changes but do not apply them
+  -h, --help                         help for transfer-owner
+      --new-organization-id string   Organization of the new owner
+      --new-owner string             The new owners username to transfer the cluster to
+      --old-organization-id string   Organization of the old owner
+      --old-owner string             The old owners username to transfer the cluster from
 ```
 
 ### Options inherited from parent commands
@@ -39,5 +40,5 @@ osdctl account mgmt unassign [flags]
 
 ### SEE ALSO
 
-* [osdctl account mgmt](osdctl_account_mgmt.md)	 - AWS Account Management
+* [osdctl cluster](osdctl_cluster.md)	 - Provides information for a specified cluster
 

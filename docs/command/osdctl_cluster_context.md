@@ -1,20 +1,21 @@
-## osdctl account mgmt unassign
+## osdctl cluster context
 
-Unassign account to user
+Shows the context of a specified cluster
 
 ```
-osdctl account mgmt unassign [flags]
+osdctl cluster context [flags]
 ```
 
 ### Options
 
 ```
-  -i, --account-id string      Account ID
-  -h, --help                   help for unassign
-  -p, --payer-account string   Payer account type
-      --show-managed-fields    If true, keep the managedFields when printing objects in JSON or YAML format.
-      --template string        Template string or path to template file to use when --output=jsonpath, --output=jsonpath-file.
-  -u, --username string        LDAP username
+  -C, --cluster-id string   Cluster ID
+  -z, --days int            Command will display X days of Error SLs sent to the cluster. Days is set to 30 by default (default 30)
+      --full                Run full suite of checks.
+  -h, --help                help for context
+  -t, --oauthtoken string   Pass in PD oauthtoken directly. If not passed in, by default will read token from ~/.config/pagerduty-cli/config.json
+  -p, --profile string      AWS Profile
+      --verbose             Verbose output
 ```
 
 ### Options inherited from parent commands
@@ -39,5 +40,5 @@ osdctl account mgmt unassign [flags]
 
 ### SEE ALSO
 
-* [osdctl account mgmt](osdctl_account_mgmt.md)	 - AWS Account Management
+* [osdctl cluster](osdctl_cluster.md)	 - Provides information for a specified cluster
 

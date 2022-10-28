@@ -1,20 +1,16 @@
-## osdctl account mgmt unassign
+## osdctl cluster support status
 
-Unassign account to user
+Shows the support status of a specified cluster
 
 ```
-osdctl account mgmt unassign [flags]
+osdctl cluster support status [flags]
 ```
 
 ### Options
 
 ```
-  -i, --account-id string      Account ID
-  -h, --help                   help for unassign
-  -p, --payer-account string   Payer account type
-      --show-managed-fields    If true, keep the managedFields when printing objects in JSON or YAML format.
-      --template string        Template string or path to template file to use when --output=jsonpath, --output=jsonpath-file.
-  -u, --username string        LDAP username
+  -h, --help      help for status
+      --verbose   Verbose output
 ```
 
 ### Options inherited from parent commands
@@ -39,5 +35,5 @@ osdctl account mgmt unassign [flags]
 
 ### SEE ALSO
 
-* [osdctl account mgmt](osdctl_account_mgmt.md)	 - AWS Account Management
+* [osdctl cluster support](osdctl_cluster_support.md)	 - Cluster Support
 

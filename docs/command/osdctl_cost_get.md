@@ -12,9 +12,10 @@ osdctl cost get [flags]
       --csv            output result as csv
       --end string     set end date range
   -h, --help           help for get
-      --ou string      get OU ID
+      --ou string      set OU ID
   -r, --recursive      recurse through OUs
       --start string   set start date range
+      --sum            Hide sum rows (default true)
   -t, --time string    set time. One of 'LM', 'MTD', 'YTD', '3M', '6M', '1Y'
 ```
 
@@ -22,7 +23,7 @@ osdctl cost get [flags]
 
 ```
       --alsologtostderr                  log to standard error as well as files
-      --as string                        Username to impersonate for the operation
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
   -a, --aws-access-key-id string         AWS Access Key ID
   -c, --aws-config string                specify AWS config file path
   -p, --aws-profile string               specify AWS profile
@@ -35,6 +36,7 @@ osdctl cost get [flags]
       --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                   If non-empty, write log files in this directory
       --logtostderr                      log to standard error instead of files
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
       --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
