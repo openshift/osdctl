@@ -34,6 +34,7 @@ func newCmdCpd() *cobra.Command {
 		},
 	}
 	cpdCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", ops.clusterID, "Cluster ID")
+	cpdCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", ops.awsProfile, "AWS profile")
 
 	return cpdCmd
 }
@@ -90,7 +91,7 @@ func (o *cpdOptions) run() error {
 				return err
 			}
 		}
-		fmt.Println("Next step: run the verifier egress test: osd-network-verifier egress --region ${CLUSTER_REGION} --subnet-id ${SUBNET_ID} --security-group ${SECURITY_GROUP_ID")
+		fmt.Println("Next step: run the verifier egress test: osd-network-verifier egress --region ${CLUSTER_REGION} --subnet-id ${SUBNET_ID} --security-group ${SECURITY_GROUP_ID}")
 		return nil
 	}
 
@@ -107,7 +108,7 @@ func isSubnetRouteValid(awsClient aws.Client, subnetID string) (bool, error) {
 	describeRouteTablesOutput, err := awsClient.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
 		Filters: []*ec2.Filter{
 			{
-				Name:   awsSdk.String("subnet-id"),
+				Name:   awsSdk.String("association.subnet-id"),
 				Values: []*string{awsSdk.String(subnetID)},
 			},
 		},
