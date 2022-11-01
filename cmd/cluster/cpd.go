@@ -19,6 +19,19 @@ type cpdOptions struct {
 
 const (
 	unknownProvisionCode = "OCM3999"
+	cpdLongDescription   = `
+Helps investigate OSD/ROSA cluster provisioning delays (CPD) or failures
+
+  This command only supports AWS at the moment and will:
+	
+  * Check the cluster's dnszone.hive.openshift.io custom resource
+  * Check whether a known OCM error code and message has been shared with the customer already
+  * Check that the cluster's VPC and/or subnet route table(s) contain a route for 0.0.0.0/0 if it's BYOVPC
+`
+	cpdExample = `
+  # Investigate a CPD for a cluster using an AWS profile named "rhcontrol"
+  osdctl cluster cpd --cluster-id 1kfmyclusteristhebesteverp8m --profile rhcontrol
+`
 )
 
 func newCmdCpd() *cobra.Command {
@@ -26,6 +39,8 @@ func newCmdCpd() *cobra.Command {
 	cpdCmd := &cobra.Command{
 		Use:               "cpd",
 		Short:             "Runs diagnostic for a Cluster Provisioning Delay (CPD)",
+		Long:              cpdLongDescription,
+		Example:           cpdExample,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -33,8 +48,8 @@ func newCmdCpd() *cobra.Command {
 			cmdutil.CheckErr(ops.run())
 		},
 	}
-	cpdCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", ops.clusterID, "Cluster ID")
-	cpdCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", ops.awsProfile, "AWS profile")
+	cpdCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", ops.clusterID, "The internal (OCM) Cluster ID")
+	cpdCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", ops.awsProfile, "AWS profile name")
 
 	return cpdCmd
 }
@@ -44,12 +59,18 @@ func (o *cpdOptions) run() error {
 	// Get the cluster info
 	ocmClient := utils.CreateConnection()
 
+	// TODO: This currently only supports the internal OCM ID
 	resp, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(o.clusterID).Get().Send()
 	if err != nil {
 		return err
 	}
 
 	clusterInfo := resp.Body()
+
+	if clusterInfo.Status().State() == "ready" {
+		fmt.Printf("This cluster is in a ready state and already provisioned")
+		return nil
+	}
 
 	// Check if DNS is ready, exit out if not
 	if !clusterInfo.Status().DNSReady() {

@@ -305,6 +305,9 @@ func GenerateNonCCSClusterAWSClient(ocmClient *sdk.Connection, awsClient aws.Cli
 	return awsClientNonCCS, nil
 }
 
+// GenerateAWSClientForCluster generates an AWS client given an OCM cluster id and AWS profile name.
+// If an AWS profile name is not specified, this function will also read the AWS_PROFILE environment
+// variable or use the default AWS profile.
 func GenerateAWSClientForCluster(awsProfile string, clusterID string) (aws.Client, error) {
 
 	ocmClient := utils.CreateConnection()
