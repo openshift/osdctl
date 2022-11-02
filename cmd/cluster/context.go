@@ -31,6 +31,7 @@ type contextOptions struct {
 	clusterID  string
 	baseDomain string
 	days       int
+	pages      int
 	oauthtoken string
 	externalID string
 	infraID    string
@@ -58,8 +59,9 @@ func newCmdContext() *cobra.Command {
 	contextCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Cluster ID")
 	contextCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", "", "AWS Profile")
 	contextCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
-	contextCmd.Flags().BoolVarP(&ops.full, "full", "", false, "Run full suite of checks.")
-	contextCmd.Flags().IntVarP(&ops.days, "days", "z", 30, "Command will display X days of Error SLs sent to the cluster. Days is set to 30 by default")
+	contextCmd.Flags().BoolVar(&ops.full, "full", false, "Run full suite of checks.")
+	contextCmd.Flags().IntVarP(&ops.days, "days", "d", 30, "Command will display X days of Error SLs sent to the cluster. Days is set to 30 by default")
+	contextCmd.Flags().IntVar(&ops.pages, "pages", 40, "Command will display X pages of Cloud Trail logs for the cluster. Pages is set to 40 by default")
 	contextCmd.Flags().StringVarP(&ops.oauthtoken, "oauthtoken", "t", "", "Pass in PD oauthtoken directly. If not passed in, by default will read token from ~/.config/pagerduty-cli/config.json")
 
 	return contextCmd
@@ -133,7 +135,8 @@ func (o *contextOptions) run() error {
 	err = o.printPDAlerts()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't print pagerduty alerts: %v\n", err)
-		os.Exit(1)
+		// Here we don't actually want to error out, this is to ensure that even if we don't have the
+		// pd auth setup, we can still get the rest of the output.
 	}
 
 	// Print other helpful links
@@ -475,8 +478,8 @@ func (o *contextOptions) printCloudTrailLogs() error {
 	foundEvents := []*cloudtrail.Event{}
 	var eventSearchInput = cloudtrail.LookupEventsInput{}
 
-	fmt.Println("Pulling and filtering the past 40 pages of Cloudtrail data")
-	for counter := 0; counter <= 40; counter++ {
+	fmt.Println("Pulling and filtering the past", o.pages, "pages of Cloudtrail data")
+	for counter := 0; counter <= o.pages; counter++ {
 		print(".")
 		cloudTrailEvents, err := awsJumpClient.LookupEvents(&eventSearchInput)
 		if err != nil {
