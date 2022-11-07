@@ -67,11 +67,13 @@ func (o *cpdOptions) run() error {
 
 	clusterInfo := resp.Body()
 
+	fmt.Println("Checking if cluster has become ready")
 	if clusterInfo.Status().State() == "ready" {
 		fmt.Printf("This cluster is in a ready state and already provisioned")
 		return nil
 	}
 
+	fmt.Println("Checking if cluster DNS is ready")
 	// Check if DNS is ready, exit out if not
 	if !clusterInfo.Status().DNSReady() {
 		fmt.Println("DNS not ready. Investigate reasons using the dnszones CR in the cluster namespace:")
@@ -79,17 +81,20 @@ func (o *cpdOptions) run() error {
 		return nil
 	}
 
+	fmt.Println("Checking if OCM error code is already known")
 	// Check if the OCM Error code is a known error
 	if clusterInfo.Status().ProvisionErrorCode() != unknownProvisionCode {
 		fmt.Printf("Error code %s is known, customer already received Service Log\n", clusterInfo.Status().ProvisionErrorCode())
 	}
 
+	fmt.Println("Checking if cluster is GCP")
 	// If the cluster is GCP, give instructions on how to get console access
 	if clusterInfo.CloudProvider().ID() == "gcp" {
 		fmt.Printf("This command doesn't support GCP yet. Needs manual investigation\n Get the project ID from this command on hive: oc getprojectclaim -n uhc-production-$CLUSTER_INT_ID\nThen use this URL to access the GCP console: https://console.cloud.google.com/home/dashboard?project=${GCP_PROJECT_ID}\n")
 		return nil
 	}
 
+	fmt.Println("Generating AWS credentials for cluster")
 	// Get AWS credentials for the cluster
 	awsClient, err := osdCloud.GenerateAWSClientForCluster(o.awsProfile, o.clusterID)
 	if err != nil {
@@ -101,6 +106,7 @@ func (o *cpdOptions) run() error {
 	// If the cluster is BYOVPC, check the route tables
 	// This check is copied from ocm-cli
 	if clusterInfo.AWS().SubnetIDs() != nil && len(clusterInfo.AWS().SubnetIDs()) > 0 {
+		fmt.Println("Checking BYOVPC to ensure subnets have valid routing")
 		for _, subnet := range clusterInfo.AWS().SubnetIDs() {
 			isValid, err := isSubnetRouteValid(awsClient, subnet)
 			if err != nil {
