@@ -4,7 +4,6 @@ go 1.17
 
 require (
 	github.com/PagerDuty/go-pagerduty v1.5.1
-	github.com/adrg/xdg v0.4.0
 	github.com/aws/aws-sdk-go v1.44.66
 	github.com/coreos/go-semver v0.3.0
 	github.com/deckarep/golang-set v1.7.1
