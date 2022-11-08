@@ -2,7 +2,6 @@ package osdctlConfig
 
 import (
 	"errors"
-	"fmt"
 	"os"
 
 	"github.com/spf13/viper"
@@ -13,11 +12,11 @@ const (
 )
 
 func EnsureConfigFile() error {
-	configPath, err := os.UserHomeDir()
+	configHomePath, err := os.UserHomeDir()
 	if err != nil {
 		return err
 	}
-	configFilePath := configPath + "/.config/" + ConfigFileName
+	configFilePath := configHomePath + "/.config/" + ConfigFileName
 	if _, err := os.Stat(configFilePath); errors.Is(err, os.ErrNotExist) {
 		_, err = os.Create(configFilePath)
 		if err != nil {
@@ -30,8 +29,6 @@ func EnsureConfigFile() error {
 
 	if err := viper.ReadInConfig(); err != nil {
 		return err
-	} else {
-		fmt.Println("Reading config file from " + configFilePath)
 	}
 	return nil
 }
