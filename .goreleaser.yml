@@ -22,7 +22,7 @@ builds:
       # See also: https://pkg.go.dev/cmd/link
       - -s
       - -w
-      - -X github.com/openshift/osdctl/cmd.Version={{.Version}}
+      - -X github.com/openshift/osdctl/pkg/utils.Version={{.Version}}
       - "-extldflags=-zrelro" # binary hardening: For further explanation look here: https://www.redhat.com/en/blog/hardening-elf-binaries-using-relocation-read-only-relro
       - "-extldflags=-znow"
 
