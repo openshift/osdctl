@@ -182,9 +182,13 @@ func isSubnetRouteValid(awsClient aws.Client, subnetID string) (bool, error) {
 	}
 
 	for _, route := range describeRouteTablesOutput.RouteTables[0].Routes {
-		if *route.DestinationCidrBlock == "0.0.0.0/0" {
-			return true, nil
+		// Some routes don't use CIDR blocks as targets, so this needs to be checked
+		if route.DestinationCidrBlock != nil {
+			if *route.DestinationCidrBlock == "0.0.0.0/0" {
+				return true, nil
+			}
 		}
+
 	}
 
 	return false, fmt.Errorf("no default route exists to the internet in subnet %v", subnetID)
