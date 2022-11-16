@@ -33,6 +33,7 @@ type contextOptions struct {
 	days       int
 	pages      int
 	oauthtoken string
+	usertoken  string
 	externalID string
 	infraID    string
 	awsProfile string
@@ -40,6 +41,7 @@ type contextOptions struct {
 
 const (
 	PagerDutyOauthTokenConfigKey = "pd_oauth_token"
+	PagerDutyUserTokenConfigKey  = "pd_user_token"
 )
 
 // newCmdContext implements the context command to show the current context of a cluster
@@ -62,7 +64,8 @@ func newCmdContext() *cobra.Command {
 	contextCmd.Flags().BoolVar(&ops.full, "full", false, "Run full suite of checks.")
 	contextCmd.Flags().IntVarP(&ops.days, "days", "d", 30, "Command will display X days of Error SLs sent to the cluster. Days is set to 30 by default")
 	contextCmd.Flags().IntVar(&ops.pages, "pages", 40, "Command will display X pages of Cloud Trail logs for the cluster. Pages is set to 40 by default")
-	contextCmd.Flags().StringVarP(&ops.oauthtoken, "oauthtoken", "t", "", "Pass in PD oauthtoken directly. If not passed in, by default will read token from ~/.config/pagerduty-cli/config.json")
+	contextCmd.Flags().StringVar(&ops.oauthtoken, "oauthtoken", "", "Pass in PD oauthtoken directly. If not passed in, by default will read `pd_oauth_token` from ~/.config/osdctl")
+	contextCmd.Flags().StringVar(&ops.usertoken, "usertoken", "", "Pass in PD usertoken directly. If not passed in, by default will read `pd_user_token` from ~/.config/osdctl")
 
 	return contextCmd
 }
@@ -253,7 +256,17 @@ func (o *contextOptions) printServiceLogs() error {
 	return nil
 }
 
-func GetPagerdutyClient(oauthtoken string) (*pd.Client, error) {
+func getPDUserClient(usertoken string) (*pd.Client, error) {
+	if usertoken == "" {
+		if !viper.IsSet(PagerDutyUserTokenConfigKey) {
+			return nil, fmt.Errorf("key %s is not set in config file", PagerDutyUserTokenConfigKey)
+		}
+		usertoken = viper.GetString(PagerDutyUserTokenConfigKey)
+	}
+	return pd.NewClient(usertoken), nil
+}
+
+func getPDOauthClient(oauthtoken string) (*pd.Client, error) {
 	if oauthtoken == "" {
 		if !viper.IsSet(PagerDutyOauthTokenConfigKey) {
 			return nil, fmt.Errorf("key %s is not set in config file", PagerDutyOauthTokenConfigKey)
@@ -261,6 +274,20 @@ func GetPagerdutyClient(oauthtoken string) (*pd.Client, error) {
 		oauthtoken = viper.GetString(PagerDutyOauthTokenConfigKey)
 	}
 	return pd.NewOAuthClient(oauthtoken), nil
+}
+
+func GetPagerdutyClient(usertoken string, oauthtoken string) (*pd.Client, error) {
+	client, err := getPDUserClient(usertoken)
+	if client != nil {
+		fmt.Print("Usering User Client")
+		return client, err
+	}
+	client, err = getPDOauthClient(oauthtoken)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create both user and oauth clients for pd")
+	}
+	fmt.Print("Usering Oauth Client")
+	return client, err
 }
 
 func getPDSeviceID(pdClient *pd.Client, ctx context.Context, baseDomain string) (string, error) {
@@ -429,7 +456,7 @@ func printHistoricalPDAlertSummary(pdClient *pd.Client, ctx context.Context, ser
 
 func (o *contextOptions) printPDAlerts() error {
 
-	pdClient, err := GetPagerdutyClient(o.oauthtoken)
+	pdClient, err := GetPagerdutyClient(o.usertoken, o.oauthtoken)
 	if err != nil {
 		fmt.Println("error getting pd client: ", err.Error())
 		return err
