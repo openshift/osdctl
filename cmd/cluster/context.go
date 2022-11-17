@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pd "github.com/PagerDuty/go-pagerduty"
+	jira "github.com/andygrunwald/go-jira"
 	"github.com/aws/aws-sdk-go/service/cloudtrail"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	"github.com/openshift/osdctl/cmd/servicelog"
@@ -25,21 +26,23 @@ import (
 )
 
 type contextOptions struct {
-	output     string
-	verbose    bool
-	full       bool
-	clusterID  string
-	baseDomain string
-	days       int
-	pages      int
-	oauthtoken string
-	usertoken  string
-	externalID string
-	infraID    string
-	awsProfile string
+	output            string
+	verbose           bool
+	full              bool
+	clusterID         string
+	externalClusterID string
+	baseDomain        string
+	days              int
+	pages             int
+	oauthtoken        string
+	usertoken         string
+	externalID        string
+	infraID           string
+	awsProfile        string
 }
 
 const (
+	JiraTokenConfigKey           = "jira_token"
 	PagerDutyOauthTokenConfigKey = "pd_oauth_token"
 	PagerDutyUserTokenConfigKey  = "pd_user_token"
 )
@@ -96,6 +99,7 @@ func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unexpected number of clusters matched input. Expected 1 got %d", len(clusters))
 	}
 	o.clusterID = clusters[0].ID()
+	o.externalClusterID = clusters[0].ExternalID()
 	o.baseDomain = clusters[0].DNS().BaseDomain()
 	o.externalID = clusters[0].ExternalID()
 	o.infraID = clusters[0].InfraID()
@@ -134,6 +138,11 @@ func (o *contextOptions) run() error {
 		os.Exit(1)
 	}
 
+	err = o.printJiraCards()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Can't print jira cards: %v\n", err)
+	}
+
 	// Print all triggered and acknowledged pd alerts
 	err = o.printPDAlerts()
 	if err != nil {
@@ -161,6 +170,7 @@ func (o *contextOptions) run() error {
 		fmt.Println("============================================================")
 		fmt.Println("Not polling cloudtrail logs, use --full flag to do so (must be logged into the correct hive to work).")
 	}
+
 	return nil
 }
 
@@ -279,14 +289,12 @@ func getPDOauthClient(oauthtoken string) (*pd.Client, error) {
 func GetPagerdutyClient(usertoken string, oauthtoken string) (*pd.Client, error) {
 	client, err := getPDUserClient(usertoken)
 	if client != nil {
-		fmt.Print("Usering User Client")
 		return client, err
 	}
 	client, err = getPDOauthClient(oauthtoken)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create both user and oauth clients for pd")
 	}
-	fmt.Print("Usering Oauth Client")
 	return client, err
 }
 
@@ -451,6 +459,46 @@ func printHistoricalPDAlertSummary(pdClient *pd.Client, ctx context.Context, ser
 	oldestIncidentTimeInDays := int(time.Since(oldestIncidentTimestamp).Hours() / 24)
 	fmt.Println("Total number of incidents [", totalIncidents, "] in [", oldestIncidentTimeInDays, "] days")
 
+	return nil
+}
+
+func (o *contextOptions) printJiraCards() error {
+
+	if !viper.IsSet(JiraTokenConfigKey) {
+		return fmt.Errorf("key %s is not set in config file", JiraTokenConfigKey)
+	}
+
+	jiratoken := viper.GetString(JiraTokenConfigKey)
+
+	tp := jira.PATAuthTransport{
+		Token: jiratoken,
+	}
+
+	jiraClient, _ := jira.NewClient(tp.Client(), "https://issues.redhat.com/")
+
+	jql := fmt.Sprintf(
+		`(project = "OpenShift Hosted SRE Support" AND "Cluster ID" ~ "%s") 
+		OR (project = "OpenShift Hosted SRE Support" AND "Cluster ID" ~ "%s") 
+		ORDER BY priority DESC, created DESC`,
+		o.externalClusterID,
+		o.clusterID,
+	)
+
+	issues, _, err := jiraClient.Issue.Search(jql, nil)
+	if err != nil {
+		fmt.Printf("Failed to search for jira issues %q\n", err)
+		return err
+	}
+
+	fmt.Println()
+	fmt.Println("============================================================")
+	fmt.Println("Cluster JIRAs")
+	fmt.Println("============================================================")
+
+	for _, i := range issues {
+		fmt.Printf("[%s](%s/%s): %+v [Status: %s]\n", i.Key, i.Fields.Type.Name, i.Fields.Priority.Name, i.Fields.Summary, i.Fields.Status.Name)
+		fmt.Printf("- Link: https://issues.redhat.com/browse/%s\n\n", i.Key)
+	}
 	return nil
 }
 
