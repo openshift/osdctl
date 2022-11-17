@@ -253,7 +253,7 @@ func readTemplate() {
 		{
 			"severity": "Info",
 			"service_name": "SREManualAction",
-			"summary": "INTERNAL",
+			"summary": "INTERNAL ONLY, DO NOT SHARE WITH CUSTOMER",
 			"description": "${MESSAGE}",
 			"internal_only": true
 		}
