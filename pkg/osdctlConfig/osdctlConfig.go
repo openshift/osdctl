@@ -16,8 +16,13 @@ func EnsureConfigFile() error {
 	if err != nil {
 		return err
 	}
-	configFilePath := configHomePath + "/.config/" + ConfigFileName
+	configFileDir := configHomePath + "/.config/"
+	configFilePath := configFileDir + ConfigFileName
 	if _, err := os.Stat(configFilePath); errors.Is(err, os.ErrNotExist) {
+		err = os.MkdirAll(configFileDir, 0755)
+		if err != nil {
+			return err
+		}
 		_, err = os.Create(configFilePath)
 		if err != nil {
 			return err
