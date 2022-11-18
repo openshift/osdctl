@@ -118,7 +118,7 @@ func (o *cpdOptions) run() error {
 				return err
 			}
 		}
-		fmt.Println("Next step: run the verifier egress test: osd-network-verifier egress --region ${CLUSTER_REGION} --subnet-id ${SUBNET_ID} --security-group ${SECURITY_GROUP_ID}")
+		fmt.Println("Next step: run the verifier egress test: osdctl network verify-egress --region ${CLUSTER_REGION} --subnet-id ${SUBNET_ID} --security-group ${SECURITY_GROUP_ID}")
 		return nil
 	}
 
