@@ -9,10 +9,11 @@ osdctl cluster support post CLUSTER_ID [flags]
 ### Options
 
 ```
-  -d, --dry-run           Dry-run - print the limited support reason about to be sent but don't send it.
-  -h, --help              help for post
-  -t, --template string   Message template file or URL
-      --verbose           Verbose output
+  -d, --dry-run             Dry-run - print the limited support reason about to be sent but don't send it.
+  -h, --help                help for post
+  -p, --param stringArray   Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.
+  -t, --template string     Message template file or URL
+      --verbose             Verbose output
 ```
 
 ### Options inherited from parent commands

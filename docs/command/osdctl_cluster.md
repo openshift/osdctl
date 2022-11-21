@@ -33,6 +33,7 @@ Provides information for a specified cluster
 * [osdctl](osdctl.md)	 - OSD CLI
 * [osdctl cluster break-glass](osdctl_cluster_break-glass.md)	 - Emergency access to a cluster
 * [osdctl cluster context](osdctl_cluster_context.md)	 - Shows the context of a specified cluster
+* [osdctl cluster cpd](osdctl_cluster_cpd.md)	 - Runs diagnostic for a Cluster Provisioning Delay (CPD)
 * [osdctl cluster health](osdctl_cluster_health.md)	 - Describes health of cluster nodes and provides other cluster vitals.
 * [osdctl cluster logging-check](osdctl_cluster_logging-check.md)	 - Shows the logging support status of a specified cluster
 * [osdctl cluster owner](osdctl_cluster_owner.md)	 - List the clusters owned by the user (can be specified to any user, not only yourself)
