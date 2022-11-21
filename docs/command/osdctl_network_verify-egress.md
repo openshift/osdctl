@@ -18,7 +18,7 @@ AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (also AWS_SESSION_TOKEN for STS credent
 are set correctly before execution.
 
 # Verify that essential openshift domains are reachable from a given SUBNET_ID
-osdctl network verify-egress --subnet-id $(SUBNET_ID) --region $(AWS_REGION)
+osdctl network verify-egress --subnet-id $(SUBNET_ID) --security-group $(SECURITY_GROUP) --region $(AWS_REGION)
 ```
 
 ### Options
@@ -36,7 +36,7 @@ osdctl network verify-egress --subnet-id $(SUBNET_ID) --region $(AWS_REGION)
       --no-tls                      (optional) if true, ignore all ssl certificate validations on client-side.
   -p, --profile string              (optional) AWS Profile
       --region string               (optional) compute instance region. If absent, environment var AWS_REGION will be used, if set (default "us-east-1")
-      --security-group string       (optional) Security group to use for EC2 instance
+      --security-group string       Security group to use for EC2 instance
       --subnet-id string            source subnet ID
       --timeout duration            (optional) timeout for individual egress verification requests (default 1s)
 ```
