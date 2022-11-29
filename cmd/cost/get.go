@@ -68,7 +68,7 @@ func (o *getOptions) checkArgs(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-//Store flag options for get command
+// Store flag options for get command
 type getOptions struct {
 	ou        string
 	recursive bool
@@ -133,7 +133,7 @@ func (o *getOptions) run() error {
 	return nil
 }
 
-//Get account IDs of immediate accounts under given OU
+// Get account IDs of immediate accounts under given OU
 func getAccounts(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) ([]*string, error) {
 	var accountSlice []*string
 	var nextToken *string
@@ -161,7 +161,7 @@ func getAccounts(OU *organizations.OrganizationalUnit, awsClient awsprovider.Cli
 	return accountSlice, nil
 }
 
-//Get the account IDs of all (not only immediate) accounts under OU
+// Get the account IDs of all (not only immediate) accounts under OU
 func getAccountsRecursive(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) ([]*string, error) {
 	var accountsIDs []*string
 
@@ -185,7 +185,7 @@ func getAccountsRecursive(OU *organizations.OrganizationalUnit, awsClient awspro
 	return append(accountsIDs, accountsIDsOU...), nil
 }
 
-//Get immediate OUs (child nodes) directly under given OU
+// Get immediate OUs (child nodes) directly under given OU
 func getOUs(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) ([]*organizations.OrganizationalUnit, error) {
 	var OUSlice []*organizations.OrganizationalUnit
 	var nextToken *string
@@ -214,7 +214,7 @@ func getOUs(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) 
 	return OUSlice, nil
 }
 
-//Get the account IDs of all (not only immediate) accounts under OU
+// Get the account IDs of all (not only immediate) accounts under OU
 func getOUsRecursive(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) ([]*organizations.OrganizationalUnit, error) {
 	var OUs []*organizations.OrganizationalUnit
 
@@ -235,7 +235,7 @@ func getOUsRecursive(OU *organizations.OrganizationalUnit, awsClient awsprovider
 	return OUs, nil
 }
 
-//Get cost of given account
+// Get cost of given account
 func (o *getOptions) getAccountCost(accountID *string, unit *string, awsClient awsprovider.Client, cost *decimal.Decimal) error {
 
 	var start, end, granularity string
@@ -290,7 +290,7 @@ func (o *getOptions) getAccountCost(accountID *string, unit *string, awsClient a
 	return nil
 }
 
-//Get cost of given OU by aggregating costs of only immediate accounts under given OU
+// Get cost of given OU by aggregating costs of only immediate accounts under given OU
 func (o *getOptions) getOUCost(cost *decimal.Decimal, unit *string, OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) error {
 	//Populate accounts
 	accounts, err := getAccounts(OU, awsClient)
@@ -308,7 +308,7 @@ func (o *getOptions) getOUCost(cost *decimal.Decimal, unit *string, OU *organiza
 	return nil
 }
 
-//Get cost of given OU by aggregating costs of all (including immediate) accounts under OU
+// Get cost of given OU by aggregating costs of all (including immediate) accounts under OU
 func (o *getOptions) getOUCostRecursive(cost *decimal.Decimal, unit *string, OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) error {
 	//Populate OUs
 	OUs, err := getOUs(OU, awsClient)
@@ -331,7 +331,7 @@ func (o *getOptions) getOUCostRecursive(cost *decimal.Decimal, unit *string, OU 
 	return nil
 }
 
-//Get time period based on time flag
+// Get time period based on time flag
 func getTimePeriod(timePtr *string) (string, string) {
 
 	t := time.Now()

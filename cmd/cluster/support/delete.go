@@ -130,8 +130,8 @@ func (o *deleteOptions) run() error {
 }
 
 // createDeleteRequest sets the delete API and returns a request
-//SDKConnection is an interface that is satisfied by the sdk.Connection and by our mock connection
-//this facilitates unit test and allow us to mock Post() and Delete() api calls
+// SDKConnection is an interface that is satisfied by the sdk.Connection and by our mock connection
+// this facilitates unit test and allow us to mock Post() and Delete() api calls
 func createDeleteRequest(ocmClient SDKConnection, cluster *v1.Cluster, reasonID string) (request *sdk.Request, err error) {
 
 	targetAPIPath := "/api/clusters_mgmt/v1/clusters/" + cluster.ID() + "/limited_support_reasons/" + reasonID

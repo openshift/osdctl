@@ -363,7 +363,7 @@ type RegisterCluster struct {
 // fix is tracked in https://issues.redhat.com/browse/SDA-6652
 // after ocm-sdk is fixed this function can be cleaned up
 
-//re-register the cluster with CS with the new organization id
+// re-register the cluster with CS with the new organization id
 func createNewRegisterClusterRequest(ocm *sdk.Connection, externalClusterID string, subscriptionID string, organizationID string, consoleURL string, displayName string) (*sdk.Request, error) {
 
 	targetAPIPath := "/api/clusters_mgmt/v1/register_cluster"

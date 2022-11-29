@@ -44,7 +44,7 @@ func newCmdReconcile(streams genericclioptions.IOStreams) *cobra.Command {
 	return reconcileCmd
 }
 
-//Checks if there's a cost category for every OU. If not, creates the missing cost category. This should be ran every 24 hours.
+// Checks if there's a cost category for every OU. If not, creates the missing cost category. This should be ran every 24 hours.
 func reconcileCostCategories(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) error {
 	costCategoryCreated := false
 	costCategoriesSet := mapset.NewSet()

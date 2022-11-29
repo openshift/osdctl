@@ -162,8 +162,8 @@ func (o *postOptions) run() error {
 
 // createPostRequest create and populates the limited support post call
 // swagger code gen: https://api.openshift.com/?urls.primaryName=Clusters%20management%20service#/default/post_api_clusters_mgmt_v1_clusters__cluster_id__limited_support_reasons
-//SDKConnection is an interface that is satisfied by the sdk.Connection and by our mock connection
-//this facilitates unit test and allow us to mock Post() and Delete() api calls
+// SDKConnection is an interface that is satisfied by the sdk.Connection and by our mock connection
+// this facilitates unit test and allow us to mock Post() and Delete() api calls
 func createPostRequest(ocmClient SDKConnection, cluster *v1.Cluster) (request *sdk.Request, err error) {
 
 	targetAPIPath := "/api/clusters_mgmt/v1/clusters/" + cluster.ID() + "/limited_support_reasons"

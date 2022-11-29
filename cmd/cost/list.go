@@ -66,7 +66,7 @@ func (o *listOptions) checkArgs(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-//Store flag options for get command
+// Store flag options for get command
 type listOptions struct {
 	ou     []string
 	time   string
@@ -159,7 +159,7 @@ func printHeader(ops *listOptions) {
 	}
 }
 
-//List the cost of each OU under given OU
+// List the cost of each OU under given OU
 func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client, ops *listOptions) error {
 	OUs, err := getOUsRecursive(OU, awsClient)
 	if err != nil {
