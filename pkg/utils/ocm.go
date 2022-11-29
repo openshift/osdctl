@@ -12,6 +12,28 @@ import (
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 )
 
+const ClusterServiceClusterSearch = "id = '%s' or name = '%s' or external_id = '%s'"
+
+// GetClusterAnyStatus returns an OCM cluster object given an OCM connection and cluster id
+// (internal and external ids both supported).
+func GetClusterAnyStatus(conn *sdk.Connection, clusterId string) (*v1.Cluster, error) {
+	// identifier in the accounts management service. To find those clusters we need to check
+	// directly in the clusters management service.
+	clustersSearch := fmt.Sprintf(ClusterServiceClusterSearch, clusterId, clusterId, clusterId)
+	clustersListResponse, err := conn.ClustersMgmt().V1().Clusters().List().Search(clustersSearch).Size(1).Send()
+	if err != nil {
+		return nil, fmt.Errorf("can't retrieve clusters for clusterId '%s': %v", clusterId, err)
+	}
+
+	// If there is exactly one cluster matching then return it:
+	clustersTotal := clustersListResponse.Total()
+	if clustersTotal == 1 {
+		return clustersListResponse.Items().Slice()[0], nil
+	}
+
+	return nil, fmt.Errorf("there are %d clusters with identifier or name '%s', expected 1", clustersTotal, clusterId)
+}
+
 func GetClusters(ocmClient *sdk.Connection, clusterIds []string) []*v1.Cluster {
 	for i, id := range clusterIds {
 		clusterIds[i] = GenerateQuery(id)

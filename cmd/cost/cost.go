@@ -58,7 +58,7 @@ func newCostOptions(streams genericclioptions.IOStreams) *costOptions {
 	}
 }
 
-//Initiate AWS clients for Organizations and Cost Explorer services using, if given, credentials in flags, else, credentials in the environment
+// Initiate AWS clients for Organizations and Cost Explorer services using, if given, credentials in flags, else, credentials in the environment
 func (opsCost *costOptions) initAWSClients() (awsprovider.Client, error) {
 	//Initialize AWS clients
 	var (
@@ -82,7 +82,7 @@ func (opsCost *costOptions) initAWSClients() (awsprovider.Client, error) {
 	return awsClient, err
 }
 
-//Gets information regarding Organizational Unit
+// Gets information regarding Organizational Unit
 func getOU(org awsprovider.Client, OUid string) *organizations.OrganizationalUnit {
 	result, err := org.DescribeOrganizationalUnit(&organizations.DescribeOrganizationalUnitInput{
 		OrganizationalUnitId: aws.String(OUid),

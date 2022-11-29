@@ -48,34 +48,31 @@ func newCmdCpd() *cobra.Command {
 			cmdutil.CheckErr(ops.run())
 		},
 	}
-	cpdCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", ops.clusterID, "The internal (OCM) Cluster ID")
+	cpdCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", ops.clusterID, "The internal/external (OCM) Cluster ID")
 	cpdCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", ops.awsProfile, "AWS profile name")
 
 	return cpdCmd
 }
 
 func (o *cpdOptions) run() error {
-
 	// Get the cluster info
 	ocmClient := utils.CreateConnection()
+	defer ocmClient.Close()
 
-	// TODO: This currently only supports the internal OCM ID
-	resp, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(o.clusterID).Get().Send()
+	cluster, err := utils.GetClusterAnyStatus(ocmClient, o.clusterID)
 	if err != nil {
 		return err
 	}
 
-	clusterInfo := resp.Body()
-
 	fmt.Println("Checking if cluster has become ready")
-	if clusterInfo.Status().State() == "ready" {
+	if cluster.Status().State() == "ready" {
 		fmt.Printf("This cluster is in a ready state and already provisioned")
 		return nil
 	}
 
 	fmt.Println("Checking if cluster DNS is ready")
 	// Check if DNS is ready, exit out if not
-	if !clusterInfo.Status().DNSReady() {
+	if !cluster.Status().DNSReady() {
 		fmt.Println("DNS not ready. Investigate reasons using the dnszones CR in the cluster namespace:")
 		fmt.Printf("oc get dnszones -n uhc-production-%s -o yaml --as backplane-cluster-admin\n", o.clusterID)
 		return nil
@@ -83,15 +80,14 @@ func (o *cpdOptions) run() error {
 
 	fmt.Println("Checking if OCM error code is already known")
 	// Check if the OCM Error code is a known error
-	if clusterInfo.Status().ProvisionErrorCode() != unknownProvisionCode {
-		fmt.Printf("Error code %s is known, customer already received Service Log\n", clusterInfo.Status().ProvisionErrorCode())
+	if cluster.Status().ProvisionErrorCode() != unknownProvisionCode {
+		fmt.Printf("Error code %s is known, customer already received Service Log\n", cluster.Status().ProvisionErrorCode())
 	}
 
 	fmt.Println("Checking if cluster is GCP")
 	// If the cluster is GCP, give instructions on how to get console access
-	if clusterInfo.CloudProvider().ID() == "gcp" {
-		fmt.Printf("This command doesn't support GCP yet. Needs manual investigation\n Get the project ID from this command on hive: oc getprojectclaim -n uhc-production-$CLUSTER_INT_ID\nThen use this URL to access the GCP console: https://console.cloud.google.com/home/dashboard?project=${GCP_PROJECT_ID}\n")
-		return nil
+	if cluster.CloudProvider().ID() == "gcp" {
+		return fmt.Errorf("this command doesn't support GCP yet. Needs manual investigation:\nocm backplane cloud console -b %s", o.clusterID)
 	}
 
 	fmt.Println("Generating AWS credentials for cluster")
@@ -105,17 +101,15 @@ func (o *cpdOptions) run() error {
 
 	// If the cluster is BYOVPC, check the route tables
 	// This check is copied from ocm-cli
-	if clusterInfo.AWS().SubnetIDs() != nil && len(clusterInfo.AWS().SubnetIDs()) > 0 {
+	if cluster.AWS().SubnetIDs() != nil && len(cluster.AWS().SubnetIDs()) > 0 {
 		fmt.Println("Checking BYOVPC to ensure subnets have valid routing")
-		for _, subnet := range clusterInfo.AWS().SubnetIDs() {
+		for _, subnet := range cluster.AWS().SubnetIDs() {
 			isValid, err := isSubnetRouteValid(awsClient, subnet)
 			if err != nil {
 				return err
 			}
 			if !isValid {
-				err := fmt.Errorf("subnet %v does not have valid routing. ", subnet)
-				fmt.Printf("%v\n Run the following to send a SerivceLog:\n osdctl servicelog post ${CLUSTER_EXT_ID} -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/aws/InstallFailed_NoRouteToInternet.json", err)
-				return err
+				return fmt.Errorf("subnet %s does not have a default route to 0.0.0.0/0\n Run the following to send a SerivceLog:\n osdctl servicelog post %s -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/aws/InstallFailed_NoRouteToInternet.json", subnet, o.clusterID)
 			}
 		}
 		fmt.Println("Next step: run the verifier egress test: osdctl network verify-egress --region ${CLUSTER_REGION} --subnet-id ${SUBNET_ID} --security-group ${SECURITY_GROUP_ID}")
@@ -128,10 +122,9 @@ func (o *cpdOptions) run() error {
 }
 
 func isSubnetRouteValid(awsClient aws.Client, subnetID string) (bool, error) {
-
 	var routeTable string
 
-	// Try and find a RouteTable with an association for the given subnet
+	// Try and find a Route Table associated with the given subnet
 	describeRouteTablesOutput, err := awsClient.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
 		Filters: []*ec2.Filter{
 			{
@@ -141,7 +134,7 @@ func isSubnetRouteValid(awsClient aws.Client, subnetID string) (bool, error) {
 		},
 	})
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to describe route tables associated to subnet %s: %w", subnetID, err)
 	}
 
 	// If there are no associated RouteTables, then the subnet uses the default RoutTable for the VPC
@@ -159,13 +152,13 @@ func isSubnetRouteValid(awsClient aws.Client, subnetID string) (bool, error) {
 
 		vpcID := *describeSubnetOutput.Subnets[0].VpcId
 
-		// Set the routetable to the default for the VPC
+		// Set the route table to the default for the VPC
 		routeTable, err = findDefaultRouteTableForVPC(awsClient, vpcID)
 		if err != nil {
 			return false, err
 		}
 	} else {
-		// Set the routetable to the one asscoiated with the subnet
+		// Set the route table to the one associated with the subnet
 		routeTable = *describeRouteTablesOutput.RouteTables[0].RouteTableId
 	}
 
@@ -178,25 +171,23 @@ func isSubnetRouteValid(awsClient aws.Client, subnetID string) (bool, error) {
 	}
 
 	if len(describeRouteTablesOutput.RouteTables) == 0 {
-		return false, fmt.Errorf("no routetables found for routetable id %v", routeTable)
+		// Shouldn't happen
+		return false, fmt.Errorf("no route tables found for route table id %v", routeTable)
 	}
 
 	for _, route := range describeRouteTablesOutput.RouteTables[0].Routes {
 		// Some routes don't use CIDR blocks as targets, so this needs to be checked
-		if route.DestinationCidrBlock != nil {
-			if *route.DestinationCidrBlock == "0.0.0.0/0" {
-				return true, nil
-			}
+		if route.DestinationCidrBlock != nil && *route.DestinationCidrBlock == "0.0.0.0/0" {
+			return true, nil
 		}
-
 	}
 
-	return false, fmt.Errorf("no default route exists to the internet in subnet %v", subnetID)
+	// We haven't found a default route to the internet, so this subnet has an invalid route table
+	return false, nil
 }
 
+// findDefaultRouteTableForVPC returns the AWS Route Table ID of the VPC's default Route Table
 func findDefaultRouteTableForVPC(awsClient aws.Client, vpcID string) (string, error) {
-
-	// Get all subnets in the VPC
 	describeRouteTablesOutput, err := awsClient.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
 		Filters: []*ec2.Filter{
 			{
@@ -206,7 +197,7 @@ func findDefaultRouteTableForVPC(awsClient aws.Client, vpcID string) (string, er
 		},
 	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to describe route tables associated with vpc %s: %w", vpcID, err)
 	}
 
 	for _, rt := range describeRouteTablesOutput.RouteTables {
@@ -217,5 +208,5 @@ func findDefaultRouteTableForVPC(awsClient aws.Client, vpcID string) (string, er
 		}
 	}
 
-	return "", fmt.Errorf("no default routetable found for vpc %v", vpcID)
+	return "", fmt.Errorf("no default route table found for vpc: %s", vpcID)
 }
