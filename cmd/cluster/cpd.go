@@ -87,8 +87,7 @@ func (o *cpdOptions) run() error {
 	fmt.Println("Checking if cluster is GCP")
 	// If the cluster is GCP, give instructions on how to get console access
 	if cluster.CloudProvider().ID() == "gcp" {
-		fmt.Printf("This command doesn't support GCP yet. Needs manual investigation\n Get the project ID from this command on hive: oc getprojectclaim -n uhc-production-$CLUSTER_INT_ID\nThen use this URL to access the GCP console: https://console.cloud.google.com/home/dashboard?project=${GCP_PROJECT_ID}\n")
-		return nil
+		return fmt.Errorf("this command doesn't support GCP yet. Needs manual investigation:\nocm backplane cloud console -b %s", o.clusterID)
 	}
 
 	fmt.Println("Generating AWS credentials for cluster")
