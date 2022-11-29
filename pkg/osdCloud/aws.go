@@ -309,17 +309,16 @@ func GenerateNonCCSClusterAWSClient(ocmClient *sdk.Connection, awsClient aws.Cli
 // If an AWS profile name is not specified, this function will also read the AWS_PROFILE environment
 // variable or use the default AWS profile.
 func GenerateAWSClientForCluster(awsProfile string, clusterID string) (aws.Client, error) {
-
 	ocmClient := utils.CreateConnection()
 	defer ocmClient.Close()
 
-	clusterResp, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(clusterID).Get().Send()
+	cluster, err := utils.GetClusterAnyStatus(ocmClient, clusterID)
 	if err != nil {
 		fmt.Println(err)
 		return nil, err
 	}
-	cluster := clusterResp.Body()
 	clusterRegion := cluster.Region().ID()
+	internalClusterId := cluster.ID()
 
 	// Builds the base client using the provided creds (via profile or env vars)
 	awsClient, err := aws.NewAwsClient(awsProfile, clusterRegion, "")
@@ -342,9 +341,9 @@ func GenerateAWSClientForCluster(awsProfile string, clusterID string) (aws.Clien
 	}
 
 	if cluster.CCS().Enabled() {
-		awsClient, err = GenerateCCSClusterAWSClient(ocmClient, awsClient, clusterID, clusterRegion, partition, sessionName)
+		awsClient, err = GenerateCCSClusterAWSClient(ocmClient, awsClient, internalClusterId, clusterRegion, partition, sessionName)
 	} else {
-		awsClient, err = GenerateNonCCSClusterAWSClient(ocmClient, awsClient, clusterID, clusterRegion, partition, sessionName)
+		awsClient, err = GenerateNonCCSClusterAWSClient(ocmClient, awsClient, internalClusterId, clusterRegion, partition, sessionName)
 	}
 
 	return awsClient, err
