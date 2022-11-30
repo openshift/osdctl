@@ -22,7 +22,7 @@ OS := $(shell go env GOOS | sed 's/[a-z]/\U&/')
 ARCH := $(shell go env GOARCH)
 .PHONY: download-goreleaser
 download-goreleaser:
-	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser@v1.6.3
+	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser@v1.13.1
 
 # CI build containers don't include goreleaser by default,
 # so they need to get it first, and then run the build
@@ -48,7 +48,7 @@ mod:
 
 .PHONY: docs
 docs:
-	./dist/osdctl_$(shell  uname | tr [:upper:] [:lower:])_amd64/osdctl docs ./docs/command
+	./dist/osdctl_$(shell  uname | tr [:upper:] [:lower:])_amd64_v1/osdctl docs ./docs/command
 	@git diff --exit-code -- ./docs/command/
 
 mockgen: ensure-mockgen
