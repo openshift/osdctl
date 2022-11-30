@@ -3,7 +3,6 @@ package support
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -206,7 +205,7 @@ func accessFile(filePath string) ([]byte, error) {
 
 	// when template is file on disk
 	if utils.FileExists(filePath) {
-		file, err := ioutil.ReadFile(filePath) //#nosec G304 -- filePath cannot be constant
+		file, err := os.ReadFile(filePath) //#nosec G304 -- filePath cannot be constant
 		if err != nil {
 			return file, fmt.Errorf("cannot read the file.\nError: %q", err)
 		}

@@ -3,7 +3,7 @@ package aws
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -182,7 +182,7 @@ func requestSignedURL(baseUrl string, jsonCredentials []byte) (string, error) {
 	}
 	defer res.Body.Close()
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		klog.Errorf("Failed to read response body %v", err)
 		return "", err

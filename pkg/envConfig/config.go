@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -32,7 +31,7 @@ func LoadYaml(paramFilePath string) Config {
 		return config
 	}
 	// ignore linter error: filepath has to be static
-	yamlFile, err := ioutil.ReadFile(configFilePath) //#nosec G304 -- filepath cannot be constant
+	yamlFile, err := os.ReadFile(configFilePath) //#nosec G304 -- filepath cannot be constant
 	if err != nil {
 		log.Printf("Failed to read config yaml %s: %v ", configFilePath, err)
 	}
@@ -57,7 +56,7 @@ func LoadPDConfig(paramFilePath string) PDConfig {
 	}
 
 	// ignore linter error: filepath has to be static
-	jsonFile, err := ioutil.ReadFile(configFilePath) //#nosec G304 -- filepath cannot be constant
+	jsonFile, err := os.ReadFile(configFilePath) //#nosec G304 -- filepath cannot be constant
 	if err != nil {
 		log.Printf("Failed to read config json %s: %v ", configFilePath, err)
 	}

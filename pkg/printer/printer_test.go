@@ -2,7 +2,7 @@ package printer
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -45,7 +45,7 @@ foo1                foo2                foo3
 			err := p.Flush()
 			g.Expect(err).ShouldNot(HaveOccurred())
 
-			data, err := ioutil.ReadAll(buf)
+			data, err := io.ReadAll(buf)
 			g.Expect(err).ShouldNot(HaveOccurred())
 			g.Expect(string(data)).Should(Equal(tc.output))
 		})

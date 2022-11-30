@@ -3,7 +3,7 @@ package account
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -209,7 +209,7 @@ func (o *generateSecretOptions) run() error {
 			return err
 		}
 		// set permission to 0600 to ensure, only owner has access
-		return ioutil.WriteFile(outputPath, []byte(secret), 0600)
+		return os.WriteFile(outputPath, []byte(secret), 0600)
 	}
 
 	return nil
