@@ -112,11 +112,11 @@ func (o *cpdOptions) run() error {
 				return fmt.Errorf("subnet %s does not have a default route to 0.0.0.0/0\n Run the following to send a SerivceLog:\n osdctl servicelog post %s -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/aws/InstallFailed_NoRouteToInternet.json", subnet, o.clusterID)
 			}
 		}
-		fmt.Println("Next step: run the verifier egress test: osdctl network verify-egress --region ${CLUSTER_REGION} --subnet-id ${SUBNET_ID} --security-group ${SECURITY_GROUP_ID}")
+		fmt.Printf("Next step: run the verifier egress test: osdctl network verify-egress --cluster-id %s\n", o.clusterID)
 		return nil
 	}
 
-	fmt.Println("Next step: check the AWS reources manually, run ocm backplane cloud console")
+	fmt.Println("Next step: check the AWS resources manually, run ocm backplane cloud console")
 
 	return nil
 }

@@ -173,7 +173,8 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 		return nil, err
 	}
 
-	awsClient := &AwsClient{iamClient: iam.New(sess),
+	awsClient := &AwsClient{
+		iamClient:           iam.New(sess),
 		ec2Client:           ec2.New(sess),
 		stsClient:           sts.New(sess),
 		s3Client:            s3.New(sess),
