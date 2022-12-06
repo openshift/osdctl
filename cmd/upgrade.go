@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -89,7 +88,7 @@ func upgrade(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		dir, err := ioutil.TempDir(homeDir, ".*")
+		dir, err := os.MkdirTemp(homeDir, ".*")
 		if err != nil {
 			return err
 		}

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -383,14 +382,14 @@ func (e *OcEnv) createBin(cmd, content string) {
 
 func (e *OcEnv) createKubeconfig() {
 	if e.Options.Kubeconfig != "" {
-		input, err := ioutil.ReadFile(e.Options.Kubeconfig)
+		input, err := os.ReadFile(e.Options.Kubeconfig)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 
 		path := filepath.Join(e.Path, "/kubeconfig.json")
-		err = ioutil.WriteFile(path, input, 0600)
+		err = os.WriteFile(path, input, 0600)
 		if err != nil {
 			panic(fmt.Errorf("error creating %s: %v", path, err))
 		}

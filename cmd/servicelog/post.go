@@ -3,7 +3,6 @@ package servicelog
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"os/signal"
@@ -223,7 +222,7 @@ func accessFile(filePath string) ([]byte, error) {
 	filePath = filepath.Clean(filePath)
 	if utils.FileExists(filePath) {
 		// template is file on the disk
-		file, err := ioutil.ReadFile(filePath) //#nosec G304 -- Potential file inclusion via variable
+		file, err := os.ReadFile(filePath) //#nosec G304 -- Potential file inclusion via variable
 		if err != nil {
 			return file, fmt.Errorf("cannot read the file.\nError: %q", err)
 		}

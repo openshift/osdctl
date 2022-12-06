@@ -3,8 +3,9 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -17,11 +18,6 @@ const (
 )
 
 var (
-	// GitCommit is the short git commit hash from the environment
-	// Will be set during build process via GoReleaser
-	// See also: https://pkg.go.dev/cmd/link
-	GitCommit string
-
 	// Version is the tag version from the environment
 	// Will be set during build process via GoReleaser
 	// See also: https://pkg.go.dev/cmd/link
@@ -52,9 +48,20 @@ var versionCmd = &cobra.Command{
 
 // version returns the osdctl version marshalled in JSON
 func version(cmd *cobra.Command, args []string) error {
+	gitCommit := "unknown"
+
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.revision" {
+				gitCommit = setting.Value
+				break
+			}
+		}
+	}
+
 	latest, _ := getLatestVersion() // let's ignore this error, just in case we have no internet access
 	ver, err := json.MarshalIndent(&versionResponse{
-		Commit:  GitCommit,
+		Commit:  gitCommit,
 		Version: Version,
 		Latest:  strings.TrimPrefix(latest, "v"),
 	}, "", "  ")
@@ -83,7 +90,7 @@ func getLatestVersion() (latest string, err error) {
 		return latest, err
 	}
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return latest, err
 	}
