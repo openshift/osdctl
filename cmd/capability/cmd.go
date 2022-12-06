@@ -43,6 +43,7 @@ func NewCmdCapability() *cobra.Command {
 				return
 			}
 		},
+		Deprecated: "This command is being deprecated in lieu of using ocm-resources. Soon, this command will not work, and you will have to follow the SOP v4/howto/capabilities.md.",
 	}
 
 	// Add subcommands
