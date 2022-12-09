@@ -222,7 +222,7 @@ func retrySkipForceCancelDialog(procedure string) (optionsDialogResponse, error)
 
 func forceDrainNode(nodeID string) error {
 	printer.PrintlnGreen("Force draining node... This might take a minute or two...")
-	cmd := fmt.Sprintf("oc adm drain %s --ignore-daemonsets --delete-emptydir-data --force", nodeID)
+	cmd := fmt.Sprintf("oc adm drain %s --ignore-daemonsets --delete-emptydir-data --force --as backplane-cluster-admin", nodeID)
 	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("Failed to force drain:\n%s", strings.TrimSpace(string(output)))
