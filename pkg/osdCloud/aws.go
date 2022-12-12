@@ -1,20 +1,24 @@
 package osdCloud
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	awsSdk "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/aws/aws-sdk-go/service/sts"
-	"github.com/spf13/viper"
 
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -200,6 +204,37 @@ type awsCredentialsResponse struct {
 // Requires previous log on to the correct api server via ocm login
 // and tunneling to the backplane
 func CreateAWSClient(clusterID string) (aws.Client, error) {
+	input, err := GetAWSClientInputFromBackplane(clusterID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve AWS credentials from backplane: %w", err)
+	}
+
+	return aws.NewAwsClientWithInput(input)
+}
+
+// CreateAWSV2Config creates an aws-sdk-go-v2 config via Backplane given a cluster id
+func CreateAWSV2Config(ctx context.Context, clusterID string) (awsv2.Config, error) {
+	input, err := GetAWSClientInputFromBackplane(clusterID)
+	if err != nil {
+		return awsv2.Config{}, fmt.Errorf("failed to retrieve AWS credentials from backplane, ensure there is an active backplane tunnel: %s", err)
+	}
+
+	return config.LoadDefaultConfig(ctx,
+		config.WithCredentialsProvider(
+			awsv2.NewCredentialsCache(
+				credentials.NewStaticCredentialsProvider(
+					input.AccessKeyID,
+					input.SecretAccessKey,
+					input.SessionToken,
+				),
+			),
+		),
+		config.WithRegion(input.Region),
+	)
+}
+
+// GetAWSClientInputFromBackplane sets up AWS credentials via backplane-api given a cluster id
+func GetAWSClientInputFromBackplane(clusterID string) (*aws.AwsClientInput, error) {
 	token, err := utils.GetOCMApiServerToken()
 
 	getUrl, err := utils.GetBackplaneURL(clusterID)
@@ -244,9 +279,12 @@ func CreateAWSClient(clusterID string) (aws.Client, error) {
 		}
 	}
 
-	input := aws.AwsClientInput{AccessKeyID: awsCredentials.AccessKeyId, SecretAccessKey: awsCredentials.SecretAccessKey, SessionToken: awsCredentials.SessionToken, Region: *cloudCredentials.Region}
-
-	return aws.NewAwsClientWithInput(&input)
+	return &aws.AwsClientInput{
+		AccessKeyID:     awsCredentials.AccessKeyId,
+		SecretAccessKey: awsCredentials.SecretAccessKey,
+		SessionToken:    awsCredentials.SessionToken,
+		Region:          *cloudCredentials.Region,
+	}, nil
 }
 
 func GenerateCCSClusterAWSClient(ocmClient *sdk.Connection, awsClient aws.Client, clusterID string, clusterRegion string, partition string, sessionName string) (aws.Client, error) {

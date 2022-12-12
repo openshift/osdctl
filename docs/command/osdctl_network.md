@@ -32,5 +32,5 @@ network related utilities
 
 * [osdctl](osdctl.md)	 - OSD CLI
 * [osdctl network packet-capture](osdctl_network_packet-capture.md)	 - Start packet capture
-* [osdctl network verify-egress](osdctl_network_verify-egress.md)	 - Verify essential openshift domains are reachable from given subnet ID.
+* [osdctl network verify-egress](osdctl_network_verify-egress.md)	 - Verify an AWS OSD/ROSA cluster can reach all required external URLs necessary for full support.
 

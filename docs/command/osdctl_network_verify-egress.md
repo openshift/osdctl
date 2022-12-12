@@ -1,10 +1,18 @@
 ## osdctl network verify-egress
 
-Verify essential openshift domains are reachable from given subnet ID.
+Verify an AWS OSD/ROSA cluster can reach all required external URLs necessary for full support.
 
 ### Synopsis
 
-Verify essential openshift domains are reachable from given subnet ID.
+Verify an AWS OSD/ROSA cluster can reach all required external URLs necessary for full support.
+
+  This command is an opinionated wrapper around running https://github.com/openshift/osd-network-verifier for SREs.
+  Given an OCM cluster name or id, this command will attempt to automatically detect the security group, subnet, and
+  cluster-wide proxy configuration to run osd-network-verifier's egress verification. The purpose of this check is to
+  verify whether a ROSA cluster's VPC allows for all required external URLs are reachable. The exact cause can vary and
+  typically requires a customer to remediate the issue themselves.
+
+  Docs: https://docs.openshift.com/rosa/rosa_install_access_delete_clusters/rosa_getting_started_iam/rosa-aws-prereqs.html#osd-aws-privatelink-firewall-prerequisites_prerequisites
 
 ```
 osdctl network verify-egress [flags]
@@ -13,32 +21,36 @@ osdctl network verify-egress [flags]
 ### Examples
 
 ```
-For AWS, ensure your credential environment vars 
-AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (also AWS_SESSION_TOKEN for STS credentials) 
-are set correctly before execution.
 
-# Verify that essential openshift domains are reachable from a given SUBNET_ID
-osdctl network verify-egress --subnet-id $(SUBNET_ID) --security-group $(SECURITY_GROUP) --region $(AWS_REGION)
+  # Run against a cluster registered in OCM
+  ocm-backplane tunnel -D
+  osdctl network verify-egress --cluster-id my-rosa-cluster
+
+  # Run against a cluster registered in OCM with a cluster-wide-proxy
+  ocm-backplane tunnel -D
+  touch cacert.txt
+  osdctl network verify-egress --cluster-id my-rosa-cluster --cacert cacert.txt
+
+  # Override automatic selection of a subnet or security group id
+  ocm-backplane tunnel -D
+  osdctl network verify-egress --cluster-id my-rosa-cluster --subnet-id subnet-abcd --security-group sg-abcd
+
+  # (Not recommended) Run against a specific VPC, without specifying cluster-id
+  <export environment variables like AWS_ACCESS_KEY_ID or use aws configure>
+  osdctl network verify-egress --subnet-id subnet-abcdefg123 --security-group sg-abcdefgh123 --region us-east-1
 ```
 
 ### Options
 
 ```
-      --cacert string               (optional) path to cacert file to be used upon https requests being made by verifier
-      --cloud-tags stringToString   (optional) comma-seperated list of tags to assign to cloud resources e.g. --cloud-tags key1=value1,key2=value2 (default [osd-network-verifier=owned,red-hat-managed=true,Name=osd-network-verifier])
-      --debug                       (optional) if true, enable additional debug-level logging
-  -h, --help                        help for verify-egress
-      --http-proxy string           (optional) http-proxy to be used upon http requests being made by verifier, format: http://user:pass@x.x.x.x:8978
-      --https-proxy string          (optional) https-proxy to be used upon https requests being made by verifier, format: https://user:pass@x.x.x.x:8978
-      --image-id string             (optional) cloud image for the compute instance
-      --instance-type string        (optional) compute instance type (default "t3.micro")
-      --kms-key-id string           (optional) ID of KMS key used to encrypt root volumes of compute instances. Defaults to cloud account default key
-      --no-tls                      (optional) if true, ignore all ssl certificate validations on client-side.
-  -p, --profile string              (optional) AWS Profile
-      --region string               (optional) compute instance region. If absent, environment var AWS_REGION will be used, if set (default "us-east-1")
-      --security-group string       Security group to use for EC2 instance
-      --subnet-id string            source subnet ID
-      --timeout duration            (optional) timeout for individual egress verification requests (default 1s)
+      --cacert string           (optional) path to cacert file to be used with https requests being made by verifier
+      --cluster-id string       (optional) OCM internal/external cluster id to run osd-network-verifier against.
+      --debug                   (optional) if provided, enable additional debug-level logging
+  -h, --help                    help for verify-egress
+      --no-tls                  (optional) if provided, ignore all ssl certificate validations on client-side.
+      --region string           (optional) AWS region
+      --security-group string   (optional) security group ID override for osd-network-verifier, required if not specifying --cluster-id
+      --subnet-id string        (optional) private subnet ID override, required if not specifying --cluster-id
 ```
 
 ### Options inherited from parent commands

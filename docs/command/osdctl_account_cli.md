@@ -12,6 +12,7 @@ osdctl account cli [flags]
   -i, --accountId string   AWS Account ID
   -C, --clusterID string   Cluster ID
   -h, --help               help for cli
+  -o, --output string      Output type
   -p, --profile string     AWS Profile
   -r, --region string      Region
       --verbose            Verbose output
@@ -29,7 +30,6 @@ osdctl account cli [flags]
       --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                   If non-empty, write log files in this directory
       --logtostderr                      log to standard error instead of files
-  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
       --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
