@@ -14,6 +14,7 @@ osdctl env [flags] [env-alias]
   -d, --delete                Delete environment
   -k, --export-kubeconfig     Output export kubeconfig statement, to use environment outside of the env directory
   -h, --help                  help for env
+  -K, --kubeconfig string     KUBECONFIG file to use in this env (will be copied to the environment dir)
   -l, --login-script string   OCM login script to execute in a loop in ocb every 30 seconds
   -p, --password string       Password for individual cluster login
   -r, --reset                 Reset environment
@@ -29,7 +30,6 @@ osdctl env [flags] [env-alias]
       --cluster string                   The name of the kubeconfig cluster to use
       --context string                   The name of the kubeconfig context to use
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
-      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
       --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                   If non-empty, write log files in this directory
       --logtostderr                      log to standard error instead of files

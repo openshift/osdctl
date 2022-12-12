@@ -471,8 +471,10 @@ $ osdctl env --kubeconfig <(pbpaste) mycluster
 ```
 
 ### Network Utilities
+
 #### OSD network verifier
 1. Egress test - [SOP](https://github.com/openshift/ops-sop/blob/master/v4/knowledge_base/osd-network-verifier.md)
-```
-$ AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) osdctl network verify-egress --subnet-id=$(SUBNET-ID) --region=$(REGION)
-```
+
+  ```bash
+  osdctl network verify-egress --cluster-id "${CLUSTER_ID}"
+  ```
