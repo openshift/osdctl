@@ -23,6 +23,7 @@ func newRemoveCmd() *cobra.Command {
 			cmdutil.CheckErr(ops.complete(cmd, args))
 			cmdutil.CheckErr(ops.run(cmd, args[0]))
 		},
+		Deprecated: "This command is being deprecated in lieu of using git-backed capabilities. Soon, this command will not work, and you will have to follow the SOP at https://github.com/openshift/ops-sop/v4/howto/capabilities.md.",
 	}
 
 	addCmd.Flags().StringVarP(&ops.OrganizationID, "organization-id", "g", "", "Specify an OCM Organization to apply a capability to")

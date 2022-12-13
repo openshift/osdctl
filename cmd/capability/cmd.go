@@ -43,6 +43,7 @@ func NewCmdCapability() *cobra.Command {
 				return
 			}
 		},
+		Deprecated: "This command is being deprecated in lieu of using git-backed capabilities. Soon, this command will not work, and you will have to follow the SOP at https://github.com/openshift/ops-sop/v4/howto/capabilities.md.",
 	}
 
 	// Add subcommands
