@@ -1,15 +1,20 @@
 package cluster
 
 import (
+	"context"
 	"fmt"
+	"os"
 
 	awsSdk "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/spf13/cobra"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+
+	onvUtils "github.com/openshift/osd-network-verifier/cmd/utils"
+	"github.com/openshift/osd-network-verifier/pkg/verifier"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
-	"github.com/spf13/cobra"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 type cpdOptions struct {
@@ -111,8 +116,25 @@ func (o *cpdOptions) run() error {
 			if !isValid {
 				return fmt.Errorf("subnet %s does not have a default route to 0.0.0.0/0\n Run the following to send a SerivceLog:\n osdctl servicelog post %s -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/aws/InstallFailed_NoRouteToInternet.json", subnet, o.clusterID)
 			}
+			// running the network verifier is the next step anyways, so let's save some keystrokes
+			vei := verifier.ValidateEgressInput{
+				Ctx:          context.TODO(),
+				SubnetID:     subnet,
+				InstanceType: "t3.micro",
+			}
+
+			awsVerifier, err := onvUtils.GetAwsVerifier(cluster.Region().DisplayName(), o.awsProfile, false)
+			if err != nil {
+				fmt.Printf("could not build awsVerifier %v", err)
+				os.Exit(1)
+			}
+
+			output := verifier.ValidateEgress(awsVerifier, vei)
+			_, _, errors := output.Parse()
+			for _, err := range errors {
+				return err
+			}
 		}
-		fmt.Printf("Next step: run the verifier egress test: osdctl network verify-egress --cluster-id %s\n", o.clusterID)
 		return nil
 	}
 
