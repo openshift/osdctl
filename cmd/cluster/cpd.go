@@ -71,7 +71,7 @@ func (o *cpdOptions) run() error {
 
 	fmt.Println("Checking if cluster has become ready")
 	if cluster.Status().State() == "ready" {
-		fmt.Printf("This cluster is in a ready state and already provisioned")
+		fmt.Println("This cluster is in a ready state and already provisioned")
 		return nil
 	}
 
