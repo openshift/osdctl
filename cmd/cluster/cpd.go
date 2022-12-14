@@ -116,11 +116,37 @@ func (o *cpdOptions) run() error {
 			if !isValid {
 				return fmt.Errorf("subnet %s does not have a default route to 0.0.0.0/0\n Run the following to send a SerivceLog:\n osdctl servicelog post %s -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/aws/InstallFailed_NoRouteToInternet.json", subnet, o.clusterID)
 			}
+
 			// running the network verifier is the next step anyways, so let's save some keystrokes
+			// look up the security group ID for the master instances
+			response, err := awsClient.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{
+				Filters: []*ec2.Filter{
+					{
+						Name:   awsSdk.String("tag:Name"),
+						Values: []*string{awsSdk.String(fmt.Sprintf("%s-master-sg", cluster.InfraID()))},
+					},
+					{
+						Name:   awsSdk.String(fmt.Sprintf("tag:kubernetes.io/cluster/%s", cluster.InfraID())),
+						Values: []*string{awsSdk.String("owned")},
+					},
+				},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to find master security group for %s: %w", cluster.InfraID(), err)
+			}
+
+			if len(response.SecurityGroups) == 0 {
+				return fmt.Errorf("failed to find any master security groups by tag: kubernetes.io/cluster/%s=owned and Name==%s-master-sg", cluster.InfraID(), cluster.InfraID())
+			}
+
+			// run the network verifier
 			vei := verifier.ValidateEgressInput{
 				Ctx:          context.TODO(),
 				SubnetID:     subnet,
 				InstanceType: "t3.micro",
+				AWS: verifier.AwsEgressConfig{
+					SecurityGroupId: *response.SecurityGroups[0].GroupId,
+				},
 			}
 
 			awsVerifier, err := onvUtils.GetAwsVerifier(cluster.Region().DisplayName(), o.awsProfile, false)
