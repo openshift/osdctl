@@ -234,7 +234,7 @@ func drainNode(nodeID string) error {
 	printer.PrintlnGreen("Draining node", nodeID)
 
 	// TODO: replace subprocess call with API call
-	cmd := fmt.Sprintf("oc adm drain %s --ignore-daemonsets --delete-emptydir-data", nodeID)
+	cmd := fmt.Sprintf("oc adm drain %s --ignore-daemonsets --delete-emptydir-data --as backplane-cluster-admin", nodeID)
 	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 
 	if err != nil {
