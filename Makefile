@@ -29,12 +29,14 @@ download-goreleaser:
 .PHONY: ci-build
 ci-build: download-goreleaser build
 
+SINGLE_TARGET ?= false
+
 # Need to use --snapshot here because the goReleaser
 # requires more git info that is provided in Prow's clone.
 # Snapshot allows the build without validation of the
 # repository itself
 build:
-	goreleaser build --rm-dist --snapshot
+	goreleaser build --rm-dist --snapshot --single-target=${SINGLE_TARGET}
 
 release:
 	./bin/goreleaser release --rm-dist
