@@ -22,25 +22,37 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const nonByovpcPrivateSubnetTagKey = "kubernetes.io/role/internal-elb"
+const (
+	nonByovpcPrivateSubnetTagKey = "kubernetes.io/role/internal-elb"
+	defaultInstanceType          = "t3.micro"
+	defaultTimeout               = 2
+)
 
-type egressVerification struct {
+type Egress struct {
 	awsClient egressVerificationAWSClient
 	cluster   *cmv1.Cluster
 	log       logging.Logger
 
-	// clusterId is the cluster identifier that will be used to query backplane for AWS credentials to build an AWS client
-	clusterId       string
-	region          string
-	subnetId        string
-	securityGroupId string
-	debug           bool
-	caCert          string
-	noTls           bool
+	// ClusterId is the cluster identifier that will be used to query backplane for AWS credentials to build an AWS client
+	ClusterId       string
+	Region          string
+	SubnetId        string
+	SecurityGroupId string
+	Debug           bool
+	Cacert          string
+	NoTls           bool
+
+	// Generally only used when developing osd-network-verifier
+	HttpProxy    string
+	HttpsProxy   string
+	Timeout      int
+	KmsKeyId     string
+	InstanceType string
+	AmiId        string
 }
 
 func NewCmdValidateEgress() *cobra.Command {
-	e := &egressVerification{}
+	e := &Egress{}
 
 	validateEgressCmd := &cobra.Command{
 		Use:   "verify-egress",
@@ -68,24 +80,30 @@ func NewCmdValidateEgress() *cobra.Command {
   ocm-backplane tunnel -D
   osdctl network verify-egress --cluster-id my-rosa-cluster --subnet-id subnet-abcd --security-group sg-abcd
 
-  # (Not recommended) Run against a specific VPC, without specifying cluster-id
+  # Advanced usage: Run against a specific VPC, without specifying cluster-id
   <export environment variables like AWS_ACCESS_KEY_ID or use aws configure>
-  osdctl network verify-egress --subnet-id subnet-abcdefg123 --security-group sg-abcdefgh123 --region us-east-1`,
+  osdctl network verify-egress --subnet-id subnet-abcd --security-group sg-abcd --region us-east-1`,
 		Run: func(cmd *cobra.Command, args []string) {
 			e.run(context.TODO())
 		},
 	}
 
-	validateEgressCmd.Flags().StringVar(&e.clusterId, "cluster-id", "", "(optional) OCM internal/external cluster id to run osd-network-verifier against.")
-	validateEgressCmd.Flags().StringVar(&e.subnetId, "subnet-id", "", "(optional) private subnet ID override, required if not specifying --cluster-id")
-	validateEgressCmd.Flags().StringVar(&e.securityGroupId, "security-group", "", "(optional) security group ID override for osd-network-verifier, required if not specifying --cluster-id")
-	validateEgressCmd.Flags().StringVar(&e.caCert, "cacert", "", "(optional) path to cacert file to be used with https requests being made by verifier")
-	validateEgressCmd.Flags().BoolVar(&e.noTls, "no-tls", false, "(optional) if provided, ignore all ssl certificate validations on client-side.")
-	validateEgressCmd.Flags().StringVar(&e.region, "region", "", "(optional) AWS region")
-	validateEgressCmd.Flags().BoolVar(&e.debug, "debug", false, "(optional) if provided, enable additional debug-level logging")
+	validateEgressCmd.Flags().StringVarP(&e.ClusterId, "cluster-id", "-c", "", "(optional) OCM internal/external cluster id to run osd-network-verifier against.")
+	validateEgressCmd.Flags().StringVar(&e.SubnetId, "subnet-id", "", "(optional) private subnet ID override, required if not specifying --cluster-id")
+	validateEgressCmd.Flags().StringVar(&e.SecurityGroupId, "security-group", "", "(optional) security group ID override for osd-network-verifier, required if not specifying --cluster-id")
+	validateEgressCmd.Flags().StringVar(&e.Cacert, "cacert", "", "(optional) path to cacert file to be used with https requests being made by verifier")
+	validateEgressCmd.Flags().BoolVar(&e.NoTls, "no-tls", false, "(optional) if provided, ignore all ssl certificate validations on client-side.")
+	validateEgressCmd.Flags().StringVar(&e.Region, "region", "", "(optional) AWS Region")
+	validateEgressCmd.Flags().StringVar(&e.HttpProxy, "http-proxy", "", "(optional) manually specify http proxy")
+	validateEgressCmd.Flags().StringVar(&e.HttpsProxy, "https-proxy", "", "(optional) manually specify https proxy")
+	validateEgressCmd.Flags().StringVar(&e.KmsKeyId, "kms-key-id", "", "(optional) manually specify an AWS KMS Key ID to encrypt the EC2 instance's volume with")
+	validateEgressCmd.Flags().StringVar(&e.AmiId, "ami-id", "", "(optional) manually specify the AMI to run")
+	validateEgressCmd.Flags().StringVar(&e.InstanceType, "instance-type", defaultInstanceType, "(optional) manually the AWS EC2 instance type")
+	validateEgressCmd.Flags().IntVar(&e.Timeout, "timeout", defaultTimeout, "(optional) manually specify timeout in seconds for individual egress health checks")
+	validateEgressCmd.Flags().BoolVarP(&e.Debug, "debug", "v", false, "(optional) if provided, enable additional debug-level logging")
 
-	// If a cluster-id is specified, don't allow the foot-gun of overriding region
-	validateEgressCmd.MarkFlagsMutuallyExclusive("cluster-id", "region")
+	// If a cluster-id is specified, don't allow the foot-gun of overriding Region
+	validateEgressCmd.MarkFlagsMutuallyExclusive("cluster-id", "Region")
 
 	return validateEgressCmd
 }
@@ -95,9 +113,9 @@ type egressVerificationAWSClient interface {
 	DescribeSecurityGroups(ctx context.Context, params *ec2.DescribeSecurityGroupsInput, optFns ...func(options *ec2.Options)) (*ec2.DescribeSecurityGroupsOutput, error)
 }
 
-// run parses the egressVerification input, typically sets values automatically using the clusterId, and runs
+// run parses the Egress input, typically sets values automatically using the ClusterId, and runs
 // osd-network-verifier's egress check to validate AWS firewall prerequisites for ROSA.
-func (e *egressVerification) run(ctx context.Context) {
+func (e *Egress) run(ctx context.Context) {
 	cfg, err := e.setup(ctx)
 	if err != nil {
 		log.Fatal(err)
@@ -115,18 +133,18 @@ func (e *egressVerification) run(ctx context.Context) {
 	e.log.Info(ctx, "running with config: %+v", input)
 
 	out := onv.ValidateEgress(c, *input)
-	out.Summary(e.debug)
+	out.Summary(e.Debug)
 	if out.IsSuccessful() {
 		log.Println("All tests pass")
 	}
 }
 
-// setup configures an egressVerification's awsClient and cluster depending on whether the clusterId or profile
+// setup configures an Egress's awsClient and cluster depending on whether the ClusterId or profile
 // flags are supplied. It also returns an aws.Config if needed.
-func (e *egressVerification) setup(ctx context.Context) (*aws.Config, error) {
+func (e *Egress) setup(ctx context.Context) (*aws.Config, error) {
 	// Setup logger
 	builder := logging.NewGoLoggerBuilder()
-	if e.debug {
+	if e.Debug {
 		builder.Debug(true)
 	}
 	logger, err := builder.Build()
@@ -135,17 +153,17 @@ func (e *egressVerification) setup(ctx context.Context) (*aws.Config, error) {
 	}
 	e.log = logger
 
-	// If clusterId is supplied, leverage ocm and ocm-backplane to get an AWS client
-	if e.clusterId != "" {
-		e.log.Debug(ctx, "searching OCM for cluster: %s", e.clusterId)
+	// If ClusterId is supplied, leverage ocm and ocm-backplane to get an AWS client
+	if e.ClusterId != "" {
+		e.log.Debug(ctx, "searching OCM for cluster: %s", e.ClusterId)
 		ocmClient := utils.CreateConnection()
 		defer ocmClient.Close()
 
-		cluster, err := utils.GetClusterAnyStatus(ocmClient, e.clusterId)
+		cluster, err := utils.GetClusterAnyStatus(ocmClient, e.ClusterId)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get OCM cluster info for %s: %s", e.clusterId, err)
+			return nil, fmt.Errorf("failed to get OCM cluster info for %s: %s", e.ClusterId, err)
 		}
-		e.log.Debug(ctx, "cluster %s found from OCM: %s", e.clusterId, cluster.ID())
+		e.log.Debug(ctx, "cluster %s found from OCM: %s", e.ClusterId, cluster.ID())
 		e.cluster = cluster
 
 		e.log.Info(ctx, "getting AWS credentials from backplane-api")
@@ -158,8 +176,8 @@ func (e *egressVerification) setup(ctx context.Context) (*aws.Config, error) {
 		return &cfg, nil
 	}
 
-	// If no clusterId is supplied, then --subnet-id and --security-group are required
-	if e.subnetId == "" || e.securityGroupId == "" {
+	// If no ClusterId is supplied, then --subnet-id and --security-group are required
+	if e.SubnetId == "" || e.SecurityGroupId == "" {
 		return nil, fmt.Errorf("--subnet-id and --security-group are required when --cluster-id is not specified")
 	}
 
@@ -170,21 +188,21 @@ func (e *egressVerification) setup(ctx context.Context) (*aws.Config, error) {
 		return nil, fmt.Errorf("network verification failed to find valid creds locally: %s", err)
 	}
 
-	// Additionally, if an AWS region must be provided somehow if there's no clusterId
-	// This could have been done via the default AWS credentials or can be supplied manually via --region
-	if e.region != "" {
-		e.log.Info(ctx, "overriding region with %s", e.region)
-		cfg.Region = e.region
+	// Additionally, if an AWS Region must be provided somehow if there's no ClusterId
+	// This could have been done via the default AWS credentials or can be supplied manually via --Region
+	if e.Region != "" {
+		e.log.Info(ctx, "overriding Region with %s", e.Region)
+		cfg.Region = e.Region
 	}
 
 	return &cfg, nil
 }
 
 // generateAWSValidateEgressInput is an opinionated interface in front of osd-network-verifier.
-// Its input is an OCM internal/external clusterId and it returns the corresponding input to osd-network-verifier with
+// Its input is an OCM internal/external ClusterId and it returns the corresponding input to osd-network-verifier with
 // default AWS tags, one of the cluster's private subnet IDs, and the cluster's master security group.
-// Can override securityGroupId and subnetId.
-func (e *egressVerification) generateAWSValidateEgressInput(ctx context.Context, region string) (*onv.ValidateEgressInput, error) {
+// Can override SecurityGroupId and SubnetId.
+func (e *Egress) generateAWSValidateEgressInput(ctx context.Context, region string) (*onv.ValidateEgressInput, error) {
 	// We can auto-detect information from OCM
 	if e.cluster != nil {
 		// TODO: osd-network-verifier technically does support GCP, but just handle AWS for now
@@ -197,15 +215,15 @@ func (e *egressVerification) generateAWSValidateEgressInput(ctx context.Context,
 		}
 	}
 
-	input, err := defaultValidateEgressInput(ctx, region)
+	input, err := e.defaultValidateEgressInput(ctx, region)
 	if err != nil {
 		return nil, fmt.Errorf("failed to assemble validate egress input: %s", err)
 	}
 
 	// Setup proxy configuration that is not automatically determined
-	input.Proxy.NoTls = e.noTls
-	if e.caCert != "" {
-		cert, err := os.ReadFile(e.caCert)
+	input.Proxy.NoTls = e.NoTls
+	if e.Cacert != "" {
+		cert, err := os.ReadFile(e.Cacert)
 		if err != nil {
 			return nil, err
 		}
@@ -219,8 +237,8 @@ func (e *egressVerification) generateAWSValidateEgressInput(ctx context.Context,
 			input.Proxy.HttpsProxy = e.cluster.Proxy().HTTPSProxy()
 
 			// The actual trust bundle is redacted in OCM, but is an indicator that --cacert is required
-			if e.cluster.AdditionalTrustBundle() != "" && e.caCert == "" {
-				return nil, fmt.Errorf("%s has an additional trust bundle configured, but no --cacert supplied", e.clusterId)
+			if e.cluster.AdditionalTrustBundle() != "" && e.Cacert == "" {
+				return nil, fmt.Errorf("%s has an additional trust bundle configured, but no --cacert supplied", e.ClusterId)
 			}
 		}
 	}
@@ -243,12 +261,12 @@ func (e *egressVerification) generateAWSValidateEgressInput(ctx context.Context,
 }
 
 // getSubnetId attempts to return a private subnet ID.
-// e.subnetId acts as an override, otherwise e.awsClient will be used to attempt to determine the correct subnets
-func (e *egressVerification) getSubnetId(ctx context.Context) (string, error) {
-	// A subnetId was manually specified, just use that
-	if e.subnetId != "" {
-		e.log.Info(ctx, "using manually specified subnet-id: %s", e.subnetId)
-		return e.subnetId, nil
+// e.SubnetId acts as an override, otherwise e.awsClient will be used to attempt to determine the correct subnets
+func (e *Egress) getSubnetId(ctx context.Context) (string, error) {
+	// A SubnetId was manually specified, just use that
+	if e.SubnetId != "" {
+		e.log.Info(ctx, "using manually specified subnet-id: %s", e.SubnetId)
+		return e.SubnetId, nil
 	}
 
 	// If this is a non-BYOVPC cluster, we can find the private subnets based on the cluster and internal-elb tag
@@ -294,15 +312,15 @@ func (e *egressVerification) getSubnetId(ctx context.Context) (string, error) {
 }
 
 // getSecurityGroupId attempts to return a cluster's master node security group Id
-// e.securityGroupId acts as an override, otherwise e.awsClient will be used to attempt to determine the correct security group
-func (e *egressVerification) getSecurityGroupId(ctx context.Context) (string, error) {
-	// A securityGroupId was manually specified, just use that
-	if e.securityGroupId != "" {
-		e.log.Info(ctx, "using manually specified security-group-id: %s", e.securityGroupId)
-		return e.securityGroupId, nil
+// e.SecurityGroupId acts as an override, otherwise e.awsClient will be used to attempt to determine the correct security group
+func (e *Egress) getSecurityGroupId(ctx context.Context) (string, error) {
+	// A SecurityGroupId was manually specified, just use that
+	if e.SecurityGroupId != "" {
+		e.log.Info(ctx, "using manually specified security-group-id: %s", e.SecurityGroupId)
+		return e.SecurityGroupId, nil
 	}
 
-	// If no securityGroupId override is passed in, try to determine the master security group id
+	// If no SecurityGroupId override is passed in, try to determine the master security group id
 	e.log.Info(ctx, "searching for security group by tags: kubernetes.io/cluster/%s=owned and Name=%s-master-sg", e.cluster.InfraID(), e.cluster.InfraID())
 	resp, err := e.awsClient.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
 		Filters: []types.Filter{
@@ -329,7 +347,7 @@ func (e *egressVerification) getSecurityGroupId(ctx context.Context) (string, er
 }
 
 // defaultValidateEgressInput generates an opinionated default osd-network-verifier ValidateEgressInput.
-func defaultValidateEgressInput(ctx context.Context, region string) (*onv.ValidateEgressInput, error) {
+func (e *Egress) defaultValidateEgressInput(ctx context.Context, region string) (*onv.ValidateEgressInput, error) {
 	awsDefaultTags := map[string]string{
 		"osd-network-verifier": "owned",
 		"red-hat-managed":      "true",
@@ -337,19 +355,29 @@ func defaultValidateEgressInput(ctx context.Context, region string) (*onv.Valida
 	}
 
 	if onvAwsClient.GetAMIForRegion(region) == "" {
-		return nil, fmt.Errorf("unsupported region: %s", region)
+		return nil, fmt.Errorf("unsupported Region: %s", region)
+	}
+
+	if e.AmiId == "" {
+		e.AmiId = onvAwsClient.GetAMIForRegion(region)
 	}
 
 	return &onv.ValidateEgressInput{
-		Timeout:      2 * time.Second,
+		Timeout:      time.Duration(e.Timeout) * time.Second,
 		Ctx:          ctx,
-		SubnetID:     "",
-		CloudImageID: onvAwsClient.GetAMIForRegion(region),
-		InstanceType: "t3.micro",
-		Proxy:        proxy.ProxyConfig{},
-		Tags:         awsDefaultTags,
+		SubnetID:     e.SubnetId,
+		CloudImageID: e.AmiId,
+		InstanceType: e.InstanceType,
+		Proxy: proxy.ProxyConfig{
+			HttpProxy:  e.HttpProxy,
+			HttpsProxy: e.HttpsProxy,
+			Cacert:     e.Cacert,
+			NoTls:      e.NoTls,
+		},
+		Tags: awsDefaultTags,
 		AWS: onv.AwsEgressConfig{
-			SecurityGroupId: "",
+			KmsKeyID:        e.KmsKeyId,
+			SecurityGroupId: e.SecurityGroupId,
 		},
 	}, nil
 }

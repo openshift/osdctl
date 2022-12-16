@@ -37,22 +37,22 @@ func (m mockEgressVerificationAWSClient) DescribeSecurityGroups(ctx context.Cont
 func Test_egressVerificationSetup(t *testing.T) {
 	tests := []struct {
 		name      string
-		e         *egressVerification
+		e         *Egress
 		expectErr bool
 	}{
 		{
-			name: "no clusterId requires subnet/sg",
-			e: &egressVerification{
-				clusterId: "",
+			name: "no ClusterId requires subnet/sg",
+			e: &Egress{
+				ClusterId: "",
 			},
 			expectErr: true,
 		},
 		{
-			name: "clusterId optional",
-			e: &egressVerification{
-				clusterId:       "",
-				subnetId:        "subnet-a",
-				securityGroupId: "sg-b",
+			name: "ClusterId optional",
+			e: &Egress{
+				ClusterId:       "",
+				SubnetId:        "subnet-a",
+				SecurityGroupId: "sg-b",
 			},
 			expectErr: false,
 		},
@@ -77,13 +77,13 @@ func Test_egressVerificationSetup(t *testing.T) {
 func Test_egressVerificationGetSecurityGroupId(t *testing.T) {
 	tests := []struct {
 		name      string
-		e         *egressVerification
+		e         *Egress
 		expected  string
 		expectErr bool
 	}{
 		{
 			name: "manual override",
-			e: &egressVerification{
+			e: &Egress{
 				awsClient: mockEgressVerificationAWSClient{
 					describeSecurityGroupsResp: &ec2.DescribeSecurityGroupsOutput{
 						SecurityGroups: []types.SecurityGroup{
@@ -94,14 +94,14 @@ func Test_egressVerificationGetSecurityGroupId(t *testing.T) {
 					},
 				},
 				log:             newTestLogger(t),
-				securityGroupId: "override",
+				SecurityGroupId: "override",
 			},
 			expected:  "override",
 			expectErr: false,
 		},
 		{
 			name: "zero from AWS",
-			e: &egressVerification{
+			e: &Egress{
 				awsClient: mockEgressVerificationAWSClient{
 					describeSecurityGroupsResp: &ec2.DescribeSecurityGroupsOutput{
 						SecurityGroups: []types.SecurityGroup{},
@@ -113,7 +113,7 @@ func Test_egressVerificationGetSecurityGroupId(t *testing.T) {
 		},
 		{
 			name: "one from AWS",
-			e: &egressVerification{
+			e: &Egress{
 				awsClient: mockEgressVerificationAWSClient{
 					describeSecurityGroupsResp: &ec2.DescribeSecurityGroupsOutput{
 						SecurityGroups: []types.SecurityGroup{
@@ -152,15 +152,15 @@ func Test_egressVerificationGetSecurityGroupId(t *testing.T) {
 func Test_egressVerificationGetSubnetId(t *testing.T) {
 	tests := []struct {
 		name      string
-		e         *egressVerification
+		e         *Egress
 		expected  string
 		expectErr bool
 	}{
 		{
 			name: "manual override",
-			e: &egressVerification{
+			e: &Egress{
 				log:      newTestLogger(t),
-				subnetId: "override",
+				SubnetId: "override",
 			},
 			expected:  "override",
 			expectErr: false,
@@ -203,7 +203,8 @@ func TestDefaultValidateEgressInput(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.region, func(t *testing.T) {
-			_, err := defaultValidateEgressInput(context.TODO(), test.region)
+			e := Egress{}
+			_, err := e.defaultValidateEgressInput(context.TODO(), test.region)
 			if err != nil {
 				if !test.expectErr {
 					t.Errorf("expected no err, got %s", err)
