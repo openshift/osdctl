@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-semver/semver"
+	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -29,12 +30,12 @@ func upgrade(cmd *cobra.Command, args []string) error {
 	// between releases :-)
 	rootName := cmd.Root().Name()
 
-	latest, err := getLatestVersion()
+	latest, err := utils.GetLatestVersion()
 	if err != nil {
 		return err
 	}
 	latestWithoutPrefix := strings.TrimPrefix(latest, "v")
-	currentSemVer := semver.New(Version)
+	currentSemVer := semver.New(utils.Version)
 	latestSemVer := semver.New(latestWithoutPrefix)
 	if !currentSemVer.LessThan(*latestSemVer) {
 		fmt.Println("Already up to date, nothing to do!")
@@ -45,7 +46,7 @@ func upgrade(cmd *cobra.Command, args []string) error {
 		Timeout: time.Second * 60,
 	}
 
-	addr := fmt.Sprintf(versionAddressTemplate,
+	addr := fmt.Sprintf(utils.VersionAddressTemplate,
 		latestWithoutPrefix,
 		latestWithoutPrefix,
 		parseGOOS(runtime.GOOS),

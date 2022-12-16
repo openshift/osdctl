@@ -4,9 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/openshift/osdctl/cmd"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
+	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/pflag"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -18,6 +20,31 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 		return
+	}
+
+	latestVersion, err := utils.GetLatestVersion()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if utils.Version != latestVersion {
+		fmt.Println("The current version is different than the latest version.")
+		fmt.Println("It is recommended that you update to the latest version to ensure that no known bugs or issues are hit.")
+		fmt.Println("Please confirm that you would like to continute with [y|n]")
+
+		var input string
+		for {
+			fmt.Scanln(&input)
+			if strings.ToLower(input) == "y" {
+				break
+			}
+			if strings.ToLower(input) == "n" {
+				fmt.Println("Exiting")
+				return
+			}
+			fmt.Println("Input not recognized. Please select [y|n]")
+		}
 	}
 
 	flags := pflag.NewFlagSet("osdctl", pflag.ExitOnError)
