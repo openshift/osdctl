@@ -21,7 +21,8 @@ func NewCmdOrg() *cobra.Command {
 
 	// Add subcommands
 
-	orgCmd.AddCommand(currentCmd) // current oraganization
+	orgCmd.AddCommand(currentCmd)
+	orgCmd.AddCommand(getCmd)
 
 	return orgCmd
 }
