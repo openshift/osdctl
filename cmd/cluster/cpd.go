@@ -156,9 +156,19 @@ func (o *cpdOptions) run() error {
 			}
 
 			output := verifier.ValidateEgress(awsVerifier, vei)
-			_, _, errors := output.Parse()
-			for _, err := range errors {
-				return err
+			failures, exceptions, errors := output.Parse()
+			if len(failures) != 0 || len(exceptions) != 0 || len(errors) != 0 {
+				resultString := "Network verifier results:\n"
+				for _, failure := range failures {
+					resultString = resultString + failure.Error() + "\n"
+				}
+				for _, exception := range exceptions {
+					resultString = resultString + exception.Error() + "\n"
+				}
+				for _, err := range errors {
+					resultString = resultString + err.Error() + "\n"
+				}
+				return fmt.Errorf(resultString)
 			}
 		}
 		return nil
