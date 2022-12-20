@@ -84,7 +84,7 @@ func CreateGetCurrentOrgRequest(ocmClient *sdk.Connection) *sdk.Request {
 }
 
 func printCurrentOrg(acc Account) (err error) {
-	// Print current go details
+	// Print current org details
 	fmt.Println("Name: \t \t ", acc.Organization.Name)
 	fmt.Println("ID:  \t \t ", acc.Organization.ID)
 	fmt.Println("External ID:  \t ", acc.Organization.ExternalId)

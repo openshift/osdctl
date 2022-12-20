@@ -23,6 +23,8 @@ func NewCmdOrg() *cobra.Command {
 
 	orgCmd.AddCommand(currentCmd)
 	orgCmd.AddCommand(getCmd)
+	orgCmd.AddCommand(usersCmd)
+	orgCmd.AddCommand(lablesCmd)
 
 	return orgCmd
 }

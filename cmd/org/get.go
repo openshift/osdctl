@@ -20,7 +20,7 @@ const (
 var (
 	getCmd = &cobra.Command{
 		Use:           "get",
-		Short:         "get oraganization",
+		Short:         "get oraganization by users",
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -29,15 +29,28 @@ var (
 		},
 	}
 	searchUser       string
-	isPartMatch      bool   = false
-	searchLikeAppend string = "%"
 	seachLikePrepend string
+	searchLikeAppend string = "%"
+	isPartMatch      bool   = false
 )
 
 func init() {
 	// define flags
-	getCmd.Flags().StringVarP(&searchUser, "user", "u", "", "search organization by user name ")
-	getCmd.Flags().BoolVarP(&isPartMatch, "part-match", "", false, "Part matching user name")
+	flags := getCmd.Flags()
+	flags.StringVarP(
+		&searchUser,
+		"user",
+		"u",
+		"",
+		"search organization by user name ",
+	)
+	flags.BoolVarP(
+		&isPartMatch,
+		"part-match",
+		"",
+		false,
+		"Part matching user name",
+	)
 	getCmd.MarkFlagRequired("user")
 
 }
@@ -60,6 +73,7 @@ func SearchOrgByUsers(cmd *cobra.Command) error {
 		// If outputing the data errored, there's likely an internal error, so just return the error
 		return err
 	}
+
 	return nil
 }
 
