@@ -13,10 +13,6 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-const (
-	getAPIPath = "/api/accounts_mgmt/v1/accounts"
-)
-
 var (
 	getCmd = &cobra.Command{
 		Use:           "get",
@@ -93,10 +89,10 @@ func GetOrgs() (*sdk.Response, error) {
 func CreateGetOrgsRequest(ocmClient *sdk.Connection) *sdk.Request {
 	// Create and populate the request:
 	request := ocmClient.Get()
-	err := arguments.ApplyPathArg(request, getAPIPath)
+	err := arguments.ApplyPathArg(request, accountsAPIPath)
 
 	if err != nil {
-		log.Fatalf("Can't parse API path '%s': %v\n", getAPIPath, err)
+		log.Fatalf("Can't parse API path '%s': %v\n", accountsAPIPath, err)
 
 	}
 	if isPartMatch {

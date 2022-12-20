@@ -16,11 +16,11 @@ import (
 var (
 	usersCmd = &cobra.Command{
 		Use:           "users",
-		Short:         "get oraganization users",
+		Short:         "get organization users",
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(checkUsersOrgId(cmd, args))
+			cmdutil.CheckErr(checkOrgId(cmd, args))
 			cmdutil.CheckErr(GetUsers(args[0]))
 		},
 	}
@@ -35,19 +35,6 @@ var args struct {
 	debug bool
 	org   string
 	roles []string
-}
-
-func checkUsersOrgId(cmd *cobra.Command, args []string) error {
-	if len(args) == 0 {
-		err := cmd.Help()
-		if err != nil {
-			return fmt.Errorf("error calling cmd.Help(): %w", err)
-
-		}
-		return fmt.Errorf("oraganization id was not provided. please provide a oraganization id")
-	}
-
-	return nil
 }
 
 func checkRoles(roles, roleArgs []string) bool {

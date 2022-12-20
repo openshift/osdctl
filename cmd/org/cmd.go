@@ -9,7 +9,7 @@ import (
 func NewCmdOrg() *cobra.Command {
 	var orgCmd = &cobra.Command{
 		Use:   "org",
-		Short: "OCM/Org",
+		Short: "Provides information for a specified organization",
 		Run: func(cmd *cobra.Command, args []string) {
 			err := cmd.Help()
 			if err != nil {
@@ -24,7 +24,8 @@ func NewCmdOrg() *cobra.Command {
 	orgCmd.AddCommand(currentCmd)
 	orgCmd.AddCommand(getCmd)
 	orgCmd.AddCommand(usersCmd)
-	orgCmd.AddCommand(lablesCmd)
+	orgCmd.AddCommand(labelsCmd)
+	orgCmd.AddCommand(describeCmd)
 
 	return orgCmd
 }

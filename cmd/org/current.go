@@ -12,13 +12,9 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-const (
-	targetAPIPath = "/api/accounts_mgmt/v1/current_account"
-)
-
 var currentCmd = &cobra.Command{
 	Use:           "current",
-	Short:         "gets current oraganization",
+	Short:         "gets current organization",
 	Args:          cobra.ArbitraryArgs,
 	SilenceErrors: true,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -28,12 +24,6 @@ var currentCmd = &cobra.Command{
 
 type Account struct {
 	Organization Organization `json:"organization"`
-}
-
-type Organization struct {
-	ID         string `json:"id"`
-	ExternalId string `json:"external_id"`
-	Name       string `json:"name"`
 }
 
 func run(cmd *cobra.Command) error {
@@ -49,12 +39,8 @@ func run(cmd *cobra.Command) error {
 
 	acc := Account{}
 	json.Unmarshal(response.Bytes(), &acc)
-	printCurrentOrg(acc)
+	printOrg(acc.Organization)
 
-	if err != nil {
-		// If outputing the data errored, there's likely an internal error, so just return the error
-		return err
-	}
 	return nil
 }
 
@@ -74,20 +60,11 @@ func GetCurrentOrg() (*sdk.Response, error) {
 func CreateGetCurrentOrgRequest(ocmClient *sdk.Connection) *sdk.Request {
 	// Create and populate the request:
 	request := ocmClient.Get()
-	err := arguments.ApplyPathArg(request, targetAPIPath)
+	err := arguments.ApplyPathArg(request, currentAccountApiPath)
 	if err != nil {
-		log.Fatalf("Can't parse API path '%s': %v\n", targetAPIPath, err)
+		log.Fatalf("Can't parse API path '%s': %v\n", currentAccountApiPath, err)
 
 	}
 
 	return request
-}
-
-func printCurrentOrg(acc Account) (err error) {
-	// Print current org details
-	fmt.Println("Name: \t \t ", acc.Organization.Name)
-	fmt.Println("ID:  \t \t ", acc.Organization.ID)
-	fmt.Println("External ID:  \t ", acc.Organization.ExternalId)
-	return nil
-
 }
