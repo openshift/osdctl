@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	organizationsAPIPath  = "/api/accounts_mgmt/v1/organizations/"
+	organizationsAPIPath  = "/api/accounts_mgmt/v1/organizations"
 	accountsAPIPath       = "/api/accounts_mgmt/v1/accounts"
 	currentAccountApiPath = "/api/accounts_mgmt/v1/current_account"
 )
@@ -34,10 +34,6 @@ func sendRequest(request *sdk.Request) (*sdk.Response, error) {
 
 func checkOrgId(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
-		err := cmd.Help()
-		if err != nil {
-			return err
-		}
 		return fmt.Errorf("organization id was not provided. please provide a organization id")
 	}
 	if len(args) != 1 {

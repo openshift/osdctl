@@ -29,12 +29,7 @@ func DescribeOrg(cmd *cobra.Command, orgID string) error {
 
 	response, err := SendDescribeOrgRequest(orgID)
 	if err != nil {
-		// If the response has errored, likely the input was bad, so show usage
-		err := cmd.Help()
-		if err != nil {
-			return err
-		}
-		return err
+		return fmt.Errorf("invalid input: %q", err)
 	}
 
 	org := Organization{}
@@ -67,7 +62,6 @@ func CreateDescribeRequest(ocmClient *sdk.Connection, orgID string) *sdk.Request
 
 	if err != nil {
 		log.Fatalf("Can't parse API path '%s': %v\n", apiPath, err)
-
 	}
 
 	return request

@@ -41,12 +41,7 @@ func SearchLabelsByOrg(cmd *cobra.Command, orgID string) error {
 
 	response, err := GetLabels(orgID)
 	if err != nil {
-		// If the response has errored, likely the input was bad, so show usage
-		err := cmd.Help()
-		if err != nil {
-			return err
-		}
-		return err
+		return fmt.Errorf("invalid input: %q", err)
 	}
 
 	items := LabelItems{}
@@ -99,5 +94,4 @@ func printLabels(items []Label) {
 
 	table.AddRow([]string{})
 	table.Flush()
-
 }

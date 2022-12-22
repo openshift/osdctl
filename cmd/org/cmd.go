@@ -26,6 +26,7 @@ func NewCmdOrg() *cobra.Command {
 	orgCmd.AddCommand(usersCmd)
 	orgCmd.AddCommand(labelsCmd)
 	orgCmd.AddCommand(describeCmd)
+	orgCmd.AddCommand(clustersCmd)
 
 	return orgCmd
 }

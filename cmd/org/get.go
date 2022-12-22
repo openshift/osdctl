@@ -16,11 +16,10 @@ import (
 var (
 	getCmd = &cobra.Command{
 		Use:           "get",
-		Short:         "get oraganization by users",
+		Short:         "get organization by users",
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
-
 			cmdutil.CheckErr(SearchOrgByUsers(cmd))
 		},
 	}
@@ -55,12 +54,7 @@ func SearchOrgByUsers(cmd *cobra.Command) error {
 	response, err := GetOrgs()
 
 	if err != nil {
-		// If the response has errored, likely the input was bad, so show usage
-		err := cmd.Help()
-		if err != nil {
-			return err
-		}
-		return err
+		return fmt.Errorf("invalid input: %q", err)
 	}
 
 	err = dump.Pretty(os.Stdout, response.Bytes())
