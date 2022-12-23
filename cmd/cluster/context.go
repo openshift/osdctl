@@ -224,9 +224,10 @@ func printSupportStatus(limitedSupportReasons []*utils.LimitedSupportReasonItem)
 }
 
 func (o *contextOptions) printServiceLogs() error {
+	slClient := &servicelog.List{}
 
 	// Get the SLs for the cluster
-	slResponse, err := servicelog.FetchServiceLogs(o.clusterID)
+	slResponse, err := slClient.FetchServiceLogs(o.clusterID)
 	if err != nil {
 		return err
 	}
