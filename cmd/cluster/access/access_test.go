@@ -18,7 +18,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -295,7 +294,7 @@ func TestClusterAccessOptions_createLocalKubeconfigAccess(t *testing.T) {
 				}
 			} else {
 				// Since we don't expect the createLocalKubeconfigAccess func to throw an error in this test, we also expect the local file to be a valid kubeconfig
-				localKubeconfig := clientcmdapiv1.Config{}
+				localKubeconfig := clusterKubeConfig{}
 				err = yaml.Unmarshal(file, &localKubeconfig)
 				if err != nil {
 					t.Errorf("Failed '%s': could not unmarshal local file to Config: %v", test.Name, err)
@@ -468,11 +467,11 @@ func generateClusterObjectForTesting(name string, id string, privateLink bool, p
 }
 
 // generateKubeconfigSecretObjectForTesting creates a Secret containing a kubeconfig file for testing purposes
-func generateKubeconfigSecretObjectForTesting(name, namespace, key, serverURL string) (corev1.Secret, clientcmdapiv1.Config) {
-	kubeconfig := clientcmdapiv1.Config{
-		Clusters: []clientcmdapiv1.NamedCluster{
+func generateKubeconfigSecretObjectForTesting(name, namespace, key, serverURL string) (corev1.Secret, clusterKubeConfig) {
+	kubeconfig := clusterKubeConfig{
+		Clusters: []clusterConfig{
 			{
-				Cluster: clientcmdapiv1.Cluster{
+				Cluster: cluster{
 					Server: serverURL,
 				},
 			},
