@@ -1,6 +1,7 @@
 package access
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,12 +13,14 @@ import (
 
 	clustersmgmtv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/yaml"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -294,9 +297,9 @@ func TestClusterAccessOptions_createLocalKubeconfigAccess(t *testing.T) {
 				}
 			} else {
 				// Since we don't expect the createLocalKubeconfigAccess func to throw an error in this test, we also expect the local file to be a valid kubeconfig
-				localKubeconfig := clusterKubeConfig{}
-				err = yaml.Unmarshal(file, &localKubeconfig)
-				if err != nil {
+				localKubeconfig := clientcmdapiv1.Config{}
+				d := utilyaml.NewYAMLOrJSONDecoder(bytes.NewReader(file), len(file))
+				if err := d.Decode(&localKubeconfig); err != nil {
 					t.Errorf("Failed '%s': could not unmarshal local file to Config: %v", test.Name, err)
 				}
 				if test.PrivateAPI {
@@ -304,18 +307,22 @@ func TestClusterAccessOptions_createLocalKubeconfigAccess(t *testing.T) {
 					expectedServerURL := "https://rh-api.test-cluster.fakedomain.devshift.org:6443"
 					expectedKubeconfig.Clusters[0].Cluster.Server = expectedServerURL
 					// After updating the kubeconfig, we have to re- Marshal & Unmarshal the yaml for the following DeepEqual call to succeed
-					rawNestedKubeconfig, err := yaml.Marshal(expectedKubeconfig)
+					rawNestedKubeconfig, err := json.Marshal(expectedKubeconfig)
 					if err != nil {
 						t.Errorf("Failed '%s': could not marshal kubeconfig after updating for private API: %v", test.Name, err)
 					}
-					err = yaml.Unmarshal(rawNestedKubeconfig, &expectedKubeconfig)
+					rawKubeconfig, err1 := yaml.JSONToYAML(rawNestedKubeconfig)
+					if err1 != nil {
+						t.Errorf("Failed '%s': could not marshal kubeconfig after updating for private API: %v", test.Name, err)
+					}
+					err = yaml.Unmarshal(rawKubeconfig, &expectedKubeconfig)
 					if err != nil {
 						t.Errorf("Failed '%s': could not unmarshal kubeconfig after updating for private API: %v", test.Name, err)
 					}
 				}
 
 				if !reflect.DeepEqual(expectedKubeconfig, localKubeconfig) {
-					t.Errorf("Failed '%s': Kubeconfigs are not equivalent.\nOriginal kubeconfig: %v\n\nWritten kubeconfig:%v", test.Name, expectedKubeconfig, localKubeconfig)
+					t.Errorf("Failed '%s': Kubeconfigs are not equivalent.\nOriginal kubeconfig:%v\n\nWritten kubeconfig:%v", test.Name, expectedKubeconfig, localKubeconfig)
 				}
 			}
 
@@ -467,11 +474,11 @@ func generateClusterObjectForTesting(name string, id string, privateLink bool, p
 }
 
 // generateKubeconfigSecretObjectForTesting creates a Secret containing a kubeconfig file for testing purposes
-func generateKubeconfigSecretObjectForTesting(name, namespace, key, serverURL string) (corev1.Secret, clusterKubeConfig) {
-	kubeconfig := clusterKubeConfig{
-		Clusters: []clusterConfig{
+func generateKubeconfigSecretObjectForTesting(name, namespace, key, serverURL string) (corev1.Secret, clientcmdapiv1.Config) {
+	kubeconfig := clientcmdapiv1.Config{
+		Clusters: []clientcmdapiv1.NamedCluster{
 			{
-				Cluster: cluster{
+				Cluster: clientcmdapiv1.Cluster{
 					Server: serverURL,
 				},
 			},

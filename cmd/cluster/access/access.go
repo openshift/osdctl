@@ -1,6 +1,7 @@
 package access
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,17 +15,18 @@ import (
 	"github.com/openshift/osdctl/pkg/k8s"
 	osdctlutil "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	corev1 "k8s.io/api/core/v1"
 	kerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	kclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -68,73 +70,6 @@ func NewCmdAccess(streams genericclioptions.IOStreams, flags *genericclioptions.
 	return accessCmd
 }
 
-type clusterKubeConfig struct {
-	Kind       string `json:"kind,omitempty" yaml:"kind,omitempty"`
-	APIVersion string `json:"apiVersion,omitempty" yaml:"apiVersion,omitempty"`
-	// Preferences holds general information to be use for cli interactions
-	Preferences clientcmdapiv1.Preferences `json:"preferences" yaml:"preferences"`
-	AuthInfos   []authInfo                 `json:"users" yaml:"users"`
-	// Clusters is a map of referencable names to cluster configs
-	Clusters       []clusterConfig                 `json:"clusters" yaml:"clusters"`
-	Contexts       []clientcmdapiv1.NamedContext   `json:"contexts" yaml:"contexts"`
-	CurrentContext string                          `json:"current-context" yaml:"current-context"`
-	Extensions     []clientcmdapiv1.NamedExtension `json:"extensions,omitempty" yaml:"extensions,omitempty"`
-}
-
-type clusterConfig struct {
-	Name    string  `json:"name" yaml:"name"`
-	Cluster cluster `json:"cluster" yaml:"cluster"`
-}
-
-type cluster struct {
-	Server                   string                          `json:"server" yaml:"server"`
-	TLSServerName            string                          `json:"tls-server-name,omitempty" yaml:"tls-server-name,omitempty"`
-	InsecureSkipTLSVerify    bool                            `json:"insecure-skip-tls-verify,omitempty" yaml:"insecure-skip-tls-verify,omitempty"`
-	CertificateAuthority     string                          `json:"certificate-authority,omitempty" yaml:"certificate-authority,omitempty"`
-	CertificateAuthorityData string                          `json:"certificate-authority-data,omitempty" yaml:"certificate-authority-data,omitempty"`
-	ProxyURL                 string                          `json:"proxy-url,omitempty" yaml:"proxy-url,omitempty"`
-	Extensions               []clientcmdapiv1.NamedExtension `json:"extensions,omitempty" yaml:"extensions,omitempty"`
-}
-
-type authInfo struct {
-	// Name is the nickname for this AuthInfo
-	Name string `json:"name" yaml:"name"`
-	// AuthInfo holds the auth information
-	Users users `json:"user" yaml:"user"`
-}
-
-type users struct {
-	// ClientCertificate is the path to a client cert file for TLS.
-	ClientCertificate string `json:"client-certificate,omitempty" yaml:"client-certificate,omitempty"`
-	// ClientCertificateData contains PEM-encoded data from a client cert file for TLS. Overrides ClientCertificate
-	ClientCertificateData string `json:"client-certificate-data,omitempty" yaml:"client-certificate-data,omitempty"`
-	// ClientKey is the path to a client key file for TLS.
-	ClientKey string `json:"client-key,omitempty" yaml:"client-key,omitempty"`
-	// ClientKeyData contains PEM-encoded data from a client key file for TLS. Overrides ClientKey
-	ClientKeyData string `json:"client-key-data,omitempty" datapolicy:"security-key" yaml:"client-key-data,omitempty"`
-	// Token is the bearer token for authentication to the kubernetes cluster.
-	Token string `json:"token,omitempty" datapolicy:"token" yaml:"token,omitempty"`
-	// TokenFile is a pointer to a file that contains a bearer token (as described above).  If both Token and TokenFile are present, Token takes precedence.
-	TokenFile string `json:"tokenFile,omitempty" yaml:"tokenFile,omitempty"`
-	// Impersonate is the username to impersonate.  The name matches the flag.
-	Impersonate string `json:"as,omitempty" yaml:"as,omitempty"`
-	// ImpersonateUID is the uid to impersonate.
-	ImpersonateUID string `json:"as-uid,omitempty" yaml:"as-uid,omitempty"`
-	// ImpersonateGroups is the groups to impersonate.
-	ImpersonateGroups []string `json:"as-groups,omitempty" yaml:"as-groups,omitempty"`
-	// ImpersonateUserExtra contains additional information for impersonated user.
-	ImpersonateUserExtra map[string][]string `json:"as-user-extra,omitempty" yaml:"as-user-extra,omitempty"`
-	// Username is the username for basic authentication to the kubernetes cluster.
-	Username string `json:"username,omitempty" yaml:"username,omitempty"`
-	// Password is the password for basic authentication to the kubernetes cluster.
-	Password string `json:"password,omitempty" datapolicy:"password" yaml:"password,omitempty" `
-	// AuthProvider specifies a custom authentication plugin for the kubernetes cluster.
-	AuthProvider *clientcmdapiv1.AuthProviderConfig `json:"auth-provider,omitempty" yaml:"auth-provider,omitempty"`
-	// Exec specifies a custom exec-based authentication plugin for the kubernetes cluster.
-	Exec *clientcmdapiv1.ExecConfig `json:"exec,omitempty" yaml:"exec,omitempty"`
-	// Extensions holds additional information. This is useful for extenders so that reads and writes don't clobber unknown fields
-	Extensions []clientcmdapiv1.NamedExtension `json:"extensions,omitempty" yaml:"extensions,omitempty"`
-}
 
 // clusterCmdComplete verifies the command's invocation, returning an error if the usage is invalid
 func accessCmdComplete(cmd *cobra.Command, args []string) error {
@@ -378,10 +313,10 @@ func (c *clusterAccessOptions) createLocalKubeconfigAccess(cluster *clustersmgmt
 func (c *clusterAccessOptions) createPrivateAPIAccess(rawKubeconfig []byte, kubeconfigFilePath string) error {
 	c.Println("Cluster is private. Updating kubeconfig to execute commands against the rh-api")
 
-	var formattedKubeconfig clusterKubeConfig
+	formattedKubeconfig := clientcmdapiv1.Config{}
 
-	err := yaml.Unmarshal(rawKubeconfig, &formattedKubeconfig)
-	if err != nil {
+	d := utilyaml.NewYAMLOrJSONDecoder(bytes.NewReader(rawKubeconfig), len(rawKubeconfig))
+	if err := d.Decode(&formattedKubeconfig); err != nil {
 		c.Errorln("Failed to unmarshal kubeconfig")
 		return err
 	}
@@ -392,9 +327,16 @@ func (c *clusterAccessOptions) createPrivateAPIAccess(rawKubeconfig []byte, kube
 		formattedKubeconfig.Clusters[i].Cluster.Server = strings.Replace(originalServerURL, "api.", "rh-api.", 1)
 	}
 
-	rawKubeconfig, err = yaml.Marshal(formattedKubeconfig)
+	var err error
+	jsonRawKubeConfig, err1 := json.Marshal(formattedKubeconfig)
+	if err1 != nil {
+		c.Errorln("Failed to re-marshal json kubeconfig")
+		return err
+	}
+
+	rawKubeconfig, err = yaml.JSONToYAML(jsonRawKubeConfig)
 	if err != nil {
-		c.Errorln("Failed to re-marshal kubeconfig")
+		c.Errorln("Failed to re-marshal yaml kubeconfig")
 		return err
 	}
 
