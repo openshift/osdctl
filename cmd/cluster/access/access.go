@@ -70,7 +70,6 @@ func NewCmdAccess(streams genericclioptions.IOStreams, flags *genericclioptions.
 	return accessCmd
 }
 
-
 // clusterCmdComplete verifies the command's invocation, returning an error if the usage is invalid
 func accessCmdComplete(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
