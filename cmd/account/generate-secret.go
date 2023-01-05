@@ -64,9 +64,10 @@ type generateSecretOptions struct {
 	outputPath      string
 
 	// AWS config
-	region  string
-	profile string
-	cfgFile string
+	region            string
+	profile           string
+	cfgFile           string
+	awsAccountTimeout *int64
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
@@ -106,6 +107,10 @@ func (o *generateSecretOptions) complete(cmd *cobra.Command, args []string) erro
 	if o.accountName != "" && o.accountID != "" {
 		return cmdutil.UsageErrorf(cmd, "AWS account CR name and AWS account ID cannot be set at the same time")
 	}
+
+	// The aws account timeout. The min the API supports is 15mins.
+	// 900 sec is 15min
+	o.awsAccountTimeout = aws.Int64(900)
 
 	return nil
 }
@@ -238,14 +243,14 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 
 	accountIDSuffixLabel, ok := account.Labels["iamUserId"]
 	if !ok {
-		return fmt.Errorf("No label on Account CR for IAM User")
+		return fmt.Errorf("no label on Account CR for IAM User")
 	}
 
 	// Get the aws-account-operator configmap
 	cm := &corev1.ConfigMap{}
 	cmErr := o.kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: common.AWSAccountNamespace, Name: common.DefaultConfigMap}, cm)
 	if cmErr != nil {
-		return fmt.Errorf("There was an error getting the ConfigMap to get the SRE Access Role %s", cmErr)
+		return fmt.Errorf("there was an error getting the ConfigMap to get the SRE Access Role %s", cmErr)
 	}
 	// Get the ARN value
 	SREAccessARN := cm.Data["CCS-Access-Arn"]
@@ -273,10 +278,10 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 	// Get the Jump ARN value
 	JumpARN := cm.Data["support-jump-role"]
 	if JumpARN == "" {
-		return fmt.Errorf("Jump Access ARN is missing from configmap")
+		return fmt.Errorf("jump Access ARN is missing from configmap")
 	}
 	// Assume the ARN
-	jumpRoleCreds, err := awsprovider.GetAssumeRoleCredentials(srepRoleClient, aws.Int64(900), callerIdentityOutput.UserId, &JumpARN)
+	jumpRoleCreds, err := awsprovider.GetAssumeRoleCredentials(srepRoleClient, o.awsAccountTimeout, callerIdentityOutput.UserId, &JumpARN)
 	if err != nil {
 		return err
 	}
@@ -292,7 +297,7 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 	}
 	// Role chain to assume ManagedOpenShift-Support-{uid}
 	roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", account.Spec.AwsAccountID, "ManagedOpenShift-Support-"+accountIDSuffixLabel))
-	credentials, err := awsprovider.GetAssumeRoleCredentials(jumpRoleClient, aws.Int64(900),
+	credentials, err := awsprovider.GetAssumeRoleCredentials(jumpRoleClient, o.awsAccountTimeout,
 		callerIdentityOutput.UserId, roleArn)
 	if err != nil {
 		return err
@@ -305,6 +310,9 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 		SessionToken:    *credentials.SessionToken,
 		Region:          "us-east-1",
 	})
+	if err != nil {
+		return err
+	}
 
 	// Create new set of Access Keys for osdCcsAdmin
 	newKey, err := awsAssumedRoleClient.CreateAccessKey(&iam.CreateAccessKeyInput{
