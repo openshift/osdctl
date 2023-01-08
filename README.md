@@ -478,3 +478,48 @@ $ osdctl env --kubeconfig <(pbpaste) mycluster
   ```bash
   osdctl network verify-egress --cluster-id "${CLUSTER_ID}"
   ```
+
+### Organizations
+
+#### Get the current organization
+ ```
+$ osdctl org current
+```
+
+#### Search organizations
+
+Get an organization by username 
+ ```
+$ osdctl org get --user=<search-user-name>
+```
+
+Get organizations by part-matching username
+ ```
+$ osdctl org get --user=<search-user-name-like> --part-match
+```
+
+#### Describe an organization
+ ```
+$ osdctl org describe  <orgid>
+```
+
+#### List users in the organization
+ ```
+$ osdctl org users <orgid>
+```
+
+#### List labels in the organization
+ ```
+$ osdctl org labels <orgid>
+```
+
+#### List clusters in the organization
+Get all clusters in the organization
+ ```
+$ osdctl org labels <orgid>
+```
+
+Get active clusters in the organization
+ ```
+$ osdctl org labels <orgid> --active
+```

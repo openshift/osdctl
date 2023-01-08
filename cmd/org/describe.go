@@ -56,7 +56,7 @@ func SendDescribeOrgRequest(orgID string) (*sdk.Response, error) {
 func CreateDescribeRequest(ocmClient *sdk.Connection, orgID string) *sdk.Request {
 	// Create and populate the request:
 	request := ocmClient.Get()
-	apiPath := organizationsAPIPath + orgID
+	apiPath := organizationsAPIPath + "/" + orgID
 
 	err := arguments.ApplyPathArg(request, apiPath)
 
