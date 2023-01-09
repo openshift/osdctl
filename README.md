@@ -523,3 +523,14 @@ Get active clusters in the organization
  ```
 $ osdctl org labels <orgid> --active
 ```
+
+#### List paying and non-paying organization
+paying customers list 
+ ```
+$ osdctl org customers
+```
+
+non-paying customers list 
+ ```
+$ osdctl org customers --paying=false
+```
