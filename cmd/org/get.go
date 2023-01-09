@@ -1,16 +1,22 @@
 package org
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
-	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
+	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+)
+
+const (
+	USER_SEARCH = 1
+	EBS_SEARCH  = 2
 )
 
 var (
@@ -20,14 +26,27 @@ var (
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(SearchOrgByUsers(cmd))
+			cmdutil.CheckErr(SearchOrgs(cmd))
 		},
 	}
-	searchUser       string
-	seachLikePrepend string
-	searchLikeAppend string = "%"
-	isPartMatch      bool   = false
+	searchEBSaccountID string
+	searchUser         string
+	seachLikePrepend   string
+	searchLikeAppend   string = "%"
+	isPartMatch        bool   = false
 )
+
+type OrgItems struct {
+	Orgs []Organization `json:"items"`
+}
+
+type AccountItems struct {
+	AccountItems []AccountItem `json:"items"`
+}
+
+type AccountItem struct {
+	Org Organization `json:"organization"`
+}
 
 func init() {
 	// define flags
@@ -39,6 +58,13 @@ func init() {
 		"",
 		"search organization by user name ",
 	)
+	flags.StringVarP(
+		&searchEBSaccountID,
+		"ebs-id",
+		"",
+		"",
+		"search organization by ebs account id ",
+	)
 	flags.BoolVarP(
 		&isPartMatch,
 		"part-match",
@@ -46,28 +72,44 @@ func init() {
 		false,
 		"Part matching user name",
 	)
-	getCmd.MarkFlagRequired("user")
+
+	getCmd.MarkFlagsMutuallyExclusive("user", "ebs-id")
 
 }
 
-func SearchOrgByUsers(cmd *cobra.Command) error {
-	response, err := GetOrgs()
+func SearchOrgs(cmd *cobra.Command) error {
+	if searchUser == "" && searchEBSaccountID == "" {
+		return fmt.Errorf("invalid search params")
+	}
+
+	response, err := getOrgs()
 
 	if err != nil {
 		return fmt.Errorf("invalid input: %q", err)
 	}
 
-	err = dump.Pretty(os.Stdout, response.Bytes())
+	var orgList []Organization
+	switch getSearchType() {
 
-	if err != nil {
-		// If outputing the data errored, there's likely an internal error, so just return the error
-		return err
+	case USER_SEARCH:
+		items := AccountItems{}
+		json.Unmarshal(response.Bytes(), &items)
+		for _, account := range items.AccountItems {
+			orgList = append(orgList, account.Org)
+		}
+
+	case EBS_SEARCH:
+		items := OrgItems{}
+		json.Unmarshal(response.Bytes(), &items)
+		orgList = items.Orgs
 	}
+
+	printOrgList(orgList)
 
 	return nil
 }
 
-func GetOrgs() (*sdk.Response, error) {
+func getOrgs() (*sdk.Response, error) {
 	// Create OCM client to talk
 	ocmClient := utils.CreateConnection()
 	defer func() {
@@ -75,31 +117,75 @@ func GetOrgs() (*sdk.Response, error) {
 			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
 		}
 	}()
+	request := ocmClient.Get()
+	apiPath := ""
+	switch getSearchType() {
 
-	// Now get the matching orgs
-	return sendRequest(CreateGetOrgsRequest(ocmClient))
+	case USER_SEARCH:
+		apiPath = accountsAPIPath
+
+	case EBS_SEARCH:
+		apiPath = organizationsAPIPath
+	}
+	err := arguments.ApplyPathArg(request, apiPath)
+	if err != nil {
+		log.Fatalf("Can't parse API path '%s': %v\n", apiPath, err)
+
+	}
+	arguments.ApplyParameterFlag(request, []string{getSearchQuery()})
+	return sendRequest(request)
 }
 
-func CreateGetOrgsRequest(ocmClient *sdk.Connection) *sdk.Request {
-	// Create and populate the request:
-	request := ocmClient.Get()
-	err := arguments.ApplyPathArg(request, accountsAPIPath)
+func getSearchQuery() string {
+	searchQuery := ""
 
-	if err != nil {
-		log.Fatalf("Can't parse API path '%s': %v\n", accountsAPIPath, err)
+	switch getSearchType() {
+	case USER_SEARCH:
+		if isPartMatch {
+			seachLikePrepend = "%"
+		}
 
+		searchQuery = fmt.Sprintf(
+			`search=username like '%s%s%s'`,
+			seachLikePrepend,
+			searchUser,
+			searchLikeAppend,
+		)
+	case EBS_SEARCH:
+		searchQuery = fmt.Sprintf(
+			`search=ebs_account_id='%s'`,
+			searchEBSaccountID,
+		)
 	}
-	if isPartMatch {
-		seachLikePrepend = "%"
+	return searchQuery
+}
+
+func printOrgList(orgs []Organization) {
+
+	table := printer.NewTablePrinter(os.Stdout, 20, 1, 6, ' ')
+	table.AddRow([]string{"ID", "Name", "External ID", "EBS ID"})
+
+	for _, org := range orgs {
+		table.AddRow([]string{
+			org.ID,
+			org.Name,
+			org.ExternalID,
+			org.EBSAccoundID,
+		})
 	}
 
-	formatMessage := fmt.Sprintf(
-		`search=username like '%s%s%s'`,
-		seachLikePrepend,
-		searchUser,
-		searchLikeAppend,
-	)
-	arguments.ApplyParameterFlag(request, []string{formatMessage})
+	table.AddRow([]string{})
+	table.Flush()
+}
 
-	return request
+func getSearchType() int {
+	if searchUser != "" {
+		return USER_SEARCH
+	}
+
+	if searchEBSaccountID != "" {
+		return EBS_SEARCH
+	}
+
+	return 0
 }

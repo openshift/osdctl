@@ -498,6 +498,11 @@ Get organizations by part-matching username
 $ osdctl org get --user=<search-user-name-like> --part-match
 ```
 
+Get an organization by ebs account id
+ ```
+$ osdctl org get --ebs-id=<ebs-account-id>
+```
+
 #### Describe an organization
  ```
 $ osdctl org describe  <orgid>
@@ -516,12 +521,12 @@ $ osdctl org labels <orgid>
 #### List clusters in the organization
 Get all clusters in the organization
  ```
-$ osdctl org labels <orgid>
+$ osdctl org clusters <orgid>
 ```
 
 Get active clusters in the organization
  ```
-$ osdctl org labels <orgid> --active
+$ osdctl org clusters <orgid> --active
 ```
 
 #### List paying and non-paying organization
