@@ -529,6 +529,11 @@ Get active clusters in the organization
 $ osdctl org clusters <orgid> --active
 ```
 
+Get organization clusters from AWS profile and account id
+ ```
+$ osdctl org clusters --aws-profile="<aws-profile>"  --aws-account-id="<aws-account-id>"
+```
+
 #### List paying and non-paying organization
 paying customers list 
  ```

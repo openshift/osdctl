@@ -6,9 +6,13 @@ import (
 	"log"
 	"os"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
+	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/pkg/printer"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -25,11 +29,12 @@ var (
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(checkOrgId(cmd, args))
-			cmdutil.CheckErr(SearchclustersByOrg(cmd, args[0]))
+			cmdutil.CheckErr(SearchClusters(cmd, args))
 		},
 	}
-	onlyActive bool = false
+	onlyActive   bool   = false
+	awsProfile   string = ""
+	awsAccountID string = ""
 )
 
 type SubscriptionItems struct {
@@ -53,11 +58,77 @@ func init() {
 		false,
 		"get organization active clusters",
 	)
+
+	flags.StringVarP(
+		&awsProfile,
+		"aws-profile",
+		"p",
+		"",
+		"specify AWS profile",
+	)
+
+	flags.StringVarP(
+		&awsAccountID,
+		"aws-account-id",
+		"a",
+		"",
+		"specify AWS Account Id",
+	)
 }
 
-func SearchclustersByOrg(cmd *cobra.Command, orgID string) error {
+func SearchClusters(cmd *cobra.Command, args []string) error {
 
-	response, err := GetClusters(orgID)
+	var err error
+	if !hasOrgId(args) && !isAWSProfileSearch() {
+		err = fmt.Errorf("specify either org-id or --aws-profile,--aws-account-id arguments")
+	}
+	if hasOrgId(args) {
+		err = searchclustersByOrg(cmd, args[0])
+	}
+	if isAWSProfileSearch() {
+		err = searchClustersByAWSProfile(cmd)
+	}
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func initAWSClients() (awsprovider.Client, error) {
+	return awsprovider.NewAwsClient(awsProfile, common.DefaultRegion, "")
+}
+
+func searchClustersByAWSProfile(cmd *cobra.Command) error {
+	awsClient, err := initAWSClients()
+	if err != nil {
+		return fmt.Errorf("could not create AWS client: %q", err)
+	}
+	parent, err := awsClient.ListParents(&organizations.ListParentsInput{
+		ChildId: aws.String(awsAccountID),
+	})
+	if err != nil {
+		return fmt.Errorf("cannot get organization parents: %q", err)
+	}
+	parentId := *parent.Parents[0].Id
+
+	result, err := awsClient.DescribeOrganizationalUnit(
+		&organizations.DescribeOrganizationalUnitInput{
+			OrganizationalUnitId: aws.String(parentId),
+		})
+
+	if err != nil {
+		log.Fatalln("cannot get Organizational Unit:", err)
+	}
+
+	searchclustersByOrg(cmd, *result.OrganizationalUnit.Id)
+
+	return nil
+}
+
+func searchclustersByOrg(cmd *cobra.Command, orgID string) error {
+
+	response, err := getClusters(orgID)
 	if err != nil {
 		return fmt.Errorf("invalid input: %q", err)
 	}
@@ -73,7 +144,7 @@ func SearchclustersByOrg(cmd *cobra.Command, orgID string) error {
 	return nil
 }
 
-func GetClusters(orgID string) (*sdk.Response, error) {
+func getClusters(orgID string) (*sdk.Response, error) {
 	// Create OCM client to talk
 	ocmClient := utils.CreateConnection()
 	defer func() {
@@ -83,10 +154,10 @@ func GetClusters(orgID string) (*sdk.Response, error) {
 	}()
 
 	// Now get the matching orgs
-	return sendRequest(CreateGetClustersRequest(ocmClient, orgID))
+	return sendRequest(createGetClustersRequest(ocmClient, orgID))
 }
 
-func CreateGetClustersRequest(ocmClient *sdk.Connection, orgID string) *sdk.Request {
+func createGetClustersRequest(ocmClient *sdk.Connection, orgID string) *sdk.Request {
 	// Create and populate the request:
 	request := ocmClient.Get()
 	subscriptionApiPath := "/api/accounts_mgmt/v1/subscriptions"
@@ -125,4 +196,12 @@ func printClusters(items []Subscription) {
 
 	table.AddRow([]string{})
 	table.Flush()
+}
+
+func hasOrgId(args []string) bool {
+	return len(args) == 1
+}
+
+func isAWSProfileSearch() bool {
+	return awsProfile != "" && awsAccountID != ""
 }
