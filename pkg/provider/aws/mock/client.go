@@ -597,6 +597,21 @@ func (mr *MockClientMockRecorder) ListBuckets(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListBuckets", reflect.TypeOf((*MockClient)(nil).ListBuckets), arg0)
 }
 
+// ListChildren mocks base method.
+func (m *MockClient) ListChildren(input *organizations.ListChildrenInput) (*organizations.ListChildrenOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListChildren", input)
+	ret0, _ := ret[0].(*organizations.ListChildrenOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListChildren indicates an expected call of ListChildren.
+func (mr *MockClientMockRecorder) ListChildren(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListChildren", reflect.TypeOf((*MockClient)(nil).ListChildren), input)
+}
+
 // ListCostCategoryDefinitions mocks base method.
 func (m *MockClient) ListCostCategoryDefinitions(input *costexplorer.ListCostCategoryDefinitionsInput) (*costexplorer.ListCostCategoryDefinitionsOutput, error) {
 	m.ctrl.T.Helper()

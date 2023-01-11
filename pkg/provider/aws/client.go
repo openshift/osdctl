@@ -99,6 +99,7 @@ type Client interface {
 	DescribeCreateAccountStatus(input *organizations.DescribeCreateAccountStatusInput) (*organizations.DescribeCreateAccountStatusOutput, error)
 	ListAccounts(input *organizations.ListAccountsInput) (*organizations.ListAccountsOutput, error)
 	ListParents(input *organizations.ListParentsInput) (*organizations.ListParentsOutput, error)
+	ListChildren(input *organizations.ListChildrenInput) (*organizations.ListChildrenOutput, error)
 	ListRoots(input *organizations.ListRootsInput) (*organizations.ListRootsOutput, error)
 	ListAccountsForParent(input *organizations.ListAccountsForParentInput) (*organizations.ListAccountsForParentOutput, error)
 	ListOrganizationalUnitsForParent(input *organizations.ListOrganizationalUnitsForParentInput) (*organizations.ListOrganizationalUnitsForParentOutput, error)
@@ -360,6 +361,10 @@ func (c *AwsClient) ListAccounts(input *organizations.ListAccountsInput) (*organ
 
 func (c *AwsClient) ListParents(input *organizations.ListParentsInput) (*organizations.ListParentsOutput, error) {
 	return c.orgClient.ListParents(input)
+}
+
+func (c *AwsClient) ListChildren(input *organizations.ListChildrenInput) (*organizations.ListChildrenOutput, error) {
+	return c.orgClient.ListChildren(input)
 }
 func (c *AwsClient) ListRoots(input *organizations.ListRootsInput) (*organizations.ListRootsOutput, error) {
 	return c.orgClient.ListRoots(input)

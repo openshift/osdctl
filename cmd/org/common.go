@@ -5,7 +5,9 @@ import (
 	"os"
 
 	sdk "github.com/openshift-online/ocm-sdk-go"
+	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/pkg/printer"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
 )
 
@@ -13,6 +15,10 @@ const (
 	organizationsAPIPath  = "/api/accounts_mgmt/v1/organizations"
 	accountsAPIPath       = "/api/accounts_mgmt/v1/accounts"
 	currentAccountApiPath = "/api/accounts_mgmt/v1/current_account"
+)
+
+var (
+	awsProfile string = ""
 )
 
 type Organization struct {
@@ -41,6 +47,10 @@ func checkOrgId(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func initAWSClient(awsProfile string) (awsprovider.Client, error) {
+	return awsprovider.NewAwsClient(awsProfile, common.DefaultRegion, "")
 }
 
 func printOrg(org Organization) {

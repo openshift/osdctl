@@ -544,3 +544,8 @@ non-paying customers list
  ```
 $ osdctl org customers --paying=false
 ```
+
+#### List AWS accounts for the given organization unit id
+```
+$ osdctl org aws-accounts --aws-profile="<aws-profile>" ou-id="<ou-id>"
+```

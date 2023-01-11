@@ -10,9 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/organizations"
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
-	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/pkg/printer"
-	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -33,7 +31,6 @@ var (
 		},
 	}
 	onlyActive   bool   = false
-	awsProfile   string = ""
 	awsAccountID string = ""
 )
 
@@ -95,12 +92,8 @@ func SearchClusters(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func initAWSClients() (awsprovider.Client, error) {
-	return awsprovider.NewAwsClient(awsProfile, common.DefaultRegion, "")
-}
-
 func searchClustersByAWSProfile(cmd *cobra.Command) error {
-	awsClient, err := initAWSClients()
+	awsClient, err := initAWSClient(awsProfile)
 	if err != nil {
 		return fmt.Errorf("could not create AWS client: %q", err)
 	}
