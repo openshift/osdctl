@@ -1,6 +1,7 @@
 package access
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -14,17 +15,18 @@ import (
 	"github.com/openshift/osdctl/pkg/k8s"
 	osdctlutil "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	corev1 "k8s.io/api/core/v1"
 	kerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	kclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -309,10 +311,11 @@ func (c *clusterAccessOptions) createLocalKubeconfigAccess(cluster *clustersmgmt
 // createPrivateAPIAccess provides the necessary changes to access clusters with Private APIs
 func (c *clusterAccessOptions) createPrivateAPIAccess(rawKubeconfig []byte, kubeconfigFilePath string) error {
 	c.Println("Cluster is private. Updating kubeconfig to execute commands against the rh-api")
+
 	formattedKubeconfig := clientcmdapiv1.Config{}
 
-	err := yaml.Unmarshal(rawKubeconfig, &formattedKubeconfig)
-	if err != nil {
+	d := utilyaml.NewYAMLOrJSONDecoder(bytes.NewReader(rawKubeconfig), len(rawKubeconfig))
+	if err := d.Decode(&formattedKubeconfig); err != nil {
 		c.Errorln("Failed to unmarshal kubeconfig")
 		return err
 	}
@@ -323,9 +326,16 @@ func (c *clusterAccessOptions) createPrivateAPIAccess(rawKubeconfig []byte, kube
 		formattedKubeconfig.Clusters[i].Cluster.Server = strings.Replace(originalServerURL, "api.", "rh-api.", 1)
 	}
 
-	rawKubeconfig, err = yaml.Marshal(formattedKubeconfig)
+	var err error
+	jsonRawKubeConfig, err1 := json.Marshal(formattedKubeconfig)
+	if err1 != nil {
+		c.Errorln("Failed to re-marshal json kubeconfig")
+		return err
+	}
+
+	rawKubeconfig, err = yaml.JSONToYAML(jsonRawKubeConfig)
 	if err != nil {
-		c.Errorln("Failed to re-marshal kubeconfig")
+		c.Errorln("Failed to re-marshal yaml kubeconfig")
 		return err
 	}
 
