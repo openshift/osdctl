@@ -35,7 +35,7 @@ type gitHubResponse struct {
 // tags with a suffix like *-rc.1 are not returned. We will always show the latest stable on master branch.
 func GetLatestVersion() (latest string, err error) {
 	client := http.Client{
-		Timeout: time.Second * 2,
+		Timeout: time.Second * 10,
 	}
 
 	req, err := http.NewRequest(http.MethodGet, VersionAPIEndpoint, nil)
