@@ -20,14 +20,20 @@ var (
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(checkOrgId(cmd, args))
-			cmdutil.CheckErr(DescribeOrg(cmd, args[0]))
+			cmdutil.CheckErr(describeOrg(cmd, args[0]))
 		},
 	}
 )
 
-func DescribeOrg(cmd *cobra.Command, orgID string) error {
+func init() {
+	flags := describeCmd.Flags()
 
-	response, err := SendDescribeOrgRequest(orgID)
+	AddOutputFlag(flags)
+}
+
+func describeOrg(cmd *cobra.Command, orgID string) error {
+
+	response, err := sendDescribeOrgRequest(orgID)
 	if err != nil {
 		return fmt.Errorf("invalid input: %q", err)
 	}
@@ -40,7 +46,7 @@ func DescribeOrg(cmd *cobra.Command, orgID string) error {
 	return nil
 }
 
-func SendDescribeOrgRequest(orgID string) (*sdk.Response, error) {
+func sendDescribeOrgRequest(orgID string) (*sdk.Response, error) {
 	// Create OCM client to talk
 	ocmClient := utils.CreateConnection()
 	defer func() {
@@ -50,10 +56,10 @@ func SendDescribeOrgRequest(orgID string) (*sdk.Response, error) {
 	}()
 
 	// Now get the matching orgs
-	return sendRequest(CreateDescribeRequest(ocmClient, orgID))
+	return sendRequest(createDescribeRequest(ocmClient, orgID))
 }
 
-func CreateDescribeRequest(ocmClient *sdk.Connection, orgID string) *sdk.Request {
+func createDescribeRequest(ocmClient *sdk.Connection, orgID string) *sdk.Request {
 	// Create and populate the request:
 	request := ocmClient.Get()
 	apiPath := organizationsAPIPath + "/" + orgID

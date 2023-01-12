@@ -26,7 +26,7 @@ var (
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(SearchOrgs(cmd))
+			cmdutil.CheckErr(searchOrgs(cmd))
 		},
 	}
 	searchEBSaccountID string
@@ -51,6 +51,7 @@ type AccountItem struct {
 func init() {
 	// define flags
 	flags := getCmd.Flags()
+
 	flags.StringVarP(
 		&searchUser,
 		"user",
@@ -72,12 +73,13 @@ func init() {
 		false,
 		"Part matching user name",
 	)
+	AddOutputFlag(flags)
 
 	getCmd.MarkFlagsMutuallyExclusive("user", "ebs-id")
 
 }
 
-func SearchOrgs(cmd *cobra.Command) error {
+func searchOrgs(cmd *cobra.Command) error {
 	if searchUser == "" && searchEBSaccountID == "" {
 		return fmt.Errorf("invalid search params")
 	}
@@ -162,20 +164,28 @@ func getSearchQuery() string {
 
 func printOrgList(orgs []Organization) {
 
-	table := printer.NewTablePrinter(os.Stdout, 20, 1, 6, ' ')
-	table.AddRow([]string{"ID", "Name", "External ID", "EBS ID"})
+	if IsJsonOutput() {
+		items := OrgItems{
+			Orgs: orgs,
+		}
+		PrintJson(items)
+	} else {
+		table := printer.NewTablePrinter(os.Stdout, 20, 1, 6, ' ')
+		table.AddRow([]string{"ID", "Name", "External ID", "EBS ID"})
 
-	for _, org := range orgs {
-		table.AddRow([]string{
-			org.ID,
-			org.Name,
-			org.ExternalID,
-			org.EBSAccoundID,
-		})
+		for _, org := range orgs {
+			table.AddRow([]string{
+				org.ID,
+				org.Name,
+				org.ExternalID,
+				org.EBSAccoundID,
+			})
+		}
+
+		table.AddRow([]string{})
+		table.Flush()
 	}
 
-	table.AddRow([]string{})
-	table.Flush()
 }
 
 func getSearchType() int {

@@ -26,6 +26,16 @@ var (
 	subsType string = "Subscription"
 )
 
+type CustomerItems struct {
+	Customers []Customer `json:"items"`
+}
+
+type Customer struct {
+	ID             string `json:"id"`
+	OrganizationID string `json:"organization-id"`
+	SKU            string `json:"sku"`
+}
+
 func init() {
 	// define flags
 	flags := customersCmd.Flags()
@@ -37,10 +47,12 @@ func init() {
 		true,
 		"get organization based on paying status",
 	)
+
+	AddOutputFlag(flags)
 }
 
 func getCustomers(cmd *cobra.Command) error {
-	pageSize := 100
+	pageSize := 1000
 	pageIndex := 1
 
 	// Create OCM client to talk
@@ -56,9 +68,7 @@ func getCustomers(cmd *cobra.Command) error {
 	}
 
 	searchQuery := fmt.Sprintf("type='%s'", subsType)
-
-	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
-	table.AddRow([]string{"ID", "OrganizationID", "SKU"})
+	var customerList []Customer
 
 	for {
 
@@ -72,11 +82,12 @@ func getCustomers(cmd *cobra.Command) error {
 		}
 
 		response.Items().Each(func(resourseQuota *amv1.ResourceQuota) bool {
-			table.AddRow([]string{
-				resourseQuota.ID(),
-				resourseQuota.OrganizationID(),
-				resourseQuota.SKU(),
-			})
+			customer := Customer{
+				ID:             resourseQuota.ID(),
+				OrganizationID: resourseQuota.OrganizationID(),
+				SKU:            resourseQuota.SKU(),
+			}
+			customerList = append(customerList, customer)
 			return true
 		})
 
@@ -85,8 +96,29 @@ func getCustomers(cmd *cobra.Command) error {
 		}
 		pageIndex++
 	}
-	table.AddRow([]string{})
-	table.Flush()
-
+	printCustomers(customerList)
 	return nil
+}
+
+func printCustomers(items []Customer) {
+	if IsJsonOutput() {
+		customers := CustomerItems{
+			Customers: items,
+		}
+		PrintJson(customers)
+	} else {
+		table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+		table.AddRow([]string{"ID", "OrganizationID", "SKU"})
+
+		for _, customer := range items {
+			table.AddRow([]string{
+				customer.ID,
+				customer.OrganizationID,
+				customer.SKU,
+			})
+		}
+
+		table.AddRow([]string{})
+		table.Flush()
+	}
 }

@@ -1,14 +1,17 @@
 package org
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
+	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 const (
@@ -19,6 +22,7 @@ const (
 
 var (
 	awsProfile string = ""
+	output     string = ""
 )
 
 type Organization struct {
@@ -55,14 +59,38 @@ func initAWSClient(awsProfile string) (awsprovider.Client, error) {
 
 func printOrg(org Organization) {
 	// Print org details
-	table := printer.NewTablePrinter(os.Stdout, 20, 1, 2, ' ')
-	table.AddRow([]string{"ID:", org.ID})
-	table.AddRow([]string{"Name:", org.Name})
-	table.AddRow([]string{"External ID:", org.ExternalID})
-	table.AddRow([]string{"EBS ID:", org.EBSAccoundID})
-	table.AddRow([]string{"Created:", org.Created})
-	table.AddRow([]string{"Updated:", org.Updated})
+	if IsJsonOutput() {
+		PrintJson(org)
+	} else {
+		table := printer.NewTablePrinter(os.Stdout, 20, 1, 2, ' ')
+		table.AddRow([]string{"ID:", org.ID})
+		table.AddRow([]string{"Name:", org.Name})
+		table.AddRow([]string{"External ID:", org.ExternalID})
+		table.AddRow([]string{"EBS ID:", org.EBSAccoundID})
+		table.AddRow([]string{"Created:", org.Created})
+		table.AddRow([]string{"Updated:", org.Updated})
 
-	table.AddRow([]string{})
-	table.Flush()
+		table.AddRow([]string{})
+		table.Flush()
+	}
+}
+
+func AddOutputFlag(flags *pflag.FlagSet) {
+
+	flags.StringVarP(
+		&output,
+		"output",
+		"o",
+		"",
+		"valid output formats are ['', 'json']",
+	)
+}
+
+func IsJsonOutput() bool {
+	return output == "json"
+}
+
+func PrintJson(data interface{}) {
+	marshalledStruct, _ := json.MarshalIndent(data, "", "  ")
+	dump.Pretty(os.Stdout, marshalledStruct)
 }

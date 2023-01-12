@@ -12,22 +12,30 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-var currentCmd = &cobra.Command{
-	Use:           "current",
-	Short:         "gets current organization",
-	Args:          cobra.ArbitraryArgs,
-	SilenceErrors: true,
-	Run: func(cmd *cobra.Command, args []string) {
-		cmdutil.CheckErr(run(cmd))
-	},
-}
+var (
+	currentCmd = &cobra.Command{
+		Use:           "current",
+		Short:         "gets current organization",
+		Args:          cobra.ArbitraryArgs,
+		SilenceErrors: true,
+		Run: func(cmd *cobra.Command, args []string) {
+			cmdutil.CheckErr(run(cmd))
+		},
+	}
+)
 
 type Account struct {
 	Organization Organization `json:"organization"`
 }
 
+func init() {
+	flags := currentCmd.Flags()
+
+	AddOutputFlag(flags)
+}
+
 func run(cmd *cobra.Command) error {
-	response, err := GetCurrentOrg()
+	response, err := getCurrentOrg()
 	if err != nil {
 		return fmt.Errorf("invalid input: %q", err)
 	}
@@ -39,7 +47,7 @@ func run(cmd *cobra.Command) error {
 	return nil
 }
 
-func GetCurrentOrg() (*sdk.Response, error) {
+func getCurrentOrg() (*sdk.Response, error) {
 	// Create OCM client to talk
 	ocmClient := utils.CreateConnection()
 	defer func() {
@@ -49,10 +57,10 @@ func GetCurrentOrg() (*sdk.Response, error) {
 	}()
 
 	// Now get the current org
-	return sendRequest(CreateGetCurrentOrgRequest(ocmClient))
+	return sendRequest(createGetCurrentOrgRequest(ocmClient))
 }
 
-func CreateGetCurrentOrgRequest(ocmClient *sdk.Connection) *sdk.Request {
+func createGetCurrentOrgRequest(ocmClient *sdk.Connection) *sdk.Request {
 	// Create and populate the request:
 	request := ocmClient.Get()
 	err := arguments.ApplyPathArg(request, currentAccountApiPath)

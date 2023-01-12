@@ -71,6 +71,8 @@ func init() {
 		"",
 		"specify AWS Account Id",
 	)
+
+	AddOutputFlag(flags)
 }
 
 func SearchClusters(cmd *cobra.Command, args []string) error {
@@ -172,23 +174,31 @@ func createGetClustersRequest(ocmClient *sdk.Connection, orgID string) *sdk.Requ
 }
 
 func printClusters(items []Subscription) {
-	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
-	table.AddRow([]string{"DISPLAY NAME", "CLUSTER ID", "STATUS"})
-
-	for _, subscription := range items {
-		if subscription.Status != statusActive && onlyActive {
-			// skip non active clusters when --active flag set
-			continue
+	if IsJsonOutput() {
+		subscriptionItems := SubscriptionItems{
+			Subscriptions: items,
 		}
-		table.AddRow([]string{
-			subscription.DisplayName,
-			subscription.ClusterID,
-			subscription.Status,
-		})
+		PrintJson(subscriptionItems)
+	} else {
+		table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+		table.AddRow([]string{"DISPLAY NAME", "CLUSTER ID", "STATUS"})
+
+		for _, subscription := range items {
+			if subscription.Status != statusActive && onlyActive {
+				// skip non active clusters when --active flag set
+				continue
+			}
+			table.AddRow([]string{
+				subscription.DisplayName,
+				subscription.ClusterID,
+				subscription.Status,
+			})
+		}
+
+		table.AddRow([]string{})
+		table.Flush()
 	}
 
-	table.AddRow([]string{})
-	table.Flush()
 }
 
 func hasOrgId(args []string) bool {

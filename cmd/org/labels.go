@@ -22,7 +22,7 @@ var (
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(checkOrgId(cmd, args))
-			cmdutil.CheckErr(SearchLabelsByOrg(cmd, args[0]))
+			cmdutil.CheckErr(searchLabelsByOrg(cmd, args[0]))
 		},
 	}
 )
@@ -37,9 +37,15 @@ type Label struct {
 	Value string `json:"value"`
 }
 
-func SearchLabelsByOrg(cmd *cobra.Command, orgID string) error {
+func init() {
+	flags := labelsCmd.Flags()
 
-	response, err := GetLabels(orgID)
+	AddOutputFlag(flags)
+}
+
+func searchLabelsByOrg(cmd *cobra.Command, orgID string) error {
+
+	response, err := getLabels(orgID)
 	if err != nil {
 		return fmt.Errorf("invalid input: %q", err)
 	}
@@ -52,7 +58,7 @@ func SearchLabelsByOrg(cmd *cobra.Command, orgID string) error {
 	return nil
 }
 
-func GetLabels(orgID string) (*sdk.Response, error) {
+func getLabels(orgID string) (*sdk.Response, error) {
 	// Create OCM client to talk
 	ocmClient := utils.CreateConnection()
 	defer func() {
@@ -62,13 +68,13 @@ func GetLabels(orgID string) (*sdk.Response, error) {
 	}()
 
 	// Now get the matching orgs
-	return sendRequest(CreateGetLabelsRequest(ocmClient, orgID))
+	return sendRequest(createGetLabelsRequest(ocmClient, orgID))
 }
 
-func CreateGetLabelsRequest(ocmClient *sdk.Connection, orgID string) *sdk.Request {
+func createGetLabelsRequest(ocmClient *sdk.Connection, orgID string) *sdk.Request {
 	// Create and populate the request:
 	request := ocmClient.Get()
-	labelsApiPath := organizationsAPIPath + orgID + "/labels"
+	labelsApiPath := organizationsAPIPath + "/" + orgID + "/labels"
 
 	err := arguments.ApplyPathArg(request, labelsApiPath)
 
@@ -81,17 +87,25 @@ func CreateGetLabelsRequest(ocmClient *sdk.Connection, orgID string) *sdk.Reques
 }
 
 func printLabels(items []Label) {
-	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
-	table.AddRow([]string{"ID", "KEY", "VALUE"})
+	if IsJsonOutput() {
+		lables := LabelItems{
+			Labels: items,
+		}
+		PrintJson(lables)
+	} else {
+		table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+		table.AddRow([]string{"ID", "KEY", "VALUE"})
 
-	for _, label := range items {
-		table.AddRow([]string{
-			label.ID,
-			label.Key,
-			label.Value,
-		})
+		for _, label := range items {
+			table.AddRow([]string{
+				label.ID,
+				label.Key,
+				label.Value,
+			})
+		}
+
+		table.AddRow([]string{})
+		table.Flush()
 	}
 
-	table.AddRow([]string{})
-	table.Flush()
 }

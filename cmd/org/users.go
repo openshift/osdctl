@@ -21,20 +21,31 @@ var (
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(checkOrgId(cmd, args))
-			cmdutil.CheckErr(GetUsers(args[0]))
+			cmdutil.CheckErr(getUsers(args[0]))
 		},
 	}
 )
 
+type UserItems struct {
+	Users []*userModel `json:"items"`
+}
+
 type userModel struct {
-	userName string
-	userID   string
+	UserName string   `json:"user-name"`
+	UserID   string   `json:"user-id"`
+	Roles    []string `json:"roles"`
 }
 
 var args struct {
 	debug bool
 	org   string
 	roles []string
+}
+
+func init() {
+	flags := usersCmd.Flags()
+
+	AddOutputFlag(flags)
 }
 
 func checkRoles(roles, roleArgs []string) bool {
@@ -57,7 +68,7 @@ func printArray(arrStr []string) string {
 	return finalString
 }
 
-func GetUsers(orgID string) error {
+func getUsers(orgID string) error {
 	pageSize := 100
 	pageIndex := 1
 	searchQuery := ""
@@ -65,10 +76,7 @@ func GetUsers(orgID string) error {
 	searchQuery = fmt.Sprintf("organization_id='%s'", orgID)
 	ocmClient := utils.CreateConnection()
 
-	// Print top.
-	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
-	table.AddRow([]string{"USER", "USER ID", "ROLES"})
-
+	var userList []*userModel
 	for {
 		// Get all users within organization
 		usersResponse, err := ocmClient.AccountsMgmt().V1().Accounts().List().
@@ -86,8 +94,8 @@ func GetUsers(orgID string) error {
 		usersResponse.Items().Each(func(account *amv1.Account) bool {
 			accountList = append(accountList, account)
 			accountMap[account] = &userModel{
-				userName: account.Username(),
-				userID:   account.ID(),
+				UserName: account.Username(),
+				UserID:   account.ID(),
 			}
 			return true
 		})
@@ -101,18 +109,12 @@ func GetUsers(orgID string) error {
 		for k, v := range accountRoleMap {
 			if len(args.roles) > 0 {
 				if checkRoles(v, args.roles) {
-					table.AddRow([]string{
-						accountMap[k].userName,
-						accountMap[k].userID,
-						printArray(v),
-					})
+					accountMap[k].Roles = v
+					userList = append(userList, accountMap[k])
 				}
 			} else {
-				table.AddRow([]string{
-					accountMap[k].userName,
-					accountMap[k].userID,
-					printArray(v),
-				})
+				accountMap[k].Roles = v
+				userList = append(userList, accountMap[k])
 			}
 		}
 
@@ -122,8 +124,30 @@ func GetUsers(orgID string) error {
 		pageIndex++
 	}
 
-	table.AddRow([]string{})
-	table.Flush()
-
+	printUsers(userList)
 	return nil
+}
+
+func printUsers(userList []*userModel) {
+	if IsJsonOutput() {
+		users := UserItems{
+			Users: userList,
+		}
+		PrintJson(users)
+	} else {
+		table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+		table.AddRow([]string{"USER", "USER ID", "ROLES"})
+
+		for _, user := range userList {
+			table.AddRow([]string{
+				user.UserName,
+				user.UserID,
+				printArray(user.Roles),
+			})
+		}
+
+		table.AddRow([]string{})
+		table.Flush()
+	}
+
 }

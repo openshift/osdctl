@@ -24,6 +24,10 @@ var (
 	ouID string = ""
 )
 
+type AWSAccountItems struct {
+	Accounts []*organizations.Child `json:"items"`
+}
+
 func init() {
 	// define flags
 	flags := awsAccountsCmd.Flags()
@@ -43,6 +47,8 @@ func init() {
 		"",
 		"specify orgnaization unit id",
 	)
+
+	AddOutputFlag(flags)
 }
 
 func searchChildAwsAccounts(cmd *cobra.Command) error {
@@ -63,15 +69,23 @@ func searchChildAwsAccounts(cmd *cobra.Command) error {
 }
 
 func printAccounts(children *organizations.ListChildrenOutput) {
-	table := printer.NewTablePrinter(os.Stdout, 20, 1, 2, ' ')
-	table.AddRow([]string{"ID", "Type"})
-	for _, item := range children.Children {
-		table.AddRow([]string{
-			*item.Id,
-			*item.Type,
-		})
+	if IsJsonOutput() {
+		items := AWSAccountItems{
+			Accounts: children.Children,
+		}
+		PrintJson(items)
+	} else {
+		table := printer.NewTablePrinter(os.Stdout, 20, 1, 2, ' ')
+		table.AddRow([]string{"ID", "Type"})
+		for _, item := range children.Children {
+			table.AddRow([]string{
+				*item.Id,
+				*item.Type,
+			})
+		}
+
+		table.AddRow([]string{})
+		table.Flush()
 	}
 
-	table.AddRow([]string{})
-	table.Flush()
 }
