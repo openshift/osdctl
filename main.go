@@ -24,9 +24,10 @@ func main() {
 
 	latestVersion, err := utils.GetLatestVersion()
 	if err != nil {
-		fmt.Println("Warning: Unable to get osdctl version from GitHub:")
+		fmt.Println("Warning: Unable to verify that osdctl is running under the latest version. Error trying to reach GitHub:")
 		fmt.Println(err)
-
+		fmt.Println("Please be aware that you are possibly running an outdated version.")
+		
 		// Version query failed, so we just assume that the version didn't change
 		latestVersion = utils.Version
 	}
