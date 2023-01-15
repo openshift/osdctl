@@ -87,20 +87,13 @@ func (o *healthOptions) run() error {
 	cluster := clusterResp.Body()
 	healthObject := createHealthObject(cluster)
 
-	if cluster.Nodes().AvailabilityZones() != nil {
-
-		if cluster.Nodes().AutoscaleCompute().MinReplicas() != 0 {
-			min := strconv.Itoa(cluster.Nodes().AutoscaleCompute().MinReplicas())
-			max := strconv.Itoa(cluster.Nodes().AutoscaleCompute().MaxReplicas())
-			healthObject.Expected.Worker = string(fmt.Sprintf("%v - %v", min, max))
-		}
-		if cluster.Nodes().Compute() != 0 {
-			healthObject.Expected.Worker = int(cluster.Nodes().Compute())
-		}
-
+	if cluster.Nodes().AutoscaleCompute().MinReplicas() != 0 {
+		min := strconv.Itoa(cluster.Nodes().AutoscaleCompute().MinReplicas())
+		max := strconv.Itoa(cluster.Nodes().AutoscaleCompute().MaxReplicas())
+		healthObject.Expected.Worker = string(fmt.Sprintf("%v - %v", min, max))
 	}
-	if err != nil {
-		return err
+	if cluster.Nodes().Compute() != 0 {
+		healthObject.Expected.Worker = int(cluster.Nodes().Compute())
 	}
 
 	awsClient, err := osdCloud.GenerateAWSClientForCluster(o.awsProfile, o.clusterID)
