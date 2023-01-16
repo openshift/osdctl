@@ -159,10 +159,11 @@ func (o *cliOptions) run() error {
 	}
 
 	if o.output == "env" {
-		fmt.Printf("AWS_ACCESS_KEY_ID=%s \nAWS_SECRET_ACCESS_KEY=%s \nAWS_SESSION_TOKEN=%s \nAWS_DEFAULT_REGION=%s\n",
+		fmt.Printf("AWS_ACCESS_KEY_ID=%s\nAWS_SECRET_ACCESS_KEY=%s\nAWS_SESSION_TOKEN=%s\nAWS_DEFAULT_REGION=%s\nAWS_REGION=%s\n",
 			*assumedRoleCreds.AccessKeyId,
 			*assumedRoleCreds.SecretAccessKey,
 			*assumedRoleCreds.SessionToken,
+			o.region,
 			o.region,
 		)
 	}
