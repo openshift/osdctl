@@ -87,20 +87,13 @@ func (o *healthOptions) run() error {
 	cluster := clusterResp.Body()
 	healthObject := createHealthObject(cluster)
 
-	if cluster.Nodes().AvailabilityZones() != nil {
-
-		if cluster.Nodes().AutoscaleCompute().MinReplicas() != 0 {
-			min := strconv.Itoa(cluster.Nodes().AutoscaleCompute().MinReplicas())
-			max := strconv.Itoa(cluster.Nodes().AutoscaleCompute().MaxReplicas())
-			healthObject.Expected.Worker = string(fmt.Sprintf("%v - %v", min, max))
-		}
-		if cluster.Nodes().Compute() != 0 {
-			healthObject.Expected.Worker = int(cluster.Nodes().Compute())
-		}
-
+	if cluster.Nodes().AutoscaleCompute().MinReplicas() != 0 {
+		min := strconv.Itoa(cluster.Nodes().AutoscaleCompute().MinReplicas())
+		max := strconv.Itoa(cluster.Nodes().AutoscaleCompute().MaxReplicas())
+		healthObject.Expected.Worker = string(fmt.Sprintf("%v - %v", min, max))
 	}
-	if err != nil {
-		return err
+	if cluster.Nodes().Compute() != 0 {
+		healthObject.Expected.Worker = int(cluster.Nodes().Compute())
 	}
 
 	awsClient, err := osdCloud.GenerateAWSClientForCluster(o.awsProfile, o.clusterID)
@@ -109,6 +102,9 @@ func (o *healthOptions) run() error {
 	}
 
 	instances, err := awsClient.DescribeInstances(&ec2.DescribeInstancesInput{})
+	if err != nil {
+		return err
+	}
 	runningMasters := 0
 	runningInfra := 0
 	runningWorkers := 0
@@ -121,7 +117,7 @@ func (o *healthOptions) run() error {
 			tags := inst.Tags
 			for _, t := range tags {
 				if *t.Key == "Name" {
-					if strings.HasPrefix(*t.Value, cluster.Name()) && strings.Contains(*t.Value, "master") {
+					if strings.HasPrefix(*t.Value, cluster.InfraID()) && strings.Contains(*t.Value, "master") {
 						totalCluster += 1
 						if *inst.State.Name == "running" {
 							runningMasters += 1
@@ -130,7 +126,7 @@ func (o *healthOptions) run() error {
 							totalStopped += 1
 						}
 
-					} else if strings.HasPrefix(*t.Value, cluster.Name()) && strings.Contains(*t.Value, "infra") {
+					} else if strings.HasPrefix(*t.Value, cluster.InfraID()) && strings.Contains(*t.Value, "infra") {
 						totalCluster += 1
 						if *inst.State.Name == "running" {
 							runningInfra += 1
@@ -138,7 +134,7 @@ func (o *healthOptions) run() error {
 						if *inst.State.Name == "stopped" {
 							totalStopped += 1
 						}
-					} else if strings.HasPrefix(*t.Value, cluster.Name()) && strings.Contains(*t.Value, "worker") {
+					} else if strings.HasPrefix(*t.Value, cluster.InfraID()) && strings.Contains(*t.Value, "worker") {
 						totalCluster += 1
 						if *inst.State.Name == "running" {
 							runningWorkers += 1
