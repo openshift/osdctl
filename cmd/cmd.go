@@ -21,6 +21,7 @@ import (
 	"github.com/openshift/osdctl/cmd/env"
 	"github.com/openshift/osdctl/cmd/federatedrole"
 	"github.com/openshift/osdctl/cmd/network"
+	"github.com/openshift/osdctl/cmd/org"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/cmd/sts"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
@@ -58,6 +59,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(federatedrole.NewCmdFederatedRole(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(servicelog.NewCmdServiceLog())
+	rootCmd.AddCommand(org.NewCmdOrg())
 	rootCmd.AddCommand(sts.NewCmdSts(streams, kubeFlags, kubeClient))
 
 	// add docs command

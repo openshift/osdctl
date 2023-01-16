@@ -478,3 +478,74 @@ $ osdctl env --kubeconfig <(pbpaste) mycluster
   ```bash
   osdctl network verify-egress --cluster-id "${CLUSTER_ID}"
   ```
+
+### Organizations
+
+#### Get the current organization
+ ```
+$ osdctl org current
+```
+
+#### Search organizations
+
+Get an organization by username 
+ ```
+$ osdctl org get --user=<search-user-name>
+```
+
+Get organizations by part-matching username
+ ```
+$ osdctl org get --user=<search-user-name-like> --part-match
+```
+
+Get an organization by ebs account id
+ ```
+$ osdctl org get --ebs-id=<ebs-account-id>
+```
+
+#### Describe an organization
+ ```
+$ osdctl org describe  <orgid>
+```
+
+#### List users in the organization
+ ```
+$ osdctl org users <orgid>
+```
+
+#### List labels in the organization
+ ```
+$ osdctl org labels <orgid>
+```
+
+#### List clusters in the organization
+Get all clusters in the organization
+ ```
+$ osdctl org clusters <orgid>
+```
+
+Get active clusters in the organization
+ ```
+$ osdctl org clusters <orgid> --active
+```
+
+Get organization clusters from AWS profile and account id
+ ```
+$ osdctl org clusters --aws-profile="<aws-profile>"  --aws-account-id="<aws-account-id>"
+```
+
+#### List paying and non-paying organization
+paying customers list 
+ ```
+$ osdctl org customers
+```
+
+non-paying customers list 
+ ```
+$ osdctl org customers --paying=false
+```
+
+#### List AWS accounts for the given organization unit id
+```
+$ osdctl org aws-accounts --aws-profile="<aws-profile>" ou-id="<ou-id>"
+```
