@@ -192,8 +192,10 @@ func (e *egressVerification) generateAWSValidateEgressInput(ctx context.Context,
 			return nil, fmt.Errorf("only supports aws, got %s", e.cluster.CloudProvider().ID())
 		}
 
-		if e.cluster.Product().ID() != "rosa" && e.cluster.Product().ID() != "osd" {
-			return nil, fmt.Errorf("only supports rosa and osd, got %s", e.cluster.Product().ID())
+		if e.cluster.Product().ID() != "rosa" &&
+			e.cluster.Product().ID() != "osd" &&
+			e.cluster.Product().ID() != "osdtrial" {
+			return nil, fmt.Errorf("only supports rosa, osd, and osdtrial, got %s", e.cluster.Product().ID())
 		}
 	}
 
