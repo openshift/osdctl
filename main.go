@@ -32,7 +32,7 @@ func main() {
 		latestVersion = utils.Version
 	}
 
-	if utils.Version != latestVersion {
+	if utils.Version != latestVersion && utils.Version != latestVersion+"-next" {
 		fmt.Println("The current version is different than the latest version.")
 		fmt.Println("It is recommended that you update to the latest version to ensure that no known bugs or issues are hit.")
 		fmt.Println("Please confirm that you would like to continue with [y|n]")
