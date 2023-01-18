@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/iam"
@@ -10,7 +11,11 @@ import (
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
 	"github.com/spf13/cobra"
 
+	hiveapiv1 "github.com/openshift/hive/apis/hive/v1"
+	hiveinternalv1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -43,9 +48,10 @@ func newCmdRotateSecret(streams genericclioptions.IOStreams, flags *genericcliop
 
 // rotateSecretOptions defines the struct for running rotate-iam command
 type rotateSecretOptions struct {
-	accountCRName  string
-	profile        string
-	updateCcsCreds bool
+	accountCRName     string
+	profile           string
+	updateCcsCreds    bool
+	awsAccountTimeout *int64
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
@@ -72,6 +78,10 @@ func (o *rotateSecretOptions) complete(cmd *cobra.Command, args []string) error 
 		o.profile = "default"
 	}
 
+	// The aws account timeout. The min the API supports is 15mins.
+	// 900 sec is 15min
+	o.awsAccountTimeout = aws.Int64(900)
+
 	return nil
 }
 
@@ -94,7 +104,7 @@ func (o *rotateSecretOptions) run() error {
 
 	accountIDSuffixLabel, ok := account.Labels["iamUserId"]
 	if !ok {
-		return fmt.Errorf("No label on Account CR for IAM User")
+		return fmt.Errorf("no label on Account CR for IAM User")
 	}
 
 	// Use provided profile
@@ -116,7 +126,7 @@ func (o *rotateSecretOptions) run() error {
 		cm := &corev1.ConfigMap{}
 		cmErr := o.kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: common.AWSAccountNamespace, Name: common.DefaultConfigMap}, cm)
 		if cmErr != nil {
-			return fmt.Errorf("There was an error getting the ConfigMap to get the SRE Access Role %s", cmErr)
+			return fmt.Errorf("there was an error getting the ConfigMap to get the SRE Access Role %s", cmErr)
 		}
 		// Get the ARN value
 		SREAccessARN := cm.Data["CCS-Access-Arn"]
@@ -125,7 +135,7 @@ func (o *rotateSecretOptions) run() error {
 		}
 
 		// Assume the ARN
-		srepRoleCredentials, err := awsprovider.GetAssumeRoleCredentials(awsSetupClient, aws.Int64(900), callerIdentityOutput.UserId, &SREAccessARN)
+		srepRoleCredentials, err := awsprovider.GetAssumeRoleCredentials(awsSetupClient, o.awsAccountTimeout, callerIdentityOutput.UserId, &SREAccessARN)
 		if err != nil {
 			return err
 		}
@@ -141,9 +151,29 @@ func (o *rotateSecretOptions) run() error {
 			return err
 		}
 
+		// Get the Jump ARN value
+		JumpARN := cm.Data["support-jump-role"]
+		if JumpARN == "" {
+			return fmt.Errorf("jump Access ARN is missing from configmap")
+		}
+		// Assume the ARN
+		jumpRoleCreds, err := awsprovider.GetAssumeRoleCredentials(srepRoleClient, o.awsAccountTimeout, callerIdentityOutput.UserId, &JumpARN)
+		if err != nil {
+			return err
+		}
+		// Create client with the Jump role
+		jumpRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+			AccessKeyID:     *jumpRoleCreds.AccessKeyId,
+			SecretAccessKey: *jumpRoleCreds.SecretAccessKey,
+			SessionToken:    *jumpRoleCreds.SessionToken,
+			Region:          "us-east-1",
+		})
+		if err != nil {
+			return err
+		}
 		// Role chain to assume ManagedOpenShift-Support-{uid}
 		roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, "ManagedOpenShift-Support-"+accountIDSuffixLabel))
-		credentials, err = awsprovider.GetAssumeRoleCredentials(srepRoleClient, aws.Int64(900),
+		credentials, err = awsprovider.GetAssumeRoleCredentials(jumpRoleClient, o.awsAccountTimeout,
 			callerIdentityOutput.UserId, roleArn)
 		if err != nil {
 			return err
@@ -152,7 +182,7 @@ func (o *rotateSecretOptions) run() error {
 	} else {
 		// Assume the OrganizationAdminAccess role
 		roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, awsv1alpha1.AccountOperatorIAMRole))
-		credentials, err = awsprovider.GetAssumeRoleCredentials(awsSetupClient, aws.Int64(900),
+		credentials, err = awsprovider.GetAssumeRoleCredentials(awsSetupClient, o.awsAccountTimeout,
 			callerIdentityOutput.UserId, roleArn)
 		if err != nil {
 			return err
@@ -174,28 +204,6 @@ func (o *rotateSecretOptions) run() error {
 	// Username is osdManagedAdmin-aaabbb
 	osdManagedAdminUsername := common.OSDManagedAdminIAM + "-" + accountIDSuffixLabel
 
-	// List and delete any existing access keys
-	inputListAccessKeys := &iam.ListAccessKeysInput{
-		UserName: &osdManagedAdminUsername,
-	}
-
-	accessKeys, err := awsClient.ListAccessKeys(inputListAccessKeys)
-	if err != nil {
-		return err
-	}
-
-	for _, k := range accessKeys.AccessKeyMetadata {
-
-		inputDelKey := &iam.DeleteAccessKeyInput{
-			AccessKeyId: k.AccessKeyId,
-			UserName:    &osdManagedAdminUsername,
-		}
-		_, err = awsClient.DeleteAccessKey(inputDelKey)
-		if err != nil {
-			return err
-		}
-	}
-
 	// Create new access key
 	createAccessKeyOutput, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{
 		UserName: aws.String(osdManagedAdminUsername),
@@ -211,6 +219,9 @@ func (o *rotateSecretOptions) run() error {
 		"aws_secret_access_key": []byte(*createAccessKeyOutput.AccessKey.SecretAccessKey),
 	}
 
+	// Escalte to backplane cluster admin
+	o.flags.Impersonate = pointer.StringPtr("backplane-cluster-admin")
+
 	// Update existing osdManagedAdmin secret
 	err = common.UpdateSecret(o.kubeCli, o.accountCRName+"-secret", common.AWSAccountNamespace, newOsdManagedAdminSecretData)
 	if err != nil {
@@ -219,6 +230,90 @@ func (o *rotateSecretOptions) run() error {
 
 	// Update secret in ClusterDeployment's namespace
 	err = common.UpdateSecret(o.kubeCli, "aws", account.Spec.ClaimLinkNamespace, newOsdManagedAdminSecretData)
+	if err != nil {
+		return err
+	}
+
+	// Create syncset to deploy the updated creds to the cluster for CCO
+	syncSetName := "aws-sync"
+	syncSet := &hiveapiv1.SyncSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      syncSetName,
+			Namespace: account.Spec.ClaimLinkNamespace,
+		},
+		Spec: hiveapiv1.SyncSetSpec{
+			SyncSetCommonSpec: hiveapiv1.SyncSetCommonSpec{
+				ResourceApplyMode: "Upsert",
+				Secrets: []hiveapiv1.SecretMapping{
+					{
+						SourceRef: hiveapiv1.SecretReference{
+							Name: "aws",
+						},
+						TargetRef: hiveapiv1.SecretReference{
+							Name:      "aws-creds",
+							Namespace: "kube-system",
+						},
+					},
+				},
+			},
+		},
+	}
+	err = o.kubeCli.Create(ctx, syncSet)
+	if err != nil {
+		return err
+	}
+
+	clusterDeployments := &hiveapiv1.ClusterDeploymentList{}
+	listOpts := []client.ListOption{
+		client.InNamespace(account.Spec.ClaimLinkNamespace),
+	}
+
+	err = o.kubeCli.List(ctx, clusterDeployments, listOpts...)
+	if err != nil {
+		return err
+	}
+
+	if len(clusterDeployments.Items) == 0 {
+		return fmt.Errorf("failed to retreive cluster deployments")
+	}
+	cdName := clusterDeployments.Items[0].ObjectMeta.Name
+
+	syncStatus := &hiveinternalv1alpha1.ClusterSync{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cdName,
+			Namespace: account.Spec.ClaimLinkNamespace,
+		},
+	}
+
+	fmt.Printf("Watching Cluster Sync Status for deployment...")
+
+	isSSSynced := false
+	for i := 0; i < 5; i++ {
+		o.kubeCli.Get(ctx, client.ObjectKeyFromObject(syncStatus), syncStatus)
+
+		for _, status := range syncStatus.Status.SyncSets {
+			if status.Name == syncSetName {
+				if status.FirstSuccessTime != nil {
+					isSSSynced = true
+					break
+				}
+			}
+		}
+
+		if isSSSynced {
+			fmt.Printf("Sync completed...")
+			break
+		}
+
+		fmt.Printf("Sync not completed, sleeping 5 seconds and rechecking...")
+		time.Sleep(time.Second * 5)
+	}
+	if !isSSSynced {
+		return fmt.Errorf("syncset failed to sync in 5mins. Please verify")
+	}
+
+	// Clean up the SS on hive
+	err = o.kubeCli.Delete(ctx, syncSet)
 	if err != nil {
 		return err
 	}
