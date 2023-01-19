@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	routev1 "github.com/openshift/api/route/v1"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
@@ -26,6 +28,7 @@ import (
 	"github.com/openshift/osdctl/cmd/sts"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/k8s"
+	"github.com/openshift/osdctl/pkg/utils"
 )
 
 func init() {
@@ -43,6 +46,43 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 		Short:             "OSD CLI",
 		Long:              `CLI tool to provide OSD related utilities`,
 		DisableAutoGenTag: true,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			skipVersionCheck, err := cmd.Flags().GetBool("skip-version-check")
+			if err != nil {
+				fmt.Println("flag --skip-version-check/-S undefined")
+				os.Exit(1)
+			}
+
+			if !skipVersionCheck {
+				latestVersion, err := utils.GetLatestVersion()
+				if err != nil {
+					fmt.Println("Warning: Unable to verify that osdctl is running under the latest released version. Error trying to reach GitHub:")
+					fmt.Println(err)
+					fmt.Println("Please be aware that you are possibly running an outdated or unreleased version.")
+
+					// Version query failed, so we just assume that the version didn't change
+					latestVersion = utils.Version
+				}
+
+				if utils.Version != latestVersion {
+					fmt.Println("The current version is different than the latest released version.")
+					fmt.Println("It is recommended that you update to the latest released version to ensure that no known bugs or issues are hit.")
+					fmt.Println("Please confirm that you would like to continue with [y|n]")
+
+					var input string
+					for {
+						fmt.Scanln(&input)
+						if strings.ToLower(input) == "y" {
+							break
+						}
+						if strings.ToLower(input) == "n" {
+							fmt.Println("Exiting")
+							os.Exit(0)
+						}
+					}
+				}
+			}
+		},
 	}
 
 	globalflags.AddGlobalFlags(rootCmd, globalOpts)

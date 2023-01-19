@@ -3,11 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/openshift/osdctl/cmd"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
-	"github.com/openshift/osdctl/pkg/utils"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
@@ -18,35 +16,6 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 		return
-	}
-
-	latestVersion, err := utils.GetLatestVersion()
-	if err != nil {
-		fmt.Println("Warning: Unable to verify that osdctl is running under the latest version. Error trying to reach GitHub:")
-		fmt.Println(err)
-		fmt.Println("Please be aware that you are possibly running an outdated version.")
-
-		// Version query failed, so we just assume that the version didn't change
-		latestVersion = utils.Version
-	}
-
-	if utils.Version != latestVersion && utils.Version != latestVersion+"-next" {
-		fmt.Println("The current version is different than the latest version.")
-		fmt.Println("It is recommended that you update to the latest version to ensure that no known bugs or issues are hit.")
-		fmt.Println("Please confirm that you would like to continue with [y|n]")
-
-		var input string
-		for {
-			fmt.Scanln(&input)
-			if strings.ToLower(input) == "y" {
-				break
-			}
-			if strings.ToLower(input) == "n" {
-				fmt.Println("Exiting")
-				return
-			}
-			fmt.Println("Input not recognized. Please select [y|n]")
-		}
 	}
 
 	command := cmd.NewCmdRoot(genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr})
