@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -9,7 +8,6 @@ import (
 	"github.com/openshift/osdctl/cmd"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/openshift/osdctl/pkg/utils"
-	"github.com/spf13/pflag"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
@@ -50,14 +48,6 @@ func main() {
 			fmt.Println("Input not recognized. Please select [y|n]")
 		}
 	}
-
-	flags := pflag.NewFlagSet("osdctl", pflag.ExitOnError)
-	err = flag.CommandLine.Parse([]string{})
-	if err != nil {
-		fmt.Println("Error parsing commandline flags: ", err.Error())
-		return
-	}
-	pflag.CommandLine = flags
 
 	command := cmd.NewCmdRoot(genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr})
 
