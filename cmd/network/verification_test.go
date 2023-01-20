@@ -35,8 +35,13 @@ func newTestCluster(t *testing.T, cb *cmv1.ClusterBuilder) *cmv1.Cluster {
 }
 
 type mockEgressVerificationAWSClient struct {
+	describeInstancesResp      *ec2.DescribeInstancesOutput
 	describeSecurityGroupsResp *ec2.DescribeSecurityGroupsOutput
 	describeSubnetsResp        *ec2.DescribeSubnetsOutput
+}
+
+func (m mockEgressVerificationAWSClient) DescribeInstances(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(options *ec2.Options)) (*ec2.DescribeInstancesOutput, error) {
+	return m.describeInstancesResp, nil
 }
 
 func (m mockEgressVerificationAWSClient) DescribeSubnets(ctx context.Context, params *ec2.DescribeSubnetsInput, optFns ...func(options *ec2.Options)) (*ec2.DescribeSubnetsOutput, error) {

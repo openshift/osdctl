@@ -155,6 +155,31 @@ func GetHiveShard(clusterID string) (string, error) {
 	connection := CreateConnection()
 	defer connection.Close()
 
+	out, err := GetCluster(connection, clusterID)
+	if err != nil {
+		return "", err
+	}
+
+	if out.Hypershift().Enabled() {
+		// Check corresponding management cluster
+		// Ignorning the error here as this endpoint is behind a specific permissioon
+		hypershiftResp, _ := connection.ClustersMgmt().V1().Clusters().
+			Cluster(clusterID).
+			Hypershift().
+			Get().
+			Send()
+		mgmtCluster := hypershiftResp.Body().ManagementCluster()
+
+		// get management cluster ID by name
+		cluster, err := GetClusterByName(connection, mgmtCluster)
+		if err != nil {
+			return "", err
+		}
+
+		// replace clusterID with management cluster ID
+		clusterID = cluster.ID()
+	}
+
 	shardPath, err := connection.ClustersMgmt().V1().Clusters().
 		Cluster(clusterID).
 		ProvisionShard().
@@ -172,7 +197,7 @@ func GetHiveShard(clusterID string) (string, error) {
 	}
 
 	if shard == "" {
-		return "", fmt.Errorf("Unable to retrieve shard for cluster %s", clusterID)
+		return "", fmt.Errorf("unable to retrieve shard for cluster %s", clusterID)
 	}
 
 	return shard, nil
@@ -210,4 +235,17 @@ func GetOCMApiServerToken() (*string, error) {
 	accessToken = strings.TrimSuffix(accessToken, "\n")
 
 	return &accessToken, nil
+}
+
+func GetClusterByName(ocmClient *sdk.Connection, clusterName string) (*v1.Cluster, error) {
+	clusterResponse, err := ocmClient.ClustersMgmt().V1().Clusters().List().Search(fmt.Sprintf("name = '%s'", clusterName)).Send()
+	if err != nil {
+		return nil, err
+	}
+
+	if clusterResponse.Size() == 0 {
+		return nil, fmt.Errorf("No cluster found with name %s", clusterName)
+	}
+
+	return clusterResponse.Items().Get(0), nil
 }

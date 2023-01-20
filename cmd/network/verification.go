@@ -91,6 +91,7 @@ func NewCmdValidateEgress() *cobra.Command {
 }
 
 type egressVerificationAWSClient interface {
+	DescribeInstances(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(options *ec2.Options)) (*ec2.DescribeInstancesOutput, error)
 	DescribeSubnets(ctx context.Context, params *ec2.DescribeSubnetsInput, optFns ...func(options *ec2.Options)) (*ec2.DescribeSubnetsOutput, error)
 	DescribeSecurityGroups(ctx context.Context, params *ec2.DescribeSecurityGroupsInput, optFns ...func(options *ec2.Options)) (*ec2.DescribeSecurityGroupsOutput, error)
 }
@@ -290,6 +291,36 @@ func (e *egressVerification) getSubnetId(ctx context.Context) (string, error) {
 		return e.cluster.AWS().SubnetIDs()[0], nil
 	}
 
+	if e.cluster.Hypershift().Enabled() {
+		instance, err := e.awsClient.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+			Filters: []types.Filter{
+				{
+					Name:   aws.String(fmt.Sprintf("tag:kubernetes.io/cluster/%s", e.clusterId)),
+					Values: []string{"owned"},
+				},
+				{
+					Name:   aws.String("tag:red-hat-managed"),
+					Values: []string{"true"},
+				},
+			},
+		})
+		if err != nil {
+			return "", fmt.Errorf("failed to find private subnets for %s: %w", e.clusterId, err)
+		}
+		if len(instance.Reservations) == 0 {
+			return "", fmt.Errorf("found 0 instances with kubernetes.io/cluster/%s=owned and red-hat-managed, consider the --subnet-id flag", e.clusterId)
+		}
+		if len(instance.Reservations[0].Instances) == 0 {
+			return "", fmt.Errorf("found 0 instances with kubernetes.io/cluster/%s=owned and red-hat-managed, consider the --subnet-id flag", e.clusterId)
+		}
+		if len(instance.Reservations[0].Instances[0].NetworkInterfaces) == 0 {
+			return "", fmt.Errorf("found 0 network interfaces of the worker node: %s, consider the --subnet-id flag", *instance.Reservations[0].Instances[0].InstanceId)
+		}
+
+		e.log.Info(ctx, "detected BYOVPC Hypershift cluster, using the subnets of the worker nodes(private): %s", *instance.Reservations[0].Instances[0].NetworkInterfaces[0].SubnetId)
+		return *instance.Reservations[0].Instances[0].NetworkInterfaces[0].SubnetId, nil
+	}
+
 	// For non-PrivateLink BYOVPC clusters, provided subnets are 50/50 public/private subnets, so make the user decide for now
 	// TODO: Figure out via IGW/NAT GW/Route Tables
 	return "", fmt.Errorf("unable to determine which non-PrivateLink BYOVPC subnets are private yet, please check manually and provide the --subnet-id flag")
@@ -302,6 +333,33 @@ func (e *egressVerification) getSecurityGroupId(ctx context.Context) (string, er
 	if e.securityGroupId != "" {
 		e.log.Info(ctx, "using manually specified security-group-id: %s", e.securityGroupId)
 		return e.securityGroupId, nil
+	}
+
+	// If this is a Hypershift cluster, we can find the security group by checking hypershift specific tags
+	if e.cluster.Hypershift().Enabled() {
+		e.log.Info(ctx, "searching for security group by tags: api.openshift.com/id=%s", e.clusterId)
+		resp, err := e.awsClient.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
+			Filters: []types.Filter{
+				{
+					Name:   aws.String("tag:api.openshift.com/id"),
+					Values: []string{e.clusterId},
+				},
+				{
+					Name:   aws.String("tag:red-hat-managed"),
+					Values: []string{"true"},
+				},
+			},
+		})
+		if err != nil {
+			return "", fmt.Errorf("failed to find security group for %s: %w", e.cluster.InfraID(), err)
+		}
+
+		if len(resp.SecurityGroups) == 0 {
+			return "", fmt.Errorf("found 0 security groups with api.openshift.com/id=%s, consider the --security-group-id flag", e.clusterId)
+		}
+
+		e.log.Info(ctx, "using security-group-id: %s", *resp.SecurityGroups[0].GroupId)
+		return *resp.SecurityGroups[0].GroupId, nil
 	}
 
 	// If no securityGroupId override is passed in, try to determine the master security group id
