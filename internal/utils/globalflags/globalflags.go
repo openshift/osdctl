@@ -10,13 +10,15 @@ import (
 
 // GlobalOptions defines all available commands
 type GlobalOptions struct {
-	Output string
+	Output           string
+	SkipVersionCheck bool
 }
 
 // AddGlobalFlags adds the Global Flags to the root command
 func AddGlobalFlags(cmd *cobra.Command, opts *GlobalOptions) {
 	cmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 	cmd.PersistentFlags().StringVarP(&opts.Output, "output", "o", "", "Valid formats are ['', 'json', 'yaml', 'env']")
+	cmd.PersistentFlags().BoolVarP(&opts.SkipVersionCheck, "skip-version-check", "S", false, "skip checking to see if this is the most recent release")
 }
 
 // GetFlags adds the kubeFlags we care about and adds the flags from the provided command
