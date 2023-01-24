@@ -59,9 +59,6 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 					fmt.Println("Warning: Unable to verify that osdctl is running under the latest released version. Error trying to reach GitHub:")
 					fmt.Println(err)
 					fmt.Println("Please be aware that you are possibly running an outdated or unreleased version.")
-
-					// Version query failed, so we just assume that the version didn't change
-					latestVersion = utils.Version
 				}
 
 				if utils.Version != latestVersion {
