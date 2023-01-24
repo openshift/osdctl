@@ -15,7 +15,6 @@ import (
 	hiveinternalv1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -42,7 +41,6 @@ func newCmdRotateSecret(streams genericclioptions.IOStreams, flags *genericcliop
 
 	rotateSecretCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile")
 	rotateSecretCmd.Flags().BoolVar(&ops.updateCcsCreds, "ccs", false, "Also rotates osdCcsAdmin credential. Use caution.")
-	flags.Impersonate = pointer.StringPtr("backplane-cluster-admin")
 
 	return rotateSecretCmd
 }
@@ -284,7 +282,7 @@ func (o *rotateSecretOptions) run() error {
 		return err
 	}
 
-	fmt.Println("Watching Cluster Sync Status for deployment...")
+	fmt.Printf("Watching Cluster Sync Status for deployment...")
 	hiveinternalv1alpha1.AddToScheme(o.kubeCli.Scheme())
 	searchStatus := &hiveinternalv1alpha1.ClusterSync{
 		ObjectMeta: metav1.ObjectMeta{
@@ -297,7 +295,7 @@ func (o *rotateSecretOptions) run() error {
 	for i := 0; i < 6; i++ {
 		err = o.kubeCli.Get(ctx, client.ObjectKeyFromObject(searchStatus), foundStatus)
 		if err != nil {
-			fmt.Println(err)
+			return err
 		}
 
 		for _, status := range foundStatus.Status.SyncSets {
@@ -310,10 +308,11 @@ func (o *rotateSecretOptions) run() error {
 		}
 
 		if isSSSynced {
-			fmt.Println("Sync completed...")
+			fmt.Printf("\nSync completed...\n")
 			break
 		}
 
+		fmt.Printf(".")
 		time.Sleep(time.Second * 5)
 	}
 	if !isSSSynced {
