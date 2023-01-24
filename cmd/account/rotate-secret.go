@@ -42,6 +42,7 @@ func newCmdRotateSecret(streams genericclioptions.IOStreams, flags *genericcliop
 
 	rotateSecretCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile")
 	rotateSecretCmd.Flags().BoolVar(&ops.updateCcsCreds, "ccs", false, "Also rotates osdCcsAdmin credential. Use caution.")
+	flags.Impersonate = pointer.StringPtr("backplane-cluster-admin")
 
 	return rotateSecretCmd
 }
@@ -219,9 +220,6 @@ func (o *rotateSecretOptions) run() error {
 		"aws_secret_access_key": []byte(*createAccessKeyOutput.AccessKey.SecretAccessKey),
 	}
 
-	// Escalte to backplane cluster admin
-	o.flags.Impersonate = pointer.StringPtr("backplane-cluster-admin")
-
 	// Update existing osdManagedAdmin secret
 	err = common.UpdateSecret(o.kubeCli, o.accountCRName+"-secret", common.AWSAccountNamespace, newOsdManagedAdminSecretData)
 	if err != nil {
@@ -234,34 +232,7 @@ func (o *rotateSecretOptions) run() error {
 		return err
 	}
 
-	// Create syncset to deploy the updated creds to the cluster for CCO
-	syncSetName := "aws-sync"
-	syncSet := &hiveapiv1.SyncSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      syncSetName,
-			Namespace: account.Spec.ClaimLinkNamespace,
-		},
-		Spec: hiveapiv1.SyncSetSpec{
-			SyncSetCommonSpec: hiveapiv1.SyncSetCommonSpec{
-				ResourceApplyMode: "Upsert",
-				Secrets: []hiveapiv1.SecretMapping{
-					{
-						SourceRef: hiveapiv1.SecretReference{
-							Name: "aws",
-						},
-						TargetRef: hiveapiv1.SecretReference{
-							Name:      "aws-creds",
-							Namespace: "kube-system",
-						},
-					},
-				},
-			},
-		},
-	}
-	err = o.kubeCli.Create(ctx, syncSet)
-	if err != nil {
-		return err
-	}
+	fmt.Println("AWS creds updated on hive.")
 
 	clusterDeployments := &hiveapiv1.ClusterDeploymentList{}
 	listOpts := []client.ListOption{
@@ -278,20 +249,58 @@ func (o *rotateSecretOptions) run() error {
 	}
 	cdName := clusterDeployments.Items[0].ObjectMeta.Name
 
-	syncStatus := &hiveinternalv1alpha1.ClusterSync{
+	// Create syncset to deploy the updated creds to the cluster for CCO
+	syncSetName := "aws-sync"
+	syncSet := &hiveapiv1.SyncSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      syncSetName,
+			Namespace: account.Spec.ClaimLinkNamespace,
+		},
+		Spec: hiveapiv1.SyncSetSpec{
+			ClusterDeploymentRefs: []corev1.LocalObjectReference{
+				{
+					Name: cdName,
+				},
+			},
+			SyncSetCommonSpec: hiveapiv1.SyncSetCommonSpec{
+				ResourceApplyMode: "Upsert",
+				Secrets: []hiveapiv1.SecretMapping{
+					{
+						SourceRef: hiveapiv1.SecretReference{
+							Name: "aws",
+						},
+						TargetRef: hiveapiv1.SecretReference{
+							Name:      "aws-creds",
+							Namespace: "kube-system",
+						},
+					},
+				},
+			},
+		},
+	}
+	fmt.Println("Syncing AWS creds down to cluster.")
+	err = o.kubeCli.Create(ctx, syncSet)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Watching Cluster Sync Status for deployment...")
+	hiveinternalv1alpha1.AddToScheme(o.kubeCli.Scheme())
+	searchStatus := &hiveinternalv1alpha1.ClusterSync{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cdName,
 			Namespace: account.Spec.ClaimLinkNamespace,
 		},
 	}
-
-	fmt.Printf("Watching Cluster Sync Status for deployment...")
-
+	foundStatus := &hiveinternalv1alpha1.ClusterSync{}
 	isSSSynced := false
-	for i := 0; i < 5; i++ {
-		o.kubeCli.Get(ctx, client.ObjectKeyFromObject(syncStatus), syncStatus)
+	for i := 0; i < 6; i++ {
+		err = o.kubeCli.Get(ctx, client.ObjectKeyFromObject(searchStatus), foundStatus)
+		if err != nil {
+			fmt.Println(err)
+		}
 
-		for _, status := range syncStatus.Status.SyncSets {
+		for _, status := range foundStatus.Status.SyncSets {
 			if status.Name == syncSetName {
 				if status.FirstSuccessTime != nil {
 					isSSSynced = true
@@ -301,15 +310,14 @@ func (o *rotateSecretOptions) run() error {
 		}
 
 		if isSSSynced {
-			fmt.Printf("Sync completed...")
+			fmt.Println("Sync completed...")
 			break
 		}
 
-		fmt.Printf("Sync not completed, sleeping 5 seconds and rechecking...")
 		time.Sleep(time.Second * 5)
 	}
 	if !isSSSynced {
-		return fmt.Errorf("syncset failed to sync in 5mins. Please verify")
+		return fmt.Errorf("syncset failed to sync. Please verify")
 	}
 
 	// Clean up the SS on hive
