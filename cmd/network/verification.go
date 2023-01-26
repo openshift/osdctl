@@ -316,6 +316,9 @@ func (e *egressVerification) getSubnetId(ctx context.Context) (string, error) {
 		if len(instance.Reservations[0].Instances[0].NetworkInterfaces) == 0 {
 			return "", fmt.Errorf("found 0 network interfaces of the worker node: %s, consider the --subnet-id flag", *instance.Reservations[0].Instances[0].InstanceId)
 		}
+		if len(instance.Reservations[0].Instances[0].NetworkInterfaces) > 1 {
+			return "", fmt.Errorf("more than one interface found on the worker node: %s, consider the --subnet-id flag", *instance.Reservations[0].Instances[0].InstanceId)
+		}
 
 		e.log.Info(ctx, "detected BYOVPC Hypershift cluster, using the subnets of the worker nodes(private): %s", *instance.Reservations[0].Instances[0].NetworkInterfaces[0].SubnetId)
 		return *instance.Reservations[0].Instances[0].NetworkInterfaces[0].SubnetId, nil
