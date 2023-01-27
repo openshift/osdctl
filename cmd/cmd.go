@@ -62,7 +62,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 				}
 
 				if utils.Version != latestVersion {
-					fmt.Println("The current version is different than the latest released version.")
+					fmt.Println(fmt.Sprintf("The current version (%s) is different than the latest released version (%s).", utils.Version, latestVersion))
 					fmt.Println("It is recommended that you update to the latest released version to ensure that no known bugs or issues are hit.")
 					fmt.Println("Please confirm that you would like to continue with [y|n]")
 
