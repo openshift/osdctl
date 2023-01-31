@@ -33,6 +33,7 @@ type contextOptions struct {
 	clusterID         string
 	externalClusterID string
 	baseDomain        string
+	organizationID    string
 	days              int
 	pages             int
 	oauthtoken        string
@@ -88,7 +89,7 @@ func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
 	}
 
 	if o.days < 1 {
-		return fmt.Errorf("Cannot have a days value lower than 1")
+		return fmt.Errorf("cannot have a days value lower than 1")
 	}
 
 	// Create OCM client to talk to cluster API
@@ -103,11 +104,20 @@ func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
 	if len(clusters) != 1 {
 		return fmt.Errorf("unexpected number of clusters matched input. Expected 1 got %d", len(clusters))
 	}
-	o.clusterID = clusters[0].ID()
-	o.externalClusterID = clusters[0].ExternalID()
-	o.baseDomain = clusters[0].DNS().BaseDomain()
-	o.externalID = clusters[0].ExternalID()
-	o.infraID = clusters[0].InfraID()
+
+	cluster := clusters[0]
+	o.clusterID = cluster.ID()
+	o.externalClusterID = cluster.ExternalID()
+	o.baseDomain = cluster.DNS().BaseDomain()
+	o.externalID = cluster.ExternalID()
+	o.infraID = cluster.InfraID()
+
+	orgID, err := utils.GetOrgfromClusterID(ocmClient, *cluster)
+	if err != nil {
+		o.organizationID = ""
+	} else {
+		o.organizationID = orgID
+	}
 
 	return nil
 }
@@ -298,7 +308,7 @@ func GetPagerdutyClient(usertoken string, oauthtoken string) (*pd.Client, error)
 	}
 	client, err = getPDOauthClient(oauthtoken)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create both user and oauth clients for pd")
+		return nil, fmt.Errorf("failed to create both user and oauth clients for pd")
 	}
 	return client, err
 }
@@ -324,6 +334,7 @@ func printCurrentPDAlerts(pdClient *pd.Client, ctx context.Context, serviceID st
 		pd.ListIncidentsOptions{
 			ServiceIDs: []string{serviceID},
 			Statuses:   []string{"triggered", "acknowledged"},
+			SortBy:     "urgency:DESC",
 		},
 	)
 	if err != nil {
@@ -481,10 +492,17 @@ func (o *contextOptions) printJiraCards() error {
 
 	jiraClient, _ := jira.NewClient(tp.Client(), "https://issues.redhat.com/")
 
+	o.printJIRAOHSS(jiraClient)
+	o.printJIRASupportExceptions(jiraClient)
+
+	return nil
+}
+
+func (o *contextOptions) printJIRAOHSS(jiraClient *jira.Client) error {
 	jql := fmt.Sprintf(
 		`(project = "OpenShift Hosted SRE Support" AND "Cluster ID" ~ "%s") 
 		OR (project = "OpenShift Hosted SRE Support" AND "Cluster ID" ~ "%s") 
-		ORDER BY priority DESC, created DESC`,
+		ORDER BY priority DESC, Status DESC`,
 		o.externalClusterID,
 		o.clusterID,
 	)
@@ -497,13 +515,49 @@ func (o *contextOptions) printJiraCards() error {
 
 	fmt.Println()
 	fmt.Println("============================================================")
-	fmt.Println("Cluster JIRAs")
+	fmt.Println("Cluster OHSS Cards")
 	fmt.Println("============================================================")
 
 	for _, i := range issues {
 		fmt.Printf("[%s](%s/%s): %+v [Status: %s]\n", i.Key, i.Fields.Type.Name, i.Fields.Priority.Name, i.Fields.Summary, i.Fields.Status.Name)
 		fmt.Printf("- Link: https://issues.redhat.com/browse/%s\n\n", i.Key)
 	}
+
+	if len(issues) == 0 {
+		fmt.Println("No OHSS Cards found")
+		fmt.Println()
+	}
+
+	return nil
+}
+
+func (o *contextOptions) printJIRASupportExceptions(jiraClient *jira.Client) error {
+	jql := fmt.Sprintf(
+		`project = "Support Exceptions" AND type = Story AND Status = Approved AND
+		 Resolution = Unresolved AND "Customer Name" ~ "%s"`,
+		o.organizationID,
+	)
+
+	issues, _, err := jiraClient.Issue.Search(jql, nil)
+	if err != nil {
+		fmt.Printf("Failed to search for jira issues %q\n", err)
+		return err
+	}
+
+	fmt.Println()
+	fmt.Println("============================================================")
+	fmt.Println("Cluster Org Support Exception")
+	fmt.Println("============================================================")
+	for _, i := range issues {
+		fmt.Printf("[%s](%s/%s): %+v [Status: %s]\n", i.Key, i.Fields.Type.Name, i.Fields.Priority.Name, i.Fields.Summary, i.Fields.Status.Name)
+		fmt.Printf("- Link: https://issues.redhat.com/browse/%s\n\n", i.Key)
+	}
+
+	if len(issues) == 0 {
+		fmt.Println("No Support Exceptions found")
+		fmt.Println()
+	}
+
 	return nil
 }
 
