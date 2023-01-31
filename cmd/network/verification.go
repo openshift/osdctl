@@ -302,6 +302,10 @@ func (e *egressVerification) getSubnetId(ctx context.Context) (string, error) {
 					Name:   aws.String("tag:red-hat-managed"),
 					Values: []string{"true"},
 				},
+				{
+					Name:   aws.String("instance-state-name"),
+					Values: []string{"running", "pending"},
+				},
 			},
 		})
 		if err != nil {
@@ -311,7 +315,7 @@ func (e *egressVerification) getSubnetId(ctx context.Context) (string, error) {
 			return "", fmt.Errorf("found 0 instances with kubernetes.io/cluster/%s=owned and red-hat-managed, consider the --subnet-id flag", e.clusterId)
 		}
 		if len(instance.Reservations[0].Instances) == 0 {
-			return "", fmt.Errorf("found 0 instances with kubernetes.io/cluster/%s=owned and red-hat-managed, consider the --subnet-id flag", e.clusterId)
+			return "", fmt.Errorf("found 0 instances with kubernetes.io/cluster/%s=owned and red-hat-managed as running/pending, consider the --subnet-id flag", e.clusterId)
 		}
 		if len(instance.Reservations[0].Instances[0].NetworkInterfaces) == 0 {
 			return "", fmt.Errorf("found 0 network interfaces of the worker node: %s, consider the --subnet-id flag", *instance.Reservations[0].Instances[0].InstanceId)
