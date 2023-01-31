@@ -47,6 +47,25 @@ func GetClusters(ocmClient *sdk.Connection, clusterIds []string) []*v1.Cluster {
 	return clusters
 }
 
+func GetOrgfromClusterID(ocmClient *sdk.Connection, cluster v1.Cluster) (string, error) {
+	subID, ok := cluster.Subscription().GetID()
+	if !ok {
+		return "", fmt.Errorf("failed getting sub id")
+	}
+
+	resp, err := ocmClient.AccountsMgmt().V1().Subscriptions().List().Search(fmt.Sprintf("id like '%s'", subID)).Size(1).Send()
+	if err != nil {
+		return "", err
+	}
+
+	respSlice := resp.Items().Slice()
+	if len(respSlice) > 1 {
+		return "", fmt.Errorf("expected only 1 org to be returned")
+	}
+
+	return respSlice[0].OrganizationID(), nil
+}
+
 // ApplyFilters retrieves clusters in OCM which match the filters given
 func ApplyFilters(ocmClient *sdk.Connection, filters []string) ([]*v1.Cluster, error) {
 	if len(filters) < 1 {
