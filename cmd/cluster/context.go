@@ -114,6 +114,7 @@ func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
 
 	orgID, err := utils.GetOrgfromClusterID(ocmClient, *cluster)
 	if err != nil {
+		fmt.Printf("Failed to get Org ID for cluster ID %s - err: %q", o.clusterID, err)
 		o.organizationID = ""
 	} else {
 		o.organizationID = orgID
@@ -493,7 +494,10 @@ func (o *contextOptions) printJiraCards() error {
 	jiraClient, _ := jira.NewClient(tp.Client(), "https://issues.redhat.com/")
 
 	o.printJIRAOHSS(jiraClient)
-	o.printJIRASupportExceptions(jiraClient)
+
+	if o.organizationID != "" {
+		o.printJIRASupportExceptions(jiraClient)
+	}
 
 	return nil
 }
