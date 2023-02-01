@@ -14,7 +14,7 @@ Currently, it mainly supports related work for AWS, especially [aws-account-oper
 
 #### Requirements
 
-- Go >= 1.13
+- Go >= 1.19
 - make
 - [goreleaser](https://github.com/goreleaser)
 - `GOPROXY` contains `proxy.golang.org`
