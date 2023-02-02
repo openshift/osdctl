@@ -22,7 +22,7 @@ OS := $(shell go env GOOS | sed 's/[a-z]/\U&/')
 ARCH := $(shell go env GOARCH)
 .PHONY: download-goreleaser
 download-goreleaser:
-	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser@v1.13.1
+	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser@v1.15.0
 
 # CI build containers don't include goreleaser by default,
 # so they need to get it first, and then run the build
@@ -36,10 +36,10 @@ SINGLE_TARGET ?= false
 # Snapshot allows the build without validation of the
 # repository itself
 build:
-	goreleaser build --rm-dist --snapshot --single-target=${SINGLE_TARGET}
+	goreleaser build --clean --snapshot --single-target=${SINGLE_TARGET}
 
 release:
-	./bin/goreleaser release --rm-dist
+	./bin/goreleaser release --clean
 
 vet:
 	go vet ${BUILDFLAGS} ./...
