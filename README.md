@@ -28,6 +28,7 @@ Currently, it mainly supports related work for AWS, especially [aws-account-oper
 # but can be downloaded with the `make download-goreleaser` target
 
 git clone https://github.com/openshift/osdctl.git
+cd osdctl
 make download-goreleaser # only needs to be done once
 make build
 ```
