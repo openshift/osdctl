@@ -95,6 +95,9 @@ func (o *rotateSecretOptions) run() error {
 	if err != nil {
 		return err
 	}
+	if account.Spec.ManualSTSMode {
+		return fmt.Errorf("Account %s is STS - No IAM User Credentials to Rotate", o.accountCRName)
+	}
 
 	// Set the account ID
 	accountID = account.Spec.AwsAccountID

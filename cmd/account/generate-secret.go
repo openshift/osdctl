@@ -139,6 +139,10 @@ func (o *generateSecretOptions) run() error {
 		} else {
 			return fmt.Errorf("account CR is missing AWS Account ID")
 		}
+
+		if account.Spec.ManualSTSMode {
+			return fmt.Errorf("Account %s is STS - No IAM User Credentials to Rotate", o.accountName)
+		}
 	} else {
 		accountID = o.accountID
 	}
