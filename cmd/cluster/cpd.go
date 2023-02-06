@@ -80,8 +80,8 @@ func (o *cpdOptions) run() error {
 
 	fmt.Println("Checking if OCM error code is already known")
 	// Check if the OCM Error code is a known error
-	if cluster.Status().ProvisionErrorCode() != unknownProvisionCode {
-		fmt.Printf("Error code %s is known, customer already received Service Log\n", cluster.Status().ProvisionErrorCode())
+	if len(cluster.Status().ProvisionErrorCode()) > 0 && cluster.Status().ProvisionErrorCode() != unknownProvisionCode {
+		fmt.Printf("Error code '%s' is known, customer already received Service Log\n", cluster.Status().ProvisionErrorCode())
 	}
 
 	fmt.Println("Checking if cluster is GCP")
