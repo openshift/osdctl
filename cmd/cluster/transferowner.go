@@ -3,7 +3,6 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
@@ -17,77 +16,42 @@ import (
 
 // transferOwnerOptions defines the struct for running transferOwner command
 type transferOwnerOptions struct {
-	output            string
-	clusterID         string
-	newOwnerName      string
-	newOrganizationId string
-	oldOwnerName      string
-	oldOrganizationId string
-	dryrun            bool
+	output       string
+	clusterID    string
+	newOwnerName string
+	dryrun       bool
 
 	genericclioptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
 }
 
-func newCmdTransferOwner(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newTransferOwnerOptions(streams, flags, globalOpts)
+func newCmdTransferOwner(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newTransferOwnerOptions(streams, globalOpts)
 	transferOwnerCmd := &cobra.Command{
 		Use:               "transfer-owner",
 		Short:             "Transfer cluster ownership to a new user (to be done by Region Lead)",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(ops.complete(cmd, args))
 			cmdutil.CheckErr(ops.run())
 		},
 	}
 	// can we get cluster-id from some context maybe?
 	transferOwnerCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "The Internal Cluster ID/External Cluster ID/ Cluster Name")
 	transferOwnerCmd.Flags().StringVar(&ops.newOwnerName, "new-owner", ops.newOwnerName, "The new owners username to transfer the cluster to")
-	transferOwnerCmd.Flags().StringVar(&ops.newOrganizationId, "new-organization-id", ops.newOrganizationId, "Organization of the new owner")
-	transferOwnerCmd.Flags().StringVar(&ops.oldOwnerName, "old-owner", ops.oldOwnerName, "The old owners username to transfer the cluster from")
-	transferOwnerCmd.Flags().StringVar(&ops.oldOrganizationId, "old-organization-id", ops.oldOrganizationId, "Organization of the old owner")
 	transferOwnerCmd.Flags().BoolVarP(&ops.dryrun, "dry-run", "d", false, "Dry-run - show all changes but do not apply them")
 
-	transferOwnerCmd.MarkFlagRequired("cluster-id")
-	transferOwnerCmd.MarkFlagRequired("new-owner")
-	transferOwnerCmd.MarkFlagRequired("old-owner")
-	transferOwnerCmd.MarkFlagRequired("new-organization-id")
-	transferOwnerCmd.MarkFlagRequired("old-organization-id")
+	_ = transferOwnerCmd.MarkFlagRequired("cluster-id")
+	_ = transferOwnerCmd.MarkFlagRequired("new-owner")
 
 	return transferOwnerCmd
 }
 
-func newTransferOwnerOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *transferOwnerOptions {
+func newTransferOwnerOptions(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *transferOwnerOptions {
 	return &transferOwnerOptions{
 		IOStreams:     streams,
 		GlobalOptions: globalOpts,
 	}
-}
-
-func (o *transferOwnerOptions) complete(cmd *cobra.Command, _ []string) error {
-	o.output = o.GlobalOptions.Output
-	err := validateOrgID(o.newOrganizationId)
-	if err != nil {
-		return fmt.Errorf("error validating new organization-id: %w", err)
-	}
-	err = validateOrgID(o.oldOrganizationId)
-	if err != nil {
-		return fmt.Errorf("error validating old organization-id: %w", err)
-	}
-	return nil
-}
-
-// basic organization-id input validation
-func validateOrgID(orgID string) error {
-	ok, err := regexp.MatchString(`[a-zA-Z0-9]{27}`, orgID)
-	if err != nil {
-		return fmt.Errorf("error validating new organization-id")
-	}
-	if !ok {
-		return fmt.Errorf("invalid new organization id provided: %v", orgID)
-	}
-	return nil
 }
 
 func (o *transferOwnerOptions) run() error {
@@ -102,8 +66,8 @@ func (o *transferOwnerOptions) run() error {
 	// the user has to be logged in (e.g. 'ocm login')
 	ocm := utils.CreateConnection()
 	defer func() {
-		if err := ocm.Close(); err != nil {
-			fmt.Printf("Cannot close the ocm (possible memory leak): %q", err)
+		if ocmCloseErr := ocm.Close(); ocmCloseErr != nil {
+			fmt.Printf("Cannot close the ocm (possible memory leak): %q", ocmCloseErr)
 		}
 	}()
 
@@ -119,24 +83,39 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("cluster has no external id")
 	}
 
-	subscription, err := utils.GetSubscription(ocm, externalClusterID)
+	subscription, err := utils.GetSubscription(ocm, o.clusterID)
 	if err != nil {
 		return fmt.Errorf("could not get subscription: %w", err)
 	}
 
-	account, err := utils.GetAccount(ocm, o.newOwnerName)
+	oldOwnerAccount, ok := subscription.GetCreator()
+	if !ok {
+		return fmt.Errorf("cluster has no owner account")
+	}
+
+	oldOrganizationId, ok := subscription.GetOrganizationID()
+	if !ok {
+		return fmt.Errorf("old organization has no ID")
+	}
+
+	newAccount, err := utils.GetAccount(ocm, o.newOwnerName)
 	if err != nil {
 		return fmt.Errorf("could not get new owners account: %w", err)
 	}
 
-	accountID, ok := account.GetID()
+	newOrganization, ok := newAccount.GetOrganization()
 	if !ok {
-		return fmt.Errorf("account has no id")
+		return fmt.Errorf("new account has no organization")
 	}
 
-	oldOwnerAccount, err := utils.GetAccount(ocm, o.oldOwnerName)
-	if err != nil {
-		return fmt.Errorf("could not get old owners account: %w", err)
+	newOrganizationId, ok := newOrganization.GetID()
+	if !ok {
+		return fmt.Errorf("new organization has no ID")
+	}
+
+	accountID, ok := newAccount.GetID()
+	if !ok {
+		return fmt.Errorf("account has no id")
 	}
 
 	subscriptionID, ok := subscription.GetID()
@@ -159,7 +138,7 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("subscription has no displayName")
 	}
 
-	ok = validateOldOwner(o, subscription, oldOwnerAccount)
+	ok = validateOldOwner(oldOrganizationId, subscription, oldOwnerAccount)
 	if !ok {
 		fmt.Print("can't validate this is old owners cluster, this could be because of a previously failed run\n")
 		err = utils.ConfirmSend()
@@ -168,9 +147,9 @@ func (o *transferOwnerOptions) run() error {
 		}
 	}
 
-	orgChanged := o.oldOrganizationId != o.newOrganizationId
+	orgChanged := oldOrganizationId != newOrganizationId
 
-	subscriptionOrgPatch, err := amv1.NewSubscription().OrganizationID(o.newOrganizationId).Build()
+	subscriptionOrgPatch, err := amv1.NewSubscription().OrganizationID(newOrganizationId).Build()
 
 	if err != nil {
 		return fmt.Errorf("can't create subscription organization patch: %w", err)
@@ -197,7 +176,7 @@ func (o *transferOwnerOptions) run() error {
 	fmt.Printf("Transfer cluster: \t\t'%v' (%v)\n", externalClusterID, cluster.Name())
 	fmt.Printf("from user \t\t\t'%v' to '%v'\n", oldOwnerAccount.ID(), accountID)
 	if orgChanged {
-		fmt.Printf("with organization change from \t'%v' to '%v'\n", o.oldOrganizationId, o.newOrganizationId)
+		fmt.Printf("with organization change from \t'%v' to '%v'\n", oldOrganizationId, newOrganizationId)
 	}
 
 	if o.dryrun {
@@ -237,7 +216,7 @@ func (o *transferOwnerOptions) run() error {
 	newRoleBindingClient := ocm.AccountsMgmt().V1().RoleBindings()
 	postRes, err := newRoleBindingClient.Add().Body(newRoleBinding).Send()
 
-	// dont fail if the rolebinding already exists, could be rerun
+	// don't fail if the rolebinding already exists, could be rerun
 	if err != nil {
 		return fmt.Errorf("request failed '%w'", err)
 	} else if postRes.Status() == 201 {
@@ -251,7 +230,7 @@ func (o *transferOwnerOptions) run() error {
 	// If the organization id has changed, re-register the cluster with CS with the new organization id
 	if orgChanged {
 
-		request, err := createNewRegisterClusterRequest(ocm, externalClusterID, subscriptionID, o.newOrganizationId, clusterURL, displayName)
+		request, err := createNewRegisterClusterRequest(ocm, externalClusterID, subscriptionID, newOrganizationId, clusterURL, displayName)
 		if err != nil {
 			return fmt.Errorf("can't create RegisterClusterRequest with CS, '%w'", err)
 		}
@@ -263,7 +242,7 @@ func (o *transferOwnerOptions) run() error {
 		fmt.Print("Re-registered cluster\n")
 	}
 
-	err = validateTransfer(ocm, subscription.ClusterID(), o.newOrganizationId)
+	err = validateTransfer(ocm, subscription.ClusterID(), newOrganizationId)
 	if err != nil {
 		return fmt.Errorf("error while validating transfer %w", err)
 	}
@@ -404,7 +383,7 @@ func validateTransfer(ocm *sdk.Connection, clusterID string, newOrgID string) er
 }
 
 // checks if old owner is on subscription
-func validateOldOwner(o *transferOwnerOptions, subscription *amv1.Subscription, oldOwner *amv1.Account) bool {
+func validateOldOwner(oldOrganizationId string, subscription *amv1.Subscription, oldOwner *amv1.Account) bool {
 	oldOrgSub, ok := subscription.GetOrganizationID()
 	if !ok {
 		fmt.Printf("subscription has no organization\n")
@@ -422,9 +401,9 @@ func validateOldOwner(o *transferOwnerOptions, subscription *amv1.Subscription, 
 	}
 
 	ok = true
-	if oldOrgSub != o.oldOrganizationId {
+	if oldOrgSub != oldOrganizationId {
 		fmt.Printf("old owners organization on subscription differs from the specified one. ")
-		fmt.Printf("Subscription has organization ID: %v (specified was: %v)\n", oldOrgSub, o.oldOrganizationId)
+		fmt.Printf("Subscription has organization ID: %v (specified was: %v)\n", oldOrgSub, oldOrganizationId)
 		ok = false
 	}
 	if userIDSub != oldOwner.ID() {
