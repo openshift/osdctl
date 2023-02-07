@@ -57,10 +57,6 @@ func newTransferOwnerOptions(streams genericclioptions.IOStreams, globalOpts *gl
 func (o *transferOwnerOptions) run() error {
 	fmt.Print("Before making changes in OCM, the cluster must have the pull secret updated to be the new owner's. ")
 	fmt.Print("See: https://github.com/openshift/ops-sop/blob/master/v4/howto/replace-pull-secret.md\n")
-	err := utils.ConfirmSend()
-	if err != nil {
-		return err
-	}
 
 	// Create an OCM client to talk to the cluster API
 	// the user has to be logged in (e.g. 'ocm login')
@@ -138,6 +134,13 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("subscription has no displayName")
 	}
 
+	fmt.Printf("Transfer cluster: \t\t'%v' (%v)\n", externalClusterID, cluster.Name())
+	fmt.Printf("from user \t\t\t'%v' to '%v'\n", oldOwnerAccount.ID(), accountID)
+	err = utils.ConfirmSend()
+	if err != nil {
+		return err
+	}
+
 	ok = validateOldOwner(oldOrganizationId, subscription, oldOwnerAccount)
 	if !ok {
 		fmt.Print("can't validate this is old owners cluster, this could be because of a previously failed run\n")
@@ -173,8 +176,6 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("can't create new owners rolebinding %w", err)
 	}
 
-	fmt.Printf("Transfer cluster: \t\t'%v' (%v)\n", externalClusterID, cluster.Name())
-	fmt.Printf("from user \t\t\t'%v' to '%v'\n", oldOwnerAccount.ID(), accountID)
 	if orgChanged {
 		fmt.Printf("with organization change from \t'%v' to '%v'\n", oldOrganizationId, newOrganizationId)
 	}
