@@ -1,10 +1,12 @@
 package cluster
 
 import (
+	"context"
 	"fmt"
 
 	awsSdk "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/openshift/osdctl/cmd/network"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -112,7 +114,9 @@ func (o *cpdOptions) run() error {
 				return fmt.Errorf("subnet %s does not have a default route to 0.0.0.0/0\n Run the following to send a SerivceLog:\n osdctl servicelog post %s -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/aws/InstallFailed_NoRouteToInternet.json", subnet, o.clusterID)
 			}
 		}
-		fmt.Printf("Next step: run the verifier egress test: osdctl network verify-egress --cluster-id %s\n", o.clusterID)
+		fmt.Printf("Attempting to run: osdctl network verify-egress --cluster-id %s\n", o.clusterID)
+		ev := &network.EgressVerification{ClusterId: o.clusterID}
+		ev.Run(context.TODO())
 		return nil
 	}
 

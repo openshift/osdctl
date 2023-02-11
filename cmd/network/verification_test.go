@@ -50,22 +50,22 @@ func (m mockEgressVerificationAWSClient) DescribeSecurityGroups(ctx context.Cont
 func Test_egressVerificationSetup(t *testing.T) {
 	tests := []struct {
 		name      string
-		e         *egressVerification
+		e         *EgressVerification
 		expectErr bool
 	}{
 		{
-			name: "no clusterId requires subnet/sg",
-			e: &egressVerification{
-				clusterId: "",
+			name: "no ClusterId requires subnet/sg",
+			e: &EgressVerification{
+				ClusterId: "",
 			},
 			expectErr: true,
 		},
 		{
-			name: "clusterId optional",
-			e: &egressVerification{
-				clusterId:       "",
-				subnetId:        "subnet-a",
-				securityGroupId: "sg-b",
+			name: "ClusterId optional",
+			e: &EgressVerification{
+				ClusterId:       "",
+				SubnetId:        "subnet-a",
+				SecurityGroupId: "sg-b",
 			},
 			expectErr: false,
 		},
@@ -90,14 +90,14 @@ func Test_egressVerificationSetup(t *testing.T) {
 func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 	tests := []struct {
 		name      string
-		e         *egressVerification
+		e         *EgressVerification
 		region    string
 		expected  *onv.ValidateEgressInput
 		expectErr bool
 	}{
 		{
 			name: "GCP Unsupported",
-			e: &egressVerification{
+			e: &EgressVerification{
 				cluster: newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("gcp"))),
 				log:     newTestLogger(t),
 			},
@@ -105,7 +105,7 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 		},
 		{
 			name: "Cluster-wide proxy requires cacert when there is an additional trust bundle",
-			e: &egressVerification{
+			e: &EgressVerification{
 				cluster: newTestCluster(t, cmv1.NewCluster().
 					CloudProvider(cmv1.NewCloudProvider().ID("aws")).
 					Product(cmv1.NewProduct().ID("rosa")).
@@ -119,7 +119,7 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 		},
 		{
 			name: "Transparent cluster-wide proxy",
-			e: &egressVerification{
+			e: &EgressVerification{
 				awsClient: mockEgressVerificationAWSClient{
 					describeSecurityGroupsResp: &ec2.DescribeSecurityGroupsOutput{
 						SecurityGroups: []types.SecurityGroup{
@@ -180,13 +180,13 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 func Test_egressVerificationGetSecurityGroupId(t *testing.T) {
 	tests := []struct {
 		name      string
-		e         *egressVerification
+		e         *EgressVerification
 		expected  string
 		expectErr bool
 	}{
 		{
 			name: "manual override",
-			e: &egressVerification{
+			e: &EgressVerification{
 				awsClient: mockEgressVerificationAWSClient{
 					describeSecurityGroupsResp: &ec2.DescribeSecurityGroupsOutput{
 						SecurityGroups: []types.SecurityGroup{
@@ -197,14 +197,14 @@ func Test_egressVerificationGetSecurityGroupId(t *testing.T) {
 					},
 				},
 				log:             newTestLogger(t),
-				securityGroupId: "override",
+				SecurityGroupId: "override",
 			},
 			expected:  "override",
 			expectErr: false,
 		},
 		{
 			name: "zero from AWS",
-			e: &egressVerification{
+			e: &EgressVerification{
 				awsClient: mockEgressVerificationAWSClient{
 					describeSecurityGroupsResp: &ec2.DescribeSecurityGroupsOutput{
 						SecurityGroups: []types.SecurityGroup{},
@@ -216,7 +216,7 @@ func Test_egressVerificationGetSecurityGroupId(t *testing.T) {
 		},
 		{
 			name: "one from AWS",
-			e: &egressVerification{
+			e: &EgressVerification{
 				awsClient: mockEgressVerificationAWSClient{
 					describeSecurityGroupsResp: &ec2.DescribeSecurityGroupsOutput{
 						SecurityGroups: []types.SecurityGroup{
@@ -255,22 +255,22 @@ func Test_egressVerificationGetSecurityGroupId(t *testing.T) {
 func Test_egressVerificationGetSubnetId(t *testing.T) {
 	tests := []struct {
 		name      string
-		e         *egressVerification
+		e         *EgressVerification
 		expected  string
 		expectErr bool
 	}{
 		{
 			name: "manual override",
-			e: &egressVerification{
+			e: &EgressVerification{
 				log:      newTestLogger(t),
-				subnetId: "override",
+				SubnetId: "override",
 			},
 			expected:  "override",
 			expectErr: false,
 		},
 		{
 			name: "non-PrivateLink + BYOVPC unsupported",
-			e: &egressVerification{
+			e: &EgressVerification{
 				cluster: newTestCluster(t, cmv1.NewCluster().AWS(cmv1.NewAWS().PrivateLink(false).SubnetIDs("subnet-abcd"))),
 				log:     newTestLogger(t),
 			},
@@ -278,7 +278,7 @@ func Test_egressVerificationGetSubnetId(t *testing.T) {
 		},
 		{
 			name: "PrivateLink + BYOVPC picks the first subnet",
-			e: &egressVerification{
+			e: &EgressVerification{
 				cluster: newTestCluster(t, cmv1.NewCluster().AWS(cmv1.NewAWS().PrivateLink(true).SubnetIDs("subnet-abcd"))),
 				log:     newTestLogger(t),
 			},
@@ -287,7 +287,7 @@ func Test_egressVerificationGetSubnetId(t *testing.T) {
 		},
 		{
 			name: "non-BYOVPC clusters get subnets from AWS",
-			e: &egressVerification{
+			e: &EgressVerification{
 				awsClient: mockEgressVerificationAWSClient{
 					describeSubnetsResp: &ec2.DescribeSubnetsOutput{
 						Subnets: []types.Subnet{
@@ -305,7 +305,7 @@ func Test_egressVerificationGetSubnetId(t *testing.T) {
 		},
 		{
 			name: "non-BYOVPC clusters error if no subnets found in AWS",
-			e: &egressVerification{
+			e: &EgressVerification{
 				awsClient: mockEgressVerificationAWSClient{
 					describeSubnetsResp: &ec2.DescribeSubnetsOutput{
 						Subnets: []types.Subnet{},
