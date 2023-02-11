@@ -7,6 +7,7 @@ import (
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/utils"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -81,7 +82,7 @@ func FetchServiceLogs(clusterID string) (*sdk.Response, error) {
 	cluster := clusters[0]
 
 	// Now get the SLs for the cluster
-	return sendRequest(CreateListSLRequest(ocmClient, cluster.ExternalID(), serviceLogListAllMessagesFlag, serviceLogListInternalOnlyFlag))
+	return sendRequest(CreateListSLRequest(ocmClient, cluster, serviceLogListAllMessagesFlag, serviceLogListInternalOnlyFlag))
 }
 
 func init() {
@@ -90,7 +91,7 @@ func init() {
 	listCmd.Flags().BoolVarP(&serviceLogListInternalOnlyFlag, "internal", "i", serviceLogListInternalOnlyFlag, "Toggle if we should see internal messages")
 }
 
-func CreateListSLRequest(ocmClient *sdk.Connection, clusterId string, allMessages bool, internalMessages bool) *sdk.Request {
+func CreateListSLRequest(ocmClient *sdk.Connection, cluster *cmv1.Cluster, allMessages bool, internalMessages bool) *sdk.Request {
 	// Create and populate the request:
 	request := ocmClient.Get()
 	err := arguments.ApplyPathArg(request, targetAPIPath)
@@ -99,7 +100,14 @@ func CreateListSLRequest(ocmClient *sdk.Connection, clusterId string, allMessage
 	}
 	var empty []string
 
-	formatMessage := fmt.Sprintf(`search=cluster_uuid = '%s'`, clusterId)
+	// prefer cluster external over cluster internal ID
+	var formatMessage string
+	if cluster.ExternalID() != "" {
+		formatMessage = fmt.Sprintf(`search=cluster_uuid = '%s'`, cluster.ExternalID())
+	} else {
+		formatMessage = fmt.Sprintf(`search=cluster_id = '%s'`, cluster.ID())
+	}
+
 	if !allMessages {
 		formatMessage += ` and service_name = 'SREManualAction'`
 	}
