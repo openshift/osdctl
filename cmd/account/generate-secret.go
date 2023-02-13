@@ -28,7 +28,8 @@ func newCmdGenerateSecret(streams genericclioptions.IOStreams, flags *genericcli
 	ops := newGenerateSecretOptions(streams, flags, client)
 	generateSecretCmd := &cobra.Command{
 		Use:               "generate-secret <IAM User name>",
-		Short:             "Generate IAM credentials secret",
+		Short:             "Generates IAM credentials secret",
+		Long:              "When logged into a hive shard, this generates a new IAM credential secret for a given IAM user",
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd, args))
@@ -138,6 +139,10 @@ func (o *generateSecretOptions) run() error {
 			accountID = account.Spec.AwsAccountID
 		} else {
 			return fmt.Errorf("account CR is missing AWS Account ID")
+		}
+
+		if account.Spec.ManualSTSMode {
+			return fmt.Errorf("Account %s is STS - No IAM User Credentials to Rotate", o.accountName)
 		}
 	} else {
 		accountID = o.accountID

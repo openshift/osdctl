@@ -30,8 +30,9 @@ import (
 func newCmdRotateSecret(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
 	ops := newRotateSecretOptions(streams, flags, client)
 	rotateSecretCmd := &cobra.Command{
-		Use:               "rotate-secret <IAM User name>",
+		Use:               "rotate-secret <aws-account-cr-name>",
 		Short:             "Rotate IAM credentials secret",
+		Long:              "When logged into a hive shard, this rotates IAM credential secrets for a given `account` CR.",
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd, args))
@@ -94,6 +95,9 @@ func (o *rotateSecretOptions) run() error {
 	account, err := k8s.GetAWSAccount(ctx, o.kubeCli, common.AWSAccountNamespace, o.accountCRName)
 	if err != nil {
 		return err
+	}
+	if account.Spec.ManualSTSMode {
+		return fmt.Errorf("Account %s is STS - No IAM User Credentials to Rotate", o.accountCRName)
 	}
 
 	// Set the account ID
