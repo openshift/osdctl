@@ -29,6 +29,8 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 	clusterCmd.AddCommand(access.NewCmdAccess(streams, flags))
 	clusterCmd.AddCommand(newCmdResizeControlPlaneNode(streams, flags, globalOpts))
 	clusterCmd.AddCommand(newCmdCpd())
+	clusterCmd.AddCommand(newCmdCheckBannedUser())
+	clusterCmd.AddCommand(newCmdValidatePullSecret(client, flags))
 	return clusterCmd
 }
 

@@ -1,0 +1,106 @@
+package cluster
+
+import (
+	"context"
+	"fmt"
+	v1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
+	"github.com/openshift/osdctl/pkg/utils"
+	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+var BackplaneClusterAdmin = "backplane-cluster-admin"
+
+func newCmdValidatePullSecret(kubeCli client.Client, flags *genericclioptions.ConfigFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:   "validate-pull-secret [CLUSTER_ID]",
+		Short: "Checks if the pull secret email matches the owner email",
+		Long: `Checks if the pull secret email matches the owner email.
+
+The owner's email to check will be determined by the cluster identifier passed to the command, while the pull secret checked will be determined by the cluster that the caller is currently logged in to.`,
+		Args:              cobra.ExactArgs(1),
+		DisableAutoGenTag: true,
+		Run: func(cmd *cobra.Command, args []string) {
+			cmdutil.CheckErr(ValidatePullSecret(args[0], kubeCli, flags))
+		},
+	}
+}
+
+func ValidatePullSecret(clusterID string, kubeCli client.Client, flags *genericclioptions.ConfigFlags) error {
+	ocm := utils.CreateConnection()
+	defer func() {
+		if ocmCloseErr := ocm.Close(); ocmCloseErr != nil {
+			fmt.Printf("Cannot close the ocm (possible memory leak): %q", ocmCloseErr)
+		}
+	}()
+
+	fmt.Println("Checking if pull secret email matches user email")
+
+	// This is the flagset for the kubeCli object provided from the root command. Set here to retroactively impersonate backplane-cluster-admin
+	flags.Impersonate = &BackplaneClusterAdmin
+	secret := &corev1.Secret{}
+	err := kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: "openshift-config", Name: "pull-secret"}, secret)
+	if err != nil {
+		return err
+	}
+
+	clusterPullSecretEmail, err, done := getPullSecretEmail(clusterID, secret)
+	if done {
+		return err
+	}
+
+	subscription, err := utils.GetSubscription(ocm, clusterID)
+	if err != nil {
+		return err
+	}
+
+	account, err := utils.GetAccount(ocm, subscription.Creator().ID())
+	if err != nil {
+		return err
+	}
+
+	if account.Email() != clusterPullSecretEmail {
+		fmt.Println("Pull secret email doesn't match OCM user email. Recommend sending service log with:")
+		fmt.Printf("osdctl servicelog post -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_user_mismatch.json %v\n", clusterID)
+		return nil
+	}
+
+	fmt.Println("Email addresses match.")
+	return nil
+}
+
+func getPullSecretEmail(clusterID string, secret *corev1.Secret) (string, error, bool) {
+	dockerConfigJsonBytes, found := secret.Data[".dockerconfigjson"]
+	if !found {
+		// Indicates issue w/ pull-secret, so we can stop evaluating and specify a more direct course of action
+		fmt.Println("Secret does not contain expected key '.dockerconfigjson'. Recommend sending a service log with the following command:")
+		fmt.Printf("osdctl servicelog post -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json %v\n", clusterID)
+		return "", nil, true
+	}
+
+	dockerConfigJson, err := v1.UnmarshalAccessToken(dockerConfigJsonBytes)
+	if err != nil {
+		return "", err, true
+	}
+
+	cloudOpenshiftAuth, found := dockerConfigJson.Auths()["cloud.openshift.com"]
+	if !found {
+		fmt.Println("Secret does not contain entry for cloud.openshift.com. Recommend sending a service log with the following command:")
+		fmt.Printf("osdctl servicelog post -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json %v\n", clusterID)
+		return "", nil, true
+	}
+
+	clusterPullSecretEmail := cloudOpenshiftAuth.Email()
+	if clusterPullSecretEmail == "" {
+		fmt.Printf("%v\n%v\n%v\n",
+			"Couldn't extract email address from pull secret for cloud.openshift.com",
+			"This can mean the pull secret is misconfigured. Please verify the pull secret manually:",
+			"  oc get secret -n openshift-config pull-secret -o json | jq -r '.data[\".dockerconfigjson\"]' | base64 -d")
+		return "", nil, true
+	}
+	return clusterPullSecretEmail, nil, false
+}
