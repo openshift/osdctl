@@ -43,6 +43,10 @@ func (o *InitOptions) Init() error {
 	return nil
 }
 
+// Validate validates the options that are passed to the command. These are generally
+// populated by flags, but in the cases where we would be calling a command from another
+// command these would be manually populated, so it would be a good idea to have a separate
+// set of validation in that case.
 func (o *InitOptions) Validate() error {
 	if o.keyName == "" {
 		return fmt.Errorf("Key name must be specified")
@@ -50,6 +54,10 @@ func (o *InitOptions) Validate() error {
 	return nil
 }
 
+// This should be the entire functionality of the command, from start to end. There's
+// nothing saying that we can't break out into smaller functions here.  Printing output is
+// also something that we should consider how to do effectively, as we might not always
+// want to _print_ the output after running, but we might want to just _use_ the output.
 func (o *InitOptions) Run() error {
 	err := o.Validate()
 	if err != nil {
