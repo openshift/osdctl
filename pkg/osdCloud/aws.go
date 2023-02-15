@@ -15,6 +15,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/aws/aws-sdk-go/service/sts"
 
+	conversions "github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -385,4 +387,87 @@ func GenerateAWSClientForCluster(awsProfile string, clusterID string) (aws.Clien
 	}
 
 	return awsClient, err
+}
+
+// Concrete struct with fields required only for interacting with the AWS cloud.
+type AwsCluster struct {
+	*BaseClient
+	AZs        []string
+	AwsProfile string
+	AwsClient  aws.Client
+}
+
+func NewAwsCluster(ocmClient *sdk.Connection, clusterId string, awsProfile string) (ClusterHealthClient, error) {
+	clusterResp, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(clusterId).Get().Send()
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+	cluster := clusterResp.Body()
+	return &AwsCluster{
+		BaseClient: &BaseClient{
+			ClusterId: clusterId,
+			OcmClient: ocmClient,
+			Cluster:   cluster,
+		},
+		AwsProfile: awsProfile,
+	}, nil
+}
+
+func (a *AwsCluster) Login() error {
+	awsClient, err := GenerateAWSClientForCluster(a.AwsProfile, a.ClusterId)
+	a.AwsClient = awsClient
+	a.AZs = a.Cluster.Nodes().AvailabilityZones()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a *AwsCluster) Close() {
+}
+
+func (a *AwsCluster) GetAZs() []string {
+	return a.AZs
+}
+
+func (a *AwsCluster) GetAllVirtualMachines(region string) ([]VirtualMachine, error) {
+	vms := make([]VirtualMachine, 5)
+	var nextToken *string
+	for {
+		instances, err := a.AwsClient.DescribeInstances(&ec2.DescribeInstancesInput{
+			MaxResults: conversions.Int64(5),
+			NextToken:  nextToken,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for idx := range instances.Reservations {
+			for _, instance := range instances.Reservations[idx].Instances {
+				stringTags := make(map[string]string, 0)
+				var name, size, state string
+				size = *instance.InstanceType
+				state = *instance.State.Name
+				for _, t := range instance.Tags {
+					stringTags[*t.Key] = *t.Value
+					if *t.Key == "Name" {
+						name = *t.Value
+					}
+				}
+				vm := VirtualMachine{
+					Original: instance,
+					Name:     name,
+					Size:     size,
+					State:    state,
+					Labels:   stringTags,
+				}
+				vms = append(vms, vm)
+			}
+		}
+		if instances.NextToken == nil {
+			break
+		}
+		nextToken = instances.NextToken
+	}
+	return vms, nil
 }
