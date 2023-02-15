@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/openshift/osdctl/cmd/cluster/access"
+	"github.com/openshift/osdctl/cmd/cluster/jumphost"
 	"github.com/openshift/osdctl/cmd/cluster/support"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/spf13/cobra"
@@ -29,6 +30,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 	clusterCmd.AddCommand(access.NewCmdAccess(streams, flags))
 	clusterCmd.AddCommand(newCmdResizeControlPlaneNode(streams, flags, globalOpts))
 	clusterCmd.AddCommand(newCmdCpd())
+	clusterCmd.AddCommand(jumphost.NewCmdJumphost(streams, flags, client))
 	return clusterCmd
 }
 
