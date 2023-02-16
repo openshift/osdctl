@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	v1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
+	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
@@ -48,7 +49,7 @@ func ValidatePullSecret(clusterID string, kubeCli client.Client, flags *genericc
 		return err
 	}
 
-	clusterPullSecretEmail, err, done := getPullSecretEmail(clusterID, secret)
+	clusterPullSecretEmail, err, done := getPullSecretEmail(clusterID, secret, true)
 	if done {
 		return err
 	}
@@ -64,8 +65,14 @@ func ValidatePullSecret(clusterID string, kubeCli client.Client, flags *genericc
 	}
 
 	if account.Email() != clusterPullSecretEmail {
-		fmt.Println("Pull secret email doesn't match OCM user email. Recommend sending service log with:")
-		fmt.Printf("osdctl servicelog post -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_user_mismatch.json %v\n", clusterID)
+		fmt.Println("Pull secret email doesn't match OCM user email. Sending service log.")
+		postCmd := servicelog.PostCmdOptions{
+			Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_user_mismatch.json",
+			ClusterId: clusterID,
+		}
+		if err = postCmd.Run(); err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -73,12 +80,22 @@ func ValidatePullSecret(clusterID string, kubeCli client.Client, flags *genericc
 	return nil
 }
 
-func getPullSecretEmail(clusterID string, secret *corev1.Secret) (string, error, bool) {
+func getPullSecretEmail(clusterID string, secret *corev1.Secret, sendServiceLog bool) (string, error, bool) {
 	dockerConfigJsonBytes, found := secret.Data[".dockerconfigjson"]
 	if !found {
 		// Indicates issue w/ pull-secret, so we can stop evaluating and specify a more direct course of action
-		fmt.Println("Secret does not contain expected key '.dockerconfigjson'. Recommend sending a service log with the following command:")
-		fmt.Printf("osdctl servicelog post -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json %v\n", clusterID)
+		fmt.Println("Secret does not contain expected key '.dockerconfigjson'.")
+		if sendServiceLog {
+			fmt.Println("Sending service log.")
+			postCmd := servicelog.PostCmdOptions{
+				Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json",
+				ClusterId: clusterID,
+			}
+			if err := postCmd.Run(); err != nil {
+				return "", err, true
+			}
+		}
+
 		return "", nil, true
 	}
 
@@ -89,8 +106,17 @@ func getPullSecretEmail(clusterID string, secret *corev1.Secret) (string, error,
 
 	cloudOpenshiftAuth, found := dockerConfigJson.Auths()["cloud.openshift.com"]
 	if !found {
-		fmt.Println("Secret does not contain entry for cloud.openshift.com. Recommend sending a service log with the following command:")
-		fmt.Printf("osdctl servicelog post -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json %v\n", clusterID)
+		fmt.Println("Secret does not contain entry for cloud.openshift.com")
+		if sendServiceLog {
+			fmt.Println("Sending service log")
+			postCmd := servicelog.PostCmdOptions{
+				Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json",
+				ClusterId: clusterID,
+			}
+			if err = postCmd.Run(); err != nil {
+				return "", err, true
+			}
+		}
 		return "", nil, true
 	}
 

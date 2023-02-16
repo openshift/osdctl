@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	templateParams, userParameterNames, userParameterValues, filterParams []string
-	HTMLBody                                                              []byte
+	userParameterNames, userParameterValues, filterParams []string
+	HTMLBody                                              []byte
 )
 
 const (
@@ -25,25 +25,6 @@ func sendRequest(request *sdk.Request) (*sdk.Response, error) {
 		return nil, fmt.Errorf("cannot send request: %q", err)
 	}
 	return response, nil
-}
-
-func check(response *sdk.Response, clusterMessage servicelog.Message) {
-	body := response.Bytes()
-	if response.Status() < 400 {
-		_, err := validateGoodResponse(body, clusterMessage)
-		if err != nil {
-			failedClusters[clusterMessage.ClusterUUID] = err.Error()
-		} else {
-			successfulClusters[clusterMessage.ClusterUUID] = fmt.Sprintf("Message has been successfully sent to %s", clusterMessage.ClusterUUID)
-		}
-	} else {
-		badReply, err := validateBadResponse(body)
-		if err != nil {
-			failedClusters[clusterMessage.ClusterUUID] = err.Error()
-		} else {
-			failedClusters[clusterMessage.ClusterUUID] = badReply.Reason
-		}
-	}
 }
 
 func validateGoodResponse(body []byte, clusterMessage servicelog.Message) (goodReply *servicelog.GoodReply, err error) {
