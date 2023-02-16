@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"k8s.io/kubectl/pkg/util/slice"
 	"os"
 	"strings"
 
@@ -53,7 +54,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 				os.Exit(1)
 			}
 
-			if !skipVersionCheck {
+			if !skipVersionCheck && !slice.ContainsString(getSkipVersionCommands(), cmd.Use, nil) {
 				latestVersion, err := utils.GetLatestVersion()
 				if err != nil {
 					fmt.Println("Warning: Unable to verify that osdctl is running under the latest released version. Error trying to reach GitHub:")
@@ -128,4 +129,8 @@ func help(cmd *cobra.Command, _ []string) {
 	if err != nil {
 		fmt.Println("Error while printing help: ", err.Error())
 	}
+}
+
+func getSkipVersionCommands() []string {
+	return []string{"upgrade", "version"}
 }
