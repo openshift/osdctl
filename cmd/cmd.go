@@ -13,6 +13,7 @@ import (
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/kubectl/pkg/util/slice"
 
 	"github.com/openshift/osdctl/cmd/aao"
 	"github.com/openshift/osdctl/cmd/account"
@@ -53,31 +54,9 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 				os.Exit(1)
 			}
 
-			if !skipVersionCheck {
-				latestVersion, err := utils.GetLatestVersion()
-				if err != nil {
-					fmt.Println("Warning: Unable to verify that osdctl is running under the latest released version. Error trying to reach GitHub:")
-					fmt.Println(err)
-					fmt.Println("Please be aware that you are possibly running an outdated or unreleased version.")
-				}
-
-				if utils.Version != strings.TrimPrefix(latestVersion, "v") {
-					fmt.Println(fmt.Sprintf("The current version (%s) is different than the latest released version (%s).", utils.Version, latestVersion))
-					fmt.Println("It is recommended that you update to the latest released version to ensure that no known bugs or issues are hit.")
-					fmt.Println("Please confirm that you would like to continue with [y|n]")
-
-					var input string
-					for {
-						fmt.Scanln(&input)
-						if strings.ToLower(input) == "y" {
-							break
-						}
-						if strings.ToLower(input) == "n" {
-							fmt.Println("Exiting")
-							os.Exit(0)
-						}
-					}
-				}
+			// Checks the skipVersionCheck flag and the command being run to determine if the version check should run
+			if shouldRunVersionCheck(skipVersionCheck, cmd.Use) {
+				versionCheck()
 			}
 		},
 	}
@@ -127,5 +106,49 @@ func help(cmd *cobra.Command, _ []string) {
 	err := cmd.Help()
 	if err != nil {
 		fmt.Println("Error while printing help: ", err.Error())
+	}
+}
+
+// Checks if the version check should be run
+func shouldRunVersionCheck(skipVersionCheckFlag bool, commandName string) bool {
+
+	// If either are true, then the version check should NOT run, hence negation
+	return !(skipVersionCheckFlag || canCommandSkipVersionCheck(commandName))
+}
+
+func canCommandSkipVersionCheck(commandName string) bool {
+	// Checks if the specific command is in the allowlist
+	return slice.ContainsString(getSkipVersionCommands(), commandName, nil)
+}
+
+// Returns allowlist of commands that can skip version check
+func getSkipVersionCommands() []string {
+	return []string{"upgrade", "version"}
+}
+
+func versionCheck() {
+	latestVersion, err := utils.GetLatestVersion()
+	if err != nil {
+		fmt.Println("Warning: Unable to verify that osdctl is running under the latest released version. Error trying to reach GitHub:")
+		fmt.Println(err)
+		fmt.Println("Please be aware that you are possibly running an outdated or unreleased version.")
+	}
+
+	if utils.Version != strings.TrimPrefix(latestVersion, "v") {
+		fmt.Printf("The current version (%s) is different than the latest released version (%s).", utils.Version, latestVersion)
+		fmt.Println("It is recommended that you update to the latest released version to ensure that no known bugs or issues are hit.")
+		fmt.Println("Please confirm that you would like to continue with [y|n]")
+
+		var input string
+		for {
+			fmt.Scanln(&input)
+			if strings.ToLower(input) == "y" {
+				break
+			}
+			if strings.ToLower(input) == "n" {
+				fmt.Println("Exiting")
+				os.Exit(0)
+			}
+		}
 	}
 }
