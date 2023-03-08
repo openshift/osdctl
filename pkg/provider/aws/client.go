@@ -5,6 +5,9 @@ package aws
 
 import (
 	"fmt"
+	"github.com/spf13/viper"
+	"net/http"
+	"net/url"
 	"path/filepath"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -30,6 +33,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/aws/aws-sdk-go/service/sts/stsiface"
 )
+
+const awsProxyUrlKey = "aws_proxy_url"
 
 // AwsClientInput input for new aws client
 type AwsClientInput struct {
@@ -141,6 +146,16 @@ func NewAwsSession(profile, region, configFile string) (*session.Session, error)
 			Region: aws.String(region),
 		},
 		Profile: profile,
+	}
+
+	if awsProxyUrl := viper.GetString(awsProxyUrlKey); awsProxyUrl != "" {
+		opt.Config.HTTPClient = &http.Client{
+			Transport: &http.Transport{
+				Proxy: func(*http.Request) (*url.URL, error) {
+					return url.Parse(awsProxyUrl)
+				},
+			},
+		}
 	}
 
 	// only set config file if it is not empty

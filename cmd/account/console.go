@@ -102,7 +102,7 @@ func (o *consoleOptions) run() error {
 		}
 	}
 
-	// Build the base AWS client using the provide credentials (profile or env vars)
+	// Build the base AWS client using the provided credentials (profile or env vars)
 	awsClient, err := aws.NewAwsClient(o.awsProfile, o.region, "")
 	if err != nil {
 		fmt.Printf("Could not build AWS Client: %s\n", err)
