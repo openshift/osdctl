@@ -4,15 +4,32 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws/arn"
-	"github.com/openshift-online/ocm-cli/pkg/ocm"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 )
 
 const ClusterServiceClusterSearch = "id = '%s' or name = '%s' or external_id = '%s'"
+
+const (
+	productionURL  = "https://api.openshift.com"
+	stagingURL     = "https://api.stage.openshift.com"
+	integrationURL = "https://api.integration.openshift.com"
+)
+
+var urlAliases = map[string]string{
+	"production":  productionURL,
+	"prod":        productionURL,
+	"prd":         productionURL,
+	"staging":     stagingURL,
+	"stage":       stagingURL,
+	"stg":         stagingURL,
+	"integration": integrationURL,
+	"int":         integrationURL,
+}
 
 // GetClusterAnyStatus returns an OCM cluster object given an OCM connection and cluster id
 // (internal and external ids both supported).
@@ -104,7 +121,26 @@ func GenerateQuery(clusterIdentifier string) string {
 }
 
 func CreateConnection() *sdk.Connection {
-	connection, err := ocm.NewConnection().Build()
+	token := os.Getenv("OCM_TOKEN")
+	url := os.Getenv("OCM_URL")
+
+	connectionBuilder := sdk.NewConnectionBuilder()
+
+	if token != "" {
+		connectionBuilder.Tokens(token)
+	}
+
+	if url != "" {
+		gatewayURL, ok := urlAliases[url]
+		if !ok {
+			fmt.Println("Invalid OCM_URL found: ", url)
+			fmt.Println("Valid URL aliases are: 'production', 'staging', 'integration'")
+		}
+		connectionBuilder.URL(gatewayURL)
+	}
+
+	connection, err := connectionBuilder.Build()
+
 	if err != nil {
 		if strings.Contains(err.Error(), "Not logged in, run the") {
 			log.Fatalf("Failed to create OCM connection: Authentication error, run the 'ocm login' command first.")
