@@ -4,7 +4,6 @@ import (
 	"context"
 
 	hiveapiv1 "github.com/openshift/hive/apis/hive/v1"
-	hivev1 "github.com/openshift/hive/pkg/constants"
 	"github.com/spf13/cobra"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -13,6 +12,8 @@ import (
 
 	"github.com/openshift/osdctl/pkg/printer"
 )
+
+const hiveVersionMajorMinorPatchLabel string = "hive.openshift.io/version-major-minor-patch"
 
 // newCmdList implements the list command to list cluster deployment crs
 func newCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
@@ -82,7 +83,7 @@ func (o *listOptions) run() error {
 			region = ""
 		}
 
-		if vmm, ok := cd.Labels[hivev1.VersionMajorMinorPatchLabel]; ok {
+		if vmm, ok := cd.Labels[hiveVersionMajorMinorPatchLabel]; ok {
 			version = vmm
 		}
 
