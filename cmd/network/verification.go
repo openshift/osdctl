@@ -36,7 +36,7 @@ type EgressVerification struct {
 	Region string
 	// SubnetId is an optional override for specifying an AWS subnet ID.
 	// Must be a private subnet to provide accurate results.
-	SubnetId string
+	SubnetId []string
 	// SecurityGroupId is an optional override for specifying an AWS security group ID.
 	SecurityGroupId string
 	// Debug optionally enables debug-level logging for underlying calls to osd-network-verifier.
@@ -47,6 +47,8 @@ type EgressVerification struct {
 	CaCert string
 	// NoTls optionally ignores SSL validation on the client-side.
 	NoTls bool
+	// AllSubnets is an option for multi-AZ clusters that will run the network verification against all subnets listed by ocm
+	AllSubnets bool
 }
 
 func NewCmdValidateEgress() *cobra.Command {
@@ -86,13 +88,14 @@ func NewCmdValidateEgress() *cobra.Command {
 		},
 	}
 
-	validateEgressCmd.Flags().StringVar(&e.ClusterId, "cluster-id", "", "(optional) OCM internal/external cluster id to run osd-network-verifier against.")
-	validateEgressCmd.Flags().StringVar(&e.SubnetId, "subnet-id", "", "(optional) private subnet ID override, required if not specifying --cluster-id")
+	validateEgressCmd.Flags().StringVarP(&e.ClusterId, "cluster-id", "C", "", "(optional) OCM internal/external cluster id to run osd-network-verifier against.")
+	validateEgressCmd.Flags().StringArrayVar(&e.SubnetId, "subnet-id", nil, "(optional) private subnet ID override, required if not specifying --cluster-id and can be specified multiple times to run against multiple subnets")
 	validateEgressCmd.Flags().StringVar(&e.SecurityGroupId, "security-group", "", "(optional) security group ID override for osd-network-verifier, required if not specifying --cluster-id")
 	validateEgressCmd.Flags().StringVar(&e.CaCert, "cacert", "", "(optional) path to a file containing the additional CA trust bundle. Typically set so that the verifier can use a configured cluster-wide proxy.")
 	validateEgressCmd.Flags().BoolVar(&e.NoTls, "no-tls", false, "(optional) if provided, ignore all ssl certificate validations on client-side.")
 	validateEgressCmd.Flags().StringVar(&e.Region, "region", "", "(optional) AWS region")
 	validateEgressCmd.Flags().BoolVar(&e.Debug, "debug", false, "(optional) if provided, enable additional debug-level logging")
+	validateEgressCmd.Flags().BoolVarP(&e.AllSubnets, "all-subnets", "A", false, "(optional) an option to run osd-network-verifier against all subnets listed by ocm.")
 
 	// If a cluster-id is specified, don't allow the foot-gun of overriding region
 	validateEgressCmd.MarkFlagsMutuallyExclusive("cluster-id", "region")
@@ -119,16 +122,19 @@ func (e *EgressVerification) Run(ctx context.Context) {
 		log.Fatal(fmt.Errorf("failed to assemble osd-network-verifier client: %s", err))
 	}
 
-	input, err := e.generateAWSValidateEgressInput(ctx, cfg.Region)
+	inputs, err := e.generateAWSValidateEgressInput(ctx, cfg.Region)
 	if err != nil {
 		log.Fatal(err)
 	}
-	e.log.Info(ctx, "running with config: %+v", input)
 
-	out := onv.ValidateEgress(c, *input)
-	out.Summary(e.Debug)
-	if out.IsSuccessful() {
-		log.Println("All tests pass")
+	for i, _ := range inputs {
+		e.log.Info(ctx, "running with config: %+v", inputs[i])
+		e.log.Info(ctx, "running network verifier for subnet  %+v, security group %+v", inputs[i].SubnetID, inputs[i].AWS.SecurityGroupId)
+		out := onv.ValidateEgress(c, *inputs[i])
+		out.Summary(e.Debug)
+		if out.IsSuccessful() {
+			log.Println("All tests pass")
+		}
 	}
 }
 
@@ -170,7 +176,7 @@ func (e *EgressVerification) setup(ctx context.Context) (*aws.Config, error) {
 	}
 
 	// If no ClusterId is supplied, then --subnet-id and --security-group are required
-	if e.SubnetId == "" || e.SecurityGroupId == "" {
+	if e.SubnetId == nil || e.SecurityGroupId == "" {
 		return nil, fmt.Errorf("--subnet-id and --security-group are required when --cluster-id is not specified")
 	}
 
@@ -195,7 +201,7 @@ func (e *EgressVerification) setup(ctx context.Context) (*aws.Config, error) {
 // Its input is an OCM internal/external ClusterId and it returns the corresponding input to osd-network-verifier with
 // default AWS tags, one of the cluster's private subnet IDs, and the cluster's master security group.
 // Can override SecurityGroupId and SubnetId.
-func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context, region string) (*onv.ValidateEgressInput, error) {
+func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context, region string) ([]*onv.ValidateEgressInput, error) {
 	// We can auto-detect information from OCM
 	if e.cluster != nil {
 		// TODO: osd-network-verifier technically does support GCP, but just handle AWS for now
@@ -243,7 +249,7 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	input.SubnetID = subnetId
+	input.SubnetID = subnetId[0]
 
 	// Fill in securityGroupID
 	sgId, err := e.getSecurityGroupId(context.TODO())
@@ -252,16 +258,39 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 	}
 	input.AWS.SecurityGroupId = sgId
 
-	return input, nil
+	//Creating a slice of input values to run in a for loop in the network-verifier
+	inputs := make([]*onv.ValidateEgressInput, len(subnetId))
+	for i, _ := range subnetId {
+		inputs[i] = input
+		inputs[i].SubnetID = subnetId[i]
+
+	}
+
+	return inputs, nil
 }
 
 // getSubnetId attempts to return a private subnet ID.
 // e.SubnetId acts as an override, otherwise e.awsClient will be used to attempt to determine the correct subnets
-func (e *EgressVerification) getSubnetId(ctx context.Context) (string, error) {
+func (e *EgressVerification) getSubnetId(ctx context.Context) ([]string, error) {
 	// A SubnetId was manually specified, just use that
-	if e.SubnetId != "" {
+	if e.SubnetId != nil {
 		e.log.Info(ctx, "using manually specified subnet-id: %s", e.SubnetId)
 		return e.SubnetId, nil
+	}
+
+	if e.AllSubnets {
+
+		if e.cluster.AWS().SubnetIDs() != nil {
+
+			subnets := e.cluster.AWS().SubnetIDs()
+
+			e.log.Debug(ctx, "Found the following subnets listed with ocm: %v", subnets)
+
+			//add an error to handle
+			e.log.Debug(ctx, "Assigned value to var e.SubnetId: %v", subnets)
+			return subnets, nil
+		}
+
 	}
 
 	// If this is a non-BYOVPC cluster, we can find the private subnets based on the cluster and internal-elb tag
@@ -280,30 +309,38 @@ func (e *EgressVerification) getSubnetId(ctx context.Context) (string, error) {
 			},
 		})
 		if err != nil {
-			return "", fmt.Errorf("failed to find private subnets for %s: %w", e.cluster.InfraID(), err)
+			return nil, fmt.Errorf("failed to find private subnets for %s: %w", e.cluster.InfraID(), err)
 		}
 
 		if len(resp.Subnets) == 0 {
-			return "", fmt.Errorf("found 0 subnets with kubernetes.io/cluster/%s=owned and %s, consider the --subnet-id flag", e.cluster.InfraID(), e.cluster.InfraID())
+			return nil, fmt.Errorf("found 0 subnets with kubernetes.io/cluster/%s=owned and %s, consider the --subnet-id flag", e.cluster.InfraID(), e.cluster.InfraID())
 		}
+		if e.AllSubnets {
+			subnetIds := make([]string, len(resp.Subnets))
+			for i, subnet := range resp.Subnets {
+				subnetIds[i] = *subnet.SubnetId
+			}
 
+			e.log.Info(ctx, "using subnet-ids: %v", subnetIds)
+			return subnetIds, nil
+		}
 		e.log.Info(ctx, "using subnet-id: %s", *resp.Subnets[0].SubnetId)
-		return *resp.Subnets[0].SubnetId, nil
+		return []string{*resp.Subnets[0].SubnetId}, nil
 	}
 
 	// For PrivateLink clusters, any provided subnet is considered a private subnet
 	if e.cluster.AWS().PrivateLink() {
 		if len(e.cluster.AWS().SubnetIDs()) == 0 {
-			return "", fmt.Errorf("unexpected error: %s is a PrivateLink cluster, but no subnets in OCM", e.cluster.InfraID())
+			return nil, fmt.Errorf("unexpected error: %s is a PrivateLink cluster, but no subnets in OCM", e.cluster.InfraID())
 		}
 
 		e.log.Info(ctx, "detected BYOVPC PrivateLink cluster, using first subnet from OCM: %s", e.cluster.AWS().SubnetIDs()[0])
-		return e.cluster.AWS().SubnetIDs()[0], nil
+		return []string{e.cluster.AWS().SubnetIDs()[0]}, nil
 	}
 
 	// For non-PrivateLink BYOVPC clusters, provided subnets are 50/50 public/private subnets, so make the user decide for now
 	// TODO: Figure out via IGW/NAT GW/Route Tables
-	return "", fmt.Errorf("unable to determine which non-PrivateLink BYOVPC subnets are private yet, please check manually and provide the --subnet-id flag")
+	return nil, fmt.Errorf("unable to determine which non-PrivateLink BYOVPC subnets are private yet, please check manually and provide the --subnet-id flag")
 }
 
 // getSecurityGroupId attempts to return a cluster's master node security group Id
