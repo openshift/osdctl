@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws/arn"
@@ -21,14 +22,33 @@ const (
 )
 
 var urlAliases = map[string]string{
-	"production":  productionURL,
-	"prod":        productionURL,
-	"prd":         productionURL,
-	"staging":     stagingURL,
-	"stage":       stagingURL,
-	"stg":         stagingURL,
-	"integration": integrationURL,
-	"int":         integrationURL,
+	"production":   productionURL,
+	"prod":         productionURL,
+	"prd":          productionURL,
+	productionURL:  productionURL,
+	"staging":      stagingURL,
+	"stage":        stagingURL,
+	"stg":          stagingURL,
+	stagingURL:     stagingURL,
+	"integration":  integrationURL,
+	"int":          integrationURL,
+	integrationURL: integrationURL,
+}
+
+// Config describes the OCM client configuration
+// Taken wholesale from openshift-online/ocm-cli
+type Config struct {
+	AccessToken  string   `json:"access_token,omitempty" doc:"Bearer access token."`
+	ClientID     string   `json:"client_id,omitempty" doc:"OpenID client identifier."`
+	ClientSecret string   `json:"client_secret,omitempty" doc:"OpenID client secret."`
+	Insecure     bool     `json:"insecure,omitempty" doc:"Enables insecure communication with the server. This disables verification of TLS certificates and host names."`
+	Password     string   `json:"password,omitempty" doc:"User password."`
+	RefreshToken string   `json:"refresh_token,omitempty" doc:"Offline or refresh token."`
+	Scopes       []string `json:"scopes,omitempty" doc:"OpenID scope. If this option is used it will replace completely the default scopes. Can be repeated multiple times to specify multiple scopes."`
+	TokenURL     string   `json:"token_url,omitempty" doc:"OpenID token URL."`
+	URL          string   `json:"url,omitempty" doc:"URL of the API gateway. The value can be the complete URL or an alias. The valid aliases are 'production', 'staging' and 'integration'."`
+	User         string   `json:"user,omitempty" doc:"User name."`
+	Pager        string   `json:"pager,omitempty" doc:"Pager command, for example 'less'. If empty no pager will be used."`
 }
 
 // GetClusterAnyStatus returns an OCM cluster object given an OCM connection and cluster id
@@ -120,33 +140,144 @@ func GenerateQuery(clusterIdentifier string) string {
 	return strings.TrimSpace(fmt.Sprintf("(id like '%[1]s' or external_id like '%[1]s' or display_name like '%[1]s')", clusterIdentifier))
 }
 
+// Finds the OCM Configuration file and returns the path to it
+// Taken wholesale from	openshift-online/ocm-cli
+func getOCMConfigLocation() (string, error) {
+	if ocmconfig := os.Getenv("OCM_CONFIG"); ocmconfig != "" {
+		return ocmconfig, nil
+	}
+
+	// Determine home directory to use for the legacy file path
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	path := filepath.Join(home, ".ocm.json")
+
+	_, err = os.Stat(path)
+	if os.IsNotExist(err) {
+		// Determine standard config directory
+		configDir, err := os.UserConfigDir()
+		if err != nil {
+			return path, err
+		}
+
+		// Use standard config directory
+		path = filepath.Join(configDir, "/ocm/ocm.json")
+	}
+
+	return path, nil
+}
+
+// Loads the OCM Configuration file
+// Taken wholesale from	openshift-online/ocm-cli
+func loadOCMConfig() (*Config, error) {
+	var err error
+
+	file, err := getOCMConfigLocation()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = os.Stat(file)
+	if os.IsNotExist(err) {
+		cfg := &Config{}
+		err = nil
+		return cfg, err
+	}
+
+	if err != nil {
+		err = fmt.Errorf("can't check if config file '%s' exists: %v", file, err)
+		return nil, err
+	}
+
+	data, err := os.ReadFile(file)
+	if err != nil {
+		err = fmt.Errorf("can't read config file '%s': %v", file, err)
+		return nil, err
+	}
+
+	if len(data) == 0 {
+		return nil, nil
+	}
+
+	cfg := &Config{}
+	err = json.Unmarshal(data, cfg)
+
+	if err != nil {
+		err = fmt.Errorf("can't parse config file '%s': %v", file, err)
+		return cfg, err
+	}
+
+	return cfg, nil
+}
+
 func CreateConnection() *sdk.Connection {
 	token := os.Getenv("OCM_TOKEN")
 	url := os.Getenv("OCM_URL")
 
+	// Unlikely to be set, but check anyway
+	refresh_token := os.Getenv("OCM_REFRESH_TOKEN")
+
+	ocmConfigError := "Unable to load OCM config\nLogin with 'ocm login' or set OCM_TOKEN and OCM_URL environment variables"
+	ocmInvalidURLError := "Invalid OCM_URL found: %s\nValid URL aliases are: 'production', 'staging', 'integration'"
+
 	connectionBuilder := sdk.NewConnectionBuilder()
 
-	if token != "" {
-		connectionBuilder.Tokens(token)
+	config := &Config{}
+	err := error(nil)
+
+	if token == "" || url == "" {
+		// If either token or url are not set, try to load them from the config file
+		config, err = loadOCMConfig()
+		if err != nil {
+			log.Fatal(ocmConfigError)
+			return nil
+		}
 	}
 
+	if token == "" {
+		token = config.AccessToken
+		refresh_token = config.RefreshToken
+
+		// Can't both be nil
+		if token == "" && refresh_token == "" {
+			log.Fatal(ocmConfigError)
+			return nil
+		}
+	}
+
+	connectionBuilder.Tokens(token, refresh_token)
+
+	if url == "" {
+		url = config.URL
+		if url == "" {
+			log.Fatal(ocmConfigError)
+			return nil
+		}
+	}
+
+	// Parse the possible URLs
 	if url != "" {
 		gatewayURL, ok := urlAliases[url]
 		if !ok {
-			fmt.Println("Invalid OCM_URL found: ", url)
-			fmt.Println("Valid URL aliases are: 'production', 'staging', 'integration'")
+			log.Fatalf(ocmInvalidURLError, url)
 		}
 		connectionBuilder.URL(gatewayURL)
+	} else {
+		log.Fatalf(ocmInvalidURLError, "\"\"")
 	}
 
 	connection, err := connectionBuilder.Build()
 
 	if err != nil {
 		if strings.Contains(err.Error(), "Not logged in, run the") {
-			log.Fatalf("Failed to create OCM connection: Authentication error, run the 'ocm login' command first.")
+			log.Fatal(ocmConfigError)
 		}
 		log.Fatalf("Failed to create OCM connection: %v", err)
 	}
+
 	return connection
 }
 
