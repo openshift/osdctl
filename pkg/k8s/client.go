@@ -27,7 +27,7 @@ func (s *LazyClient) err() error {
 	return fmt.Errorf("not connected to real cluster, please verify KUBECONFIG is correct")
 }
 
-func (s *LazyClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+func (s *LazyClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	return s.getClient().Get(ctx, key, obj)
 }
 

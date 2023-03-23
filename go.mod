@@ -15,14 +15,13 @@ require (
 	github.com/deckarep/golang-set v1.7.1
 	github.com/fatih/color v1.13.0
 	github.com/golang/mock v1.6.0
-	github.com/onsi/gomega v1.20.0
+	github.com/onsi/gomega v1.23.0
 	github.com/openshift-online/ocm-cli v0.1.65-0.20220913083421-16b44c698a1f
 	github.com/openshift-online/ocm-sdk-go v0.1.300
-	github.com/openshift/api v3.9.1-0.20191111211345-a27ff30ebf09+incompatible
+	github.com/openshift/api v0.0.0-20230320211411-560b2fb170af
 	github.com/openshift/aws-account-operator/api v0.0.0-20220921130557-58a04a5f1ba2
 	github.com/openshift/gcp-project-operator v0.0.0-20220920194256-df38e31387a7
-	github.com/openshift/hive v1.1.17-0.20220921183516-849ebe80fa61
-	github.com/openshift/hive/apis v0.0.0
+	github.com/openshift/hive/apis v0.0.0-20230314202213-17cb22fc3d7c
 	github.com/openshift/osd-network-verifier v0.1.1-0.20221209180454-dfb584543d46
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/shopspring/decimal v1.2.0
@@ -33,14 +32,14 @@ require (
 	google.golang.org/api v0.84.0
 	google.golang.org/genproto v0.0.0-20220616135557-88e70c0c3a90
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.24.3
-	k8s.io/apimachinery v0.24.3
-	k8s.io/cli-runtime v0.24.3
-	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/klog/v2 v2.60.1
-	k8s.io/kubectl v0.24.3
-	k8s.io/utils v0.0.0-20220210201930-3a6ce19ff2f9
-	sigs.k8s.io/controller-runtime v0.12.1
+	k8s.io/api v0.26.3
+	k8s.io/apimachinery v0.26.3
+	k8s.io/cli-runtime v0.26.3
+	k8s.io/client-go v0.26.3
+	k8s.io/klog/v2 v2.90.1
+	k8s.io/kubectl v0.26.3
+	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749
+	sigs.k8s.io/controller-runtime v0.13.0
 	sigs.k8s.io/yaml v1.3.0
 )
 
@@ -61,17 +60,17 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
-	github.com/chai2010/gettext-go v0.0.0-20160711120539-c6fed771bfd5 // indirect
+	github.com/chai2010/gettext-go v1.0.2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/emicklei/go-restful v2.15.0+incompatible // indirect
+	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
+	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/go-errors/errors v1.0.1 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
-	github.com/go-logr/zapr v1.2.3 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.20.0 // indirect
 	github.com/go-openapi/swag v0.21.1 // indirect
@@ -104,14 +103,14 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
-	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
+	github.com/matttproud/golang_protobuf_extensions v1.0.2 // indirect
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
 	github.com/microcosm-cc/bluemonday v1.0.19 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/moby/spdystream v0.2.0 // indirect
-	github.com/moby/term v0.0.0-20210619224110-3f7ff695adc6 // indirect
+	github.com/moby/term v0.0.0-20220808134915-39b0c02b01ae // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
@@ -122,13 +121,11 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.5 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_golang v1.12.2 // indirect
-	github.com/prometheus/client_model v0.2.0 // indirect
+	github.com/prometheus/client_golang v1.14.0 // indirect
+	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/rogpeppe/go-internal v1.6.2 // indirect
-	github.com/russross/blackfriday v1.5.2 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sergi/go-diff v1.2.0 // indirect
 	github.com/spf13/afero v1.8.2 // indirect
@@ -137,48 +134,29 @@ require (
 	github.com/stretchr/testify v1.8.1 // indirect
 	github.com/subosito/gotenv v1.4.1 // indirect
 	github.com/trivago/tgo v1.0.7 // indirect
-	github.com/xlab/treeprint v0.0.0-20181112141820-a009c3971eca // indirect
+	github.com/xlab/treeprint v1.1.0 // indirect
 	gitlab.com/c0b/go-ordered-json v0.0.0-20201030195603-febf46534d5a // indirect
 	go.opencensus.io v0.23.0 // indirect
 	go.starlark.net v0.0.0-20200306205701-8dd3e2ee1dd5 // indirect
+	go.uber.org/atomic v1.8.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
-	golang.org/x/net v0.4.0 // indirect
+	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/oauth2 v0.3.0 // indirect
-	golang.org/x/sys v0.3.0 // indirect
-	golang.org/x/term v0.3.0 // indirect
-	golang.org/x/text v0.5.0 // indirect
-	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
+	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/term v0.6.0 // indirect
+	golang.org/x/text v0.8.0 // indirect
+	golang.org/x/time v0.0.0-20220609170525-579cf78fd858 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/grpc v1.47.0 // indirect
+	google.golang.org/grpc v1.49.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/component-base v0.24.3 // indirect
-	k8s.io/kube-openapi v0.0.0-20220328201542-3ee0da9b0b42 // indirect
-	sigs.k8s.io/json v0.0.0-20211208200746-9f7c6b3444d2 // indirect
-	sigs.k8s.io/kustomize/api v0.11.4 // indirect
-	sigs.k8s.io/kustomize/kyaml v0.13.6 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
-)
-
-replace (
-	bitbucket.org/ww/goautoneg => github.com/munnerz/goautoneg v0.0.0-20190414153302-2ae31c8b6b30
-	github.com/coreos/go-systemd => github.com/coreos/go-systemd/v22 v22.0.0 // Pin non-versioned import to v22.0.0
-	github.com/metal3-io/baremetal-operator => github.com/openshift/baremetal-operator v0.0.0-20211201170610-92ffa60c683d
-	github.com/metal3-io/baremetal-operator/apis => github.com/openshift/baremetal-operator/apis v0.0.0-20211201170610-92ffa60c683d
-	github.com/metal3-io/baremetal-operator/pkg/hardwareutils => github.com/openshift/baremetal-operator/pkg/hardwareutils v0.0.0-20211201170610-92ffa60c683d
-	github.com/openshift/api v3.9.0+incompatible => github.com/openshift/api v0.0.0-20200617152309-e9562717e6cd
-	github.com/openshift/hive/apis => github.com/openshift/hive/apis v0.0.0-20220831193253-7dca200fad2f
-	github.com/terraform-providers/terraform-provider-aws => github.com/openshift/terraform-provider-aws v1.60.1-0.20200526184553-1a716dcc0fa8 // Pin to openshift fork with tag v2.60.0-openshift-1
-	github.com/terraform-providers/terraform-provider-azurerm => github.com/openshift/terraform-provider-azurerm v1.41.1-openshift-3 // Pin to openshift fork with IPv6 fixes
-	k8s.io/api => k8s.io/api v0.24.3
-	k8s.io/apimachinery => k8s.io/apimachinery v0.24.3
-	k8s.io/cli-runtime => k8s.io/cli-runtime v0.24.3
-	k8s.io/client-go => k8s.io/client-go v0.24.3
-	k8s.io/kubectl => k8s.io/kubectl v0.24.3
-	sigs.k8s.io/cluster-api-provider-aws => github.com/openshift/cluster-api-provider-aws v0.2.1-0.20200506073438-9d49428ff837 // Pin OpenShift fork
-	sigs.k8s.io/cluster-api-provider-azure => github.com/openshift/cluster-api-provider-azure v0.1.0-alpha.3.0.20200120114645-8a9592f1f87b // Pin OpenShift fork
-	sigs.k8s.io/cluster-api-provider-openstack => github.com/openshift/cluster-api-provider-openstack v0.0.0-20200526112135-319a35b2e38e // Pin OpenShift fork
+	k8s.io/component-base v0.26.3 // indirect
+	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
+	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
+	sigs.k8s.io/kustomize/api v0.12.1 // indirect
+	sigs.k8s.io/kustomize/kyaml v0.13.9 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 )
