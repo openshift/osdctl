@@ -24,10 +24,35 @@ func newCmdDeleteJumphost() *cobra.Command {
 		Short:        "Delete a jumphost created by `osdctl jumphost create`",
 		Long: `Delete a jumphost created by "osdctl jumphost create"
 
-  NOTE: Only support key pairs currently
+  This command cleans up AWS resources created by "osdctl jumphost create" if it
+  fails the customer should be notified as there will be leftover AWS resources
+  in their account. This command is idempotent and safe to run over and over.
 
-  This command cleans up AWS resources created by "osdctl jumphost create" if it fails the customer should be notified
-  as there will be leftover AWS resources in their account. This command is idempotent and safe to run over and over.`,
+  Requires these permissions:
+  {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Action": [
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:CreateKeyPair",
+          "ec2:CreateSecurityGroup",
+          "ec2:CreateTags",
+          "ec2:DeleteKeyPair",
+          "ec2:DeleteSecurityGroup",
+          "ec2:DescribeImages",
+          "ec2:DescribeInstances",
+          "ec2:DescribeKeyPairs",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeSubnets",
+          "ec2:RunInstances",
+          "ec2:TerminateInstances"
+        ],
+        "Effect": "Allow",
+        "Resource": "*"
+      }
+    ]
+  }`,
 		Example: `
   # Create and delete a jumphost
   osdctl jumphost create --subnet-id public-subnet-id

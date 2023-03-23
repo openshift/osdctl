@@ -30,14 +30,39 @@ func newCmdCreateJumphost() *cobra.Command {
 		Short:        "Create a jumphost for emergency SSH access to a cluster's VMs",
 		Long: `Create a jumphost for emergency SSH access to a cluster's VMs'
 
-  NOTE: Only support key pairs currently
+  This command automates the process of creating a jumphost in order to gain SSH
+  access to a cluster's EC2 instances and should generally only be used as a last
+  resort when the cluster's API server is otherwise inaccessible. It requires valid
+  AWS credentials to be already set and a subnet ID in the associated AWS account.
+  The provided subnet ID must be a public subnet.
 
-  This command automates the process of creating a jumphost in order to gain SSH access to a cluster's EC2 instances and
-  should generally only be used as a last resort when the cluster's API server is otherwise inaccessible. It requires
-  valid AWS credentials to be already set and a subnet ID in the associated AWS account. The provided subnet ID must
-  be a public subnet.
+  When the cluster's API server is accessible, prefer "oc debug node".
 
-  When the cluster's API server is accessible, prefer "oc debug node"`,
+  Requires these permissions:
+  {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Action": [
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:CreateKeyPair",
+          "ec2:CreateSecurityGroup",
+          "ec2:CreateTags",
+          "ec2:DeleteKeyPair",
+          "ec2:DeleteSecurityGroup",
+          "ec2:DescribeImages",
+          "ec2:DescribeInstances",
+          "ec2:DescribeKeyPairs",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeSubnets",
+          "ec2:RunInstances",
+          "ec2:TerminateInstances"
+        ],
+        "Effect": "Allow",
+        "Resource": "*"
+      }
+    ]
+  }`,
 		Example: `
   # Create and delete a jumphost
   osdctl jumphost create --subnet-id public-subnet-id
