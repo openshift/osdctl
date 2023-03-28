@@ -506,7 +506,7 @@ func (o *contextOptions) printJIRAOHSS(jiraClient *jira.Client) error {
 	jql := fmt.Sprintf(
 		`(project = "OpenShift Hosted SRE Support" AND "Cluster ID" ~ "%s") 
 		OR (project = "OpenShift Hosted SRE Support" AND "Cluster ID" ~ "%s") 
-		ORDER BY priority DESC, Status DESC`,
+		ORDER BY created DESC`,
 		o.externalClusterID,
 		o.clusterID,
 	)
@@ -523,7 +523,8 @@ func (o *contextOptions) printJIRAOHSS(jiraClient *jira.Client) error {
 	fmt.Println("============================================================")
 
 	for _, i := range issues {
-		fmt.Printf("[%s](%s/%s): %+v [Status: %s]\n", i.Key, i.Fields.Type.Name, i.Fields.Priority.Name, i.Fields.Summary, i.Fields.Status.Name)
+		fmt.Printf("[%s](%s/%s): %+v\n", i.Key, i.Fields.Type.Name, i.Fields.Priority.Name, i.Fields.Summary)
+		fmt.Printf("- Created: %s\tStatus: %s\n", time.Time(i.Fields.Created).Format("2006-01-02 15:04"), i.Fields.Status.Name)
 		fmt.Printf("- Link: https://issues.redhat.com/browse/%s\n\n", i.Key)
 	}
 
