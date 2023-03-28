@@ -2,12 +2,14 @@ package aao
 
 import (
 	"fmt"
+
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // NewCmdAao implements the base aao command
-func NewCmdAao(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
+func NewCmdAao(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
 	aaoCmd := &cobra.Command{
 		Use:               "aao",
 		Short:             "AWS Account Operator Debugging Utilities",
@@ -15,7 +17,7 @@ func NewCmdAao(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 		DisableAutoGenTag: true,
 	}
 
-	aaoCmd.AddCommand(newCmdPool(streams, flags))
+	aaoCmd.AddCommand(newCmdPool(streams, flags, client))
 
 	return aaoCmd
 }
