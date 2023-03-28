@@ -19,7 +19,7 @@ require (
 	github.com/openshift-online/ocm-cli v0.1.65-0.20220913083421-16b44c698a1f
 	github.com/openshift-online/ocm-sdk-go v0.1.300
 	github.com/openshift/api v0.0.0-20230320211411-560b2fb170af
-	github.com/openshift/aws-account-operator/api v0.0.0-20220921130557-58a04a5f1ba2
+	github.com/openshift/aws-account-operator/api v0.0.0-20230322125717-5b5a00a3e99f
 	github.com/openshift/gcp-project-operator v0.0.0-20220920194256-df38e31387a7
 	github.com/openshift/hive/apis v0.0.0-20230314202213-17cb22fc3d7c
 	github.com/openshift/osd-network-verifier v0.1.1-0.20221209180454-dfb584543d46
