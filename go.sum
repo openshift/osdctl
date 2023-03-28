@@ -702,8 +702,6 @@ github.com/openshift-online/ocm-sdk-go v0.1.300 h1:g4u6Hevaorc39nZu2zoCd6vNZ+FEU
 github.com/openshift-online/ocm-sdk-go v0.1.300/go.mod h1:KYOw8kAKAHyPrJcQoVR82CneQ4ofC02Na4cXXaTq4Nw=
 github.com/openshift/api v0.0.0-20230320211411-560b2fb170af h1:js8+NVUCTK7cz+IO6i9MnKfKU14QYSMgOiJYvqhAMM0=
 github.com/openshift/api v0.0.0-20230320211411-560b2fb170af/go.mod h1:ctXNyWanKEjGj8sss1KjjHQ3ENKFm33FFnS5BKaIPh4=
-github.com/openshift/aws-account-operator/api v0.0.0-20220921130557-58a04a5f1ba2 h1:qK7JrY2cBOKN/cDnHI6kRVHOIqMWHhkV7b3BQgldQ7A=
-github.com/openshift/aws-account-operator/api v0.0.0-20220921130557-58a04a5f1ba2/go.mod h1:1PdbQqTDrejSl9zsScM1x59f0oHNTsAgoJqTZqTkH/U=
 github.com/openshift/aws-account-operator/api v0.0.0-20230322125717-5b5a00a3e99f h1:sfv+SJc6S9r2m+c8/7N9RwzHIXQEVkXDl1odNcizwis=
 github.com/openshift/aws-account-operator/api v0.0.0-20230322125717-5b5a00a3e99f/go.mod h1:1PdbQqTDrejSl9zsScM1x59f0oHNTsAgoJqTZqTkH/U=
 github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 h1:cHyxR+Y8rAMT6m1jQCaYGRwikqahI0OjjUDhFNf3ySQ=
