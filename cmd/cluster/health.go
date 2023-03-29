@@ -7,12 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/service/ec2"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"google.golang.org/api/iterator"
 	"gopkg.in/yaml.v2"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
@@ -104,117 +102,64 @@ func (o *healthOptions) run() error {
 	totalStopped := 0
 	totalCluster := 0
 
+	var clusterHealthClient osdCloud.ClusterHealthClient
+	var ownedLabel string
+	infraID := cluster.InfraID()
 	if cluster.CloudProvider().ID() == "gcp" {
-		clusterResources, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(o.clusterID).Resources().Live().Get().Send()
+		clusterHealthClient, err = osdCloud.NewGcpCluster(ocmClient, o.clusterID)
 		if err != nil {
 			return err
 		}
-		projectClaimRaw, found := clusterResources.Body().Resources()["gcp_project_claim"]
-		if !found {
-			return fmt.Errorf("The gcp_project_claim was not found in the ocm resource")
-		}
-		projectClaim, err := osdCloud.ParseGcpProjectClaim(projectClaimRaw)
-		if err != nil {
-			log.Printf("Unmarshalling GCP projectClaim failed: %v\n", err)
-			return err
-		}
-		projectId := projectClaim.Spec.GcpProjectID
-		zones := cluster.Nodes().AvailabilityZones()
-		if projectId == "" || len(zones) == 0 {
-			return fmt.Errorf("ProjectID or Zones empty - aborting")
-		}
-		gcpClient, err := osdCloud.GenerateGCPComputeInstancesClient()
-		defer gcpClient.Close()
-		if err != nil {
-			return err
-		}
-		ownedLabel := "kubernetes-io-cluster-" + cluster.InfraID()
-		for _, zone := range zones {
-			instances := osdCloud.ListInstances(gcpClient, projectId, zone)
-			for {
-				instance, err := instances.Next()
-				if err == iterator.Done {
-					break
-				}
-				if err != nil {
-					return err
-				}
-				name := instance.GetName()
-				state := instance.GetStatus()
-				labels := instance.GetLabels()
-				belongsToCluster := false
-				for label := range labels {
-					if label == ownedLabel {
-						belongsToCluster = true
-					}
-				}
-				if !belongsToCluster {
-					log.Printf("Skipping a machine not belonging to the cluster: %s\n", name)
-					continue
-				}
-				totalCluster += 1
-				if state != "RUNNING" {
-					totalStopped += 1
-				} else {
-					if strings.HasPrefix(name, cluster.InfraID()) && strings.Contains(name, "master") {
-						runningMasters += 1
-					} else if strings.HasPrefix(name, cluster.InfraID()) && strings.Contains(name, "infra") {
-						runningInfra += 1
-					} else if strings.HasPrefix(name, cluster.InfraID()) && strings.Contains(name, "worker") {
-						runningWorkers += 1
-					}
-				}
-			}
-		}
+		ownedLabel = "kubernetes-io-cluster-" + infraID
+		defer clusterHealthClient.Close()
 	} else if cluster.CloudProvider().ID() == "aws" {
-		awsClient, err := osdCloud.GenerateAWSClientForCluster(o.awsProfile, o.clusterID)
+		clusterHealthClient, err = osdCloud.NewAwsCluster(ocmClient, o.clusterID, o.awsProfile)
 		if err != nil {
 			return err
 		}
-
-		instances, err := awsClient.DescribeInstances(&ec2.DescribeInstancesInput{})
-		if err != nil {
-			return err
-		}
-
-		//Here we count the number of customer's running worker, infra and master instances in the cluster in the given region. To decide if the instance belongs to the cluster we are checking the Name Tag on the instance.
-		for idx := range instances.Reservations {
-			for _, inst := range instances.Reservations[idx].Instances {
-				tags := inst.Tags
-				for _, t := range tags {
-					if *t.Key == "Name" {
-						if strings.HasPrefix(*t.Value, cluster.InfraID()) && strings.Contains(*t.Value, "master") {
-							totalCluster += 1
-							if *inst.State.Name == "running" {
-								runningMasters += 1
-							}
-							if *inst.State.Name == "stopped" {
-								totalStopped += 1
-							}
-
-						} else if strings.HasPrefix(*t.Value, cluster.InfraID()) && strings.Contains(*t.Value, "infra") {
-							totalCluster += 1
-							if *inst.State.Name == "running" {
-								runningInfra += 1
-							}
-							if *inst.State.Name == "stopped" {
-								totalStopped += 1
-							}
-						} else if strings.HasPrefix(*t.Value, cluster.InfraID()) && strings.Contains(*t.Value, "worker") {
-							totalCluster += 1
-							if *inst.State.Name == "running" {
-								runningWorkers += 1
-							}
-							if *inst.State.Name == "stopped" {
-								totalStopped += 1
-							}
-						}
-					}
-				}
-			}
-		}
+		ownedLabel = "kubernetes.io/cluster/" + infraID
+		defer clusterHealthClient.Close()
 	} else {
 		return errors.New(fmt.Sprintf("Unknown cloud provider found: %s", cluster.CloudProvider().ID()))
+	}
+	err = clusterHealthClient.Login()
+	if err != nil {
+		return err
+	}
+	for _, zone := range clusterHealthClient.GetAZs() {
+		instances, err := clusterHealthClient.GetAllVirtualMachines(zone)
+		if err != nil {
+			return err
+		}
+		for _, instance := range instances {
+			name := instance.Name
+			state := instance.State
+			labels := instance.Labels
+			belongsToCluster := false
+			for label := range labels {
+				if label == ownedLabel {
+					belongsToCluster = true
+				}
+			}
+			if !belongsToCluster {
+				if o.verbose {
+					log.Printf("Skipping a machine not belonging to the cluster: %s\n", name)
+				}
+				continue
+			}
+			totalCluster += 1
+			if state != "running" {
+				totalStopped += 1
+			} else {
+				if strings.HasPrefix(name, infraID) && strings.Contains(name, "master") {
+					runningMasters += 1
+				} else if strings.HasPrefix(name, infraID) && strings.Contains(name, "infra") {
+					runningInfra += 1
+				} else if strings.HasPrefix(name, infraID) && strings.Contains(name, "worker") {
+					runningWorkers += 1
+				}
+			}
+		}
 	}
 
 	healthObject.Actual.Stopped = totalStopped
