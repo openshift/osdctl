@@ -282,6 +282,18 @@ func CreateConnection() *sdk.Connection {
 }
 
 func GetSupportRoleArnForCluster(ocmClient *sdk.Connection, clusterID string) (string, error) {
+
+	clusterResponse, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(clusterID).Get().Send()
+	if err != nil {
+		return "", err
+	}
+
+	// If the cluster is Hypershift, get the ARN from the cluster response body
+	if clusterResponse.Body().Hypershift().Enabled() {
+		return clusterResponse.Body().AWS().STS().SupportRoleARN(), nil
+	}
+
+	// For non-hypershift, the ARN is in the accountclaim
 	liveResponse, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(clusterID).Resources().Live().Get().Send()
 	if err != nil {
 		return "", err
