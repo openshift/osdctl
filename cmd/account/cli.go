@@ -149,7 +149,7 @@ func (o *cliOptions) run() error {
 	}
 
 	if o.output == "json" {
-		fmt.Printf("{\n\"AccessKeyId\": %q, \n\"Expiration\": %q, \n\"SecretAccessKey\": %q, \n\"SessionToken\": %q, \n\"Region\": %s\n}",
+		fmt.Printf("{\n\"AccessKeyId\": %q, \n\"Expiration\": %q, \n\"SecretAccessKey\": %q, \n\"SessionToken\": %q, \n\"Region\": %q\n}",
 			*assumedRoleCreds.AccessKeyId,
 			*assumedRoleCreds.Expiration,
 			*assumedRoleCreds.SecretAccessKey,
