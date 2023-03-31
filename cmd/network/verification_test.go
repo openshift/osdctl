@@ -64,7 +64,7 @@ func Test_egressVerificationSetup(t *testing.T) {
 			name: "ClusterId optional",
 			e: &EgressVerification{
 				ClusterId:       "",
-				SubnetId:        "subnet-a",
+				SubnetId:        []string{"subnet-a"},
 				SecurityGroupId: "sg-b",
 			},
 			expectErr: false,
@@ -169,8 +169,10 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 				if test.expectErr {
 					t.Errorf("expected err, got none")
 				}
-				if !compareValidateEgressInput(test.expected, actual) {
-					t.Errorf("expected %v, got %v", test.expected, actual)
+				for i, _ := range actual {
+					if !compareValidateEgressInput(test.expected, actual[i]) {
+						t.Errorf("expected %v, got %v", test.expected, actual[i])
+					}
 				}
 			}
 		})
@@ -263,7 +265,7 @@ func Test_egressVerificationGetSubnetId(t *testing.T) {
 			name: "manual override",
 			e: &EgressVerification{
 				log:      newTestLogger(t),
-				SubnetId: "override",
+				SubnetId: []string{"override"},
 			},
 			expected:  "override",
 			expectErr: false,
@@ -326,11 +328,14 @@ func Test_egressVerificationGetSubnetId(t *testing.T) {
 					t.Errorf("expected no err, got %s", err)
 				}
 			} else {
-				if test.expectErr {
-					t.Errorf("expected err, got none")
-				}
-				if actual != test.expected {
-					t.Errorf("expected subnet-id %s, got %s", test.expected, actual)
+				for i, _ := range actual {
+
+					if test.expectErr {
+						t.Errorf("expected err, got none")
+					}
+					if actual[i] != test.expected {
+						t.Errorf("expected subnet-id %s, got %s", test.expected, actual[i])
+					}
 				}
 			}
 		})
