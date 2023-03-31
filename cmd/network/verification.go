@@ -95,7 +95,7 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().BoolVar(&e.NoTls, "no-tls", false, "(optional) if provided, ignore all ssl certificate validations on client-side.")
 	validateEgressCmd.Flags().StringVar(&e.Region, "region", "", "(optional) AWS region")
 	validateEgressCmd.Flags().BoolVar(&e.Debug, "debug", false, "(optional) if provided, enable additional debug-level logging")
-	validateEgressCmd.Flags().BoolVarP(&e.AllSubnets, "all-subnets", "A", false, "(optional) an option to run osd-network-verifier against all subnets listed by ocm.")
+	validateEgressCmd.Flags().BoolVarP(&e.AllSubnets, "all-subnets", "A", false, "(optional) an option for Privatelink clusters to run osd-network-verifier against all subnets listed by ocm.")
 
 	// If a cluster-id is specified, don't allow the foot-gun of overriding region
 	validateEgressCmd.MarkFlagsMutuallyExclusive("cluster-id", "region")
@@ -277,10 +277,10 @@ func (e *EgressVerification) getSubnetId(ctx context.Context) ([]string, error) 
 		e.log.Info(ctx, "using manually specified subnet-id: %s", e.SubnetId)
 		return e.SubnetId, nil
 	}
-
+	//If the --all-subnets flag is specified, and the cluster is privatelink, the network verifier will be run on all the subnets listed in ocm
 	if e.AllSubnets {
 
-		if e.cluster.AWS().SubnetIDs() != nil {
+		if e.cluster.AWS().SubnetIDs() != nil && e.cluster.AWS().PrivateLink() {
 
 			subnets := e.cluster.AWS().SubnetIDs()
 
@@ -315,15 +315,7 @@ func (e *EgressVerification) getSubnetId(ctx context.Context) ([]string, error) 
 		if len(resp.Subnets) == 0 {
 			return nil, fmt.Errorf("found 0 subnets with kubernetes.io/cluster/%s=owned and %s, consider the --subnet-id flag", e.cluster.InfraID(), e.cluster.InfraID())
 		}
-		if e.AllSubnets {
-			subnetIds := make([]string, len(resp.Subnets))
-			for i, subnet := range resp.Subnets {
-				subnetIds[i] = *subnet.SubnetId
-			}
 
-			e.log.Info(ctx, "using subnet-ids: %v", subnetIds)
-			return subnetIds, nil
-		}
 		e.log.Info(ctx, "using subnet-id: %s", *resp.Subnets[0].SubnetId)
 		return []string{*resp.Subnets[0].SubnetId}, nil
 	}
@@ -336,6 +328,7 @@ func (e *EgressVerification) getSubnetId(ctx context.Context) ([]string, error) 
 
 		e.log.Info(ctx, "detected BYOVPC PrivateLink cluster, using first subnet from OCM: %s", e.cluster.AWS().SubnetIDs()[0])
 		return []string{e.cluster.AWS().SubnetIDs()[0]}, nil
+
 	}
 
 	// For non-PrivateLink BYOVPC clusters, provided subnets are 50/50 public/private subnets, so make the user decide for now
