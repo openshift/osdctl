@@ -127,7 +127,7 @@ func (e *EgressVerification) Run(ctx context.Context) {
 		log.Fatal(err)
 	}
 
-	for i, _ := range inputs {
+	for i := range inputs {
 		e.log.Info(ctx, "running with config: %+v", inputs[i])
 		e.log.Info(ctx, "running network verifier for subnet  %+v, security group %+v", inputs[i].SubnetID, inputs[i].AWS.SecurityGroupId)
 		out := onv.ValidateEgress(c, *inputs[i])
@@ -260,7 +260,7 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 
 	//Creating a slice of input values to run in a for loop in the network-verifier
 	inputs := make([]*onv.ValidateEgressInput, len(subnetId))
-	for i, _ := range subnetId {
+	for i := range subnetId {
 		inputs[i] = input
 		inputs[i].SubnetID = subnetId[i]
 
@@ -277,7 +277,7 @@ func (e *EgressVerification) getSubnetId(ctx context.Context) ([]string, error) 
 		e.log.Info(ctx, "using manually specified subnet-id: %s", e.SubnetId)
 		return e.SubnetId, nil
 	}
-	//If the --all-subnets flag is specified, and the cluster is privatelink, the network verifier will be run on all the subnets listed in ocm
+	//If the --all-subnets flag is specified, and the cluster is Privatelink, the network verifier will be run on all the subnets listed in ocm
 	if e.AllSubnets {
 
 		if e.cluster.AWS().SubnetIDs() != nil && e.cluster.AWS().PrivateLink() {

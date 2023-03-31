@@ -169,7 +169,7 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 				if test.expectErr {
 					t.Errorf("expected err, got none")
 				}
-				for i, _ := range actual {
+				for i := range actual {
 					if !compareValidateEgressInput(test.expected, actual[i]) {
 						t.Errorf("expected %v, got %v", test.expected, actual[i])
 					}
@@ -328,7 +328,7 @@ func Test_egressVerificationGetSubnetId(t *testing.T) {
 					t.Errorf("expected no err, got %s", err)
 				}
 			} else {
-				for i, _ := range actual {
+				for i := range actual {
 
 					if test.expectErr {
 						t.Errorf("expected err, got none")
