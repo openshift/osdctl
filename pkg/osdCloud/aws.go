@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
 	awsSdk "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/aws/aws-sdk-go/service/sts"
@@ -18,6 +16,9 @@ import (
 	conversions "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	sdk "github.com/openshift-online/ocm-sdk-go"
+	bpcloud "github.com/openshift/backplane-cli/cmd/ocm-backplane/cloud"
+	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
+	bpcliutils "github.com/openshift/backplane-cli/pkg/utils"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/viper"
@@ -214,71 +215,62 @@ func CreateAWSClient(clusterID string) (aws.Client, error) {
 	return aws.NewAwsClientWithInput(input)
 }
 
-// CreateAWSV2Config creates an aws-sdk-go-v2 config via Backplane given a cluster id
-func CreateAWSV2Config(ctx context.Context, clusterID string) (awsv2.Config, error) {
-	input, err := GetAWSClientInputFromBackplane(clusterID)
+// CreateAWSV2Config creates an aws-sdk-go-v2 config via Backplane given an internal cluster id
+func CreateAWSV2Config(clusterID string) (awsv2.Config, error) {
+	bp, err := bpconfig.GetBackplaneConfiguration()
 	if err != nil {
-		return awsv2.Config{}, fmt.Errorf("failed to retrieve AWS credentials from backplane, ensure there is an active backplane tunnel: %s", err)
+		return awsv2.Config{}, fmt.Errorf("failed to load backplane-cli config: %v", err)
 	}
 
-	return config.LoadDefaultConfig(ctx,
-		config.WithCredentialsProvider(
-			awsv2.NewCredentialsCache(
-				credentials.NewStaticCredentialsProvider(
-					input.AccessKeyID,
-					input.SecretAccessKey,
-					input.SessionToken,
-				),
-			),
-		),
-		config.WithRegion(input.Region),
-	)
+	return bpcloud.GetAWSV2Config(bp.URL, clusterID)
 }
 
 // GetAWSClientInputFromBackplane sets up AWS credentials via backplane-api given a cluster id
 func GetAWSClientInputFromBackplane(clusterID string) (*aws.AwsClientInput, error) {
-	token, err := utils.GetOCMApiServerToken()
-
-	getUrl, err := utils.GetBackplaneURL(clusterID)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to retrieve backplane URL for cluster %s: %s", clusterID, err)
+	ocmToBackplane := map[string]string{
+		"https://api.openshift.com":             "https://api.backplane.openshift.com",
+		"https://api.stage.openshift.com":       "https://api.stage.backplane.openshift.com",
+		"https://api.integration.openshift.com": "https://api.integration.backplane.openshift.com",
 	}
 
-	client := http.Client{}
+	bapiUrl, ok := ocmToBackplane[utils.GetOCMApiUrl()]
+	if !ok {
+		return nil, fmt.Errorf("unable to find backplane api url for %s", utils.GetOCMApiUrl())
+	}
 
-	request, _ := http.NewRequest("GET", getUrl, nil)
+	init := bpcliutils.DefaultClientUtilsImpl{}
+	client, err := init.GetBackplaneClient(bapiUrl)
 	if err != nil {
 		return nil, err
 	}
 
-	request.Header.Set("Authorization", "Bearer "+*token)
-	request.Header.Set("User-Agent", "osdctl")
-
-	resp, err := client.Do(request)
+	resp, err := client.GetCloudCredentials(context.TODO(), clusterID)
 	if err != nil {
 		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unable to parse error from backplane: Status Code: %d", resp.StatusCode)
 	}
 
 	var cloudCredentials cloudCredentialsResponse
 	var awsCredentials awsCredentialsResponse
-	if resp.StatusCode == http.StatusOK {
-		defer resp.Body.Close()
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
-		}
+	defer resp.Body.Close()
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 
-		cloudCredentials = cloudCredentialsResponse{}
+	cloudCredentials = cloudCredentialsResponse{}
 
-		err = json.Unmarshal(bodyBytes, &cloudCredentials)
-		if err != nil {
-			return nil, fmt.Errorf("Unable to unmarshal cloud credentials: %s", err)
-		}
+	err = json.Unmarshal(bodyBytes, &cloudCredentials)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to unmarshal cloud credentials: %s", err)
+	}
 
-		err = json.Unmarshal([]byte(*cloudCredentials.Credentials), &awsCredentials)
-		if err != nil {
-			return nil, fmt.Errorf("Unable to unmarshal aws credentials: %s", err)
-		}
+	err = json.Unmarshal([]byte(*cloudCredentials.Credentials), &awsCredentials)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to unmarshal aws credentials: %s", err)
 	}
 
 	return &aws.AwsClientInput{
