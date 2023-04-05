@@ -213,61 +213,62 @@ func loadOCMConfig() (*Config, error) {
 	return cfg, nil
 }
 
+func getOcmConfiguration() (*Config, error) {
+	tokenEnv := os.Getenv("OCM_TOKEN")
+	urlEnv := os.Getenv("OCM_URL")
+	refreshTokenEnv := os.Getenv("OCM_REFRESH_TOKEN") // Unlikely to be set, but check anyway
+
+	config := &Config{}
+	var err error
+
+	// If neither of the token ENVS 'OCM_TOKEN', 'OCM_REFRESH_TOKEN' are set, or 'OCM_URL' is not set,
+	// use the configuration file as base.
+	// We don't want to always load this, because the user might only use environment variables.
+	if (tokenEnv == "" && refreshTokenEnv == "") || urlEnv == "" {
+		config, err = loadOCMConfig()
+		if err != nil {
+			return &Config{}, fmt.Errorf("Could not load OCM configuration file")
+		}
+	}
+
+	// Overwrite with set environment variables, to allow users to overwrite
+	// their configuration file's variables
+	if tokenEnv != "" {
+		config.AccessToken = tokenEnv
+	}
+	if urlEnv != "" {
+		config.URL = urlEnv
+	}
+	if refreshTokenEnv != "" {
+		config.RefreshToken = refreshTokenEnv
+	}
+
+	return config, nil
+}
+
 func CreateConnection() *sdk.Connection {
-	token := os.Getenv("OCM_TOKEN")
-	url := os.Getenv("OCM_URL")
-
-	// Unlikely to be set, but check anyway
-	refresh_token := os.Getenv("OCM_REFRESH_TOKEN")
-
-	ocmConfigError := "Unable to load OCM config\nLogin with 'ocm login' or set OCM_TOKEN and OCM_URL environment variables"
-	ocmInvalidURLError := "Invalid OCM_URL found: %s\nValid URL aliases are: 'production', 'staging', 'integration'"
+	ocmConfigError := "Unable to load OCM config\nLogin with 'ocm login' or set OCM_TOKEN, OCM_URL and OCM_REFRESH_TOKEN environment variables"
 
 	connectionBuilder := sdk.NewConnectionBuilder()
 
-	config := &Config{}
-	err := error(nil)
-
-	if token == "" || url == "" {
-		// If either token or url are not set, try to load them from the config file
-		config, err = loadOCMConfig()
-		if err != nil {
-			log.Fatal(ocmConfigError)
-			return nil
-		}
+	config, err := getOcmConfiguration()
+	if err != nil {
+		log.Fatal(ocmConfigError)
 	}
 
-	if token == "" {
-		token = config.AccessToken
-		refresh_token = config.RefreshToken
+	connectionBuilder.Tokens(config.AccessToken, config.RefreshToken)
 
-		// Can't both be nil
-		if token == "" && refresh_token == "" {
-			log.Fatal(ocmConfigError)
-			return nil
-		}
+	if config.URL == "" {
+		log.Fatal(ocmConfigError)
+		return nil
 	}
 
-	connectionBuilder.Tokens(token, refresh_token)
-
-	if url == "" {
-		url = config.URL
-		if url == "" {
-			log.Fatal(ocmConfigError)
-			return nil
-		}
+	// Parse the URL in case it is an alias
+	gatewayURL, ok := urlAliases[config.URL]
+	if !ok {
+		log.Fatalf("Invalid OCM_URL found: %s\nValid URL aliases are: 'production', 'staging', 'integration'", config.URL)
 	}
-
-	// Parse the possible URLs
-	if url != "" {
-		gatewayURL, ok := urlAliases[url]
-		if !ok {
-			log.Fatalf(ocmInvalidURLError, url)
-		}
-		connectionBuilder.URL(gatewayURL)
-	} else {
-		log.Fatalf(ocmInvalidURLError, "\"\"")
-	}
+	connectionBuilder.URL(gatewayURL)
 
 	connection, err := connectionBuilder.Build()
 
