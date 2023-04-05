@@ -221,10 +221,10 @@ func getOcmConfiguration() (*Config, error) {
 	config := &Config{}
 	var err error
 
-	// If any of the environment variables 'OCM_TOKEN', 'OCM_REFRESH_TOKEN', 'OCM_URL' are not set,
+	// If neither of the token ENVS 'OCM_TOKEN', 'OCM_REFRESH_TOKEN' are set, or 'OCM_URL' is not set,
 	// use the configuration file as base.
 	// We don't want to always load this, because the user might only use environment variables.
-	if tokenEnv == "" || urlEnv == "" || refreshTokenEnv == "" {
+	if (tokenEnv == "" && refreshTokenEnv == "") || urlEnv == "" {
 		config, err = loadOCMConfig()
 		if err != nil {
 			return &Config{}, fmt.Errorf("Could not load OCM configuration file")
