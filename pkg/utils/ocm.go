@@ -214,63 +214,51 @@ func loadOCMConfig() (*Config, error) {
 }
 
 func CreateConnection() *sdk.Connection {
-	token := os.Getenv("OCM_TOKEN")
-	url := os.Getenv("OCM_URL")
+	const ocmConfigError = "Unable to load OCM config\nLogin with 'ocm login' or set OCM_TOKEN and OCM_URL environment variables"
+	const ocmInvalidURLError = "Invalid OCM_URL found: %s\nValid URL aliases are: 'production', 'staging', 'integration'"
 
-	// Unlikely to be set, but check anyway
-	refresh_token := os.Getenv("OCM_REFRESH_TOKEN")
+	var (
+		ok           bool
+		refreshToken string
+		token        string
+		urlAlias     string
+		url          string
+	)
 
-	ocmConfigError := "Unable to load OCM config\nLogin with 'ocm login' or set OCM_TOKEN and OCM_URL environment variables"
-	ocmInvalidURLError := "Invalid OCM_URL found: %s\nValid URL aliases are: 'production', 'staging', 'integration'"
-
-	connectionBuilder := sdk.NewConnectionBuilder()
-
-	config := &Config{}
-	err := error(nil)
-
-	if token == "" || url == "" {
-		// If either token or url are not set, try to load them from the config file
-		config, err = loadOCMConfig()
-		if err != nil {
+	config, err := loadOCMConfig()
+	if err != nil {
+		// If we fail loading the config, try to get the values from environment variables
+		if token, ok = os.LookupEnv("OCM_TOKEN"); !ok {
 			log.Fatal(ocmConfigError)
-			return nil
 		}
+
+		if urlAlias, ok = os.LookupEnv("OCM_URL"); !ok {
+			log.Fatal(ocmConfigError)
+		}
+
+		// This is unlikely to be set and not required
+		refreshToken = os.Getenv("OCM_REFRESH_TOKEN")
 	}
 
+	// Set values from the ocm config file if they aren't already set
 	if token == "" {
 		token = config.AccessToken
-		refresh_token = config.RefreshToken
-
-		// Can't both be nil
-		if token == "" && refresh_token == "" {
-			log.Fatal(ocmConfigError)
-			return nil
-		}
 	}
 
-	connectionBuilder.Tokens(token, refresh_token)
+	if refreshToken == "" {
+		refreshToken = config.RefreshToken
+	}
 
-	if url == "" {
+	if urlAlias == "" {
 		url = config.URL
-		if url == "" {
-			log.Fatal(ocmConfigError)
-			return nil
-		}
-	}
-
-	// Parse the possible URLs
-	if url != "" {
-		gatewayURL, ok := urlAliases[url]
+	} else {
+		url, ok := urlAliases[urlAlias]
 		if !ok {
 			log.Fatalf(ocmInvalidURLError, url)
 		}
-		connectionBuilder.URL(gatewayURL)
-	} else {
-		log.Fatalf(ocmInvalidURLError, "\"\"")
 	}
 
-	connection, err := connectionBuilder.Build()
-
+	conn, err := sdk.NewConnectionBuilder().Tokens(token, refreshToken).URL(url).Build()
 	if err != nil {
 		if strings.Contains(err.Error(), "Not logged in, run the") {
 			log.Fatal(ocmConfigError)
@@ -278,7 +266,7 @@ func CreateConnection() *sdk.Connection {
 		log.Fatalf("Failed to create OCM connection: %v", err)
 	}
 
-	return connection
+	return conn
 }
 
 func GetSupportRoleArnForCluster(ocmClient *sdk.Connection, clusterID string) (string, error) {
