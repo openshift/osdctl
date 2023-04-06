@@ -23,6 +23,7 @@ Provides information for a specified cluster
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
+  -S, --skip-version-check               skip checking to see if this is the most recent release
       --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
   -v, --v Level                          log level for V logs
       --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging
@@ -32,6 +33,7 @@ Provides information for a specified cluster
 
 * [osdctl](osdctl.md)	 - OSD CLI
 * [osdctl cluster break-glass](osdctl_cluster_break-glass.md)	 - Emergency access to a cluster
+* [osdctl cluster check-banned-user](osdctl_cluster_check-banned-user.md)	 - Checks if the cluster owner is a banned user.
 * [osdctl cluster context](osdctl_cluster_context.md)	 - Shows the context of a specified cluster
 * [osdctl cluster cpd](osdctl_cluster_cpd.md)	 - Runs diagnostic for a Cluster Provisioning Delay (CPD)
 * [osdctl cluster health](osdctl_cluster_health.md)	 - Describes health of cluster nodes and provides other cluster vitals.
@@ -40,4 +42,5 @@ Provides information for a specified cluster
 * [osdctl cluster resize-control-plane-node](osdctl_cluster_resize-control-plane-node.md)	 - Resize a control plane node. Requires previous login to the api server via `ocm login` and being tunneled to the backplane.
 * [osdctl cluster support](osdctl_cluster_support.md)	 - Cluster Support
 * [osdctl cluster transfer-owner](osdctl_cluster_transfer-owner.md)	 - Transfer cluster ownership to a new user (to be done by Region Lead)
+* [osdctl cluster validate-pull-secret](osdctl_cluster_validate-pull-secret.md)	 - Checks if the pull secret email matches the owner email
 

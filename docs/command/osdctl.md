@@ -22,6 +22,7 @@ CLI tool to provide OSD related utilities
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
+  -S, --skip-version-check               skip checking to see if this is the most recent release
       --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
   -v, --v Level                          log level for V logs
       --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging
@@ -31,15 +32,16 @@ CLI tool to provide OSD related utilities
 
 * [osdctl aao](osdctl_aao.md)	 - AWS Account Operator Debugging Utilities
 * [osdctl account](osdctl_account.md)	 - AWS Account related utilities
-* [osdctl capability](osdctl_capability.md)	 - Manage capabilites for OCM Organizations
 * [osdctl cluster](osdctl_cluster.md)	 - Provides information for a specified cluster
 * [osdctl clusterdeployment](osdctl_clusterdeployment.md)	 - cluster deployment related utilities
 * [osdctl completion](osdctl_completion.md)	 - Output shell completion code for the specified shell (bash or zsh)
 * [osdctl cost](osdctl_cost.md)	 - Cost Management related utilities
 * [osdctl env](osdctl_env.md)	 - Create an environment to interact with a cluster
 * [osdctl federatedrole](osdctl_federatedrole.md)	 - federated role related commands
+* [osdctl jumphost](osdctl_jumphost.md)	 - 
 * [osdctl network](osdctl_network.md)	 - network related utilities
 * [osdctl options](osdctl_options.md)	 - Print the list of flags inherited by all commands
+* [osdctl org](osdctl_org.md)	 - Provides information for a specified organization
 * [osdctl servicelog](osdctl_servicelog.md)	 - OCM/Hive Service log
 * [osdctl sts](osdctl_sts.md)	 - STS related utilities
 * [osdctl upgrade](osdctl_upgrade.md)	 - Upgrade osdctl

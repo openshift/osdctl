@@ -1,27 +1,59 @@
-## osdctl account generate-secret
+## osdctl jumphost delete
 
-Generates IAM credentials secret
+Delete a jumphost created by `osdctl jumphost create`
 
 ### Synopsis
 
-When logged into a hive shard, this generates a new IAM credential secret for a given IAM user
+Delete a jumphost created by "osdctl jumphost create"
+
+  This command cleans up AWS resources created by "osdctl jumphost create" if it
+  fails the customer should be notified as there will be leftover AWS resources
+  in their account. This command is idempotent and safe to run over and over.
+
+  Requires these permissions:
+  {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Action": [
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:CreateKeyPair",
+          "ec2:CreateSecurityGroup",
+          "ec2:CreateTags",
+          "ec2:DeleteKeyPair",
+          "ec2:DeleteSecurityGroup",
+          "ec2:DescribeImages",
+          "ec2:DescribeInstances",
+          "ec2:DescribeKeyPairs",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeSubnets",
+          "ec2:RunInstances",
+          "ec2:TerminateInstances"
+        ],
+        "Effect": "Allow",
+        "Resource": "*"
+      }
+    ]
+  }
 
 ```
-osdctl account generate-secret <IAM User name> [flags]
+osdctl jumphost delete [flags]
+```
+
+### Examples
+
+```
+
+  # Create and delete a jumphost
+  osdctl jumphost create --subnet-id public-subnet-id
+  osdctl jumphost delete --subnet-id public-subnet-id
 ```
 
 ### Options
 
 ```
-  -i, --account-id string          AWS Account ID
-  -a, --account-name string        AWS Account CR name
-      --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
-  -p, --aws-profile string         specify AWS profile
-      --ccs                        Only generate specific secret for osdCcsAdmin. Requires Account CR name
-  -h, --help                       help for generate-secret
-      --quiet                      Suppress logged output
-      --secret-name string         Specify name of the generated secret
-      --secret-namespace string    Specify namespace of the generated secret (default "aws-account-operator")
+  -h, --help               help for delete
+      --subnet-id string   subnet id to search for and delete a jumphost in
 ```
 
 ### Options inherited from parent commands
@@ -47,5 +79,5 @@ osdctl account generate-secret <IAM User name> [flags]
 
 ### SEE ALSO
 
-* [osdctl account](osdctl_account.md)	 - AWS Account related utilities
+* [osdctl jumphost](osdctl_jumphost.md)	 - 
 

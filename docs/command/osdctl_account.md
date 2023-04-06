@@ -23,6 +23,7 @@ AWS Account related utilities
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
+  -S, --skip-version-check               skip checking to see if this is the most recent release
       --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
   -v, --v Level                          log level for V logs
       --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging
@@ -34,7 +35,7 @@ AWS Account related utilities
 * [osdctl account clean-velero-snapshots](osdctl_account_clean-velero-snapshots.md)	 - Cleans up S3 buckets whose name start with managed-velero
 * [osdctl account cli](osdctl_account_cli.md)	 - Generate temporary AWS CLI credentials on demand
 * [osdctl account console](osdctl_account_console.md)	 - Generate an AWS console URL on the fly
-* [osdctl account generate-secret](osdctl_account_generate-secret.md)	 - Generate IAM credentials secret
+* [osdctl account generate-secret](osdctl_account_generate-secret.md)	 - Generates IAM credentials secret
 * [osdctl account get](osdctl_account_get.md)	 - Get resources
 * [osdctl account list](osdctl_account_list.md)	 - List resources
 * [osdctl account mgmt](osdctl_account_mgmt.md)	 - AWS Account Management
