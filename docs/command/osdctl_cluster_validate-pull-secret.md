@@ -1,27 +1,21 @@
-## osdctl account generate-secret
+## osdctl cluster validate-pull-secret
 
-Generates IAM credentials secret
+Checks if the pull secret email matches the owner email
 
 ### Synopsis
 
-When logged into a hive shard, this generates a new IAM credential secret for a given IAM user
+Checks if the pull secret email matches the owner email.
+
+The owner's email to check will be determined by the cluster identifier passed to the command, while the pull secret checked will be determined by the cluster that the caller is currently logged in to.
 
 ```
-osdctl account generate-secret <IAM User name> [flags]
+osdctl cluster validate-pull-secret [CLUSTER_ID] [flags]
 ```
 
 ### Options
 
 ```
-  -i, --account-id string          AWS Account ID
-  -a, --account-name string        AWS Account CR name
-      --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
-  -p, --aws-profile string         specify AWS profile
-      --ccs                        Only generate specific secret for osdCcsAdmin. Requires Account CR name
-  -h, --help                       help for generate-secret
-      --quiet                      Suppress logged output
-      --secret-name string         Specify name of the generated secret
-      --secret-namespace string    Specify namespace of the generated secret (default "aws-account-operator")
+  -h, --help   help for validate-pull-secret
 ```
 
 ### Options inherited from parent commands
@@ -47,5 +41,5 @@ osdctl account generate-secret <IAM User name> [flags]
 
 ### SEE ALSO
 
-* [osdctl account](osdctl_account.md)	 - AWS Account related utilities
+* [osdctl cluster](osdctl_cluster.md)	 - Provides information for a specified cluster
 

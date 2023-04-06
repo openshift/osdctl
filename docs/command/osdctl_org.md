@@ -1,27 +1,15 @@
-## osdctl account generate-secret
+## osdctl org
 
-Generates IAM credentials secret
-
-### Synopsis
-
-When logged into a hive shard, this generates a new IAM credential secret for a given IAM user
+Provides information for a specified organization
 
 ```
-osdctl account generate-secret <IAM User name> [flags]
+osdctl org [flags]
 ```
 
 ### Options
 
 ```
-  -i, --account-id string          AWS Account ID
-  -a, --account-name string        AWS Account CR name
-      --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
-  -p, --aws-profile string         specify AWS profile
-      --ccs                        Only generate specific secret for osdCcsAdmin. Requires Account CR name
-  -h, --help                       help for generate-secret
-      --quiet                      Suppress logged output
-      --secret-name string         Specify name of the generated secret
-      --secret-namespace string    Specify namespace of the generated secret (default "aws-account-operator")
+  -h, --help   help for org
 ```
 
 ### Options inherited from parent commands
@@ -47,5 +35,13 @@ osdctl account generate-secret <IAM User name> [flags]
 
 ### SEE ALSO
 
-* [osdctl account](osdctl_account.md)	 - AWS Account related utilities
+* [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl org aws-accounts](osdctl_org_aws-accounts.md)	 - get organization AWS Accounts
+* [osdctl org clusters](osdctl_org_clusters.md)	 - get organization clusters
+* [osdctl org current](osdctl_org_current.md)	 - gets current organization
+* [osdctl org customers](osdctl_org_customers.md)	 - get paying/non-paying organizations
+* [osdctl org describe](osdctl_org_describe.md)	 - describe organization
+* [osdctl org get](osdctl_org_get.md)	 - get organization by users
+* [osdctl org labels](osdctl_org_labels.md)	 - get organization labels
+* [osdctl org users](osdctl_org_users.md)	 - get organization users
 

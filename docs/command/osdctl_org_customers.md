@@ -1,27 +1,17 @@
-## osdctl account generate-secret
+## osdctl org customers
 
-Generates IAM credentials secret
-
-### Synopsis
-
-When logged into a hive shard, this generates a new IAM credential secret for a given IAM user
+get paying/non-paying organizations
 
 ```
-osdctl account generate-secret <IAM User name> [flags]
+osdctl org customers [flags]
 ```
 
 ### Options
 
 ```
-  -i, --account-id string          AWS Account ID
-  -a, --account-name string        AWS Account CR name
-      --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
-  -p, --aws-profile string         specify AWS profile
-      --ccs                        Only generate specific secret for osdCcsAdmin. Requires Account CR name
-  -h, --help                       help for generate-secret
-      --quiet                      Suppress logged output
-      --secret-name string         Specify name of the generated secret
-      --secret-namespace string    Specify namespace of the generated secret (default "aws-account-operator")
+  -h, --help            help for customers
+  -o, --output string   valid output formats are ['', 'json']
+      --paying          get organization based on paying status (default true)
 ```
 
 ### Options inherited from parent commands
@@ -36,7 +26,6 @@ osdctl account generate-secret <IAM User name> [flags]
       --log_backtrace_at traceLocation   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                   If non-empty, write log files in this directory
       --logtostderr                      log to standard error instead of files
-  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
   -S, --skip-version-check               skip checking to see if this is the most recent release
@@ -47,5 +36,5 @@ osdctl account generate-secret <IAM User name> [flags]
 
 ### SEE ALSO
 
-* [osdctl account](osdctl_account.md)	 - AWS Account related utilities
+* [osdctl org](osdctl_org.md)	 - Provides information for a specified organization
 

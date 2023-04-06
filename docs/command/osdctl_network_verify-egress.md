@@ -43,7 +43,7 @@ osdctl network verify-egress [flags]
 ### Options
 
 ```
-      --cacert string           (optional) path to cacert file to be used with https requests being made by verifier
+      --cacert string           (optional) path to a file containing the additional CA trust bundle. Typically set so that the verifier can use a configured cluster-wide proxy.
       --cluster-id string       (optional) OCM internal/external cluster id to run osd-network-verifier against.
       --debug                   (optional) if provided, enable additional debug-level logging
   -h, --help                    help for verify-egress
@@ -68,6 +68,7 @@ osdctl network verify-egress [flags]
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
+  -S, --skip-version-check               skip checking to see if this is the most recent release
       --stderrthreshold severity         logs at or above this threshold go to stderr (default 2)
   -v, --v Level                          log level for V logs
       --vmodule moduleSpec               comma-separated list of pattern=N settings for file-filtered logging

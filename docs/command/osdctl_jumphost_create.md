@@ -1,27 +1,63 @@
-## osdctl account generate-secret
+## osdctl jumphost create
 
-Generates IAM credentials secret
+Create a jumphost for emergency SSH access to a cluster's VMs
 
 ### Synopsis
 
-When logged into a hive shard, this generates a new IAM credential secret for a given IAM user
+Create a jumphost for emergency SSH access to a cluster's VMs'
+
+  This command automates the process of creating a jumphost in order to gain SSH
+  access to a cluster's EC2 instances and should generally only be used as a last
+  resort when the cluster's API server is otherwise inaccessible. It requires valid
+  AWS credentials to be already set and a subnet ID in the associated AWS account.
+  The provided subnet ID must be a public subnet.
+
+  When the cluster's API server is accessible, prefer "oc debug node".
+
+  Requires these permissions:
+  {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Action": [
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:CreateKeyPair",
+          "ec2:CreateSecurityGroup",
+          "ec2:CreateTags",
+          "ec2:DeleteKeyPair",
+          "ec2:DeleteSecurityGroup",
+          "ec2:DescribeImages",
+          "ec2:DescribeInstances",
+          "ec2:DescribeKeyPairs",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeSubnets",
+          "ec2:RunInstances",
+          "ec2:TerminateInstances"
+        ],
+        "Effect": "Allow",
+        "Resource": "*"
+      }
+    ]
+  }
 
 ```
-osdctl account generate-secret <IAM User name> [flags]
+osdctl jumphost create [flags]
+```
+
+### Examples
+
+```
+
+  # Create and delete a jumphost
+  osdctl jumphost create --subnet-id public-subnet-id
+  osdctl jumphost delete --subnet-id public-subnet-id
 ```
 
 ### Options
 
 ```
-  -i, --account-id string          AWS Account ID
-  -a, --account-name string        AWS Account CR name
-      --account-namespace string   The namespace to keep AWS accounts. The default value is aws-account-operator. (default "aws-account-operator")
-  -p, --aws-profile string         specify AWS profile
-      --ccs                        Only generate specific secret for osdCcsAdmin. Requires Account CR name
-  -h, --help                       help for generate-secret
-      --quiet                      Suppress logged output
-      --secret-name string         Specify name of the generated secret
-      --secret-namespace string    Specify namespace of the generated secret (default "aws-account-operator")
+  -h, --help               help for create
+      --subnet-id string   public subnet id to create a jumphost in
 ```
 
 ### Options inherited from parent commands
@@ -47,5 +83,5 @@ osdctl account generate-secret <IAM User name> [flags]
 
 ### SEE ALSO
 
-* [osdctl account](osdctl_account.md)	 - AWS Account related utilities
+* [osdctl jumphost](osdctl_jumphost.md)	 - 
 
