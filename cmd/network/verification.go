@@ -277,21 +277,6 @@ func (e *EgressVerification) getSubnetId(ctx context.Context) ([]string, error) 
 		e.log.Info(ctx, "using manually specified subnet-id: %s", e.SubnetId)
 		return e.SubnetId, nil
 	}
-	//If the --all-subnets flag is specified, and the cluster is Privatelink, the network verifier will be run on all the subnets listed in ocm
-	if e.AllSubnets {
-
-		if e.cluster.AWS().SubnetIDs() != nil && e.cluster.AWS().PrivateLink() {
-
-			subnets := e.cluster.AWS().SubnetIDs()
-
-			e.log.Debug(ctx, "Found the following subnets listed with ocm: %v", subnets)
-
-			//add an error to handle
-			e.log.Debug(ctx, "Assigned value to var e.SubnetId: %v", subnets)
-			return subnets, nil
-		}
-
-	}
 
 	// If this is a non-BYOVPC cluster, we can find the private subnets based on the cluster and internal-elb tag
 	if len(e.cluster.AWS().SubnetIDs()) == 0 {
@@ -315,15 +300,34 @@ func (e *EgressVerification) getSubnetId(ctx context.Context) ([]string, error) 
 		if len(resp.Subnets) == 0 {
 			return nil, fmt.Errorf("found 0 subnets with kubernetes.io/cluster/%s=owned and %s, consider the --subnet-id flag", e.cluster.InfraID(), e.cluster.InfraID())
 		}
-
-		e.log.Info(ctx, "using subnet-id: %s", *resp.Subnets[0].SubnetId)
-		return []string{*resp.Subnets[0].SubnetId}, nil
+		if e.AllSubnets {
+			subnets := make([]string, len(resp.Subnets))
+			for i := range resp.Subnets {
+				subnets[i] = *resp.Subnets[i].SubnetId
+			}
+			return subnets, nil
+		} else {
+			e.log.Info(ctx, "using subnet-id: %s", *resp.Subnets[0].SubnetId)
+			return []string{*resp.Subnets[0].SubnetId}, nil
+		}
 	}
 
 	// For PrivateLink clusters, any provided subnet is considered a private subnet
 	if e.cluster.AWS().PrivateLink() {
 		if len(e.cluster.AWS().SubnetIDs()) == 0 {
 			return nil, fmt.Errorf("unexpected error: %s is a PrivateLink cluster, but no subnets in OCM", e.cluster.InfraID())
+		}
+		// If the all-subnets flag is on, the network verifier will iterate over all subnets listed by ocm
+		if e.AllSubnets {
+
+			subnets := e.cluster.AWS().SubnetIDs()
+
+			e.log.Debug(ctx, "Found the following subnets listed with ocm: %v", subnets)
+
+			//add an error to handle
+			e.log.Debug(ctx, "Assigned value to var e.SubnetId: %v", subnets)
+			return subnets, nil
+
 		}
 
 		e.log.Info(ctx, "detected BYOVPC PrivateLink cluster, using first subnet from OCM: %s", e.cluster.AWS().SubnetIDs()[0])

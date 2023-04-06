@@ -435,7 +435,7 @@ func Test_egressVerificationGetSubnetIdAllSubnetsFlag(t *testing.T) {
 			expectErr: false,
 		},
 		{
-			name: "non-BYOVPC clusters get subnets from AWS, with --all-subnets flag",
+			name: "non-BYOVPC clusters get subnets from AWS",
 			e: &EgressVerification{
 				awsClient: mockEgressVerificationAWSClient{
 					describeSubnetsResp: &ec2.DescribeSubnetsOutput{
@@ -451,6 +451,31 @@ func Test_egressVerificationGetSubnetIdAllSubnetsFlag(t *testing.T) {
 				AllSubnets: true,
 			},
 			expected:  []string{"subnet-abcd"},
+			expectErr: false,
+		},
+		{
+			name: "non-BYOVPC clusters get subnets from AWS, all-subnets flag enabled",
+			e: &EgressVerification{
+				awsClient: mockEgressVerificationAWSClient{
+					describeSubnetsResp: &ec2.DescribeSubnetsOutput{
+						Subnets: []types.Subnet{
+							{
+								SubnetId: aws.String("subnet-abcd"),
+							},
+							{
+								SubnetId: aws.String("subnet-1234"),
+							},
+							{
+								SubnetId: aws.String("subnet-1267"),
+							},
+						},
+					},
+				},
+				cluster:    newTestCluster(t, cmv1.NewCluster()),
+				log:        newTestLogger(t),
+				AllSubnets: true,
+			},
+			expected:  []string{"subnet-abcd", "subnet-1234", "subnet-1267"},
 			expectErr: false,
 		},
 	}
