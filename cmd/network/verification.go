@@ -126,9 +126,10 @@ func (e *EgressVerification) Run(ctx context.Context) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	e.log.Info(ctx, "Preparing to check %+v subnet(s) with network verifier.", len(inputs))
 
 	for i := range inputs {
-		e.log.Info(ctx, "running with config: %+v", inputs[i])
+
 		e.log.Info(ctx, "running network verifier for subnet  %+v, security group %+v", inputs[i].SubnetID, inputs[i].AWS.SecurityGroupId)
 		out := onv.ValidateEgress(c, *inputs[i])
 		out.Summary(e.Debug)
@@ -261,11 +262,13 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 	//Creating a slice of input values to run in a for loop in the network-verifier
 	inputs := make([]*onv.ValidateEgressInput, len(subnetId))
 	for i := range subnetId {
-		inputs[i] = input
+		//Copying a pointer to avoid overwriting it
+		var myinput = &onv.ValidateEgressInput{}
+		*myinput = *input
+		inputs[i] = myinput
 		inputs[i].SubnetID = subnetId[i]
 
 	}
-
 	return inputs, nil
 }
 
@@ -302,7 +305,9 @@ func (e *EgressVerification) getSubnetId(ctx context.Context) ([]string, error) 
 		}
 		if e.AllSubnets {
 			subnets := make([]string, len(resp.Subnets))
+			e.log.Debug(ctx, "Found %v subnets.", len(resp.Subnets))
 			for i := range resp.Subnets {
+				e.log.Debug(ctx, "Found subnet: %v", *resp.Subnets[i].SubnetId)
 				subnets[i] = *resp.Subnets[i].SubnetId
 			}
 			return subnets, nil
@@ -323,8 +328,6 @@ func (e *EgressVerification) getSubnetId(ctx context.Context) ([]string, error) 
 			subnets := e.cluster.AWS().SubnetIDs()
 
 			e.log.Debug(ctx, "Found the following subnets listed with ocm: %v", subnets)
-
-			//add an error to handle
 			e.log.Debug(ctx, "Assigned value to var e.SubnetId: %v", subnets)
 			return subnets, nil
 
