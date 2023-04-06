@@ -64,7 +64,7 @@ func Test_egressVerificationSetup(t *testing.T) {
 			name: "ClusterId optional",
 			e: &EgressVerification{
 				ClusterId:       "",
-				SubnetId:        "subnet-a",
+				SubnetId:        []string{"subnet-a", "subnet-b", "subnet-c"},
 				SecurityGroupId: "sg-b",
 			},
 			expectErr: false,
@@ -169,8 +169,10 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 				if test.expectErr {
 					t.Errorf("expected err, got none")
 				}
-				if !compareValidateEgressInput(test.expected, actual) {
-					t.Errorf("expected %v, got %v", test.expected, actual)
+				for i := range actual {
+					if !compareValidateEgressInput(test.expected, actual[i]) {
+						t.Errorf("expected %v, got %v", test.expected, actual[i])
+					}
 				}
 			}
 		})
@@ -263,7 +265,7 @@ func Test_egressVerificationGetSubnetId(t *testing.T) {
 			name: "manual override",
 			e: &EgressVerification{
 				log:      newTestLogger(t),
-				SubnetId: "override",
+				SubnetId: []string{"override"},
 			},
 			expected:  "override",
 			expectErr: false,
@@ -326,11 +328,14 @@ func Test_egressVerificationGetSubnetId(t *testing.T) {
 					t.Errorf("expected no err, got %s", err)
 				}
 			} else {
-				if test.expectErr {
-					t.Errorf("expected err, got none")
-				}
-				if actual != test.expected {
-					t.Errorf("expected subnet-id %s, got %s", test.expected, actual)
+				for i := range actual {
+
+					if test.expectErr {
+						t.Errorf("expected err, got none")
+					}
+					if actual[i] != test.expected {
+						t.Errorf("expected subnet-id %s, got %s", test.expected, actual[i])
+					}
 				}
 			}
 		})
@@ -389,4 +394,110 @@ func compareValidateEgressInput(expected, actual *onv.ValidateEgressInput) bool 
 	}
 
 	return true
+}
+
+// Testing multiple subnets
+
+func Test_egressVerificationGetSubnetIdAllSubnetsFlag(t *testing.T) {
+	tests := []struct {
+		name      string
+		e         *EgressVerification
+		expected  []string
+		expectErr bool
+	}{
+		{
+			name: "all subnets flag is on",
+			e: &EgressVerification{
+				log:        newTestLogger(t),
+				SubnetId:   []string{"string-1", "string-2", "string-3"},
+				AllSubnets: true,
+			},
+			expected:  []string{"string-1", "string-2", "string-3"},
+			expectErr: false,
+		},
+		{
+			name: "non-PrivateLink + BYOVPC unsupported, with --all-subnets flag",
+			e: &EgressVerification{
+				cluster:    newTestCluster(t, cmv1.NewCluster().AWS(cmv1.NewAWS().PrivateLink(false).SubnetIDs("subnet-1", "subnet-2", "subnet-3"))),
+				log:        newTestLogger(t),
+				AllSubnets: true,
+			},
+			expectErr: true,
+		},
+		{
+			name: "PrivateLink + BYOVPC with --all-subnets flag",
+			e: &EgressVerification{
+				cluster:    newTestCluster(t, cmv1.NewCluster().AWS(cmv1.NewAWS().PrivateLink(true).SubnetIDs("subnet-abcd", "subnet-1", "subnet-2", "subnet-3"))),
+				log:        newTestLogger(t),
+				AllSubnets: true,
+			},
+			expected:  []string{"subnet-abcd", "subnet-1", "subnet-2", "subnet-3"},
+			expectErr: false,
+		},
+		{
+			name: "non-BYOVPC clusters get subnets from AWS",
+			e: &EgressVerification{
+				awsClient: mockEgressVerificationAWSClient{
+					describeSubnetsResp: &ec2.DescribeSubnetsOutput{
+						Subnets: []types.Subnet{
+							{
+								SubnetId: aws.String("subnet-abcd"),
+							},
+						},
+					},
+				},
+				cluster:    newTestCluster(t, cmv1.NewCluster()),
+				log:        newTestLogger(t),
+				AllSubnets: true,
+			},
+			expected:  []string{"subnet-abcd"},
+			expectErr: false,
+		},
+		{
+			name: "non-BYOVPC clusters get subnets from AWS, all-subnets flag enabled",
+			e: &EgressVerification{
+				awsClient: mockEgressVerificationAWSClient{
+					describeSubnetsResp: &ec2.DescribeSubnetsOutput{
+						Subnets: []types.Subnet{
+							{
+								SubnetId: aws.String("subnet-abcd"),
+							},
+							{
+								SubnetId: aws.String("subnet-1234"),
+							},
+							{
+								SubnetId: aws.String("subnet-1267"),
+							},
+						},
+					},
+				},
+				cluster:    newTestCluster(t, cmv1.NewCluster()),
+				log:        newTestLogger(t),
+				AllSubnets: true,
+			},
+			expected:  []string{"subnet-abcd", "subnet-1234", "subnet-1267"},
+			expectErr: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual, err := test.e.getSubnetId(context.TODO())
+			if err != nil {
+				if !test.expectErr {
+					t.Errorf("expected no err, got %s", err)
+				}
+			} else {
+				for i := range actual {
+
+					if test.expectErr {
+						t.Errorf("expected err, got none")
+					}
+					if actual[i] != test.expected[i] {
+						t.Errorf("expected subnet-id %s, got %s", test.expected, actual[i])
+					}
+				}
+			}
+		})
+	}
 }
