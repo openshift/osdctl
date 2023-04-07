@@ -505,27 +505,12 @@ func Test_egressVerificationGetSubnetIdAllSubnetsFlag(t *testing.T) {
 	}
 }
 
-type egressOutputNoFailures struct {
+type egressOutputImpl struct {
+	failures []error
 }
 
-func (e egressOutputNoFailures) Parse() ([]error, []error, []error) { return nil, nil, nil }
-
-type egressOutputOneFailure struct {
-}
-
-func (e egressOutputOneFailure) Parse() ([]error, []error, []error) {
-	return []error{errors.New("-  egressURL error: Unable to reach storage.googleapis.com:443")}, nil, nil
-}
-
-type egressOutputMultipleFailures struct {
-}
-
-func (e egressOutputMultipleFailures) Parse() ([]error, []error, []error) {
-	return []error{
-		errors.New("-  egressURL error: Unable to reach storage.googleapis.com:443"),
-		errors.New("-  egressURL error: Unable to reach console.redhat.com:443"),
-		errors.New("-  egressURL error: Unable to reach s3.amazonaws.com:443"),
-	}, nil, nil
+func (e egressOutputImpl) Parse() ([]error, []error, []error) {
+	return e.failures, nil, nil
 }
 
 func Test_generateServiceLog(t *testing.T) {
@@ -539,11 +524,11 @@ func Test_generateServiceLog(t *testing.T) {
 	}{
 		{
 			name: "no egress failures",
-			out:  egressOutputNoFailures{},
+			out:  egressOutputImpl{},
 		},
 		{
 			name: "one egress failure",
-			out:  egressOutputOneFailure{},
+			out:  egressOutputImpl{failures: []error{errors.New("-  egressURL error: Unable to reach storage.googleapis.com:443")}},
 			want: servicelog.PostCmdOptions{
 				Template:       template,
 				TemplateParams: []string{"URLS=storage.googleapis.com:443"},
@@ -552,7 +537,13 @@ func Test_generateServiceLog(t *testing.T) {
 		},
 		{
 			name: "multiple egress failures",
-			out:  egressOutputMultipleFailures{},
+			out: egressOutputImpl{
+				failures: []error{
+					errors.New("-  egressURL error: Unable to reach storage.googleapis.com:443"),
+					errors.New("-  egressURL error: Unable to reach console.redhat.com:443"),
+					errors.New("-  egressURL error: Unable to reach s3.amazonaws.com:443"),
+				},
+			},
 			want: servicelog.PostCmdOptions{
 				Template:       template,
 				TemplateParams: []string{"URLS=storage.googleapis.com:443,console.redhat.com:443,s3.amazonaws.com:443"},
