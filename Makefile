@@ -6,7 +6,7 @@ unexport GOFLAGS
 # but otherwise can be installed elsewhere on developers machines
 BASE_DIR=$(shell pwd)
 export PATH:=$(BASE_DIR)/bin:$(PATH)
-SHELL := env PATH=$(PATH) /bin/bash
+SHELL := /bin/bash
 
 
 all: format mod build test lint
@@ -39,7 +39,7 @@ build:
 	goreleaser build --clean --snapshot --single-target=${SINGLE_TARGET}
 
 release:
-	./bin/goreleaser release --clean
+	goreleaser release --clean
 
 vet:
 	go vet ${BUILDFLAGS} ./...
