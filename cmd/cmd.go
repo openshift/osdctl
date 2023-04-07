@@ -125,7 +125,7 @@ func canCommandSkipVersionCheck(commandName string) bool {
 
 // Returns allowlist of commands that can skip version check
 func getSkipVersionCommands() []string {
-	return []string{"upgrade", "version"}
+	return []string{"docs", "upgrade", "version"}
 }
 
 func versionCheck() {
