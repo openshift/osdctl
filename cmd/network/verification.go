@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/openshift/osd-network-verifier/pkg/output"
+	"github.com/openshift/osdctl/cmd/servicelog"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -129,12 +132,33 @@ func (e *EgressVerification) Run(ctx context.Context) {
 	e.log.Info(ctx, "Preparing to check %+v subnet(s) with network verifier.", len(inputs))
 
 	for i := range inputs {
-
 		e.log.Info(ctx, "running network verifier for subnet  %+v, security group %+v", inputs[i].SubnetID, inputs[i].AWS.SecurityGroupId)
 		out := onv.ValidateEgress(c, *inputs[i])
 		out.Summary(e.Debug)
-		if out.IsSuccessful() {
-			log.Println("All tests pass")
+
+		if !out.IsSuccessful() {
+			generateServiceLog(out, e.ClusterId)
+		}
+	}
+}
+
+func generateServiceLog(out *output.Output, clusterId string) {
+	failures, _, _ := out.Parse()
+	var failedEgresses []string
+	for _, failure := range failures {
+		failedEgresses = append(failedEgresses, strings.Split(failure.Error(), "Unable to reach ")[1])
+	}
+
+	if len(failedEgresses) > 0 {
+		postCmd := servicelog.PostCmdOptions{
+			Template:       "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json",
+			ClusterId:      clusterId,
+			TemplateParams: []string{fmt.Sprintf("URLS=%v", strings.Join(failedEgresses, ","))},
+		}
+		if err := postCmd.Run(); err != nil {
+			fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
+			fmt.Printf("osdctl servicelog post %v -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json -p URLS=%v\n",
+				clusterId, strings.Join(failedEgresses, ","))
 		}
 	}
 }
