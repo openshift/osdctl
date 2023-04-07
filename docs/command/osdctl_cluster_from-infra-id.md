@@ -1,11 +1,15 @@
-## osdctl cluster
+## osdctl cluster from-infra-id
 
-Provides information for a specified cluster
+Get cluster ID and external ID from a given infrastructure ID commonly used by Splunk
+
+```
+osdctl cluster from-infra-id [flags]
+```
 
 ### Options
 
 ```
-  -h, --help   help for cluster
+  -h, --help   help for from-infra-id
 ```
 
 ### Options inherited from parent commands
@@ -31,17 +35,5 @@ Provides information for a specified cluster
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
-* [osdctl cluster break-glass](osdctl_cluster_break-glass.md)	 - Emergency access to a cluster
-* [osdctl cluster check-banned-user](osdctl_cluster_check-banned-user.md)	 - Checks if the cluster owner is a banned user.
-* [osdctl cluster context](osdctl_cluster_context.md)	 - Shows the context of a specified cluster
-* [osdctl cluster cpd](osdctl_cluster_cpd.md)	 - Runs diagnostic for a Cluster Provisioning Delay (CPD)
-* [osdctl cluster from-infra-id](osdctl_cluster_from-infra-id.md)	 - Get cluster ID and external ID from a given infrastructure ID commonly used by Splunk
-* [osdctl cluster health](osdctl_cluster_health.md)	 - Describes health of cluster nodes and provides other cluster vitals.
-* [osdctl cluster logging-check](osdctl_cluster_logging-check.md)	 - Shows the logging support status of a specified cluster
-* [osdctl cluster owner](osdctl_cluster_owner.md)	 - List the clusters owned by the user (can be specified to any user, not only yourself)
-* [osdctl cluster resize-control-plane-node](osdctl_cluster_resize-control-plane-node.md)	 - Resize a control plane node. Requires previous login to the api server via `ocm login` and being tunneled to the backplane.
-* [osdctl cluster support](osdctl_cluster_support.md)	 - Cluster Support
-* [osdctl cluster transfer-owner](osdctl_cluster_transfer-owner.md)	 - Transfer cluster ownership to a new user (to be done by Region Lead)
-* [osdctl cluster validate-pull-secret](osdctl_cluster_validate-pull-secret.md)	 - Checks if the pull secret email matches the owner email
+* [osdctl cluster](osdctl_cluster.md)	 - Provides information for a specified cluster
 

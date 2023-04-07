@@ -43,14 +43,15 @@ osdctl network verify-egress [flags]
 ### Options
 
 ```
+  -A, --all-subnets             (optional) an option for Privatelink clusters to run osd-network-verifier against all subnets listed by ocm.
       --cacert string           (optional) path to a file containing the additional CA trust bundle. Typically set so that the verifier can use a configured cluster-wide proxy.
-      --cluster-id string       (optional) OCM internal/external cluster id to run osd-network-verifier against.
+  -C, --cluster-id string       (optional) OCM internal/external cluster id to run osd-network-verifier against.
       --debug                   (optional) if provided, enable additional debug-level logging
   -h, --help                    help for verify-egress
       --no-tls                  (optional) if provided, ignore all ssl certificate validations on client-side.
       --region string           (optional) AWS region
       --security-group string   (optional) security group ID override for osd-network-verifier, required if not specifying --cluster-id
-      --subnet-id string        (optional) private subnet ID override, required if not specifying --cluster-id
+      --subnet-id stringArray   (optional) private subnet ID override, required if not specifying --cluster-id and can be specified multiple times to run against multiple subnets
 ```
 
 ### Options inherited from parent commands

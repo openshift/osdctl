@@ -31,8 +31,8 @@ func TestGetClusterNameFromInfraIdWithOneSegment(t *testing.T) {
 }
 
 func TestGetClusterNameFromEmptyInfraId(t *testing.T) {
-	infraIdWithOneSegment := "" // one segment, no hyphens
-	actualName, err := getClusterNameFromInfraId(infraIdWithOneSegment)
+	emptyInfraId := "" // one segment, no hyphens
+	actualName, err := getClusterNameFromInfraId(emptyInfraId)
 	if actualName != "" {
 		t.Errorf("no name should be returned from empty infrastructure id, got %s", actualName)
 	}
