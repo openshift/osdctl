@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/openshift/osd-network-verifier/pkg/output"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"log"
 	"os"
@@ -137,12 +136,21 @@ func (e *EgressVerification) Run(ctx context.Context) {
 		out.Summary(e.Debug)
 
 		if !out.IsSuccessful() {
-			generateServiceLog(out, e.ClusterId)
+			postCmd := generateServiceLog(out, e.ClusterId)
+			if err := postCmd.Run(); err != nil {
+				fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
+				fmt.Printf("osdctl servicelog post %v -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json -p %v\n",
+					e.ClusterId, strings.Join(postCmd.TemplateParams, " -p "))
+			}
 		}
 	}
 }
 
-func generateServiceLog(out *output.Output, clusterId string) {
+type egressOutput interface {
+	Parse() ([]error, []error, []error)
+}
+
+func generateServiceLog(out egressOutput, clusterId string) servicelog.PostCmdOptions {
 	failures, _, _ := out.Parse()
 	var failedEgresses []string
 	for _, failure := range failures {
@@ -150,17 +158,13 @@ func generateServiceLog(out *output.Output, clusterId string) {
 	}
 
 	if len(failedEgresses) > 0 {
-		postCmd := servicelog.PostCmdOptions{
+		return servicelog.PostCmdOptions{
 			Template:       "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json",
 			ClusterId:      clusterId,
 			TemplateParams: []string{fmt.Sprintf("URLS=%v", strings.Join(failedEgresses, ","))},
 		}
-		if err := postCmd.Run(); err != nil {
-			fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
-			fmt.Printf("osdctl servicelog post %v -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json -p URLS=%v\n",
-				clusterId, strings.Join(failedEgresses, ","))
-		}
 	}
+	return servicelog.PostCmdOptions{}
 }
 
 // setup configures an EgressVerification's awsClient and cluster depending on whether the ClusterId or profile

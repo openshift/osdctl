@@ -2,6 +2,9 @@ package network
 
 import (
 	"context"
+	"errors"
+	"github.com/openshift/osdctl/cmd/servicelog"
+	"reflect"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -497,6 +500,70 @@ func Test_egressVerificationGetSubnetIdAllSubnetsFlag(t *testing.T) {
 						t.Errorf("expected subnet-id %s, got %s", test.expected, actual[i])
 					}
 				}
+			}
+		})
+	}
+}
+
+type egressOutputNoFailures struct {
+}
+
+func (e egressOutputNoFailures) Parse() ([]error, []error, []error) { return nil, nil, nil }
+
+type egressOutputOneFailure struct {
+}
+
+func (e egressOutputOneFailure) Parse() ([]error, []error, []error) {
+	return []error{errors.New("-  egressURL error: Unable to reach storage.googleapis.com:443")}, nil, nil
+}
+
+type egressOutputMultipleFailures struct {
+}
+
+func (e egressOutputMultipleFailures) Parse() ([]error, []error, []error) {
+	return []error{
+		errors.New("-  egressURL error: Unable to reach storage.googleapis.com:443"),
+		errors.New("-  egressURL error: Unable to reach console.redhat.com:443"),
+		errors.New("-  egressURL error: Unable to reach s3.amazonaws.com:443"),
+	}, nil, nil
+}
+
+func Test_generateServiceLog(t *testing.T) {
+	testClusterId := "abc123"
+	template := "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json"
+
+	tests := []struct {
+		name string
+		out  egressOutput
+		want servicelog.PostCmdOptions
+	}{
+		{
+			name: "no egress failures",
+			out:  egressOutputNoFailures{},
+		},
+		{
+			name: "one egress failure",
+			out:  egressOutputOneFailure{},
+			want: servicelog.PostCmdOptions{
+				Template:       template,
+				TemplateParams: []string{"URLS=storage.googleapis.com:443"},
+				ClusterId:      testClusterId,
+			},
+		},
+		{
+			name: "multiple egress failures",
+			out:  egressOutputMultipleFailures{},
+			want: servicelog.PostCmdOptions{
+				Template:       template,
+				TemplateParams: []string{"URLS=storage.googleapis.com:443,console.redhat.com:443,s3.amazonaws.com:443"},
+				ClusterId:      testClusterId,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := generateServiceLog(tt.out, testClusterId); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("generateServiceLog() = %v, want %v", got, tt.want)
 			}
 		})
 	}
