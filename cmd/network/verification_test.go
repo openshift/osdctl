@@ -515,7 +515,6 @@ func (e egressOutputImpl) Parse() ([]error, []error, []error) {
 
 func Test_generateServiceLog(t *testing.T) {
 	testClusterId := "abc123"
-	template := "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json"
 
 	tests := []struct {
 		name string
@@ -530,7 +529,7 @@ func Test_generateServiceLog(t *testing.T) {
 			name: "one egress failure",
 			out:  egressOutputImpl{failures: []error{errors.New("-  egressURL error: Unable to reach storage.googleapis.com:443")}},
 			want: servicelog.PostCmdOptions{
-				Template:       template,
+				Template:       blockedEgressTemplateUrl,
 				TemplateParams: []string{"URLS=storage.googleapis.com:443"},
 				ClusterId:      testClusterId,
 			},
@@ -545,7 +544,7 @@ func Test_generateServiceLog(t *testing.T) {
 				},
 			},
 			want: servicelog.PostCmdOptions{
-				Template:       template,
+				Template:       blockedEgressTemplateUrl,
 				TemplateParams: []string{"URLS=storage.googleapis.com:443,console.redhat.com:443,s3.amazonaws.com:443"},
 				ClusterId:      testClusterId,
 			},

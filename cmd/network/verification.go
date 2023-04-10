@@ -24,7 +24,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const nonByovpcPrivateSubnetTagKey = "kubernetes.io/role/internal-elb"
+const (
+	nonByovpcPrivateSubnetTagKey = "kubernetes.io/role/internal-elb"
+	blockedEgressTemplateUrl     = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json"
+)
 
 type EgressVerification struct {
 	awsClient egressVerificationAWSClient
@@ -139,8 +142,8 @@ func (e *EgressVerification) Run(ctx context.Context) {
 			postCmd := generateServiceLog(out, e.ClusterId)
 			if err := postCmd.Run(); err != nil {
 				fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
-				fmt.Printf("osdctl servicelog post %v -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json -p %v\n",
-					e.ClusterId, strings.Join(postCmd.TemplateParams, " -p "))
+				fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
+					e.ClusterId, blockedEgressTemplateUrl, strings.Join(postCmd.TemplateParams, " -p "))
 			}
 		}
 	}
@@ -159,7 +162,7 @@ func generateServiceLog(out egressOutput, clusterId string) servicelog.PostCmdOp
 
 	if len(failedEgresses) > 0 {
 		return servicelog.PostCmdOptions{
-			Template:       "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json",
+			Template:       blockedEgressTemplateUrl,
 			ClusterId:      clusterId,
 			TemplateParams: []string{fmt.Sprintf("URLS=%v", strings.Join(failedEgresses, ","))},
 		}
