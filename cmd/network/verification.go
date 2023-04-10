@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/openshift/osdctl/cmd/servicelog"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -22,7 +24,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const nonByovpcPrivateSubnetTagKey = "kubernetes.io/role/internal-elb"
+const (
+	nonByovpcPrivateSubnetTagKey = "kubernetes.io/role/internal-elb"
+	blockedEgressTemplateUrl     = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json"
+)
 
 type EgressVerification struct {
 	awsClient egressVerificationAWSClient
@@ -129,14 +134,40 @@ func (e *EgressVerification) Run(ctx context.Context) {
 	e.log.Info(ctx, "Preparing to check %+v subnet(s) with network verifier.", len(inputs))
 
 	for i := range inputs {
-
 		e.log.Info(ctx, "running network verifier for subnet  %+v, security group %+v", inputs[i].SubnetID, inputs[i].AWS.SecurityGroupId)
 		out := onv.ValidateEgress(c, *inputs[i])
 		out.Summary(e.Debug)
-		if out.IsSuccessful() {
-			log.Println("All tests pass")
+
+		if !out.IsSuccessful() {
+			postCmd := generateServiceLog(out, e.ClusterId)
+			if err := postCmd.Run(); err != nil {
+				fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
+				fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
+					e.ClusterId, blockedEgressTemplateUrl, strings.Join(postCmd.TemplateParams, " -p "))
+			}
 		}
 	}
+}
+
+type egressOutput interface {
+	Parse() ([]error, []error, []error)
+}
+
+func generateServiceLog(out egressOutput, clusterId string) servicelog.PostCmdOptions {
+	failures, _, _ := out.Parse()
+	var failedEgresses []string
+	for _, failure := range failures {
+		failedEgresses = append(failedEgresses, strings.Split(failure.Error(), "Unable to reach ")[1])
+	}
+
+	if len(failedEgresses) > 0 {
+		return servicelog.PostCmdOptions{
+			Template:       blockedEgressTemplateUrl,
+			ClusterId:      clusterId,
+			TemplateParams: []string{fmt.Sprintf("URLS=%v", strings.Join(failedEgresses, ","))},
+		}
+	}
+	return servicelog.PostCmdOptions{}
 }
 
 // setup configures an EgressVerification's awsClient and cluster depending on whether the ClusterId or profile
