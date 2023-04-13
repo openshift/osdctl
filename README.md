@@ -285,6 +285,19 @@ osdctl sts policy <OCP version>
 osdctl sts policy-diff <old version> <new version>
 ```
 
+### Get cluster context
+
+`context` command shows the context of a specified cluster. 
+```bash
+osdctl cluster context <cluster identifier> --jiratoken jira_token --oauthtoken pd_oauth_token --usertoken pd_user_token 
+```
+The command flags can be suppressed from CLI if the variables are informed in the ~/.config/osdctl config file:
+```
+pd_oauth_token: TOKEN
+pd_user_token: TOKEN
+jira_token: TOKEN
+```
+
 ### Hive ClusterDeployment CR list
 
 ```bash
