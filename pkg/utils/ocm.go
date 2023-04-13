@@ -213,21 +213,20 @@ func loadOCMConfig() (*Config, error) {
 	return cfg, nil
 }
 
-func getOcmConfiguration() (*Config, error) {
+func getOcmConfiguration(ocmConfigLoader func() (*Config, error)) (*Config, error) {
 	tokenEnv := os.Getenv("OCM_TOKEN")
 	urlEnv := os.Getenv("OCM_URL")
 	refreshTokenEnv := os.Getenv("OCM_REFRESH_TOKEN") // Unlikely to be set, but check anyway
 
 	config := &Config{}
-	var err error
 
-	// If neither of the token ENVS 'OCM_TOKEN', 'OCM_REFRESH_TOKEN' are set, or 'OCM_URL' is not set,
-	// use the configuration file as base.
+	// If missing required data, load from the config file.
 	// We don't want to always load this, because the user might only use environment variables.
-	if (tokenEnv == "" && refreshTokenEnv == "") || urlEnv == "" {
-		config, err = loadOCMConfig()
-		if err != nil {
-			return &Config{}, fmt.Errorf("Could not load OCM configuration file")
+	if tokenEnv == "" || refreshTokenEnv == "" || urlEnv == "" {
+		var fileConfigLoadError error
+		config, fileConfigLoadError = ocmConfigLoader()
+		if fileConfigLoadError != nil {
+			return config, fmt.Errorf("could not load OCM configuration file")
 		}
 	}
 
@@ -251,7 +250,7 @@ func CreateConnection() *sdk.Connection {
 
 	connectionBuilder := sdk.NewConnectionBuilder()
 
-	config, err := getOcmConfiguration()
+	config, err := getOcmConfiguration(loadOCMConfig)
 	if err != nil {
 		log.Fatal(ocmConfigError)
 	}
