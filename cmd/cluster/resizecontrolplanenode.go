@@ -2,17 +2,20 @@ package cluster
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/printer"
-	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -73,8 +76,11 @@ func (o *resizeControlPlaneNodeOptions) complete(cmd *cobra.Command, _ []string)
 		return err
 	}
 
+	// Ensure we store the internal OCM cluster id
+	o.clusterID = cluster.ID()
+
 	if strings.ToUpper(cluster.CloudProvider().ID()) != "AWS" {
-		return fmt.Errorf("This command is only available for AWS clusters")
+		return errors.New("this command is only available for AWS clusters")
 	}
 	/*
 		Ideally we would want additional validation here for:
@@ -136,10 +142,10 @@ func withRetryCancelOption(fn func() error, procedure string) (err error) {
 	case Retry:
 		return withRetryCancelOption(fn, procedure)
 	case Cancel:
-		return fmt.Errorf("Exiting...")
+		return errors.New("exiting")
 	default:
 		// This would be a programming error
-		return fmt.Errorf("Unhandled enumerator in withRetryCancelOption")
+		return errors.New("unhandled enumerator in withRetryCancelOption")
 	}
 }
 
@@ -185,10 +191,10 @@ func withRetrySkipCancelOption(fn func() error, procedure string) (err error) {
 	case Skip:
 		fmt.Printf("Skipping %s...\n", procedure)
 	case Cancel:
-		return fmt.Errorf("Exiting...")
+		return errors.New("exiting")
 	default:
 		// This would be a programming error
-		return fmt.Errorf("Unhandled enumerator in withRetrySkipCancelOption")
+		return errors.New("unhandled enumerator in withRetrySkipCancelOption")
 	}
 	return nil
 }
@@ -225,7 +231,7 @@ func forceDrainNode(nodeID string) error {
 	cmd := fmt.Sprintf("oc adm drain %s --ignore-daemonsets --delete-emptydir-data --force --as backplane-cluster-admin", nodeID)
 	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to force drain:\n%s", strings.TrimSpace(string(output)))
+		return fmt.Errorf("failed to force drain:\n%s", strings.TrimSpace(string(output)))
 	}
 	return nil
 }
@@ -257,61 +263,64 @@ func drainNode(nodeID string) error {
 				return err
 			}
 		case Cancel:
-			return fmt.Errorf("Exiting...")
+			return errors.New("exiting")
 		}
 	}
 	return nil
 }
 
-func stopNode(awsClient *awsprovider.Client, nodeID string) error {
+func stopNode(ctx context.Context, awsClient resizeControlPlaneNodeAWSClient, nodeID string) error {
 	printer.PrintfGreen("Stopping ec2 instance %s. This might take a minute or two...\n", nodeID)
 
-	stopInstancesInput := &ec2.StopInstancesInput{InstanceIds: []*string{aws.String(nodeID)}}
-
-	stopInstanceOutput, err := (*awsClient).StopInstances(stopInstancesInput)
+	_, err := awsClient.StopInstances(ctx, &ec2.StopInstancesInput{
+		InstanceIds: []string{nodeID},
+	})
 	if err != nil {
-		return fmt.Errorf("Unable to request stop of ec2 instance, output: %s. Error %s", stopInstanceOutput, err)
+		return fmt.Errorf("unable to request stop of ec2 instance: %v", err)
 	}
 
+	waiter := ec2.NewInstanceStoppedWaiter(awsClient)
 	describeInstancesInput := &ec2.DescribeInstancesInput{
-		InstanceIds: []*string{aws.String(nodeID)},
+		InstanceIds: []string{nodeID},
 	}
 
-	err = (*awsClient).WaitUntilInstanceStopped(describeInstancesInput)
+	err = waiter.Wait(ctx, describeInstancesInput, 10*time.Minute)
 	if err != nil {
-		return fmt.Errorf("Unable to stop of ec2 instance: %s", err)
+		return fmt.Errorf("unable to stop or timed out while stopping ec2 instance: %s", err)
 	}
 	return nil
 }
 
-func modifyInstanceAttribute(awsClient *awsprovider.Client, nodeID string, newMachineType string) error {
+func modifyInstanceAttribute(ctx context.Context, awsClient resizeControlPlaneNodeAWSClient, nodeID string, newMachineType string) error {
 	printer.PrintlnGreen("Modifying machine type of instance:", nodeID, "to", newMachineType)
 
-	modifyInstanceAttributeInput := &ec2.ModifyInstanceAttributeInput{InstanceId: &nodeID, InstanceType: &ec2.AttributeValue{Value: &newMachineType}}
+	modifyInstanceAttributeInput := &ec2.ModifyInstanceAttributeInput{InstanceId: &nodeID, InstanceType: &types.AttributeValue{Value: &newMachineType}}
 
-	modifyInstanceOutput, err := (*awsClient).ModifyInstanceAttribute(modifyInstanceAttributeInput)
+	_, err := awsClient.ModifyInstanceAttribute(ctx, modifyInstanceAttributeInput)
 	if err != nil {
-		return fmt.Errorf("Unable to modify ec2 instance, output: %s. Error: %s", modifyInstanceOutput, err)
+		return fmt.Errorf("unable to modify ec2 instance: %v", err)
 	}
 	return nil
 }
 
-func startNode(awsClient *awsprovider.Client, nodeID string) error {
+func startNode(ctx context.Context, awsClient resizeControlPlaneNodeAWSClient, nodeID string) error {
 	printer.PrintfGreen("Starting instance %s. This might take a minute or two...\n", nodeID)
 
-	startInstancesInput := &ec2.StartInstancesInput{InstanceIds: []*string{aws.String(nodeID)}}
-	startInstanceOutput, err := (*awsClient).StartInstances(startInstancesInput)
+	_, err := awsClient.StartInstances(ctx, &ec2.StartInstancesInput{
+		InstanceIds: []string{nodeID},
+	})
 	if err != nil {
-		return fmt.Errorf("Unable to request start of ec2 instance, output: %s. Error %s", startInstanceOutput, err)
+		return fmt.Errorf("unable to request start of ec2 instance: %v", err)
 	}
 
+	waiter := ec2.NewInstanceRunningWaiter(awsClient)
 	describeInstancesInput := &ec2.DescribeInstancesInput{
-		InstanceIds: []*string{aws.String(nodeID)},
+		InstanceIds: []string{nodeID},
 	}
 
-	err = (*awsClient).WaitUntilInstanceRunning(describeInstancesInput)
+	err = waiter.Wait(ctx, describeInstancesInput, 10*time.Minute)
 	if err != nil {
-		return fmt.Errorf("Unable to get ec2 instance up and running: %s", err)
+		return fmt.Errorf("unable to run or timed out while running ec2 instance: %s", err)
 	}
 	return nil
 }
@@ -331,23 +340,23 @@ func uncordonNode(nodeID string) error {
 
 // Start and stop calls require the internal AWS instance ID
 // Machinetype patch requires the tag "Name"
-func getNodeAwsInstanceData(node string, awsClient *awsprovider.Client) (string, string, error) {
+func getNodeAwsInstanceData(ctx context.Context, node string, awsClient resizeControlPlaneNodeAWSClient) (string, string, error) {
 	params := &ec2.DescribeInstancesInput{
-		Filters: []*ec2.Filter{
+		Filters: []types.Filter{
 			{
 				Name:   aws.String("private-dns-name"),
-				Values: []*string{aws.String(node)},
+				Values: []string{node},
 			},
 		},
 	}
-	ret, err := (*awsClient).DescribeInstances(params)
+	ret, err := awsClient.DescribeInstances(ctx, params)
 	if err != nil {
 		return "", "", err
 	}
 
 	awsInstanceID := *(ret.Reservations[0].Instances[0].InstanceId)
 
-	var machineName string = ""
+	var machineName string
 	tags := ret.Reservations[0].Instances[0].Tags
 	for _, t := range tags {
 		if *t.Key == "Name" {
@@ -356,7 +365,7 @@ func getNodeAwsInstanceData(node string, awsClient *awsprovider.Client) (string,
 	}
 
 	if machineName == "" {
-		return "", "", fmt.Errorf("Could not retrieve node machine name.")
+		return "", "", errors.New("could not retrieve node machine name")
 	}
 
 	fmt.Println("Node", node, "found as AWS internal InstanceId", awsInstanceID, "with machine name", machineName)
@@ -374,14 +383,21 @@ func patchMachineType(machine string, machineType string) error {
 	return nil
 }
 
-func (o *resizeControlPlaneNodeOptions) run() error {
+type resizeControlPlaneNodeAWSClient interface {
+	ec2.DescribeInstancesAPIClient
+	StartInstances(ctx context.Context, params *ec2.StartInstancesInput, optFns ...func(*ec2.Options)) (*ec2.StartInstancesOutput, error)
+	StopInstances(ctx context.Context, params *ec2.StopInstancesInput, optFns ...func(*ec2.Options)) (*ec2.StopInstancesOutput, error)
+	ModifyInstanceAttribute(ctx context.Context, params *ec2.ModifyInstanceAttributeInput, optFns ...func(*ec2.Options)) (*ec2.ModifyInstanceAttributeOutput, error)
+}
 
-	awsClient, err := osdCloud.CreateAWSClient(o.clusterID)
+func (o *resizeControlPlaneNodeOptions) run() error {
+	cfg, err := osdCloud.CreateAWSV2Config(o.clusterID)
 	if err != nil {
 		return err
 	}
+	awsClient := ec2.NewFromConfig(cfg)
 
-	machineName, nodeAwsID, err := getNodeAwsInstanceData(o.node, &awsClient)
+	machineName, nodeAwsID, err := getNodeAwsInstanceData(context.TODO(), o.node, awsClient)
 	if err != nil {
 		return err
 	}
@@ -396,21 +412,21 @@ func (o *resizeControlPlaneNodeOptions) run() error {
 	fmt.Println() // Add an empty line for better output formatting
 
 	// Stop the node instance
-	err = withRetryCancelOption(func() error { return stopNode(&awsClient, nodeAwsID) }, "stopping node")
+	err = withRetryCancelOption(func() error { return stopNode(context.TODO(), awsClient, nodeAwsID) }, "stopping node")
 	if err != nil {
 		return err
 	}
 	fmt.Println() // Add an empty line for better output formatting
 
 	// Once stopped, change the instance type
-	err = withRetryCancelOption(func() error { return modifyInstanceAttribute(&awsClient, nodeAwsID, o.newMachineType) }, "modify instance attribute")
+	err = withRetryCancelOption(func() error { return modifyInstanceAttribute(context.TODO(), awsClient, nodeAwsID, o.newMachineType) }, "modify instance attribute")
 	if err != nil {
 		return err
 	}
 	fmt.Println() // Add an empty line for better output formatting
 
 	// Start the node instance
-	err = withRetryCancelOption(func() error { return startNode(&awsClient, nodeAwsID) }, "starting node")
+	err = withRetryCancelOption(func() error { return startNode(context.TODO(), awsClient, nodeAwsID) }, "starting node")
 	if err != nil {
 		return err
 	}

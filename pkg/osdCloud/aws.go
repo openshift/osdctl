@@ -1,24 +1,18 @@
 package osdCloud
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 
 	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
 	awsSdk "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/arn"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/sts"
 
-	conversions "github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ec2"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	bpcloud "github.com/openshift/backplane-cli/cmd/ocm-backplane/cloud"
 	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
-	bpcliutils "github.com/openshift/backplane-cli/pkg/utils"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/viper"
@@ -95,7 +89,7 @@ func GenerateSupportRoleCredentials(client aws.Client, awsAccountID, region, ses
 	return targetAssumeRoleOutput.Credentials, nil
 }
 
-// Preforms the Assume Role chain from IAM User to the Jump role
+// GenerateJumpRoleCredentials performs the Assume Role chain from IAM User to the Jump role
 // This sequence stays within the Red Hat account boundary, so a failure here indicates an internal misconfiguration
 func GenerateJumpRoleCredentials(client aws.Client, awsAccountID, region, sessionName string) (*sts.Credentials, error) {
 
@@ -181,40 +175,6 @@ func GenerateRoleSessionName(client aws.Client) (string, error) {
 	return fmt.Sprintf("RH-SRE-%s", username), nil
 }
 
-type cloudCredentialsResponse struct {
-	// ClusterID
-	ClusterID string `json:"clusterID"`
-
-	// Link to the console, optional
-	ConsoleLink *string `json:"consoleLink,omitempty"`
-
-	// Cloud credentials, optional
-	Credentials *string `json:"credentials,omitempty"`
-
-	// Region, optional
-	Region *string `json:"region,omitempty"`
-}
-
-type awsCredentialsResponse struct {
-	AccessKeyId     string `json:"AccessKeyId" yaml:"AccessKeyId"`
-	SecretAccessKey string `json:"SecretAccessKey" yaml:"SecretAccessKey"`
-	SessionToken    string `json:"SessionToken" yaml:"SessionToken"`
-	Region          string `json:"Region" yaml:"Region"`
-	Expiration      string `json:"Expiration" yaml:"Expiration"`
-}
-
-// Creates an AWS client based on a clusterid
-// Requires previous log on to the correct api server via ocm login
-// and tunneling to the backplane
-func CreateAWSClient(clusterID string) (aws.Client, error) {
-	input, err := GetAWSClientInputFromBackplane(clusterID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve AWS credentials from backplane: %w", err)
-	}
-
-	return aws.NewAwsClientWithInput(input)
-}
-
 // CreateAWSV2Config creates an aws-sdk-go-v2 config via Backplane given an internal cluster id
 func CreateAWSV2Config(clusterID string) (awsv2.Config, error) {
 	bp, err := bpconfig.GetBackplaneConfiguration()
@@ -223,62 +183,6 @@ func CreateAWSV2Config(clusterID string) (awsv2.Config, error) {
 	}
 
 	return bpcloud.GetAWSV2Config(bp.URL, clusterID)
-}
-
-// GetAWSClientInputFromBackplane sets up AWS credentials via backplane-api given a cluster id
-func GetAWSClientInputFromBackplane(clusterID string) (*aws.AwsClientInput, error) {
-	ocmToBackplane := map[string]string{
-		"https://api.openshift.com":             "https://api.backplane.openshift.com",
-		"https://api.stage.openshift.com":       "https://api.stage.backplane.openshift.com",
-		"https://api.integration.openshift.com": "https://api.integration.backplane.openshift.com",
-	}
-
-	bapiUrl, ok := ocmToBackplane[utils.GetOCMApiUrl()]
-	if !ok {
-		return nil, fmt.Errorf("unable to find backplane api url for %s", utils.GetOCMApiUrl())
-	}
-
-	init := bpcliutils.DefaultClientUtilsImpl{}
-	client, err := init.GetBackplaneClient(bapiUrl)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := client.GetCloudCredentials(context.TODO(), clusterID)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unable to parse error from backplane: Status Code: %d", resp.StatusCode)
-	}
-
-	var cloudCredentials cloudCredentialsResponse
-	var awsCredentials awsCredentialsResponse
-	defer resp.Body.Close()
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	cloudCredentials = cloudCredentialsResponse{}
-
-	err = json.Unmarshal(bodyBytes, &cloudCredentials)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal cloud credentials: %s", err)
-	}
-
-	err = json.Unmarshal([]byte(*cloudCredentials.Credentials), &awsCredentials)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to unmarshal aws credentials: %s", err)
-	}
-
-	return &aws.AwsClientInput{
-		AccessKeyID:     awsCredentials.AccessKeyId,
-		SecretAccessKey: awsCredentials.SecretAccessKey,
-		SessionToken:    awsCredentials.SessionToken,
-		Region:          *cloudCredentials.Region,
-	}, nil
 }
 
 func GenerateCCSClusterAWSClient(ocmClient *sdk.Connection, awsClient aws.Client, clusterID string, clusterRegion string, partition string, sessionName string) (aws.Client, error) {
@@ -428,7 +332,7 @@ func (a *AwsCluster) GetAllVirtualMachines(region string) ([]VirtualMachine, err
 	var nextToken *string
 	for {
 		instances, err := a.AwsClient.DescribeInstances(&ec2.DescribeInstancesInput{
-			MaxResults: conversions.Int64(5),
+			MaxResults: awsSdk.Int64(5),
 			NextToken:  nextToken,
 		})
 		if err != nil {

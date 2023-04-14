@@ -375,11 +375,3 @@ func GetHiveShard(clusterID string) (string, error) {
 
 	return shard, nil
 }
-
-// GetOCMApiUrl returns the configured OCM API URL
-func GetOCMApiUrl() string {
-	connection := CreateConnection()
-	defer connection.Close()
-
-	return connection.URL()
-}
