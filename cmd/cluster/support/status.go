@@ -6,7 +6,6 @@ import (
 
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/printer"
-	ctlutil "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
@@ -23,8 +22,8 @@ type statusOptions struct {
 }
 
 // newCmdsupportCheck implements the supportCheck command to show the support status of a cluster
-func newCmdstatus(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newStatusOptions(streams, flags, globalOpts)
+func newCmdstatus(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newStatusOptions(streams, globalOpts)
 	statusCmd := &cobra.Command{
 		Use:               "status",
 		Short:             "Shows the support status of a specified cluster",
@@ -40,7 +39,7 @@ func newCmdstatus(streams genericclioptions.IOStreams, flags *genericclioptions.
 	return statusCmd
 }
 
-func newStatusOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *statusOptions {
+func newStatusOptions(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *statusOptions {
 	return &statusOptions{
 		IOStreams:     streams,
 		GlobalOptions: globalOpts,
@@ -60,34 +59,10 @@ func (o *statusOptions) complete(cmd *cobra.Command, args []string) error {
 
 func (o *statusOptions) run() error {
 
-	// Check that the cluster key (name, identifier or external identifier) given by the user
-	// is reasonably safe so that there is no risk of SQL injection
-	err := ctlutil.IsValidClusterKey(o.clusterID)
+	clusterLimitedSupportReasons, err := getLimitedSupportReasons(o.clusterID)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to get limited support reasons: %v\n", err)
 		return err
-	}
-
-	//create connection to sdk
-	connection := ctlutil.CreateConnection()
-	defer func() {
-		if err := connection.Close(); err != nil {
-			fmt.Printf("Cannot close the connection: %q\n", err)
-			os.Exit(1)
-		}
-	}()
-
-	//getting the cluster
-	cluster, err := ctlutil.GetCluster(connection, o.clusterID)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't retrieve cluster: %v\n", err)
-		os.Exit(1)
-	}
-
-	//getting the limited support reasons for the cluster
-	clusterLimitedSupportReasons, err := ctlutil.GetClusterLimitedSupportReasons(connection, cluster.ID())
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't retrieve cluster limited support reasons: %v\n", err)
-		os.Exit(1)
 	}
 
 	// No reasons found, cluster is fully supported

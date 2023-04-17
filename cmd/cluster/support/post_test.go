@@ -77,7 +77,7 @@ func TestValidateGoodResponse(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		_, result := validateGoodResponse(tc.body, tc.lmtSprReason)
+		_, result := validateGoodResponse(tc.body)
 		if tc.errExpected {
 			if result == nil {
 				t.Fatalf("Test %s failed. Expected error %s, but got none", tc.title, tc.errReason)
