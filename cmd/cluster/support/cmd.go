@@ -21,9 +21,9 @@ func NewCmdSupport(streams genericclioptions.IOStreams, flags *genericclioptions
 		Run:               help,
 	}
 
-	supportCmd.AddCommand(newCmdstatus(streams, flags, globalOpts))
-	supportCmd.AddCommand(newCmdpost(streams, flags, globalOpts))
-	supportCmd.AddCommand(newCmddelete(streams, flags, globalOpts))
+	supportCmd.AddCommand(newCmdstatus(streams, globalOpts))
+	supportCmd.AddCommand(newCmdpost(streams, globalOpts))
+	supportCmd.AddCommand(newCmddelete(streams, globalOpts))
 
 	return supportCmd
 }

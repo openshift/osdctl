@@ -3,7 +3,6 @@ package support
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 
@@ -24,14 +23,16 @@ type deleteOptions struct {
 	verbose                bool
 	clusterID              string
 	limitedSupportReasonID string
+	removeAll              bool
+	isDryRun               bool
 
 	genericclioptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
 }
 
-func newCmddelete(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+func newCmddelete(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 
-	ops := newDeleteOptions(streams, flags, globalOpts)
+	ops := newDeleteOptions(streams, globalOpts)
 	deleteCmd := &cobra.Command{
 		Use:               "delete CLUSTER_ID",
 		Short:             "Delete specified limited support reason for a given cluster",
@@ -44,19 +45,15 @@ func newCmddelete(streams genericclioptions.IOStreams, flags *genericclioptions.
 	}
 
 	// Defined required flags
+	deleteCmd.Flags().BoolVar(&ops.removeAll, "all", false, "Remove all limited support reasons")
 	deleteCmd.Flags().StringVarP(&ops.limitedSupportReasonID, "limited-support-reason-id", "i", "", "Limited support reason ID")
-	deleteCmd.Flags().BoolVarP(&isDryRun, "dry-run", "d", false, "Dry-run - print the limited support reason about to be sent but don't send it.")
+	deleteCmd.Flags().BoolVarP(&ops.isDryRun, "dry-run", "d", false, "Dry-run - print the limited support reason about to be sent but don't send it.")
 	deleteCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
-
-	// Mark limited-support-reason-id (-i) flag required
-	if err := deleteCmd.MarkFlagRequired("limited-support-reason-id"); err != nil {
-		log.Fatalln("limited-support-reason-id", err)
-	}
 
 	return deleteCmd
 }
 
-func newDeleteOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *deleteOptions {
+func newDeleteOptions(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *deleteOptions {
 
 	return &deleteOptions{
 		IOStreams:     streams,
@@ -68,6 +65,14 @@ func (o *deleteOptions) complete(cmd *cobra.Command, args []string) error {
 
 	if len(args) != 1 {
 		return cmdutil.UsageErrorf(cmd, "Provide exactly one internal cluster ID")
+	}
+
+	if o.limitedSupportReasonID == "" && !o.removeAll {
+		return cmdutil.UsageErrorf(cmd, "Must provide a reason ID or the `all` flag")
+	}
+
+	if o.limitedSupportReasonID != "" && o.removeAll {
+		return cmdutil.UsageErrorf(cmd, "Cannot provide a reason ID with the `all` flag. Please provide one or the other.")
 	}
 
 	o.clusterID = args[0]
@@ -95,7 +100,7 @@ func (o *deleteOptions) run() error {
 	}()
 
 	// Stop here if dry-run
-	if isDryRun {
+	if o.isDryRun {
 		return nil
 	}
 
@@ -112,18 +117,34 @@ func (o *deleteOptions) run() error {
 		os.Exit(1)
 	}
 
-	deleteRequest, err := createDeleteRequest(connection, cluster, o.limitedSupportReasonID)
-	if err != nil {
-		fmt.Printf("failed post call %q\n", err)
-	}
-	deleteResponse, err := sendRequest(deleteRequest)
-	if err != nil {
-		fmt.Printf("Failed to get delete call response: %q\n", err)
+	var limitedSupportReasonIds []string
+	if o.removeAll {
+		limitedSupportReasons, err := getLimitedSupportReasons(o.clusterID)
+		for _, limitedSupportReason := range limitedSupportReasons {
+			limitedSupportReasonIds = append(limitedSupportReasonIds, limitedSupportReason.ID)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to get limited support reasons: %v\n", err)
+			return err
+		}
+	} else {
+		limitedSupportReasonIds = append(limitedSupportReasonIds, o.limitedSupportReasonID)
 	}
 
-	err = checkDelete(deleteResponse)
-	if err != nil {
-		fmt.Printf("check for delete call failed: %q", err)
+	for _, limitedSupportReasonId := range limitedSupportReasonIds {
+		deleteRequest, err := createDeleteRequest(connection, cluster, limitedSupportReasonId)
+		if err != nil {
+			fmt.Printf("failed post call %q\n", err)
+		}
+		deleteResponse, err := sendRequest(deleteRequest)
+		if err != nil {
+			fmt.Printf("Failed to get delete call response: %q\n", err)
+		}
+
+		err = checkDelete(deleteResponse)
+		if err != nil {
+			fmt.Printf("check for delete call failed: %q", err)
+		}
 	}
 
 	return nil
