@@ -286,7 +286,7 @@ func StreamRead(stream genericclioptions.IOStreams, delim byte) (string, error) 
 }
 
 // Contains returns true if the given key is present in the provided list
-func Contains(list []string, key string) bool {
+func Contains[T comparable](list []T, key T) bool {
 	for _, item := range list {
 		if item == key {
 			return true
