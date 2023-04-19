@@ -335,7 +335,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	}
 
 	fmt.Fprintln(os.Stderr, "Getting Pagerduty Service...")
-	data.pdServiceID, err = GetPDSeviceID(o.baseDomain, o.usertoken, o.oauthtoken, o.team_ids)
+	data.pdServiceID, err = GetPDServiceID(o.baseDomain, o.usertoken, o.oauthtoken, o.team_ids)
 	if err != nil {
 		errors = append(errors, fmt.Errorf("Error getting PD Service ID: %v", err))
 	}
@@ -627,8 +627,8 @@ func GetPagerdutyClient(usertoken string, oauthtoken string) (*pd.Client, error)
 	return client, err
 }
 
-func GetPDSeviceID(baseDomain string, usertoken string, oauthtoken string, team_ids []string) ([]string, error) {
-	ctx := context.TODO()
+func GetPDServiceID(baseDomain string, usertoken string, oauthtoken string, team_ids []string) ([]string, error) {
+
 	pdClient, err := GetPagerdutyClient(usertoken, oauthtoken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to GetPagerdutyClient: %w", err)
@@ -637,7 +637,7 @@ func GetPDSeviceID(baseDomain string, usertoken string, oauthtoken string, team_
 	// Gets the PD Team IDS
 	teams := getPDTeamIDs(team_ids)
 
-	lsResponse, err := pdClient.ListServicesWithContext(ctx, pd.ListServiceOptions{Query: baseDomain, TeamIDs: teams})
+	lsResponse, err := pdClient.ListServicesWithContext(context.TODO(), pd.ListServiceOptions{Query: baseDomain, TeamIDs: teams})
 
 	if err != nil {
 		fmt.Printf("Failed to ListServicesWithContext %q\n", err)
