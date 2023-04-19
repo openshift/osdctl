@@ -631,8 +631,7 @@ func GetPDSeviceID(baseDomain string, usertoken string, oauthtoken string, team_
 	ctx := context.TODO()
 	pdClient, err := GetPagerdutyClient(usertoken, oauthtoken)
 	if err != nil {
-		fmt.Printf("Failed to GetPagerdutyClient %q\n", err)
-		return []string{}, err
+		return nil, fmt.Errorf("failed to GetPagerdutyClient: %w", err)
 	}
 
 	// Gets the PD Team IDS
