@@ -121,7 +121,7 @@ func (o *deleteOptions) run() error {
 	if o.removeAll {
 		limitedSupportReasons, err := getLimitedSupportReasons(o.clusterID)
 		for _, limitedSupportReason := range limitedSupportReasons {
-			limitedSupportReasonIds = append(limitedSupportReasonIds, limitedSupportReason.ID)
+			limitedSupportReasonIds = append(limitedSupportReasonIds, limitedSupportReason.ID())
 		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to get limited support reasons: %v\n", err)
