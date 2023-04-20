@@ -32,6 +32,7 @@ type accountAssignOptions struct {
 	payerAccount string
 	accountID    string
 	output       string
+	iamUser      bool
 
 	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
@@ -73,6 +74,7 @@ func newCmdAccountAssign(streams genericclioptions.IOStreams, flags *genericclio
 	accountAssignCmd.Flags().StringVarP(&ops.payerAccount, "payer-account", "p", "", "Payer account type")
 	accountAssignCmd.Flags().StringVarP(&ops.username, "username", "u", "", "LDAP username")
 	accountAssignCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "(optional) Specific AWS account ID to assign")
+	accountAssignCmd.Flags().BoolVarP(&ops.iamUser, "iam-user", "I", false, "Create an AWS IAM user and Access Key")
 
 	return accountAssignCmd
 }
@@ -171,6 +173,21 @@ func (o *accountAssignOptions) run() error {
 	err = outputflag.PrintResponse(o.output, resp)
 	if err != nil {
 		fmt.Println("Error while calling PrintResponse(): ", err.Error())
+	}
+
+	// Create an AWS IAM user if iamUser is true
+	if o.iamUser {
+		iamOptions := iamOptions{
+			awsAccountID: o.accountID,
+			awsProfile:   o.payerAccount,
+			awsRegion:    "us-east-1",
+			kerberosUser: o.username,
+			rotate:       false,
+		}
+		err = iamOptions.run()
+		if err != nil {
+			fmt.Println("Error while creating AWS IAM user: ", err.Error())
+		}
 	}
 
 	return nil
