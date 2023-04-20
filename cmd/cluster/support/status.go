@@ -74,7 +74,7 @@ func (o *statusOptions) run() error {
 	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
 	table.AddRow([]string{"Reason ID", "Summary", "Details"})
 	for _, clusterLimitedSupportReason := range clusterLimitedSupportReasons {
-		table.AddRow([]string{clusterLimitedSupportReason.ID, clusterLimitedSupportReason.Summary, clusterLimitedSupportReason.Details})
+		table.AddRow([]string{clusterLimitedSupportReason.ID(), clusterLimitedSupportReason.Summary(), clusterLimitedSupportReason.Details()})
 	}
 	// Add empty row for readability
 	table.AddRow([]string{})

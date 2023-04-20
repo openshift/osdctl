@@ -12,12 +12,6 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
-type LimitedSupportReasonItem struct {
-	ID      string
-	Summary string
-	Details string
-}
-
 var clusterKeyRE = regexp.MustCompile(`^(\w|-)+$`)
 
 func IsValidKey(clusterKey string) bool {
@@ -142,8 +136,7 @@ func GetCluster(connection *sdk.Connection, key string) (cluster *cmv1.Cluster, 
 	return
 }
 
-func GetClusterLimitedSupportReasons(connection *sdk.Connection, clusterID string) ([]*LimitedSupportReasonItem, error) {
-
+func GetClusterLimitedSupportReasons(connection *sdk.Connection, clusterID string) ([]*cmv1.LimitedSupportReason, error) {
 	limitedSupportReasons, err := connection.ClustersMgmt().V1().
 		Clusters().
 		Cluster(clusterID).
@@ -154,20 +147,7 @@ func GetClusterLimitedSupportReasons(connection *sdk.Connection, clusterID strin
 		return nil, fmt.Errorf("Failed to get limited Support Reasons: %s", err)
 	}
 
-	lmtReason := limitedSupportReasons.Items().Slice()
-
-	var clusterLmtSprReasons []*LimitedSupportReasonItem
-
-	for _, reason := range lmtReason {
-		clusterLmtSprReason := LimitedSupportReasonItem{
-			ID:      reason.ID(),
-			Summary: reason.Summary(),
-			Details: reason.Details(),
-		}
-		clusterLmtSprReasons = append(clusterLmtSprReasons, &clusterLmtSprReason)
-	}
-
-	return clusterLmtSprReasons, nil
+	return limitedSupportReasons.Items().Slice(), nil
 }
 
 // GetSubscription Function allows to get a single subscription with any identifier (displayname, ID, internal or external ID)

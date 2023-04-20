@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"os"
 	"os/exec"
 	"sort"
@@ -63,7 +64,7 @@ type contextData struct {
 	ClusterVersion string
 	ClusterID      string
 	// limited Support Status
-	LimitedSupportReasons []*utils.LimitedSupportReasonItem
+	LimitedSupportReasons []*cmv1.LimitedSupportReason
 	// Service Logs
 	ServiceLogs []sl.ServiceLogShort
 
@@ -730,7 +731,7 @@ func printServiceLogs(serviceLogs []sl.ServiceLogShort, verbose bool, sinceDays 
 }
 
 // printSupportStatus reports if a cluster is in limited support or fully supported.
-func printSupportStatus(limitedSupportReasons []*utils.LimitedSupportReasonItem) {
+func printSupportStatus(limitedSupportReasons []*cmv1.LimitedSupportReason) {
 
 	fmt.Println("============================================================")
 	fmt.Println("Limited Support Status")
@@ -746,7 +747,7 @@ func printSupportStatus(limitedSupportReasons []*utils.LimitedSupportReasonItem)
 	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
 	table.AddRow([]string{"Reason ID", "Summary", "Details"})
 	for _, clusterLimitedSupportReason := range limitedSupportReasons {
-		table.AddRow([]string{clusterLimitedSupportReason.ID, clusterLimitedSupportReason.Summary, clusterLimitedSupportReason.Details})
+		table.AddRow([]string{clusterLimitedSupportReason.ID(), clusterLimitedSupportReason.Summary(), clusterLimitedSupportReason.Details()})
 	}
 	// Add empty row for readability
 	table.AddRow([]string{})

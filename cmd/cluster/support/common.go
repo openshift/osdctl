@@ -3,6 +3,7 @@ package support
 import (
 	"errors"
 	"fmt"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	ctlutil "github.com/openshift/osdctl/pkg/utils"
 	"os"
 
@@ -18,7 +19,7 @@ func sendRequest(request *sdk.Request) (*sdk.Response, error) {
 	return response, nil
 }
 
-func getLimitedSupportReasons(clusterId string) ([]*ctlutil.LimitedSupportReasonItem, error) {
+func getLimitedSupportReasons(clusterId string) ([]*cmv1.LimitedSupportReason, error) {
 	// Check that the cluster key (name, identifier or external identifier) given by the user
 	// is reasonably safe so that there is no risk of SQL injection
 	err := ctlutil.IsValidClusterKey(clusterId)
