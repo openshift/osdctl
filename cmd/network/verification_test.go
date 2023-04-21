@@ -67,7 +67,7 @@ func Test_egressVerificationSetup(t *testing.T) {
 			name: "ClusterId optional",
 			e: &EgressVerification{
 				ClusterId:       "",
-				SubnetId:        []string{"subnet-a", "subnet-b", "subnet-c"},
+				SubnetIds:       []string{"subnet-a", "subnet-b", "subnet-c"},
 				SecurityGroupId: "sg-b",
 			},
 			expectErr: false,
@@ -267,8 +267,8 @@ func Test_egressVerificationGetSubnetId(t *testing.T) {
 		{
 			name: "manual override",
 			e: &EgressVerification{
-				log:      newTestLogger(t),
-				SubnetId: []string{"override"},
+				log:       newTestLogger(t),
+				SubnetIds: []string{"override"},
 			},
 			expected:  "override",
 			expectErr: false,
@@ -325,7 +325,7 @@ func Test_egressVerificationGetSubnetId(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actual, err := test.e.getSubnetId(context.TODO())
+			actual, err := test.e.getSubnetIds(context.TODO())
 			if err != nil {
 				if !test.expectErr {
 					t.Errorf("expected no err, got %s", err)
@@ -412,7 +412,7 @@ func Test_egressVerificationGetSubnetIdAllSubnetsFlag(t *testing.T) {
 			name: "all subnets flag is on",
 			e: &EgressVerification{
 				log:        newTestLogger(t),
-				SubnetId:   []string{"string-1", "string-2", "string-3"},
+				SubnetIds:  []string{"string-1", "string-2", "string-3"},
 				AllSubnets: true,
 			},
 			expected:  []string{"string-1", "string-2", "string-3"},
@@ -485,7 +485,7 @@ func Test_egressVerificationGetSubnetIdAllSubnetsFlag(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actual, err := test.e.getSubnetId(context.TODO())
+			actual, err := test.e.getSubnetIds(context.TODO())
 			if err != nil {
 				if !test.expectErr {
 					t.Errorf("expected no err, got %s", err)
