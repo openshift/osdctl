@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	"log"
 	"os"
 	"strings"
@@ -16,9 +15,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift-online/ocm-sdk-go/logging"
+	"github.com/openshift/osd-network-verifier/pkg/output"
 	"github.com/openshift/osd-network-verifier/pkg/proxy"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
 	onvAwsClient "github.com/openshift/osd-network-verifier/pkg/verifier/aws"
+	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -149,22 +150,18 @@ func (e *EgressVerification) Run(ctx context.Context) {
 	}
 }
 
-type egressOutput interface {
-	Parse() ([]error, []error, []error)
-}
+func generateServiceLog(out *output.Output, clusterId string) servicelog.PostCmdOptions {
+	failures := out.GetEgressURLFailures()
+	if len(failures) > 0 {
+		egressUrls := make([]string, len(failures))
+		for i, failure := range failures {
+			egressUrls[i] = failure.EgressURL()
+		}
 
-func generateServiceLog(out egressOutput, clusterId string) servicelog.PostCmdOptions {
-	failures, _, _ := out.Parse()
-	var failedEgresses []string
-	for _, failure := range failures {
-		failedEgresses = append(failedEgresses, strings.Split(failure.Error(), "Unable to reach ")[1])
-	}
-
-	if len(failedEgresses) > 0 {
 		return servicelog.PostCmdOptions{
 			Template:       blockedEgressTemplateUrl,
 			ClusterId:      clusterId,
-			TemplateParams: []string{fmt.Sprintf("URLS=%v", strings.Join(failedEgresses, ","))},
+			TemplateParams: []string{fmt.Sprintf("URLS=%v", strings.Join(egressUrls, ","))},
 		}
 	}
 	return servicelog.PostCmdOptions{}

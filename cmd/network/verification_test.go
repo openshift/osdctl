@@ -2,8 +2,6 @@ package network
 
 import (
 	"context"
-	"errors"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	"reflect"
 	"testing"
 
@@ -12,8 +10,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift-online/ocm-sdk-go/logging"
+	"github.com/openshift/osd-network-verifier/pkg/output"
 	"github.com/openshift/osd-network-verifier/pkg/proxy"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
+	"github.com/openshift/osdctl/cmd/servicelog"
 )
 
 func newTestLogger(t *testing.T) logging.Logger {
@@ -505,29 +505,21 @@ func Test_egressVerificationGetSubnetIdAllSubnetsFlag(t *testing.T) {
 	}
 }
 
-type egressOutputImpl struct {
-	failures []error
-}
-
-func (e egressOutputImpl) Parse() ([]error, []error, []error) {
-	return e.failures, nil, nil
-}
-
 func Test_generateServiceLog(t *testing.T) {
 	testClusterId := "abc123"
 
 	tests := []struct {
-		name string
-		out  egressOutput
-		want servicelog.PostCmdOptions
+		name       string
+		egressUrls []string
+		want       servicelog.PostCmdOptions
 	}{
 		{
-			name: "no egress failures",
-			out:  egressOutputImpl{},
+			name:       "no egress failures",
+			egressUrls: nil,
 		},
 		{
-			name: "one egress failure",
-			out:  egressOutputImpl{failures: []error{errors.New("-  egressURL error: Unable to reach storage.googleapis.com:443")}},
+			name:       "one egress failure",
+			egressUrls: []string{"storage.googleapis.com:443"},
 			want: servicelog.PostCmdOptions{
 				Template:       blockedEgressTemplateUrl,
 				TemplateParams: []string{"URLS=storage.googleapis.com:443"},
@@ -536,12 +528,10 @@ func Test_generateServiceLog(t *testing.T) {
 		},
 		{
 			name: "multiple egress failures",
-			out: egressOutputImpl{
-				failures: []error{
-					errors.New("-  egressURL error: Unable to reach storage.googleapis.com:443"),
-					errors.New("-  egressURL error: Unable to reach console.redhat.com:443"),
-					errors.New("-  egressURL error: Unable to reach s3.amazonaws.com:443"),
-				},
+			egressUrls: []string{
+				"storage.googleapis.com:443",
+				"console.redhat.com:443",
+				"s3.amazonaws.com:443",
 			},
 			want: servicelog.PostCmdOptions{
 				Template:       blockedEgressTemplateUrl,
@@ -550,10 +540,12 @@ func Test_generateServiceLog(t *testing.T) {
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := generateServiceLog(tt.out, testClusterId); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("generateServiceLog() = %v, want %v", got, tt.want)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			out := new(output.Output)
+			out.SetEgressFailures(test.egressUrls)
+			if got := generateServiceLog(out, testClusterId); !reflect.DeepEqual(got, test.want) {
+				t.Errorf("generateServiceLog() = %v, want %v", got, test.want)
 			}
 		})
 	}
