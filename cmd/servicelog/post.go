@@ -45,10 +45,7 @@ type PostCmdOptions struct {
 }
 
 func newPostCmd() *cobra.Command {
-	var opts = PostCmdOptions{
-		successfulClusters: make(map[string]string),
-		failedClusters:     make(map[string]string),
-	}
+	var opts = PostCmdOptions{}
 	postCmd := &cobra.Command{
 		Use:   "post CLUSTER_ID",
 		Short: "Send a servicelog message to a given cluster",
@@ -75,6 +72,8 @@ func newPostCmd() *cobra.Command {
 }
 
 func (o *PostCmdOptions) Init() error {
+	o.successfulClusters = make(map[string]string)
+	o.failedClusters = make(map[string]string)
 	return nil
 }
 
