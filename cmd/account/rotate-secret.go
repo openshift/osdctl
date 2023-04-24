@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -208,11 +209,18 @@ func (o *rotateSecretOptions) run() error {
 	osdManagedAdminUsername := common.OSDManagedAdminIAM + "-" + accountIDSuffixLabel
 
 	// Create new access key
-	createAccessKeyOutput, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{
-		UserName: aws.String(osdManagedAdminUsername),
-	})
+	createAccessKeyOutput, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{UserName: aws.String(osdManagedAdminUsername)})
 	if err != nil {
-		return err
+		if awsErr, ok := err.(awserr.Error); ok && awsErr.Code() == "NoSuchEntity" {
+			// try removing accountIDSuffixLabel from the end of the username
+			osdManagedAdminUsername = common.OSDManagedAdminIAM
+			createAccessKeyOutput, err = awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{UserName: aws.String(osdManagedAdminUsername)})
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
 	}
 
 	// Place new credentials into body for secret
