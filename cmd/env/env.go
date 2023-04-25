@@ -47,6 +47,30 @@ type OcEnv struct {
 
 var Config_Filepath = "/.osdctl.yaml"
 
+var commandHelp = `
+Creates an isolated environment where you can interact with a cluster.
+The environment is set up in a dedicated folder in $HOME/.ocenv.
+The $CLUSTERID variable will be populated with the external ID of the cluster you're logged in to.
+
+*PS1*
+osdctl env renders the required PS1 function 'kube_ps1' to use when logged in to a cluster.
+You need to include it inside your .bashrc or .bash_profile by adding a snippet like the following:
+
+export PS1='...other information for your PS1... $(kube_ps1) \$ '
+
+e.g.
+
+export PS1='\[\033[36m\]\u\[\033[m\]@\[\033[32m\]\h:\[\033[33;1m\]\w\[\033[m\]$(kube_ps1) \$ '
+
+osdctl env creates a new ocm and kube config so you can log in to different environments at the same time.
+When initialized, osdctl env will copy the ocm config you're currently using.
+
+*Logging in to the cluster*
+
+To log in to a cluster within the environment using backplane, osdctl creates the ocb command.
+The ocb command is created in the bin directory in the environment folder and added to the PATH when inside the environment.
+`
+
 func NewCmdEnv(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
 	options := Options{}
 	config := config.LoadYaml(Config_Filepath)
@@ -55,9 +79,11 @@ func NewCmdEnv(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 		Options: &options,
 		Config:  config,
 	}
+
 	envCmd := &cobra.Command{
 		Use:               "env [flags] [env-alias]",
 		Short:             "Create an environment to interact with a cluster",
+		Long:              commandHelp,
 		Args:              cobra.MaximumNArgs(1),
 		DisableAutoGenTag: true,
 		Run:               env.RunCommand,
