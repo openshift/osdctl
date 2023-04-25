@@ -2,6 +2,7 @@ package env
 
 import (
 	"bufio"
+	"embed"
 	"errors"
 	"fmt"
 	"log"
@@ -252,6 +253,7 @@ func (e *OcEnv) ensureEnvVariables() {
 	envContent := `
 KUBECONFIG=` + e.Path + `/kubeconfig.json
 OCM_CONFIG=` + e.Path + `/ocm.json
+PS1=[\u@\h \W $(kube_ps1)]\$ 
 PATH=` + e.Path + `/bin:` + os.Getenv("PATH") + `
 `
 	if e.Options.ClusterId != "" {
@@ -275,15 +277,11 @@ PATH=` + e.Path + `/bin:` + os.Getenv("PATH") + `
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer func(direnvfile *os.File) {
-		err := direnvfile.Close()
-		if err != nil {
-			fmt.Println("Error while calling direnvFile.Close(): ", err.Error())
-			return
-		}
-	}(direnvfile)
 	return
 }
+
+//go:embed kube-ps1.sh
+var f embed.FS
 
 func (e *OcEnv) createBins() {
 	if _, err := os.Stat(e.binPath()); errors.Is(err, os.ErrNotExist) {
@@ -292,32 +290,46 @@ func (e *OcEnv) createBins() {
 			log.Fatal(err)
 		}
 	}
-	e.createBin("oct", "ocm tunnel "+e.Options.ClusterId)
 	if e.Options.Kubeconfig == "" {
 		e.createBin("ocl", e.generateLoginCommand())
 	}
+
+	kubeps1, err := f.ReadFile("kube-ps1.sh")
+	if err != nil {
+		panic(fmt.Errorf("can't read kube-ps1.sh: %v", err))
+	}
+	e.createBin("kube_ps1", "echo -n")
+	e.createBin("kube-ps1.sh", string(kubeps1))
 	e.createBin("ocd", "ocm describe cluster "+e.Options.ClusterId)
 	loginScript := e.getLoginScript()
 	ocb := `
 #!/bin/bash
 
-set -euo pipefail
 
-sudo ls`
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+source "$DIR/kube-ps1.sh"
+set -euo pipefail
+function cluster_function() {
+	info="$(ocm backplane status 2> /dev/null)"
+	if [ $? -ne 0 ]; then return; fi
+	clustername=$(grep "Cluster Name" <<< $info | awk '{print $3}')
+	baseid=$(grep "Cluster Basedomain" <<< $info | awk '{print $3}' | cut -d'.' -f1,2)
+	echo $clustername.$baseid
+  }
+KUBE_PS1_BINARY=oc
+export KUBE_PS1_CLUSTER_FUNCTION=cluster_function
+`
 	if loginScript != "" {
 		ocb += `
 while true; do
-  sleep 30s
+  sleep 2m
   ` + loginScript + `
 done &
-` + loginScript + `
 echo $! >> .killpids
+` + loginScript + `
 `
 	}
 	ocb += `
-ocm-backplane tunnel ` + e.Options.ClusterId + ` &
-echo $! >> .killpids
-sleep 5s
 ocm backplane login ` + e.Options.ClusterId + `
 `
 	e.createBin("ocb", ocb)
