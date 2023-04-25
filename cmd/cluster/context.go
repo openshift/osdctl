@@ -159,6 +159,18 @@ func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
 
 func (o *contextOptions) run() error {
 
+	var printFunc func(*contextData)
+	switch o.output {
+	case shortOutputConfigValue:
+		printFunc = o.printShortOutput
+	case longOutputConfigValue:
+		printFunc = o.printLongOutput
+	case jsonOutputConfigValue:
+		printFunc = o.printJsonOutput
+	default:
+		return fmt.Errorf("Unknown Output Format: %s", o.output)
+	}
+
 	currentData, dataErrors := o.generateContextData()
 	if currentData == nil {
 		fmt.Fprintf(os.Stderr, "Failed to query cluster info: %+v", dataErrors)
@@ -172,16 +184,7 @@ func (o *contextOptions) run() error {
 		}
 	}
 
-	switch o.output {
-	case shortOutputConfigValue:
-		o.printShortOutput(currentData)
-	case longOutputConfigValue:
-		o.printLongOutput(currentData)
-	case jsonOutputConfigValue:
-		o.printJsonOutput(currentData)
-	default:
-		return fmt.Errorf("Unknown Output Format: %s", o.output)
-	}
+	printFunc(currentData)
 
 	return nil
 }

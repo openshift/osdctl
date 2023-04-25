@@ -41,6 +41,9 @@ build:
 release:
 	goreleaser release --clean
 
+install:
+	goreleaser build --single-target -o "$(shell go env GOPATH)/bin/osdctl" --snapshot --clean
+
 vet:
 	go vet ${BUILDFLAGS} ./...
 
