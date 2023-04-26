@@ -177,16 +177,18 @@ func (o *accountAssignOptions) run() error {
 
 	// Create an AWS IAM user if iamUser is true
 	if o.iamUser {
+		fmt.Printf("Creating AWS IAM user for account %s...\n\n", accountAssignID)
 		iamOptions := iamOptions{
-			awsAccountID: o.accountID,
+			awsAccountID: accountAssignID,
 			awsProfile:   o.payerAccount,
 			awsRegion:    "us-east-1",
 			kerberosUser: o.username,
 			rotate:       false,
 		}
+
 		err = iamOptions.run()
 		if err != nil {
-			fmt.Println("Error while creating AWS IAM user: ", err.Error())
+			return fmt.Errorf("error while creating AWS IAM user: %s", err)
 		}
 	}
 

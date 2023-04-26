@@ -2,6 +2,7 @@ package mgmt
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
@@ -62,33 +63,38 @@ func (o *iamOptions) complete(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func checkError(msg string, err error) {
+	if err != nil {
+		r := fmt.Errorf(msg, err)
+		panic(r)
+	}
+}
+
+func writeFile(user string, content string) {
+	data := []byte(content)
+	fileName := fmt.Sprintf("/tmp/aws-iam-%s", user)
+	err := os.WriteFile(fileName, data, 0644)
+	checkError("Failed to create credential file in /tmp", err)
+	fmt.Printf("AWS credentials file created in %s\n", fileName)
+}
+
 func (o *iamOptions) run() error {
 	// Build the base AWS client using the provide credentials (profile or env vars)
 	awsClient, err := awsprovider.NewAwsClient(o.awsProfile, o.awsRegion, "")
-	if err != nil {
-		fmt.Printf("Could not build AWS Client: %s\n", err)
-		return err
-	}
+	checkError("Could not build AWS Client: %s", err)
 
 	// Get the right partition for the final ARN
 	partition, err := awsprovider.GetAwsPartition(awsClient)
-	if err != nil {
-		fmt.Printf("Could not get AWS partition: %s\n", err)
-		return err
-	}
+	checkError("Could not get AWS partition: %s", err)
 
 	// Generate a session name using the SRE's kerberos ID
 	sessionName, err := osdCloud.GenerateRoleSessionName(awsClient)
-	if err != nil {
-		fmt.Printf("Could not generate Session Name: %s\n", err)
-		return err
-	}
+	checkError("Could not generate Session Name: %s", err)
+
 	// Use OrganizationAccountAccessRole
 	assumedRoleCreds, err := osdCloud.GenerateOrganizationAccountAccessCredentials(awsClient, o.awsAccountID, sessionName, partition)
-	if err != nil {
-		fmt.Printf("Could not build AWS Client for OrganizationAccountAccessRole: %s\n", err)
-		return err
-	}
+	checkError("Could not build AWS Client for OrganizationAccountAccessRole: %s", err)
+
 	// Variable with credential to be used by the impersonate aws client
 	impersonateAwsCredentials := awsprovider.AwsClientInput{
 		AccessKeyID:     *assumedRoleCreds.AccessKeyId,
@@ -99,54 +105,46 @@ func (o *iamOptions) run() error {
 
 	// Create a new impersonated AWS client
 	impersonateAwsClient, err := awsprovider.NewAwsClientWithInput(&impersonateAwsCredentials)
-	if err != nil {
-		fmt.Printf("Could create impersonated AWS Client: %s\n", err)
-		return err
-	}
+	checkError("Could create impersonated AWS Client: %s", err)
 
 	// Check if IAM user already exists
 	iamUserExist, err := awsprovider.CheckIAMUserExists(impersonateAwsClient, &o.kerberosUser)
 	if !iamUserExist {
 		// Create IAM user
 		err := awsprovider.CreateIAMUserAndAttachPolicy(impersonateAwsClient, &o.kerberosUser, &arnPolicy)
-		if err != nil {
-			fmt.Printf("Error Creating the IAM user: %s\n", err)
-			return err
-		}
+		checkError("Error Creating the IAM user: %s", err)
+
 		// Create AccessKey
 		newAccessKey, err := impersonateAwsClient.CreateAccessKey(&iam.CreateAccessKeyInput{UserName: &o.kerberosUser})
-		if err != nil {
-			fmt.Printf("Error creating the use Access Key: %s\n", err)
-			return err
-		}
-		// Print the output of the
-		fmt.Printf("Add the follow block to ~/.aws/credentials:\n[%v-dev-account]\naws_access_key_id = %v\naws_secret_access_key = %v\n", *newAccessKey.AccessKey.UserName, *newAccessKey.AccessKey.AccessKeyId, *newAccessKey.AccessKey.SecretAccessKey)
+		checkError("Error creating the use Access Key: %s", err)
+
+		// Creates the file with aws IAM user credentials
+		content := fmt.Sprintf("[%v-dev-account]\naws_access_key_id = %v\naws_secret_access_key = %v\n", *newAccessKey.AccessKey.UserName, *newAccessKey.AccessKey.AccessKeyId, *newAccessKey.AccessKey.SecretAccessKey)
+		writeFile(*newAccessKey.AccessKey.UserName, content)
+
 		return nil
+
 	} else {
 		if o.rotate {
 			existingKeys, err := impersonateAwsClient.ListAccessKeys(&iam.ListAccessKeysInput{UserName: &o.kerberosUser})
-			if err != nil {
-				fmt.Printf("Error getting existing access keys: %s\n", err)
-				return err
-			}
+			checkError("Error getting existing access keys: %s", err)
+
 			for i := range existingKeys.AccessKeyMetadata {
 				_, err := impersonateAwsClient.DeleteAccessKey(&iam.DeleteAccessKeyInput{AccessKeyId: existingKeys.AccessKeyMetadata[i].AccessKeyId, UserName: &o.kerberosUser})
-				if err != nil {
-					fmt.Printf("Error deleting existing access keys: %s\n", err)
-					return err
-				}
+				checkError("Error deleting existing access keys: %s", err)
 			}
 			// Create AccessKey
 			newAccessKey, err := impersonateAwsClient.CreateAccessKey(&iam.CreateAccessKeyInput{UserName: &o.kerberosUser})
-			if err != nil {
-				fmt.Printf("Error creating the use Access Key: %s\n", err)
-				return err
-			}
-			// Print the output of the
-			fmt.Printf("Add the follow block to ~/.aws/credentials:\n[%v-dev-account]\naws_access_key_id = %v\naws_secret_access_key = %v\n", *newAccessKey.AccessKey.UserName, *newAccessKey.AccessKey.AccessKeyId, *newAccessKey.AccessKey.SecretAccessKey)
-			return nil
+			checkError("Error creating the use Access Key: %s", err)
 
+			// Creates the file with aws IAM user credentials
+			content := fmt.Sprintf("[%v-dev-account]\naws_access_key_id = %v\naws_secret_access_key = %v\n", *newAccessKey.AccessKey.UserName, *newAccessKey.AccessKey.AccessKeyId, *newAccessKey.AccessKey.SecretAccessKey)
+			writeFile(*newAccessKey.AccessKey.UserName, content)
+
+			return nil
 		}
+
+		// Print message if user exists and rotate not defined
 		fmt.Printf("User %s already exists in AWS account %s\n", o.kerberosUser, o.awsAccountID)
 		return err
 	}
