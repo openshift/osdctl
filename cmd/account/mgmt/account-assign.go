@@ -74,7 +74,7 @@ func newCmdAccountAssign(streams genericclioptions.IOStreams, flags *genericclio
 	accountAssignCmd.Flags().StringVarP(&ops.payerAccount, "payer-account", "p", "", "Payer account type")
 	accountAssignCmd.Flags().StringVarP(&ops.username, "username", "u", "", "LDAP username")
 	accountAssignCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "(optional) Specific AWS account ID to assign")
-	accountAssignCmd.Flags().BoolVarP(&ops.iamUser, "iam-user", "I", false, "Create an AWS IAM user and Access Key")
+	accountAssignCmd.Flags().BoolVarP(&ops.iamUser, "iam-user", "I", false, "(optional) Create an AWS IAM user and Access Key")
 
 	return accountAssignCmd
 }
