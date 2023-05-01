@@ -2,6 +2,7 @@ package mgmt
 
 import (
 	"fmt"
+
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -19,6 +20,7 @@ func NewCmdMgmt(streams genericclioptions.IOStreams, flags *genericclioptions.Co
 	mgmtCmd.AddCommand(newCmdAccountList(streams, flags, globalOpts))
 	mgmtCmd.AddCommand(newCmdAccountAssign(streams, flags, globalOpts))
 	mgmtCmd.AddCommand(newCmdAccountUnassign(streams, flags))
+	mgmtCmd.AddCommand(newCmdAccountIAM(streams, flags, globalOpts))
 
 	return mgmtCmd
 }
