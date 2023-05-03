@@ -139,7 +139,8 @@ func (e *EgressVerification) Run(ctx context.Context) {
 		out := onv.ValidateEgress(c, *inputs[i])
 		out.Summary(e.Debug)
 
-		if !out.IsSuccessful() {
+		// Only suggest sending a service log if the failures are egress-url related
+		if !out.IsSuccessful() && len(out.GetEgressURLFailures()) > 0 {
 			postCmd := generateServiceLog(out, e.ClusterId)
 			if err := postCmd.Run(); err != nil {
 				fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
@@ -197,7 +198,10 @@ func (e *EgressVerification) setup(ctx context.Context) (*aws.Config, error) {
 		e.log.Info(ctx, "getting AWS credentials from backplane-api")
 		cfg, err := osdCloud.CreateAWSV2Config(cluster.ID())
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to get credentials automatically from backplane-api: %v."+
+				" You can still try this command by exporting AWS credentials as environment variables and specifying"+
+				" the --subnet-id, --security-group, and other required flags manually."+
+				" See osdctl network verify-egress -h for more details", err)
 		}
 		e.log.Debug(ctx, "retrieved AWS credentials from backplane-api")
 		e.awsClient = ec2.NewFromConfig(cfg)
