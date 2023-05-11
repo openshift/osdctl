@@ -63,6 +63,10 @@ type contextData struct {
 	ClusterName    string
 	ClusterVersion string
 	ClusterID      string
+
+	// Current OCM environment (e.g., "production" or "stage")
+	OCMEnv string
+
 	// limited Support Status
 	LimitedSupportReasons []*cmv1.LimitedSupportReason
 	// Service Logs
@@ -221,7 +225,7 @@ func (o *contextOptions) printLongOutput(data *contextData) {
 	}
 
 	// Print other helpful links
-	err := o.printOtherLinks()
+	err := o.printOtherLinks(data.OCMEnv)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't print other links: %v\n", err)
 	}
@@ -311,6 +315,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	data.ClusterName = cluster.Name()
 	data.ClusterID = cluster.ID()
 	data.ClusterVersion = cluster.Version().RawID()
+	data.OCMEnv = utils.GetCurrentOCMEnv(ocmClient)
 
 	fmt.Fprintln(os.Stderr, "Getting Limited Support Reason...")
 	limitedSupportReasons, err := utils.GetClusterLimitedSupportReasons(ocmClient, cluster.ID())
@@ -852,11 +857,19 @@ func printJIRASupportExceptions(issues []jira.Issue) {
 	}
 }
 
-func (o *contextOptions) printOtherLinks() error {
+func (o *contextOptions) printOtherLinks(OCMEnv string) error {
 	fmt.Println("============================================================")
 	fmt.Println("External resources containing related cluster data")
 	fmt.Println("============================================================")
-	fmt.Printf("Link to Splunk audit logs (set time in Splunk): https://osdsecuritylogs.splunkcloud.com/en-US/app/search/search?q=search%%20index%%3D%%22openshift_managed_audit%%22%%20clusterid%%3D%%22%s%%22\n\n", o.infraID)
+	// Determine whether to use the prod or stage Splunk index
+	splunkIndex := "openshift_managed_audit"
+	if OCMEnv == "stage" {
+		splunkIndex = "openshift_managed_audit_stage"
+	}
+	// Clusters in integration don't forward to splunk
+	if OCMEnv != "integration" {
+		fmt.Printf("Link to Splunk audit logs (set time in Splunk): https://osdsecuritylogs.splunkcloud.com/en-US/app/search/search?q=search%%20index%%3D%%22%s%%22%%20clusterid%%3D%%22%s%%22\n\n", splunkIndex, o.infraID)
+	}
 	fmt.Printf("Link to OHSS tickets: %s/issues/?jql=project%%20%%3D%%20OHSS%%20and%%20(%%22Cluster%%20ID%%22%%20~%%20%%20%%22%s%%22%%20OR%%20%%22Cluster%%20ID%%22%%20~%%20%%22%s%%22)\n\n", JiraBaseURL, o.clusterID, o.externalClusterID)
 	fmt.Printf("Link to CCX dashboard: https://kraken.psi.redhat.com/clusters/%s\n\n", o.externalClusterID)
 
