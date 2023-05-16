@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	"math"
 	"os"
 	"os/exec"
 	"sort"
@@ -261,6 +262,13 @@ func (o *contextOptions) printShortOutput(data *contextData) {
 		historicalAlertsString = fmt.Sprintf("%d", historicalAlertsCount)
 	}
 
+	var numInternalServiceLogs int
+	for _, serviceLog := range data.ServiceLogs {
+		if serviceLog.InternalOnly {
+			numInternalServiceLogs++
+		}
+	}
+
 	table := printer.NewTablePrinter(os.Stdout, 20, 1, 2, ' ')
 	table.AddRow([]string{
 		"Version",
@@ -273,7 +281,7 @@ func (o *contextOptions) printShortOutput(data *contextData) {
 	table.AddRow([]string{
 		data.ClusterVersion,
 		fmt.Sprintf("%t", len(data.LimitedSupportReasons) == 0),
-		fmt.Sprintf("%d", len(data.ServiceLogs)),
+		fmt.Sprintf("%d (%d internal)", len(data.ServiceLogs), numInternalServiceLogs),
 		fmt.Sprintf("%d", len(data.JiraIssues)),
 		fmt.Sprintf("H: %d | L: %d", highAlertCount, lowAlertCount),
 		historicalAlertsString,
@@ -726,13 +734,26 @@ func printServiceLogs(serviceLogs []sl.ServiceLogShort, verbose bool, sinceDays 
 	if verbose {
 		marshalledSLs, err := json.MarshalIndent(serviceLogs, "", "  ")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Couldn't prepare service logs for printing: %v", err)
+			_, _ = fmt.Fprintf(os.Stderr, "Couldn't prepare service logs for printing: %v", err)
 		}
-		dump.Pretty(os.Stdout, marshalledSLs)
+		_ = dump.Pretty(os.Stdout, marshalledSLs)
 	} else {
 		// Non verbose only prints the summaries
 		for i, errorServiceLog := range serviceLogs {
-			fmt.Printf("%d. %s (%s)\n", i, errorServiceLog.Summary, errorServiceLog.CreatedAt.Format(time.RFC3339))
+			var serviceLogSummary string
+			if errorServiceLog.InternalOnly {
+				internalServiceLogLines := strings.Split(errorServiceLog.Description, "\n")
+				if len(internalServiceLogLines) > 0 {
+					// if the description is "", Split returns []
+					serviceLogSummary = fmt.Sprintf("INT %s", internalServiceLogLines[0])
+				} else {
+					serviceLogSummary = errorServiceLog.Summary
+				}
+			} else {
+				serviceLogSummary = errorServiceLog.Summary
+			}
+			serviceLogSummaryAbbreviated := serviceLogSummary[:int(math.Min(40, float64(len(serviceLogSummary))))]
+			fmt.Printf("%d. %s (%s)\n", i, serviceLogSummaryAbbreviated, errorServiceLog.CreatedAt.Format(time.RFC3339))
 		}
 	}
 	fmt.Println()

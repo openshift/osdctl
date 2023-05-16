@@ -17,10 +17,11 @@ type GoodReply struct {
 }
 
 type ServiceLogShort struct {
-	Summary     string    `json:"summary"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
-	Severity    string    `json:"severity"`
+	Summary      string    `json:"summary"`
+	Description  string    `json:"description"`
+	CreatedAt    time.Time `json:"created_at"`
+	Severity     string    `json:"severity"`
+	InternalOnly bool      `json:"internal_only"`
 }
 
 type ClusterListGoodReply struct {
