@@ -221,10 +221,10 @@ func (o *contextOptions) printLongOutput(data *contextData) {
 
 	printCurrentPDAlerts(data.PdAlerts, data.pdServiceID)
 
-	printCurrentClusterAlerts(data.clusterAlerts)
-
 	if o.full {
 		printHistoricalPDAlertSummary(data.HistoricalAlerts, data.pdServiceID, o.days)
+
+		printCurrentClusterAlerts(data.clusterAlerts)
 
 		err := printCloudTrailLogs(data.CloudtrailEvents)
 		if err != nil {
@@ -233,6 +233,10 @@ func (o *contextOptions) printLongOutput(data *contextData) {
 		}
 	} else {
 		fmt.Println()
+		fmt.Println("============================================================")
+		fmt.Println("All current alerts for the Cluster")
+		fmt.Println("============================================================")
+		fmt.Println("Not polling cluster alerts, use --full flag to do so (must be connected to VPN and have backplane proxy set to work).")
 		fmt.Println("============================================================")
 		fmt.Println("CloudTrail events for the Cluster")
 		fmt.Println("============================================================")
@@ -377,17 +381,16 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		errors = append(errors, fmt.Errorf("Error while getting current PD Alerts: %v", err))
 	}
 
-	fmt.Fprintln(os.Stderr, "Getting currently firing cluster alerts...")
-	data.clusterAlerts, err = GetCurrentClusterAlerts(data.ClusterID, ocmClient)
-	if err != nil {
-		errors = append(errors, fmt.Errorf("Error while getting current cluster alerts: %v", err))
-	}
-
 	if o.full {
 		fmt.Fprintln(os.Stderr, "Getting historical Pagerduty Alerts...")
 		data.HistoricalAlerts, err = GetHistoricalPDAlertsForCluster(data.pdServiceID, o.usertoken, o.oauthtoken)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("Error while getting historical PD Alert Data: %v", err))
+		}
+		fmt.Fprintln(os.Stderr, "Getting currently firing cluster alerts...")
+		data.clusterAlerts, err = GetCurrentClusterAlerts(data.ClusterID, ocmClient, o.backplaneProxy)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("Error while getting current cluster alerts: %v", err))
 		}
 		fmt.Fprintln(os.Stderr, "Getting Cloudtrail events...")
 		data.CloudtrailEvents, err = GetCloudTrailLogsForCluster(o.awsProfile, o.clusterID, o.pages)
@@ -446,28 +449,29 @@ type ClusterAlerts struct {
 // GetCurrentClusterAlerts curls the backplane api for the clusters prometheus
 // A proxy needs to be specified in .config/osdctl or HTTPS_PROXY environment variable
 // Example: curl -x <proxy> -H "Authorization: Bearer $(ocm token)" "https://api.stage.backplane.openshift.com/backplane/prometheus/<internalid>/api/v1/alerts"
-func GetCurrentClusterAlerts(clusterID string, ocmClient *ocmsdk.Connection) (prom.Alerts, error) {
+func GetCurrentClusterAlerts(clusterID string, ocmClient *ocmsdk.Connection, backplane_proxy string) (prom.Alerts, error) {
 	url := strings.Replace(ocmClient.URL(), ".openshift.com", ".backplane.openshift.com", 1)
 	url += fmt.Sprintf("/backplane/prometheus/%s/api/v1/alerts", clusterID)
 
 	clusterAlerts := ClusterAlerts{}
 	if intutil.IsValidUrl(url) {
-
-		proxy, err := getProxy()
-		if err != nil {
-			if os.Getenv("HTTPS_PROXY") == "" {
-				fmt.Println("A backplane proxy and VPN connection is needed to get all currently firing cluster alerts")
-				return prom.Alerts{}, err
+		if backplane_proxy == "" {
+			var err error
+			backplane_proxy, err = getProxy()
+			if err != nil {
+				if os.Getenv("HTTPS_PROXY") == "" {
+					fmt.Println("A backplane proxy and VPN connection is needed to get all currently firing cluster alerts")
+					return prom.Alerts{}, err
+				}
+				fmt.Println("No backplane proxy configured, using env HTTPS_PROXY")
 			}
-			fmt.Println("No backplane proxy configured, using env HTTPS_PROXY")
 		}
-
 		token, _, err := ocmClient.Tokens()
 		if err != nil {
 			return prom.Alerts{}, err
 		}
 
-		response, err := intutil.CurlThisAuthorized(url, token, proxy)
+		response, err := intutil.CurlThisAuthorized(url, token, backplane_proxy)
 		if err != nil {
 			return prom.Alerts{}, err
 		}
