@@ -37,7 +37,6 @@ CLI tool to provide OSD related utilities
 * [osdctl completion](osdctl_completion.md)	 - Output shell completion code for the specified shell (bash or zsh)
 * [osdctl cost](osdctl_cost.md)	 - Cost Management related utilities
 * [osdctl env](osdctl_env.md)	 - Create an environment to interact with a cluster
-* [osdctl federatedrole](osdctl_federatedrole.md)	 - federated role related commands
 * [osdctl jumphost](osdctl_jumphost.md)	 - 
 * [osdctl network](osdctl_network.md)	 - network related utilities
 * [osdctl options](osdctl_options.md)	 - Print the list of flags inherited by all commands

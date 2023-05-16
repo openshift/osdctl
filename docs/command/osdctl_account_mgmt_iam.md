@@ -1,11 +1,20 @@
-## osdctl account mgmt
+## osdctl account mgmt iam
 
-AWS Account Management
+Creates an IAM user in a given AWS account and prints out the credentials
+
+```
+osdctl account mgmt iam [flags]
+```
 
 ### Options
 
 ```
-  -h, --help   help for mgmt
+  -i, --accountId string   AWS account ID to run this against
+  -h, --help               help for iam
+  -p, --profile string     AWS Profile
+  -r, --region string      AWS Region
+  -R, --rotate             Rotate an IAM user's credentials and print the output
+  -u, --user string        Kerberos username to run this for
 ```
 
 ### Options inherited from parent commands
@@ -31,9 +40,5 @@ AWS Account Management
 
 ### SEE ALSO
 
-* [osdctl account](osdctl_account.md)	 - AWS Account related utilities
-* [osdctl account mgmt assign](osdctl_account_mgmt_assign.md)	 - Assign account to user
-* [osdctl account mgmt iam](osdctl_account_mgmt_iam.md)	 - Creates an IAM user in a given AWS account and prints out the credentials
-* [osdctl account mgmt list](osdctl_account_mgmt_list.md)	 - List out accounts for username
-* [osdctl account mgmt unassign](osdctl_account_mgmt_unassign.md)	 - Unassign account to user
+* [osdctl account mgmt](osdctl_account_mgmt.md)	 - AWS Account Management
 

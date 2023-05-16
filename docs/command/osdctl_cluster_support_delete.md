@@ -9,6 +9,7 @@ osdctl cluster support delete CLUSTER_ID [flags]
 ### Options
 
 ```
+      --all                                Remove all limited support reasons
   -d, --dry-run                            Dry-run - print the limited support reason about to be sent but don't send it.
   -h, --help                               help for delete
   -i, --limited-support-reason-id string   Limited support reason ID

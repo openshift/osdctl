@@ -11,6 +11,7 @@ osdctl account mgmt assign [flags]
 ```
   -i, --account-id string      (optional) Specific AWS account ID to assign
   -h, --help                   help for assign
+  -I, --iam-user               (optional) Create an AWS IAM user and Access Key
   -p, --payer-account string   Payer account type
       --show-managed-fields    If true, keep the managedFields when printing objects in JSON or YAML format.
       --template string        Template string or path to template file to use when --output=jsonpath, --output=jsonpath-file.
