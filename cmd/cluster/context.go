@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"math"
 	"os"
 	"os/exec"
@@ -13,12 +12,19 @@ import (
 	"strings"
 	"time"
 
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+
+	ocmsdk "github.com/openshift-online/ocm-sdk-go"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	prom "github.com/prometheus/common/model"
+
 	pd "github.com/PagerDuty/go-pagerduty"
 	jira "github.com/andygrunwald/go-jira"
 	"github.com/aws/aws-sdk-go/service/cloudtrail"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	sl "github.com/openshift/osdctl/internal/servicelog"
+	intutil "github.com/openshift/osdctl/internal/utils"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/openshift/osdctl/pkg/printer"
@@ -36,6 +42,7 @@ const (
 	PagerDutyUserTokenConfigKey   = "pd_user_token"
 	PagerDutyTokenRegistrationUrl = "https://martindstone.github.io/PDOAuth/"
 	PagerDutyTeamIDs              = "team_ids"
+	BackplaneProxy                = "backplane_proxy"
 	shortOutputConfigValue        = "short"
 	longOutputConfigValue         = "long"
 	jsonOutputConfigValue         = "json"
@@ -57,6 +64,7 @@ type contextOptions struct {
 	awsProfile        string
 	jiratoken         string
 	team_ids          []string
+	backplaneProxy    string
 }
 
 type contextData struct {
@@ -81,6 +89,9 @@ type contextData struct {
 	pdServiceID      []string
 	PdAlerts         map[string][]pd.Incident
 	HistoricalAlerts map[string][]*IncidentOccurrenceTracker
+
+	// Cluster Alerts
+	clusterAlerts prom.Alerts
 
 	// CloudTrail Logs
 	CloudtrailEvents []*cloudtrail.Event
@@ -116,6 +127,7 @@ func newCmdContext() *cobra.Command {
 	contextCmd.Flags().StringVar(&ops.usertoken, "usertoken", "", fmt.Sprintf("Pass in PD usertoken directly. If not passed in, by default will read `pd_user_token` from ~/config/%s", osdctlConfig.ConfigFileName))
 	contextCmd.Flags().StringVar(&ops.jiratoken, "jiratoken", "", fmt.Sprintf("Pass in the Jira access token directly. If not passed in, by default will read `jira_token` from ~/.config/%s.\nJira access tokens can be registered by visiting %s/%s", osdctlConfig.ConfigFileName, JiraBaseURL, JiraTokenRegistrationPath))
 	contextCmd.Flags().StringArrayVarP(&ops.team_ids, "team-ids", "t", []string{}, fmt.Sprintf("Pass in PD teamids directly to filter the PD Alerts by team. Can also be defined as `team_ids` in ~/.config/%s\nWill show all PD Alerts for all PD service IDs if none is defined", osdctlConfig.ConfigFileName))
+	contextCmd.Flags().StringVar(&ops.backplaneProxy, "backplane-proxy", "", fmt.Sprintf("Pass in backplane proxy directly. If not passed in, by default will read `backplane_proxy` from ~/config/%s", osdctlConfig.ConfigFileName))
 	return contextCmd
 }
 
@@ -208,6 +220,8 @@ func (o *contextOptions) printLongOutput(data *contextData) {
 	printSupportStatus(data.LimitedSupportReasons)
 
 	printCurrentPDAlerts(data.PdAlerts, data.pdServiceID)
+
+	printCurrentClusterAlerts(data.clusterAlerts)
 
 	if o.full {
 		printHistoricalPDAlertSummary(data.HistoricalAlerts, data.pdServiceID, o.days)
@@ -363,6 +377,12 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		errors = append(errors, fmt.Errorf("Error while getting current PD Alerts: %v", err))
 	}
 
+	fmt.Fprintln(os.Stderr, "Getting currently firing cluster alerts...")
+	data.clusterAlerts, err = GetCurrentClusterAlerts(data.ClusterID, ocmClient)
+	if err != nil {
+		errors = append(errors, fmt.Errorf("Error while getting current cluster alerts: %v", err))
+	}
+
 	if o.full {
 		fmt.Fprintln(os.Stderr, "Getting historical Pagerduty Alerts...")
 		data.HistoricalAlerts, err = GetHistoricalPDAlertsForCluster(data.pdServiceID, o.usertoken, o.oauthtoken)
@@ -415,6 +435,51 @@ func GetCurrentPDAlertsForCluster(pdServiceIDs []string, pdUsertoken string, pdA
 		}
 	}
 	return incidents, nil
+}
+
+type ClusterAlerts struct {
+	Data struct {
+		Alerts prom.Alerts `json:"alerts"`
+	} `json:"data"`
+}
+
+// GetCurrentClusterAlerts curls the backplane api for the clusters prometheus
+// A proxy needs to be specified in .config/osdctl or HTTPS_PROXY environment variable
+// Example: curl -x <proxy> -H "Authorization: Bearer $(ocm token)" "https://api.stage.backplane.openshift.com/backplane/prometheus/<internalid>/api/v1/alerts"
+func GetCurrentClusterAlerts(clusterID string, ocmClient *ocmsdk.Connection) (prom.Alerts, error) {
+	url := strings.Replace(ocmClient.URL(), ".openshift.com", ".backplane.openshift.com", 1)
+	url += fmt.Sprintf("/backplane/prometheus/%s/api/v1/alerts", clusterID)
+
+	clusterAlerts := ClusterAlerts{}
+	if intutil.IsValidUrl(url) {
+
+		proxy, err := getProxy()
+		if err != nil {
+			if os.Getenv("HTTPS_PROXY") == "" {
+				fmt.Println("A backplane proxy and VPN connection is needed to get all currently firing cluster alerts")
+				return prom.Alerts{}, err
+			}
+			fmt.Println("No backplane proxy configured, using env HTTPS_PROXY")
+		}
+
+		token, _, err := ocmClient.Tokens()
+		if err != nil {
+			return prom.Alerts{}, err
+		}
+
+		response, err := intutil.CurlThisAuthorized(url, token, proxy)
+		if err != nil {
+			return prom.Alerts{}, err
+		}
+
+		err = json.Unmarshal(response, &clusterAlerts)
+		if err != nil {
+			return prom.Alerts{}, err
+		}
+
+		return clusterAlerts.Data.Alerts, nil
+	}
+	return prom.Alerts{}, fmt.Errorf("invalid backplane url %s", url)
 }
 
 func GetHistoricalPDAlertsForCluster(pdServiceIDs []string, pdUsertoken string, pdAuthtoken string) (map[string][]*IncidentOccurrenceTracker, error) {
@@ -710,6 +775,13 @@ func GetCloudTrailLogsForCluster(awsProfile string, clusterID string, maxPages i
 	return filteredEvents, nil
 }
 
+func getProxy() (string, error) {
+	if !viper.IsSet(BackplaneProxy) {
+		return "", fmt.Errorf("key %s is not set in config file, you can specify a proxy in the config or via HTTPS_PROXY environment variable", BackplaneProxy)
+	}
+	return viper.GetString(BackplaneProxy), nil
+}
+
 func printClusterInfo(clusterID string) {
 
 	fmt.Println("============================================================")
@@ -806,6 +878,32 @@ func printCurrentPDAlerts(incidents map[string][]pd.Incident, serviceIDs []strin
 		}
 	}
 
+}
+
+func printCurrentClusterAlerts(alerts prom.Alerts) {
+
+	fmt.Println("============================================================")
+	fmt.Println("All current alerts for the Cluster")
+	fmt.Println("============================================================")
+
+	if len(alerts) == 0 {
+		fmt.Println("No cluster alerts found")
+		fmt.Println()
+		return
+	}
+
+	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+	table.AddRow([]string{"Severity", "Title", "Namespace", "Summary"})
+	for _, alert := range alerts {
+		table.AddRow([]string{string(alert.Labels["severity"]), alert.Name(), string(alert.Labels["namespace"]), string(alert.Annotations["summary"])})
+	}
+	// Add empty row for readability
+	table.AddRow([]string{})
+	err := table.Flush()
+	if err != nil {
+		fmt.Println("error while flushing table: ", err.Error())
+		return
+	}
 }
 
 func printHistoricalPDAlertSummary(incidentCounters map[string][]*IncidentOccurrenceTracker, serviceIDs []string, sinceDays int) error {
