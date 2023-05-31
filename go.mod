@@ -22,7 +22,7 @@ require (
 	github.com/openshift/backplane-cli v0.1.3
 	github.com/openshift/gcp-project-operator v0.0.0-20220920194256-df38e31387a7
 	github.com/openshift/hive/apis v0.0.0-20230314202213-17cb22fc3d7c
-	github.com/openshift/osd-network-verifier v0.2.2
+	github.com/openshift/osd-network-verifier v0.3.0
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/shopspring/decimal v1.2.0
 	github.com/sirupsen/logrus v1.9.0
