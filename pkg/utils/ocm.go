@@ -10,7 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/arn"
 	sdk "github.com/openshift-online/ocm-sdk-go"
-	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 )
 
 const ClusterServiceClusterSearch = "id = '%s' or name = '%s' or external_id = '%s'"
@@ -53,7 +53,7 @@ type Config struct {
 
 // GetClusterAnyStatus returns an OCM cluster object given an OCM connection and cluster id
 // (internal and external ids both supported).
-func GetClusterAnyStatus(conn *sdk.Connection, clusterId string) (*v1.Cluster, error) {
+func GetClusterAnyStatus(conn *sdk.Connection, clusterId string) (*cmv1.Cluster, error) {
 	// identifier in the accounts management service. To find those clusters we need to check
 	// directly in the clusters management service.
 	clustersSearch := fmt.Sprintf(ClusterServiceClusterSearch, clusterId, clusterId, clusterId)
@@ -71,7 +71,7 @@ func GetClusterAnyStatus(conn *sdk.Connection, clusterId string) (*v1.Cluster, e
 	return nil, fmt.Errorf("there are %d clusters with identifier or name '%s', expected 1", clustersTotal, clusterId)
 }
 
-func GetClusters(ocmClient *sdk.Connection, clusterIds []string) []*v1.Cluster {
+func GetClusters(ocmClient *sdk.Connection, clusterIds []string) []*cmv1.Cluster {
 	for i, id := range clusterIds {
 		clusterIds[i] = GenerateQuery(id)
 	}
@@ -84,7 +84,7 @@ func GetClusters(ocmClient *sdk.Connection, clusterIds []string) []*v1.Cluster {
 	return clusters
 }
 
-func GetOrgfromClusterID(ocmClient *sdk.Connection, cluster v1.Cluster) (string, error) {
+func GetOrgfromClusterID(ocmClient *sdk.Connection, cluster cmv1.Cluster) (string, error) {
 	subID, ok := cluster.Subscription().GetID()
 	if !ok {
 		return "", fmt.Errorf("failed getting sub id")
@@ -104,7 +104,7 @@ func GetOrgfromClusterID(ocmClient *sdk.Connection, cluster v1.Cluster) (string,
 }
 
 // ApplyFilters retrieves clusters in OCM which match the filters given
-func ApplyFilters(ocmClient *sdk.Connection, filters []string) ([]*v1.Cluster, error) {
+func ApplyFilters(ocmClient *sdk.Connection, filters []string) ([]*cmv1.Cluster, error) {
 	if len(filters) < 1 {
 		return nil, nil
 	}
@@ -374,4 +374,36 @@ func GetHiveShard(clusterID string) (string, error) {
 	}
 
 	return shard, nil
+}
+
+func GetHiveCluster(clusterId string) (*cmv1.Cluster, error) {
+	conn := CreateConnection()
+	defer conn.Close()
+
+	provisionShard, err := conn.ClustersMgmt().V1().Clusters().
+		Cluster(clusterId).
+		ProvisionShard().
+		Get().
+		Send()
+	if err != nil {
+		return nil, err
+	}
+
+	hiveApiUrl, ok := provisionShard.Body().HiveConfig().GetServer()
+	if !ok {
+		return nil, fmt.Errorf("no provision shard url found for %s", clusterId)
+	}
+
+	resp, err := conn.ClustersMgmt().V1().Clusters().List().
+		Parameter("search", fmt.Sprintf("api.url='%s'", hiveApiUrl)).
+		Send()
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Items().Empty() {
+		return nil, fmt.Errorf("failed to find cluster with api.url=%s", hiveApiUrl)
+	}
+
+	return resp.Items().Get(0), nil
 }

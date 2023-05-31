@@ -3,13 +3,13 @@ module github.com/openshift/osdctl
 go 1.19
 
 require (
-	cloud.google.com/go/compute v1.19.0
+	cloud.google.com/go/compute v1.19.3
 	github.com/PagerDuty/go-pagerduty v1.5.1
 	github.com/andygrunwald/go-jira v1.16.0
 	github.com/aws/aws-sdk-go v1.44.110
 	github.com/aws/aws-sdk-go-v2 v1.18.0
 	github.com/aws/aws-sdk-go-v2/config v1.18.25
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.75.0
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.98.0
 	github.com/coreos/go-semver v0.3.0
 	github.com/deckarep/golang-set v1.7.1
 	github.com/fatih/color v1.13.0
@@ -152,7 +152,7 @@ require (
 	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/crypto v0.9.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
-	golang.org/x/oauth2 v0.7.0 // indirect
+	golang.org/x/oauth2 v0.8.0 // indirect
 	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/term v0.8.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
