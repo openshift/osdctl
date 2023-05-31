@@ -127,7 +127,7 @@ func newCmdContext() *cobra.Command {
 	contextCmd.Flags().StringVar(&ops.usertoken, "usertoken", "", fmt.Sprintf("Pass in PD usertoken directly. If not passed in, by default will read `pd_user_token` from ~/config/%s", osdctlConfig.ConfigFileName))
 	contextCmd.Flags().StringVar(&ops.jiratoken, "jiratoken", "", fmt.Sprintf("Pass in the Jira access token directly. If not passed in, by default will read `jira_token` from ~/.config/%s.\nJira access tokens can be registered by visiting %s/%s", osdctlConfig.ConfigFileName, JiraBaseURL, JiraTokenRegistrationPath))
 	contextCmd.Flags().StringArrayVarP(&ops.team_ids, "team-ids", "t", []string{}, fmt.Sprintf("Pass in PD teamids directly to filter the PD Alerts by team. Can also be defined as `team_ids` in ~/.config/%s\nWill show all PD Alerts for all PD service IDs if none is defined", osdctlConfig.ConfigFileName))
-	contextCmd.Flags().StringVar(&ops.backplaneProxy, "backplane-proxy", "", fmt.Sprintf("Pass in backplane proxy directly. If not passed in, by default will read `backplane_proxy` from ~/config/%s", osdctlConfig.ConfigFileName))
+	contextCmd.Flags().StringVar(&ops.backplaneProxy, "backplane-proxy", "", fmt.Sprintf("Pass in backplane proxy directly. If not passed in, by default will read `backplane_proxy` from ~/.config/%s", osdctlConfig.ConfigFileName))
 	return contextCmd
 }
 
