@@ -182,6 +182,70 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 	}
 }
 
+func Test_egressVerificationGetPlatformType(t *testing.T) {
+	tests := []struct {
+		name      string
+		e         *EgressVerification
+		expected  string
+		expectErr bool
+	}{
+		{
+			name: "aws",
+			e: &EgressVerification{
+				cluster: newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("aws"))),
+				log:     newTestLogger(t),
+			},
+			expected:  "aws",
+			expectErr: false,
+		},
+		{
+			name: "hostedcluster",
+			e: &EgressVerification{
+				cluster: newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("aws")).Hypershift(cmv1.NewHypershift().Enabled(true))),
+				log:     newTestLogger(t),
+			},
+			expected:  "hostedcluster",
+			expectErr: false,
+		},
+		{
+			name: "override",
+			e: &EgressVerification{
+				cluster:      newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("aws")).Hypershift(cmv1.NewHypershift().Enabled(true))),
+				PlatformType: "aws",
+				log:          newTestLogger(t),
+			},
+			expected:  "aws",
+			expectErr: false,
+		},
+		{
+			name: "invalid",
+			e: &EgressVerification{
+				cluster: newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("gcp"))),
+				log:     newTestLogger(t),
+			},
+			expectErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual, err := test.e.getPlatformType()
+			if err != nil {
+				if !test.expectErr {
+					t.Errorf("expected no err, got %s", err)
+				}
+			} else {
+				if test.expectErr {
+					t.Errorf("expected err, got none")
+				}
+				if actual != test.expected {
+					t.Errorf("expected platform %s, got %s", test.expected, actual)
+				}
+			}
+		})
+	}
+}
+
 func Test_egressVerificationGetSecurityGroupId(t *testing.T) {
 	tests := []struct {
 		name      string

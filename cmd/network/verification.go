@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift-online/ocm-sdk-go/logging"
+	"github.com/openshift/osd-network-verifier/pkg/helpers"
 	"github.com/openshift/osd-network-verifier/pkg/output"
 	"github.com/openshift/osd-network-verifier/pkg/proxy"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
@@ -38,6 +39,9 @@ type EgressVerification struct {
 	// ClusterId is the internal or external OCM cluster ID.
 	// This is optional, but typically is used to automatically detect the correct settings.
 	ClusterId string
+	// PlatformType is an optional override for which endpoints to test. Either 'aws' or 'hostedcluster'
+	// TODO: Technically 'gcp' is supported, but not functional yet
+	PlatformType string
 	// AWS Region is an optional override if not specified via AWS credentials.
 	Region string
 	// SubnetIds is an optional override for specifying an AWS subnet ID.
@@ -74,17 +78,17 @@ func NewCmdValidateEgress() *cobra.Command {
   Docs: https://docs.openshift.com/rosa/rosa_install_access_delete_clusters/rosa_getting_started_iam/rosa-aws-prereqs.html#osd-aws-privatelink-firewall-prerequisites_prerequisites`,
 		Example: `
   # Run against a cluster registered in OCM
-  ocm-backplane tunnel -D
   osdctl network verify-egress --cluster-id my-rosa-cluster
 
   # Run against a cluster registered in OCM with a cluster-wide-proxy
-  ocm-backplane tunnel -D
   touch cacert.txt
   osdctl network verify-egress --cluster-id my-rosa-cluster --cacert cacert.txt
 
   # Override automatic selection of a subnet or security group id
-  ocm-backplane tunnel -D
   osdctl network verify-egress --cluster-id my-rosa-cluster --subnet-id subnet-abcd --security-group sg-abcd
+
+  # Override automatic selection of the list of endpoints to check
+  osdctl network verify-egress --cluster-id my-rosa-cluster --platform hostedcluster
 
   # (Not recommended) Run against a specific VPC, without specifying cluster-id
   <export environment variables like AWS_ACCESS_KEY_ID or use aws configure>
@@ -102,6 +106,7 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().StringVar(&e.Region, "region", "", "(optional) AWS region")
 	validateEgressCmd.Flags().BoolVar(&e.Debug, "debug", false, "(optional) if provided, enable additional debug-level logging")
 	validateEgressCmd.Flags().BoolVarP(&e.AllSubnets, "all-subnets", "A", false, "(optional) an option for Privatelink clusters to run osd-network-verifier against all subnets listed by ocm.")
+	validateEgressCmd.Flags().StringVar(&e.PlatformType, "platform", "", "(optional) override for which endpoints to test. Either 'aws' or 'hostedcluster'")
 
 	// If a cluster-id is specified, don't allow the foot-gun of overriding region
 	validateEgressCmd.MarkFlagsMutuallyExclusive("cluster-id", "region")
@@ -254,6 +259,13 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 		return nil, fmt.Errorf("failed to assemble validate egress input: %s", err)
 	}
 
+	platform, err := e.getPlatformType()
+	if err != nil {
+		return nil, err
+	}
+	e.log.Info(ctx, "using platform: %s", platform)
+	input.PlatformType = platform
+
 	// Setup proxy configuration that is not automatically determined
 	input.Proxy.NoTls = e.NoTls
 	if e.CaCert != "" {
@@ -303,6 +315,30 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 	}
 
 	return inputs, nil
+}
+
+// getPlatformType returns the platform type of a cluster, with e.PlatformType acting as an override.
+func (e *EgressVerification) getPlatformType() (string, error) {
+	switch e.PlatformType {
+	case helpers.PlatformAWS:
+		fallthrough
+	case helpers.PlatformHostedCluster:
+		return e.PlatformType, nil
+	case "":
+		if e.cluster.Hypershift().Enabled() {
+			e.PlatformType = helpers.PlatformHostedCluster
+			return helpers.PlatformHostedCluster, nil
+		}
+
+		if e.cluster.CloudProvider().ID() == "aws" {
+			e.PlatformType = helpers.PlatformAWS
+			return helpers.PlatformAWS, nil
+		}
+
+		return "", fmt.Errorf("only supports platform types: %s and %s", helpers.PlatformAWS, helpers.PlatformHostedCluster)
+	default:
+		return "", fmt.Errorf("only supports platform types: %s and %s", helpers.PlatformAWS, helpers.PlatformHostedCluster)
+	}
 }
 
 // getSubnetIds attempts to return a private subnet ID or all private subnet IDs of the cluster.
@@ -385,10 +421,21 @@ func (e *EgressVerification) getSecurityGroupId(ctx context.Context) (string, er
 		return e.SecurityGroupId, nil
 	}
 
-	// If no SecurityGroupId override is passed in, try to determine the master security group id
-	e.log.Info(ctx, "searching for security group by tags: kubernetes.io/cluster/%s=owned and Name=%s-master-sg", e.cluster.InfraID(), e.cluster.InfraID())
-	resp, err := e.awsClient.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
-		Filters: []types.Filter{
+	var filters []types.Filter
+	switch e.PlatformType {
+	case helpers.PlatformHostedCluster:
+		filters = []types.Filter{
+			{
+				Name:   aws.String("tag:Name"),
+				Values: []string{fmt.Sprintf("%s-default-sg", e.cluster.ID())},
+			},
+			{
+				Name:   aws.String(fmt.Sprintf("tag:kubernetes.io/cluster/%s", e.cluster.ID())),
+				Values: []string{"owned"},
+			},
+		}
+	default:
+		filters = []types.Filter{
 			{
 				Name:   aws.String("tag:Name"),
 				Values: []string{fmt.Sprintf("%s-master-sg", e.cluster.InfraID())},
@@ -397,18 +444,33 @@ func (e *EgressVerification) getSecurityGroupId(ctx context.Context) (string, er
 				Name:   aws.String(fmt.Sprintf("tag:kubernetes.io/cluster/%s", e.cluster.InfraID())),
 				Values: []string{"owned"},
 			},
-		},
+		}
+	}
+
+	// If no SecurityGroupId override is passed in, try to determine the master security group id
+	e.log.Info(ctx, "searching for security group by tags: %s", filtersToString(filters))
+	resp, err := e.awsClient.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
+		Filters: filters,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to find master security group for %s: %w", e.cluster.InfraID(), err)
+		return "", fmt.Errorf("failed to find security group for %s: %w", e.cluster.InfraID(), err)
 	}
 
 	if len(resp.SecurityGroups) == 0 {
-		return "", fmt.Errorf("failed to find any master security groups by tag: kubernetes.io/cluster/%s=owned and Name==%s-master-sg", e.cluster.InfraID(), e.cluster.InfraID())
+		return "", fmt.Errorf("failed to find any security groups by tags: %s", filtersToString(filters))
 	}
 
 	e.log.Info(ctx, "using security-group-id: %s", *resp.SecurityGroups[0].GroupId)
 	return *resp.SecurityGroups[0].GroupId, nil
+}
+
+func filtersToString(filters []types.Filter) string {
+	resp := make([]string, len(filters))
+	for i := range filters {
+		resp[i] = fmt.Sprintf("name: %s, values: %s", *filters[i].Name, strings.Join(filters[i].Values, ","))
+	}
+
+	return fmt.Sprintf("%v", resp)
 }
 
 // defaultValidateEgressInput generates an opinionated default osd-network-verifier ValidateEgressInput.
@@ -430,6 +492,7 @@ func defaultValidateEgressInput(ctx context.Context, region string) (*onv.Valida
 		CloudImageID: onvAwsClient.GetAMIForRegion(region),
 		InstanceType: "t3.micro",
 		Proxy:        proxy.ProxyConfig{},
+		PlatformType: helpers.PlatformAWS,
 		Tags:         awsDefaultTags,
 		AWS: onv.AwsEgressConfig{
 			SecurityGroupId: "",
