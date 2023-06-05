@@ -5,7 +5,12 @@ package aws
 
 import (
 	"fmt"
+	"github.com/spf13/viper"
+	"net/http"
+	"net/url"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -38,6 +43,9 @@ type AwsClientInput struct {
 	SessionToken    string
 	Region          string
 }
+
+const ProxyConfigKey = "aws_proxy"
+const SkipProxyCheckKey = "skip_aws_proxy_check"
 
 // TODO: Add more methods when needed
 type Client interface {
@@ -129,6 +137,30 @@ type AwsClient struct {
 	cloudTrailClient    cloudtrailiface.CloudTrailAPI
 }
 
+func addProxyConfigToSessionOptConfig(config *aws.Config) {
+	awsProxyUrl := viper.GetString(ProxyConfigKey)
+	if awsProxyUrl == "" {
+		_, _ = fmt.Fprintf(os.Stderr, "[WARNING] `%s` not configured. Please add this to your osdctl configuration to ensure traffic is routed though a proxy.\n", ProxyConfigKey)
+		if skipAwsProxyCheck := viper.GetBool(SkipProxyCheckKey); !skipAwsProxyCheck {
+			_, _ = fmt.Fprint(os.Stderr, "Please confirm that you would like to continue with [y|N] ")
+			var input string
+			_, _ = fmt.Scanln(&input)
+			if strings.ToLower(input) != "y" {
+				_, _ = fmt.Fprintln(os.Stderr, "Must enter 'y' to continue; exiting...")
+				os.Exit(0)
+			}
+		}
+	} else {
+		config.HTTPClient = &http.Client{
+			Transport: &http.Transport{
+				Proxy: func(*http.Request) (*url.URL, error) {
+					return url.Parse(awsProxyUrl)
+				},
+			},
+		}
+	}
+}
+
 func NewAwsSession(profile, region, configFile string) (*session.Session, error) {
 
 	opt := session.Options{
@@ -137,6 +169,7 @@ func NewAwsSession(profile, region, configFile string) (*session.Session, error)
 		},
 		Profile: profile,
 	}
+	addProxyConfigToSessionOptConfig(&opt.Config)
 
 	// only set config file if it is not empty
 	if configFile != "" {
@@ -199,12 +232,14 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 
 // NewAwsClientWithInput creates an AWS client with input credentials
 func NewAwsClientWithInput(input *AwsClientInput) (Client, error) {
-	config := &aws.Config{
-		Credentials: credentials.NewStaticCredentials(input.AccessKeyID, input.SecretAccessKey, input.SessionToken),
-		Region:      aws.String(input.Region),
+	opt := session.Options{
+		Config: aws.Config{
+			Credentials: credentials.NewStaticCredentials(input.AccessKeyID, input.SecretAccessKey, input.SessionToken),
+			Region:      aws.String(input.Region),
+		},
 	}
-
-	s, err := session.NewSession(config)
+	addProxyConfigToSessionOptConfig(&opt.Config)
+	s, err := session.NewSessionWithOptions(opt)
 	if err != nil {
 		return nil, err
 	}

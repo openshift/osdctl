@@ -2,6 +2,8 @@ package mgmt
 
 import (
 	"fmt"
+	awsInternal "github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/spf13/viper"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -19,6 +21,8 @@ import (
 )
 
 func TestAssumeRoleForAccount(t *testing.T) {
+	viper.Set(awsInternal.ProxyConfigKey, "")
+	viper.Set(awsInternal.SkipProxyCheckKey, true)
 	mocks := setupDefaultMocks(t, []runtime.Object{})
 
 	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
