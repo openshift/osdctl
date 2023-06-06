@@ -15,7 +15,6 @@ import (
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 
 	ocmsdk "github.com/openshift-online/ocm-sdk-go"
-	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	prom "github.com/prometheus/common/model"
 
 	pd "github.com/PagerDuty/go-pagerduty"
