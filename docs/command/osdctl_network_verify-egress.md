@@ -23,17 +23,17 @@ osdctl network verify-egress [flags]
 ```
 
   # Run against a cluster registered in OCM
-  ocm-backplane tunnel -D
   osdctl network verify-egress --cluster-id my-rosa-cluster
 
   # Run against a cluster registered in OCM with a cluster-wide-proxy
-  ocm-backplane tunnel -D
   touch cacert.txt
   osdctl network verify-egress --cluster-id my-rosa-cluster --cacert cacert.txt
 
   # Override automatic selection of a subnet or security group id
-  ocm-backplane tunnel -D
   osdctl network verify-egress --cluster-id my-rosa-cluster --subnet-id subnet-abcd --security-group sg-abcd
+
+  # Override automatic selection of the list of endpoints to check
+  osdctl network verify-egress --cluster-id my-rosa-cluster --platform hostedcluster
 
   # (Not recommended) Run against a specific VPC, without specifying cluster-id
   <export environment variables like AWS_ACCESS_KEY_ID or use aws configure>
@@ -49,6 +49,7 @@ osdctl network verify-egress [flags]
       --debug                   (optional) if provided, enable additional debug-level logging
   -h, --help                    help for verify-egress
       --no-tls                  (optional) if provided, ignore all ssl certificate validations on client-side.
+      --platform string         (optional) override for which endpoints to test. Either 'aws' or 'hostedcluster'
       --region string           (optional) AWS region
       --security-group string   (optional) security group ID override for osd-network-verifier, required if not specifying --cluster-id
       --subnet-id stringArray   (optional) private subnet ID override, required if not specifying --cluster-id and can be specified multiple times to run against multiple subnets

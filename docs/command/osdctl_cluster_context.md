@@ -9,7 +9,7 @@ osdctl cluster context [flags]
 ### Options
 
 ```
-      --backplane-proxy backplane_proxy   Pass in backplane proxy directly. If not passed in, by default will read backplane_proxy from ~/config/osdctl
+      --backplane-proxy backplane_proxy   Pass in backplane proxy directly. If not passed in, by default will read backplane_proxy from ~/.config/osdctl
   -C, --cluster-id string                 Cluster ID
   -d, --days int                          Command will display X days of Error SLs sent to the cluster. Days is set to 30 by default (default 30)
       --full                              Run full suite of checks.
