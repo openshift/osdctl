@@ -45,7 +45,6 @@ type AwsClientInput struct {
 }
 
 const ProxyConfigKey = "aws_proxy"
-const SkipProxyCheckKey = "skip_aws_proxy_check"
 
 // TODO: Add more methods when needed
 type Client interface {
@@ -140,15 +139,13 @@ type AwsClient struct {
 func addProxyConfigToSessionOptConfig(config *aws.Config) {
 	awsProxyUrl := viper.GetString(ProxyConfigKey)
 	if awsProxyUrl == "" {
-		_, _ = fmt.Fprintf(os.Stderr, "[WARNING] `%s` not configured. Please add this to your osdctl configuration to ensure traffic is routed though a proxy.\n", ProxyConfigKey)
-		if skipAwsProxyCheck := viper.GetBool(SkipProxyCheckKey); !skipAwsProxyCheck {
-			_, _ = fmt.Fprint(os.Stderr, "Please confirm that you would like to continue with [y|N] ")
-			var input string
-			_, _ = fmt.Scanln(&input)
-			if strings.ToLower(input) != "y" {
-				_, _ = fmt.Fprintln(os.Stderr, "Must enter 'y' to continue; exiting...")
-				os.Exit(0)
-			}
+		_, _ = fmt.Fprintf(os.Stderr, "[ERROR] `%s` not configured. Please add this to your osdctl configuration to ensure traffic is routed though a proxy.\n", ProxyConfigKey)
+		_, _ = fmt.Fprint(os.Stderr, "Please confirm that you would like to continue with [y|N] ")
+		var input string
+		_, _ = fmt.Scanln(&input)
+		if strings.ToLower(input) != "y" {
+			_, _ = fmt.Fprintln(os.Stderr, "Must enter 'y' to continue; exiting...")
+			os.Exit(0)
 		}
 	} else {
 		config.HTTPClient = &http.Client{
