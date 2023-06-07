@@ -21,8 +21,7 @@ import (
 )
 
 func TestAssumeRoleForAccount(t *testing.T) {
-	viper.Set(awsInternal.ProxyConfigKey, "")
-	viper.Set(awsInternal.SkipProxyCheckKey, true)
+	viper.Set(awsInternal.ProxyConfigKey, "a-random-proxy")
 	mocks := setupDefaultMocks(t, []runtime.Object{})
 
 	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
