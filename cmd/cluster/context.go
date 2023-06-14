@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"math"
 	"os"
 	"os/exec"
@@ -14,9 +13,10 @@ import (
 	"time"
 
 	pd "github.com/PagerDuty/go-pagerduty"
-	jira "github.com/andygrunwald/go-jira"
+	"github.com/andygrunwald/go-jira"
 	"github.com/aws/aws-sdk-go/service/cloudtrail"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	sl "github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/pkg/osdCloud"
@@ -36,12 +36,16 @@ const (
 	PagerDutyUserTokenConfigKey   = "pd_user_token"
 	PagerDutyTokenRegistrationUrl = "https://martindstone.github.io/PDOAuth/"
 	PagerDutyTeamIDs              = "team_ids"
+	ClassicSplunkURL              = "https://osdsecuritylogs.splunkcloud.com/en-US/app/search/search?q=search%%20index%%3D%%22%s%%22%%20clusterid%%3D%%22%s%%22\n\n"
+	HCPSplunkURL                  = "https://osdsecuritylogs.splunkcloud.com/en-US/app/search/search?q=search%%20index%%3D%%22%s%%22%%20annotations.managed.openshift.io%%2Fhosted-cluster-id%%3Docm-%s-%s-%s\n\n"
 	shortOutputConfigValue        = "short"
 	longOutputConfigValue         = "long"
 	jsonOutputConfigValue         = "json"
 )
 
 type contextOptions struct {
+	cluster *cmv1.Cluster
+
 	output            string
 	verbose           bool
 	full              bool
@@ -314,11 +318,11 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	ocmClient := utils.CreateConnection()
 	defer ocmClient.Close()
 	cluster, err := utils.GetCluster(ocmClient, o.clusterID)
-
 	if err != nil {
 		errors = append(errors, err)
 		return nil, errors
 	}
+	o.cluster = cluster
 
 	data.ClusterName = cluster.Name()
 	data.ClusterID = cluster.ID()
@@ -882,14 +886,30 @@ func (o *contextOptions) printOtherLinks(OCMEnv string) error {
 	fmt.Println("============================================================")
 	fmt.Println("External resources containing related cluster data")
 	fmt.Println("============================================================")
-	// Determine whether to use the prod or stage Splunk index
-	splunkIndex := "openshift_managed_audit"
-	if OCMEnv == "stage" {
-		splunkIndex = "openshift_managed_audit_stage"
-	}
-	// Clusters in integration don't forward to splunk
-	if OCMEnv != "integration" {
-		fmt.Printf("Link to Splunk audit logs (set time in Splunk): https://osdsecuritylogs.splunkcloud.com/en-US/app/search/search?q=search%%20index%%3D%%22%s%%22%%20clusterid%%3D%%22%s%%22\n\n", splunkIndex, o.infraID)
+
+	// Determine the relevant Splunk URL
+	if o.cluster.Hypershift().Enabled() {
+		switch OCMEnv {
+		case "production":
+			url := fmt.Sprintf(HCPSplunkURL, "openshift_managed_hypershift_audit", "production", o.cluster.ID(), o.cluster.Name())
+			fmt.Printf("Link to Splunk audit logs (set time in Splunk): %s", url)
+		case "stage":
+			url := fmt.Sprintf(HCPSplunkURL, "openshift_managed_hypershift_audit_stage", "staging", o.cluster.ID(), o.cluster.Name())
+			fmt.Printf("Link to Splunk audit logs (set time in Splunk): %s", url)
+		default:
+			// Only stage and production clusters forward logs to Splunk
+		}
+	} else {
+		switch OCMEnv {
+		case "production":
+			url := fmt.Sprintf(ClassicSplunkURL, "openshift_managed_audit", o.cluster.ID())
+			fmt.Printf("Link to Splunk audit logs (set time in Splunk): %s", url)
+		case "stage":
+			url := fmt.Sprintf(ClassicSplunkURL, "openshift_managed_audit_stage", o.cluster.ID())
+			fmt.Printf("Link to Splunk audit logs (set time in Splunk): %s", url)
+		default:
+			// Only stage and production clusters forward logs to Splunk
+		}
 	}
 	fmt.Printf("Link to OHSS tickets: %s/issues/?jql=project%%20%%3D%%20OHSS%%20and%%20(%%22Cluster%%20ID%%22%%20~%%20%%20%%22%s%%22%%20OR%%20%%22Cluster%%20ID%%22%%20~%%20%%22%s%%22)\n\n", JiraBaseURL, o.clusterID, o.externalClusterID)
 	fmt.Printf("Link to CCX dashboard: https://kraken.psi.redhat.com/clusters/%s\n\n", o.externalClusterID)
