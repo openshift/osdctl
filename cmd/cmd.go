@@ -26,6 +26,7 @@ import (
 	"github.com/openshift/osdctl/cmd/jumphost"
 	"github.com/openshift/osdctl/cmd/network"
 	"github.com/openshift/osdctl/cmd/org"
+	"github.com/openshift/osdctl/cmd/promote"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/cmd/sts"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
@@ -79,6 +80,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(servicelog.NewCmdServiceLog())
 	rootCmd.AddCommand(org.NewCmdOrg())
 	rootCmd.AddCommand(sts.NewCmdSts(streams, kubeFlags, kubeClient))
+	rootCmd.AddCommand(promote.NewCmdPromote(kubeFlags, globalOpts))
 
 	// add docs command
 	rootCmd.AddCommand(newCmdDocs(streams))
