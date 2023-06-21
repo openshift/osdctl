@@ -1,4 +1,4 @@
-package mgmt
+package accmgmt
 
 import (
 	"fmt"

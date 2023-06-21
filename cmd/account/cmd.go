@@ -9,7 +9,7 @@ import (
 
 	"github.com/openshift/osdctl/cmd/account/get"
 	"github.com/openshift/osdctl/cmd/account/list"
-	"github.com/openshift/osdctl/cmd/account/mgmt"
+	accmgmt "github.com/openshift/osdctl/cmd/account/mgmt"
 	"github.com/openshift/osdctl/cmd/account/servicequotas"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 )
@@ -26,7 +26,7 @@ func NewCmdAccount(streams genericclioptions.IOStreams, flags *genericclioptions
 	accountCmd.AddCommand(get.NewCmdGet(streams, flags, client, globalOpts))
 	accountCmd.AddCommand(list.NewCmdList(streams, flags, client, globalOpts))
 	accountCmd.AddCommand(servicequotas.NewCmdServiceQuotas(streams, flags))
-	accountCmd.AddCommand(mgmt.NewCmdMgmt(streams, flags, globalOpts))
+	accountCmd.AddCommand(accmgmt.NewCmdMgmt(streams, flags, globalOpts))
 	accountCmd.AddCommand(newCmdReset(streams, flags, client))
 	accountCmd.AddCommand(newCmdSet(streams, flags, client))
 	accountCmd.AddCommand(newCmdConsole())

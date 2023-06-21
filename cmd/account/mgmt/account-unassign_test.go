@@ -1,10 +1,11 @@
-package mgmt
+package accmgmt
 
 import (
 	"fmt"
+	"testing"
+
 	awsInternal "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/viper"
-	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/iam"
