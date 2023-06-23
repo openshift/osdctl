@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	pd "github.com/PagerDuty/go-pagerduty"
@@ -315,6 +316,8 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	data := &contextData{}
 	errors := []error{}
 
+	wg := sync.WaitGroup{}
+
 	ocmClient := utils.CreateConnection()
 	defer ocmClient.Close()
 	cluster, err := utils.GetCluster(ocmClient, o.clusterID)
@@ -329,63 +332,128 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	data.ClusterVersion = cluster.Version().RawID()
 	data.OCMEnv = utils.GetCurrentOCMEnv(ocmClient)
 
-	fmt.Fprintln(os.Stderr, "Getting Limited Support Reason...")
-	limitedSupportReasons, err := utils.GetClusterLimitedSupportReasons(ocmClient, cluster.ID())
-	if err != nil {
-		errors = append(errors, fmt.Errorf("Error while getting Limited Support status reasons: %v", err))
-	} else {
-		data.LimitedSupportReasons = append(data.LimitedSupportReasons, limitedSupportReasons...)
+	GetLimitedSupport := func() {
+		defer wg.Done()
+		if o.verbose {
+			fmt.Fprintln(os.Stderr, "Getting Limited Support Reason...")
+		}
+		limitedSupportReasons, err := utils.GetClusterLimitedSupportReasons(ocmClient, cluster.ID())
+		if err != nil {
+			errors = append(errors, fmt.Errorf("Error while getting Limited Support status reasons: %v", err))
+		} else {
+			data.LimitedSupportReasons = append(data.LimitedSupportReasons, limitedSupportReasons...)
+		}
 	}
 
-	fmt.Fprintln(os.Stderr, "Getting Service Logs...")
-	data.ServiceLogs, err = GetServiceLogsSince(cluster.ID(), o.days)
-	if err != nil {
-		errors = append(errors, fmt.Errorf("Error while getting the service logs: %v", err))
+	GetServiceLogs := func() {
+		defer wg.Done()
+		if o.verbose {
+			fmt.Fprintln(os.Stderr, "Getting Service Logs...")
+		}
+		data.ServiceLogs, err = GetServiceLogsSince(cluster.ID(), o.days)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("Error while getting the service logs: %v", err))
+		}
 	}
 
-	fmt.Fprintln(os.Stderr, "Getting Jira Issues...")
-	data.JiraIssues, err = GetJiraIssuesForCluster(o.clusterID, o.externalClusterID)
-	if err != nil {
-		errors = append(errors, fmt.Errorf("Error while getting the open jira tickets: %v", err))
+	GetJiraIssues := func() {
+		defer wg.Done()
+		if o.verbose {
+			fmt.Fprintln(os.Stderr, "Getting Jira Issues...")
+		}
+		data.JiraIssues, err = GetJiraIssuesForCluster(o.clusterID, o.externalClusterID)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("Error while getting the open jira tickets: %v", err))
+		}
 	}
 
-	fmt.Fprintln(os.Stderr, "Getting Support Exceptions...")
-	data.SupportExceptions, err = GetJiraSupportExceptionsForOrg(o.organizationID)
-	if err != nil {
-		errors = append(errors, fmt.Errorf("Error while getting support exceptions: %v", err))
+	GetSupportExceptions := func() {
+		defer wg.Done()
+		if o.verbose {
+			fmt.Fprintln(os.Stderr, "Getting Support Exceptions...")
+		}
+		data.SupportExceptions, err = GetJiraSupportExceptionsForOrg(o.organizationID)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("Error while getting support exceptions: %v", err))
+		}
 	}
 
-	fmt.Fprintln(os.Stderr, "Getting Pagerduty Service...")
-	data.pdServiceID, err = GetPDServiceID(o.baseDomain, o.usertoken, o.oauthtoken, o.team_ids)
-	if err != nil {
-		errors = append(errors, fmt.Errorf("Error getting PD Service ID: %v", err))
+	GetPagerDutyService := func() {
+		defer wg.Done()
+		if o.verbose {
+			fmt.Fprintln(os.Stderr, "Getting PagerDuty Service...")
+		}
+		data.pdServiceID, err = GetPDServiceID(o.baseDomain, o.usertoken, o.oauthtoken, o.team_ids)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("Error getting PD Service ID: %v", err))
+		}
 	}
 
-	fmt.Fprintln(os.Stderr, "Getting current Pagerduty Alerts...")
-	data.PdAlerts, err = GetCurrentPDAlertsForCluster(data.pdServiceID, o.usertoken, o.oauthtoken)
-	if err != nil {
-		errors = append(errors, fmt.Errorf("Error while getting current PD Alerts: %v", err))
+	GetPagerDutyAlerts := func() {
+		defer wg.Done()
+		if o.verbose {
+			fmt.Fprintln(os.Stderr, "Getting current PagerDuty Alerts...")
+		}
+		data.PdAlerts, err = GetCurrentPDAlertsForCluster(data.pdServiceID, o.usertoken, o.oauthtoken)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("Error while getting current PD Alerts: %v", err))
+		}
 	}
+
+	var retrievers []func()
+
+	retrievers = append(
+		retrievers,
+		GetLimitedSupport,
+		GetServiceLogs,
+		GetJiraIssues,
+		GetSupportExceptions,
+		GetPagerDutyService,
+		GetPagerDutyAlerts,
+	)
 
 	if o.full {
-		fmt.Fprintln(os.Stderr, "Getting historical Pagerduty Alerts...")
-		data.HistoricalAlerts, err = GetHistoricalPDAlertsForCluster(data.pdServiceID, o.usertoken, o.oauthtoken)
-		if err != nil {
-			errors = append(errors, fmt.Errorf("Error while getting historical PD Alert Data: %v", err))
+		GetHistoricalPagerDutyAlerts := func() {
+			defer wg.Done()
+			if o.verbose {
+				fmt.Fprintln(os.Stderr, "Getting historical PagerDuty Alerts...")
+			}
+			data.HistoricalAlerts, err = GetHistoricalPDAlertsForCluster(data.pdServiceID, o.usertoken, o.oauthtoken)
+			if err != nil {
+				errors = append(errors, fmt.Errorf("Error while getting historical PD Alert Data: %v", err))
+			}
 		}
-		fmt.Fprintln(os.Stderr, "Getting Cloudtrail events...")
-		data.CloudtrailEvents, err = GetCloudTrailLogsForCluster(o.awsProfile, o.clusterID, o.pages)
-		if err != nil {
-			errors = append(errors, fmt.Errorf("Error getting cloudtrail logs for cluster: %v", err))
+
+		GetCloudTrailLogs := func() {
+			defer wg.Done()
+			if o.verbose {
+				fmt.Fprintln(os.Stderr, "Getting Cloudtrail events...")
+			}
+			data.CloudtrailEvents, err = GetCloudTrailLogsForCluster(o.awsProfile, o.clusterID, o.pages)
+			if err != nil {
+				errors = append(errors, fmt.Errorf("Error getting cloudtrail logs for cluster: %v", err))
+			}
 		}
+
+		retrievers = append(
+			retrievers,
+			GetHistoricalPagerDutyAlerts,
+			GetCloudTrailLogs,
+		)
 	}
+
+	for _, retriever := range retrievers {
+		wg.Add(1)
+		go retriever()
+	}
+
+	wg.Wait()
 
 	return data, errors
 }
 
 func GetCurrentPDAlertsForCluster(pdServiceIDs []string, pdUsertoken string, pdAuthtoken string) (map[string][]pd.Incident, error) {
-	fmt.Fprintln(os.Stderr, "Getting currently firing Pagerduty Alerts for the cluster.")
-	pdClient, err := GetPagerdutyClient(pdUsertoken, pdAuthtoken)
+	pdClient, err := GetPagerDutyClient(pdUsertoken, pdAuthtoken)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error getting pd client: ", err.Error())
 		return nil, err
@@ -429,7 +497,7 @@ func GetHistoricalPDAlertsForCluster(pdServiceIDs []string, pdUsertoken string, 
 	var ctx context.Context = context.TODO()
 	incidentmap := map[string][]*IncidentOccurrenceTracker{}
 
-	pdClient, err := GetPagerdutyClient(pdUsertoken, pdAuthtoken)
+	pdClient, err := GetPagerDutyClient(pdUsertoken, pdAuthtoken)
 	if err != nil {
 		fmt.Println("error getting pd client: ", err.Error())
 		return nil, err
@@ -635,7 +703,7 @@ func getPDOauthClient(oauthtoken string) (*pd.Client, error) {
 	return pd.NewOAuthClient(oauthtoken), nil
 }
 
-func GetPagerdutyClient(usertoken string, oauthtoken string) (*pd.Client, error) {
+func GetPagerDutyClient(usertoken string, oauthtoken string) (*pd.Client, error) {
 	client, err := getPDUserClient(usertoken)
 	if client != nil {
 		return client, err
@@ -650,9 +718,9 @@ func GetPagerdutyClient(usertoken string, oauthtoken string) (*pd.Client, error)
 
 func GetPDServiceID(baseDomain string, usertoken string, oauthtoken string, team_ids []string) ([]string, error) {
 
-	pdClient, err := GetPagerdutyClient(usertoken, oauthtoken)
+	pdClient, err := GetPagerDutyClient(usertoken, oauthtoken)
 	if err != nil {
-		return nil, fmt.Errorf("failed to GetPagerdutyClient: %w", err)
+		return nil, fmt.Errorf("failed to GetPagerDutyClient: %w", err)
 	}
 
 	// Gets the PD Team IDS
@@ -792,7 +860,7 @@ func printSupportStatus(limitedSupportReasons []*cmv1.LimitedSupportReason) {
 func printCurrentPDAlerts(incidents map[string][]pd.Incident, serviceIDs []string) {
 
 	fmt.Println("============================================================")
-	fmt.Println("Current Pagerduty Alerts for the Cluster")
+	fmt.Println("Current PagerDuty Alerts for the Cluster")
 	fmt.Println("============================================================")
 	for _, ID := range serviceIDs {
 		fmt.Printf("Link to PD Service: https://redhat.pagerduty.com/service-directory/%s\n", ID)
@@ -809,14 +877,13 @@ func printCurrentPDAlerts(incidents map[string][]pd.Incident, serviceIDs []strin
 			return
 		}
 	}
-
 }
 
 func printHistoricalPDAlertSummary(incidentCounters map[string][]*IncidentOccurrenceTracker, serviceIDs []string, sinceDays int) error {
 
 	fmt.Println()
 	fmt.Println("============================================================")
-	fmt.Println("Historical Pagerduty Alert Summary")
+	fmt.Println("Historical PagerDuty Alert Summary")
 	fmt.Println("============================================================")
 	for _, serviceID := range serviceIDs {
 		fmt.Printf("Link to PD Service: https://redhat.pagerduty.com/service-directory/%s\n", serviceID)
