@@ -128,10 +128,9 @@ func (o *postOptions) run() error {
 		return nil
 	}
 
-	// ConfirmSend prompt to confirm
-	err = ctlutil.ConfirmSend()
-	if err != nil {
-		return err
+	// ConfirmPrompt prompt to confirm
+	if !ctlutil.ConfirmPrompt() {
+		return nil
 	}
 
 	//getting the cluster

@@ -440,17 +440,15 @@ func (o *resizeControlPlaneNodeOptions) run() error {
 	fmt.Println() // Add an empty line for better output formatting
 
 	fmt.Println("To continue, please confirm that the node is up and running and that the cluster is in the desired state to proceed.")
-	err = utils.ConfirmSend()
-	if err != nil {
-		return err
+	if !utils.ConfirmPrompt() {
+		return nil
 	}
 	fmt.Println() // Add an empty line for better output formatting
 
 	fmt.Println("To finish the node resize, it is suggested to update the machine spec. This requires ***elevated privileges***. Do you want to proceed?")
-	err = utils.ConfirmSend()
-	if err != nil {
+	if !utils.ConfirmPrompt() {
 		fmt.Println("Node resized, machine type not patched. Exiting...")
-		return err
+		return nil
 	}
 	fmt.Println() // Add an empty line for better output formatting
 

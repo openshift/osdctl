@@ -139,18 +139,9 @@ func versionCheck() {
 	if utils.Version != strings.TrimPrefix(latestVersion, "v") {
 		fmt.Printf("The current version (%s) is different than the latest released version (%s).", utils.Version, latestVersion)
 		fmt.Println("It is recommended that you update to the latest released version to ensure that no known bugs or issues are hit.")
-		fmt.Println("Please confirm that you would like to continue with [y|n]")
 
-		var input string
-		for {
-			fmt.Scanln(&input)
-			if strings.ToLower(input) == "y" {
-				break
-			}
-			if strings.ToLower(input) == "n" {
-				fmt.Println("Exiting")
-				os.Exit(0)
-			}
+		if !utils.ConfirmPrompt() {
+			os.Exit(0)
 		}
 	}
 }
