@@ -228,11 +228,7 @@ func ConfirmPrompt() bool {
 	fmt.Print("Continue? (y/N): ")
 
 	var response string
-	_, err := fmt.Scanln(&response)
-	if err != nil {
-		fmt.Println("Invalid input. Expecting (yes) or (N)o")
-		return ConfirmPrompt()
-	}
+	_, _ = fmt.Scanln(&response) // Erroneous input will be handled by the default case below
 
 	switch strings.ToLower(response) {
 	case "y", "yes":
