@@ -174,9 +174,8 @@ func (o *PostCmdOptions) Run() error {
 	}
 
 	if !o.skipPrompts {
-		err = ctlutil.ConfirmSend()
-		if err != nil {
-			log.Fatal(err)
+		if !ctlutil.ConfirmPrompt() {
+			return nil
 		}
 	}
 

@@ -105,9 +105,8 @@ func (o *deleteOptions) run() error {
 	}
 
 	// confirmSend prompt to confirm
-	err = utils.ConfirmSend()
-	if err != nil {
-		return err
+	if !utils.ConfirmPrompt() {
+		return nil
 	}
 
 	//getting the cluster

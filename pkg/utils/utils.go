@@ -224,37 +224,38 @@ func GetAccount(connection *sdk.Connection, key string) (account *amv1.Account, 
 	return
 }
 
-func ConfirmSend() error {
+func ConfirmPrompt() bool {
 	fmt.Print("Continue? (y/N): ")
 
 	var response string
 	_, err := fmt.Scanln(&response)
 	if err != nil {
-		return err
+		fmt.Println("Invalid input. Expecting (yes) or (N)o")
+		return ConfirmPrompt()
 	}
 
 	switch strings.ToLower(response) {
 	case "y", "yes":
-		return nil
+		return true
 	case "n", "no":
-		return fmt.Errorf("Exiting...")
+		return false
 	default:
 		fmt.Println("Invalid input. Expecting (y)es or (N)o")
-		return ConfirmSend()
+		return ConfirmPrompt()
 	}
 }
 
-// streamPrintln appends a newline then prints the given msg using the provided IOStreams
+// StreamPrintln appends a newline then prints the given msg using the provided IOStreams
 func StreamPrintln(stream genericclioptions.IOStreams, msg string) {
 	stream.Out.Write([]byte(fmt.Sprintln(msg)))
 }
 
-// streamPrint prints the given msg using the provided IOStreams
+// StreamPrint prints the given msg using the provided IOStreams
 func StreamPrint(stream genericclioptions.IOStreams, msg string) {
 	stream.Out.Write([]byte(msg))
 }
 
-// streamPrint prints the given error msg using the provided IOStreams
+// StreamErrorln prints the given error msg using the provided IOStreams
 func StreamErrorln(stream genericclioptions.IOStreams, msg string) {
 	stream.ErrOut.Write([]byte(fmt.Sprintln(msg)))
 }

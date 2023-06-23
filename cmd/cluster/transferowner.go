@@ -136,17 +136,15 @@ func (o *transferOwnerOptions) run() error {
 
 	fmt.Printf("Transfer cluster: \t\t'%v' (%v)\n", externalClusterID, cluster.Name())
 	fmt.Printf("from user \t\t\t'%v' to '%v'\n", oldOwnerAccount.ID(), accountID)
-	err = utils.ConfirmSend()
-	if err != nil {
-		return err
+	if !utils.ConfirmPrompt() {
+		return nil
 	}
 
 	ok = validateOldOwner(oldOrganizationId, subscription, oldOwnerAccount)
 	if !ok {
 		fmt.Print("can't validate this is old owners cluster, this could be because of a previously failed run\n")
-		err = utils.ConfirmSend()
-		if err != nil {
-			return err
+		if !utils.ConfirmPrompt() {
+			return nil
 		}
 	}
 
