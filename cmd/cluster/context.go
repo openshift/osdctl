@@ -902,10 +902,10 @@ func (o *contextOptions) printOtherLinks(OCMEnv string) error {
 	} else {
 		switch OCMEnv {
 		case "production":
-			url := fmt.Sprintf(ClassicSplunkURL, "openshift_managed_audit", o.cluster.ID())
+			url := fmt.Sprintf(ClassicSplunkURL, "openshift_managed_audit", o.infraID)
 			fmt.Printf("Link to Splunk audit logs (set time in Splunk): %s", url)
 		case "stage":
-			url := fmt.Sprintf(ClassicSplunkURL, "openshift_managed_audit_stage", o.cluster.ID())
+			url := fmt.Sprintf(ClassicSplunkURL, "openshift_managed_audit_stage", o.infraID)
 			fmt.Printf("Link to Splunk audit logs (set time in Splunk): %s", url)
 		default:
 			// Only stage and production clusters forward logs to Splunk
