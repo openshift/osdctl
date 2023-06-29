@@ -3,9 +3,11 @@ package k8s
 import (
 	"context"
 	"fmt"
+
+	bplogin "github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
+	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -83,4 +85,32 @@ func (s *LazyClient) initialize() {
 	if err != nil {
 		panic(s.err())
 	}
+}
+
+func New(clusterID string, options client.Options) (client.Client, error) {
+	bp, err := bpconfig.GetBackplaneConfiguration()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
+	}
+
+	cfg, err := bplogin.GetRestConfig(bp, clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	return client.New(cfg, options)
+}
+
+func NewAsBackplaneClusterAdmin(clusterID string, options client.Options) (client.Client, error) {
+	bp, err := bpconfig.GetBackplaneConfiguration()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
+	}
+
+	cfg, err := bplogin.GetRestConfigAsUser(bp, clusterID, "backplane-cluster-admin")
+	if err != nil {
+		return nil, err
+	}
+
+	return client.New(cfg, options)
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/openshift/osdctl/cmd/cluster/access"
+	"github.com/openshift/osdctl/cmd/cluster/resize"
 	"github.com/openshift/osdctl/cmd/cluster/support"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/spf13/cobra"
@@ -24,6 +25,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 	clusterCmd.AddCommand(newCmdLoggingCheck(streams, flags, globalOpts))
 	clusterCmd.AddCommand(newCmdOwner(streams, flags, globalOpts))
 	clusterCmd.AddCommand(support.NewCmdSupport(streams, flags, client, globalOpts))
+	clusterCmd.AddCommand(resize.NewCmdResize())
 	clusterCmd.AddCommand(newCmdContext())
 	clusterCmd.AddCommand(newCmdTransferOwner(streams, globalOpts))
 	clusterCmd.AddCommand(access.NewCmdAccess(streams, flags))
