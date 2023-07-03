@@ -209,16 +209,14 @@ func (o *contextOptions) printLongOutput(data *contextData) {
 
 	printJIRAOHSS(data.JiraIssues)
 
-	printSupportStatus(data.LimitedSupportReasons)
-
 	printCurrentPDAlerts(data.PdAlerts, data.pdServiceID)
 
 	if o.full {
-		printHistoricalPDAlertSummary(data.HistoricalAlerts, data.pdServiceID, o.days)
+		_ = printHistoricalPDAlertSummary(data.HistoricalAlerts, data.pdServiceID, o.days)
 
 		err := printCloudTrailLogs(data.CloudtrailEvents)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Can't print cloudtrail: %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "Can't print cloudtrail: %v\n", err)
 			os.Exit(1)
 		}
 	} else {
@@ -232,7 +230,7 @@ func (o *contextOptions) printLongOutput(data *contextData) {
 	// Print other helpful links
 	err := o.printOtherLinks(data.OCMEnv)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't print other links: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "Can't print other links: %v\n", err)
 	}
 }
 func (o *contextOptions) printShortOutput(data *contextData) {
