@@ -5,7 +5,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/aws/aws-sdk-go/service/sts"
-	osdCloud "github.com/openshift/osdctl/pkg/osdCloud"
+	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"

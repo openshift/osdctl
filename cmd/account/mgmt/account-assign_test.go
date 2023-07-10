@@ -2,6 +2,7 @@ package mgmt
 
 import (
 	"fmt"
+	"github.com/aws/aws-sdk-go/service/sts"
 	"math/rand"
 	"testing"
 
@@ -91,14 +92,16 @@ func TestFindUntaggedAccount(t *testing.T) {
 	var genericAWSError error = fmt.Errorf("Generic AWS error")
 
 	testData := []struct {
-		name              string
-		accountsList      []string
-		tags              map[string]string
-		suspendCheck      bool
-		accountStatus     string
-		expectedAccountId string
-		expectErr         error
-		expectedAWSError  error
+		name                             string
+		accountsList                     []string
+		tags                             map[string]string
+		suspendCheck                     bool
+		accountStatus                    string
+		callerIdentityAccount            string
+		expectedGetCallerIdentityErr     error
+		expectedAccountId                string
+		expectErr                        error
+		expectedListAccountsForParentErr error
 	}{
 		{
 			name:              "test for untagged account present",
@@ -107,50 +110,54 @@ func TestFindUntaggedAccount(t *testing.T) {
 			tags:              map[string]string{},
 			suspendCheck:      true,
 			accountStatus:     organizations.AccountStatusActive,
-			expectErr:         nil,
-			expectedAWSError:  nil,
 		},
 		{
-			name:              "test for only partially tagged accounts present",
-			accountsList:      []string{"111111111111"},
-			expectedAccountId: "",
+			name:                  "test for only payer account present",
+			accountsList:          []string{"222222222222"},
+			callerIdentityAccount: "222222222222",
+			expectErr:             ErrNoUntaggedAccounts,
+		},
+		{
+			name:         "test for only partially tagged accounts present",
+			accountsList: []string{"111111111111"},
 			tags: map[string]string{
 				"claimed": "true",
 			},
-			suspendCheck:     false,
-			expectErr:        ErrNoUntaggedAccounts,
-			expectedAWSError: nil,
+			expectErr: ErrNoUntaggedAccounts,
 		},
 		{
-			name:              "test for only tagged accounts present",
-			accountsList:      []string{"111111111111"},
-			expectedAccountId: "",
+			name:         "test for no untagged accounts present",
+			accountsList: []string{},
+			expectErr:    ErrNoUntaggedAccounts,
+		},
+		{
+			name:         "test for only tagged accounts present",
+			accountsList: []string{"111111111111"},
 			tags: map[string]string{
 				"owner":   "randuser",
 				"claimed": "true",
 			},
-			suspendCheck:     false,
-			expectErr:        ErrNoUntaggedAccounts,
-			expectedAWSError: nil,
+			expectErr: ErrNoUntaggedAccounts,
 		},
 		{
-			name:              "test for AWS list accounts error",
-			accountsList:      []string{},
-			expectedAccountId: "",
-			tags:              nil,
-			suspendCheck:      false,
-			expectErr:         genericAWSError,
-			expectedAWSError:  genericAWSError,
+			name:                             "test for AWS list accounts error",
+			accountsList:                     []string{},
+			expectErr:                        genericAWSError,
+			expectedListAccountsForParentErr: genericAWSError,
 		},
 		{
-			name:              "test for suspended account error",
-			accountsList:      []string{"111111111111"},
-			expectedAccountId: "",
-			tags:              map[string]string{},
-			suspendCheck:      true,
-			accountStatus:     organizations.AccountStatusSuspended,
-			expectErr:         ErrNoUntaggedAccounts,
-			expectedAWSError:  nil,
+			name:                         "test for AWS get caller identity error",
+			accountsList:                 []string{"111111111111"},
+			expectErr:                    genericAWSError,
+			expectedGetCallerIdentityErr: genericAWSError,
+		},
+		{
+			name:          "test for suspended account error",
+			accountsList:  []string{"111111111111"},
+			tags:          map[string]string{},
+			suspendCheck:  true,
+			accountStatus: organizations.AccountStatusSuspended,
+			expectErr:     ErrNoUntaggedAccounts,
 		},
 	}
 
@@ -194,7 +201,7 @@ func TestFindUntaggedAccount(t *testing.T) {
 						ResourceId: &test.accountsList[0],
 					}).Return(
 					awsOutputTags,
-					test.expectedAWSError,
+					test.expectedListAccountsForParentErr,
 				)
 			}
 
@@ -215,8 +222,15 @@ func TestFindUntaggedAccount(t *testing.T) {
 
 			mockAWSClient.EXPECT().ListAccountsForParent(gomock.Any()).Return(
 				awsOutputAccounts,
-				test.expectedAWSError,
+				test.expectedListAccountsForParentErr,
 			)
+
+			if test.expectedListAccountsForParentErr == nil && len(test.accountsList) > 0 {
+				mockAWSClient.EXPECT().GetCallerIdentity(gomock.Any()).Return(
+					&sts.GetCallerIdentityOutput{Account: aws.String(test.callerIdentityAccount)},
+					test.expectedGetCallerIdentityErr,
+				)
+			}
 
 			returnValue, err := o.findUntaggedAccount(rootOuId)
 			if test.expectErr != err {
@@ -235,8 +249,7 @@ func TestCreateAccount(t *testing.T) {
 	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
 
 	seed := int64(1)
-	rand.Seed(seed)
-	randStr := RandomString(6)
+	randStr := RandomString(rand.New(rand.NewSource(seed)), 6)
 	accountName := "osd-creds-mgmt+" + randStr
 	email := accountName + "@redhat.com"
 

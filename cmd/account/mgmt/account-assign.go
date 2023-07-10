@@ -2,7 +2,7 @@ package mgmt
 
 import (
 	"fmt"
-
+	"github.com/aws/aws-sdk-go/service/sts"
 	"math/rand"
 	"time"
 
@@ -214,8 +214,18 @@ func (o *accountAssignOptions) findUntaggedAccount(rootOu string) (string, error
 		return "", ErrNoUntaggedAccounts
 	}
 
+	identity, err := o.awsClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
+	if err != nil {
+		return "", err
+	}
+
 	// Loop through accounts and check that it's untagged and assign ID to user
 	for _, a := range accounts.Accounts {
+		if *a.Id == *identity.Account {
+			// Don't allow the payer account to be assigned to an individual user
+			continue
+		}
+
 		isOwned, err := isOwned(*a.Id, &o.awsClient)
 		if err != nil {
 			return "", err
@@ -321,16 +331,14 @@ func (o *accountAssignOptions) buildAccount(seedVal int64) (string, error) {
 	return newAccountId, nil
 }
 
-var ErrAwsAccountLimitExceeded error = fmt.Errorf("ErrAwsAccountLimitExceeded")
-var ErrEmailAlreadyExist error = fmt.Errorf("ErrEmailAlreadyExist")
-var ErrAwsInternalFailure error = fmt.Errorf("ErrAwsInternalFailure")
-var ErrAwsTooManyRequests error = fmt.Errorf("ErrAwsTooManyRequests")
-var ErrAwsFailedCreateAccount error = fmt.Errorf("ErrAwsFailedCreateAccount")
+var ErrAwsAccountLimitExceeded = fmt.Errorf("ErrAwsAccountLimitExceeded")
+var ErrEmailAlreadyExist = fmt.Errorf("ErrEmailAlreadyExist")
+var ErrAwsInternalFailure = fmt.Errorf("ErrAwsInternalFailure")
+var ErrAwsTooManyRequests = fmt.Errorf("ErrAwsTooManyRequests")
+var ErrAwsFailedCreateAccount = fmt.Errorf("ErrAwsFailedCreateAccount")
 
 func (o *accountAssignOptions) createAccount(seedVal int64) (*organizations.DescribeCreateAccountStatusOutput, error) {
-
-	rand.Seed(seedVal)
-	randStr := RandomString(6)
+	randStr := RandomString(rand.New(rand.NewSource(seedVal)), 6)
 	accountName := "osd-creds-mgmt+" + randStr
 	email := accountName + "@redhat.com"
 
@@ -382,12 +390,12 @@ func (o *accountAssignOptions) createAccount(seedVal int64) (*organizations.Desc
 	return accountStatus, nil
 }
 
-func RandomString(n int) string {
+func RandomString(r *rand.Rand, length int) string {
 	var letters = []byte("abcdefghijklmnopqrstuvwxyz0123456789")
 
-	s := make([]byte, n)
+	s := make([]byte, length)
 	for i := range s {
-		s[i] = letters[rand.Intn(len(letters))] //#nosec G404 -- math/rand is not used for a secret here, hence it's okay
+		s[i] = letters[r.Intn(len(letters))] //#nosec G404 -- math/rand is not used for a secret here, hence it's okay
 	}
 	return string(s)
 }
