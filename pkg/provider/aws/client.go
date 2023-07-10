@@ -46,7 +46,7 @@ type AwsClientInput struct {
 
 const (
 	ProxyConfigKey = "aws_proxy"
-	NoProxyFlag    = "no-aws-proxy"
+	NoProxyFlag    = "skip-aws-proxy-check"
 )
 
 // TODO: Add more methods when needed
