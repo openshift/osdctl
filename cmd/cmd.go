@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/spf13/viper"
 	"os"
 	"strings"
 
@@ -50,6 +52,13 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 		Long:              `CLI tool to provide OSD related utilities`,
 		DisableAutoGenTag: true,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			noAwsProxy, err := cmd.Flags().GetBool(aws.NoProxyFlag)
+			if err != nil {
+				fmt.Printf("flag --%v undefined\n", aws.NoProxyFlag)
+				os.Exit(1)
+			}
+			viper.Set(aws.NoProxyFlag, noAwsProxy)
+
 			skipVersionCheck, err := cmd.Flags().GetBool("skip-version-check")
 			if err != nil {
 				fmt.Println("flag --skip-version-check/-S undefined")

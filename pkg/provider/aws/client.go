@@ -44,7 +44,10 @@ type AwsClientInput struct {
 	Region          string
 }
 
-const ProxyConfigKey = "aws_proxy"
+const (
+	ProxyConfigKey = "aws_proxy"
+	NoProxyFlag    = "skip-aws-proxy-check"
+)
 
 // TODO: Add more methods when needed
 type Client interface {
@@ -137,6 +140,11 @@ type AwsClient struct {
 }
 
 func addProxyConfigToSessionOptConfig(config *aws.Config) {
+	if viper.GetBool(NoProxyFlag) {
+		fmt.Printf("Not adding proxy to AWS client due to presence of %v flag\n", NoProxyFlag)
+		return
+	}
+
 	awsProxyUrl := viper.GetString(ProxyConfigKey)
 	if awsProxyUrl == "" {
 		_, _ = fmt.Fprintf(os.Stderr, "[ERROR] `%s` not configured. Please add this to your osdctl configuration to ensure traffic is routed though a proxy.\n", ProxyConfigKey)

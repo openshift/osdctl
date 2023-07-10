@@ -2,6 +2,7 @@ package globalflags
 
 import (
 	"flag"
+	"github.com/openshift/osdctl/pkg/provider/aws"
 
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -12,6 +13,7 @@ import (
 type GlobalOptions struct {
 	Output           string
 	SkipVersionCheck bool
+	NoAwsProxy       bool
 }
 
 // AddGlobalFlags adds the Global Flags to the root command
@@ -19,6 +21,7 @@ func AddGlobalFlags(cmd *cobra.Command, opts *GlobalOptions) {
 	cmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 	cmd.PersistentFlags().StringVarP(&opts.Output, "output", "o", "", "Valid formats are ['', 'json', 'yaml', 'env']")
 	cmd.PersistentFlags().BoolVarP(&opts.SkipVersionCheck, "skip-version-check", "S", false, "skip checking to see if this is the most recent release")
+	cmd.PersistentFlags().BoolVar(&opts.NoAwsProxy, aws.NoProxyFlag, false, "Don't use the configured `aws_proxy` value")
 }
 
 // GetFlags adds the kubeFlags we care about and adds the flags from the provided command
