@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	//"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/servicequotas"
 
 	"github.com/spf13/cobra"
