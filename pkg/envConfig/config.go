@@ -37,7 +37,7 @@ func LoadYaml(paramFilePath string) Config {
 	}
 	err = yaml.Unmarshal(yamlFile, &config)
 	if err != nil {
-		log.Fatalf("Unmarshal: %v", err)
+		log.Fatalf("Failed to unmarshal config yaml %s: %v", configFilePath, err)
 	}
 
 	return config
@@ -58,12 +58,12 @@ func LoadPDConfig(paramFilePath string) PDConfig {
 	// ignore linter error: filepath has to be static
 	jsonFile, err := os.ReadFile(configFilePath) //#nosec G304 -- filepath cannot be constant
 	if err != nil {
-		log.Printf("Failed to read config json %s: %v ", configFilePath, err)
+		log.Printf("Failed to read PagerDuty config json %s: %v ", configFilePath, err)
 	}
 
 	err = json.Unmarshal(jsonFile, &config)
 	if err != nil {
-		log.Fatalf("Unmarshal: %v", err)
+		log.Fatalf("Failed to unmarshal PagerDuty config json %s: %v", configFilePath, err)
 	}
 	return config
 }
