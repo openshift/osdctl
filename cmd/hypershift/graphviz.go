@@ -16,7 +16,7 @@ func (n *Node) Render() string {
 	return fmt.Sprintf("%s\\n%s", n.AdditionalInformation, n.Id)
 }
 
-func createGraphViz(ai aggregateClusterInfo) map[Node][]Node {
+func createGraphViz(ai *aggregateClusterInfo) map[Node][]Node {
 	connections := make(map[Node][]Node)
 	for _, hz := range ai.privatelinkInfo.HostedZones {
 		hzn := Node{
@@ -107,7 +107,7 @@ func renderGraphViz(connections map[Node][]Node) {
 	sb := strings.Builder{}
 	sb.WriteString("strict graph {\n")
 	sb.WriteString("node [shape=box]\n")
-	for node, _ := range connections {
+	for node := range connections {
 		subgraphs[node.Subgraph] = true
 	}
 	for subgraph := range subgraphs {
