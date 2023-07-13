@@ -24,6 +24,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/servicequotas"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/aws/aws-sdk-go/service/elb"
+	"github.com/aws/aws-sdk-go/service/elbv2"
+	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/spf13/viper"
 )
 
@@ -85,6 +88,9 @@ type Client interface {
 	DescribeRouteTables(*ec2.DescribeRouteTablesInput) (*ec2.DescribeRouteTablesOutput, error)
 	DescribeSubnets(*ec2.DescribeSubnetsInput) (*ec2.DescribeSubnetsOutput, error)
 	DescribeVpcs(*ec2.DescribeVpcsInput) (*ec2.DescribeVpcsOutput, error)
+	DescribeVpcEndpoints(*ec2.DescribeVpcEndpointsInput) (*ec2.DescribeVpcEndpointsOutput, error)
+	DescribeVpcEndpointConnections(*ec2.DescribeVpcEndpointConnectionsInput) (*ec2.DescribeVpcEndpointConnectionsOutput, error)
+	DescribeVpcEndpointServices(*ec2.DescribeVpcEndpointServicesInput) (*ec2.DescribeVpcEndpointServicesOutput, error)
 
 	// Service Quotas
 	ListServiceQuotas(*servicequotas.ListServiceQuotasInput) (*servicequotas.ListServiceQuotasOutput, error)
@@ -116,6 +122,16 @@ type Client interface {
 
 	// Cloudtrail
 	LookupEvents(input *cloudtrail.LookupEventsInput) (*cloudtrail.LookupEventsOutput, error)
+
+	// Route53
+	ListHostedZones(input *route53.ListHostedZonesInput) (*route53.ListHostedZonesOutput, error)
+	ListResourceRecordSets(input *route53.ListResourceRecordSetsInput) (*route53.ListResourceRecordSetsOutput, error)
+
+	// ELB
+	DescribeLoadBalancers(input *elb.DescribeLoadBalancersInput) (*elb.DescribeLoadBalancersOutput, error)
+	DescribeTags(input *elb.DescribeTagsInput) (*elb.DescribeTagsOutput, error)
+	DescribeV2LoadBalancers(input *elbv2.DescribeLoadBalancersInput) (*elbv2.DescribeLoadBalancersOutput, error)
+	DescribeV2Tags(input *elbv2.DescribeTagsInput) (*elbv2.DescribeTagsOutput, error)
 }
 
 type AwsClient struct {
@@ -458,6 +474,18 @@ func (c *AwsClient) DescribeVpcs(input *ec2.DescribeVpcsInput) (*ec2.DescribeVpc
 	return c.ec2Client.DescribeVpcs(context.TODO(), input)
 }
 
+func (c *AwsClient) DescribeVpcEndpoints(input *ec2.DescribeVpcEndpointsInput) (*ec2.DescribeVpcEndpointsOutput, error) {
+	return c.ec2Client.DescribeVpcEndpoints(input)
+}
+
+func (c *AwsClient) DescribeVpcEndpointServices(input *ec2.DescribeVpcEndpointServicesInput) (*ec2.DescribeVpcEndpointServicesOutput, error) {
+	return c.ec2Client.DescribeVpcEndpointServices(input)
+}
+
+func (c *AwsClient) DescribeVpcEndpointConnections(input *ec2.DescribeVpcEndpointConnectionsInput) (*ec2.DescribeVpcEndpointConnectionsOutput, error) {
+	return c.ec2Client.DescribeVpcEndpointConnections(input)
+}
+
 func (c *AwsClient) StopInstances(input *ec2.StopInstancesInput) (*ec2.StopInstancesOutput, error) {
 	return c.ec2Client.StopInstances(context.TODO(), input)
 }
@@ -472,4 +500,28 @@ func (c *AwsClient) StartInstances(input *ec2.StartInstancesInput) (*ec2.StartIn
 
 func (c *AwsClient) LookupEvents(input *cloudtrail.LookupEventsInput) (*cloudtrail.LookupEventsOutput, error) {
 	return c.cloudTrailClient.LookupEvents(context.TODO(), input)
+}
+
+func (c *AwsClient) ListHostedZones(input *route53.ListHostedZonesInput) (*route53.ListHostedZonesOutput, error) {
+	return c.route53Client.ListHostedZones(input)
+}
+
+func (c *AwsClient) ListResourceRecordSets(input *route53.ListResourceRecordSetsInput) (*route53.ListResourceRecordSetsOutput, error) {
+	return c.route53Client.ListResourceRecordSets(input)
+}
+
+func (c *AwsClient) DescribeLoadBalancers(input *elb.DescribeLoadBalancersInput) (*elb.DescribeLoadBalancersOutput, error) {
+	return c.elbClient.DescribeLoadBalancers(input)
+}
+
+func (c *AwsClient) DescribeTags(input *elb.DescribeTagsInput) (*elb.DescribeTagsOutput, error) {
+	return c.elbClient.DescribeTags(input)
+}
+
+func (c *AwsClient) DescribeV2LoadBalancers(input *elbv2.DescribeLoadBalancersInput) (*elbv2.DescribeLoadBalancersOutput, error) {
+	return c.elbv2Client.DescribeLoadBalancers(input)
+}
+
+func (c *AwsClient) DescribeV2Tags(input *elbv2.DescribeTagsInput) (*elbv2.DescribeTagsOutput, error) {
+	return c.elbv2Client.DescribeTags(input)
 }
