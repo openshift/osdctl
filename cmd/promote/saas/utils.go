@@ -11,25 +11,25 @@ import (
 )
 
 const (
-	osdSaasDir = "data/services/osd-operators/cicd/saas"
-	bpSaasDir  = "data/services/backplane/cicd/saas"
-	cadSaasDir = "data/services/configuration-anomaly-detection/cicd"
+	OSDSaasDir = "data/services/osd-operators/cicd/saas"
+	BPSaasDir  = "data/services/backplane/cicd/saas"
+	CADSaasDir = "data/services/configuration-anomaly-detection/cicd"
 )
 
 var (
-	servicesSlice    []string
-	servicesFilesMap = map[string]string{}
+	ServicesSlice    []string
+	ServicesFilesMap = map[string]string{}
 )
 
 func listServiceNames() error {
-	_, err := getServiceNames(osdSaasDir, bpSaasDir, cadSaasDir)
+	_, err := GetServiceNames(OSDSaasDir, BPSaasDir, CADSaasDir)
 	if err != nil {
 		return err
 	}
 
-	sort.Strings(servicesSlice)
+	sort.Strings(ServicesSlice)
 	fmt.Println("### Available service names ###")
-	for _, service := range servicesSlice {
+	for _, service := range ServicesSlice {
 		fmt.Println(service)
 	}
 
@@ -37,17 +37,17 @@ func listServiceNames() error {
 }
 
 func servicePromotion(serviceName, gitHash string, osd, hcp bool) error {
-	_, err := getServiceNames(osdSaasDir, bpSaasDir, cadSaasDir)
+	_, err := GetServiceNames(OSDSaasDir, BPSaasDir, CADSaasDir)
 	if err != nil {
 		return err
 	}
 
-	err = validateServiceName(servicesSlice, serviceName)
+	err = ValidateServiceName(ServicesSlice, serviceName)
 	if err != nil {
 		return err
 	}
 
-	saasDir, err := getSaasDir(serviceName, osd, hcp)
+	saasDir, err := GetSaasDir(serviceName, osd, hcp)
 	if err != nil {
 		return err
 	}
@@ -73,15 +73,28 @@ func servicePromotion(serviceName, gitHash string, osd, hcp bool) error {
 	}
 	fmt.Printf("Service: %s will be promoted to %s\n", serviceName, promotionGitHash)
 
-	err = git.UpdateAndCommitChangesForAppInterface(serviceName, saasDir, currentGitHash, promotionGitHash)
+	branchName := fmt.Sprintf("promote-%s-%s", serviceName, promotionGitHash)
+	err = git.UpdateAppInterface(serviceName, saasDir, currentGitHash, promotionGitHash, branchName)
 	if err != nil {
 		fmt.Printf("FAILURE: %v\n", err)
 	}
 
+	commitMessage := fmt.Sprintf("Promote %s to %s", serviceName, promotionGitHash)
+	err = git.CommitSaasFile(saasDir, commitMessage)
+	if err != nil {
+		return fmt.Errorf("failed to commit changes to app-interface: %w", err)
+	}
+
+	fmt.Printf("The branch %s is ready to be pushed\n", branchName)
+	fmt.Println("")
+	fmt.Println("service:", serviceName)
+	fmt.Println("from:", currentGitHash)
+	fmt.Println("to:", promotionGitHash)
+	fmt.Println("READY TO PUSH,", serviceName, "promotion commit is ready locally")
 	return nil
 }
 
-func getServiceNames(saaDirs ...string) ([]string, error) {
+func GetServiceNames(saaDirs ...string) ([]string, error) {
 	baseDir := git.BaseDir
 	for _, dir := range saaDirs {
 		dirGlob := filepath.Join(baseDir, dir, "saas-*")
@@ -92,15 +105,15 @@ func getServiceNames(saaDirs ...string) ([]string, error) {
 		for _, filepath := range filepaths {
 			filename := strings.TrimPrefix(filepath, baseDir+"/"+dir+"/")
 			filename = strings.TrimSuffix(filename, ".yaml")
-			servicesSlice = append(servicesSlice, filename)
-			servicesFilesMap[filename] = filepath
+			ServicesSlice = append(ServicesSlice, filename)
+			ServicesFilesMap[filename] = filepath
 		}
 	}
 
-	return servicesSlice, nil
+	return ServicesSlice, nil
 }
 
-func validateServiceName(serviceSlice []string, serviceName string) error {
+func ValidateServiceName(serviceSlice []string, serviceName string) error {
 	fmt.Printf("### Checking if service %s exists ###\n", serviceName)
 	for _, service := range serviceSlice {
 		if service == serviceName {
@@ -112,8 +125,8 @@ func validateServiceName(serviceSlice []string, serviceName string) error {
 	return fmt.Errorf("service %s not found", serviceName)
 }
 
-func getSaasDir(serviceName string, osd bool, hcp bool) (string, error) {
-	if saasDir, ok := servicesFilesMap[serviceName]; ok {
+func GetSaasDir(serviceName string, osd bool, hcp bool) (string, error) {
+	if saasDir, ok := ServicesFilesMap[serviceName]; ok {
 		if strings.Contains(saasDir, ".yaml") && osd {
 			return saasDir, nil
 		}
