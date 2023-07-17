@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
@@ -16,11 +17,14 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/osdctl/cmd/servicelog"
 )
 
 const (
-	twentyMinuteTimeout   = 20 * time.Minute
-	twentySecondIncrement = 20 * time.Second
+	twentyMinuteTimeout                = 20 * time.Minute
+	twentySecondIncrement              = 20 * time.Second
+	resizedInfraNodeServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_resized_auto.json"
 )
 
 func newCmdResizeInfra() *cobra.Command {
@@ -243,6 +247,13 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 		return err
 	}
 
+	postCmd := generateServiceLog(newMp.Spec.Platform.AWS.InstanceType, r.clusterId)
+	if err := postCmd.Run(); err != nil {
+		fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
+		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
+			r.clusterId, resizedInfraNodeServiceLogTemplate, strings.Join(postCmd.TemplateParams, " -p "))
+	}
+
 	log.Printf("[REMINDER] follow the cleanup tasks in https://github.com/openshift/ops-sop/blob/master/v4/howto/resize-infras-workers.md#sending-the-all-clear")
 	return nil
 }
@@ -338,4 +349,12 @@ func getInstanceType(mp *hivev1.MachinePool) (string, error) {
 	}
 
 	return "", errors.New("unsupported platform, only AWS and GCP are supported")
+}
+
+func generateServiceLog(instanceType, clusterId string) servicelog.PostCmdOptions {
+	return servicelog.PostCmdOptions{
+		Template:       resizedInfraNodeServiceLogTemplate,
+		ClusterId:      clusterId,
+		TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
+	}
 }
