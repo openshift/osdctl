@@ -5,16 +5,14 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubectl/pkg/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 )
 
 func TestGetAWSAccount(t *testing.T) {
@@ -209,7 +207,7 @@ func TestGetAWSAccountCredentials(t *testing.T) {
 		localObjects []runtime.Object
 		namespace    string
 		secretName   string
-		credentials  awsprovider.AwsClientInput
+		credentials  awsprovider.ClientInput
 		errExpected  bool
 		errReason    metav1.StatusReason
 	}{
@@ -269,7 +267,7 @@ func TestGetAWSAccountCredentials(t *testing.T) {
 			namespace:   "foo",
 			secretName:  "bar",
 			errExpected: false,
-			credentials: awsprovider.AwsClientInput{
+			credentials: awsprovider.ClientInput{
 				AccessKeyID:     "foo",
 				SecretAccessKey: "bar",
 			},

@@ -2,15 +2,14 @@ package mgmt
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/sts"
 	"math/rand"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/organizations"
+	"github.com/aws/aws-sdk-go-v2/service/organizations"
+	organizationTypes "github.com/aws/aws-sdk-go-v2/service/organizations/types"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
-
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
@@ -251,7 +250,7 @@ func (o *accountAssignOptions) findUntaggedAccount(rootOu string) (string, error
 
 func isOwned(accountID string, awsClient *awsprovider.Client) (bool, error) {
 	inputListTags := &organizations.ListTagsForResourceInput{
-		ResourceId: aws.String(accountID),
+		ResourceId: &accountID,
 	}
 	tags, err := (*awsClient).ListTagsForResource(inputListTags)
 	if err != nil {
@@ -278,7 +277,7 @@ func isSuspended(accountIdInput string, awsClient awsprovider.Client) (bool, err
 		return false, err
 	}
 
-	if *accountInfo.Account.Status == organizations.AccountStatusSuspended {
+	if accountInfo.Account.Status == "SUSPENDED" {
 		return true, nil
 	}
 
@@ -286,17 +285,19 @@ func isSuspended(accountIdInput string, awsClient awsprovider.Client) (bool, err
 }
 
 func (o *accountAssignOptions) tagAccount(accountId string) error {
-
+	ownerKey := "owner"
+	claimedKey := "claimed"
+	claimedValue := "true"
 	inputTag := &organizations.TagResourceInput{
-		ResourceId: aws.String(accountId),
-		Tags: []*organizations.Tag{
+		ResourceId: &accountId,
+		Tags: []organizationTypes.Tag{
 			{
-				Key:   aws.String("owner"),
-				Value: aws.String(o.username),
+				Key:   &ownerKey,
+				Value: &o.username,
 			},
 			{
-				Key:   aws.String("claimed"),
-				Value: aws.String("true"),
+				Key:   &claimedKey,
+				Value: &claimedValue,
 			},
 		},
 	}
@@ -331,11 +332,13 @@ func (o *accountAssignOptions) buildAccount(seedVal int64) (string, error) {
 	return newAccountId, nil
 }
 
-var ErrAwsAccountLimitExceeded = fmt.Errorf("ErrAwsAccountLimitExceeded")
-var ErrEmailAlreadyExist = fmt.Errorf("ErrEmailAlreadyExist")
-var ErrAwsInternalFailure = fmt.Errorf("ErrAwsInternalFailure")
-var ErrAwsTooManyRequests = fmt.Errorf("ErrAwsTooManyRequests")
-var ErrAwsFailedCreateAccount = fmt.Errorf("ErrAwsFailedCreateAccount")
+var (
+	ErrAwsAccountLimitExceeded = fmt.Errorf("ErrAwsAccountLimitExceeded")
+	ErrEmailAlreadyExist       = fmt.Errorf("ErrEmailAlreadyExist")
+	ErrAwsInternalFailure      = fmt.Errorf("ErrAwsInternalFailure")
+	ErrAwsTooManyRequests      = fmt.Errorf("ErrAwsTooManyRequests")
+	ErrAwsFailedCreateAccount  = fmt.Errorf("ErrAwsFailedCreateAccount")
+)
 
 func (o *accountAssignOptions) createAccount(seedVal int64) (*organizations.DescribeCreateAccountStatusOutput, error) {
 	randStr := RandomString(rand.New(rand.NewSource(seedVal)), 6)
@@ -343,8 +346,8 @@ func (o *accountAssignOptions) createAccount(seedVal int64) (*organizations.Desc
 	email := accountName + "@redhat.com"
 
 	createInput := &organizations.CreateAccountInput{
-		AccountName: aws.String(accountName),
-		Email:       aws.String(email),
+		AccountName: &accountName,
+		Email:       &email,
 	}
 
 	createOutput, err := o.awsClient.CreateAccount(createInput)
@@ -364,11 +367,11 @@ func (o *accountAssignOptions) createAccount(seedVal int64) (*organizations.Desc
 		}
 
 		accountStatus = status
-		createStatus := *status.CreateAccountStatus.State
+		createStatus := status.CreateAccountStatus.State
 
 		if createStatus == "FAILED" {
 			var returnErr error
-			switch *status.CreateAccountStatus.FailureReason {
+			switch status.CreateAccountStatus.FailureReason {
 			case "ACCOUNT_LIMIT_EXCEEDED":
 				returnErr = ErrAwsAccountLimitExceeded
 			case "EMAIL_ALREADY_EXISTS":
@@ -403,9 +406,9 @@ func RandomString(r *rand.Rand, length int) string {
 func (o *accountAssignOptions) moveAccount(accountIdInput string, destOuInput string, rootIdInput string) error {
 
 	inputMove := &organizations.MoveAccountInput{
-		AccountId:           aws.String(accountIdInput),
-		DestinationParentId: aws.String(destOuInput),
-		SourceParentId:      aws.String(rootIdInput),
+		AccountId:           &accountIdInput,
+		DestinationParentId: &destOuInput,
+		SourceParentId:      &rootIdInput,
 	}
 
 	_, err := o.awsClient.MoveAccount(inputMove)

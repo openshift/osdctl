@@ -2,11 +2,11 @@ package globalflags
 
 import (
 	"flag"
-	"github.com/openshift/osdctl/pkg/provider/aws"
 
+	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/utils/pointer"
 )
 
 // GlobalOptions defines all available commands
@@ -29,13 +29,13 @@ func GetFlags(cmd *cobra.Command) *genericclioptions.ConfigFlags {
 	// Reuse kubectl global flags to provide namespace, context and credential options.
 	// We are not using NewConfigFlags here to avoid adding too many flags
 	flags := &genericclioptions.ConfigFlags{
-		KubeConfig:  pointer.StringPtr(""),
-		ClusterName: pointer.StringPtr(""),
-		Context:     pointer.StringPtr(""),
-		APIServer:   pointer.StringPtr(""),
-		Timeout:     pointer.StringPtr("0"),
-		Insecure:    pointer.BoolPtr(false),
-		Impersonate: pointer.StringPtr(""),
+		KubeConfig:  awsSdk.String(""),
+		ClusterName: awsSdk.String(""),
+		Context:     awsSdk.String(""),
+		APIServer:   awsSdk.String(""),
+		Timeout:     awsSdk.String("0"),
+		Insecure:    awsSdk.Bool(false),
+		Impersonate: awsSdk.String(""),
 	}
 	flags.AddFlags(cmd.PersistentFlags())
 	return flags

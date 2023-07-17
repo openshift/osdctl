@@ -5,18 +5,16 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/aws/aws-sdk-go/service/sts"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
+	"github.com/openshift/osdctl/cmd/common"
+	"github.com/openshift/osdctl/pkg/k8s"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
-
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/openshift/osdctl/cmd/common"
-	"github.com/openshift/osdctl/pkg/k8s"
-	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 )
 
 const (
@@ -112,7 +110,7 @@ func (o *verifySecretsOptions) run() error {
 			}
 			credentials = append(credentials, &awsSecret{
 				secret: account.Spec.IAMUserSecret,
-				awsCreds: &awsprovider.AwsClientInput{
+				awsCreds: &awsprovider.ClientInput{
 					AccessKeyID:     creds.AccessKeyID,
 					SecretAccessKey: creds.SecretAccessKey,
 				},
@@ -138,7 +136,7 @@ func (o *verifySecretsOptions) run() error {
 		}
 		credentials = append(credentials, &awsSecret{
 			secret: account.Spec.IAMUserSecret,
-			awsCreds: &awsprovider.AwsClientInput{
+			awsCreds: &awsprovider.ClientInput{
 				AccessKeyID:     creds.AccessKeyID,
 				SecretAccessKey: creds.SecretAccessKey,
 			},
@@ -152,7 +150,7 @@ func (o *verifySecretsOptions) run() error {
 			}
 			credentials = append(credentials, &awsSecret{
 				secret: "byoc",
-				awsCreds: &awsprovider.AwsClientInput{
+				awsCreds: &awsprovider.ClientInput{
 					AccessKeyID:     creds.AccessKeyID,
 					SecretAccessKey: creds.SecretAccessKey,
 				},
@@ -199,6 +197,6 @@ func (o *verifySecretsOptions) run() error {
 }
 
 type awsSecret struct {
-	awsCreds *awsprovider.AwsClientInput
+	awsCreds *awsprovider.ClientInput
 	secret   string
 }

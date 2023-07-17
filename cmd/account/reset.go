@@ -3,19 +3,17 @@ package account
 import (
 	"bufio"
 	"context"
-	base64 "encoding/base64"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
 
-	"github.com/spf13/cobra"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/organizations"
+	"github.com/aws/aws-sdk-go-v2/service/organizations"
 	"github.com/openshift/aws-account-operator/api/v1alpha1"
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/pkg/k8s"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -140,7 +138,7 @@ func (o *resetOptions) run() error {
 
 		//get the id of the current OU that the account is living in
 		parent, err := awsClient.ListParents(&organizations.ListParentsInput{
-			ChildId: aws.String(accountId),
+			ChildId: &accountId,
 		})
 		if err != nil {
 			return err
@@ -151,9 +149,9 @@ func (o *resetOptions) run() error {
 		if rootId != parentId {
 			//move the account from the current OU to rootOU
 			_, err = awsClient.MoveAccount(&organizations.MoveAccountInput{
-				AccountId:           aws.String(accountId),
-				DestinationParentId: aws.String(rootId),
-				SourceParentId:      aws.String(parentId),
+				AccountId:           &accountId,
+				DestinationParentId: &rootId,
+				SourceParentId:      &parentId,
 			})
 			if err != nil {
 				return err
@@ -198,19 +196,19 @@ func (o *resetOptions) getAwsClientFromSecret(secretName string, namespace strin
 	if err != nil {
 		return nil, err
 	}
-	accessId := base64.StdEncoding.EncodeToString([]byte(secretAws.Data["aws_access_key_id"]))
+	accessId := base64.StdEncoding.EncodeToString(secretAws.Data["aws_access_key_id"])
 	accessKeyID, err := base64.StdEncoding.DecodeString(accessId)
 	if err != nil {
 		fmt.Println("decode error:", err)
 		return nil, err
 	}
-	secretId := base64.StdEncoding.EncodeToString([]byte(secretAws.Data["aws_secret_access_key"]))
+	secretId := base64.StdEncoding.EncodeToString(secretAws.Data["aws_secret_access_key"])
 	secretkeyID, err := base64.StdEncoding.DecodeString(secretId)
 	if err != nil {
 		fmt.Println("decode error:", err)
 		return nil, err
 	}
-	awsClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+	awsClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
 		AccessKeyID:     string(accessKeyID),
 		SecretAccessKey: string(secretkeyID),
 		Region:          "us-east-1",

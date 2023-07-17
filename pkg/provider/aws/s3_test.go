@@ -4,11 +4,11 @@ import (
 	"errors"
 	"testing"
 
-	. "github.com/onsi/gomega"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
+	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/golang/mock/gomock"
+	. "github.com/onsi/gomega"
 	"github.com/openshift/osdctl/pkg/provider/aws/mock"
 )
 
@@ -31,7 +31,7 @@ func TestDeleteS3BucketsWithPrefix(t *testing.T) {
 		{
 			title: "List buckets return empty buckets",
 			setupAWSMock: func(r *mock.MockClientMockRecorder) {
-				r.ListBuckets(gomock.Any()).Return(&s3.ListBucketsOutput{Buckets: []*s3.Bucket{}}, nil).Times(1)
+				r.ListBuckets(gomock.Any()).Return(&s3.ListBucketsOutput{Buckets: []types.Bucket{}}, nil).Times(1)
 			},
 			prefix:      "",
 			errExpected: false,
@@ -41,7 +41,7 @@ func TestDeleteS3BucketsWithPrefix(t *testing.T) {
 			setupAWSMock: func(r *mock.MockClientMockRecorder) {
 				r.ListBuckets(gomock.Any()).Return(
 					&s3.ListBucketsOutput{
-						Buckets: []*s3.Bucket{{Name: aws.String("foo")}},
+						Buckets: []types.Bucket{{Name: awsSdk.String("foo")}},
 					}, nil).Times(1)
 			},
 			prefix:      "bar",
@@ -53,7 +53,7 @@ func TestDeleteS3BucketsWithPrefix(t *testing.T) {
 				gomock.InOrder(
 					r.ListBuckets(gomock.Any()).Return(
 						&s3.ListBucketsOutput{
-							Buckets: []*s3.Bucket{{Name: aws.String("foo")}},
+							Buckets: []types.Bucket{{Name: awsSdk.String("foo")}},
 						}, nil).Times(1),
 					r.ListObjects(gomock.Any()).Return(nil, errors.New("FakeError")).Times(1),
 				)
@@ -67,13 +67,13 @@ func TestDeleteS3BucketsWithPrefix(t *testing.T) {
 				gomock.InOrder(
 					r.ListBuckets(gomock.Any()).Return(
 						&s3.ListBucketsOutput{
-							Buckets: []*s3.Bucket{{Name: aws.String("foo")}},
+							Buckets: []types.Bucket{{Name: awsSdk.String("foo")}},
 						}, nil).Times(1),
 					r.ListObjects(gomock.Any()).Return(&s3.ListObjectsOutput{
-						Name: aws.String("aws"),
-						Contents: []*s3.Object{
+						Name: awsSdk.String("aws"),
+						Contents: []types.Object{
 							{
-								Key: aws.String("foo"),
+								Key: awsSdk.String("foo"),
 							},
 						},
 					}, nil).Times(1),
@@ -89,13 +89,13 @@ func TestDeleteS3BucketsWithPrefix(t *testing.T) {
 				gomock.InOrder(
 					r.ListBuckets(gomock.Any()).Return(
 						&s3.ListBucketsOutput{
-							Buckets: []*s3.Bucket{{Name: aws.String("foo")}},
+							Buckets: []types.Bucket{{Name: awsSdk.String("foo")}},
 						}, nil).Times(1),
 					r.ListObjects(gomock.Any()).Return(&s3.ListObjectsOutput{
-						Name: aws.String("aws"),
-						Contents: []*s3.Object{
+						Name: awsSdk.String("aws"),
+						Contents: []types.Object{
 							{
-								Key: aws.String("foo"),
+								Key: awsSdk.String("foo"),
 							},
 						},
 					}, nil).Times(1),
@@ -112,13 +112,13 @@ func TestDeleteS3BucketsWithPrefix(t *testing.T) {
 				gomock.InOrder(
 					r.ListBuckets(gomock.Any()).Return(
 						&s3.ListBucketsOutput{
-							Buckets: []*s3.Bucket{{Name: aws.String("foo")}},
+							Buckets: []types.Bucket{{Name: awsSdk.String("foo")}},
 						}, nil).Times(1),
 					r.ListObjects(gomock.Any()).Return(&s3.ListObjectsOutput{
-						Name: aws.String("aws"),
-						Contents: []*s3.Object{
+						Name: awsSdk.String("aws"),
+						Contents: []types.Object{
 							{
-								Key: aws.String("foo"),
+								Key: awsSdk.String("foo"),
 							},
 						},
 					}, nil).Times(1),
@@ -135,16 +135,16 @@ func TestDeleteS3BucketsWithPrefix(t *testing.T) {
 				gomock.InOrder(
 					r.ListBuckets(gomock.Any()).Return(
 						&s3.ListBucketsOutput{
-							Buckets: []*s3.Bucket{
-								{Name: aws.String("foo1")},
-								{Name: aws.String("foo2")},
+							Buckets: []types.Bucket{
+								{Name: awsSdk.String("foo1")},
+								{Name: awsSdk.String("foo2")},
 							},
 						}, nil).Times(1),
 					r.ListObjects(gomock.Any()).Return(&s3.ListObjectsOutput{
-						Name: aws.String("aws"),
-						Contents: []*s3.Object{
+						Name: awsSdk.String("aws"),
+						Contents: []types.Object{
 							{
-								Key: aws.String("foo"),
+								Key: awsSdk.String("foo"),
 							},
 						},
 					}, nil).Times(1),

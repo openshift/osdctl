@@ -6,8 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/organizations"
+	"github.com/aws/aws-sdk-go-v2/service/organizations"
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	"github.com/openshift/osdctl/pkg/printer"
@@ -100,7 +99,7 @@ func searchClustersByAWSProfile(cmd *cobra.Command) error {
 		return fmt.Errorf("could not create AWS client: %q", err)
 	}
 	parent, err := awsClient.ListParents(&organizations.ListParentsInput{
-		ChildId: aws.String(awsAccountID),
+		ChildId: &awsAccountID,
 	})
 	if err != nil {
 		return fmt.Errorf("cannot get organization parents: %q", err)
@@ -109,7 +108,7 @@ func searchClustersByAWSProfile(cmd *cobra.Command) error {
 
 	result, err := awsClient.DescribeOrganizationalUnit(
 		&organizations.DescribeOrganizationalUnitInput{
-			OrganizationalUnitId: aws.String(parentId),
+			OrganizationalUnitId: &parentId,
 		})
 
 	if err != nil {
@@ -122,7 +121,6 @@ func searchClustersByAWSProfile(cmd *cobra.Command) error {
 }
 
 func searchclustersByOrg(cmd *cobra.Command, orgID string) error {
-
 	response, err := getClusters(orgID)
 	if err != nil {
 		return fmt.Errorf("invalid input: %q", err)

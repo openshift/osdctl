@@ -1,9 +1,11 @@
 package aws
 
 import (
+	"errors"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/iam"
+
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"k8s.io/klog/v2"
 )
 
@@ -25,11 +27,9 @@ func CreateIAMUserAndAttachPolicy(awsClient Client, username, policyArn *string)
 
 func CheckIAMUserExists(awsClient Client, username *string) (bool, error) {
 	if _, err := awsClient.GetUser(&iam.GetUserInput{UserName: username}); err != nil {
-		if aerr, ok := err.(awserr.Error); ok {
-			// the specified IAM User doesn't exist
-			if aerr.Code() == iam.ErrCodeNoSuchEntityException {
-				return false, nil
-			}
+		var nse *types.NoSuchEntityException
+		if errors.As(err, &nse) {
+			return false, nil
 		}
 		return false, err
 	}

@@ -2,15 +2,16 @@ package cost
 
 import (
 	"errors"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/costexplorer"
+	"testing"
 
-	//"github.com/aws/aws-sdk-go/service/costexplorer"
-	"github.com/aws/aws-sdk-go/service/organizations"
+	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/costexplorer"
+	costExplorerTypes "github.com/aws/aws-sdk-go-v2/service/costexplorer/types"
+	"github.com/aws/aws-sdk-go-v2/service/organizations"
+	organizationTypes "github.com/aws/aws-sdk-go-v2/service/organizations/types"
 	"github.com/golang/mock/gomock"
 	"github.com/onsi/gomega"
 	"github.com/openshift/osdctl/pkg/provider/aws/mock"
-	"testing"
 )
 
 func TestReconcileCostCategories(t *testing.T) {
@@ -28,8 +29,8 @@ func TestReconcileCostCategories(t *testing.T) {
 			setupAWSMock: func(r *mock.MockClientMockRecorder) {
 				r.ListCostCategoryDefinitions(gomock.Any()).Return(nil, errors.New("FakeError")).Times(1)
 			},
-			OUid:        aws.String("ou-9999-99999999"),
-			name:        aws.String("Random OU"),
+			OUid:        awsSdk.String("ou-9999-99999999"),
+			name:        awsSdk.String("Random OU"),
 			errExpected: true,
 		},
 		{
@@ -38,8 +39,8 @@ func TestReconcileCostCategories(t *testing.T) {
 				gomock.InOrder(
 					r.ListCostCategoryDefinitions(gomock.Any()).Return(
 						&costexplorer.ListCostCategoryDefinitionsOutput{
-							CostCategoryReferences: []*costexplorer.CostCategoryReference{{Name: aws.String("CostCategory1")}},
-							NextToken:              aws.String("FakeToken"),
+							CostCategoryReferences: []costExplorerTypes.CostCategoryReference{{Name: awsSdk.String("CostCategory1")}},
+							NextToken:              awsSdk.String("FakeToken"),
 						}, nil).Times(1),
 
 					r.ListCostCategoryDefinitions(gomock.Any()).Return(
@@ -48,8 +49,8 @@ func TestReconcileCostCategories(t *testing.T) {
 					r.ListOrganizationalUnitsForParent(gomock.Any()).Return(nil, errors.New("FakeError")).Times(1),
 				)
 			},
-			OUid:        aws.String("ou-9999-99999999"),
-			name:        aws.String("Random OU"),
+			OUid:        awsSdk.String("ou-9999-99999999"),
+			name:        awsSdk.String("Random OU"),
 			errExpected: true,
 		},
 		{
@@ -61,11 +62,11 @@ func TestReconcileCostCategories(t *testing.T) {
 
 					r.ListOrganizationalUnitsForParent(gomock.Any()).Return(
 						&organizations.ListOrganizationalUnitsForParentOutput{
-							NextToken: aws.String("FakeToken"),
-							OrganizationalUnits: []*organizations.OrganizationalUnit{
+							NextToken: awsSdk.String("FakeToken"),
+							OrganizationalUnits: []organizationTypes.OrganizationalUnit{
 								{
-									Id:   aws.String("FakeID"),
-									Name: aws.String("FakeName"),
+									Id:   awsSdk.String("FakeID"),
+									Name: awsSdk.String("FakeName"),
 								},
 							},
 						}, nil).Times(1),
@@ -73,26 +74,26 @@ func TestReconcileCostCategories(t *testing.T) {
 					r.ListOrganizationalUnitsForParent(gomock.Any()).Return(
 						&organizations.ListOrganizationalUnitsForParentOutput{
 							NextToken:           nil,
-							OrganizationalUnits: []*organizations.OrganizationalUnit{},
+							OrganizationalUnits: []organizationTypes.OrganizationalUnit{},
 						}, nil).Times(1),
 
 					r.ListOrganizationalUnitsForParent(gomock.Any()).Return(
 						&organizations.ListOrganizationalUnitsForParentOutput{
 							NextToken:           nil,
-							OrganizationalUnits: []*organizations.OrganizationalUnit{},
+							OrganizationalUnits: []organizationTypes.OrganizationalUnit{},
 						}, nil).Times(1),
 
 					r.ListOrganizationalUnitsForParent(gomock.Any()).Return(
 						&organizations.ListOrganizationalUnitsForParentOutput{
 							NextToken:           nil,
-							OrganizationalUnits: []*organizations.OrganizationalUnit{},
+							OrganizationalUnits: []organizationTypes.OrganizationalUnit{},
 						}, nil).Times(1),
 
 					r.ListAccountsForParent(gomock.Any()).Return(nil, errors.New("FakeError")).Times(1),
 				)
 			},
-			OUid:        aws.String("ou-9999-99999999"),
-			name:        aws.String("Random OU"),
+			OUid:        awsSdk.String("ou-9999-99999999"),
+			name:        awsSdk.String("Random OU"),
 			errExpected: true,
 		},
 		{
@@ -104,11 +105,11 @@ func TestReconcileCostCategories(t *testing.T) {
 
 					r.ListOrganizationalUnitsForParent(gomock.Any()).Return(
 						&organizations.ListOrganizationalUnitsForParentOutput{
-							NextToken: aws.String("FakeToken"),
-							OrganizationalUnits: []*organizations.OrganizationalUnit{
+							NextToken: awsSdk.String("FakeToken"),
+							OrganizationalUnits: []organizationTypes.OrganizationalUnit{
 								{
-									Id:   aws.String("FakeID"),
-									Name: aws.String("FakeName"),
+									Id:   awsSdk.String("FakeID"),
+									Name: awsSdk.String("FakeName"),
 								},
 							},
 						}, nil).Times(1),
@@ -116,19 +117,19 @@ func TestReconcileCostCategories(t *testing.T) {
 					r.ListOrganizationalUnitsForParent(gomock.Any()).Return(
 						&organizations.ListOrganizationalUnitsForParentOutput{
 							NextToken:           nil,
-							OrganizationalUnits: []*organizations.OrganizationalUnit{},
+							OrganizationalUnits: []organizationTypes.OrganizationalUnit{},
 						}, nil).Times(1),
 
 					r.ListOrganizationalUnitsForParent(gomock.Any()).Return(
 						&organizations.ListOrganizationalUnitsForParentOutput{
 							NextToken:           nil,
-							OrganizationalUnits: []*organizations.OrganizationalUnit{},
+							OrganizationalUnits: []organizationTypes.OrganizationalUnit{},
 						}, nil).Times(1),
 
 					r.ListOrganizationalUnitsForParent(gomock.Any()).Return(
 						&organizations.ListOrganizationalUnitsForParentOutput{
 							NextToken:           nil,
-							OrganizationalUnits: []*organizations.OrganizationalUnit{},
+							OrganizationalUnits: []organizationTypes.OrganizationalUnit{},
 						}, nil).Times(1),
 
 					r.ListAccountsForParent(gomock.Any()).Return(&organizations.ListAccountsForParentOutput{}, nil).Times(1),
@@ -136,8 +137,8 @@ func TestReconcileCostCategories(t *testing.T) {
 					r.CreateCostCategoryDefinition(gomock.Any()).Return(nil, nil).Times(1),
 				)
 			},
-			OUid:        aws.String("ou-9999-99999999"),
-			name:        aws.String("Random OU"),
+			OUid:        awsSdk.String("ou-9999-99999999"),
+			name:        awsSdk.String("Random OU"),
 			errExpected: false,
 		},
 	}
@@ -150,7 +151,7 @@ func TestReconcileCostCategories(t *testing.T) {
 
 			defer mocks.mockCtrl.Finish()
 
-			OU := &organizations.OrganizationalUnit{Id: tc.OUid, Name: tc.name}
+			OU := &organizationTypes.OrganizationalUnit{Id: tc.OUid, Name: tc.name}
 
 			err := reconcileCostCategories(OU, mocks.mockAWSClient)
 

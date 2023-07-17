@@ -3,11 +3,12 @@ package aws
 import (
 	"strings"
 
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"k8s.io/klog/v2"
 )
 
-// Delete all S3 buckets with the specified prefix
+// DeleteS3BucketsWithPrefix Delete all S3 buckets with the specified prefix
 func DeleteS3BucketsWithPrefix(awsClient Client, prefix string) error {
 	resp, err := awsClient.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
@@ -27,14 +28,14 @@ func DeleteS3BucketsWithPrefix(awsClient Client, prefix string) error {
 
 			// Clean up the objects in the bucket
 			if len(objects.Contents) > 0 {
-				deleteObjects := make([]*s3.ObjectIdentifier, 0, len(objects.Contents))
+				deleteObjects := make([]types.ObjectIdentifier, 0, len(objects.Contents))
 				for _, obj := range objects.Contents {
-					deleteObjects = append(deleteObjects, &s3.ObjectIdentifier{Key: obj.Key})
+					deleteObjects = append(deleteObjects, types.ObjectIdentifier{Key: obj.Key})
 				}
 
 				if _, err = awsClient.DeleteObjects(
 					&s3.DeleteObjectsInput{
-						Delete: &s3.Delete{Objects: deleteObjects},
+						Delete: &types.Delete{Objects: deleteObjects},
 						Bucket: bucket.Name,
 					},
 				); err != nil {

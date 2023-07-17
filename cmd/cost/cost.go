@@ -3,8 +3,8 @@ package cost
 import (
 	"log"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/organizations"
+	"github.com/aws/aws-sdk-go-v2/service/organizations"
+	"github.com/aws/aws-sdk-go-v2/service/organizations/types"
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
@@ -68,7 +68,7 @@ func (opsCost *costOptions) initAWSClients() (awsprovider.Client, error) {
 	if opsCost.accessKeyID == "" && opsCost.secretAccessKey == "" {
 		awsClient, err = awsprovider.NewAwsClient(opsCost.profile, opsCost.region, opsCost.configFile)
 	} else {
-		awsClient, err = awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+		awsClient, err = awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
 			AccessKeyID:     opsCost.accessKeyID,
 			SecretAccessKey: opsCost.secretAccessKey,
 			Region:          opsCost.region,
@@ -83,9 +83,9 @@ func (opsCost *costOptions) initAWSClients() (awsprovider.Client, error) {
 }
 
 // Gets information regarding Organizational Unit
-func getOU(org awsprovider.Client, OUid string) *organizations.OrganizationalUnit {
+func getOU(org awsprovider.Client, OUid string) *types.OrganizationalUnit {
 	result, err := org.DescribeOrganizationalUnit(&organizations.DescribeOrganizationalUnitInput{
-		OrganizationalUnitId: aws.String(OUid),
+		OrganizationalUnitId: &OUid,
 	})
 	if err != nil {
 		log.Fatalln("Cannot get Organizational Unit:", err)

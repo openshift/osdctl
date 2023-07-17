@@ -5,21 +5,20 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/organizations"
-
-	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
+	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/organizations"
+	organizationTypes "github.com/aws/aws-sdk-go-v2/service/organizations/types"
+	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
+	resourceGroupsTaggingApiTypes "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi/types"
 	"github.com/golang/mock/gomock"
 	"github.com/openshift/osdctl/pkg/provider/aws/mock"
-
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 type mocks struct {
 	mockCtrl *gomock.Controller
 }
 
-func setupDefaultMocks(t *testing.T, localObjects []runtime.Object) *mocks {
+func setupDefaultMocks(t *testing.T) *mocks {
 	mocks := &mocks{
 		mockCtrl: gomock.NewController(t),
 	}
@@ -28,7 +27,7 @@ func setupDefaultMocks(t *testing.T, localObjects []runtime.Object) *mocks {
 }
 
 func TestListUsername(t *testing.T) {
-	var genericAWSError error = fmt.Errorf("Generic AWS Error")
+	var genericAWSError = fmt.Errorf("Generic AWS Error")
 
 	testData := []struct {
 		name             string
@@ -74,18 +73,18 @@ func TestListUsername(t *testing.T) {
 
 	for _, test := range testData {
 		t.Run(test.name, func(t *testing.T) {
-			mocks := setupDefaultMocks(t, []runtime.Object{})
+			mocks := setupDefaultMocks(t)
 
 			mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
 			accountID := "111111111111"
 
 			awsOutput := &organizations.ListTagsForResourceOutput{}
 			if test.expectedAWSError == nil {
-				tags := []*organizations.Tag{}
+				var tags []organizationTypes.Tag
 				for key, value := range test.tags {
-					tag := &organizations.Tag{
-						Key:   aws.String(key),
-						Value: aws.String(value),
+					tag := organizationTypes.Tag{
+						Key:   &key,
+						Value: &value,
 					}
 					tags = append(tags, tag)
 				}
@@ -112,7 +111,7 @@ func TestListUsername(t *testing.T) {
 
 func TestListAccountsByUser(t *testing.T) {
 
-	var genericAWSError error = fmt.Errorf("Generic AWS Error")
+	var genericAWSError = fmt.Errorf("Generic AWS Error")
 
 	testData := []struct {
 		name                string
@@ -146,7 +145,7 @@ func TestListAccountsByUser(t *testing.T) {
 
 	for _, test := range testData {
 		t.Run(test.name, func(t *testing.T) {
-			mocks := setupDefaultMocks(t, []runtime.Object{})
+			mocks := setupDefaultMocks(t)
 
 			mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
 
@@ -154,10 +153,10 @@ func TestListAccountsByUser(t *testing.T) {
 
 			awsOutput := &resourcegroupstaggingapi.GetResourcesOutput{}
 			if test.expectedAWSError == nil {
-				resources := []*resourcegroupstaggingapi.ResourceTagMapping{}
+				var resources []resourceGroupsTaggingApiTypes.ResourceTagMapping
 				for _, r := range test.resources {
-					resource := &resourcegroupstaggingapi.ResourceTagMapping{
-						ResourceARN: aws.String(r),
+					resource := resourceGroupsTaggingApiTypes.ResourceTagMapping{
+						ResourceARN: &r,
 					}
 					resources = append(resources, resource)
 				}
@@ -184,7 +183,7 @@ func TestListAccountsByUser(t *testing.T) {
 
 func TestListAllAccounts(t *testing.T) {
 
-	var genericAWSError error = fmt.Errorf("Generic AWS Error")
+	var genericAWSError = fmt.Errorf("Generic AWS Error")
 
 	testData := []struct {
 		name             string
@@ -246,17 +245,17 @@ func TestListAllAccounts(t *testing.T) {
 	for _, test := range testData {
 		t.Run(test.name, func(t *testing.T) {
 
-			mocks := setupDefaultMocks(t, []runtime.Object{})
+			mocks := setupDefaultMocks(t)
 			mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
 			OuId := "ou-abcd-efghlmno"
 
 			awsOutputAccounts := &organizations.ListAccountsForParentOutput{}
 
 			if test.accountsList != nil {
-				accountsList := []*organizations.Account{}
+				var accountsList []organizationTypes.Account
 				for _, a := range test.accountsList {
-					account := &organizations.Account{
-						Id: aws.String(a),
+					account := organizationTypes.Account{
+						Id: &a,
 					}
 					accountsList = append(accountsList, account)
 				}
@@ -265,11 +264,11 @@ func TestListAllAccounts(t *testing.T) {
 
 			if test.tags != nil {
 				awsOutputTags := &organizations.ListTagsForResourceOutput{}
-				tags := []*organizations.Tag{}
+				var tags []organizationTypes.Tag
 				for key, value := range test.tags {
-					tag := &organizations.Tag{
-						Key:   aws.String(key),
-						Value: aws.String(value),
+					tag := organizationTypes.Tag{
+						Key:   awsSdk.String(key),
+						Value: awsSdk.String(value),
 					}
 					tags = append(tags, tag)
 				}
