@@ -2,6 +2,7 @@ package resize
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -76,15 +77,20 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 	tempMp.Name = fmt.Sprintf("%s2", tempMp.Name)
 	tempMp.Spec.Name = fmt.Sprintf("%s2", tempMp.Spec.Name)
 
+	instanceType, err := getInstanceType(tempMp)
+	if err != nil {
+		return fmt.Errorf("failed to parse instance type from machinepool: %v", err)
+	}
+
 	// Create the temporary machinepool
-	log.Printf("planning to resize to machine type %s", tempMp.Spec.Platform.AWS.InstanceType)
+	log.Printf("planning to resize to instance type %s", instanceType)
 	log.Printf("[REMINDER] follow the preparation tasks described in https://github.com/openshift/ops-sop/blob/master/v4/howto/resize-infras-workers.md#prepare")
 	if !utils.ConfirmPrompt() {
 		log.Printf("exiting")
 		return nil
 	}
 
-	log.Printf("creating temporary machinepool %s, with machine type %s", tempMp.Name, tempMp.Spec.Platform.AWS.InstanceType)
+	log.Printf("creating temporary machinepool %s, with instance type %s", tempMp.Name, instanceType)
 	if err := r.hiveAdmin.Create(ctx, tempMp); err != nil {
 		return err
 	}
@@ -125,7 +131,7 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 	}
 
 	// Delete original machinepool
-	log.Printf("deleting original machinepool %s, with machine type %s", originalMp.Name, originalMp.Spec.Platform.AWS.InstanceType)
+	log.Printf("deleting original machinepool %s, with instance type %s", originalMp.Name, instanceType)
 	if err := r.hiveAdmin.Delete(ctx, originalMp); err != nil {
 		return err
 	}
@@ -148,7 +154,7 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 	}
 
 	// Create new permanent machinepool
-	log.Printf("creating new machinepool %s, with machine type %s", newMp.Name, newMp.Spec.Platform.AWS.InstanceType)
+	log.Printf("creating new machinepool %s, with instance type %s", newMp.Name, instanceType)
 	if err := r.hiveAdmin.Create(ctx, newMp); err != nil {
 		return err
 	}
@@ -190,7 +196,7 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 	}
 
 	// Delete temp machinepool
-	log.Printf("deleting temporary machinepool %s, with machine type %s", tempMp.Name, tempMp.Spec.Platform.AWS.InstanceType)
+	log.Printf("deleting temporary machinepool %s, with instance type %s", tempMp.Name, instanceType)
 	if err := r.hiveAdmin.Delete(ctx, tempMp); err != nil {
 		return err
 	}
@@ -265,7 +271,7 @@ func (r *Resize) getInfraMachinePool(ctx context.Context) (*hivev1.MachinePool, 
 	for _, mp := range mpList.Items {
 		mp := mp
 		if mp.Spec.Name == "infra" {
-			log.Printf("found machinepool %s, with machine type %s", mp.Name, mp.Spec.Platform.AWS.InstanceType)
+			log.Printf("found machinepool %s", mp.Name)
 			return &mp, nil
 		}
 	}
@@ -280,6 +286,9 @@ func (r *Resize) embiggenMachinePool(mp *hivev1.MachinePool) (*hivev1.MachinePoo
 		"r5.xlarge":  "r5.2xlarge",
 		"r5.2xlarge": "r5.4xlarge",
 		"r5.4xlarge": "r5.8xlarge",
+		// GCP
+		"custom-4-32768-ext": "custom-8-65536-ext",
+		"custom-8-65536-ext": "custom-16-131072-ext",
 	}
 
 	newMp := &hivev1.MachinePool{}
@@ -297,13 +306,36 @@ func (r *Resize) embiggenMachinePool(mp *hivev1.MachinePool) (*hivev1.MachinePoo
 	// Update instance type sizing
 	if r.instanceType != "" {
 		log.Printf("using override instance type: %s", r.instanceType)
-		newMp.Spec.Platform.AWS.InstanceType = r.instanceType
 	} else {
-		if _, ok := embiggen[mp.Spec.Platform.AWS.InstanceType]; !ok {
-			return nil, fmt.Errorf("resizing instance type %s not supported", mp.Spec.Platform.AWS.InstanceType)
+		instanceType, err := getInstanceType(mp)
+		if err != nil {
+			return nil, err
 		}
-		newMp.Spec.Platform.AWS.InstanceType = embiggen[mp.Spec.Platform.AWS.InstanceType]
+		if _, ok := embiggen[instanceType]; !ok {
+			return nil, fmt.Errorf("resizing instance type %s not supported", instanceType)
+		}
+
+		r.instanceType = embiggen[instanceType]
+	}
+
+	switch r.cluster.CloudProvider().ID() {
+	case "aws":
+		newMp.Spec.Platform.AWS.InstanceType = r.instanceType
+	case "gcp":
+		newMp.Spec.Platform.GCP.InstanceType = r.instanceType
+	default:
+		return nil, fmt.Errorf("cloud provider not supported: %s, only AWS and GCP are supported", r.cluster.CloudProvider().ID())
 	}
 
 	return newMp, nil
+}
+
+func getInstanceType(mp *hivev1.MachinePool) (string, error) {
+	if mp.Spec.Platform.AWS != nil {
+		return mp.Spec.Platform.AWS.InstanceType, nil
+	} else if mp.Spec.Platform.GCP != nil {
+		return mp.Spec.Platform.GCP.InstanceType, nil
+	}
+
+	return "", errors.New("unsupported platform, only AWS and GCP are supported")
 }

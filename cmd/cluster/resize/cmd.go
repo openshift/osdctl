@@ -1,15 +1,18 @@
 package resize
 
 import (
+	"fmt"
+
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/k8s"
-	ocmutils "github.com/openshift/osdctl/pkg/utils"
+	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type Resize struct {
@@ -17,6 +20,7 @@ type Resize struct {
 	hive      client.Client
 	hiveAdmin client.Client
 
+	cluster      *cmv1.Cluster
 	clusterId    string
 	instanceType string
 }
@@ -51,7 +55,15 @@ func (r *Resize) New(clusterId string) error {
 		return err
 	}
 
-	hive, err := ocmutils.GetHiveCluster(clusterId)
+	ocmClient := utils.CreateConnection()
+	defer ocmClient.Close()
+	cluster, err := utils.GetClusterAnyStatus(ocmClient, r.clusterId)
+	if err != nil {
+		return fmt.Errorf("failed to get OCM cluster info for %s: %s", r.clusterId, err)
+	}
+	r.cluster = cluster
+
+	hive, err := utils.GetHiveCluster(clusterId)
 	if err != nil {
 		return err
 	}
