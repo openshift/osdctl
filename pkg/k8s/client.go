@@ -61,6 +61,10 @@ func (s *LazyClient) Status() client.StatusWriter {
 	return s.getClient().Status()
 }
 
+func (s *LazyClient) SubResource(subResource string) client.SubResourceClient {
+	return s.getClient().SubResource(subResource)
+}
+
 func NewClient(flags *genericclioptions.ConfigFlags) client.Client {
 	return &LazyClient{nil, flags}
 }
