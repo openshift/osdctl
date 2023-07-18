@@ -151,7 +151,10 @@ func (c *clusterAccessOptions) Run(cmd *cobra.Command, args []string) error {
 	c.Println(fmt.Sprintf("Retrieving Kubeconfig for cluster '%s'", clusterIdentifier))
 
 	// Connect to ocm
-	conn := osdctlutil.CreateConnection()
+	conn, err := osdctlutil.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		cmdutil.CheckErr(conn.Close())
 	}()

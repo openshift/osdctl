@@ -76,7 +76,10 @@ type ClusterHealthCondensedObject struct {
 
 func (o *healthOptions) run() error {
 
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer ocmClient.Close()
 
 	clusterResp, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(o.clusterID).Get().Send()

@@ -23,7 +23,10 @@ func newCmdCheckBannedUser() *cobra.Command {
 }
 
 func CheckBannedUser(clusterID string) error {
-	ocm := utils.CreateConnection()
+	ocm, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		if ocmCloseErr := ocm.Close(); ocmCloseErr != nil {
 			fmt.Printf("Cannot close the ocm (possible memory leak): %q", ocmCloseErr)

@@ -60,7 +60,10 @@ func (o *transferOwnerOptions) run() error {
 
 	// Create an OCM client to talk to the cluster API
 	// the user has to be logged in (e.g. 'ocm login')
-	ocm := utils.CreateConnection()
+	ocm, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		if ocmCloseErr := ocm.Close(); ocmCloseErr != nil {
 			fmt.Printf("Cannot close the ocm (possible memory leak): %q", ocmCloseErr)

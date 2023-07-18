@@ -68,7 +68,10 @@ func (o *resizeControlPlaneNodeOptions) complete(cmd *cobra.Command, _ []string)
 		return err
 	}
 
-	connection := utils.CreateConnection()
+	connection, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer connection.Close()
 
 	cluster, err := utils.GetCluster(connection, o.clusterID)

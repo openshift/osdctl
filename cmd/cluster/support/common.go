@@ -28,7 +28,10 @@ func getLimitedSupportReasons(clusterId string) ([]*cmv1.LimitedSupportReason, e
 	}
 
 	//create connection to sdk
-	connection := ctlutil.CreateConnection()
+	connection, err := ctlutil.CreateConnection()
+	if err != nil {
+		return nil, err
+	}
 	defer func() {
 		if err := connection.Close(); err != nil {
 			fmt.Printf("Cannot close the connection: %q\n", err)

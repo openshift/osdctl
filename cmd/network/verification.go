@@ -15,20 +15,29 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift-online/ocm-sdk-go/logging"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"github.com/openshift/osd-network-verifier/pkg/helpers"
 	"github.com/openshift/osd-network-verifier/pkg/output"
 	"github.com/openshift/osd-network-verifier/pkg/proxy"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
 	onvAwsClient "github.com/openshift/osd-network-verifier/pkg/verifier/aws"
 	"github.com/openshift/osdctl/cmd/servicelog"
+	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 const (
 	nonByovpcPrivateSubnetTagKey = "kubernetes.io/role/internal-elb"
 	blockedEgressTemplateUrl     = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json"
+	caBundleConfigMapKey         = "ca-bundle.crt"
 )
 
 type EgressVerification struct {
@@ -190,7 +199,10 @@ func (e *EgressVerification) setup(ctx context.Context) (*aws.Config, error) {
 	// If ClusterId is supplied, leverage ocm and ocm-backplane to get an AWS client
 	if e.ClusterId != "" {
 		e.log.Debug(ctx, "searching OCM for cluster: %s", e.ClusterId)
-		ocmClient := utils.CreateConnection()
+		ocmClient, err := utils.CreateConnection()
+		if err != nil {
+			return nil, err
+		}
 		defer ocmClient.Close()
 
 		cluster, err := utils.GetClusterAnyStatus(ocmClient, e.ClusterId)
@@ -285,7 +297,13 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 
 		// The actual trust bundle is redacted in OCM, but is an indicator that --cacert is required
 		if e.cluster.AdditionalTrustBundle() != "" && e.CaCert == "" {
-			return nil, fmt.Errorf("%s has an additional trust bundle configured, but no --cacert supplied", e.ClusterId)
+			e.log.Info(ctx, "cluster has an additional trusted CA bundle, but none specified - attempting to retrieve from hive")
+			caBundle, err := e.getCABundle(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get additional CA trust bundle from hive with error: %v, consider specifying --cacert", err)
+			}
+
+			input.Proxy.Cacert = caBundle
 		}
 	}
 
@@ -462,6 +480,85 @@ func (e *EgressVerification) getSecurityGroupId(ctx context.Context) (string, er
 
 	e.log.Info(ctx, "using security-group-id: %s", *resp.SecurityGroups[0].GroupId)
 	return *resp.SecurityGroups[0].GroupId, nil
+}
+
+// getCABundle retrieves a cluster's CA Trust Bundle from Hive
+func (e *EgressVerification) getCABundle(ctx context.Context) (string, error) {
+	if e.cluster == nil || e.cluster.AdditionalTrustBundle() == "" {
+		// No CA Bundle to retrieve for this cluster
+		return "", nil
+	}
+
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		return "", err
+	}
+	// Register hivev1 for SelectorSyncSets
+	if err := hivev1.AddToScheme(scheme); err != nil {
+		return "", err
+	}
+
+	hive, err := utils.GetHiveCluster(e.cluster.ID())
+	if err != nil {
+		return "", err
+	}
+
+	e.log.Debug(ctx, "assembling K8s client for %s (%s)", hive.ID(), hive.Name())
+	hc, err := k8s.New(hive.ID(), client.Options{Scheme: scheme})
+	if err != nil {
+		return "", err
+	}
+
+	e.log.Debug(ctx, "searching for proxy SyncSet")
+	nsList := &corev1.NamespaceList{}
+	clusterSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{MatchLabels: map[string]string{
+		"api.openshift.com/id": e.cluster.ID(),
+	}})
+	if err != nil {
+		return "", err
+	}
+
+	if err := hc.List(ctx, nsList, &client.ListOptions{LabelSelector: clusterSelector}); err != nil {
+		return "", err
+	}
+
+	if len(nsList.Items) != 1 {
+		return "", fmt.Errorf("one namespace expected matching: api.openshift.com/id=%s, found %d", e.cluster.ID(), len(nsList.Items))
+	}
+
+	ss := &hivev1.SyncSet{}
+	if err := hc.Get(ctx, client.ObjectKey{Name: "proxy", Namespace: nsList.Items[0].Name}, ss); err != nil {
+		return "", err
+	}
+
+	e.log.Debug(ctx, "extracting additional trusted CA bundle from proxy SyncSet")
+	caBundle, err := getCaBundleFromSyncSet(ss)
+	if err != nil {
+		return "", err
+	}
+
+	return caBundle, nil
+}
+
+// getCaBundleFromSyncSet returns a cluster's proxy CA Bundle given a Hive SyncSet
+func getCaBundleFromSyncSet(ss *hivev1.SyncSet) (string, error) {
+	decoder, err := admission.NewDecoder(runtime.NewScheme())
+	if err != nil {
+		return "", err
+	}
+
+	for i := range ss.Spec.Resources {
+		cm := &corev1.ConfigMap{}
+		if err := decoder.DecodeRaw(ss.Spec.Resources[i], cm); err != nil {
+			return "", err
+		}
+
+		if _, ok := cm.Data[caBundleConfigMapKey]; ok {
+			return cm.Data[caBundleConfigMapKey], nil
+		}
+	}
+
+	return "", fmt.Errorf("cabundle ConfigMap not found in SyncSet: %s", ss.Name)
 }
 
 func filtersToString(filters []types.Filter) string {

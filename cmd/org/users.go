@@ -74,7 +74,11 @@ func getUsers(orgID string) error {
 	searchQuery := ""
 
 	searchQuery = fmt.Sprintf("organization_id='%s'", orgID)
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
+	defer ocmClient.Close()
 
 	var userList []*userModel
 	for {

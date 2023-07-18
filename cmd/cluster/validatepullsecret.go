@@ -32,7 +32,10 @@ The owner's email to check will be determined by the cluster identifier passed t
 }
 
 func ValidatePullSecret(clusterID string, kubeCli client.Client, flags *genericclioptions.ConfigFlags) error {
-	ocm := utils.CreateConnection()
+	ocm, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		if ocmCloseErr := ocm.Close(); ocmCloseErr != nil {
 			fmt.Printf("Cannot close the ocm (possible memory leak): %q", ocmCloseErr)
@@ -44,8 +47,7 @@ func ValidatePullSecret(clusterID string, kubeCli client.Client, flags *genericc
 	// This is the flagset for the kubeCli object provided from the root command. Set here to retroactively impersonate backplane-cluster-admin
 	flags.Impersonate = &BackplaneClusterAdmin
 	secret := &corev1.Secret{}
-	err := kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: "openshift-config", Name: "pull-secret"}, secret)
-	if err != nil {
+	if err := kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: "openshift-config", Name: "pull-secret"}, secret); err != nil {
 		return err
 	}
 
