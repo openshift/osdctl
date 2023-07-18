@@ -55,7 +55,10 @@ func (r *Resize) New(clusterId string) error {
 		return err
 	}
 
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer ocmClient.Close()
 	cluster, err := utils.GetClusterAnyStatus(ocmClient, r.clusterId)
 	if err != nil {

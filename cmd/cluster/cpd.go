@@ -58,7 +58,10 @@ func newCmdCpd() *cobra.Command {
 
 func (o *cpdOptions) run() error {
 	// Get the cluster info
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer ocmClient.Close()
 
 	cluster, err := utils.GetClusterAnyStatus(ocmClient, o.clusterID)

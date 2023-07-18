@@ -117,7 +117,10 @@ func (o *PostCmdOptions) Run() error {
 
 	// Create an OCM client to talk to the cluster API
 	// the user has to be logged in (e.g. 'ocm login')
-	ocmClient := ocmutils.CreateConnection()
+	ocmClient, err := ocmutils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		if err := ocmClient.Close(); err != nil {
 			log.Errorf("Cannot close the ocmClient (possible memory leak): %q", err)

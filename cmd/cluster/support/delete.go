@@ -91,7 +91,10 @@ func (o *deleteOptions) run() error {
 	}
 
 	// Create an OCM client to talk to the cluster API
-	connection := ctlutil.CreateConnection()
+	connection, err := ctlutil.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		if err := connection.Close(); err != nil {
 			fmt.Printf("Cannot close the connection: %q\n", err)

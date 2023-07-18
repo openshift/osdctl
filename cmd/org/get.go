@@ -113,7 +113,10 @@ func searchOrgs(cmd *cobra.Command) error {
 
 func getOrgs() (*sdk.Response, error) {
 	// Create OCM client to talk
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return nil, err
+	}
 	defer func() {
 		if err := ocmClient.Close(); err != nil {
 			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
@@ -129,11 +132,10 @@ func getOrgs() (*sdk.Response, error) {
 	case EBS_SEARCH:
 		apiPath = organizationsAPIPath
 	}
-	err := arguments.ApplyPathArg(request, apiPath)
-	if err != nil {
+	if err := arguments.ApplyPathArg(request, apiPath); err != nil {
 		log.Fatalf("Can't parse API path '%s': %v\n", apiPath, err)
-
 	}
+
 	arguments.ApplyParameterFlag(request, []string{getSearchQuery()})
 	return sendRequest(request)
 }

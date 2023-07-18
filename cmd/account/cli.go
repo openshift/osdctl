@@ -51,7 +51,11 @@ func (o *cliOptions) complete(cmd *cobra.Command) error {
 
 	var err error
 
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
+	defer ocmClient.Close()
 
 	if o.awsAccountID == "" && o.clusterID == "" {
 		return fmt.Errorf("please specify -i or -C")
@@ -80,7 +84,11 @@ func (o *cliOptions) run() error {
 	var err error
 	isCCS := false
 
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
+	defer ocmClient.Close()
 
 	// If a cluster ID was provided, determine if the cluster is CCS
 	if o.clusterID != "" {

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -245,27 +246,26 @@ func getOcmConfiguration(ocmConfigLoader func() (*Config, error)) (*Config, erro
 	return config, nil
 }
 
-func CreateConnection() *sdk.Connection {
+func CreateConnection() (*sdk.Connection, error) {
 	ocmConfigError := "Unable to load OCM config\nLogin with 'ocm login' or set OCM_TOKEN, OCM_URL and OCM_REFRESH_TOKEN environment variables"
 
 	connectionBuilder := sdk.NewConnectionBuilder()
 
 	config, err := getOcmConfiguration(loadOCMConfig)
 	if err != nil {
-		log.Fatal(ocmConfigError)
+		return nil, errors.New(ocmConfigError)
 	}
 
 	connectionBuilder.Tokens(config.AccessToken, config.RefreshToken)
 
 	if config.URL == "" {
-		log.Fatal(ocmConfigError)
-		return nil
+		return nil, errors.New(ocmConfigError)
 	}
 
 	// Parse the URL in case it is an alias
 	gatewayURL, ok := urlAliases[config.URL]
 	if !ok {
-		log.Fatalf("Invalid OCM_URL found: %s\nValid URL aliases are: 'production', 'staging', 'integration'", config.URL)
+		return nil, fmt.Errorf("invalid OCM_URL found: %s\nValid URL aliases are: 'production', 'staging', 'integration'", config.URL)
 	}
 	connectionBuilder.URL(gatewayURL)
 
@@ -273,12 +273,12 @@ func CreateConnection() *sdk.Connection {
 
 	if err != nil {
 		if strings.Contains(err.Error(), "Not logged in, run the") {
-			log.Fatal(ocmConfigError)
+			return nil, errors.New(ocmConfigError)
 		}
-		log.Fatalf("Failed to create OCM connection: %v", err)
+		return nil, fmt.Errorf("failed to create OCM connection: %v", err)
 	}
 
-	return connection
+	return connection, nil
 }
 
 func GetSupportRoleArnForCluster(ocmClient *sdk.Connection, clusterID string) (string, error) {
@@ -350,7 +350,10 @@ func IsClusterCCS(ocmClient *sdk.Connection, clusterID string) (bool, error) {
 // Returns the hive shard corresponding to a cluster
 // e.g. https://api.<hive_cluster>.byo5.p1.openshiftapps.com:6443
 func GetHiveShard(clusterID string) (string, error) {
-	connection := CreateConnection()
+	connection, err := CreateConnection()
+	if err != nil {
+		return "", err
+	}
 	defer connection.Close()
 
 	shardPath, err := connection.ClustersMgmt().V1().Clusters().
@@ -377,7 +380,10 @@ func GetHiveShard(clusterID string) (string, error) {
 }
 
 func GetHiveCluster(clusterId string) (*cmv1.Cluster, error) {
-	conn := CreateConnection()
+	conn, err := CreateConnection()
+	if err != nil {
+		return nil, err
+	}
 	defer conn.Close()
 
 	provisionShard, err := conn.ClustersMgmt().V1().Clusters().

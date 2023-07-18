@@ -139,7 +139,10 @@ func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create OCM client to talk to cluster API
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		if err := ocmClient.Close(); err != nil {
 			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
@@ -318,7 +321,10 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	// For PD query dependencies
 	pdwg := sync.WaitGroup{}
 
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return nil, []error{err}
+	}
 	defer ocmClient.Close()
 	cluster, err := utils.GetCluster(ocmClient, o.clusterID)
 	if err != nil {

@@ -67,7 +67,10 @@ type jumphostAWSClient interface {
 // initJumphostConfig initializes a jumphostConfig struct for use with jumphost commands.
 // Generally, this function should always be used as opposed to initializing the struct by hand.
 func initJumphostConfig(ctx context.Context, clusterId, subnetId string) (*jumphostConfig, error) {
-	ocm := utils.CreateConnection()
+	ocm, err := utils.CreateConnection()
+	if err != nil {
+		return nil, err
+	}
 	defer ocm.Close()
 
 	//cluster, err := utils.GetClusterAnyStatus(ocm, clusterId)

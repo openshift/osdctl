@@ -199,7 +199,10 @@ func (e *EgressVerification) setup(ctx context.Context) (*aws.Config, error) {
 	// If ClusterId is supplied, leverage ocm and ocm-backplane to get an AWS client
 	if e.ClusterId != "" {
 		e.log.Debug(ctx, "searching OCM for cluster: %s", e.ClusterId)
-		ocmClient := utils.CreateConnection()
+		ocmClient, err := utils.CreateConnection()
+		if err != nil {
+			return nil, err
+		}
 		defer ocmClient.Close()
 
 		cluster, err := utils.GetClusterAnyStatus(ocmClient, e.ClusterId)

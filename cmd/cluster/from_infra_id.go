@@ -52,7 +52,10 @@ func getClusterNameFromInfraId(infraId string) (string, error) {
 }
 
 func (ops *fromInfraIdOptions) run(cmd *cobra.Command, args []string) error {
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		if err := ocmClient.Close(); err != nil {
 			fmt.Printf("cannot close the ocmClient (possible memory leak): %q", err)

@@ -60,7 +60,10 @@ func searchLabelsByOrg(cmd *cobra.Command, orgID string) error {
 
 func getLabels(orgID string) (*sdk.Response, error) {
 	// Create OCM client to talk
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return nil, err
+	}
 	defer func() {
 		if err := ocmClient.Close(); err != nil {
 			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)

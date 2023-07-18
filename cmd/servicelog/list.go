@@ -67,7 +67,10 @@ var serviceLogListInternalOnlyFlag = false
 
 func FetchServiceLogs(clusterID string) (*sdk.Response, error) {
 	// Create OCM client to talk to cluster API
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return nil, err
+	}
 	defer func() {
 		if err := ocmClient.Close(); err != nil {
 			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)

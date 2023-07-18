@@ -129,7 +129,12 @@ func GenerateJumpRoleCredentials(client aws.Client, awsAccountID, region, sessio
 	}
 
 	jumpRoleKey := ProdJumproleConfigKey
-	currentEnv := utils.GetCurrentOCMEnv(utils.CreateConnection())
+	conn, err := utils.CreateConnection()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	currentEnv := utils.GetCurrentOCMEnv(conn)
 	if currentEnv == "stage" || currentEnv == "integration" {
 		jumpRoleKey = StageJumproleConfigKey
 	}
@@ -245,7 +250,10 @@ func GenerateNonCCSClusterAWSClient(ocmClient *sdk.Connection, awsClient aws.Cli
 // If an AWS profile name is not specified, this function will also read the AWS_PROFILE environment
 // variable or use the default AWS profile.
 func GenerateAWSClientForCluster(awsProfile string, clusterID string) (aws.Client, error) {
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return nil, err
+	}
 	defer ocmClient.Close()
 
 	cluster, err := utils.GetClusterAnyStatus(ocmClient, clusterID)

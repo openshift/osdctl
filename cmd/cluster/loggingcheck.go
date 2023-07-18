@@ -59,7 +59,10 @@ func (o *loggingCheckOptions) complete(cmd *cobra.Command, args []string) error 
 
 	// Create an OCM client to talk to the cluster API
 	// the user has to be logged in (e.g. 'ocm login')
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		if err := ocmClient.Close(); err != nil {
 			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
@@ -79,7 +82,10 @@ func (o *loggingCheckOptions) complete(cmd *cobra.Command, args []string) error 
 
 func (o *loggingCheckOptions) run() error {
 
-	connection := utils.CreateConnection()
+	connection, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer connection.Close()
 
 	// Get the client for the resource that manages the collection of clusters:
