@@ -47,9 +47,9 @@ func run(cmd *cobra.Command, clusterID string) error {
 	response, err := FetchServiceLogs(clusterID)
 	if err != nil {
 		// If the response has errored, likely the input was bad, so show usage
-		err := cmd.Help()
-		if err != nil {
-			return err
+		helpErr := cmd.Help()
+		if helpErr != nil {
+			return helpErr
 		}
 		return err
 	}
