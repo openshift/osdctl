@@ -204,18 +204,19 @@ func (o *healthOptions) run() error {
 
 		hsHealthObject := createHypershiftHealthObject(cluster)
 
-
 		if cluster.Nodes().Compute() != 0 {
 			hsHealthObject.Expected.Worker = int(cluster.Nodes().Compute())
 		}
 		mc := ""
 		if cluster.Hypershift().Enabled() {
-			// Ignorning the error here as this endpoint is behind a specific permissioon
-			hypershiftResp, _ := ocmClient.ClustersMgmt().V1().Clusters().
+			hypershiftResp, err := ocmClient.ClustersMgmt().V1().Clusters().
 				Cluster(cluster.ID()).
 				Hypershift().
 				Get().
 				Send()
+			if err != nil {
+				return errors.New(fmt.Sprintf("Could not get hypershift response.  %s", err))
+			}
 			mc = hypershiftResp.Body().ManagementCluster()
 		}
 
