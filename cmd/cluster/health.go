@@ -204,7 +204,6 @@ func (o *healthOptions) run() error {
 
 		hsHealthObject := createHypershiftHealthObject(cluster)
 
-		//var clusterHealthClient osdCloud.ClusterHealthClient
 
 		if cluster.Nodes().Compute() != 0 {
 			hsHealthObject.Expected.Worker = int(cluster.Nodes().Compute())
