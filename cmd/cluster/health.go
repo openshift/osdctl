@@ -63,7 +63,7 @@ type ClusterHealthCondensedObject struct {
 	ID         string   `yaml:"ID"`
 	Name       string   `yaml:"Name"`
 	Provider   string   `yaml:"Provider"`
-	Hypershift bool     `yaml: "Hypershift"`
+	Hypershift bool     `yaml:"Hypershift"`
 	AZs        []string `yaml:"AZs"`
 	Expected   struct {
 		Master int         `yaml:"Master"`
@@ -83,7 +83,7 @@ type ClusterHealthHypershiftObject struct {
 	ID                string   `yaml:"ID"`
 	Name              string   `yaml:"Name"`
 	Provider          string   `yaml:"Provider"`
-	Hypershift        bool     `yaml: "Hypershift"`
+	Hypershift        bool     `yaml:"Hypershift"`
 	ManagementCluster string   `yaml:"Management Cluster"`
 	AZs               []string `yaml:"AZs"`
 	Expected          struct {
