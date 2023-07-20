@@ -17,7 +17,6 @@ import (
 	"github.com/olekukonko/tablewriter"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/osdCloud"
-	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -47,10 +46,10 @@ func NewCmdInfo(streams genericclioptions.IOStreams) *cobra.Command {
 			cmdutil.CheckErr(ops.run())
 		},
 	}
-	ops.printFlags.AddFlags(infoCmd)
 	infoCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", "", "AWS Profile")
 	infoCmd.Flags().StringVarP(&ops.awsRegion, "region", "r", "", "AWS Region")
 	infoCmd.Flags().StringVarP(&ops.privatelinkAccountId, "privatelinkaccount", "l", "", "Privatelink account ID")
+	infoCmd.Flags().StringVarP(&ops.output, "output", "o", "graphviz", "output format ['table', 'graphviz']")
 
 	return infoCmd
 }
@@ -62,7 +61,6 @@ type infoOptions struct {
 	awsRegion            string
 	privatelinkAccountId string
 	output               string
-	printFlags           *printer.PrintFlags
 	genericclioptions.IOStreams
 }
 
@@ -111,8 +109,7 @@ type aggregateClusterInfo struct {
 
 func newInfoOptions(streams genericclioptions.IOStreams) *infoOptions {
 	return &infoOptions{
-		printFlags: printer.NewPrintFlags(),
-		IOStreams:  streams,
+		IOStreams: streams,
 	}
 }
 
@@ -123,6 +120,11 @@ func (i *infoOptions) complete(cmd *cobra.Command) error {
 	}
 	if i.privatelinkAccountId == "" {
 		errMsg += "missing argument -l."
+	}
+	if i.output != "" {
+		if i.output != "graphviz" && i.output != "table" {
+			errMsg += "output must be 'graphviz' or 'table'"
+		}
 	}
 	if errMsg != "" {
 		return fmt.Errorf(errMsg)
@@ -165,9 +167,15 @@ func (i *infoOptions) run() error {
 		}
 	}()
 	wg.Wait()
-	render(&ai)
-	connections := createGraphViz(&ai)
-	renderGraphViz(connections)
+	switch i.output {
+	case "table":
+		render(&ai)
+	case "graphviz":
+		connections := createGraphViz(&ai)
+		renderGraphViz(connections)
+	default:
+		log.Println("No valid output format selected")
+	}
 	return nil
 }
 
