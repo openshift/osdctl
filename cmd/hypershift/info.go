@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -25,6 +24,8 @@ import (
 )
 
 const HYPERSHIFT_URL = "/api/clusters_mgmt/v1/clusters/{cluster_id}/hypershift"
+
+var verbose bool = false
 
 // newCmdPool gets the current status of the AWS Account Operator AccountPool
 func NewCmdInfo(streams genericclioptions.IOStreams) *cobra.Command {
@@ -50,6 +51,7 @@ func NewCmdInfo(streams genericclioptions.IOStreams) *cobra.Command {
 	infoCmd.Flags().StringVarP(&ops.awsRegion, "region", "r", "", "AWS Region")
 	infoCmd.Flags().StringVarP(&ops.privatelinkAccountId, "privatelinkaccount", "l", "", "Privatelink account ID")
 	infoCmd.Flags().StringVarP(&ops.output, "output", "o", "graphviz", "output format ['table', 'graphviz']")
+	infoCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 
 	return infoCmd
 }
@@ -61,6 +63,7 @@ type infoOptions struct {
 	awsRegion            string
 	privatelinkAccountId string
 	output               string
+	verbose              bool
 	genericclioptions.IOStreams
 }
 
@@ -80,9 +83,11 @@ type hypershiftAWSClients struct {
 
 // Information related to the customer cluster
 type clusterInfo struct {
-	HostedZones     []*route53.HostedZone
-	ResourceRecords []*route53.ResourceRecordSet
-	Endpoints       []*ec2.VpcEndpoint
+	HostedZones       []*route53.HostedZone
+	ResourceRecords   []*route53.ResourceRecordSet
+	Endpoints         []*ec2.VpcEndpoint
+	Subnets           []*ec2.Subnet
+	SubnetRouteTables []*ec2.RouteTable
 }
 
 // Information related to the management cluster
@@ -105,6 +110,15 @@ type aggregateClusterInfo struct {
 	managementClusterInfo *managementClusterInfo
 	clusterInfo           *clusterInfo
 	privatelinkInfo       *privatelinkInfo
+}
+
+type retrievable interface {
+	clusterInfo | managementClusterInfo | privatelinkInfo
+}
+
+type ChanReturn[T retrievable] struct {
+	Value T
+	Error error
 }
 
 func newInfoOptions(streams genericclioptions.IOStreams) *infoOptions {
@@ -132,21 +146,28 @@ func (i *infoOptions) complete(cmd *cobra.Command) error {
 	return nil
 }
 
+func baseApiUrl(c *v1.Cluster) string {
+	return strings.Replace(strings.Replace(strings.Replace(c.API().URL(), "https://api.", "", 1), c.Name(), "", 1), ":443", "", 1)
+}
+
 func (i *infoOptions) run() error {
-	log.Println("Getting hypershift info for cluster: ", i.clusterID)
+	if i.verbose {
+		verbose = true
+	}
+	verboseLog("Getting hypershift info for cluster: ", i.clusterID)
 	clusters, err := i.getClusters()
 	if err != nil {
 		return err
 	}
 	if i.awsRegion == "" {
 		i.awsRegion = clusters.customerCluster.Region().ID()
-		log.Println("Set aws region to: ", i.awsRegion)
+		verboseLog("Set aws region to: ", i.awsRegion)
 	}
 
-	log.Println("Constructing AWS sessions for all accounts")
+	verboseLog("Constructing AWS sessions for all accounts")
 	awsSessions, err := i.getAWSSessions(clusters)
 	if err != nil {
-		log.Fatal("Could not construct all AWS sessions: ", err)
+		fmt.Println("Could not construct all AWS sessions: ", err)
 		return err
 	}
 	wg := sync.WaitGroup{}
@@ -155,15 +176,14 @@ func (i *infoOptions) run() error {
 	ai := aggregateClusterInfo{}
 	eC := make(chan error)
 	// To find hostedzones we use the api-url but strip the 'api' and 'clustername' parts
-	baseUrlApi := strings.Replace(strings.Replace(strings.Replace(clusters.customerCluster.API().URL(), "https://api.", "", 1), clusters.customerCluster.Name(), "", 1), ":443", "", 1)
-	log.Println("Retrieving resources from accounts")
+	verboseLog("Retrieving resources from accounts")
 	go gatherManagementClusterInfo(&wg, &ai, awsSessions.managementClient, clusters.customerCluster.ID(), eC)
-	go gatherCustomerClusterInfo(&wg, &ai, awsSessions.customerClient, clusters.customerCluster.ID(), baseUrlApi, eC)
-	go gatherPrivatelinkClusterInfo(&wg, &ai, awsSessions.privatelinkClient, clusters.customerCluster.ID(), baseUrlApi, eC)
+	go gatherCustomerClusterInfo(&wg, &ai, awsSessions.customerClient, clusters.customerCluster, eC)
+	go gatherPrivatelinkClusterInfo(&wg, &ai, awsSessions.privatelinkClient, clusters.customerCluster, eC)
 	go func() {
 		err := <-eC
 		if err != nil {
-			log.Fatalln("Error while fetching AWS resources.", err)
+			fmt.Println("Error while fetching AWS resources.", err)
 		}
 	}()
 	wg.Wait()
@@ -174,23 +194,26 @@ func (i *infoOptions) run() error {
 		connections := createGraphViz(&ai)
 		renderGraphViz(connections)
 	default:
-		log.Println("No valid output format selected")
+		fmt.Println("No valid output format selected")
 	}
 	return nil
 }
 
 func (i *infoOptions) getClusters() (*infoClusters, error) {
-	ocmConnection := utils.CreateConnection()
+	ocmConnection, err := utils.CreateConnection()
+	if err != nil {
+		return nil, err
+	}
 	clusters := utils.GetClusters(ocmConnection, []string{i.clusterID})
 	if len(clusters) != 1 {
 		errMsg := fmt.Sprint("Did not find cluster with id ", i.clusterID)
-		log.Fatal(errMsg)
+		fmt.Println(errMsg)
 		return nil, errors.New(errMsg)
 	}
 	customerCluster := clusters[0]
 	if !customerCluster.Hypershift().Enabled() {
 		errMsg := fmt.Sprint("Cluster is not a hypershift cluster")
-		log.Fatal(errMsg)
+		fmt.Println(errMsg)
 		return nil, errors.New(errMsg)
 	}
 
@@ -209,13 +232,13 @@ func (i *infoOptions) getClusters() (*infoClusters, error) {
 	var hrsp hypershiftresponse
 	err = json.Unmarshal(response.Bytes(), &hrsp)
 	if err != nil {
-		log.Fatal("Could not retrieve management cluster for cluster.")
+		fmt.Println("Could not retrieve management cluster for cluster.")
 	}
 
 	clusters = utils.GetClusters(ocmConnection, []string{hrsp.ManagementCluster})
 	if len(clusters) != 1 {
 		errMsg := fmt.Sprint("Did not find management cluster with id ", hrsp.ManagementCluster)
-		log.Fatal(errMsg)
+		fmt.Println(errMsg)
 		return nil, errors.New(errMsg)
 	}
 	managementCluster := clusters[0]
@@ -236,7 +259,7 @@ func (i *infoOptions) getAWSSessions(clusters *infoClusters) (*hypershiftAWSClie
 	}
 	awsClient, err := aws.NewAwsClient(i.awsProfile, i.awsRegion, "")
 	if err != nil {
-		fmt.Printf("Could not build AWS Client: %s\n", err)
+		verboseLog(fmt.Sprintf("Could not build AWS Client: %s\n", err))
 		return nil, err
 	}
 	// Get the right partition for the final ARN
@@ -248,7 +271,7 @@ func (i *infoOptions) getAWSSessions(clusters *infoClusters) (*hypershiftAWSClie
 	// Generate a session name using the SRE's kerberos ID
 	sessionName, err := osdCloud.GenerateRoleSessionName(awsClient)
 	if err != nil {
-		fmt.Printf("Could not generate Session Name: %s\n", err)
+		verboseLog(fmt.Sprintf("Could not generate Session Name: %s\n", err))
 		return nil, err
 	}
 
@@ -264,7 +287,7 @@ func (i *infoOptions) getAWSSessions(clusters *infoClusters) (*hypershiftAWSClie
 
 	assumedRoleCreds, err := osdCloud.GenerateOrganizationAccountAccessCredentials(awsClient, i.privatelinkAccountId, sessionName, partition)
 	if err != nil {
-		fmt.Printf("Could not build AWS Client for OrganizationAccountAccessRole: %s\n", err)
+		verboseLog(fmt.Sprintf("Could not build AWS Client for OrganizationAccountAccessRole: %s\n", err))
 		return nil, err
 	}
 
@@ -421,32 +444,32 @@ func getLoadBalancers(client aws.Client, clusterID string) ([]*elbv2.LoadBalance
 }
 
 func gatherManagementClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, client aws.Client, clusterID string, eC chan<- error) error {
-	log.Println("==> Management Cluster <==")
+	verboseLog("Fetching resources for Management Cluster")
 	defer wg.Done()
 	// Get the VPC endpoints
 	clusterEndpointServices, err := getVpcEndpointServices(client, clusterID)
 	if err != nil {
-		log.Println("Could not find matching endpoint services in the management cluster - this is likely a problem.")
+		verboseLog("Could not find matching endpoint services in the management cluster - this is likely a problem.")
 		eC <- err
 	}
 	if len(clusterEndpointServices) == 0 {
-		log.Println("Could not find matching endpoint services in the management cluster - this is likely a problem.")
+		verboseLog("Could not find matching endpoint services in the management cluster - this is likely a problem.")
 	}
 	clusterEndpoints, err := getVpcEndpointConnections(client, clusterEndpointServices)
 	if err != nil {
-		log.Println("Could not find matching endpoints in the management cluster - this is likely a problem.")
+		verboseLog("Could not find matching endpoints in the management cluster - this is likely a problem.")
 		eC <- err
 	}
 	if len(clusterEndpointServices) == 0 {
-		log.Println("Could not find matching endpoints in the management cluster - this is likely a problem.")
+		verboseLog("Could not find matching endpoints in the management cluster - this is likely a problem.")
 	}
 	clusterLoadbalancers, err := getLoadBalancers(client, clusterID)
 	if err != nil {
-		log.Println("Could not find matching loadbalancers in the management cluster - this is likely a problem.")
+		verboseLog("Could not find matching loadbalancers in the management cluster - this is likely a problem.")
 		eC <- err
 	}
 	if len(clusterEndpointServices) == 0 {
-		log.Println("Could not find matching loadbalancers in the management cluster - this is likely a problem.")
+		verboseLog("Could not find matching loadbalancers in the management cluster - this is likely a problem.")
 	}
 	// Get the loadbalancer
 	ai.lock.Lock()
@@ -459,31 +482,33 @@ func gatherManagementClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, c
 	return nil
 }
 
-func gatherPrivatelinkClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, client aws.Client, clusterID string, apiUrl string, eC chan<- error) error {
-	log.Println("==> Privatelink Cluster <==")
+func gatherPrivatelinkClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, client aws.Client, cluster *v1.Cluster, eC chan<- error) error {
+	clusterID := cluster.ID()
+	apiUrl := baseApiUrl(cluster)
+	verboseLog("Fetching resources for Privatelink")
 	defer wg.Done()
 	// Get Route53 information
 	clusterHostedZones, err := getHostedZones(client, apiUrl)
 	if err != nil {
-		log.Println("Could not find matching hosted zones in the privatelink cluster - this is likely a problem.")
+		verboseLog("Could not find matching hosted zones in the privatelink cluster - this is likely a problem.")
 		eC <- err
 	}
 	if len(clusterHostedZones) == 0 {
-		log.Println("Could not find matching hosted zones in the privatelink cluster - this is likely a problem.")
+		verboseLog("Could not find matching hosted zones in the privatelink cluster - this is likely a problem.")
 	}
 	// Get ResourceSets in the HostedZones
 	rrs, err := getResourceRecordSets(client, clusterHostedZones)
 	if err != nil {
-		log.Println("Could not find matching resource records in the privatelink cluster - this is likely a problem.")
+		verboseLog("Could not find matching resource records in the privatelink cluster - this is likely a problem.")
 		eC <- err
 	}
 	if len(rrs) == 0 {
-		log.Println("Could not find matching resource records in the privatelink cluster - this is likely a problem.")
+		verboseLog("Could not find matching resource records in the privatelink cluster - this is likely a problem.")
 	}
 	// Get the VPC endpoints
 	clusterEndpoints, err := getVpcEndpoints(client, clusterID, "Name", fmt.Sprintf("%s-private-hcp-vpce", clusterID))
 	if err != nil {
-		log.Println("Could not find matching cluster endpoints in the privatelink cluster - this is likely a problem.")
+		verboseLog("Could not find matching cluster endpoints in the privatelink cluster - this is likely a problem.")
 		eC <- err
 	}
 	ai.lock.Lock()
@@ -496,52 +521,103 @@ func gatherPrivatelinkClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, 
 	return nil
 }
 
-func gatherCustomerClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, client aws.Client, clusterID string, apiUrl string, eC chan<- error) error {
-	log.Println("==> Customer Cluster <==")
+func getSubnets(client aws.Client, subnetIds []string) ([]*ec2.Subnet, error) {
+	subnetFilter := make([]*string, 0, len(subnetIds))
+	for _, subnet := range subnetIds {
+		subnetFilter = append(subnetFilter, &subnet)
+	}
+	input := ec2.DescribeSubnetsInput{
+		SubnetIds: subnetFilter,
+	}
+	subnets, err := client.DescribeSubnets(&input)
+	if err != nil {
+		return nil, err
+	}
+	return subnets.Subnets, err
+}
+
+func gatherCustomerClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, client aws.Client, cluster *v1.Cluster, eC chan<- error) error {
+	clusterID := cluster.ID()
+	apiUrl := baseApiUrl(cluster)
+	verboseLog("Fetching resources for Customer Cluster")
 	defer wg.Done()
 	// Get the Route53 HostedZone
 	clusterHostedZones, err := getHostedZones(client, apiUrl)
 	if err != nil {
-		log.Println("Could not find matching hosted zones in the cluster - this is likely a problem.")
+		verboseLog("Could not find matching hosted zones in the cluster - this is likely a problem.")
 		eC <- err
 	}
 	if len(clusterHostedZones) == 0 {
-		log.Println("Could not find matching hosted zones in the cluster - this is likely a problem.")
+		verboseLog("Could not find matching hosted zones in the cluster - this is likely a problem.")
 	}
 	// Get ResourceSets in the HostedZones
 	rrs, err := getResourceRecordSets(client, clusterHostedZones)
 	if err != nil {
-		log.Println("Could not find record sets in the cluster - this is likely a problem.")
+		verboseLog("Could not find record sets in the cluster - this is likely a problem.")
 		eC <- err
 	}
 	if len(clusterHostedZones) == 0 {
-		log.Println("Could not find endpoints in the cluster - this is likely a problem.")
+		verboseLog("Could not find endpoints in the cluster - this is likely a problem.")
 	}
 	// Get VPC Endpoints
 	clusterEndpoints, err := getVpcEndpoints(client, clusterID, fmt.Sprintf("kubernetes.io/cluster/%s", clusterID), "owned")
 	if err != nil {
-		log.Println("Could not find endpoints in the cluster - this is likely a problem.")
+		verboseLog("Could not find endpoints in the cluster - this is likely a problem.")
 		eC <- err
 	}
 	if len(clusterHostedZones) == 0 {
-		log.Println("Could not find endpoints in the cluster - this is likely a problem.")
+		verboseLog("Could not find endpoints in the cluster - this is likely a problem.")
 	}
-	// Get the VPC endpoints
+	// Get Subnets
+	clusterSubnets, err := getSubnets(client, cluster.AWS().SubnetIDs())
+	if err != nil {
+		verboseLog("Could not find subnets in the cluster - this is likely a problem.")
+		eC <- err
+	}
+	// Get RouteTables
+	clusterRouteTables, err := getRouteTables(client, cluster.AWS().SubnetIDs())
+	if err != nil {
+		verboseLog("Could not find routetables in the subnets - this is likely a problem.")
+		eC <- err
+	}
 	ai.lock.Lock()
 	ai.clusterInfo = &clusterInfo{
-		HostedZones:     clusterHostedZones,
-		ResourceRecords: rrs,
-		Endpoints:       clusterEndpoints,
+		HostedZones:       clusterHostedZones,
+		ResourceRecords:   rrs,
+		Endpoints:         clusterEndpoints,
+		Subnets:           clusterSubnets,
+		SubnetRouteTables: clusterRouteTables,
 	}
 	ai.lock.Unlock()
 	return nil
+}
+
+func getRouteTables(client aws.Client, subnets []string) ([]*ec2.RouteTable, error) {
+	routeTables := make([]*ec2.RouteTable, 0)
+	filterKey := "association.subnet-id"
+	for _, subnet := range subnets {
+		input := ec2.DescribeRouteTablesInput{
+			Filters: []*ec2.Filter{
+				{
+					Name:   &filterKey,
+					Values: []*string{&subnet},
+				},
+			},
+		}
+		rtbs, err := client.DescribeRouteTables(&input)
+		if err != nil {
+			return nil, err
+		}
+		routeTables = append(routeTables, rtbs.RouteTables...)
+	}
+	return routeTables, nil
 }
 
 func render(ainfo *aggregateClusterInfo) {
 	// Expected connection that we want to render:
 	// - API Resource record set in the privatelink cluster should connect to the VPCE in the MC cluster
 	// - VPCE in the MC cluster should connect to the LB
-	log.Println("PRIVATELINK")
+	fmt.Println("[PRIVATELINK]")
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Hostedzone ID", "Hostedzone Name", "Private"})
 	for _, hz := range ainfo.privatelinkInfo.HostedZones {
@@ -559,7 +635,7 @@ func render(ainfo *aggregateClusterInfo) {
 	}
 	table.Render()
 
-	log.Println("MANAGEMENT CLUSTER")
+	fmt.Println("[MANAGEMENT CLUSTER]")
 	table = tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"LoadBalancer Name", "DNSName", "LoadBalancerArn", "HostedZoneID"})
 	for _, lb := range ainfo.managementClusterInfo.LoadBalancers {
@@ -586,7 +662,7 @@ func render(ainfo *aggregateClusterInfo) {
 	}
 	table.Render()
 
-	log.Println("CUSTOMER CLUSTER")
+	fmt.Println("[CUSTOMER CLUSTER]")
 	table = tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Hostedzone ID", "Hostedzone Name", "Private"})
 	for _, hz := range ainfo.clusterInfo.HostedZones {
@@ -607,6 +683,35 @@ func render(ainfo *aggregateClusterInfo) {
 	table = tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Endpoint ID", "Type", "VPC", "Service", "State"})
 	for _, ep := range ainfo.clusterInfo.Endpoints {
-		table.Append([]string{"EndpointID", *ep.VpcEndpointType, *ep.VpcEndpointType, *ep.VpcId, *ep.ServiceName, *ep.State})
+		table.Append([]string{*ep.VpcEndpointId, *ep.VpcEndpointType, *ep.VpcEndpointType, *ep.VpcId, *ep.ServiceName, *ep.State})
+	}
+	table.Render()
+
+	table = tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"RouteTable", "VPC", "Destination CIDR", "Destination Gateway"})
+	table.SetAutoMergeCells(true)
+	for _, rtb := range ainfo.clusterInfo.SubnetRouteTables {
+		for _, route := range rtb.Routes {
+			var destination string
+			if route.DestinationCidrBlock != nil {
+				destination = *route.DestinationCidrBlock
+			} else {
+				destination = *route.DestinationPrefixListId
+			}
+			var targetId string
+			if route.GatewayId != nil {
+				targetId = *route.GatewayId
+			} else {
+				targetId = *route.NatGatewayId
+			}
+			table.Append([]string{*rtb.RouteTableId, *rtb.VpcId, destination, targetId})
+		}
+	}
+	table.Render()
+}
+
+func verboseLog(msg ...interface{}) {
+	if verbose {
+		fmt.Println(msg...)
 	}
 }

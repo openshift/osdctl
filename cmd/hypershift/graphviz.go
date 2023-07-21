@@ -2,7 +2,6 @@ package hypershift
 
 import (
 	"fmt"
-	"log"
 	"strings"
 )
 
@@ -87,7 +86,6 @@ func createGraphViz(ai *aggregateClusterInfo) map[Node][]Node {
 			}
 			for _, rr := range rrs.ResourceRecords {
 				if *rr.Value+"." == *hz.Name {
-					log.Println("Found a matchin RR in customer")
 					node := Node{
 						Id:                    *rr.Value,
 						AdditionalInformation: "Resource Record (C)",
@@ -131,6 +129,6 @@ func renderGraphViz(connections map[Node][]Node) {
 		}
 	}
 	sb.WriteString("}")
-	log.Println("Graphviz Input: ")
+	verboseLog("Graphviz Input - please run this: 'echo <output> | dot -Tpng -o/tmp/example.png'")
 	fmt.Println(sb.String())
 }

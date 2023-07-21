@@ -5,7 +5,6 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
-// NewCmdAao implements the base aao command
 func NewCmdHypershift(streams genericclioptions.IOStreams) *cobra.Command {
 	hypershiftCmd := &cobra.Command{
 		Use:               "hypershift",
