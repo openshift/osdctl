@@ -9,6 +9,7 @@ import (
 	"time"
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
@@ -17,8 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/openshift/osdctl/cmd/servicelog"
 )
 
 const (
@@ -63,11 +62,11 @@ func newCmdResizeInfra() *cobra.Command {
 }
 
 func (r *Resize) RunInfra(ctx context.Context) error {
-	if err := r.New(r.clusterId); err != nil {
-		return err
+	if err := r.New(); err != nil {
+		return fmt.Errorf("failed to initialize command: %v", err)
 	}
 
-	log.Printf("resizing infra nodes for %s", r.clusterId)
+	log.Printf("resizing infra nodes for %s - %s", r.cluster.Name(), r.clusterId)
 	originalMp, err := r.getInfraMachinePool(ctx)
 	if err != nil {
 		return err
@@ -88,7 +87,6 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 
 	// Create the temporary machinepool
 	log.Printf("planning to resize to instance type %s", instanceType)
-	log.Printf("[REMINDER] follow the preparation tasks described in https://github.com/openshift/ops-sop/blob/master/v4/howto/resize-infras-workers.md#prepare")
 	if !utils.ConfirmPrompt() {
 		log.Printf("exiting")
 		return nil
@@ -254,7 +252,6 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 			r.clusterId, resizedInfraNodeServiceLogTemplate, strings.Join(postCmd.TemplateParams, " -p "))
 	}
 
-	log.Printf("[REMINDER] follow the cleanup tasks in https://github.com/openshift/ops-sop/blob/master/v4/howto/resize-infras-workers.md#sending-the-all-clear")
 	return nil
 }
 
