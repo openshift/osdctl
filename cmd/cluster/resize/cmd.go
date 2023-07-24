@@ -38,7 +38,7 @@ func NewCmdResize() *cobra.Command {
 	return resize
 }
 
-func (r *Resize) New(clusterId string) error {
+func (r *Resize) New() error {
 	scheme := runtime.NewScheme()
 
 	// Register machinev1beta1 for Machines
@@ -65,13 +65,14 @@ func (r *Resize) New(clusterId string) error {
 		return fmt.Errorf("failed to get OCM cluster info for %s: %s", r.clusterId, err)
 	}
 	r.cluster = cluster
+	r.clusterId = cluster.ID()
 
-	hive, err := utils.GetHiveCluster(clusterId)
+	hive, err := utils.GetHiveCluster(cluster.ID())
 	if err != nil {
 		return err
 	}
 
-	c, err := k8s.New(r.clusterId, client.Options{Scheme: scheme})
+	c, err := k8s.New(cluster.ID(), client.Options{Scheme: scheme})
 	if err != nil {
 		return err
 	}
@@ -86,7 +87,7 @@ func (r *Resize) New(clusterId string) error {
 		return err
 	}
 
-	r.clusterId = clusterId
+	r.clusterId = cluster.ID()
 	r.client = c
 	r.hive = hc
 	r.hiveAdmin = hac
