@@ -27,7 +27,6 @@ import (
 	"github.com/openshift/osdctl/cmd/cost"
 	"github.com/openshift/osdctl/cmd/env"
 	"github.com/openshift/osdctl/cmd/federatedrole"
-	"github.com/openshift/osdctl/cmd/hypershift"
 	"github.com/openshift/osdctl/cmd/jumphost"
 	"github.com/openshift/osdctl/cmd/network"
 	"github.com/openshift/osdctl/cmd/org"
@@ -115,8 +114,6 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(upgradeCmd)
 
 	rootCmd.AddCommand(capability.NewCmdCapability())
-
-	rootCmd.AddCommand(hypershift.NewCmdHypershift(streams))
 
 	return rootCmd
 }

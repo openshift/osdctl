@@ -1,4 +1,4 @@
-package hypershift
+package cluster
 
 import (
 	"encoding/json"
@@ -28,11 +28,13 @@ const HYPERSHIFT_URL = "/api/clusters_mgmt/v1/clusters/{cluster_id}/hypershift"
 var verbose bool = false
 
 // newCmdPool gets the current status of the AWS Account Operator AccountPool
-func NewCmdInfo(streams genericclioptions.IOStreams) *cobra.Command {
+func NewCmdHypershiftInfo(streams genericclioptions.IOStreams) *cobra.Command {
 	ops := newInfoOptions(streams)
 	infoCmd := &cobra.Command{
-		Use:   "info CLUSTERID",
+		Use:   "hypershift-info CLUSTERID",
 		Short: "Pull information about AWS objects from the cluster, the management cluster and the privatelink cluster",
+		Long: `This command aggregates AWS objects from the cluster, management cluster and privatelink for hypershift cluster.
+It attempts to render the relationships as graphviz if that output format is chosen or will simply print the output as tables.`,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 {
 				return errors.New("requires a clusterid argument")

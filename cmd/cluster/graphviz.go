@@ -1,4 +1,4 @@
-package hypershift
+package cluster
 
 import (
 	"fmt"
