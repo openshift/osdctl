@@ -224,6 +224,15 @@ func GetAccount(connection *sdk.Connection, key string) (account *amv1.Account, 
 	return
 }
 
+func GetRegistryCredentials(connection *sdk.Connection, accountId string) ([]*amv1.RegistryCredential, error) {
+	searchString := fmt.Sprintf("account_id = '%s'", accountId)
+	registryCredentials, err := connection.AccountsMgmt().V1().RegistryCredentials().List().Search(searchString).Send()
+	if err != nil {
+		return nil, err
+	}
+	return registryCredentials.Items().Slice(), nil
+}
+
 func ConfirmPrompt() bool {
 	fmt.Print("Continue? (y/N): ")
 
