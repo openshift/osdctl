@@ -4,7 +4,11 @@ import (
 	"fmt"
 
 	"github.com/openshift/osdctl/cmd/cluster/access"
+<<<<<<< HEAD
 	"github.com/openshift/osdctl/cmd/cluster/resize"
+=======
+	"github.com/openshift/osdctl/cmd/cluster/health"
+>>>>>>> 1ed726d (Updating)
 	"github.com/openshift/osdctl/cmd/cluster/support"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/spf13/cobra"
@@ -21,7 +25,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 		DisableAutoGenTag: true,
 	}
 
-	clusterCmd.AddCommand(health.newCmdHealth())
+	clusterCmd.AddCommand(health.NewCmdHealth())
 	clusterCmd.AddCommand(newCmdLoggingCheck(streams, flags, globalOpts))
 	clusterCmd.AddCommand(newCmdOwner(streams, flags, globalOpts))
 	clusterCmd.AddCommand(support.NewCmdSupport(streams, flags, client, globalOpts))

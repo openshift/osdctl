@@ -1,4 +1,4 @@
-package cluster
+package health
 
 import (
 	"errors"
@@ -28,7 +28,7 @@ type healthOptions struct {
 }
 
 // newCmdHealth implements the health command to describe number of running instances in cluster and the expected number of nodes
-func newCmdHealth() *cobra.Command {
+func newCmdClusterHealth() *cobra.Command {
 	ops := newHealthOptions()
 	healthCmd := &cobra.Command{
 		Use:               "health",

@@ -32,7 +32,7 @@ func NewCmdHealth() *cobra.Command {
 	}
 
 	health.AddCommand(
-		newCmdHealth(),
+		NewCmdHealth(),
 	)
 
 	return health
