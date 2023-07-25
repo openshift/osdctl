@@ -42,40 +42,7 @@ func ValidatePullSecret(clusterID string, kubeCli client.Client, flags *genericc
 		}
 	}()
 
-	subscription, err := utils.GetSubscription(ocm, clusterID)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("Checking if OCM for registry credential list")
-	org, err := ocm.AccountsMgmt().V1().Organizations().Organization(subscription.OrganizationID()).Get().Send()
-	if err != nil {
-		return err
-	}
-	ebsAccountId := org.Body().EbsAccountID()
-	registryCredentials, err := ocm.AccountsMgmt().V1().RegistryCredentials().List().Search(fmt.Sprintf("account_id = '%s'", ebsAccountId)).Send()
-	if err != nil {
-		return err
-	}
-	if registryCredentials.Size() == 0 {
-		fmt.Println("There is no pull secret in OCM. Sending service log.")
-		postCmd := servicelog.PostCmdOptions{
-			Template:       "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/update_pull_secret.json",
-			TemplateParams: []string{"REGISTRY=registry.redhat.io"},
-			ClusterId:      clusterID,
-		}
-		if err = postCmd.Run(); err != nil {
-			return err
-		}
-		return nil
-	}
-
 	fmt.Println("Checking if pull secret email matches user email")
-
-	account, err := utils.GetAccount(ocm, subscription.Creator().ID())
-	if err != nil {
-		return err
-	}
 
 	// This is the flagset for the kubeCli object provided from the root command. Set here to retroactively impersonate backplane-cluster-admin
 	flags.Impersonate = &BackplaneClusterAdmin
@@ -86,6 +53,16 @@ func ValidatePullSecret(clusterID string, kubeCli client.Client, flags *genericc
 
 	clusterPullSecretEmail, err, done := getPullSecretEmail(clusterID, secret, true)
 	if done {
+		return err
+	}
+
+	subscription, err := utils.GetSubscription(ocm, clusterID)
+	if err != nil {
+		return err
+	}
+
+	account, err := utils.GetAccount(ocm, subscription.Creator().ID())
+	if err != nil {
 		return err
 	}
 
