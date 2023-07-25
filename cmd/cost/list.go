@@ -5,15 +5,14 @@ import (
 	"log"
 	"sort"
 
+	"github.com/aws/aws-sdk-go-v2/service/organizations/types"
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/shopspring/decimal"
+	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-
-	"github.com/aws/aws-sdk-go/service/organizations"
-	"github.com/spf13/cobra"
 )
 
 // listCmd represents the list command
@@ -112,30 +111,30 @@ func newListOptions(streams genericclioptions.IOStreams, globalOpts *globalflags
 	}
 }
 
-func (ops *listOptions) runList() error {
+func (o *listOptions) runList() error {
 	awsClient, err := opsCost.initAWSClients()
 	cmdutil.CheckErr(err)
 
-	printHeader(ops)
+	printHeader(o)
 
-	for _, ou := range ops.ou {
+	for _, ou := range o.ou {
 		OU := getOU(awsClient, ou)
 
 		var cost decimal.Decimal
 		var unit string
 
-		if ops.level == "ou" {
-			if err := listCostsUnderOU(OU, awsClient, ops); err != nil {
+		if o.level == "ou" {
+			if err := listCostsUnderOU(OU, awsClient, o); err != nil {
 				log.Fatalln("Error listing costs under OU:", err)
 			}
-			printCostList(cost, unit, OU, ops, true) // TODO: Update bool here
+			printCostList(cost, unit, OU, o, true) // TODO: Update bool here
 			return nil
 		}
 
-		if ops.level == "account" {
+		if o.level == "account" {
 			ouCost := OUCost{
 				OU:      OU,
-				options: ops,
+				options: o,
 			}
 			ouCost.printCostPerAccount(awsClient) // Get cost per account, print per account
 		}
@@ -160,7 +159,7 @@ func printHeader(ops *listOptions) {
 }
 
 // List the cost of each OU under given OU
-func listCostsUnderOU(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client, ops *listOptions) error {
+func listCostsUnderOU(OU *types.OrganizationalUnit, awsClient awsprovider.Client, ops *listOptions) error {
 	OUs, err := getOUsRecursive(OU, awsClient)
 	if err != nil {
 		return err
@@ -205,7 +204,7 @@ type AccountCost struct {
 
 type OUCost struct {
 	Costs   []AccountCost
-	OU      *organizations.OrganizationalUnit
+	OU      *types.OrganizationalUnit
 	options *listOptions
 }
 
@@ -243,7 +242,7 @@ func (o *OUCost) getCost(awsClient awsprovider.Client) error {
 	return nil
 }
 
-func (o OUCost) getSum() (sum decimal.Decimal, unit string, err error) {
+func (o *OUCost) getSum() (sum decimal.Decimal, unit string, err error) {
 	sum = decimal.Zero
 	for _, cost := range o.Costs {
 		sum = sum.Add(cost.Cost)
@@ -259,7 +258,7 @@ func (o OUCost) getSum() (sum decimal.Decimal, unit string, err error) {
 	return
 }
 
-func (o OUCost) printCostPerAccount(awsClient awsprovider.Client) {
+func (o *OUCost) printCostPerAccount(awsClient awsprovider.Client) {
 	err := o.getCost(awsClient)
 	if err != nil {
 		fmt.Println("Error while calling getCost(): ", err.Error())
@@ -296,7 +295,7 @@ func (o OUCost) printCostPerAccount(awsClient awsprovider.Client) {
 	printCostList(sum, unit, o.OU, o.options, true)
 }
 
-func printCostList(cost decimal.Decimal, unit string, OU *organizations.OrganizationalUnit, ops *listOptions, isChildNode bool) {
+func printCostList(cost decimal.Decimal, unit string, OU *types.OrganizationalUnit, ops *listOptions, isChildNode bool) {
 
 	resp := listCostResponse{
 		OuId:    *OU.Id,

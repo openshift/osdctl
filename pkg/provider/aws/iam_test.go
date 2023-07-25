@@ -4,12 +4,11 @@ import (
 	"errors"
 	"testing"
 
-	. "github.com/onsi/gomega"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/iam"
+	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	iamTypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/golang/mock/gomock"
+	. "github.com/onsi/gomega"
 	"github.com/openshift/osdctl/pkg/provider/aws/mock"
 )
 
@@ -36,11 +35,7 @@ func TestCheckIAMUserExists(t *testing.T) {
 			title: "specified user doesn't exist",
 			setupAWSMock: func(r *mock.MockClientMockRecorder) {
 				r.GetUser(gomock.Any()).
-					Return(nil, awserr.New(
-						iam.ErrCodeNoSuchEntityException,
-						"",
-						errors.New("FakeError"),
-					)).Times(1)
+					Return(nil, &iamTypes.NoSuchEntityException{}).Times(1)
 			},
 			username:    "",
 			exists:      false,
@@ -67,10 +62,11 @@ func TestCheckIAMUserExists(t *testing.T) {
 			// after mocks is defined
 			defer mocks.mockCtrl.Finish()
 
-			exists, err := CheckIAMUserExists(mocks.mockAWSClient, aws.String(tc.username))
+			exists, err := CheckIAMUserExists(mocks.mockAWSClient, &tc.username)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())
 			} else {
+				g.Expect(err).Should(Not(HaveOccurred()))
 				g.Expect(exists).Should(Equal(tc.exists))
 			}
 		})
@@ -98,10 +94,10 @@ func TestDeleteUserAccessKeys(t *testing.T) {
 				gomock.InOrder(
 					r.ListAccessKeys(gomock.Any()).Return(
 						&iam.ListAccessKeysOutput{
-							AccessKeyMetadata: []*iam.AccessKeyMetadata{
+							AccessKeyMetadata: []iamTypes.AccessKeyMetadata{
 								{
-									UserName:    aws.String("foo"),
-									AccessKeyId: aws.String("bar"),
+									UserName:    awsSdk.String("foo"),
+									AccessKeyId: awsSdk.String("bar"),
 								},
 							},
 						}, nil).Times(1),
@@ -117,10 +113,10 @@ func TestDeleteUserAccessKeys(t *testing.T) {
 				gomock.InOrder(
 					r.ListAccessKeys(gomock.Any()).Return(
 						&iam.ListAccessKeysOutput{
-							AccessKeyMetadata: []*iam.AccessKeyMetadata{
+							AccessKeyMetadata: []iamTypes.AccessKeyMetadata{
 								{
-									UserName:    aws.String("foo"),
-									AccessKeyId: aws.String("bar"),
+									UserName:    awsSdk.String("foo"),
+									AccessKeyId: awsSdk.String("bar"),
 								},
 							},
 						}, nil).Times(1),
@@ -135,14 +131,14 @@ func TestDeleteUserAccessKeys(t *testing.T) {
 				gomock.InOrder(
 					r.ListAccessKeys(gomock.Any()).Return(
 						&iam.ListAccessKeysOutput{
-							AccessKeyMetadata: []*iam.AccessKeyMetadata{
+							AccessKeyMetadata: []iamTypes.AccessKeyMetadata{
 								{
-									UserName:    aws.String("foo"),
-									AccessKeyId: aws.String("bar"),
+									UserName:    awsSdk.String("foo"),
+									AccessKeyId: awsSdk.String("bar"),
 								},
 								{
-									UserName:    aws.String("fizz"),
-									AccessKeyId: aws.String("buzz"),
+									UserName:    awsSdk.String("fizz"),
+									AccessKeyId: awsSdk.String("buzz"),
 								},
 							},
 						}, nil).Times(1),
@@ -164,7 +160,7 @@ func TestDeleteUserAccessKeys(t *testing.T) {
 			// after mocks is defined
 			defer mocks.mockCtrl.Finish()
 
-			err := DeleteUserAccessKeys(mocks.mockAWSClient, aws.String(""))
+			err := DeleteUserAccessKeys(mocks.mockAWSClient, awsSdk.String(""))
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())
 			} else {
@@ -189,8 +185,8 @@ func TestCreateIAMUserAndAttachPolicy(t *testing.T) {
 				r.CreateUser(gomock.Any()).
 					Return(nil, errors.New("FakeError")).Times(1)
 			},
-			username:    aws.String(""),
-			policyArn:   aws.String(""),
+			username:    awsSdk.String(""),
+			policyArn:   awsSdk.String(""),
 			errExpected: true,
 		},
 		{
@@ -199,8 +195,8 @@ func TestCreateIAMUserAndAttachPolicy(t *testing.T) {
 				gomock.InOrder(
 					r.CreateUser(gomock.Any()).Return(
 						&iam.CreateUserOutput{
-							User: &iam.User{
-								UserName: aws.String("foo"),
+							User: &iamTypes.User{
+								UserName: awsSdk.String("foo"),
 							},
 						}, nil).Times(1),
 					r.AttachUserPolicy(gomock.Any()).
@@ -208,8 +204,8 @@ func TestCreateIAMUserAndAttachPolicy(t *testing.T) {
 				)
 
 			},
-			username:    aws.String("foo"),
-			policyArn:   aws.String("bar"),
+			username:    awsSdk.String("foo"),
+			policyArn:   awsSdk.String("bar"),
 			errExpected: true,
 		},
 		{
@@ -218,8 +214,8 @@ func TestCreateIAMUserAndAttachPolicy(t *testing.T) {
 				gomock.InOrder(
 					r.CreateUser(gomock.Any()).Return(
 						&iam.CreateUserOutput{
-							User: &iam.User{
-								UserName: aws.String("foo"),
+							User: &iamTypes.User{
+								UserName: awsSdk.String("foo"),
 							},
 						}, nil).Times(1),
 					r.AttachUserPolicy(gomock.Any()).
@@ -227,8 +223,8 @@ func TestCreateIAMUserAndAttachPolicy(t *testing.T) {
 				)
 
 			},
-			username:    aws.String("foo"),
-			policyArn:   aws.String("bar"),
+			username:    awsSdk.String("foo"),
+			policyArn:   awsSdk.String("bar"),
 			errExpected: false,
 		},
 	}

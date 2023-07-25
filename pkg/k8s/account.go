@@ -6,12 +6,11 @@ import (
 	"fmt"
 
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 )
 
 // Get AWS Account CR
@@ -62,7 +61,7 @@ func GetAWSAccountCredentials(
 	cli client.Client,
 	namespace,
 	secretName string,
-) (*awsprovider.AwsClientInput, error) {
+) (*awsprovider.ClientInput, error) {
 	var secret v1.Secret
 	if err := cli.Get(ctx, types.NamespacedName{
 		Name:      secretName,
@@ -80,7 +79,7 @@ func GetAWSAccountCredentials(
 		return nil, fmt.Errorf("cannot find aws_secret_access_key in secret %s", secretName)
 	}
 
-	return &awsprovider.AwsClientInput{
+	return &awsprovider.ClientInput{
 		AccessKeyID:     string(accessKeyID),
 		SecretAccessKey: string(secretAccessKey),
 	}, nil

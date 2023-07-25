@@ -1,7 +1,8 @@
 package aws
 
 import (
-	"github.com/aws/aws-sdk-go/service/sts"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/aws/aws-sdk-go-v2/service/sts/types"
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/spf13/cobra"
 )
@@ -17,7 +18,7 @@ type FactoryOptions struct {
 
 	ConsoleDuration int64
 
-	Credentials *sts.Credentials
+	Credentials *types.Credentials
 
 	CallerIdentity *sts.GetCallerIdentityOutput
 }

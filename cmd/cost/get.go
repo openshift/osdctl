@@ -6,18 +6,17 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/costexplorer"
+	costExplorerTypes "github.com/aws/aws-sdk-go-v2/service/costexplorer/types"
+	"github.com/aws/aws-sdk-go-v2/service/organizations"
+	organizationTypes "github.com/aws/aws-sdk-go-v2/service/organizations/types"
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/shopspring/decimal"
 	"github.com/spf13/cobra"
-
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/costexplorer"
-	"github.com/aws/aws-sdk-go/service/organizations"
 )
 
 // getCmd represents the get command
@@ -134,7 +133,7 @@ func (o *getOptions) run() error {
 }
 
 // Get account IDs of immediate accounts under given OU
-func getAccounts(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) ([]*string, error) {
+func getAccounts(OU *organizationTypes.OrganizationalUnit, awsClient awsprovider.Client) ([]*string, error) {
 	var accountSlice []*string
 	var nextToken *string
 
@@ -162,7 +161,7 @@ func getAccounts(OU *organizations.OrganizationalUnit, awsClient awsprovider.Cli
 }
 
 // Get the account IDs of all (not only immediate) accounts under OU
-func getAccountsRecursive(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) ([]*string, error) {
+func getAccountsRecursive(OU *organizationTypes.OrganizationalUnit, awsClient awsprovider.Client) ([]*string, error) {
 	var accountsIDs []*string
 
 	//Populate OUs
@@ -186,8 +185,8 @@ func getAccountsRecursive(OU *organizations.OrganizationalUnit, awsClient awspro
 }
 
 // Get immediate OUs (child nodes) directly under given OU
-func getOUs(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) ([]*organizations.OrganizationalUnit, error) {
-	var OUSlice []*organizations.OrganizationalUnit
+func getOUs(OU *organizationTypes.OrganizationalUnit, awsClient awsprovider.Client) ([]*organizationTypes.OrganizationalUnit, error) {
+	var OUSlice []*organizationTypes.OrganizationalUnit
 	var nextToken *string
 
 	//Populate OUSlice with OUs by looping until OUs.NextToken is null
@@ -202,7 +201,7 @@ func getOUs(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) 
 
 		//Add OUs to slice
 		for childOU := 0; childOU < len(OUs.OrganizationalUnits); childOU++ {
-			OUSlice = append(OUSlice, OUs.OrganizationalUnits[childOU])
+			OUSlice = append(OUSlice, &OUs.OrganizationalUnits[childOU])
 		}
 
 		if OUs.NextToken == nil {
@@ -215,8 +214,8 @@ func getOUs(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) 
 }
 
 // Get the account IDs of all (not only immediate) accounts under OU
-func getOUsRecursive(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) ([]*organizations.OrganizationalUnit, error) {
-	var OUs []*organizations.OrganizationalUnit
+func getOUsRecursive(OU *organizationTypes.OrganizationalUnit, awsClient awsprovider.Client) ([]*organizationTypes.OrganizationalUnit, error) {
+	var OUs []*organizationTypes.OrganizationalUnit
 
 	//Populate OUs by getting immediate OUs (direct nodes)
 	currentOUs, err := getOUs(OU, awsClient)
@@ -256,20 +255,18 @@ func (o *getOptions) getAccountCost(accountID *string, unit *string, awsClient a
 
 	//Get cost information for chosen account
 	costs, err := awsClient.GetCostAndUsage(&costexplorer.GetCostAndUsageInput{
-		Filter: &costexplorer.Expression{
-			Dimensions: &costexplorer.DimensionValues{
-				Key: aws.String("LINKED_ACCOUNT"),
-				Values: []*string{
-					accountID,
-				},
+		Filter: &costExplorerTypes.Expression{
+			Dimensions: &costExplorerTypes.DimensionValues{
+				Key:    "LINKED_ACCOUNT",
+				Values: []string{*accountID},
 			},
 		},
-		TimePeriod: &costexplorer.DateInterval{
-			Start: aws.String(start),
-			End:   aws.String(end),
+		TimePeriod: &costExplorerTypes.DateInterval{
+			Start: &start,
+			End:   &end,
 		},
-		Granularity: aws.String(granularity),
-		Metrics:     aws.StringSlice(metrics),
+		Granularity: costExplorerTypes.Granularity(granularity),
+		Metrics:     metrics,
 	})
 	if err != nil {
 		return err
@@ -291,7 +288,7 @@ func (o *getOptions) getAccountCost(accountID *string, unit *string, awsClient a
 }
 
 // Get cost of given OU by aggregating costs of only immediate accounts under given OU
-func (o *getOptions) getOUCost(cost *decimal.Decimal, unit *string, OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) error {
+func (o *getOptions) getOUCost(cost *decimal.Decimal, unit *string, OU *organizationTypes.OrganizationalUnit, awsClient awsprovider.Client) error {
 	//Populate accounts
 	accounts, err := getAccounts(OU, awsClient)
 	if err != nil {
@@ -309,7 +306,7 @@ func (o *getOptions) getOUCost(cost *decimal.Decimal, unit *string, OU *organiza
 }
 
 // Get cost of given OU by aggregating costs of all (including immediate) accounts under OU
-func (o *getOptions) getOUCostRecursive(cost *decimal.Decimal, unit *string, OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) error {
+func (o *getOptions) getOUCostRecursive(cost *decimal.Decimal, unit *string, OU *organizationTypes.OrganizationalUnit, awsClient awsprovider.Client) error {
 	//Populate OUs
 	OUs, err := getOUs(OU, awsClient)
 	if err != nil {
@@ -367,7 +364,7 @@ func getTimePeriod(timePtr *string) (string, string) {
 	return start, end
 }
 
-func (o *getOptions) printCostGet(cost decimal.Decimal, unit string, ops *getOptions, OU *organizations.OrganizationalUnit) error {
+func (o *getOptions) printCostGet(cost decimal.Decimal, unit string, ops *getOptions, OU *organizationTypes.OrganizationalUnit) error {
 
 	resp := getCostResponse{
 		OuId:    *OU.Id,

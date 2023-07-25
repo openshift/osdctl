@@ -15,7 +15,8 @@ import (
 
 	pd "github.com/PagerDuty/go-pagerduty"
 	"github.com/andygrunwald/go-jira"
-	"github.com/aws/aws-sdk-go/service/cloudtrail"
+	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
+	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/cmd/servicelog"
@@ -89,7 +90,7 @@ type contextData struct {
 	HistoricalAlerts map[string][]*IncidentOccurrenceTracker
 
 	// CloudTrail Logs
-	CloudtrailEvents []*cloudtrail.Event
+	CloudtrailEvents []*types.Event
 }
 type IncidentOccurrenceTracker struct {
 	IncidentName   string
@@ -747,13 +748,13 @@ func GetPDServiceID(baseDomain string, usertoken string, oauthtoken string, team
 	return serviceIDS, nil
 }
 
-func GetCloudTrailLogsForCluster(awsProfile string, clusterID string, maxPages int) ([]*cloudtrail.Event, error) {
+func GetCloudTrailLogsForCluster(awsProfile string, clusterID string, maxPages int) ([]*types.Event, error) {
 	awsJumpClient, err := osdCloud.GenerateAWSClientForCluster(awsProfile, clusterID)
 	if err != nil {
 		return nil, err
 	}
 
-	foundEvents := []*cloudtrail.Event{}
+	var foundEvents []types.Event
 
 	var eventSearchInput = cloudtrail.LookupEventsInput{}
 
@@ -772,7 +773,7 @@ func GetCloudTrailLogsForCluster(awsProfile string, clusterID string, maxPages i
 			break
 		}
 	}
-	filteredEvents := []*cloudtrail.Event{}
+	var filteredEvents []*types.Event
 	for _, event := range foundEvents {
 		if skippableEvent(*event.EventName) {
 			continue
@@ -780,7 +781,7 @@ func GetCloudTrailLogsForCluster(awsProfile string, clusterID string, maxPages i
 		if event.Username != nil && strings.Contains(*event.Username, "RH-SRE-") {
 			continue
 		}
-		filteredEvents = append(filteredEvents, event)
+		filteredEvents = append(filteredEvents, &event)
 	}
 
 	return filteredEvents, nil
@@ -999,7 +1000,7 @@ func (o *contextOptions) buildSplunkURL(data *contextData) string {
 	}
 }
 
-func printCloudTrailLogs(events []*cloudtrail.Event) {
+func printCloudTrailLogs(events []*types.Event) {
 	var name string = "Potentially interesting CloudTrail events"
 	fmt.Println(delimiter + name)
 

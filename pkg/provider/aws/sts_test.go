@@ -7,13 +7,17 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	. "github.com/onsi/gomega"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/endpoints"
-	"github.com/aws/aws-sdk-go/service/sts"
+	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/aws/aws-sdk-go-v2/service/sts/types"
 	"github.com/golang/mock/gomock"
+	. "github.com/onsi/gomega"
 	"github.com/openshift/osdctl/pkg/provider/aws/mock"
+)
+
+const (
+	AwsPartitionID      = "aws"        // AWS Standard partition.
+	AwsUsGovPartitionID = "aws-us-gov" // AWS GovCloud (US) partition.
 )
 
 type mockSuite struct {
@@ -43,27 +47,27 @@ func TestGetAwsPartition(t *testing.T) {
 			title: "AWS partition",
 			setupAWSMock: func(r *mock.MockClientMockRecorder) {
 				r.GetCallerIdentity(gomock.Any()).Return(&sts.GetCallerIdentityOutput{
-					Arn: aws.String("arn:aws:iam::123456789012:user/username"),
+					Arn: awsSdk.String("arn:aws:iam::123456789012:user/username"),
 				}, nil)
 			},
 			errExpected: false,
-			expected:    endpoints.AwsPartitionID,
+			expected:    AwsPartitionID,
 		},
 		{
 			title: "AWS GovCloud partition",
 			setupAWSMock: func(r *mock.MockClientMockRecorder) {
 				r.GetCallerIdentity(gomock.Any()).Return(&sts.GetCallerIdentityOutput{
-					Arn: aws.String("arn:aws-us-gov:iam::123456789012:user/username"),
+					Arn: awsSdk.String("arn:aws-us-gov:iam::123456789012:user/username"),
 				}, nil)
 			},
 			errExpected: false,
-			expected:    endpoints.AwsUsGovPartitionID,
+			expected:    AwsUsGovPartitionID,
 		},
 		{
 			title: "Invalid arn",
 			setupAWSMock: func(r *mock.MockClientMockRecorder) {
 				r.GetCallerIdentity(gomock.Any()).Return(&sts.GetCallerIdentityOutput{
-					Arn: aws.String("hello"),
+					Arn: awsSdk.String("hello"),
 				}, nil)
 			},
 			errExpected: true,
@@ -99,7 +103,7 @@ func TestGetFederationEndpointUrl(t *testing.T) {
 	}{
 		{
 			title:       "AWS partition",
-			partition:   endpoints.AwsPartitionID,
+			partition:   AwsPartitionID,
 			errExpected: false,
 		},
 		{
@@ -128,7 +132,7 @@ func TestGetConsoleUrl(t *testing.T) {
 	}{
 		{
 			title:       "AWS GovCloud partition",
-			partition:   endpoints.AwsUsGovPartitionID,
+			partition:   AwsUsGovPartitionID,
 			errExpected: false,
 		},
 		{
@@ -156,7 +160,7 @@ func TestGetAssumeRoleCredentials(t *testing.T) {
 		duration        int64
 		roleSessionName string
 		roleArn         string
-		credentials     *sts.Credentials
+		credentials     *types.Credentials
 		errExpected     bool
 	}{
 		{
@@ -185,15 +189,15 @@ func TestGetAssumeRoleCredentials(t *testing.T) {
 			title: "Normal",
 			setupAWSMock: func(r *mock.MockClientMockRecorder) {
 				r.AssumeRole(gomock.Any()).Return(&sts.AssumeRoleOutput{
-					Credentials: &sts.Credentials{
-						AccessKeyId:     aws.String("foo/bar"),
-						SecretAccessKey: aws.String("foo/bar"),
+					Credentials: &types.Credentials{
+						AccessKeyId:     awsSdk.String("foo/bar"),
+						SecretAccessKey: awsSdk.String("foo/bar"),
 					},
 				}, nil).Times(1)
 			},
-			credentials: &sts.Credentials{
-				AccessKeyId:     aws.String("foo/bar"),
-				SecretAccessKey: aws.String("foo/bar"),
+			credentials: &types.Credentials{
+				AccessKeyId:     awsSdk.String("foo/bar"),
+				SecretAccessKey: awsSdk.String("foo/bar"),
 			},
 			roleSessionName: "foo",
 			roleArn:         "bar",
@@ -210,7 +214,7 @@ func TestGetAssumeRoleCredentials(t *testing.T) {
 			// after mocks is defined
 			defer mocks.mockCtrl.Finish()
 
-			creds, err := GetAssumeRoleCredentials(mocks.mockAWSClient, aws.Int64(0), &tc.roleSessionName, &tc.roleArn)
+			creds, err := GetAssumeRoleCredentials(mocks.mockAWSClient, awsSdk.Int32(0), &tc.roleSessionName, &tc.roleArn)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())
 			} else {
@@ -230,13 +234,13 @@ func TestFormatSignInURL(t *testing.T) {
 	}{
 		{
 			title:       "signInToken foo",
-			partition:   endpoints.AwsPartitionID,
+			partition:   AwsPartitionID,
 			signInToken: "foo",
 			base:        "https://signin.aws.amazon.com/federation?Action=login&Destination=https%3A%2F%2Fconsole.aws.amazon.com%2F&Issuer=Red+Hat+SRE&SigninToken=",
 		},
 		{
 			title:       "signInToken bar",
-			partition:   endpoints.AwsUsGovPartitionID,
+			partition:   AwsUsGovPartitionID,
 			signInToken: "bar",
 			base:        "https://signin.amazonaws-us-gov.com/federation?Action=login&Destination=https%3A%2F%2Fconsole.amazonaws-us-gov.com%2F&Issuer=Red+Hat+SRE&SigninToken=",
 		},
@@ -254,16 +258,16 @@ func TestFormatSignInURL(t *testing.T) {
 func TestGetSignInToken(t *testing.T) {
 	g := NewGomegaWithT(t)
 
-	testCreds := &sts.Credentials{
-		AccessKeyId:     aws.String("foo"),
-		SecretAccessKey: aws.String("bar"),
-		SessionToken:    aws.String("buz"),
+	testCreds := &types.Credentials{
+		AccessKeyId:     awsSdk.String("foo"),
+		SecretAccessKey: awsSdk.String("bar"),
+		SessionToken:    awsSdk.String("buz"),
 	}
 
 	testCases := []struct {
 		title       string
 		handler     func(w http.ResponseWriter, r *http.Request)
-		creds       *sts.Credentials
+		creds       *types.Credentials
 		token       string
 		errExpected bool
 		errContent  string
@@ -345,16 +349,16 @@ func TestGetSignInToken(t *testing.T) {
 func TestRequestSignedURL(t *testing.T) {
 	g := NewGomegaWithT(t)
 
-	testCreds := &sts.Credentials{
-		AccessKeyId:     aws.String("foo"),
-		SecretAccessKey: aws.String("bar"),
-		SessionToken:    aws.String("buz"),
+	testCreds := &types.Credentials{
+		AccessKeyId:     awsSdk.String("foo"),
+		SecretAccessKey: awsSdk.String("bar"),
+		SessionToken:    awsSdk.String("buz"),
 	}
 
 	testCases := []struct {
 		title       string
 		handler     func(w http.ResponseWriter, r *http.Request)
-		creds       *sts.Credentials
+		creds       *types.Credentials
 		token       string
 		errExpected bool
 		errContent  string
@@ -405,7 +409,7 @@ func TestRequestSignedURL(t *testing.T) {
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				_ = r.ParseForm()
 				session := r.FormValue("Session")
-				var creds sts.Credentials
+				var creds types.Credentials
 				_ = json.Unmarshal([]byte(session), &creds)
 				w.WriteHeader(200)
 

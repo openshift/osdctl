@@ -3,8 +3,8 @@ package account
 import (
 	"fmt"
 
-	"github.com/aws/aws-sdk-go/aws/arn"
-	"github.com/aws/aws-sdk-go/service/sts"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	"github.com/aws/aws-sdk-go-v2/service/sts/types"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -118,7 +118,7 @@ func (o *cliOptions) run() error {
 		return err
 	}
 
-	var assumedRoleCreds *sts.Credentials
+	var assumedRoleCreds *types.Credentials
 	if isCCS {
 		// If the cluster is CCS, the target role needs to be determined, and the jump role chain needs to be executed
 
@@ -136,7 +136,7 @@ func (o *cliOptions) run() error {
 		targetRoleArn.Partition = partition
 
 		// Start the jump role chain. Result should be credentials for the ManagedOpenShift Support role for the target cluster
-		assumedRoleCreds, err = osdCloud.GenerateSupportRoleCredentials(awsClient, o.awsAccountID, o.region, sessionName, targetRoleArn.String())
+		assumedRoleCreds, err = osdCloud.GenerateSupportRoleCredentials(awsClient, o.region, sessionName, targetRoleArn.String())
 		if err != nil {
 			return err
 		}
@@ -153,7 +153,7 @@ func (o *cliOptions) run() error {
 
 	// Output section
 	if o.output == "" {
-		fmt.Printf("Temporary AWS Credentials:\n%s\n", assumedRoleCreds)
+		fmt.Printf("Temporary AWS Credentials:\n%v\n", assumedRoleCreds)
 	}
 
 	if o.output == "json" {

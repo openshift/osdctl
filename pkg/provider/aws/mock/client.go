@@ -7,15 +7,15 @@ package mock
 import (
 	reflect "reflect"
 
-	cloudtrail "github.com/aws/aws-sdk-go/service/cloudtrail"
-	costexplorer "github.com/aws/aws-sdk-go/service/costexplorer"
-	ec2 "github.com/aws/aws-sdk-go/service/ec2"
-	iam "github.com/aws/aws-sdk-go/service/iam"
-	organizations "github.com/aws/aws-sdk-go/service/organizations"
-	resourcegroupstaggingapi "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
-	s3 "github.com/aws/aws-sdk-go/service/s3"
-	servicequotas "github.com/aws/aws-sdk-go/service/servicequotas"
-	sts "github.com/aws/aws-sdk-go/service/sts"
+	cloudtrail "github.com/aws/aws-sdk-go-v2/service/cloudtrail"
+	costexplorer "github.com/aws/aws-sdk-go-v2/service/costexplorer"
+	ec2 "github.com/aws/aws-sdk-go-v2/service/ec2"
+	iam "github.com/aws/aws-sdk-go-v2/service/iam"
+	organizations "github.com/aws/aws-sdk-go-v2/service/organizations"
+	resourcegroupstaggingapi "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
+	s3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	servicequotas "github.com/aws/aws-sdk-go-v2/service/servicequotas"
+	sts "github.com/aws/aws-sdk-go-v2/service/sts"
 	gomock "github.com/golang/mock/gomock"
 )
 
