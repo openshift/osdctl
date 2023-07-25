@@ -172,23 +172,40 @@ func (i *infoOptions) run() error {
 		fmt.Println("Could not construct all AWS sessions: ", err)
 		return err
 	}
-	wg := sync.WaitGroup{}
-	wg.Add(3)
-
 	ai := aggregateClusterInfo{}
-	eC := make(chan error)
+	plC := make(chan ChanReturn[privatelinkInfo])
+	mcC := make(chan ChanReturn[managementClusterInfo])
+	cC := make(chan ChanReturn[clusterInfo])
 	// To find hostedzones we use the api-url but strip the 'api' and 'clustername' parts
 	verboseLog("Retrieving resources from accounts")
-	go gatherManagementClusterInfo(&wg, &ai, awsSessions.managementClient, clusters.customerCluster.ID(), eC)
-	go gatherCustomerClusterInfo(&wg, &ai, awsSessions.customerClient, clusters.customerCluster, eC)
-	go gatherPrivatelinkClusterInfo(&wg, &ai, awsSessions.privatelinkClient, clusters.customerCluster, eC)
-	go func() {
-		err := <-eC
-		if err != nil {
-			fmt.Println("Error while fetching AWS resources.", err)
+	go gatherManagementClusterInfo(awsSessions.managementClient, clusters.customerCluster.ID(), mcC)
+	go gatherCustomerClusterInfo(awsSessions.customerClient, clusters.customerCluster, cC)
+	go gatherPrivatelinkClusterInfo(awsSessions.privatelinkClient, clusters.customerCluster, plC)
+	for {
+		select {
+		case r := <-plC:
+			verboseLog("Received privatelink information")
+			if r.Error != nil {
+				return r.Error
+			}
+			ai.privatelinkInfo = &r.Value
+		case r := <-mcC:
+			verboseLog("Received management information")
+			if r.Error != nil {
+				return r.Error
+			}
+			ai.managementClusterInfo = &r.Value
+		case r := <-cC:
+			verboseLog("Received customer information")
+			if r.Error != nil {
+				return r.Error
+			}
+			ai.clusterInfo = &r.Value
 		}
-	}()
-	wg.Wait()
+		if ai.clusterInfo != nil && ai.managementClusterInfo != nil && ai.privatelinkInfo != nil {
+			break
+		}
+	}
 	switch i.output {
 	case "table":
 		render(&ai)
@@ -445,14 +462,16 @@ func getLoadBalancers(client aws.Client, clusterID string) ([]*elbv2.LoadBalance
 	return clusterLoadbalancers, nil
 }
 
-func gatherManagementClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, client aws.Client, clusterID string, eC chan<- error) error {
+func gatherManagementClusterInfo(client aws.Client, clusterID string, c chan ChanReturn[managementClusterInfo]) {
 	verboseLog("Fetching resources for Management Cluster")
-	defer wg.Done()
 	// Get the VPC endpoints
 	clusterEndpointServices, err := getVpcEndpointServices(client, clusterID)
 	if err != nil {
 		verboseLog("Could not find matching endpoint services in the management cluster - this is likely a problem.")
-		eC <- err
+		c <- ChanReturn[managementClusterInfo]{
+			Value: managementClusterInfo{},
+			Error: err,
+		}
 	}
 	if len(clusterEndpointServices) == 0 {
 		verboseLog("Could not find matching endpoint services in the management cluster - this is likely a problem.")
@@ -460,7 +479,10 @@ func gatherManagementClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, c
 	clusterEndpoints, err := getVpcEndpointConnections(client, clusterEndpointServices)
 	if err != nil {
 		verboseLog("Could not find matching endpoints in the management cluster - this is likely a problem.")
-		eC <- err
+		c <- ChanReturn[managementClusterInfo]{
+			Value: managementClusterInfo{},
+			Error: err,
+		}
 	}
 	if len(clusterEndpointServices) == 0 {
 		verboseLog("Could not find matching endpoints in the management cluster - this is likely a problem.")
@@ -468,32 +490,36 @@ func gatherManagementClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, c
 	clusterLoadbalancers, err := getLoadBalancers(client, clusterID)
 	if err != nil {
 		verboseLog("Could not find matching loadbalancers in the management cluster - this is likely a problem.")
-		eC <- err
+		c <- ChanReturn[managementClusterInfo]{
+			Value: managementClusterInfo{},
+			Error: err,
+		}
 	}
 	if len(clusterEndpointServices) == 0 {
 		verboseLog("Could not find matching loadbalancers in the management cluster - this is likely a problem.")
 	}
-	// Get the loadbalancer
-	ai.lock.Lock()
-	ai.managementClusterInfo = &managementClusterInfo{
-		EndpointConnections: clusterEndpoints,
-		EndpointServices:    clusterEndpointServices,
-		LoadBalancers:       clusterLoadbalancers,
+	c <- ChanReturn[managementClusterInfo]{
+		Value: managementClusterInfo{
+			EndpointConnections: clusterEndpoints,
+			EndpointServices:    clusterEndpointServices,
+			LoadBalancers:       clusterLoadbalancers,
+		},
+		Error: nil,
 	}
-	ai.lock.Unlock()
-	return nil
 }
 
-func gatherPrivatelinkClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, client aws.Client, cluster *v1.Cluster, eC chan<- error) error {
+func gatherPrivatelinkClusterInfo(client aws.Client, cluster *v1.Cluster, c chan ChanReturn[privatelinkInfo]) {
 	clusterID := cluster.ID()
 	apiUrl := baseApiUrl(cluster)
 	verboseLog("Fetching resources for Privatelink")
-	defer wg.Done()
 	// Get Route53 information
 	clusterHostedZones, err := getHostedZones(client, apiUrl)
 	if err != nil {
 		verboseLog("Could not find matching hosted zones in the privatelink cluster - this is likely a problem.")
-		eC <- err
+		c <- ChanReturn[privatelinkInfo]{
+			Value: privatelinkInfo{},
+			Error: err,
+		}
 	}
 	if len(clusterHostedZones) == 0 {
 		verboseLog("Could not find matching hosted zones in the privatelink cluster - this is likely a problem.")
@@ -502,7 +528,10 @@ func gatherPrivatelinkClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, 
 	rrs, err := getResourceRecordSets(client, clusterHostedZones)
 	if err != nil {
 		verboseLog("Could not find matching resource records in the privatelink cluster - this is likely a problem.")
-		eC <- err
+		c <- ChanReturn[privatelinkInfo]{
+			Value: privatelinkInfo{},
+			Error: err,
+		}
 	}
 	if len(rrs) == 0 {
 		verboseLog("Could not find matching resource records in the privatelink cluster - this is likely a problem.")
@@ -511,16 +540,19 @@ func gatherPrivatelinkClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, 
 	clusterEndpoints, err := getVpcEndpoints(client, clusterID, "Name", fmt.Sprintf("%s-private-hcp-vpce", clusterID))
 	if err != nil {
 		verboseLog("Could not find matching cluster endpoints in the privatelink cluster - this is likely a problem.")
-		eC <- err
+		c <- ChanReturn[privatelinkInfo]{
+			Value: privatelinkInfo{},
+			Error: err,
+		}
 	}
-	ai.lock.Lock()
-	ai.privatelinkInfo = &privatelinkInfo{
-		HostedZones:     clusterHostedZones,
-		ResourceRecords: rrs,
-		Endpoints:       clusterEndpoints,
+	c <- ChanReturn[privatelinkInfo]{
+		Value: privatelinkInfo{
+			HostedZones:     clusterHostedZones,
+			ResourceRecords: rrs,
+			Endpoints:       clusterEndpoints,
+		},
+		Error: err,
 	}
-	ai.lock.Unlock()
-	return nil
 }
 
 func getSubnets(client aws.Client, subnetIds []string) ([]*ec2.Subnet, error) {
@@ -538,16 +570,18 @@ func getSubnets(client aws.Client, subnetIds []string) ([]*ec2.Subnet, error) {
 	return subnets.Subnets, err
 }
 
-func gatherCustomerClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, client aws.Client, cluster *v1.Cluster, eC chan<- error) error {
+func gatherCustomerClusterInfo(client aws.Client, cluster *v1.Cluster, c chan<- ChanReturn[clusterInfo]) {
 	clusterID := cluster.ID()
 	apiUrl := baseApiUrl(cluster)
 	verboseLog("Fetching resources for Customer Cluster")
-	defer wg.Done()
 	// Get the Route53 HostedZone
 	clusterHostedZones, err := getHostedZones(client, apiUrl)
 	if err != nil {
 		verboseLog("Could not find matching hosted zones in the cluster - this is likely a problem.")
-		eC <- err
+		c <- ChanReturn[clusterInfo]{
+			Value: clusterInfo{},
+			Error: err,
+		}
 	}
 	if len(clusterHostedZones) == 0 {
 		verboseLog("Could not find matching hosted zones in the cluster - this is likely a problem.")
@@ -556,7 +590,10 @@ func gatherCustomerClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, cli
 	rrs, err := getResourceRecordSets(client, clusterHostedZones)
 	if err != nil {
 		verboseLog("Could not find record sets in the cluster - this is likely a problem.")
-		eC <- err
+		c <- ChanReturn[clusterInfo]{
+			Value: clusterInfo{},
+			Error: err,
+		}
 	}
 	if len(clusterHostedZones) == 0 {
 		verboseLog("Could not find endpoints in the cluster - this is likely a problem.")
@@ -565,7 +602,10 @@ func gatherCustomerClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, cli
 	clusterEndpoints, err := getVpcEndpoints(client, clusterID, fmt.Sprintf("kubernetes.io/cluster/%s", clusterID), "owned")
 	if err != nil {
 		verboseLog("Could not find endpoints in the cluster - this is likely a problem.")
-		eC <- err
+		c <- ChanReturn[clusterInfo]{
+			Value: clusterInfo{},
+			Error: err,
+		}
 	}
 	if len(clusterHostedZones) == 0 {
 		verboseLog("Could not find endpoints in the cluster - this is likely a problem.")
@@ -574,24 +614,30 @@ func gatherCustomerClusterInfo(wg *sync.WaitGroup, ai *aggregateClusterInfo, cli
 	clusterSubnets, err := getSubnets(client, cluster.AWS().SubnetIDs())
 	if err != nil {
 		verboseLog("Could not find subnets in the cluster - this is likely a problem.")
-		eC <- err
+		c <- ChanReturn[clusterInfo]{
+			Value: clusterInfo{},
+			Error: err,
+		}
 	}
 	// Get RouteTables
 	clusterRouteTables, err := getRouteTables(client, cluster.AWS().SubnetIDs())
 	if err != nil {
 		verboseLog("Could not find routetables in the subnets - this is likely a problem.")
-		eC <- err
+		c <- ChanReturn[clusterInfo]{
+			Value: clusterInfo{},
+			Error: err,
+		}
 	}
-	ai.lock.Lock()
-	ai.clusterInfo = &clusterInfo{
-		HostedZones:       clusterHostedZones,
-		ResourceRecords:   rrs,
-		Endpoints:         clusterEndpoints,
-		Subnets:           clusterSubnets,
-		SubnetRouteTables: clusterRouteTables,
+	c <- ChanReturn[clusterInfo]{
+		Value: clusterInfo{
+			HostedZones:       clusterHostedZones,
+			ResourceRecords:   rrs,
+			Endpoints:         clusterEndpoints,
+			Subnets:           clusterSubnets,
+			SubnetRouteTables: clusterRouteTables,
+		},
+		Error: nil,
 	}
-	ai.lock.Unlock()
-	return nil
 }
 
 func getRouteTables(client aws.Client, subnets []string) ([]*ec2.RouteTable, error) {
