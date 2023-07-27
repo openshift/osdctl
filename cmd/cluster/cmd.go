@@ -33,6 +33,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 	clusterCmd.AddCommand(newCmdCpd())
 	clusterCmd.AddCommand(newCmdCheckBannedUser())
 	clusterCmd.AddCommand(newCmdValidatePullSecret(client, flags))
+	clusterCmd.AddCommand(newCmdEtcdHealthCheck(client, flags))
 	clusterCmd.AddCommand(newCmdFromInfraId(globalOpts))
 	return clusterCmd
 }
