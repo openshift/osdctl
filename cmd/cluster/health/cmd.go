@@ -16,13 +16,12 @@ import (
 )
 
 type Health struct {
-	client    client.Client
-	hive      client.Client
-	hiveAdmin client.Client
+	client                client.Client
+	managementClusterName string
+	managementCluster     client.Client
 
-	cluster      *cmv1.Cluster
-	clusterId    string
-	instanceType string
+	cluster   *cmv1.Cluster
+	clusterId string
 }
 
 func NewCmdHealth() *cobra.Command {
@@ -32,7 +31,7 @@ func NewCmdHealth() *cobra.Command {
 	}
 
 	health.AddCommand(
-		NewCmdHealth(),
+		newCmdClusterHealth(),
 	)
 
 	return health
@@ -57,8 +56,9 @@ func (h *Health) New() error {
 
 	ocmClient, err := utils.CreateConnection()
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to connect to the cluster, %s", err)
 	}
+
 	defer ocmClient.Close()
 	cluster, err := utils.GetClusterAnyStatus(ocmClient, h.clusterId)
 	if err != nil {
@@ -67,30 +67,25 @@ func (h *Health) New() error {
 	h.cluster = cluster
 	h.clusterId = cluster.ID()
 
-	hive, err := utils.GetHiveCluster(cluster.ID())
-	if err != nil {
-		return err
-	}
-
 	c, err := k8s.New(cluster.ID(), client.Options{Scheme: scheme})
-	if err != nil {
-		return err
-	}
-
-	hc, err := k8s.New(hive.ID(), client.Options{Scheme: scheme})
-	if err != nil {
-		return err
-	}
-
-	hac, err := k8s.NewAsBackplaneClusterAdmin(hive.ID(), client.Options{Scheme: scheme})
 	if err != nil {
 		return err
 	}
 
 	h.clusterId = cluster.ID()
 	h.client = c
-	h.hive = hc
-	h.hiveAdmin = hac
+
+	mcName, mcID, err := utils.GetManagementCluster(cluster.ID())
+	if err != nil {
+		return err
+	}
+
+	m, err := k8s.New(mcID, client.Options{Scheme: scheme})
+	if err != nil {
+		return err
+	}
+	h.managementCluster = m
+	h.managementClusterName = mcName
 
 	return nil
 }
