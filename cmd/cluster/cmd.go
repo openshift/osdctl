@@ -4,11 +4,8 @@ import (
 	"fmt"
 
 	"github.com/openshift/osdctl/cmd/cluster/access"
-<<<<<<< HEAD
-	"github.com/openshift/osdctl/cmd/cluster/resize"
-=======
 	"github.com/openshift/osdctl/cmd/cluster/health"
->>>>>>> 1ed726d (Updating)
+	"github.com/openshift/osdctl/cmd/cluster/resize"
 	"github.com/openshift/osdctl/cmd/cluster/support"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/spf13/cobra"
