@@ -413,3 +413,34 @@ func GetHiveCluster(clusterId string) (*cmv1.Cluster, error) {
 
 	return resp.Items().Get(0), nil
 }
+
+// Returns management cluster name and ID for hypershift clusters, and empty strings otherwise
+func GetManagementCluster(clusterID string) (string, string, error) {
+	connection, err := CreateConnection()
+	if err != nil {
+		return "", "", errors.New(fmt.Sprintf("Could not connect to the cluster, %v", err))
+	}
+
+	defer connection.Close()
+
+	cluster, err := GetClusterAnyStatus(connection, clusterID)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get OCM cluster info for %v: %v", clusterID, err)
+	}
+	managementClusterName := ""
+	managementClusterID := ""
+	if cluster.Hypershift().Enabled() {
+		hypershiftResp, err := connection.ClustersMgmt().V1().Clusters().
+			Cluster(cluster.ID()).
+			Hypershift().
+			Get().
+			Send()
+		if err != nil {
+			return "", "", errors.New(fmt.Sprintf("Could not get hypershift response.  %s", err))
+		}
+		managementClusterName = hypershiftResp.Body().ManagementCluster()
+		managementClusterID = GenerateQuery(managementClusterName)
+	}
+
+	return managementClusterName, managementClusterID, nil
+}
