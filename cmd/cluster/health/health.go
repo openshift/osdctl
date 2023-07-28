@@ -8,8 +8,9 @@ import (
 	"strconv"
 	"strings"
 
+	hypershift "github.com/openshift/hypershift/api/v1alpha1"
+
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
-	github.com/openshift/hypershift v0.1.6-0.20230426135702-7e212f871818
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -264,7 +265,7 @@ func createHypershiftHealthObject(cluster *v1.Cluster) *ClusterHealthHypershiftO
 
 	return &hsHealthObject
 }
-func getNodepools(ctx context.Context) (*v1.NodePool, error) {
+func getNodepools(ctx context.Context) (*hypershift.NodePool, error) {
 
 	h := &Health{}
 	if err := h.New(); err != nil {
@@ -275,14 +276,14 @@ func getNodepools(ctx context.Context) (*v1.NodePool, error) {
 
 	//("oc get nodepool -n ocm-production-%v", clusterID)
 
-	np := &metav1.Node
+	np := &hypershift.NodePool{}
 
-	get_nodepool := h.managementCluster.Get(ctx, client.ObjectKey{Namespace: namespace}, np)
-
+	err := h.managementCluster.List(ctx, np, client.ListOptions{Namespace: namespace})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to execute:\n%s", strings.TrimSpace(string(nodepool)))
 	}
 	return nodepool, nil
+
 }
 
 /*
