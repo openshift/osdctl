@@ -45,7 +45,7 @@ func init() {
 		"ou-id",
 		"",
 		"",
-		"specify orgnaization unit id",
+		"specify organization unit id",
 	)
 
 	AddOutputFlag(flags)

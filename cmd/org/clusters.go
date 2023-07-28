@@ -1,13 +1,11 @@
 package org
 
 import (
-	"encoding/json"
 	"fmt"
-	"log"
+	accountsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	"os"
 
 	"github.com/aws/aws-sdk-go-v2/service/organizations"
-	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -20,39 +18,55 @@ const (
 )
 
 var (
-	clustersCmd = &cobra.Command{
-		Use:           "clusters",
-		Short:         "get organization clusters",
-		Args:          cobra.ArbitraryArgs,
+	allClustersFlag = false
+	awsAccountID    = ""
+	clustersCmd     = &cobra.Command{
+		Use:   "clusters",
+		Short: "get all active organization clusters",
+		Long: `By default, returns all active clusters for a given organization. The organization can either be specified with an argument
+passed in, or by providing both the --aws-profile and --aws-account-id flags. You can request all clusters regardless of status by providing the --all flag.`,
+		Example: `Retrieving all active clusters for a given organizational unit:
+osdctl org clusters 123456789AbcDEfGHiJklMnopQR
+
+Retrieving all active clusters for a given organizational unit in JSON format:
+osdctl org clusters 123456789AbcDEfGHiJklMnopQR -o json
+
+Retrieving all clusters for a given organizational unit regardless of status:
+osdctl org clusters 123456789AbcDEfGHiJklMnopQR --all
+
+Retrieving all active clusters for a given AWS profile:
+osdctl org clusters --aws-profile my-aws-profile --aws-account-id 123456789
+`,
+		Args:          cobra.MaximumNArgs(1),
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(SearchClusters(cmd, args))
+			orgId := ""
+			if len(args) > 0 {
+				orgId = args[0]
+			}
+
+			status := ""
+			if !allClustersFlag {
+				status = statusActive
+			}
+
+			clusters, err := SearchClusters(orgId, status)
+			cmdutil.CheckErr(err)
+			printClusters(clusters)
 		},
 	}
-	onlyActive   bool   = false
-	awsAccountID string = ""
 )
-
-type SubscriptionItems struct {
-	Subscriptions []Subscription `json:"items"`
-}
-
-type Subscription struct {
-	ClusterID   string `json:"cluster_id"`
-	DisplayName string `json:"display_name"`
-	Status      string `json:"status"`
-}
 
 func init() {
 	// define flags
 	flags := clustersCmd.Flags()
 
 	flags.BoolVarP(
-		&onlyActive,
-		"active",
-		"",
+		&allClustersFlag,
+		"all",
+		"A",
 		false,
-		"get organization active clusters",
+		"get all clusters regardless of status",
 	)
 
 	flags.StringVarP(
@@ -74,35 +88,41 @@ func init() {
 	AddOutputFlag(flags)
 }
 
-func SearchClusters(cmd *cobra.Command, args []string) error {
+func SearchClusters(orgId string, status string) ([]*accountsv1.Subscription, error) {
+	if orgId == "" && !isAWSProfileSearch() {
+		return nil, fmt.Errorf("specify either org-id or --aws-profile,--aws-account-id arguments")
+	}
 
-	var err error
-	if !hasOrgId(args) && !isAWSProfileSearch() {
-		err = fmt.Errorf("specify either org-id or --aws-profile,--aws-account-id arguments")
+	if orgId != "" && isAWSProfileSearch() {
+		return nil, fmt.Errorf("specify either an org id argument or --aws-profile, --aws-account-id arguments")
 	}
-	if hasOrgId(args) {
-		err = searchclustersByOrg(cmd, args[0])
-	}
+
 	if isAWSProfileSearch() {
-		err = searchClustersByAWSProfile(cmd)
+		orgIdFromAws, err := getOrganizationIdFromAWSProfile()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get org ID from AWS profile: %w", err)
+		}
+		orgId = *orgIdFromAws
 	}
 
+	clusterSubscriptions, err := searchAllClustersByOrg(orgId, status)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+
+	return clusterSubscriptions, nil
 }
 
-func searchClustersByAWSProfile(cmd *cobra.Command) error {
+func getOrganizationIdFromAWSProfile() (*string, error) {
 	awsClient, err := initAWSClient(awsProfile)
 	if err != nil {
-		return fmt.Errorf("could not create AWS client: %q", err)
+		return nil, fmt.Errorf("could not create AWS client: %q", err)
 	}
 	parent, err := awsClient.ListParents(&organizations.ListParentsInput{
 		ChildId: &awsAccountID,
 	})
 	if err != nil {
-		return fmt.Errorf("cannot get organization parents: %q", err)
+		return nil, fmt.Errorf("cannot get organization parents: %q", err)
 	}
 	parentId := *parent.Parents[0].Id
 
@@ -110,34 +130,35 @@ func searchClustersByAWSProfile(cmd *cobra.Command) error {
 		&organizations.DescribeOrganizationalUnitInput{
 			OrganizationalUnitId: &parentId,
 		})
-
 	if err != nil {
-		log.Fatalln("cannot get Organizational Unit:", err)
+		return nil, fmt.Errorf("cannot get Organizational Unit: %w", err)
 	}
 
-	searchclustersByOrg(cmd, *result.OrganizationalUnit.Id)
-
-	return nil
+	return result.OrganizationalUnit.Id, nil
 }
 
-func searchclustersByOrg(cmd *cobra.Command, orgID string) error {
-	response, err := getClusters(orgID)
-	if err != nil {
-		return fmt.Errorf("invalid input: %q", err)
+func searchAllClustersByOrg(orgID string, status string) ([]*accountsv1.Subscription, error) {
+	var clusterSubscriptions []*accountsv1.Subscription
+	requestPageSize := 100
+	morePages := true
+	for page := 1; morePages; page++ {
+		clustersData, err := getClusters(orgID, status, page, requestPageSize)
+		if err != nil {
+			return nil, fmt.Errorf("encountered an error fetching subscriptions for page %v: %w", page, err)
+		}
+
+		clustersDataItems := clustersData.Items().Slice()
+		clusterSubscriptions = append(clusterSubscriptions, clustersDataItems...)
+
+		if clustersData.Size() < requestPageSize {
+			morePages = false
+		}
 	}
 
-	items := SubscriptionItems{}
-	json.Unmarshal(response.Bytes(), &items)
-
-	printClusters(items.Subscriptions)
-	if err != nil {
-		// If outputing the data errored, there's likely an internal error, so just return the error
-		return err
-	}
-	return nil
+	return clusterSubscriptions, nil
 }
 
-func getClusters(orgID string) (*sdk.Response, error) {
+func getClusters(orgID string, status string, page int, size int) (*accountsv1.SubscriptionsListResponse, error) {
 	// Create OCM client to talk
 	ocmClient, err := utils.CreateConnection()
 	if err != nil {
@@ -150,49 +171,48 @@ func getClusters(orgID string) (*sdk.Response, error) {
 	}()
 
 	// Now get the matching orgs
-	return sendRequest(createGetClustersRequest(ocmClient, orgID))
-}
-
-func createGetClustersRequest(ocmClient *sdk.Connection, orgID string) *sdk.Request {
-	// Create and populate the request:
-	request := ocmClient.Get()
-	subscriptionApiPath := "/api/accounts_mgmt/v1/subscriptions"
-
-	err := arguments.ApplyPathArg(request, subscriptionApiPath)
-
+	response, err := createGetClustersRequest(ocmClient, orgID, status, page, size).Send()
 	if err != nil {
-		log.Fatalf("Can't parse API path '%s': %v\n", subscriptionApiPath, err)
-
+		return nil, fmt.Errorf("failed to get clusters: %w", err)
 	}
 
-	formatMessage := fmt.Sprintf(
-		`search=organization_id='%s'`,
-		orgID,
-	)
-	arguments.ApplyParameterFlag(request, []string{formatMessage})
+	return response, nil
+}
+
+func createGetClustersRequest(ocmClient *sdk.Connection, orgID string, status string, page int, size int) *accountsv1.SubscriptionsListRequest {
+	// Create and populate the request:
+	request := ocmClient.AccountsMgmt().V1().Subscriptions().List().Page(page).Size(size)
+
+	searchMessage := fmt.Sprintf(`organization_id='%s'`, orgID)
+	if status != "" {
+		searchMessage += fmt.Sprintf(` and status='%s'`, statusActive)
+	}
+	request = request.Search(searchMessage)
 
 	return request
 }
 
-func printClusters(items []Subscription) {
+func printClusters(items []*accountsv1.Subscription) {
 	if IsJsonOutput() {
-		subscriptionItems := SubscriptionItems{
-			Subscriptions: items,
+		subscriptions := make([]map[string]string, 0, len(items))
+		for _, item := range items {
+			subscription := map[string]string{
+				"cluster_id":   item.ClusterID(),
+				"display_name": item.DisplayName(),
+				"status":       item.Status(),
+			}
+			subscriptions = append(subscriptions, subscription)
 		}
-		PrintJson(subscriptionItems)
+		PrintJson(subscriptions)
 	} else {
 		table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
 		table.AddRow([]string{"DISPLAY NAME", "CLUSTER ID", "STATUS"})
 
 		for _, subscription := range items {
-			if subscription.Status != statusActive && onlyActive {
-				// skip non active clusters when --active flag set
-				continue
-			}
 			table.AddRow([]string{
-				subscription.DisplayName,
-				subscription.ClusterID,
-				subscription.Status,
+				subscription.DisplayName(),
+				subscription.ClusterID(),
+				subscription.Status(),
 			})
 		}
 
@@ -200,10 +220,6 @@ func printClusters(items []Subscription) {
 		table.Flush()
 	}
 
-}
-
-func hasOrgId(args []string) bool {
-	return len(args) == 1
 }
 
 func isAWSProfileSearch() bool {
