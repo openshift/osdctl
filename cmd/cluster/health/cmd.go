@@ -8,8 +8,7 @@ import (
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 
-	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
-	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	hypershift "github.com/openshift/hypershift/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -20,8 +19,12 @@ type Health struct {
 	managementClusterName string
 	managementCluster     client.Client
 
-	cluster   *cmv1.Cluster
-	clusterId string
+	cluster     *cmv1.Cluster
+	clusterId   string
+	output      string
+	verbose     bool
+	awsProfile  string
+	environment string
 }
 
 func NewCmdHealth() *cobra.Command {
@@ -40,16 +43,6 @@ func NewCmdHealth() *cobra.Command {
 func (h *Health) New() error {
 	scheme := runtime.NewScheme()
 
-	// Register machinev1beta1 for Machines
-	if err := machinev1beta1.Install(scheme); err != nil {
-		return err
-	}
-
-	// Register hivev1 for MachinePools
-	if err := hivev1.AddToScheme(scheme); err != nil {
-		return err
-	}
-
 	if err := corev1.AddToScheme(scheme); err != nil {
 		return err
 	}
@@ -66,6 +59,11 @@ func (h *Health) New() error {
 	}
 	h.cluster = cluster
 	h.clusterId = cluster.ID()
+
+	// Register hypershift for Nodepools
+	if err := hypershift.AddToScheme(scheme); err != nil {
+		return err
+	}
 
 	c, err := k8s.New(cluster.ID(), client.Options{Scheme: scheme})
 	if err != nil {
