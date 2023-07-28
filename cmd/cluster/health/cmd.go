@@ -70,7 +70,6 @@ func (h *Health) New() error {
 		return err
 	}
 
-	h.clusterId = cluster.ID()
 	h.client = c
 
 	mcName, mcID, err := utils.GetManagementCluster(cluster.ID())
