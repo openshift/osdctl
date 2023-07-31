@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/openshift/osdctl/pkg/provider/aws"
-	"github.com/spf13/viper"
 	"os"
 	"strings"
 
+	"github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/spf13/viper"
+
+	operatorv1 "github.com/openshift/api/operator/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
 	gcpv1alpha1 "github.com/openshift/gcp-project-operator/api/v1alpha1"
@@ -37,6 +39,7 @@ import (
 )
 
 func init() {
+	_ = operatorv1.AddToScheme(scheme.Scheme)
 	_ = awsv1alpha1.AddToScheme(scheme.Scheme)
 	_ = routev1.AddToScheme(scheme.Scheme)
 	_ = hivev1.AddToScheme(scheme.Scheme)
