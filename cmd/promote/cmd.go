@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 
+	"github.com/openshift/osdctl/cmd/promote/pko"
 	"github.com/openshift/osdctl/cmd/promote/saas"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 )
@@ -20,6 +21,7 @@ func NewCmdPromote(flags *genericclioptions.ConfigFlags, globalOpts *globalflags
 	}
 
 	promoteCmd.AddCommand(saas.NewCmdSaas(flags, globalOpts))
+	promoteCmd.AddCommand(pko.NewCmdPKO(flags, globalOpts))
 
 	return promoteCmd
 }
