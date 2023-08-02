@@ -21,7 +21,7 @@ type cpdOptions struct {
 }
 
 const (
-	cpdLongDescription   = `
+	cpdLongDescription = `
 Helps investigate OSD/ROSA cluster provisioning delays (CPD) or failures
 
   This command only supports AWS at the moment and will:
