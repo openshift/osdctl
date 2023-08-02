@@ -21,7 +21,6 @@ type cpdOptions struct {
 }
 
 const (
-	unknownProvisionCode = "OCM3999"
 	cpdLongDescription   = `
 Helps investigate OSD/ROSA cluster provisioning delays (CPD) or failures
 
@@ -82,12 +81,6 @@ func (o *cpdOptions) run() error {
 		fmt.Println("DNS not ready. Investigate reasons using the dnszones CR in the cluster namespace:")
 		fmt.Printf("oc get dnszones -n uhc-production-%s -o yaml --as backplane-cluster-admin\n", o.clusterID)
 		return nil
-	}
-
-	fmt.Println("Checking if OCM error code is already known")
-	// Check if the OCM Error code is a known error
-	if len(cluster.Status().ProvisionErrorCode()) > 0 && cluster.Status().ProvisionErrorCode() != unknownProvisionCode {
-		fmt.Printf("Error code '%s' is known, customer already received Service Log\n", cluster.Status().ProvisionErrorCode())
 	}
 
 	fmt.Println("Checking if cluster is GCP")
