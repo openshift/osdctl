@@ -587,8 +587,8 @@ github.com/openshift/gcp-project-operator v0.0.0-20220920194256-df38e31387a7 h1:
 github.com/openshift/gcp-project-operator v0.0.0-20220920194256-df38e31387a7/go.mod h1:BKXSfGFecnNJ/NBv61AjSP9ngf9jiP4KbPShTkO9XtA=
 github.com/openshift/hive/apis v0.0.0-20230314202213-17cb22fc3d7c h1:6UcCZQIfknM18J9VNN39i8uTrwD9QFj4B0PnyyoAGU8=
 github.com/openshift/hive/apis v0.0.0-20230314202213-17cb22fc3d7c/go.mod h1:VIxA5HhvBmsqVn7aUVQYs004B9K4U5A+HrFwvRq2nK8=
-github.com/openshift/osd-network-verifier v0.4.0 h1:j7RljUqnG+MCotE9kc6LmSbEdeSGoa57HFNP9tbIVOI=
-github.com/openshift/osd-network-verifier v0.4.0/go.mod h1:A89hA4CpxJjxx2qNbZVJmJc3MVa+bEWftKadBCJoxw4=
+github.com/openshift/osd-network-verifier v0.4.1 h1:hhBQkaVoDCmVEdq67z8/yCKL9uhC6gVLs4pY62T79qw=
+github.com/openshift/osd-network-verifier v0.4.1/go.mod h1:A89hA4CpxJjxx2qNbZVJmJc3MVa+bEWftKadBCJoxw4=
 github.com/pelletier/go-toml/v2 v2.0.8 h1:0ctb6s9mE31h0/lhu+J6OPmVeDxJn+kYnJc2jZR9tGQ=
 github.com/pelletier/go-toml/v2 v2.0.8/go.mod h1:vuYfssBdrU2XDZ9bYydBu6t+6a6PYNcZljzZR9VXg+4=
 github.com/perimeterx/marshmallow v1.1.4 h1:pZLDH9RjlLGGorbXhcaQLhfuV0pFMNfPO55FuFkxqLw=
