@@ -18,6 +18,7 @@ type Health struct {
 	client                client.Client
 	managementClusterName string
 	managementCluster     client.Client
+	hypershift            client.Client
 
 	cluster     *cmv1.Cluster
 	clusterId   string

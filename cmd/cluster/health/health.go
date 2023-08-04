@@ -278,7 +278,7 @@ func getNodepools(ctx context.Context) (*hypershift.NodePool, error) {
 
 	np := &hypershift.NodePool{}
 
-	err := h.managementCluster.List(ctx, np, client.ListOptions{Namespace: namespace})
+	err := h.cluster.Hypershift(ctx, np, client.ListOptions{Namespace: namespace})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to execute:\n%s", strings.TrimSpace(string(nodepool)))
 	}
