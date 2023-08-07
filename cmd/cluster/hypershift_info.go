@@ -9,10 +9,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/aws/aws-sdk-go/aws/arn"
-	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/service/elbv2"
-	"github.com/aws/aws-sdk-go/service/route53"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
+	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
+	"github.com/aws/aws-sdk-go-v2/service/route53"
+	route53types "github.com/aws/aws-sdk-go-v2/service/route53/types"
 	"github.com/olekukonko/tablewriter"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/osdCloud"
@@ -85,25 +88,25 @@ type hypershiftAWSClients struct {
 
 // Information related to the customer cluster
 type clusterInfo struct {
-	HostedZones       []*route53.HostedZone
-	ResourceRecords   []*route53.ResourceRecordSet
-	Endpoints         []*ec2.VpcEndpoint
-	Subnets           []*ec2.Subnet
-	SubnetRouteTables []*ec2.RouteTable
+	HostedZones       []route53types.HostedZone
+	ResourceRecords   []route53types.ResourceRecordSet
+	Endpoints         []ec2types.VpcEndpoint
+	Subnets           []ec2types.Subnet
+	SubnetRouteTables []ec2types.RouteTable
 }
 
 // Information related to the management cluster
 type managementClusterInfo struct {
-	EndpointConnections []*ec2.VpcEndpointConnection
-	EndpointServices    []*ec2.ServiceDetail
-	LoadBalancers       []*elbv2.LoadBalancer
+	EndpointConnections []ec2types.VpcEndpointConnection
+	EndpointServices    []ec2types.ServiceDetail
+	LoadBalancers       []elbv2types.LoadBalancer
 }
 
 // Information related to the privatelink account
 type privatelinkInfo struct {
-	HostedZones     []*route53.HostedZone
-	ResourceRecords []*route53.ResourceRecordSet
-	Endpoints       []*ec2.VpcEndpoint
+	HostedZones     []route53types.HostedZone
+	ResourceRecords []route53types.ResourceRecordSet
+	Endpoints       []ec2types.VpcEndpoint
 }
 
 // Aggregates all 3 AWS account informations in one
@@ -310,7 +313,7 @@ func (i *infoOptions) getAWSSessions(clusters *infoClusters) (*hypershiftAWSClie
 		return nil, err
 	}
 
-	privatelinkClient, err := aws.NewAwsClientWithInput(&aws.AwsClientInput{
+	privatelinkClient, err := aws.NewAwsClientWithInput(&aws.ClientInput{
 		AccessKeyID:     *assumedRoleCreds.AccessKeyId,
 		SecretAccessKey: *assumedRoleCreds.SecretAccessKey,
 		SessionToken:    *assumedRoleCreds.SessionToken,
@@ -326,8 +329,8 @@ func (i *infoOptions) getAWSSessions(clusters *infoClusters) (*hypershiftAWSClie
 	}, nil
 }
 
-func getHostedZones(client aws.Client, apiUrl string) ([]*route53.HostedZone, error) {
-	clusterHostedZones := make([]*route53.HostedZone, 0, 1)
+func getHostedZones(client aws.Client, apiUrl string) ([]route53types.HostedZone, error) {
+	clusterHostedZones := make([]route53types.HostedZone, 0, 1)
 	hostedZones, err := client.ListHostedZones(&route53.ListHostedZonesInput{})
 	if err != nil {
 		return nil, err
@@ -340,8 +343,8 @@ func getHostedZones(client aws.Client, apiUrl string) ([]*route53.HostedZone, er
 	return clusterHostedZones, nil
 }
 
-func getResourceRecordSets(client aws.Client, clusterHostedZones []*route53.HostedZone) ([]*route53.ResourceRecordSet, error) {
-	var rrs []*route53.ResourceRecordSet
+func getResourceRecordSets(client aws.Client, clusterHostedZones []route53types.HostedZone) ([]route53types.ResourceRecordSet, error) {
+	var rrs []route53types.ResourceRecordSet
 	for _, hostedZone := range clusterHostedZones {
 		input := route53.ListResourceRecordSetsInput{
 			HostedZoneId: hostedZone.Id,
@@ -355,14 +358,14 @@ func getResourceRecordSets(client aws.Client, clusterHostedZones []*route53.Host
 	return rrs, nil
 }
 
-func getVpcEndpointConnections(client aws.Client, services []*ec2.ServiceDetail) ([]*ec2.VpcEndpointConnection, error) {
-	serviceIds := make([]*string, 0, len(services))
+func getVpcEndpointConnections(client aws.Client, services []ec2types.ServiceDetail) ([]ec2types.VpcEndpointConnection, error) {
+	serviceIds := make([]string, 0, len(services))
 	for _, service := range services {
-		serviceIds = append(serviceIds, service.ServiceId)
+		serviceIds = append(serviceIds, *service.ServiceId)
 	}
 	key := "service-id"
 	input := ec2.DescribeVpcEndpointConnectionsInput{
-		Filters: []*ec2.Filter{
+		Filters: []ec2types.Filter{
 			{
 				Name:   &key,
 				Values: serviceIds,
@@ -375,12 +378,12 @@ func getVpcEndpointConnections(client aws.Client, services []*ec2.ServiceDetail)
 	return connections.VpcEndpointConnections, nil
 }
 
-func getVpcEndpoints(client aws.Client, clusterID, t, v string) ([]*ec2.VpcEndpoint, error) {
+func getVpcEndpoints(client aws.Client, clusterID, t, v string) ([]ec2types.VpcEndpoint, error) {
 	endpoints, err := client.DescribeVpcEndpoints(&ec2.DescribeVpcEndpointsInput{})
 	if err != nil {
 		return nil, err
 	}
-	clusterEndpoints := make([]*ec2.VpcEndpoint, 0)
+	clusterEndpoints := make([]ec2types.VpcEndpoint, 0)
 	for _, endpoint := range endpoints.VpcEndpoints {
 		for _, tag := range endpoint.Tags {
 			if *tag.Key == t && *tag.Value == v {
@@ -391,8 +394,8 @@ func getVpcEndpoints(client aws.Client, clusterID, t, v string) ([]*ec2.VpcEndpo
 	return clusterEndpoints, nil
 }
 
-func getVpcEndpointServices(client aws.Client, clusterID string) ([]*ec2.ServiceDetail, error) {
-	clusterEndpointConnections := make([]*ec2.ServiceDetail, 0, 1)
+func getVpcEndpointServices(client aws.Client, clusterID string) ([]ec2types.ServiceDetail, error) {
+	clusterEndpointConnections := make([]ec2types.ServiceDetail, 0, 1)
 	servicesInput := ec2.DescribeVpcEndpointServicesInput{}
 	services, err := client.DescribeVpcEndpointServices(&servicesInput)
 	if err != nil {
@@ -408,21 +411,21 @@ func getVpcEndpointServices(client aws.Client, clusterID string) ([]*ec2.Service
 	return clusterEndpointConnections, nil
 }
 
-func getLoadBalancers(client aws.Client, clusterID string) ([]*elbv2.LoadBalancer, error) {
+func getLoadBalancers(client aws.Client, clusterID string) ([]elbv2types.LoadBalancer, error) {
 	loadbalancerTag := "kubernetes.io/service-name"
-	loadbalancers, err := client.DescribeV2LoadBalancers(&elbv2.DescribeLoadBalancersInput{})
+	loadbalancers, err := client.DescribeV2LoadBalancers(&elasticloadbalancingv2.DescribeLoadBalancersInput{})
 	if err != nil {
 		return nil, err
 	}
-	clusterLoadbalancers := make([]*elbv2.LoadBalancer, 0, len(loadbalancers.LoadBalancers))
-	loadBalancerArns := make([]*string, 0, len(loadbalancers.LoadBalancers))
+	clusterLoadbalancers := make([]elbv2types.LoadBalancer, 0, len(loadbalancers.LoadBalancers))
+	loadBalancerArns := make([]string, 0, len(loadbalancers.LoadBalancers))
 	for _, lb := range loadbalancers.LoadBalancers {
 		if lb.LoadBalancerArn != nil {
-			loadBalancerArns = append(loadBalancerArns, lb.LoadBalancerArn)
+			loadBalancerArns = append(loadBalancerArns, *lb.LoadBalancerArn)
 		}
 	}
 	chunkSize := 20
-	var chunks [][]*string
+	var chunks [][]string
 	for i := 0; i < len(loadBalancerArns); i += chunkSize {
 		end := i + chunkSize
 		if end > len(loadBalancerArns) {
@@ -430,9 +433,9 @@ func getLoadBalancers(client aws.Client, clusterID string) ([]*elbv2.LoadBalance
 		}
 		chunks = append(chunks, loadBalancerArns[i:end])
 	}
-	var tagsOutput []*elbv2.DescribeTagsOutput
+	var tagsOutput []*elasticloadbalancingv2.DescribeTagsOutput
 	for _, chunk := range chunks {
-		tagsInput := &elbv2.DescribeTagsInput{
+		tagsInput := &elasticloadbalancingv2.DescribeTagsInput{
 			ResourceArns: chunk,
 		}
 		loadBalancerTags, err := client.DescribeV2Tags(tagsInput)
@@ -555,10 +558,10 @@ func gatherPrivatelinkClusterInfo(client aws.Client, cluster *v1.Cluster, c chan
 	}
 }
 
-func getSubnets(client aws.Client, subnetIds []string) ([]*ec2.Subnet, error) {
-	subnetFilter := make([]*string, 0, len(subnetIds))
+func getSubnets(client aws.Client, subnetIds []string) ([]ec2types.Subnet, error) {
+	subnetFilter := make([]string, 0, len(subnetIds))
 	for _, subnet := range subnetIds {
-		subnetFilter = append(subnetFilter, &subnet)
+		subnetFilter = append(subnetFilter, subnet)
 	}
 	input := ec2.DescribeSubnetsInput{
 		SubnetIds: subnetFilter,
@@ -640,15 +643,15 @@ func gatherCustomerClusterInfo(client aws.Client, cluster *v1.Cluster, c chan<- 
 	}
 }
 
-func getRouteTables(client aws.Client, subnets []string) ([]*ec2.RouteTable, error) {
-	routeTables := make([]*ec2.RouteTable, 0)
+func getRouteTables(client aws.Client, subnets []string) ([]ec2types.RouteTable, error) {
+	routeTables := make([]ec2types.RouteTable, 0)
 	filterKey := "association.subnet-id"
 	for _, subnet := range subnets {
 		input := ec2.DescribeRouteTablesInput{
-			Filters: []*ec2.Filter{
+			Filters: []ec2types.Filter{
 				{
 					Name:   &filterKey,
-					Values: []*string{&subnet},
+					Values: []string{subnet},
 				},
 			},
 		}
@@ -669,7 +672,7 @@ func render(ainfo *aggregateClusterInfo) {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Hostedzone ID", "Hostedzone Name", "Private"})
 	for _, hz := range ainfo.privatelinkInfo.HostedZones {
-		table.Append([]string{*hz.Id, *hz.Name, strconv.FormatBool(*hz.Config.PrivateZone)})
+		table.Append([]string{*hz.Id, *hz.Name, strconv.FormatBool(hz.Config.PrivateZone)})
 	}
 	table.Render()
 
@@ -696,7 +699,8 @@ func render(ainfo *aggregateClusterInfo) {
 	table.SetAutoMergeCells(true)
 	for _, svc := range ainfo.managementClusterInfo.EndpointServices {
 		for _, dnsname := range svc.BaseEndpointDnsNames {
-			table.Append([]string{*svc.ServiceName, *svc.ServiceId, *svc.ServiceType[0].ServiceType, *dnsname, *svc.Owner})
+			servicetype := string(svc.ServiceType[0].ServiceType)
+			table.Append([]string{*svc.ServiceName, *svc.ServiceId, servicetype, dnsname, *svc.Owner})
 		}
 	}
 	table.Render()
@@ -705,7 +709,9 @@ func render(ainfo *aggregateClusterInfo) {
 	table.SetHeader([]string{"Connection ID", "Endpoint ID", "Endpoint State", "Endpoint Owner", "AddressType", "DNS", "LB"})
 	for _, conn := range ainfo.managementClusterInfo.EndpointConnections {
 		for _, dns := range conn.DnsEntries {
-			table.Append([]string{*conn.VpcEndpointConnectionId, *conn.VpcEndpointId, *conn.VpcEndpointState, *conn.VpcEndpointOwner, *conn.IpAddressType, *dns.DnsName, *conn.NetworkLoadBalancerArns[0]})
+			endpointstate := string(conn.VpcEndpointState)
+			ipaddresstype := string(conn.IpAddressType)
+			table.Append([]string{*conn.VpcEndpointConnectionId, *conn.VpcEndpointId, endpointstate, *conn.VpcEndpointOwner, ipaddresstype, *dns.DnsName, conn.NetworkLoadBalancerArns[0]})
 		}
 	}
 	table.Render()
@@ -714,7 +720,7 @@ func render(ainfo *aggregateClusterInfo) {
 	table = tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Hostedzone ID", "Hostedzone Name", "Private"})
 	for _, hz := range ainfo.clusterInfo.HostedZones {
-		table.Append([]string{*hz.Id, *hz.Name, strconv.FormatBool(*hz.Config.PrivateZone)})
+		table.Append([]string{*hz.Id, *hz.Name, strconv.FormatBool(hz.Config.PrivateZone)})
 	}
 	table.Render()
 
@@ -731,7 +737,9 @@ func render(ainfo *aggregateClusterInfo) {
 	table = tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Endpoint ID", "Type", "VPC", "Service", "State"})
 	for _, ep := range ainfo.clusterInfo.Endpoints {
-		table.Append([]string{*ep.VpcEndpointId, *ep.VpcEndpointType, *ep.VpcEndpointType, *ep.VpcId, *ep.ServiceName, *ep.State})
+		eptype := string(ep.VpcEndpointType)
+		state := string(ep.State)
+		table.Append([]string{*ep.VpcEndpointId, eptype, *ep.VpcId, *ep.ServiceName, state})
 	}
 	table.Render()
 

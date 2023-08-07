@@ -18,15 +18,15 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/costexplorer"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancing"
+	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/organizations"
 	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
+	"github.com/aws/aws-sdk-go-v2/service/route53"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/servicequotas"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
-	"github.com/aws/aws-sdk-go/service/elb"
-	"github.com/aws/aws-sdk-go/service/elbv2"
-	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/spf13/viper"
 )
 
@@ -128,10 +128,10 @@ type Client interface {
 	ListResourceRecordSets(input *route53.ListResourceRecordSetsInput) (*route53.ListResourceRecordSetsOutput, error)
 
 	// ELB
-	DescribeLoadBalancers(input *elb.DescribeLoadBalancersInput) (*elb.DescribeLoadBalancersOutput, error)
-	DescribeTags(input *elb.DescribeTagsInput) (*elb.DescribeTagsOutput, error)
-	DescribeV2LoadBalancers(input *elbv2.DescribeLoadBalancersInput) (*elbv2.DescribeLoadBalancersOutput, error)
-	DescribeV2Tags(input *elbv2.DescribeTagsInput) (*elbv2.DescribeTagsOutput, error)
+	DescribeLoadBalancers(input *elasticloadbalancing.DescribeLoadBalancersInput) (*elasticloadbalancing.DescribeLoadBalancersOutput, error)
+	DescribeTags(input *elasticloadbalancing.DescribeTagsInput) (*elasticloadbalancing.DescribeTagsOutput, error)
+	DescribeV2LoadBalancers(input *elasticloadbalancingv2.DescribeLoadBalancersInput) (*elasticloadbalancingv2.DescribeLoadBalancersOutput, error)
+	DescribeV2Tags(input *elasticloadbalancingv2.DescribeTagsInput) (*elasticloadbalancingv2.DescribeTagsOutput, error)
 }
 
 type AwsClient struct {
@@ -144,6 +144,9 @@ type AwsClient struct {
 	resClient           resourcegroupstaggingapi.Client
 	ceClient            costexplorer.Client
 	cloudTrailClient    cloudtrail.Client
+	route53Client       route53.Client
+	elbClient           elasticloadbalancing.Client
+	elbv2Client         elasticloadbalancingv2.Client
 }
 
 func addProxyConfigToSessionOptConfig(config *aws.Config) {
@@ -217,6 +220,9 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 		ceClient:            *costexplorer.NewFromConfig(*cfg),
 		resClient:           *resourcegroupstaggingapi.NewFromConfig(*cfg),
 		cloudTrailClient:    *cloudtrail.NewFromConfig(*cfg),
+		route53Client:       *route53.NewFromConfig(*cfg),
+		elbClient:           *elasticloadbalancing.NewFromConfig(*cfg),
+		elbv2Client:         *elasticloadbalancingv2.NewFromConfig(*cfg),
 	}
 
 	// Validate the creds
@@ -249,6 +255,9 @@ func NewAwsClientWithInput(input *ClientInput) (Client, error) {
 		ceClient:            *costexplorer.NewFromConfig(cfg),
 		resClient:           *resourcegroupstaggingapi.NewFromConfig(cfg),
 		cloudTrailClient:    *cloudtrail.NewFromConfig(cfg),
+		route53Client:       *route53.NewFromConfig(cfg),
+		elbClient:           *elasticloadbalancing.NewFromConfig(cfg),
+		elbv2Client:         *elasticloadbalancingv2.NewFromConfig(cfg),
 	}, nil
 }
 
@@ -475,15 +484,15 @@ func (c *AwsClient) DescribeVpcs(input *ec2.DescribeVpcsInput) (*ec2.DescribeVpc
 }
 
 func (c *AwsClient) DescribeVpcEndpoints(input *ec2.DescribeVpcEndpointsInput) (*ec2.DescribeVpcEndpointsOutput, error) {
-	return c.ec2Client.DescribeVpcEndpoints(input)
+	return c.ec2Client.DescribeVpcEndpoints(context.TODO(), input)
 }
 
 func (c *AwsClient) DescribeVpcEndpointServices(input *ec2.DescribeVpcEndpointServicesInput) (*ec2.DescribeVpcEndpointServicesOutput, error) {
-	return c.ec2Client.DescribeVpcEndpointServices(input)
+	return c.ec2Client.DescribeVpcEndpointServices(context.TODO(), input)
 }
 
 func (c *AwsClient) DescribeVpcEndpointConnections(input *ec2.DescribeVpcEndpointConnectionsInput) (*ec2.DescribeVpcEndpointConnectionsOutput, error) {
-	return c.ec2Client.DescribeVpcEndpointConnections(input)
+	return c.ec2Client.DescribeVpcEndpointConnections(context.TODO(), input)
 }
 
 func (c *AwsClient) StopInstances(input *ec2.StopInstancesInput) (*ec2.StopInstancesOutput, error) {
@@ -503,25 +512,25 @@ func (c *AwsClient) LookupEvents(input *cloudtrail.LookupEventsInput) (*cloudtra
 }
 
 func (c *AwsClient) ListHostedZones(input *route53.ListHostedZonesInput) (*route53.ListHostedZonesOutput, error) {
-	return c.route53Client.ListHostedZones(input)
+	return c.route53Client.ListHostedZones(context.TODO(), input)
 }
 
 func (c *AwsClient) ListResourceRecordSets(input *route53.ListResourceRecordSetsInput) (*route53.ListResourceRecordSetsOutput, error) {
-	return c.route53Client.ListResourceRecordSets(input)
+	return c.route53Client.ListResourceRecordSets(context.TODO(), input)
 }
 
-func (c *AwsClient) DescribeLoadBalancers(input *elb.DescribeLoadBalancersInput) (*elb.DescribeLoadBalancersOutput, error) {
-	return c.elbClient.DescribeLoadBalancers(input)
+func (c *AwsClient) DescribeLoadBalancers(input *elasticloadbalancing.DescribeLoadBalancersInput) (*elasticloadbalancing.DescribeLoadBalancersOutput, error) {
+	return c.elbClient.DescribeLoadBalancers(context.TODO(), input)
 }
 
-func (c *AwsClient) DescribeTags(input *elb.DescribeTagsInput) (*elb.DescribeTagsOutput, error) {
-	return c.elbClient.DescribeTags(input)
+func (c *AwsClient) DescribeTags(input *elasticloadbalancing.DescribeTagsInput) (*elasticloadbalancing.DescribeTagsOutput, error) {
+	return c.elbClient.DescribeTags(context.TODO(), input)
 }
 
-func (c *AwsClient) DescribeV2LoadBalancers(input *elbv2.DescribeLoadBalancersInput) (*elbv2.DescribeLoadBalancersOutput, error) {
-	return c.elbv2Client.DescribeLoadBalancers(input)
+func (c *AwsClient) DescribeV2LoadBalancers(input *elasticloadbalancingv2.DescribeLoadBalancersInput) (*elasticloadbalancingv2.DescribeLoadBalancersOutput, error) {
+	return c.elbv2Client.DescribeLoadBalancers(context.TODO(), input)
 }
 
-func (c *AwsClient) DescribeV2Tags(input *elbv2.DescribeTagsInput) (*elbv2.DescribeTagsOutput, error) {
-	return c.elbv2Client.DescribeTags(input)
+func (c *AwsClient) DescribeV2Tags(input *elasticloadbalancingv2.DescribeTagsInput) (*elasticloadbalancingv2.DescribeTagsOutput, error) {
+	return c.elbv2Client.DescribeTags(context.TODO(), input)
 }

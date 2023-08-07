@@ -36,7 +36,7 @@ func createGraphViz(ai *aggregateClusterInfo) map[Node][]Node {
 	var mgmntService string
 	for _, svcs := range ai.managementClusterInfo.EndpointServices {
 		for _, dns := range svcs.BaseEndpointDnsNames {
-			if strings.Contains(privatelinkVpce, *dns) {
+			if strings.Contains(privatelinkVpce, dns) {
 				mgmntService = *svcs.ServiceId
 			}
 		}
@@ -61,7 +61,7 @@ func createGraphViz(ai *aggregateClusterInfo) map[Node][]Node {
 		connections[mgmntsvc] = append(connections[mgmntsvc], node)
 		for _, lb := range conn.NetworkLoadBalancerArns {
 			lb := Node{
-				Id:                    *lb,
+				Id:                    lb,
 				AdditionalInformation: "Load Balancer (M)",
 				Subgraph:              "management",
 			}

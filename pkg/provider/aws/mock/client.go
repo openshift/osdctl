@@ -10,15 +10,15 @@ import (
 	cloudtrail "github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	costexplorer "github.com/aws/aws-sdk-go-v2/service/costexplorer"
 	ec2 "github.com/aws/aws-sdk-go-v2/service/ec2"
+	elasticloadbalancing "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancing"
+	elasticloadbalancingv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	iam "github.com/aws/aws-sdk-go-v2/service/iam"
 	organizations "github.com/aws/aws-sdk-go-v2/service/organizations"
 	resourcegroupstaggingapi "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
+	route53 "github.com/aws/aws-sdk-go-v2/service/route53"
 	s3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	servicequotas "github.com/aws/aws-sdk-go-v2/service/servicequotas"
 	sts "github.com/aws/aws-sdk-go-v2/service/sts"
-	"github.com/aws/aws-sdk-go/service/elb"
-	"github.com/aws/aws-sdk-go/service/elbv2"
-	"github.com/aws/aws-sdk-go/service/route53"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -346,10 +346,10 @@ func (mr *MockClientMockRecorder) DescribeInstances(arg0 interface{}) *gomock.Ca
 }
 
 // DescribeLoadBalancers mocks base method.
-func (m *MockClient) DescribeLoadBalancers(input *elb.DescribeLoadBalancersInput) (*elb.DescribeLoadBalancersOutput, error) {
+func (m *MockClient) DescribeLoadBalancers(input *elasticloadbalancing.DescribeLoadBalancersInput) (*elasticloadbalancing.DescribeLoadBalancersOutput, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DescribeLoadBalancers", input)
-	ret0, _ := ret[0].(*elb.DescribeLoadBalancersOutput)
+	ret0, _ := ret[0].(*elasticloadbalancing.DescribeLoadBalancersOutput)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -406,10 +406,10 @@ func (mr *MockClientMockRecorder) DescribeSubnets(arg0 interface{}) *gomock.Call
 }
 
 // DescribeTags mocks base method.
-func (m *MockClient) DescribeTags(input *elb.DescribeTagsInput) (*elb.DescribeTagsOutput, error) {
+func (m *MockClient) DescribeTags(input *elasticloadbalancing.DescribeTagsInput) (*elasticloadbalancing.DescribeTagsOutput, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DescribeTags", input)
-	ret0, _ := ret[0].(*elb.DescribeTagsOutput)
+	ret0, _ := ret[0].(*elasticloadbalancing.DescribeTagsOutput)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -421,10 +421,10 @@ func (mr *MockClientMockRecorder) DescribeTags(input interface{}) *gomock.Call {
 }
 
 // DescribeV2LoadBalancers mocks base method.
-func (m *MockClient) DescribeV2LoadBalancers(input *elbv2.DescribeLoadBalancersInput) (*elbv2.DescribeLoadBalancersOutput, error) {
+func (m *MockClient) DescribeV2LoadBalancers(input *elasticloadbalancingv2.DescribeLoadBalancersInput) (*elasticloadbalancingv2.DescribeLoadBalancersOutput, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DescribeV2LoadBalancers", input)
-	ret0, _ := ret[0].(*elbv2.DescribeLoadBalancersOutput)
+	ret0, _ := ret[0].(*elasticloadbalancingv2.DescribeLoadBalancersOutput)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -436,10 +436,10 @@ func (mr *MockClientMockRecorder) DescribeV2LoadBalancers(input interface{}) *go
 }
 
 // DescribeV2Tags mocks base method.
-func (m *MockClient) DescribeV2Tags(input *elbv2.DescribeTagsInput) (*elbv2.DescribeTagsOutput, error) {
+func (m *MockClient) DescribeV2Tags(input *elasticloadbalancingv2.DescribeTagsInput) (*elasticloadbalancingv2.DescribeTagsOutput, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DescribeV2Tags", input)
-	ret0, _ := ret[0].(*elbv2.DescribeTagsOutput)
+	ret0, _ := ret[0].(*elasticloadbalancingv2.DescribeTagsOutput)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
