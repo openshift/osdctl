@@ -17,23 +17,28 @@ import (
 const ClusterServiceClusterSearch = "id = '%s' or name = '%s' or external_id = '%s'"
 
 const (
-	productionURL  = "https://api.openshift.com"
-	stagingURL     = "https://api.stage.openshift.com"
-	integrationURL = "https://api.integration.openshift.com"
+	productionURL    = "https://api.openshift.com"
+	stagingURL       = "https://api.stage.openshift.com"
+	integrationURL   = "https://api.integration.openshift.com"
+	productionGovURL = "https://api.openshiftusgov.com"
 )
 
 var urlAliases = map[string]string{
-	"production":   productionURL,
-	"prod":         productionURL,
-	"prd":          productionURL,
-	productionURL:  productionURL,
-	"staging":      stagingURL,
-	"stage":        stagingURL,
-	"stg":          stagingURL,
-	stagingURL:     stagingURL,
-	"integration":  integrationURL,
-	"int":          integrationURL,
-	integrationURL: integrationURL,
+	"production":     productionURL,
+	"prod":           productionURL,
+	"prd":            productionURL,
+	productionURL:    productionURL,
+	"staging":        stagingURL,
+	"stage":          stagingURL,
+	"stg":            stagingURL,
+	stagingURL:       stagingURL,
+	"integration":    integrationURL,
+	"int":            integrationURL,
+	integrationURL:   integrationURL,
+	"productiongov":  productionGovURL,
+	"prodgov":        productionGovURL,
+	"prdgov":         productionGovURL,
+	productionGovURL: productionGovURL,
 }
 
 // Config describes the OCM client configuration
