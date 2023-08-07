@@ -18,6 +18,7 @@ import (
 	route53types "github.com/aws/aws-sdk-go-v2/service/route53/types"
 	"github.com/olekukonko/tablewriter"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	"github.com/openshift/osdctl/pkg/graphviz"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -39,10 +40,7 @@ func NewCmdHypershiftInfo(streams genericclioptions.IOStreams) *cobra.Command {
 		Long: `This command aggregates AWS objects from the cluster, management cluster and privatelink for hypershift cluster.
 It attempts to render the relationships as graphviz if that output format is chosen or will simply print the output as tables.`,
 		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 1 {
-				return errors.New("requires a clusterid argument")
-			}
-			return nil
+			return cobra.ExactArgs(1)(cmd, args)
 		},
 		ArgAliases:        []string{"clusterid"},
 		DisableAutoGenTag: true,
@@ -158,6 +156,7 @@ func baseApiUrl(c *v1.Cluster) string {
 func (i *infoOptions) run() error {
 	if i.verbose {
 		verbose = true
+
 	}
 	verboseLog("Getting hypershift info for cluster: ", i.clusterID)
 	clusters, err := i.getClusters()
@@ -214,11 +213,97 @@ func (i *infoOptions) run() error {
 		render(&ai)
 	case "graphviz":
 		connections := createGraphViz(&ai)
-		renderGraphViz(connections)
+		verboseLog("Generating GraphViz Input - please run this: 'echo <output> | dot -Tpng -o/tmp/example.png'")
+		graphviz.RenderGraphViz(connections)
 	default:
 		fmt.Println("No valid output format selected")
 	}
 	return nil
+}
+
+func createGraphViz(ai *aggregateClusterInfo) map[graphviz.Node][]graphviz.Node {
+	connections := make(map[graphviz.Node][]graphviz.Node)
+	for _, hz := range ai.privatelinkInfo.HostedZones {
+		hzn := graphviz.Node{
+			Id:                    *hz.Id,
+			AdditionalInformation: fmt.Sprintf("Hosted Zone (P)\\n%s", *hz.Name),
+			Subgraph:              "privatelink",
+		}
+		connections[hzn] = make([]graphviz.Node, 0)
+	}
+	var privatelinkVpce string
+	for _, rrs := range ai.privatelinkInfo.ResourceRecords {
+		for _, rr := range rrs.ResourceRecords {
+			if strings.Contains(*rr.Value, "vpce") {
+				privatelinkVpce = *rr.Value
+			}
+		}
+	}
+	var mgmntService string
+	for _, svcs := range ai.managementClusterInfo.EndpointServices {
+		for _, dns := range svcs.BaseEndpointDnsNames {
+			if strings.Contains(privatelinkVpce, dns) {
+				mgmntService = *svcs.ServiceId
+			}
+		}
+	}
+	plvpce := graphviz.Node{
+		Id:                    privatelinkVpce,
+		AdditionalInformation: "VPC Endpoint (P)",
+		Subgraph:              "privatelink",
+	}
+	mgmntsvc := graphviz.Node{
+		Id:                    mgmntService,
+		AdditionalInformation: "Endpoint Service (M)",
+		Subgraph:              "management",
+	}
+	connections[plvpce] = append(connections[plvpce], mgmntsvc)
+	for _, conn := range ai.managementClusterInfo.EndpointConnections {
+		node := graphviz.Node{
+			Id:                    *conn.VpcEndpointConnectionId,
+			AdditionalInformation: "Endpoint Connection (M)",
+			Subgraph:              "management",
+		}
+		connections[mgmntsvc] = append(connections[mgmntsvc], node)
+		for _, lb := range conn.NetworkLoadBalancerArns {
+			lb := graphviz.Node{
+				Id:                    lb,
+				AdditionalInformation: "Load Balancer (M)",
+				Subgraph:              "management",
+			}
+			connections[node] = append(connections[node], lb)
+		}
+	}
+	for _, hz := range ai.clusterInfo.HostedZones {
+		hzn := graphviz.Node{
+			Id:                    *hz.Id,
+			AdditionalInformation: fmt.Sprintf("Hosted Zone (C)\\n%s", *hz.Name),
+			Subgraph:              "customer",
+		}
+		connections[hzn] = make([]graphviz.Node, 0)
+	}
+	for _, rrs := range ai.clusterInfo.ResourceRecords {
+		for _, hz := range ai.privatelinkInfo.HostedZones {
+			var hzNode graphviz.Node
+			for connection := range connections {
+				if connection.Id == *hz.Id {
+					hzNode = connection
+				}
+			}
+			for _, rr := range rrs.ResourceRecords {
+				if *rr.Value+"." == *hz.Name {
+					node := graphviz.Node{
+						Id:                    *rr.Value,
+						AdditionalInformation: "Resource Record (C)",
+						Subgraph:              "customer",
+					}
+					connections[node] = make([]graphviz.Node, 0)
+					connections[hzNode] = append(connections[hzNode], node)
+				}
+			}
+		}
+	}
+	return connections
 }
 
 func (i *infoOptions) getClusters() (*infoClusters, error) {
