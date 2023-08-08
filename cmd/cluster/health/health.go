@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	hypershift "github.com/openshift/hypershift/api/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/osdCloud"
@@ -274,39 +275,17 @@ func getNodepools(ctx context.Context) (*hypershift.NodePool, error) {
 
 	namespace := "ocm-production-" + h.clusterId
 
+	metav1.Kind(namespace)
+
 	//("oc get nodepool -n ocm-production-%v", clusterID)
 
 	np := &hypershift.NodePool{}
 
-	err := h.cluster.Hypershift(ctx, np, client.ListOptions{Namespace: namespace})
+	err := h.hypershift.Get(ctx, client.ObjectKey{Namespace: namespace}, np)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to execute:\n%s", strings.TrimSpace(string(nodepool)))
+		return nil, err
 	}
-	return nodepool, nil
+
+	return np, nil
 
 }
-
-/*
-func getPods(environment string, clusterID string, clusterName string) ([]byte, error) {
-
-	get_po := fmt.Sprintf("oc get po -n ocm-%v-%v-%v| grep -v \"Running\\|Completed\" ", environment, clusterID, clusterName)
-
- 	pods, err := exec.Command("bash", "-c", get_po).CombinedOutput()
-
-	if err != nil {
-		return nil, fmt.Errorf("Failed to execute:\n%s", strings.TrimSpace(string(pods)))
-	}
-	return pods, err
-}
- func getKlusterletPods(clusterID string) ([]byte, error) {
-
- 	get_po := fmt.Sprintf("oc get po -n klusterlet-%v", clusterID)
-
-	pods, err := exec.Command("bash", "-c", get_po).CombinedOutput()
-
- 	if err != nil {
-		return nil, fmt.Errorf("Failed to execute:\n%s", strings.TrimSpace(string(pods)))
-	}
-	return pods, err
- }
-*/
