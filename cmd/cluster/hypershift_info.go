@@ -415,15 +415,26 @@ func (i *infoOptions) getAWSSessions(clusters *infoClusters) (*hypershiftAWSClie
 }
 
 func getHostedZones(client aws.Client, apiUrl string) ([]route53types.HostedZone, error) {
+	verboseLog(fmt.Sprintf("Looking for hostedzones with apiURL: %s", apiUrl))
 	clusterHostedZones := make([]route53types.HostedZone, 0, 1)
-	hostedZones, err := client.ListHostedZones(&route53.ListHostedZonesInput{})
-	if err != nil {
-		return nil, err
-	}
-	for _, hz := range hostedZones.HostedZones {
-		if strings.Contains(*hz.Name, apiUrl) {
-			clusterHostedZones = append(clusterHostedZones, hz)
+	var nextMarker *string
+	for {
+		hostedZones, err := client.ListHostedZones(&route53.ListHostedZonesInput{
+			Marker: nextMarker,
+		})
+		if err != nil {
+			return nil, err
 		}
+		for _, hz := range hostedZones.HostedZones {
+			if strings.Contains(*hz.Name, apiUrl) {
+				clusterHostedZones = append(clusterHostedZones, hz)
+			}
+		}
+		if hostedZones.NextMarker == nil {
+			break
+		}
+		verboseLog("Paginating HostedZones")
+		nextMarker = hostedZones.NextMarker
 	}
 	return clusterHostedZones, nil
 }
