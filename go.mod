@@ -6,15 +6,18 @@ require (
 	cloud.google.com/go/compute v1.19.3
 	github.com/PagerDuty/go-pagerduty v1.5.1
 	github.com/andygrunwald/go-jira v1.16.0
-	github.com/aws/aws-sdk-go-v2 v1.19.0
+	github.com/aws/aws-sdk-go-v2 v1.20.0
 	github.com/aws/aws-sdk-go-v2/config v1.18.25
 	github.com/aws/aws-sdk-go-v2/credentials v1.13.24
 	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.27.2
 	github.com/aws/aws-sdk-go-v2/service/costexplorer v1.25.13
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.98.0
+	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancing v1.15.14
+	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.20.1
 	github.com/aws/aws-sdk-go-v2/service/iam v1.21.1
 	github.com/aws/aws-sdk-go-v2/service/organizations v1.19.9
 	github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.14.15
+	github.com/aws/aws-sdk-go-v2/service/route53 v1.28.6
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.37.0
 	github.com/aws/aws-sdk-go-v2/service/servicequotas v1.14.15
 	github.com/aws/aws-sdk-go-v2/service/sts v1.19.0
@@ -22,6 +25,7 @@ require (
 	github.com/deckarep/golang-set v1.7.1
 	github.com/fatih/color v1.13.0
 	github.com/golang/mock v1.6.0
+	github.com/olekukonko/tablewriter v0.0.5
 	github.com/onsi/gomega v1.27.7
 	github.com/openshift-online/ocm-cli v0.1.66
 	github.com/openshift-online/ocm-sdk-go v0.1.344
@@ -61,8 +65,8 @@ require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.10 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.13.3 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.35 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.29 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.37 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.31 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.34 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.0.27 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.9.11 // indirect
@@ -71,7 +75,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.14.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.12.10 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.14.10 // indirect
-	github.com/aws/smithy-go v1.13.5 // indirect
+	github.com/aws/smithy-go v1.14.0 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
@@ -138,7 +142,6 @@ require (
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nwidger/jsoncolor v0.3.1 // indirect
-	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/openshift/backplane-api v0.0.0-20230203044845-10f2b341bf54 // indirect
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
