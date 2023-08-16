@@ -685,6 +685,20 @@ func gatherCustomerClusterInfo(client aws.Client, cluster *v1.Cluster, c chan<- 
 	if len(clusterHostedZones) == 0 {
 		verboseLog("Could not find matching hosted zones in the cluster - this is likely a problem.")
 	}
+	// Get the private HostedZone used to communicate from cluster -> apiserver
+	privateZoneName := fmt.Sprintf("%s.hypershift.local", cluster.Name())
+	privateHostedZones, err := getHostedZones(client, privateZoneName)
+	if err != nil {
+		verboseLog("Could not find matching hosted zones in the cluster - this is likely a problem.")
+		c <- ChanReturn[clusterInfo]{
+			Value: clusterInfo{},
+			Error: err,
+		}
+	}
+	if len(privateHostedZones) == 0 {
+		verboseLog("Could not find matching private hosted zones in the cluster - this is likely a problem.")
+	}
+	clusterHostedZones = append(clusterHostedZones, privateHostedZones...)
 	// Get ResourceSets in the HostedZones
 	rrs, err := getResourceRecordSets(client, clusterHostedZones)
 	if err != nil {
