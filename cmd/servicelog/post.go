@@ -201,7 +201,7 @@ func (o *PostCmdOptions) Run() error {
 			continue
 		}
 
-		response, err := sendRequest(request)
+		response, err := ocmutils.SendRequest(request)
 		if err != nil {
 			o.failedClusters[cluster.ExternalID()] = err.Error()
 			continue

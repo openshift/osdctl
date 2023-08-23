@@ -29,6 +29,7 @@ func NewCmdOrg() *cobra.Command {
 	orgCmd.AddCommand(clustersCmd)
 	orgCmd.AddCommand(customersCmd)
 	orgCmd.AddCommand(awsAccountsCmd)
+	orgCmd.AddCommand(contextCmd)
 
 	return orgCmd
 }

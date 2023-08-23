@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
+	"github.com/openshift/osdctl/cmd/servicelog"
 	"os"
 	"os/exec"
 	"sort"
@@ -17,27 +17,20 @@ import (
 	"github.com/andygrunwald/go-jira"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
-	"github.com/openshift-online/ocm-cli/pkg/dump"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	sl "github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 const (
-	JiraTokenConfigKey            = "jira_token"
 	JiraBaseURL                   = "https://issues.redhat.com"
 	JiraTokenRegistrationPath     = "/secure/ViewProfile.jspa?selectedTab=com.atlassian.pats.pats-plugin:jira-user-personal-access-tokens"
-	PagerDutyOauthTokenConfigKey  = "pd_oauth_token"
-	PagerDutyUserTokenConfigKey   = "pd_user_token"
 	PagerDutyTokenRegistrationUrl = "https://martindstone.github.io/PDOAuth/"
-	PagerDutyTeamIDs              = "team_ids"
 	ClassicSplunkURL              = "https://osdsecuritylogs.splunkcloud.com/en-US/app/search/search?q=search%%20index%%3D%%22%s%%22%%20clusterid%%3D%%22%s%%22\n\n"
 	HCPSplunkURL                  = "https://osdsecuritylogs.splunkcloud.com/en-US/app/search/search?q=search%%20index%%3D%%22%s%%22%%20annotations.managed.openshift.io%%2Fhosted-cluster-id%%3Docm-%s-%s-%s\n\n"
 	shortOutputConfigValue        = "short"
@@ -212,15 +205,15 @@ func (o *contextOptions) printLongOutput(data *contextData) {
 
 	printClusterInfo(o.clusterID)
 
-	printSupportStatus(data.LimitedSupportReasons)
+	utils.PrintLimitedSupportReasons(data.LimitedSupportReasons)
 	fmt.Println()
 	printJIRASupportExceptions(data.SupportExceptions)
 	fmt.Println()
-	printServiceLogs(data.ServiceLogs, o.verbose, o.days)
+	utils.PrintServiceLogs(data.ServiceLogs, o.verbose, o.days)
 	fmt.Println()
-	printJiraIssues(data.JiraIssues)
+	utils.PrintJiraIssues(data.JiraIssues)
 	fmt.Println()
-	printCurrentPDAlerts(data.PdAlerts, data.pdServiceID)
+	utils.PrintPDAlerts(data.PdAlerts, data.pdServiceID)
 	fmt.Println()
 
 	if o.full {
@@ -357,7 +350,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		if o.verbose {
 			fmt.Fprintln(os.Stderr, "Getting Service Logs...")
 		}
-		data.ServiceLogs, err = GetServiceLogsSince(cluster.ID(), o.days)
+		data.ServiceLogs, err = servicelog.GetServiceLogsSince(cluster.ID(), o.days)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("Error while getting the service logs: %v", err))
 		}
@@ -368,7 +361,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		if o.verbose {
 			fmt.Fprintln(os.Stderr, "Getting Jira Issues...")
 		}
-		data.JiraIssues, err = GetJiraIssuesForCluster(o.clusterID, o.externalClusterID)
+		data.JiraIssues, err = utils.GetJiraIssuesForCluster(o.clusterID, o.externalClusterID)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("Error while getting the open jira tickets: %v", err))
 		}
@@ -379,7 +372,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		if o.verbose {
 			fmt.Fprintln(os.Stderr, "Getting Support Exceptions...")
 		}
-		data.SupportExceptions, err = GetJiraSupportExceptionsForOrg(o.organizationID)
+		data.SupportExceptions, err = utils.GetJiraSupportExceptionsForOrg(o.organizationID)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("Error while getting support exceptions: %v", err))
 		}
@@ -392,7 +385,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		if o.verbose {
 			fmt.Fprintln(os.Stderr, "Getting PagerDuty Service...")
 		}
-		data.pdServiceID, err = GetPDServiceID(o.baseDomain, o.usertoken, o.oauthtoken, o.team_ids)
+		data.pdServiceID, err = utils.GetPDServiceIDs(o.baseDomain, o.usertoken, o.oauthtoken, o.team_ids)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("Error getting PD Service ID: %v", err))
 		}
@@ -400,7 +393,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		if o.verbose {
 			fmt.Fprintln(os.Stderr, "Getting current PagerDuty Alerts...")
 		}
-		data.PdAlerts, err = GetCurrentPDAlertsForCluster(data.pdServiceID, o.usertoken, o.oauthtoken)
+		data.PdAlerts, err = utils.GetCurrentPDAlertsForCluster(data.pdServiceID, o.usertoken, o.oauthtoken)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("Error while getting current PD Alerts: %v", err))
 		}
@@ -458,52 +451,15 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	return data, errors
 }
 
-func GetCurrentPDAlertsForCluster(pdServiceIDs []string, pdUsertoken string, pdAuthToken string) (map[string][]pd.Incident, error) {
-	pdClient, err := GetPagerDutyClient(pdUsertoken, pdAuthToken)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error getting pd client: ", err.Error())
-		return nil, err
-	}
-	incidents := map[string][]pd.Incident{}
-
-	var incidentLimit uint = 25
-	var incidentListOffset uint = 0
-	for _, pdServiceID := range pdServiceIDs {
-		for {
-			listIncidentsResponse, err := pdClient.ListIncidentsWithContext(
-				context.TODO(),
-				pd.ListIncidentsOptions{
-					ServiceIDs: []string{pdServiceID},
-					Statuses:   []string{"triggered", "acknowledged"},
-					SortBy:     "urgency:DESC",
-					Limit:      incidentLimit,
-					Offset:     incidentListOffset,
-				},
-			)
-			if err != nil {
-				return nil, err
-			}
-
-			incidents[pdServiceID] = append(incidents[pdServiceID], listIncidentsResponse.Incidents...)
-
-			if !listIncidentsResponse.More {
-				break
-			}
-			incidentListOffset += incidentLimit
-		}
-	}
-	return incidents, nil
-}
-
 func GetHistoricalPDAlertsForCluster(pdServiceIDs []string, pdUsertoken string, pdAuthToken string) (map[string][]*IncidentOccurrenceTracker, error) {
 
 	var currentOffset uint
 	var limit uint = 100
 	var incidents []pd.Incident
-	var ctx context.Context = context.TODO()
+	var ctx = context.TODO()
 	incidentMap := map[string][]*IncidentOccurrenceTracker{}
 
-	pdClient, err := GetPagerDutyClient(pdUsertoken, pdAuthToken)
+	pdClient, err := utils.GetPagerDutyClient(pdUsertoken, pdAuthToken)
 	if err != nil {
 		fmt.Println("error getting pd client: ", err.Error())
 		return nil, err
@@ -583,171 +539,6 @@ func GetHistoricalPDAlertsForCluster(pdServiceIDs []string, pdUsertoken string, 
 
 }
 
-// GetJiraClient creates a jira client that connects to
-// https://issues.redhat.com. To work, the jiraToken needs to be set in the
-// config
-func GetJiraClient() (*jira.Client, error) {
-	if !viper.IsSet(JiraTokenConfigKey) {
-		return nil, fmt.Errorf("key %s is not set in config file", JiraTokenConfigKey)
-	}
-
-	jiratoken := viper.GetString(JiraTokenConfigKey)
-
-	tp := jira.PATAuthTransport{
-		Token: jiratoken,
-	}
-	return jira.NewClient(tp.Client(), JiraBaseURL)
-}
-
-func GetJiraIssuesForCluster(clusterID string, externalClusterID string) ([]jira.Issue, error) {
-
-	jiraClient, err := GetJiraClient()
-	if err != nil {
-		return nil, fmt.Errorf("Error connecting to jira: %v", err)
-	}
-
-	jql := fmt.Sprintf(
-		`(project = "OpenShift Hosted SRE Support" AND "Cluster ID" ~ "%s") 
-		OR (project = "OpenShift Hosted SRE Support" AND "Cluster ID" ~ "%s") 
-		ORDER BY created DESC`,
-		externalClusterID,
-		clusterID,
-	)
-
-	issues, _, err := jiraClient.Issue.Search(jql, nil)
-	if err != nil {
-		fmt.Printf("Failed to search for jira issues %q\n", err)
-		return nil, err
-	}
-
-	return issues, nil
-}
-
-func GetJiraSupportExceptionsForOrg(organizationID string) ([]jira.Issue, error) {
-	jiraClient, err := GetJiraClient()
-	if err != nil {
-		return nil, fmt.Errorf("Error connecting to jira: %v", err)
-	}
-
-	jql := fmt.Sprintf(
-		`project = "Support Exceptions" AND type = Story AND Status = Approved AND
-		 Resolution = Unresolved AND "Customer Name" ~ "%s"`,
-		organizationID,
-	)
-
-	issues, _, err := jiraClient.Issue.Search(jql, nil)
-	if err != nil {
-		fmt.Printf("Failed to search for jira issues %q\n", err)
-		return nil, err
-	}
-
-	return issues, nil
-}
-
-// GetServiceLogsSince returns the service logs for a cluster sent between
-// time.Now() and time.Now()-duration. the first parameter will contain a slice
-// of the service logs from the given time period, while the second return value
-// indicates if an error has happened.
-func GetServiceLogsSince(clusterID string, days int) ([]sl.ServiceLogShort, error) {
-
-	// time.Now().Sub() returns the duration between two times, so we negate the duration in Add()
-	earliestTime := time.Now().AddDate(0, 0, -days)
-
-	slResponse, err := servicelog.FetchServiceLogs(clusterID)
-	if err != nil {
-		return nil, err
-	}
-
-	var serviceLogs sl.ServiceLogShortList
-	err = json.Unmarshal(slResponse.Bytes(), &serviceLogs)
-	if err != nil {
-		fmt.Printf("Failed to unmarshal the SL response %q\n", err)
-		return nil, err
-	}
-
-	// Parsing the relevant service logs
-	// - We only care about SLs sent in the given duration
-	var errorServiceLogs []sl.ServiceLogShort
-	for _, serviceLog := range serviceLogs.Items {
-		if serviceLog.CreatedAt.After(earliestTime) {
-			errorServiceLogs = append(errorServiceLogs, serviceLog)
-		}
-	}
-
-	return errorServiceLogs, nil
-}
-
-// Returns an empty array if team_ids has not been informed via CLI or config file
-// that will make the query show all PD Alerts for all PD services by default
-func getPDTeamIDs(team_ids []string) []string {
-	if len(team_ids) == 0 {
-		if !viper.IsSet(PagerDutyTeamIDs) {
-			return []string{}
-		}
-		team_ids = viper.GetStringSlice(PagerDutyTeamIDs)
-	}
-	return team_ids
-}
-
-func getPDUserClient(usertoken string) (*pd.Client, error) {
-	if usertoken == "" {
-		if !viper.IsSet(PagerDutyUserTokenConfigKey) {
-			return nil, fmt.Errorf("key %s is not set in config file", PagerDutyUserTokenConfigKey)
-		}
-		usertoken = viper.GetString(PagerDutyUserTokenConfigKey)
-	}
-	return pd.NewClient(usertoken), nil
-
-}
-
-func getPDOauthClient(oauthtoken string) (*pd.Client, error) {
-	if oauthtoken == "" {
-		if !viper.IsSet(PagerDutyOauthTokenConfigKey) {
-			return nil, fmt.Errorf("key %s is not set in config file", PagerDutyOauthTokenConfigKey)
-		}
-		oauthtoken = viper.GetString(PagerDutyOauthTokenConfigKey)
-	}
-	return pd.NewOAuthClient(oauthtoken), nil
-}
-
-func GetPagerDutyClient(usertoken string, oauthtoken string) (*pd.Client, error) {
-	client, err := getPDUserClient(usertoken)
-	if client != nil {
-		return client, err
-	}
-
-	client, err = getPDOauthClient(oauthtoken)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create both user and oauth clients for pd, neither key pd_oauth_token or pd_user_token are set in config file")
-	}
-	return client, err
-}
-
-func GetPDServiceID(baseDomain string, usertoken string, oauthtoken string, team_ids []string) ([]string, error) {
-
-	pdClient, err := GetPagerDutyClient(usertoken, oauthtoken)
-	if err != nil {
-		return nil, fmt.Errorf("failed to GetPagerDutyClient: %w", err)
-	}
-
-	// Gets the PD Team IDS
-	teams := getPDTeamIDs(team_ids)
-
-	lsResponse, err := pdClient.ListServicesWithContext(context.TODO(), pd.ListServiceOptions{Query: baseDomain, TeamIDs: teams})
-
-	if err != nil {
-		fmt.Printf("Failed to ListServicesWithContext %q\n", err)
-		return []string{}, err
-	}
-
-	serviceIDS := []string{}
-	for _, service := range lsResponse.Services {
-		serviceIDS = append(serviceIDS, service.ID)
-	}
-
-	return serviceIDS, nil
-}
-
 func GetCloudTrailLogsForCluster(awsProfile string, clusterID string, maxPages int) ([]*types.Event, error) {
 	awsJumpClient, err := osdCloud.GenerateAWSClientForCluster(awsProfile, clusterID)
 	if err != nil {
@@ -797,93 +588,6 @@ func printClusterInfo(clusterID string) {
 	fmt.Println(string(output))
 }
 
-func printServiceLogs(serviceLogs []sl.ServiceLogShort, verbose bool, sinceDays int) {
-	var name string = fmt.Sprint("Service Logs in the past", sinceDays, "Days")
-	fmt.Println(delimiter + name)
-
-	if verbose {
-		marshalledSLs, err := json.MarshalIndent(serviceLogs, "", "  ")
-		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Couldn't prepare service logs for printing: %v", err)
-		}
-		_ = dump.Pretty(os.Stdout, marshalledSLs)
-	} else if len(serviceLogs) == 0 {
-		fmt.Println("None")
-	} else {
-		// Non verbose only prints the summaries
-		for i, errorServiceLog := range serviceLogs {
-			var serviceLogSummary string
-			if errorServiceLog.InternalOnly {
-				internalServiceLogLines := strings.Split(errorServiceLog.Description, "\n")
-				if len(internalServiceLogLines) > 0 {
-					// if the description is "", Split returns []
-					serviceLogSummary = fmt.Sprintf("INT %s", internalServiceLogLines[0])
-				} else {
-					serviceLogSummary = errorServiceLog.Summary
-				}
-			} else {
-				serviceLogSummary = errorServiceLog.Summary
-			}
-			serviceLogSummaryAbbreviated := serviceLogSummary[:int(math.Min(40, float64(len(serviceLogSummary))))]
-			fmt.Printf("%d. %s (%s)\n", i, serviceLogSummaryAbbreviated, errorServiceLog.CreatedAt.Format(time.RFC3339))
-		}
-	}
-}
-
-// printSupportStatus reports if a cluster is in limited support or fully supported.
-func printSupportStatus(limitedSupportReasons []*cmv1.LimitedSupportReason) {
-	var name string = "Limited Support Status"
-	fmt.Println(delimiter + name)
-
-	// No reasons found, cluster is fully supported
-	if len(limitedSupportReasons) == 0 {
-		fmt.Printf("Fully supported\n")
-		return
-	}
-
-	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
-	table.AddRow([]string{"Reason ID", "Summary", "Details"})
-	for _, clusterLimitedSupportReason := range limitedSupportReasons {
-		table.AddRow([]string{clusterLimitedSupportReason.ID(), clusterLimitedSupportReason.Summary(), clusterLimitedSupportReason.Details()})
-	}
-	// Add empty row for readability
-	table.AddRow([]string{})
-	if err := table.Flush(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error printing %s: %v\n", name, err)
-	}
-}
-
-func printCurrentPDAlerts(incidents map[string][]pd.Incident, serviceIDs []string) {
-	var name string = "PagerDuty Alerts"
-	fmt.Println(delimiter + name)
-
-	if len(serviceIDs) == 0 {
-		fmt.Println("No PD Service Found")
-		return
-	}
-
-	for _, ID := range serviceIDs {
-		fmt.Printf("Service: https://redhat.pagerduty.com/service-directory/%s\n", ID)
-
-		tableHasContent := false
-		table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
-		table.AddRow([]string{"Urgency", "Title", "Created At"})
-		for _, incident := range incidents[ID] {
-			table.AddRow([]string{incident.Urgency, incident.Title, incident.CreatedAt})
-			tableHasContent = true
-		}
-		if tableHasContent {
-			// Add empty row for readability
-			table.AddRow([]string{})
-			if err := table.Flush(); err != nil {
-				fmt.Fprintf(os.Stderr, "Error printing %s - %s: %v\n", name, ID, err)
-			}
-		} else {
-			fmt.Println("None")
-		}
-	}
-}
-
 func printHistoricalPDAlertSummary(incidentCounters map[string][]*IncidentOccurrenceTracker, serviceIDs []string, sinceDays int) {
 	var name string = "PagerDuty Historical Alerts"
 	fmt.Println(delimiter + name)
@@ -911,21 +615,6 @@ func printHistoricalPDAlertSummary(incidentCounters map[string][]*IncidentOccurr
 		}
 
 		fmt.Println("\tTotal number of incidents [", totalIncidents, "] in [", sinceDays, "] days")
-	}
-}
-
-func printJiraIssues(issues []jira.Issue) {
-	var name string = "OHSS Issues"
-	fmt.Println(delimiter + name)
-
-	for _, i := range issues {
-		fmt.Printf("[%s](%s/%s): %+v\n", i.Key, i.Fields.Type.Name, i.Fields.Priority.Name, i.Fields.Summary)
-		fmt.Printf("- Created: %s\tStatus: %s\n", time.Time(i.Fields.Created).Format("2006-01-02 15:04"), i.Fields.Status.Name)
-		fmt.Printf("- Link: %s/browse/%s\n\n", JiraBaseURL, i.Key)
-	}
-
-	if len(issues) == 0 {
-		fmt.Println("None")
 	}
 }
 

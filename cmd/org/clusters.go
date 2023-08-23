@@ -6,15 +6,9 @@ import (
 	"os"
 
 	"github.com/aws/aws-sdk-go-v2/service/organizations"
-	sdk "github.com/openshift-online/ocm-sdk-go"
 	"github.com/openshift/osdctl/pkg/printer"
-	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-)
-
-const (
-	statusActive = "Active"
 )
 
 var (
@@ -50,7 +44,7 @@ osdctl org clusters --aws-profile my-aws-profile --aws-account-id 123456789
 				status = statusActive
 			}
 
-			clusters, err := SearchClusters(orgId, status)
+			clusters, err := SearchSubscriptions(orgId, status)
 			cmdutil.CheckErr(err)
 			printClusters(clusters)
 		},
@@ -88,7 +82,7 @@ func init() {
 	AddOutputFlag(flags)
 }
 
-func SearchClusters(orgId string, status string) ([]*accountsv1.Subscription, error) {
+func SearchSubscriptions(orgId string, status string) ([]*accountsv1.Subscription, error) {
 	if orgId == "" && !isAWSProfileSearch() {
 		return nil, fmt.Errorf("specify either org-id or --aws-profile,--aws-account-id arguments")
 	}
@@ -105,7 +99,7 @@ func SearchClusters(orgId string, status string) ([]*accountsv1.Subscription, er
 		orgId = *orgIdFromAws
 	}
 
-	clusterSubscriptions, err := searchAllClustersByOrg(orgId, status)
+	clusterSubscriptions, err := SearchAllSubscriptionsByOrg(orgId, status, false)
 	if err != nil {
 		return nil, err
 	}
@@ -135,61 +129,6 @@ func getOrganizationIdFromAWSProfile() (*string, error) {
 	}
 
 	return result.OrganizationalUnit.Id, nil
-}
-
-func searchAllClustersByOrg(orgID string, status string) ([]*accountsv1.Subscription, error) {
-	var clusterSubscriptions []*accountsv1.Subscription
-	requestPageSize := 100
-	morePages := true
-	for page := 1; morePages; page++ {
-		clustersData, err := getClusters(orgID, status, page, requestPageSize)
-		if err != nil {
-			return nil, fmt.Errorf("encountered an error fetching subscriptions for page %v: %w", page, err)
-		}
-
-		clustersDataItems := clustersData.Items().Slice()
-		clusterSubscriptions = append(clusterSubscriptions, clustersDataItems...)
-
-		if clustersData.Size() < requestPageSize {
-			morePages = false
-		}
-	}
-
-	return clusterSubscriptions, nil
-}
-
-func getClusters(orgID string, status string, page int, size int) (*accountsv1.SubscriptionsListResponse, error) {
-	// Create OCM client to talk
-	ocmClient, err := utils.CreateConnection()
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err := ocmClient.Close(); err != nil {
-			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
-		}
-	}()
-
-	// Now get the matching orgs
-	response, err := createGetClustersRequest(ocmClient, orgID, status, page, size).Send()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get clusters: %w", err)
-	}
-
-	return response, nil
-}
-
-func createGetClustersRequest(ocmClient *sdk.Connection, orgID string, status string, page int, size int) *accountsv1.SubscriptionsListRequest {
-	// Create and populate the request:
-	request := ocmClient.AccountsMgmt().V1().Subscriptions().List().Page(page).Size(size)
-
-	searchMessage := fmt.Sprintf(`organization_id='%s'`, orgID)
-	if status != "" {
-		searchMessage += fmt.Sprintf(` and status='%s'`, statusActive)
-	}
-	request = request.Search(searchMessage)
-
-	return request
 }
 
 func printClusters(items []*accountsv1.Subscription) {

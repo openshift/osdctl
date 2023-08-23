@@ -2,8 +2,6 @@ package org
 
 import (
 	"testing"
-
-	"github.com/spf13/cobra"
 )
 
 func TestCheckOrgId(t *testing.T) {
@@ -30,7 +28,7 @@ func TestCheckOrgId(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		err := checkOrgId(&cobra.Command{}, test.Args)
+		err := checkOrgId(test.Args)
 		if test.ErrorExpected {
 			if err == nil {
 				t.Fatalf("Test '%s' failed. Expected error, but got none", test.Name)
