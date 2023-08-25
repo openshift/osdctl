@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -25,10 +26,11 @@ import (
 const (
 	EtcdNamespaceName       = "openshift-etcd"
 	EtcdMemberConditionType = "EtcdMembersAvailable"
-	ConatinerName           = "etcdctl"
+	ContainerName           = "etcdctl"
 	MasterNodeLabel         = "node-role.kubernetes.io/master"
 	EtcdPodMatchLabelName   = "k8s-app"
 	EtcdPodMatchValueName   = "etcd"
+	EtcdLabelSelector       = "k8s-app=etcd"
 )
 
 var etcdctlCmd = []string{
@@ -51,6 +53,34 @@ func (capture *logCapture) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
+func getKubeConfigAndClientSet() (*rest.Config, *kubernetes.Clientset, error) {
+	var kubeconfig *string
+
+	if home := homedir.HomeDir(); home != "" {
+		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+	} else {
+		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+	}
+	flag.Parse()
+
+	// use the current context in kubeconfig
+	kconfig, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	kconfig.Impersonate = rest.ImpersonationConfig{
+		UserName: BackplaneClusterAdmin,
+	}
+	// create the clientset
+	clientset, err := kubernetes.NewForConfig(kconfig)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return kconfig, clientset, err
+}
+
 func newCmdEtcdHealthCheck(kubeCli client.Client, flags *genericclioptions.ConfigFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:               "etcd-health-check",
@@ -65,41 +95,30 @@ func newCmdEtcdHealthCheck(kubeCli client.Client, flags *genericclioptions.Confi
 }
 
 func EtcdHealthCheck(kubeCli client.Client) error {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Fatal("error : ", err)
+		}
+	}()
 
 	err := ControlplaneNodeStatus(kubeCli)
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 
 	podlist, err := EtcdPodStatus(kubeCli)
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 
 	err = EtcdCrStatus(kubeCli)
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 
-	var kubeconfig *string
-
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	}
-	flag.Parse()
-
-	// use the current context in kubeconfig
-	kconfig, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	kconfig, clientset, err := getKubeConfigAndClientSet()
 	if err != nil {
-		panic(err.Error())
-	}
-
-	// create the clientset
-	clientset, err := kubernetes.NewForConfig(kconfig)
-	if err != nil {
-		panic(err.Error())
+		return err
 	}
 
 	MatchPodName := false
@@ -199,12 +218,12 @@ func Etcdctlhealth(kconfig *rest.Config, clientset *kubernetes.Clientset, etcdct
 	req := clientset.CoreV1().RESTClient().Post().Resource("pods").Name(etcdPodName).
 		Namespace(EtcdNamespaceName).SubResource("exec")
 	option := &corev1.PodExecOptions{
-		Container: ConatinerName,
+		Container: ContainerName,
 		Command:   cmd,
 		Stdin:     true,
 		Stdout:    true,
 		Stderr:    true,
-		TTY:       true,
+		TTY:       false,
 	}
 
 	if os.Stdin == nil {
@@ -224,7 +243,7 @@ func Etcdctlhealth(kconfig *rest.Config, clientset *kubernetes.Clientset, etcdct
 	errorCapture := &logCapture{}
 
 	err = exec.StreamWithContext(context.TODO(), remotecommand.StreamOptions{
-		Stdin:  os.Stdin,
+		Stdin:  bytes.NewReader([]byte{}),
 		Stdout: capture,
 		Stderr: errorCapture,
 		Tty:    false,
