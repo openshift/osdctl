@@ -53,8 +53,8 @@ func newCmdResizeInfra() *cobra.Command {
 		},
 	}
 
-	infraResizeCmd.Flags().StringVarP(&r.clusterId, "cluster-id", "C", "", "OCM internal cluster id to resize infra nodes for.")
-	infraResizeCmd.Flags().StringVar(&r.instanceType, "instance-type", "", "(optional) AWS EC2 instance type to resize the infra nodes to.")
+	infraResizeCmd.Flags().StringVarP(&r.clusterId, "cluster-id", "C", "", "OCM internal/external cluster id or cluster name to resize infra nodes for.")
+	infraResizeCmd.Flags().StringVar(&r.instanceType, "instance-type", "", "(optional) Override for an AWS or GCP instance type to resize the infra nodes to, by default supported instance types are automatically selected.")
 
 	infraResizeCmd.MarkFlagRequired("cluster-id")
 
@@ -245,7 +245,7 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 		return err
 	}
 
-	postCmd := generateServiceLog(newMp.Spec.Platform.AWS.InstanceType, r.clusterId)
+	postCmd := generateServiceLog(r.instanceType, r.clusterId)
 	if err := postCmd.Run(); err != nil {
 		fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
 		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",

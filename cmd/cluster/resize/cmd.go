@@ -20,8 +20,10 @@ type Resize struct {
 	hive      client.Client
 	hiveAdmin client.Client
 
-	cluster      *cmv1.Cluster
-	clusterId    string
+	cluster   *cmv1.Cluster
+	clusterId string
+
+	// instanceType is the type of instance being resized to
 	instanceType string
 }
 
