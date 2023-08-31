@@ -21,7 +21,7 @@ var (
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(checkOrgId(cmd, args))
+			cmdutil.CheckErr(checkOrgId(args))
 			cmdutil.CheckErr(searchLabelsByOrg(cmd, args[0]))
 		},
 	}

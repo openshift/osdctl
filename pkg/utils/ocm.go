@@ -418,3 +418,11 @@ func GetHiveCluster(clusterId string) (*cmv1.Cluster, error) {
 
 	return resp.Items().Get(0), nil
 }
+
+func SendRequest(request *sdk.Request) (*sdk.Response, error) {
+	response, err := request.Send()
+	if err != nil {
+		return nil, fmt.Errorf("cannot send request: %q", err)
+	}
+	return response, nil
+}

@@ -3,6 +3,8 @@ package org
 import (
 	"encoding/json"
 	"fmt"
+	accountsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
+	"github.com/openshift/osdctl/pkg/utils"
 	"os"
 
 	"github.com/openshift-online/ocm-cli/pkg/dump"
@@ -10,7 +12,6 @@ import (
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
-	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
@@ -18,6 +19,8 @@ const (
 	organizationsAPIPath  = "/api/accounts_mgmt/v1/organizations"
 	accountsAPIPath       = "/api/accounts_mgmt/v1/accounts"
 	currentAccountApiPath = "/api/accounts_mgmt/v1/current_account"
+
+	statusActive = "Active"
 )
 
 var (
@@ -42,7 +45,7 @@ func sendRequest(request *sdk.Request) (*sdk.Response, error) {
 	return response, nil
 }
 
-func checkOrgId(cmd *cobra.Command, args []string) error {
+func checkOrgId(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("organization id was not provided. please provide a organization id")
 	}
@@ -93,4 +96,62 @@ func IsJsonOutput() bool {
 func PrintJson(data interface{}) {
 	marshalledStruct, _ := json.MarshalIndent(data, "", "  ")
 	dump.Pretty(os.Stdout, marshalledStruct)
+}
+
+func SearchAllSubscriptionsByOrg(orgID string, status string, managedOnly bool) ([]*accountsv1.Subscription, error) {
+	var clusterSubscriptions []*accountsv1.Subscription
+	requestPageSize := 100
+	morePages := true
+	for page := 1; morePages; page++ {
+		clustersData, err := getSubscriptions(orgID, status, managedOnly, page, requestPageSize)
+		if err != nil {
+			return nil, fmt.Errorf("encountered an error fetching subscriptions for page %v: %w", page, err)
+		}
+
+		clustersDataItems := clustersData.Items().Slice()
+		clusterSubscriptions = append(clusterSubscriptions, clustersDataItems...)
+
+		if clustersData.Size() < requestPageSize {
+			morePages = false
+		}
+	}
+
+	return clusterSubscriptions, nil
+}
+
+func getSubscriptions(orgID string, status string, managedOnly bool, page int, size int) (*accountsv1.SubscriptionsListResponse, error) {
+	// Create OCM client to talk
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := ocmClient.Close(); err != nil {
+			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
+		}
+	}()
+
+	// Now get the matching orgs
+	response, err := createGetSubscriptionsRequest(ocmClient, orgID, status, managedOnly, page, size).Send()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get clusters: %w", err)
+	}
+
+	return response, nil
+}
+
+func createGetSubscriptionsRequest(ocmClient *sdk.Connection, orgID string, status string, managedOnly bool, page int, size int) *accountsv1.SubscriptionsListRequest {
+	// Create and populate the request:
+	request := ocmClient.AccountsMgmt().V1().Subscriptions().List().Page(page).Size(size)
+
+	searchMessage := fmt.Sprintf(`organization_id='%s'`, orgID)
+	if status != "" {
+		searchMessage += fmt.Sprintf(` and status='%s'`, status)
+	}
+	if managedOnly {
+		searchMessage += fmt.Sprintf(` and managed=%v`, managedOnly)
+	}
+	request = request.Search(searchMessage)
+
+	return request
 }
