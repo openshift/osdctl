@@ -94,9 +94,6 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(sts.NewCmdSts(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(promote.NewCmdPromote(kubeFlags, globalOpts))
 
-	// add docs command
-	rootCmd.AddCommand(newCmdDocs(streams))
-
 	// add completion command
 	rootCmd.AddCommand(newCmdCompletion(streams))
 
@@ -139,7 +136,7 @@ func canCommandSkipVersionCheck(commandName string) bool {
 
 // Returns allowlist of commands that can skip version check
 func getSkipVersionCommands() []string {
-	return []string{"docs", "upgrade", "version"}
+	return []string{"upgrade", "version"}
 }
 
 func versionCheck() {

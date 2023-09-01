@@ -11,7 +11,7 @@ SHELL := /bin/bash
 
 all: format mod build test lint
 
-format: vet mod fmt mockgen ci-build docs
+format: vet mod fmt mockgen ci-build
 
 fmt:
 	@echo "gofmt"
@@ -50,11 +50,6 @@ vet:
 mod:
 	go mod tidy
 	@git diff --exit-code -- go.mod
-
-.PHONY: docs
-docs:
-	./dist/osdctl_$(shell  uname | tr [:upper:] [:lower:])_amd64_v1/osdctl docs ./docs/command
-	@git diff --exit-code -- ./docs/command/
 
 mockgen: ensure-mockgen
 	go generate ${BUILDFLAGS} ./...
