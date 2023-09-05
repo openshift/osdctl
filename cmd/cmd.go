@@ -142,17 +142,13 @@ func getSkipVersionCommands() []string {
 func versionCheck() {
 	latestVersion, err := utils.GetLatestVersion()
 	if err != nil {
-		fmt.Println("Warning: Unable to verify that osdctl is running under the latest released version. Error trying to reach GitHub:")
-		fmt.Println(err)
-		fmt.Println("Please be aware that you are possibly running an outdated or unreleased version.")
+		fmt.Fprintln(os.Stderr, "Warning: Unable to verify that osdctl is running under the latest released version. Error trying to reach GitHub:")
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, "Please be aware that you are possibly running an outdated or unreleased version.")
 	}
 
 	if utils.Version != strings.TrimPrefix(latestVersion, "v") {
-		fmt.Printf("The current version (%s) is different than the latest released version (%s).", utils.Version, latestVersion)
-		fmt.Println("It is recommended that you update to the latest released version to ensure that no known bugs or issues are hit.")
-
-		if !utils.ConfirmPrompt() {
-			os.Exit(0)
-		}
+		fmt.Fprintf(os.Stderr, "The current version (%s) is different than the latest released version (%s).\n", utils.Version, latestVersion)
+		fmt.Fprintln(os.Stderr, "It is recommended that you update to the latest released version to ensure that no known bugs or issues are hit.")
 	}
 }
