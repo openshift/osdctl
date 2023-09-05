@@ -24,6 +24,20 @@ type ServiceLogShort struct {
 	InternalOnly bool      `json:"internal_only"`
 }
 
+type ServiceLogShortSlice []ServiceLogShort
+
+func (sl ServiceLogShortSlice) Len() int {
+	return len(sl)
+}
+
+func (sl ServiceLogShortSlice) Less(i, j int) bool {
+	return sl[i].CreatedAt.Before(sl[j].CreatedAt)
+}
+
+func (sl ServiceLogShortSlice) Swap(i, j int) {
+	sl[i], sl[j] = sl[j], sl[i]
+}
+
 type ClusterListGoodReply struct {
 	Kind  string      `json:"kind"`
 	Page  int         `json:"page"`

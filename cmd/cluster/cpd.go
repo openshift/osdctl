@@ -2,12 +2,16 @@ package cluster
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"sort"
 
 	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/openshift/osdctl/cmd/network"
+	"github.com/openshift/osdctl/cmd/servicelog"
+	sl "github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -72,6 +76,17 @@ func (o *cpdOptions) run() error {
 	fmt.Println("Checking if cluster has become ready")
 	if cluster.Status().State() == "ready" {
 		fmt.Printf("This cluster is in a ready state and already provisioned")
+		return nil
+	}
+
+	fmt.Println("Checking if a servicelog has already been sent")
+	externalservicelogs, err := findExistingExternalServiceLogs(o.clusterID)
+	if err != nil {
+		fmt.Println("Could not retrieve servicelogs for cluster")
+	}
+	if len(externalservicelogs) > 0 {
+		fmt.Printf("A servicelog has already been sent on %s - stopping CPD analysis.\n", externalservicelogs[len(externalservicelogs)-1].CreatedAt.Format("2006-01-02"))
+		fmt.Println("Check https://github.com/openshift/ops-sop/blob/master/v4/alerts/ClusterProvisioningFailure.md#toil-reduction to see if this check and servicelog sending can be automated.")
 		return nil
 	}
 
@@ -210,4 +225,24 @@ func findDefaultRouteTableForVPC(awsClient aws.Client, vpcID string) (string, er
 	}
 
 	return "", fmt.Errorf("no default route table found for vpc: %s", vpcID)
+}
+
+func findExistingExternalServiceLogs(clusterId string) ([]sl.ServiceLogShort, error) {
+	slResponse, err := servicelog.FetchServiceLogs(clusterId)
+	if err != nil {
+		return nil, err
+	}
+	var servicelogs sl.ServiceLogShortList
+	err = json.Unmarshal(slResponse.Bytes(), &servicelogs)
+	if err != nil {
+		return nil, err
+	}
+	var externalservicelogs sl.ServiceLogShortSlice
+	for _, item := range servicelogs.Items {
+		if !item.InternalOnly {
+			externalservicelogs = append(externalservicelogs, item)
+		}
+	}
+	sort.Sort(externalservicelogs)
+	return externalservicelogs, nil
 }
