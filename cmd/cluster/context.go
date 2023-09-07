@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	"os"
 	"os/exec"
 	"sort"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/openshift/osdctl/cmd/servicelog"
 
 	pd "github.com/PagerDuty/go-pagerduty"
 	"github.com/andygrunwald/go-jira"
@@ -24,6 +25,7 @@ import (
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
@@ -162,7 +164,31 @@ func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
 		o.organizationID = orgID
 	}
 
+	// Initialize external tooling API tokens
+	o.initJIRAToken()
+
 	return nil
+}
+
+func (o *contextOptions) initJIRAToken() {
+	// The order in which these should be loaded would be:
+	// 1. config file
+	// 2. env var
+	// 3. command flag
+	// The highest number should be the one used. So if you have set a value in the config file but pass a different value in the flag, the flag value should be used.
+	// Viper should have already read in the config file at this point.
+
+	// We specifically _don't_ want to use viper's AutomaticEnv functionality for this because we want to leverage the same env vars that the external tooling uses instead of having to set separate env vars
+
+	jiraTokenEnv := os.Getenv("JIRA_API_TOKEN")
+
+	if jiraTokenEnv != "" {
+		viper.Set(utils.JiraTokenConfigKey, jiraTokenEnv)
+	}
+
+	if o.jiratoken != "" {
+		viper.Set(utils.JiraTokenConfigKey, o.jiratoken)
+	}
 }
 
 func (o *contextOptions) run() error {
