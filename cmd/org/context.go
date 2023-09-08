@@ -72,7 +72,8 @@ osdctl org context 1a2B3c4DefghIjkLMNOpQrSTUV5 -o json`,
 
 		clusterInfos, err := Context(args[0])
 		if err != nil {
-			return fmt.Errorf("error fetching org context: %w", err)
+			// report error, but don't return: we should make a best-effort attempt at printing whatever we did retrieve
+			fmt.Fprintf(os.Stderr, "error fetching org context: %v\n", err)
 		}
 		if len(clusterInfos) == 0 {
 			fmt.Println("Org has no clusters")
@@ -265,7 +266,7 @@ func Context(orgId string) ([]ClusterInfo, error) {
 	}
 
 	if err := eg.Wait(); err != nil {
-		return nil, fmt.Errorf("failed to get context data: %w", err)
+		return orgClustersInfo, fmt.Errorf("failed to get context data: %w", err)
 	}
 	return orgClustersInfo, nil
 }
