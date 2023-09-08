@@ -21,11 +21,13 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.37.0
 	github.com/aws/aws-sdk-go-v2/service/servicequotas v1.14.15
 	github.com/aws/aws-sdk-go-v2/service/sts v1.19.0
+	github.com/brianvoe/gofakeit/v6 v6.23.2
 	github.com/coreos/go-semver v0.3.0
 	github.com/deckarep/golang-set v1.7.1
 	github.com/fatih/color v1.13.0
 	github.com/golang/mock v1.6.0
 	github.com/olekukonko/tablewriter v0.0.5
+	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.27.7
 	github.com/openshift-online/ocm-cli v0.1.66
 	github.com/openshift-online/ocm-sdk-go v0.1.344
@@ -42,6 +44,7 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.16.0
+	go.uber.org/mock v0.2.0
 	golang.org/x/sync v0.2.0
 	google.golang.org/api v0.122.0
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1
@@ -143,6 +146,7 @@ require (
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nwidger/jsoncolor v0.3.1 // indirect
+	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/openshift/backplane-api v0.0.0-20230203044845-10f2b341bf54 // indirect
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
@@ -178,6 +182,7 @@ require (
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
+	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	k8s.io/component-base v0.26.3 // indirect
 	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect

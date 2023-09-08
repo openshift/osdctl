@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	"os"
 	"os/exec"
 	"sort"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/openshift/osdctl/cmd/servicelog"
 
 	pd "github.com/PagerDuty/go-pagerduty"
 	"github.com/andygrunwald/go-jira"
@@ -22,8 +23,10 @@ import (
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/openshift/osdctl/pkg/printer"
+	"github.com/openshift/osdctl/pkg/provider/pagerduty"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
@@ -153,6 +156,14 @@ func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
 	o.externalClusterID = cluster.ExternalID()
 	o.baseDomain = cluster.DNS().BaseDomain()
 	o.infraID = cluster.InfraID()
+
+	if o.usertoken == "" {
+		o.usertoken = viper.GetString(pagerduty.PagerDutyUserTokenConfigKey)
+	}
+
+	if o.oauthtoken == "" {
+		o.oauthtoken = viper.GetString(pagerduty.PagerDutyOauthTokenConfigKey)
+	}
 
 	orgID, err := utils.GetOrgfromClusterID(ocmClient, *cluster)
 	if err != nil {
@@ -382,18 +393,28 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		pdwg.Add(1)
 		defer wg.Done()
 		defer pdwg.Done()
+
+		pdProvider, err := pagerduty.NewClient().
+			WithUserToken(o.usertoken).
+			WithOauthToken(o.oauthtoken).
+			WithBaseDomain(o.baseDomain).
+			WithTeamIdList(viper.GetStringSlice(pagerduty.PagerDutyTeamIDsKey)).
+			Init()
+
 		if o.verbose {
 			fmt.Fprintln(os.Stderr, "Getting PagerDuty Service...")
 		}
-		data.pdServiceID, err = utils.GetPDServiceIDs(o.baseDomain, o.usertoken, o.oauthtoken, o.team_ids)
+		data.pdServiceID, err = pdProvider.GetPDServiceIDs()
 		if err != nil {
 			errors = append(errors, fmt.Errorf("Error getting PD Service ID: %v", err))
 		}
 
+		fmt.Printf("PD Service IDs: %+v\n", data.pdServiceID)
+
 		if o.verbose {
 			fmt.Fprintln(os.Stderr, "Getting current PagerDuty Alerts...")
 		}
-		data.PdAlerts, err = utils.GetCurrentPDAlertsForCluster(data.pdServiceID, o.usertoken, o.oauthtoken)
+		data.PdAlerts, err = pdProvider.GetFiringAlertsForCluster(data.pdServiceID)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("Error while getting current PD Alerts: %v", err))
 		}
