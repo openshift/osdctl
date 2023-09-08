@@ -413,23 +413,39 @@ func Test_egressVerificationGetSubnetId(t *testing.T) {
 }
 
 func TestDefaultValidateEgressInput(t *testing.T) {
+	customTags := map[string]string{
+		"a": "b",
+	}
+
 	tests := []struct {
-		region    string
-		expectErr bool
+		region         string
+		withCustomTags bool
+		expectErr      bool
 	}{
 		{
-			region:    "us-east-2",
-			expectErr: false,
+			region:         "us-east-2",
+			withCustomTags: false,
+			expectErr:      false,
 		},
 		{
-			region:    "us-central-1",
-			expectErr: true,
+			region:         "eu-central-1",
+			withCustomTags: true,
+			expectErr:      false,
+		},
+		{
+			region:         "us-central-1",
+			withCustomTags: false,
+			expectErr:      true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.region, func(t *testing.T) {
-			_, err := defaultValidateEgressInput(context.TODO(), test.region)
+			cluster := newTestCluster(t, cmv1.NewCluster().AWS(cmv1.NewAWS()))
+			if test.withCustomTags {
+				cluster = newTestCluster(t, cmv1.NewCluster().AWS(cmv1.NewAWS().Tags(customTags)))
+			}
+			actual, err := defaultValidateEgressInput(context.TODO(), cluster, test.region)
 			if err != nil {
 				if !test.expectErr {
 					t.Errorf("expected no err, got %s", err)
@@ -437,6 +453,16 @@ func TestDefaultValidateEgressInput(t *testing.T) {
 			} else {
 				if test.expectErr {
 					t.Errorf("expected err, got none")
+				}
+				if test.withCustomTags {
+					for k := range customTags {
+						if v, ok := actual.Tags[k]; !ok {
+							t.Errorf("expected %v to contain %v", actual.Tags, k)
+							if v != customTags[k] {
+								t.Errorf("expected %v to contain %v: %v", actual.Tags, k, customTags[k])
+							}
+						}
+					}
 				}
 			}
 		})
