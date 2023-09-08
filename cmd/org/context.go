@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
+	"sync"
+
 	pd "github.com/PagerDuty/go-pagerduty"
 	"github.com/andygrunwald/go-jira"
 	sdk "github.com/openshift-online/ocm-sdk-go"
@@ -12,12 +16,11 @@ import (
 	"github.com/openshift/osdctl/cmd/servicelog"
 	sl "github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/pkg/printer"
+	pdProvider "github.com/openshift/osdctl/pkg/provider/pagerduty"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"golang.org/x/sync/errgroup"
-	"os"
-	"strconv"
-	"sync"
 )
 
 const (
@@ -299,12 +302,20 @@ func addJiraIssues(clusterInfo *ClusterInfo, externalId string) error {
 }
 
 func addPDAlerts(clusterInfo *ClusterInfo, baseDomain string) error {
-	pdServiceIds, pdServiceIdsErr := utils.GetPDServiceIDs(baseDomain, "", "", []string{})
+	pdClient, err := pdProvider.NewClient().
+		WithBaseDomain(baseDomain).
+		WithUserToken(viper.GetString(pdProvider.PagerDutyUserTokenConfigKey)).
+		WithOauthToken(viper.GetString(pdProvider.PagerDutyOauthTokenConfigKey)).
+		Init()
+	if err != nil {
+		return fmt.Errorf("failed to build PD client")
+	}
+	pdServiceIds, pdServiceIdsErr := pdClient.GetPDServiceIDs()
 	if pdServiceIdsErr != nil {
 		return fmt.Errorf("failed to get PD ServiceID for cluster %v: %v", clusterInfo.ID, pdServiceIdsErr)
 	} else {
 		var pdAlertsErr error
-		clusterInfo.PdAlerts, pdAlertsErr = utils.GetCurrentPDAlertsForCluster(pdServiceIds, "", "")
+		clusterInfo.PdAlerts, pdAlertsErr = pdClient.GetFiringAlertsForCluster(pdServiceIds)
 		if pdAlertsErr != nil {
 			return fmt.Errorf("failed to get PD Alerts for cluster %v: %v", clusterInfo.ID, pdAlertsErr)
 		}
