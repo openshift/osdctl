@@ -3,22 +3,20 @@ package cluster
 import (
 	"bytes"
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
+	"strings"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
+	bplogin "github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
+	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
-	"k8s.io/client-go/util/homedir"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -53,55 +51,54 @@ func (capture *logCapture) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func getKubeConfigAndClientSet() (*rest.Config, *kubernetes.Clientset, error) {
-	var kubeconfig *string
-
-	if home := homedir.HomeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	}
-	flag.Parse()
-
-	// use the current context in kubeconfig
-	kconfig, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+func getKubeConfigAndClient(clusterID string) (client.Client, *rest.Config, *kubernetes.Clientset, error) {
+	bp, err := bpconfig.GetBackplaneConfiguration()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
 	}
 
-	kconfig.Impersonate = rest.ImpersonationConfig{
-		UserName: BackplaneClusterAdmin,
+	kubeconfig, err := bplogin.GetRestConfigAsUser(bp, clusterID, "backplane-cluster-admin")
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	// create the clientset
-	clientset, err := kubernetes.NewForConfig(kconfig)
+	clientset, err := kubernetes.NewForConfig(kubeconfig)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-
-	return kconfig, clientset, err
+	kubeCli, err := client.New(kubeconfig, client.Options{})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return kubeCli, kubeconfig, clientset, err
 }
 
-func newCmdEtcdHealthCheck(kubeCli client.Client, flags *genericclioptions.ConfigFlags) *cobra.Command {
+func newCmdEtcdHealthCheck() *cobra.Command {
 	return &cobra.Command{
-		Use:               "etcd-health-check",
+		Use:               "etcd-health-check <cluster-id>",
 		Short:             "Checks the etcd components and member health",
 		Long:              `Checks etcd component health status for member replacement`,
-		Args:              cobra.ExactArgs(0),
+		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(EtcdHealthCheck(kubeCli))
+			cmdutil.CheckErr(EtcdHealthCheck(args[0]))
 		},
 	}
 }
 
-func EtcdHealthCheck(kubeCli client.Client) error {
+func EtcdHealthCheck(clusterId string) error {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Fatal("error : ", err)
 		}
 	}()
 
-	err := ControlplaneNodeStatus(kubeCli)
+	kubeCli, kconfig, clientset, err := getKubeConfigAndClient(clusterId)
+	if err != nil {
+		return err
+	}
+
+	err = ControlplaneNodeStatus(kubeCli)
 	if err != nil {
 		return err
 	}
@@ -111,35 +108,22 @@ func EtcdHealthCheck(kubeCli client.Client) error {
 		return err
 	}
 
-	err = EtcdCrStatus(kubeCli)
+	unhealthyMember, err := EtcdCrStatus(kubeCli)
 	if err != nil {
 		return err
-	}
-
-	kconfig, clientset, err := getKubeConfigAndClientSet()
-	if err != nil {
-		return err
-	}
-
-	MatchPodName := false
-	var etcdPodName string
-	for !MatchPodName {
-		fmt.Print("Enter Etcd Pod Name: ")
-		fmt.Scan(&etcdPodName)
-		for _, pods := range podlist.Items {
-			if etcdPodName == pods.Name {
-				MatchPodName = true
-			}
-		}
 	}
 
 	for _, v := range etcdctlCmd {
-		output, err := Etcdctlhealth(kconfig, clientset, v, etcdPodName)
+		output, err := Etcdctlhealth(kconfig, clientset, v, podlist.Items[0].Name)
 		if err != nil {
 			fmt.Println(err)
 		}
 		fmt.Printf("$ %s\n", v)
 		fmt.Println(output)
+	}
+
+	if unhealthyMember != "" {
+		fmt.Printf("[INFO] %s is unhealthy.\nRun \"osdctl cluster etcd-member-replace %s --node %s\" to replace the member \n", unhealthyMember, clusterId, unhealthyMember)
 	}
 	return nil
 }
@@ -187,25 +171,34 @@ func EtcdPodStatus(kubeCli client.Client) (*corev1.PodList, error) {
 	return pods, nil
 }
 
-func EtcdCrStatus(kubeCli client.Client) error {
+func EtcdCrStatus(kubeCli client.Client) (string, error) {
 
 	etcdCR := &operatorv1.Etcd{}
 	if err := kubeCli.Get(context.TODO(), client.ObjectKey{
 		Name: "cluster",
 	}, etcdCR); err != nil {
-		return err
+		return "", err
 	}
 
 	etcdConditionList := etcdCR.Status.Conditions
+	var message string
 	for _, v := range etcdConditionList {
 		if v.Type == EtcdMemberConditionType {
 			fmt.Println("+---------------------------------------------------------------+")
 			fmt.Println("|               ETCD MEMBER HEALTH STATUS                       |")
 			fmt.Println("+---------------------------------------------------------------+")
 			fmt.Printf("%s\n\n", v.Message)
+			message = v.Message
 		}
 	}
-	return nil
+
+	// Getting the unhealthy member name
+	list := strings.Split(message, ",")
+	if len(list) == 1 {
+		return "", nil
+	}
+	message = strings.Split(strings.TrimSpace(list[1]), " ")[0]
+	return message, nil
 }
 
 func Etcdctlhealth(kconfig *rest.Config, clientset *kubernetes.Clientset, etcdctlCmd string, etcdPodName string) (string, error) {

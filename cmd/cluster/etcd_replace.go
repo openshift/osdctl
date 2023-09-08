@@ -11,14 +11,13 @@ import (
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type flagOptions struct {
+type etcdOptions struct {
 	nodeId string
 }
 
@@ -36,24 +35,25 @@ const (
 	EtcdForceRedeployPatch = `{"spec": {"forceRedeploymentReason": "single-master-recovery-%s"}}`
 )
 
-func newCmdEtcdMemberReplacement(kubeCli client.Client, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	opts := &flagOptions{}
+func newCmdEtcdMemberReplacement() *cobra.Command {
+	opts := &etcdOptions{}
 	replaceCmd := &cobra.Command{
-		Use:               "etcd-member-replacement",
+		Use:               "etcd-member-replace <cluster-id>",
 		Short:             "Replaces an unhealthy etcd node",
 		Long:              `Replaces an unhealthy ectd node using the member id provided`,
-		Args:              cobra.ExactArgs(0),
+		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(EtcdReplaceMember(kubeCli, *opts, flags))
+			cmdutil.CheckErr(opts.EtcdReplaceMember(args[0]))
 		},
 	}
-	replaceCmd.Flags().StringVar(&opts.nodeId, "node", "", "Node ID")
+	replaceCmd.Flags().StringVar(&opts.nodeId, "node", "", "Node ID (required)")
+	replaceCmd.MarkFlagRequired("node")
 	return replaceCmd
 }
 
-func EtcdReplaceMember(kubeCli client.Client, opts flagOptions, flags *genericclioptions.ConfigFlags) error {
-	kconfig, clientset, err := getKubeConfigAndClientSet()
+func (opts *etcdOptions) EtcdReplaceMember(clusterId string) error {
+	kubeCli, kconfig, clientset, err := getKubeConfigAndClient(clusterId)
 	if err != nil {
 		return err
 	}
@@ -77,9 +77,9 @@ func EtcdReplaceMember(kubeCli client.Client, opts flagOptions, flags *genericcl
 			if c.State.Waiting != nil && (c.State.Waiting.Reason == "CrashLoopBackOff" || c.State.Waiting.Reason == "Error") {
 				podName := "etcd-" + opts.nodeId
 				if podName != pod.ObjectMeta.Name {
-					return fmt.Errorf("the etcd member seems to be healthy. Please run health-check again")
+					return fmt.Errorf("the etcd member seems to be healthy or is not present. Please run health-check again")
 				}
-				err := ReplaceEtcdMember(kubeCli, kconfig, clientset, flags, opts, pod.ObjectMeta.Name)
+				err := opts.ReplaceEtcdMember(kubeCli, kconfig, clientset, pod.ObjectMeta.Name)
 				if err != nil {
 					return err
 				}
@@ -90,17 +90,17 @@ func EtcdReplaceMember(kubeCli client.Client, opts flagOptions, flags *genericcl
 	return fmt.Errorf("none of the etcd members seems to be unhealthy. Please verify once again")
 }
 
-func ReplaceEtcdMember(kubeCli client.Client, kconfig *rest.Config, clientset *kubernetes.Clientset, flags *genericclioptions.ConfigFlags, opts flagOptions, pod string) error {
+func (opts *etcdOptions) ReplaceEtcdMember(kubeCli client.Client, kconfig *rest.Config, clientset *kubernetes.Clientset, pod string) error {
 	// Remove the etcd member
 	fmt.Printf("[INFO] Starting etcd member replacement for pod %s", pod)
-	err := removeEtcdMember(kconfig, clientset, pod, opts)
+	err := opts.removeEtcdMember(kconfig, clientset, pod)
 	if err != nil {
 		return err
 	}
 
 	// Turn off the quorum guard
 	fmt.Println("[INFO] Turning the quorum guard off")
-	err = patchEtcd(kubeCli, flags, EtcdQuorumTurnOffPatch)
+	err = patchEtcd(kubeCli, EtcdQuorumTurnOffPatch)
 	if err != nil {
 		fmt.Println("[ERROR] Could not Turn the quorum guard off. Refer error below")
 		return err
@@ -108,7 +108,7 @@ func ReplaceEtcdMember(kubeCli client.Client, kconfig *rest.Config, clientset *k
 
 	// Delete the secrets for the unhealthy etcd member
 	fmt.Println("[INFO] Deleting the secrets for the unhealthy etcd member")
-	err = removeEtcdSecrets(clientset, opts)
+	err = opts.removeEtcdSecrets(clientset)
 	if err != nil {
 		fmt.Println("[ERROR] Could not delete the secrets for the unhealthy etcd member. Refer error below")
 		return err
@@ -118,7 +118,7 @@ func ReplaceEtcdMember(kubeCli client.Client, kconfig *rest.Config, clientset *k
 	fmt.Println("[INFO] Forcing etcd redeployment")
 	timeStamp := time.Now().Format(time.RFC3339Nano)
 	patch := fmt.Sprintf(EtcdForceRedeployPatch, timeStamp)
-	err = patchEtcd(kubeCli, flags, patch)
+	err = patchEtcd(kubeCli, patch)
 	if err != nil {
 		fmt.Println("[ERROR] Could not force etcd redeployment. Refer error below")
 		return err
@@ -126,7 +126,7 @@ func ReplaceEtcdMember(kubeCli client.Client, kconfig *rest.Config, clientset *k
 
 	// Turn the quorum guard back
 	fmt.Println("[INFO] Turning the quorum guard back on")
-	err = patchEtcd(kubeCli, flags, EtcdQuorumTurnOnPatch)
+	err = patchEtcd(kubeCli, EtcdQuorumTurnOnPatch)
 	if err != nil {
 		fmt.Println("[ERROR]  Could not Turn the quorum guard back on. Refer error below")
 		return err
@@ -136,7 +136,7 @@ func ReplaceEtcdMember(kubeCli client.Client, kconfig *rest.Config, clientset *k
 	return nil
 }
 
-func removeEtcdMember(kconfig *rest.Config, clientset *kubernetes.Clientset, pod string, opts flagOptions) error {
+func (opts *etcdOptions) removeEtcdMember(kconfig *rest.Config, clientset *kubernetes.Clientset, pod string) error {
 	fmt.Println()
 	cmd := "etcdctl member list -w table | grep " + opts.nodeId + " | awk '{ print $2 }'"
 	memberId, err := Etcdctlhealth(kconfig, clientset, cmd, pod)
@@ -161,10 +161,8 @@ func removeEtcdMember(kconfig *rest.Config, clientset *kubernetes.Clientset, pod
 	return nil
 }
 
-func patchEtcd(kubeCli client.Client, flags *genericclioptions.ConfigFlags, patch string) error {
+func patchEtcd(kubeCli client.Client, patch string) error {
 	etcdCR := &operatorv1.Etcd{}
-	flags.Impersonate = &BackplaneClusterAdmin
-
 	err := kubeCli.Get(context.TODO(), client.ObjectKey{Name: "cluster"}, etcdCR)
 	if err != nil {
 		return err
@@ -176,7 +174,7 @@ func patchEtcd(kubeCli client.Client, flags *genericclioptions.ConfigFlags, patc
 	return nil
 }
 
-func removeEtcdSecrets(clientset *kubernetes.Clientset, opts flagOptions) error {
+func (opts *etcdOptions) removeEtcdSecrets(clientset *kubernetes.Clientset) error {
 	for _, secret := range secrets {
 		name := secret + opts.nodeId
 		err := clientset.CoreV1().Secrets("openshift-etcd").Delete(context.TODO(), name, metav1.DeleteOptions{})
