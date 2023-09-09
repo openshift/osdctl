@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/openshift/osdctl/cmd/servicelog"
 
@@ -83,15 +81,10 @@ type contextData struct {
 	// PD Alerts
 	pdServiceID      []string
 	PdAlerts         map[string][]pd.Incident
-	HistoricalAlerts map[string][]*IncidentOccurrenceTracker
+	HistoricalAlerts map[string][]*pagerduty.IncidentOccurrenceTracker
 
 	// CloudTrail Logs
 	CloudtrailEvents []*types.Event
-}
-type IncidentOccurrenceTracker struct {
-	IncidentName   string
-	Count          int
-	LastOccurrence string
 }
 
 // newCmdContext implements the context command to show the current context of a cluster
@@ -325,6 +318,12 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 
 	// For PD query dependencies
 	pdwg := sync.WaitGroup{}
+	pdProvider, err := pagerduty.NewClient().
+		WithUserToken(o.usertoken).
+		WithOauthToken(o.oauthtoken).
+		WithBaseDomain(o.baseDomain).
+		WithTeamIdList(viper.GetStringSlice(pagerduty.PagerDutyTeamIDsKey)).
+		Init()
 
 	ocmClient, err := utils.CreateConnection()
 	if err != nil {
@@ -394,13 +393,6 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		defer wg.Done()
 		defer pdwg.Done()
 
-		pdProvider, err := pagerduty.NewClient().
-			WithUserToken(o.usertoken).
-			WithOauthToken(o.oauthtoken).
-			WithBaseDomain(o.baseDomain).
-			WithTeamIdList(viper.GetStringSlice(pagerduty.PagerDutyTeamIDsKey)).
-			Init()
-
 		if o.verbose {
 			fmt.Fprintln(os.Stderr, "Getting PagerDuty Service...")
 		}
@@ -438,7 +430,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			if o.verbose {
 				fmt.Fprintln(os.Stderr, "Getting historical PagerDuty Alerts...")
 			}
-			data.HistoricalAlerts, err = GetHistoricalPDAlertsForCluster(data.pdServiceID, o.usertoken, o.oauthtoken)
+			data.HistoricalAlerts, err = pdProvider.GetHistoricalAlertsForCluster(data.pdServiceID)
 			if err != nil {
 				errors = append(errors, fmt.Errorf("Error while getting historical PD Alert Data: %v", err))
 			}
@@ -470,94 +462,6 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	wg.Wait()
 
 	return data, errors
-}
-
-func GetHistoricalPDAlertsForCluster(pdServiceIDs []string, pdUsertoken string, pdAuthToken string) (map[string][]*IncidentOccurrenceTracker, error) {
-
-	var currentOffset uint
-	var limit uint = 100
-	var incidents []pd.Incident
-	var ctx = context.TODO()
-	incidentMap := map[string][]*IncidentOccurrenceTracker{}
-
-	pdClient, err := utils.GetPagerDutyClient(pdUsertoken, pdAuthToken)
-	if err != nil {
-		fmt.Println("error getting pd client: ", err.Error())
-		return nil, err
-	}
-
-	for _, pdServiceID := range pdServiceIDs {
-		for currentOffset = 0; true; currentOffset += limit {
-			liResponse, err := pdClient.ListIncidentsWithContext(
-				ctx,
-				pd.ListIncidentsOptions{
-					ServiceIDs: []string{pdServiceID},
-					Statuses:   []string{"resolved", "triggered", "acknowledged"},
-					Offset:     currentOffset,
-					Limit:      limit,
-					SortBy:     "created_at:desc",
-				},
-			)
-
-			if err != nil {
-				return nil, err
-			}
-
-			if len(liResponse.Incidents) == 0 {
-				break
-			}
-
-			incidents = append(incidents, liResponse.Incidents...)
-		}
-		incidentCounter := make(map[string]*IncidentOccurrenceTracker)
-
-		for _, incident := range incidents {
-			title := strings.Split(incident.Title, " ")[0]
-			if _, found := incidentCounter[title]; found {
-				incidentCounter[title].Count++
-
-				// Compare current incident timestamp vs our previous 'latest occurrence', and save the most recent.
-				currentLastOccurrence, err := time.Parse(time.RFC3339, incidentCounter[title].LastOccurrence)
-				if err != nil {
-					fmt.Printf("Failed to parse time %q\n", err)
-					return nil, err
-				}
-
-				incidentCreatedAt, err := time.Parse(time.RFC3339, incident.CreatedAt)
-				if err != nil {
-					fmt.Printf("Failed to parse time %q\n", err)
-					return nil, err
-				}
-
-				// We want to see when the latest occurrence was
-				if incidentCreatedAt.After(currentLastOccurrence) {
-					incidentCounter[title].LastOccurrence = incident.CreatedAt
-				}
-
-			} else {
-				// First time encountering this incident type
-				incidentCounter[title] = &IncidentOccurrenceTracker{
-					IncidentName:   title,
-					Count:          1,
-					LastOccurrence: incident.CreatedAt,
-				}
-			}
-		}
-
-		var incidentSlice []*IncidentOccurrenceTracker = make([]*IncidentOccurrenceTracker, 0, len(incidentCounter))
-		for _, val := range incidentCounter {
-			incidentSlice = append(incidentSlice, val)
-		}
-
-		sort.Slice(incidentSlice, func(i int, j int) bool {
-			return incidentSlice[i].Count < incidentSlice[j].Count
-		})
-		incidentMap[pdServiceID] = append(incidentMap[pdServiceID], incidentSlice...)
-
-	}
-
-	return incidentMap, nil
-
 }
 
 func GetCloudTrailLogsForCluster(awsProfile string, clusterID string, maxPages int) ([]*types.Event, error) {
@@ -609,7 +513,7 @@ func printClusterInfo(clusterID string) {
 	fmt.Println(string(output))
 }
 
-func printHistoricalPDAlertSummary(incidentCounters map[string][]*IncidentOccurrenceTracker, serviceIDs []string, sinceDays int) {
+func printHistoricalPDAlertSummary(incidentCounters map[string][]*pagerduty.IncidentOccurrenceTracker, serviceIDs []string, sinceDays int) {
 	var name string = "PagerDuty Historical Alerts"
 	fmt.Println(delimiter + name)
 
