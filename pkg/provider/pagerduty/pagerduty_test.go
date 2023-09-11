@@ -82,7 +82,7 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 			})
 			It("Correctly parses a list of service ids", func() {
 				m := pdMock.NewMockpdClientInterface(ctrl)
-				m.EXPECT().ListServicesWithContext(gomock.Any(), gomock.Any()).Return(&pd.ListServiceResponse{Services: []pd.Service{pd.Service{APIObject: pd.APIObject{ID: "abcd"}}, pd.Service{APIObject: pd.APIObject{ID: "1234"}}}}, nil)
+				m.EXPECT().ListServicesWithContext(gomock.Any(), gomock.Any()).Return(&pd.ListServiceResponse{Services: []pd.Service{{APIObject: pd.APIObject{ID: "abcd"}}, {APIObject: pd.APIObject{ID: "1234"}}}}, nil)
 				pdProvider.pdclient = m
 				ids, err := pdProvider.GetPDServiceIDs()
 				Expect(err).To(BeNil())
