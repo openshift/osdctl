@@ -266,7 +266,7 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 		}
 	}
 
-	input, err := defaultValidateEgressInput(ctx, region)
+	input, err := defaultValidateEgressInput(ctx, e.cluster, region)
 	if err != nil {
 		return nil, fmt.Errorf("failed to assemble validate egress input: %s", err)
 	}
@@ -571,11 +571,17 @@ func filtersToString(filters []types.Filter) string {
 }
 
 // defaultValidateEgressInput generates an opinionated default osd-network-verifier ValidateEgressInput.
-func defaultValidateEgressInput(ctx context.Context, region string) (*onv.ValidateEgressInput, error) {
-	awsDefaultTags := map[string]string{
+// Tags from the cluster are passed to the network-verifier instance
+func defaultValidateEgressInput(ctx context.Context, cluster *cmv1.Cluster, region string) (*onv.ValidateEgressInput, error) {
+	networkVerifierDefaultTags := map[string]string{
 		"osd-network-verifier": "owned",
 		"red-hat-managed":      "true",
 		"Name":                 "osd-network-verifier",
+	}
+
+	// TODO: When this command supports GCP this will need to be adjusted
+	for k, v := range cluster.AWS().Tags() {
+		networkVerifierDefaultTags[k] = v
 	}
 
 	if onvAwsClient.GetAMIForRegion(region) == "" {
@@ -590,7 +596,7 @@ func defaultValidateEgressInput(ctx context.Context, region string) (*onv.Valida
 		InstanceType: "t3.micro",
 		Proxy:        proxy.ProxyConfig{},
 		PlatformType: helpers.PlatformAWS,
-		Tags:         awsDefaultTags,
+		Tags:         networkVerifierDefaultTags,
 		AWS: onv.AwsEgressConfig{
 			SecurityGroupId: "",
 		},
