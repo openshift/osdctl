@@ -1,8 +1,22 @@
 package cluster
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	bplogin "github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
+	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
+	hiveapiv1 "github.com/openshift/hive/apis/hive/v1"
+	hiveinternalv1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
+	"github.com/openshift/osdctl/cmd/servicelog"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strings"
+	"time"
 
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
@@ -54,9 +68,200 @@ func newTransferOwnerOptions(streams genericclioptions.IOStreams, globalOpts *gl
 	}
 }
 
+func generateServiceLog(clusterId string, template string) servicelog.PostCmdOptions {
+	return servicelog.PostCmdOptions{
+		Template:       template,
+		ClusterId:      clusterId,
+		TemplateParams: []string{fmt.Sprintf("DATE=%v", time.Now().Format(time.RFC3339))},
+	}
+}
+
+func getHiveKubeConfigAndClient(clusterID string) (client.Client, *rest.Config, *kubernetes.Clientset, error) {
+	hiveCluster, err := utils.GetHiveCluster(clusterID)
+
+	bp, err := bpconfig.GetBackplaneConfiguration()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
+	}
+
+	kubeconfig, err := bplogin.GetRestConfigAsUser(bp, hiveCluster.ID(), "backplane-cluster-admin")
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	// create the clientset
+	clientset, err := kubernetes.NewForConfig(kubeconfig)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	kubeCli, err := client.New(kubeconfig, client.Options{})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return kubeCli, kubeconfig, clientset, err
+}
+
+func updatePullSecret(conn *sdk.Connection, kubeCli client.Client, clientset *kubernetes.Clientset, clusterID string, secret *corev1.Secret) error {
+	currentEnv := utils.GetCurrentOCMEnv(conn)
+	secretName := "pull"
+	hiveNamespace := "uhc-" + currentEnv + "-" + clusterID
+	secretData := secret.Data
+
+	clusterDeployments := &hiveapiv1.ClusterDeploymentList{}
+	if err := kubeCli.List(context.TODO(), clusterDeployments, client.InNamespace(hiveNamespace)); err != nil {
+		return err
+	}
+
+	if len(clusterDeployments.Items) == 0 {
+		return fmt.Errorf("failed to retreive cluster deployments")
+	}
+	cdName := clusterDeployments.Items[0].ObjectMeta.Name
+
+	// Delete the secret
+	err := clientset.CoreV1().Secrets(hiveNamespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
+	if err != nil {
+		return err
+	}
+
+	secret = &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: hiveNamespace,
+		},
+		Type: corev1.SecretTypeDockerConfigJson,
+		Data: secretData,
+	}
+	_, err = clientset.CoreV1().Secrets(hiveNamespace).Create(context.TODO(), secret, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
+
+	//Create a syncset on hive to push the pull secret down
+	syncsetName := "pull-secret-replacement"
+
+	err = createSyncSet(syncsetName, hiveNamespace, cdName, kubeCli)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+func createSyncSet(syncSetName string, hiveNamespace string, cdName string, kubeCli client.Client) error {
+	ctx := context.TODO()
+
+	syncSet := &hiveapiv1.SyncSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      syncSetName,
+			Namespace: hiveNamespace,
+		},
+		Spec: hiveapiv1.SyncSetSpec{
+			ClusterDeploymentRefs: []corev1.LocalObjectReference{
+				{
+					Name: cdName,
+				},
+			},
+			SyncSetCommonSpec: hiveapiv1.SyncSetCommonSpec{
+				ResourceApplyMode: "Upsert",
+				Secrets: []hiveapiv1.SecretMapping{
+					{
+						SourceRef: hiveapiv1.SecretReference{
+							Name:      "pull",
+							Namespace: hiveNamespace,
+						},
+						TargetRef: hiveapiv1.SecretReference{
+							Name:      "pull-secret",
+							Namespace: "openshift-config",
+						},
+					},
+				},
+			},
+		},
+	}
+	fmt.Println("Syncing AWS creds down to cluster.")
+
+	err := kubeCli.Create(ctx, syncSet)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("SyncSet %s in namespace %s has been created.\n", syncSetName, hiveNamespace)
+
+	hiveinternalv1alpha1.AddToScheme(kubeCli.Scheme())
+	searchStatus := &hiveinternalv1alpha1.ClusterSync{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cdName,
+			Namespace: hiveNamespace,
+		},
+	}
+	foundStatus := &hiveinternalv1alpha1.ClusterSync{}
+	isSSSynced := false
+	for i := 0; i < 6; i++ {
+		err = kubeCli.Get(ctx, client.ObjectKeyFromObject(searchStatus), foundStatus)
+		if err != nil {
+			return err
+		}
+
+		for _, status := range foundStatus.Status.SyncSets {
+			if status.Name == syncSetName {
+				if status.FirstSuccessTime != nil {
+					isSSSynced = true
+					break
+				}
+			}
+		}
+
+		if isSSSynced {
+			fmt.Printf("\nSync completed...\n")
+			break
+		}
+
+		fmt.Printf(".")
+		time.Sleep(time.Second * 5)
+	}
+	if !isSSSynced {
+		return fmt.Errorf("syncset failed to sync. Please verify")
+	}
+
+	// Clean up the SS on hive
+	err = kubeCli.Delete(ctx, syncSet)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func rolloutTelemeterClientPods(clientset *kubernetes.Clientset, namespace, selector string) error {
+	// Delete pods with the specified label selector in the specified namespace.
+	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: selector,
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, pod := range pods.Items {
+		err = clientset.CoreV1().Pods(namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Pod %s in namespace %s has been deleted.\n", pod.Name, namespace)
+	}
+
+	fmt.Printf("Pods in namespace %s with label selector '%s' have been deleted.\n", namespace, selector)
+	return nil
+}
+
 func (o *transferOwnerOptions) run() error {
-	fmt.Print("Before making changes in OCM, the cluster must have the pull secret updated to be the new owner's. ")
-	fmt.Print("See: https://github.com/openshift/ops-sop/blob/master/v4/howto/replace-pull-secret.md\n")
+	fmt.Println("Notify the customer before ownership transfer commences. Sending service log.")
+	template := "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_completed.json"
+	postCmd := generateServiceLog(o.clusterID, template)
+	if err := postCmd.Run(); err != nil {
+		fmt.Println("Failed to generate service log. Please manually send a service log to Notify the customer before ownership transfer commences:")
+		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
+			o.clusterID, "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_starting.json", strings.Join(postCmd.TemplateParams, " -p "))
+	}
 
 	// Create an OCM client to talk to the cluster API
 	// the user has to be logged in (e.g. 'ocm login')
@@ -71,6 +276,35 @@ func (o *transferOwnerOptions) run() error {
 	}()
 
 	// Find and setup all resources that are needed
+	hiveKubeCli, _, hivecClientset, err := getHiveKubeConfigAndClient(o.clusterID)
+	if err != nil {
+		return err
+	}
+
+	secret := &corev1.Secret{}
+	if err := hiveKubeCli.Get(context.TODO(), types.NamespacedName{Namespace: "openshift-config", Name: "pull-secret"}, secret); err != nil {
+		return err
+	}
+
+	err = ValidatePullSecret(o.clusterID, hiveKubeCli, nil)
+	if err != nil {
+		return err
+	}
+
+	err = updatePullSecret(ocm, hiveKubeCli, hivecClientset, o.clusterID, secret)
+	if err != nil {
+		return err
+	}
+
+	_, _, clientset, err := getKubeConfigAndClient(o.clusterID)
+	if err != nil {
+		return err
+	}
+
+	err = rolloutTelemeterClientPods(clientset, "openshift-monitoring", "app.kubernetes.io/name=telemeter-client")
+	if err != nil {
+		return err
+	}
 
 	cluster, err := utils.GetCluster(ocm, o.clusterID)
 	if err != nil {
@@ -249,6 +483,16 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("error while validating transfer %w", err)
 	}
 	fmt.Print("Transfer complete\n")
+
+	fmt.Println("Notify the customer the ownership transfer is completed. Sending service log.")
+	template = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_completed.json"
+	postCmd = generateServiceLog(o.clusterID, template)
+	if err := postCmd.Run(); err != nil {
+		fmt.Println("Failed to generate service log. Please manually send a service log to Notify the customer  the ownership transfer is completed:")
+		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
+			o.clusterID, "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_completed.json", strings.Join(postCmd.TemplateParams, " -p "))
+	}
+
 	return nil
 }
 
