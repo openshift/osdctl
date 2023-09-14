@@ -138,7 +138,7 @@ func (o *deleteOptions) run() error {
 		if err != nil {
 			fmt.Printf("failed post call %q\n", err)
 		}
-		deleteResponse, err := sendRequest(deleteRequest)
+		deleteResponse, err := utils.SendRequest(deleteRequest)
 		if err != nil {
 			fmt.Printf("Failed to get delete call response: %q\n", err)
 		}
