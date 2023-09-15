@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/openshift/osdctl/cmd/servicelog"
 
@@ -16,7 +17,9 @@ import (
 	"github.com/andygrunwald/go-jira"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
+	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	sl "github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
@@ -85,6 +88,10 @@ type contextData struct {
 
 	// CloudTrail Logs
 	CloudtrailEvents []*types.Event
+
+	// Hibernation Status
+	// Indicates if cluster was recently awoken from hibernation
+	HibernationStatus []*HibernationPeriod
 }
 
 // newCmdContext implements the context command to show the current context of a cluster
@@ -225,6 +232,9 @@ func (o *contextOptions) printLongOutput(data *contextData) {
 		fmt.Println()
 
 		printCloudTrailLogs(data.CloudtrailEvents)
+		fmt.Println()
+
+		printHibernations(data.HibernationStatus)
 		fmt.Println()
 	}
 
@@ -447,10 +457,22 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			}
 		}
 
+		GetHibernationStatus := func() {
+			defer wg.Done()
+			if o.verbose {
+				fmt.Fprintln(os.Stderr, "Calculating hibernation data")
+			}
+			data.HibernationStatus, err = GetHibernationStatusForCluster(ocmClient, o.externalClusterID)
+			if err != nil {
+				errors = append(errors, fmt.Errorf("Error calculating hibernation status for cluster: %v", err))
+			}
+		}
+
 		retrievers = append(
 			retrievers,
 			GetHistoricalPagerDutyAlerts,
 			GetCloudTrailLogs,
+			GetHibernationStatus,
 		)
 	}
 
@@ -462,6 +484,67 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	wg.Wait()
 
 	return data, errors
+}
+
+func GetHibernationStatusForCluster(ocmClient *sdk.Connection, externalClusterID string) ([]*HibernationPeriod, error) {
+	clusterStateUpdates, err := ocmClient.ServiceLogs().V1().Clusters().Cluster(externalClusterID).ClusterLogs().List().Search("log_type='cluster-state-updates'").Send()
+	if err != nil {
+		return nil, err
+	}
+	return createHibernationTimeLine(clusterStateUpdates.Items().Slice()), nil
+}
+
+type HibernationPeriod struct {
+	HibernationDuration time.Duration
+	DehibernationTime   time.Time
+}
+
+func (h *HibernationPeriod) Status() string {
+	var extrainformation string
+	days := h.HibernationDuration.Hours() / 24
+	if days > 30 {
+		extrainformation = "(certificates on cluster might be expired, check if CSVs must be approved!)"
+	}
+	return fmt.Sprintf("A hibernation completed on %s - after %.1f days %s", h.DehibernationTime, days, extrainformation)
+}
+
+func createHibernationTimeLine(clusterStateUpdates []*v1.LogEntry) []*HibernationPeriod {
+	hibernationStart := "cluster_state_hibernating"
+	// hibernationOngoing := "cluster_state_hibernating"
+	// hibernationResume := "cluster_state_resuming"
+	hibernationEnd := "cluster_state_ready"
+	var hibernations []*HibernationPeriod
+
+	var hibernationStartTime time.Time
+	var hibernationEndTime time.Time
+	sort.SliceStable(clusterStateUpdates, func(i, j int) bool {
+		return clusterStateUpdates[i].Timestamp().Before(clusterStateUpdates[j].Timestamp())
+	})
+	for _, stateUpdate := range clusterStateUpdates {
+		event := stateUpdate.Summary()
+		date := stateUpdate.Timestamp()
+		if event == hibernationStart {
+			hibernationStartTime = date
+		}
+		if event == hibernationEnd {
+			if (hibernationStartTime == time.Time{}) {
+				// Cluster became ready after installation
+				continue
+			}
+			hibernationEndTime = date
+			hibernation := &HibernationPeriod{
+				DehibernationTime:   hibernationEndTime,
+				HibernationDuration: hibernationEndTime.Sub(hibernationStartTime),
+			}
+			hibernations = append(hibernations, hibernation)
+			hibernationStartTime = time.Time{}
+			hibernationEndTime = time.Time{}
+		}
+	}
+	if (hibernationStartTime != time.Time{} && hibernationEndTime == time.Time{}) {
+		hibernations = append(hibernations, &HibernationPeriod{})
+	}
+	return hibernations
 }
 
 func GetCloudTrailLogsForCluster(awsProfile string, clusterID string, maxPages int) ([]*types.Event, error) {
@@ -636,6 +719,13 @@ func printCloudTrailLogs(events []*types.Event) {
 	table.AddRow([]string{})
 	if err := table.Flush(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error printing %s: %v\n", name, err)
+	}
+}
+
+func printHibernations(hibernations []*HibernationPeriod) {
+	fmt.Println(delimiter + "Hibernations")
+	for _, hp := range hibernations {
+		fmt.Println(hp.Status())
 	}
 }
 
