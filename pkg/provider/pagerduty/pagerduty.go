@@ -2,6 +2,7 @@ package pagerduty
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -83,6 +84,9 @@ func (c *client) buildClient() error {
 
 func (c *client) GetPDServiceIDs() ([]string, error) {
 	// TODO : do we need this to be an exposed function or could we do this when we build the client?
+	if c.pdclient == nil {
+		return nil, errors.New("No PagerDuty client available")
+	}
 	lsResponse, err := c.pdclient.ListServicesWithContext(context.TODO(), pd.ListServiceOptions{Query: c.baseDomain, TeamIDs: c.teamIds})
 	if err != nil {
 		return []string{}, fmt.Errorf("failed to ListServicesWithContext: %w", err)
