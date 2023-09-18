@@ -546,3 +546,15 @@ $ osdctl org customers --paying=false
 ```
 $ osdctl org aws-accounts --aws-profile="<aws-profile>" ou-id="<ou-id>"
 ```
+
+
+#### Run etcd health check for a cluster
+```
+osdctl cluster etcd-health-check <internal-cluster-id>
+```
+
+#### Run etcd member replacement for a cluster
+```
+osdctl cluster etcd-member-replace <internal-cluster-id> --node <node-id>
+```
+Note : Here node-id refers to the node that has the unhealthy etcd member. This can be found out from `etcd-health-check`
