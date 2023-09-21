@@ -34,7 +34,6 @@ type transferOwnerOptions struct {
 	clusterID    string
 	newOwnerName string
 	dryrun       bool
-	userName     string
 	cluster      *cmv1.Cluster
 
 	genericclioptions.IOStreams
@@ -281,18 +280,25 @@ func (o *transferOwnerOptions) run() error {
 	cluster, err := utils.GetClusterAnyStatus(ocm, o.clusterID)
 	o.cluster = cluster
 	o.clusterID = cluster.ID()
+
+	userDetails, err := ocm.AccountsMgmt().V1().Accounts().Account(o.newOwnerName).Get().Send()
+	userName, ok := userDetails.Body().GetUsername()
+	if !ok {
+		return fmt.Errorf("Failed to get username from new user id")
+	}
+
 	// Find and setup all resources that are needed
 	hiveKubeCli, _, hivecClientset, err := getHiveKubeConfigAndClient(o.clusterID)
 	if err != nil {
 		return err
 	}
 
-	response, err := ocm.AccountsMgmt().V1().AccessToken().Post().Impersonate(o.userName).Parameter("body", "/dev/null").Send()
+	response, err := ocm.AccountsMgmt().V1().AccessToken().Post().Impersonate(userName).Parameter("body", "/dev/null").Send()
 	if err != nil {
 		return fmt.Errorf("Can't send request: %v", err)
 	}
 
-	_, ok := response.Body().GetAuths()
+	_, ok = response.Body().GetAuths()
 	if !ok {
 		return fmt.Errorf("Error validating pull secret structure. This shouldn't happen, so you might need to contact SDB")
 	}
