@@ -11,7 +11,6 @@ import (
 	"github.com/openshift/osdctl/cmd/servicelog"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,6 +33,7 @@ type transferOwnerOptions struct {
 	clusterID    string
 	newOwnerName string
 	dryrun       bool
+	userName     string
 
 	genericclioptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
@@ -100,11 +100,10 @@ func getHiveKubeConfigAndClient(clusterID string) (client.Client, *rest.Config, 
 	return kubeCli, kubeconfig, clientset, err
 }
 
-func updatePullSecret(conn *sdk.Connection, kubeCli client.Client, clientset *kubernetes.Clientset, clusterID string, secret *corev1.Secret) error {
+func updatePullSecret(conn *sdk.Connection, kubeCli client.Client, clientset *kubernetes.Clientset, clusterID string, pullsecret []byte) error {
 	currentEnv := utils.GetCurrentOCMEnv(conn)
 	secretName := "pull"
 	hiveNamespace := "uhc-" + currentEnv + "-" + clusterID
-	secretData := secret.Data
 
 	clusterDeployments := &hiveapiv1.ClusterDeploymentList{}
 	if err := kubeCli.List(context.TODO(), clusterDeployments, client.InNamespace(hiveNamespace)); err != nil {
@@ -122,13 +121,15 @@ func updatePullSecret(conn *sdk.Connection, kubeCli client.Client, clientset *ku
 		return err
 	}
 
-	secret = &corev1.Secret{
+	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
 			Namespace: hiveNamespace,
 		},
 		Type: corev1.SecretTypeDockerConfigJson,
-		Data: secretData,
+		Data: map[string][]byte{
+			".dockerconfigjson": pullsecret,
+		},
 	}
 	_, err = clientset.CoreV1().Secrets(hiveNamespace).Create(context.TODO(), secret, metav1.CreateOptions{})
 	if err != nil {
@@ -196,7 +197,7 @@ func createSyncSet(syncSetName string, hiveNamespace string, cdName string, kube
 	}
 	foundStatus := &hiveinternalv1alpha1.ClusterSync{}
 	isSSSynced := false
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 24; i++ {
 		err = kubeCli.Get(ctx, client.ObjectKeyFromObject(searchStatus), foundStatus)
 		if err != nil {
 			return err
@@ -220,7 +221,7 @@ func createSyncSet(syncSetName string, hiveNamespace string, cdName string, kube
 		time.Sleep(time.Second * 5)
 	}
 	if !isSSSynced {
-		return fmt.Errorf("syncset failed to sync. Please verify")
+		return fmt.Errorf("syncset failed to sync. Please verify syncset is still there and manually delete syncset ")
 	}
 
 	// Clean up the SS on hive
@@ -281,17 +282,19 @@ func (o *transferOwnerOptions) run() error {
 		return err
 	}
 
-	secret := &corev1.Secret{}
-	if err := hiveKubeCli.Get(context.TODO(), types.NamespacedName{Namespace: "openshift-config", Name: "pull-secret"}, secret); err != nil {
-		return err
-	}
-
-	err = ValidatePullSecret(o.clusterID, hiveKubeCli, nil)
+	response, err := ocm.AccountsMgmt().V1().AccessToken().Post().Impersonate(o.userName).Parameter("body", "/dev/null").Send()
 	if err != nil {
-		return err
+		return fmt.Errorf("Can't send request: %v", err)
 	}
 
-	err = updatePullSecret(ocm, hiveKubeCli, hivecClientset, o.clusterID, secret)
+	_, ok := response.Body().GetAuths()
+	if !ok {
+		return fmt.Errorf("Error validating pull secret structure. This shouldn't happen, so you might need to contact SDB")
+	}
+
+	pullSecret, err := json.Marshal(response)
+
+	err = updatePullSecret(ocm, hiveKubeCli, hivecClientset, o.clusterID, pullSecret)
 	if err != nil {
 		return err
 	}
