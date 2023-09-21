@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	bplogin "github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
 	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
 	hiveapiv1 "github.com/openshift/hive/apis/hive/v1"
@@ -34,6 +35,7 @@ type transferOwnerOptions struct {
 	newOwnerName string
 	dryrun       bool
 	userName     string
+	cluster      *cmv1.Cluster
 
 	genericclioptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
@@ -78,13 +80,14 @@ func generateServiceLog(clusterId string, template string) servicelog.PostCmdOpt
 
 func getHiveKubeConfigAndClient(clusterID string) (client.Client, *rest.Config, *kubernetes.Clientset, error) {
 	hiveCluster, err := utils.GetHiveCluster(clusterID)
+	hiveID := hiveCluster.ID()
 
 	bp, err := bpconfig.GetBackplaneConfiguration()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
 	}
 
-	kubeconfig, err := bplogin.GetRestConfigAsUser(bp, hiveCluster.ID(), "backplane-cluster-admin")
+	kubeconfig, err := bplogin.GetRestConfigAsUser(bp, hiveID, "backplane-cluster-admin")
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -275,7 +278,9 @@ func (o *transferOwnerOptions) run() error {
 			fmt.Printf("Cannot close the ocm (possible memory leak): %q", ocmCloseErr)
 		}
 	}()
-
+	cluster, err := utils.GetClusterAnyStatus(ocm, o.clusterID)
+	o.cluster = cluster
+	o.clusterID = cluster.ID()
 	// Find and setup all resources that are needed
 	hiveKubeCli, _, hivecClientset, err := getHiveKubeConfigAndClient(o.clusterID)
 	if err != nil {
@@ -309,7 +314,7 @@ func (o *transferOwnerOptions) run() error {
 		return err
 	}
 
-	cluster, err := utils.GetCluster(ocm, o.clusterID)
+	cluster, err = utils.GetCluster(ocm, o.clusterID)
 	if err != nil {
 		return err
 	}
