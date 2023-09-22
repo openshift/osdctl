@@ -153,7 +153,6 @@ func createSyncSet(syncSetName string, hiveNamespace string, cdName string, kube
 			},
 		},
 	}
-	fmt.Println("Syncing AWS creds down to cluster.")
 
 	err := kubeCli.Create(ctx, syncSet)
 	if err != nil {
