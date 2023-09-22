@@ -5,15 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
-	bplogin "github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
-	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
 	hiveapiv1 "github.com/openshift/hive/apis/hive/v1"
 	hiveinternalv1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 	"time"
@@ -73,33 +70,8 @@ func generateServiceLog(clusterId string, template string) servicelog.PostCmdOpt
 	return servicelog.PostCmdOptions{
 		Template:       template,
 		ClusterId:      clusterId,
-		TemplateParams: []string{fmt.Sprintf("DATE=%v", time.Now().Format(time.RFC3339))},
+		TemplateParams: []string{fmt.Sprintf("DATE=%v", time.Now().UTC().Format(time.RFC3339))},
 	}
-}
-
-func getHiveKubeConfigAndClient(clusterID string) (client.Client, *rest.Config, *kubernetes.Clientset, error) {
-	hiveCluster, err := utils.GetHiveCluster(clusterID)
-	hiveID := hiveCluster.ID()
-
-	bp, err := bpconfig.GetBackplaneConfiguration()
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
-	}
-
-	kubeconfig, err := bplogin.GetRestConfigAsUser(bp, hiveID, "backplane-cluster-admin")
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	// create the clientset
-	clientset, err := kubernetes.NewForConfig(kubeconfig)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	kubeCli, err := client.New(kubeconfig, client.Options{})
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return kubeCli, kubeconfig, clientset, err
 }
 
 func updatePullSecret(conn *sdk.Connection, kubeCli client.Client, clientset *kubernetes.Clientset, clusterID string, pullsecret []byte) error {
@@ -258,8 +230,7 @@ func rolloutTelemeterClientPods(clientset *kubernetes.Clientset, namespace, sele
 
 func (o *transferOwnerOptions) run() error {
 	fmt.Println("Notify the customer before ownership transfer commences. Sending service log.")
-	template := "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_completed.json"
-	postCmd := generateServiceLog(o.clusterID, template)
+	postCmd := generateServiceLog(o.clusterID, "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_starting.json")
 	if err := postCmd.Run(); err != nil {
 		fmt.Println("Failed to generate service log. Please manually send a service log to Notify the customer before ownership transfer commences:")
 		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
@@ -288,7 +259,8 @@ func (o *transferOwnerOptions) run() error {
 	}
 
 	// Find and setup all resources that are needed
-	hiveKubeCli, _, hivecClientset, err := getHiveKubeConfigAndClient(o.clusterID)
+	hiveCluster, err := utils.GetHiveCluster(o.clusterID)
+	hiveKubeCli, _, hivecClientset, err := getKubeConfigAndClient(hiveCluster.ID())
 	if err != nil {
 		return err
 	}
@@ -298,12 +270,24 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("Can't send request: %v", err)
 	}
 
-	_, ok = response.Body().GetAuths()
+	auths, ok := response.Body().GetAuths()
 	if !ok {
 		return fmt.Errorf("Error validating pull secret structure. This shouldn't happen, so you might need to contact SDB")
 	}
+	authsMap := map[string]map[string]string{}
+	for k, auth := range auths {
+		authsMap[k] = map[string]string{
+			"auth":  auth.Auth(),
+			"email": auth.Email(),
+		}
+	}
 
-	pullSecret, err := json.Marshal(response)
+	pullSecret, err := json.Marshal(map[string]map[string]map[string]string{
+		"auths": authsMap,
+	})
+	if err != nil {
+		return err
+	}
 
 	err = updatePullSecret(ocm, hiveKubeCli, hivecClientset, o.clusterID, pullSecret)
 	if err != nil {
@@ -499,8 +483,7 @@ func (o *transferOwnerOptions) run() error {
 	fmt.Print("Transfer complete\n")
 
 	fmt.Println("Notify the customer the ownership transfer is completed. Sending service log.")
-	template = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_completed.json"
-	postCmd = generateServiceLog(o.clusterID, template)
+	postCmd = generateServiceLog(o.clusterID, "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_completed.json")
 	if err := postCmd.Run(); err != nil {
 		fmt.Println("Failed to generate service log. Please manually send a service log to Notify the customer  the ownership transfer is completed:")
 		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
