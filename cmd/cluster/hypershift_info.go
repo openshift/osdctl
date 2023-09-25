@@ -150,7 +150,9 @@ func (i *infoOptions) complete(cmd *cobra.Command) error {
 }
 
 func baseApiUrl(c *v1.Cluster) string {
-	return strings.Replace(strings.Replace(strings.Replace(c.API().URL(), "https://api.", "", 1), c.Name(), "", 1), ":443", "", 1)
+	apiUrlSplit := strings.Split(c.API().URL(), ":")
+	clusterPort := fmt.Sprintf(":%s", apiUrlSplit[len(apiUrlSplit)-1])
+	return strings.Replace(strings.Replace(strings.Replace(c.API().URL(), "https://api.", "", 1), c.Name(), "", 1), clusterPort, "", 1)
 }
 
 func (i *infoOptions) run() error {
