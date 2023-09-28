@@ -16,28 +16,12 @@ type GoodReply struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-type ServiceLogShort struct {
-	Summary      string    `json:"summary"`
-	Description  string    `json:"description"`
-	CreatedAt    time.Time `json:"created_at"`
-	Severity     string    `json:"severity"`
-	InternalOnly bool      `json:"internal_only"`
-}
-
 type ClusterListGoodReply struct {
 	Kind  string      `json:"kind"`
 	Page  int         `json:"page"`
 	Size  int         `json:"size"`
 	Total int         `json:"total"`
 	Items []GoodReply `json:"items"`
-}
-
-type ServiceLogShortList struct {
-	Kind  string            `json:"kind"`
-	Page  int               `json:"page"`
-	Size  int               `json:"size"`
-	Total int               `json:"total"`
-	Items []ServiceLogShort `json:"items"`
 }
 
 type BadReply struct {

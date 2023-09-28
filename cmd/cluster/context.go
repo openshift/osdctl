@@ -3,6 +3,7 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
+	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"os"
 	"os/exec"
 	"sort"
@@ -17,7 +18,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
-	sl "github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/openshift/osdctl/pkg/printer"
@@ -72,7 +72,7 @@ type contextData struct {
 	// limited Support Status
 	LimitedSupportReasons []*cmv1.LimitedSupportReason
 	// Service Logs
-	ServiceLogs []sl.ServiceLogShort
+	ServiceLogs []*v1.LogEntry
 
 	// Jira Cards
 	JiraIssues        []jira.Issue
@@ -263,7 +263,7 @@ func (o *contextOptions) printShortOutput(data *contextData) {
 
 	var numInternalServiceLogs int
 	for _, serviceLog := range data.ServiceLogs {
-		if serviceLog.InternalOnly {
+		if serviceLog.InternalOnly() {
 			numInternalServiceLogs++
 		}
 	}
@@ -360,7 +360,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		if o.verbose {
 			fmt.Fprintln(os.Stderr, "Getting Service Logs...")
 		}
-		data.ServiceLogs, err = servicelog.GetServiceLogsSince(cluster.ID(), o.days)
+		data.ServiceLogs, err = servicelog.GetServiceLogsSince(cluster.ID(), o.days, false, false)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("Error while getting the service logs: %v", err))
 		}

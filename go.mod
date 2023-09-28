@@ -30,7 +30,7 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.27.7
 	github.com/openshift-online/ocm-cli v0.1.66
-	github.com/openshift-online/ocm-sdk-go v0.1.344
+	github.com/openshift-online/ocm-sdk-go v0.1.372
 	github.com/openshift/api v0.0.0-20230320211411-560b2fb170af
 	github.com/openshift/aws-account-operator/api v0.0.0-20230322125717-5b5a00a3e99f
 	github.com/openshift/backplane-cli v0.1.5

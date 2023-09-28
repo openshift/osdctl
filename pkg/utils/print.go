@@ -7,7 +7,7 @@ import (
 	"github.com/andygrunwald/go-jira"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
-	sl "github.com/openshift/osdctl/internal/servicelog"
+	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"github.com/openshift/osdctl/pkg/printer"
 	"math"
 	"os"
@@ -19,7 +19,7 @@ const (
 	delimiter = ">> "
 )
 
-func PrintServiceLogs(serviceLogs []sl.ServiceLogShort, verbose bool, sinceDays int) {
+func PrintServiceLogs(serviceLogs []*v1.LogEntry, verbose bool, sinceDays int) {
 	var name = fmt.Sprintf("Service Logs in the past %v days", sinceDays)
 	fmt.Println(delimiter + name)
 
@@ -35,19 +35,19 @@ func PrintServiceLogs(serviceLogs []sl.ServiceLogShort, verbose bool, sinceDays 
 		// Non-verbose only prints the summaries
 		for i, errorServiceLog := range serviceLogs {
 			var serviceLogSummary string
-			if errorServiceLog.InternalOnly {
-				internalServiceLogLines := strings.Split(errorServiceLog.Description, "\n")
+			if errorServiceLog.InternalOnly() {
+				internalServiceLogLines := strings.Split(errorServiceLog.Description(), "\n")
 				if len(internalServiceLogLines) > 0 {
 					// if the description is "", Split returns []
 					serviceLogSummary = fmt.Sprintf("INT %s", internalServiceLogLines[0])
 				} else {
-					serviceLogSummary = errorServiceLog.Summary
+					serviceLogSummary = errorServiceLog.Summary()
 				}
 			} else {
-				serviceLogSummary = errorServiceLog.Summary
+				serviceLogSummary = errorServiceLog.Summary()
 			}
 			serviceLogSummaryAbbreviated := serviceLogSummary[:int(math.Min(40, float64(len(serviceLogSummary))))]
-			fmt.Printf("%d. %s (%s)\n", i, serviceLogSummaryAbbreviated, errorServiceLog.CreatedAt.Format(time.RFC3339))
+			fmt.Printf("%d. %s (%s)\n", i, serviceLogSummaryAbbreviated, errorServiceLog.CreatedAt().Format(time.RFC3339))
 		}
 	}
 }

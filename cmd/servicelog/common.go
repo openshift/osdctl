@@ -3,8 +3,11 @@ package servicelog
 import (
 	"encoding/json"
 	"fmt"
+	sdk "github.com/openshift-online/ocm-sdk-go"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"github.com/openshift/osdctl/internal/servicelog"
-	sl "github.com/openshift/osdctl/internal/servicelog"
+	"github.com/openshift/osdctl/pkg/utils"
 	"time"
 )
 
@@ -61,30 +64,72 @@ func validateBadResponse(body []byte) (badReply *servicelog.BadReply, err error)
 // time.Now() and time.Now()-duration. the first parameter will contain a slice
 // of the service logs from the given time period, while the second return value
 // indicates if an error has happened.
-func GetServiceLogsSince(clusterID string, days int) ([]sl.ServiceLogShort, error) {
+func GetServiceLogsSince(clusterID string, days int, allMessages bool, internalOnly bool) ([]*v1.LogEntry, error) {
 	// time.Now().Sub() returns the duration between two times, so we negate the duration in Add()
 	earliestTime := time.Now().AddDate(0, 0, -days)
 
-	slResponse, err := FetchServiceLogs(clusterID)
+	slResponse, err := FetchServiceLogs(clusterID, allMessages, internalOnly)
 	if err != nil {
 		return nil, err
 	}
 
-	var serviceLogs sl.ServiceLogShortList
-	err = json.Unmarshal(slResponse.Bytes(), &serviceLogs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal the SL response %w", err)
-
-	}
-
-	// Parsing the relevant service logs
-	// - We only care about SLs sent in the given duration
-	var errorServiceLogs []sl.ServiceLogShort
-	for _, serviceLog := range serviceLogs.Items {
-		if serviceLog.CreatedAt.After(earliestTime) {
+	var errorServiceLogs []*v1.LogEntry
+	for _, serviceLog := range slResponse.Items().Slice() {
+		if serviceLog.CreatedAt().After(earliestTime) {
 			errorServiceLogs = append(errorServiceLogs, serviceLog)
 		}
 	}
 
 	return errorServiceLogs, nil
+}
+
+func FetchServiceLogs(clusterID string, allMessages bool, internalOnly bool) (*v1.ClustersClusterLogsListResponse, error) {
+	// Create OCM client to talk to cluster API
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := ocmClient.Close(); err != nil {
+			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
+		}
+	}()
+
+	// Use the OCM client to retrieve clusters
+	clusters := utils.GetClusters(ocmClient, []string{clusterID})
+	if len(clusters) != 1 {
+		return nil, fmt.Errorf("GetClusters expected to return 1 cluster, got: %d", len(clusters))
+	}
+	cluster := clusters[0]
+
+	// Now get the SLs for the cluster
+	clusterLogsListResponse, err := sendClusterLogsListRequest(ocmClient, cluster, allMessages, internalOnly)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch service logs for cluster %v: %w", clusterID, err)
+	}
+	return clusterLogsListResponse, nil
+}
+
+func sendClusterLogsListRequest(ocmClient *sdk.Connection, cluster *cmv1.Cluster, allMessages bool, internalMessages bool) (*v1.ClustersClusterLogsListResponse, error) {
+	request := ocmClient.ServiceLogs().V1().Clusters().ClusterLogs().List().
+		Parameter("cluster_id", cluster.ID()).
+		Parameter("cluster_uuid", cluster.ExternalID())
+
+	var searchQuery string
+	if !allMessages {
+		searchQuery = "service_name='SREManualAction'"
+	}
+	if internalMessages {
+		if searchQuery != "" {
+			searchQuery += " and "
+		}
+		searchQuery += "internal_only='true'"
+	}
+	request.Search(searchQuery)
+
+	response, err := request.Send()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch service logs: %w", err)
+	}
+	return response, nil
 }

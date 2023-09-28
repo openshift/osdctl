@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"os"
 	"strconv"
 	"sync"
@@ -14,7 +15,6 @@ import (
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/cmd/servicelog"
-	sl "github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/pkg/printer"
 	pdProvider "github.com/openshift/osdctl/pkg/provider/pagerduty"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -34,7 +34,7 @@ type ClusterInfo struct {
 	CloudProvider         string
 	Plan                  string
 	NodeCount             float64
-	ServiceLogs           []sl.ServiceLogShort
+	ServiceLogs           []*v1.LogEntry
 	PdAlerts              map[string][]pd.Incident
 	JiraIssues            []jira.Issue
 	LimitedSupportReasons []*cmv1.LimitedSupportReason
@@ -285,7 +285,7 @@ func addLimitedSupportReasons(clusterInfo *ClusterInfo, ocmClient *sdk.Connectio
 
 func addServiceLogs(clusterInfo *ClusterInfo) error {
 	var err error
-	clusterInfo.ServiceLogs, err = servicelog.GetServiceLogsSince(clusterInfo.ID, ServiceLogDaysSince)
+	clusterInfo.ServiceLogs, err = servicelog.GetServiceLogsSince(clusterInfo.ID, ServiceLogDaysSince, false, false)
 	if err != nil {
 		return fmt.Errorf("failed to fetch service logs for cluster %v: %w", clusterInfo.ID, err)
 	}
