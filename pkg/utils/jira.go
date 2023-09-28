@@ -68,3 +68,33 @@ func GetJiraSupportExceptionsForOrg(organizationID string) ([]jira.Issue, error)
 
 	return issues, nil
 }
+
+func CreateIssue(
+	service *jira.IssueService,
+	summary string,
+	description string,
+	ticketType string,
+	project string,
+	reporter *jira.User,
+	assignee *jira.User,
+	labels []string,
+) (*jira.Issue, error) {
+	issue := &jira.Issue{
+		Fields: &jira.IssueFields{
+			Reporter:    reporter,
+			Assignee:    assignee,
+			Type:        jira.IssueType{Name: ticketType},
+			Project:     jira.Project{Key: project},
+			Description: description,
+			Summary:     summary,
+			Labels:      labels,
+		},
+	}
+
+	createdIssue, _, err := service.Create(issue)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create issue: %w", err)
+	}
+
+	return createdIssue, nil
+}
