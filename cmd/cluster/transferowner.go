@@ -25,6 +25,8 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
+const CheckSyncMaxAttempts = 24
+
 // transferOwnerOptions defines the struct for running transferOwner command
 type transferOwnerOptions struct {
 	output       string
@@ -81,7 +83,7 @@ func updatePullSecret(conn *sdk.Connection, kubeCli client.Client, clientset *ku
 
 	clusterDeployments := &hiveapiv1.ClusterDeploymentList{}
 	if err := kubeCli.List(context.TODO(), clusterDeployments, client.InNamespace(hiveNamespace)); err != nil {
-		return err
+		return fmt.Errorf("failed to list cluster deployments in namespace %v: %w", hiveNamespace, err)
 	}
 
 	if len(clusterDeployments.Items) == 0 {
@@ -92,7 +94,7 @@ func updatePullSecret(conn *sdk.Connection, kubeCli client.Client, clientset *ku
 	// Delete the secret
 	err := clientset.CoreV1().Secrets(hiveNamespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to delete secret %v in namespacd %v: %w", secretName, hiveNamespace, err)
 	}
 
 	secret := &corev1.Secret{
@@ -107,27 +109,24 @@ func updatePullSecret(conn *sdk.Connection, kubeCli client.Client, clientset *ku
 	}
 	_, err = clientset.CoreV1().Secrets(hiveNamespace).Create(context.TODO(), secret, metav1.CreateOptions{})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create new secret in namespace %v: %w", hiveNamespace, err)
 	}
 
-	//Create a syncset on hive to push the pull secret down
-	syncsetName := "pull-secret-replacement"
-
-	err = createSyncSet(syncsetName, hiveNamespace, cdName, kubeCli)
+	err = awaitPullSecretSyncSet(hiveNamespace, cdName, kubeCli)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to synchronize pull secret for Hive namespace '%s' and ClusterDeployment '%s': %w", hiveNamespace, cdName, err)
 	}
 
 	return nil
 
 }
 
-func createSyncSet(syncSetName string, hiveNamespace string, cdName string, kubeCli client.Client) error {
+func awaitPullSecretSyncSet(hiveNamespace string, cdName string, kubeCli client.Client) error {
 	ctx := context.TODO()
 
 	syncSet := &hiveapiv1.SyncSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      syncSetName,
+			Name:      "pull-secret-replacement",
 			Namespace: hiveNamespace,
 		},
 		Spec: hiveapiv1.SyncSetSpec{
@@ -156,12 +155,16 @@ func createSyncSet(syncSetName string, hiveNamespace string, cdName string, kube
 
 	err := kubeCli.Create(ctx, syncSet)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create SyncSet: %w", err)
 	}
 
-	fmt.Printf("SyncSet %s in namespace %s has been created.\n", syncSetName, hiveNamespace)
+	fmt.Printf("SyncSet pull-secret-replacement in namespace %s has been created.\n", hiveNamespace)
 
-	hiveinternalv1alpha1.AddToScheme(kubeCli.Scheme())
+	err = hiveinternalv1alpha1.AddToScheme(kubeCli.Scheme())
+	if err != nil {
+		return fmt.Errorf("failed to add scheme: %w", err)
+	}
+
 	searchStatus := &hiveinternalv1alpha1.ClusterSync{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cdName,
@@ -170,14 +173,14 @@ func createSyncSet(syncSetName string, hiveNamespace string, cdName string, kube
 	}
 	foundStatus := &hiveinternalv1alpha1.ClusterSync{}
 	isSSSynced := false
-	for i := 0; i < 24; i++ {
+	for i := 0; i < CheckSyncMaxAttempts; i++ {
 		err = kubeCli.Get(ctx, client.ObjectKeyFromObject(searchStatus), foundStatus)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get status for resource %s: %w", searchStatus.GetName(), err)
 		}
 
 		for _, status := range foundStatus.Status.SyncSets {
-			if status.Name == syncSetName {
+			if status.Name == "pull-secret-replacement" {
 				if status.FirstSuccessTime != nil {
 					isSSSynced = true
 					break
@@ -200,7 +203,7 @@ func createSyncSet(syncSetName string, hiveNamespace string, cdName string, kube
 	// Clean up the SS on hive
 	err = kubeCli.Delete(ctx, syncSet)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to delete SyncSet: %w", err)
 	}
 
 	return nil
@@ -212,13 +215,13 @@ func rolloutTelemeterClientPods(clientset *kubernetes.Clientset, namespace, sele
 		LabelSelector: selector,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to list pods in namespace '%s' with label selector '%s': %w", namespace, selector, err)
 	}
 
 	for _, pod := range pods.Items {
 		err = clientset.CoreV1().Pods(namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to delete pod '%s' in namespace '%s': %w", pod.Name, namespace, err)
 		}
 		fmt.Printf("Pod %s in namespace %s has been deleted.\n", pod.Name, namespace)
 	}
@@ -240,7 +243,7 @@ func (o *transferOwnerOptions) run() error {
 	// the user has to be logged in (e.g. 'ocm login')
 	ocm, err := utils.CreateConnection()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create OCM client: %w", err)
 	}
 	defer func() {
 		if ocmCloseErr := ocm.Close(); ocmCloseErr != nil {
@@ -261,12 +264,12 @@ func (o *transferOwnerOptions) run() error {
 	hiveCluster, err := utils.GetHiveCluster(o.clusterID)
 	hiveKubeCli, _, hivecClientset, err := getKubeConfigAndClient(hiveCluster.ID())
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for Hive cluster ID %s: %w", hiveCluster.ID(), err)
 	}
 
-	response, err := ocm.AccountsMgmt().V1().AccessToken().Post().Impersonate(userName).Parameter("body", "/dev/null").Send()
+	response, err := ocm.AccountsMgmt().V1().AccessToken().Post().Impersonate(userName).Parameter("body", nil).Send()
 	if err != nil {
-		return fmt.Errorf("Can't send request: %v", err)
+		return fmt.Errorf("Can't send request: %w", err)
 	}
 
 	auths, ok := response.Body().GetAuths()
@@ -285,27 +288,27 @@ func (o *transferOwnerOptions) run() error {
 		"auths": authsMap,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal pull secret data: %w", err)
 	}
 
 	err = updatePullSecret(ocm, hiveKubeCli, hivecClientset, o.clusterID, pullSecret)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update pull secret for Hive cluster with ID %s: %w", o.clusterID, err)
 	}
 
 	_, _, clientset, err := getKubeConfigAndClient(o.clusterID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", o.clusterID, err)
 	}
 
 	err = rolloutTelemeterClientPods(clientset, "openshift-monitoring", "app.kubernetes.io/name=telemeter-client")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to roll out Telemeter Client pods in namespace 'openshift-monitoring' with label selector 'app.kubernetes.io/name=telemeter-client': %w", err)
 	}
 
 	cluster, err = utils.GetCluster(ocm, o.clusterID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get cluster information for cluster with ID %s: %w", o.clusterID, err)
 	}
 
 	externalClusterID, ok := cluster.GetExternalID()
@@ -442,7 +445,7 @@ func (o *transferOwnerOptions) run() error {
 	err = deleteOldRoleBinding(ocm, subscriptionID)
 
 	if err != nil {
-		fmt.Printf("can' delete old rolebinding %v \n", err)
+		fmt.Printf("can't delete old rolebinding %w \n", err)
 	}
 
 	// create new rolebinding
@@ -499,7 +502,7 @@ func getRoleBinding(ocm *sdk.Connection, subscriptionID string) (*amv1.RoleBindi
 		Send()
 
 	if err != nil {
-		return nil, fmt.Errorf("can't send request: %v", err)
+		return nil, fmt.Errorf("can't send request: %w", err)
 	}
 
 	if response.Total() == 0 {
