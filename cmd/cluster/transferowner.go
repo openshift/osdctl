@@ -445,7 +445,7 @@ func (o *transferOwnerOptions) run() error {
 	err = deleteOldRoleBinding(ocm, subscriptionID)
 
 	if err != nil {
-		fmt.Printf("can't delete old rolebinding %w \n", err)
+		fmt.Printf("can't delete old rolebinding %v \n", err)
 	}
 
 	// create new rolebinding
@@ -502,7 +502,7 @@ func getRoleBinding(ocm *sdk.Connection, subscriptionID string) (*amv1.RoleBindi
 		Send()
 
 	if err != nil {
-		return nil, fmt.Errorf("can't send request: %w", err)
+		return nil, fmt.Errorf("can't send request: %v", err)
 	}
 
 	if response.Total() == 0 {
