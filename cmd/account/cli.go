@@ -152,11 +152,8 @@ func (o *cliOptions) run() error {
 	}
 
 	// Output section
-	if o.output == "" {
-		fmt.Printf("Temporary AWS Credentials:\n%v\n", assumedRoleCreds)
-	}
-
-	if o.output == "json" {
+	// Default to json
+	if o.output == "" || o.output == "json" {
 		fmt.Printf("{\n\"AccessKeyId\": %q, \n\"Expiration\": %q, \n\"SecretAccessKey\": %q, \n\"SessionToken\": %q, \n\"Region\": %q\n}",
 			*assumedRoleCreds.AccessKeyId,
 			*assumedRoleCreds.Expiration,
