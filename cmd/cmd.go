@@ -10,7 +10,7 @@ import (
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
 	gcpv1alpha1 "github.com/openshift/gcp-project-operator/api/v1alpha1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
-
+	hivev1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -21,9 +21,9 @@ import (
 	"github.com/openshift/osdctl/cmd/account"
 	"github.com/openshift/osdctl/cmd/capability"
 	"github.com/openshift/osdctl/cmd/cluster"
-	"github.com/openshift/osdctl/cmd/clusterdeployment"
 	"github.com/openshift/osdctl/cmd/cost"
 	"github.com/openshift/osdctl/cmd/env"
+	"github.com/openshift/osdctl/cmd/hive"
 	"github.com/openshift/osdctl/cmd/jira"
 	"github.com/openshift/osdctl/cmd/jumphost"
 	"github.com/openshift/osdctl/cmd/network"
@@ -43,6 +43,7 @@ func init() {
 	_ = routev1.AddToScheme(scheme.Scheme)
 	_ = hivev1.AddToScheme(scheme.Scheme)
 	_ = gcpv1alpha1.AddToScheme(scheme.Scheme)
+	_ = hivev1alpha1.AddToScheme(scheme.Scheme)
 }
 
 // NewCmdRoot represents the base command when called without any subcommands
@@ -83,7 +84,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(aao.NewCmdAao(kubeClient))
 	rootCmd.AddCommand(account.NewCmdAccount(streams, kubeFlags, kubeClient, globalOpts))
 	rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeFlags, kubeClient, globalOpts))
-	rootCmd.AddCommand(clusterdeployment.NewCmdClusterDeployment(streams, kubeFlags, kubeClient))
+	rootCmd.AddCommand(hive.NewCmdHive(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(newCmdCompletion())
 	rootCmd.AddCommand(env.NewCmdEnv())
 	rootCmd.AddCommand(jumphost.NewCmdJumphost())
