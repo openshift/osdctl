@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 	"time"
@@ -230,6 +232,44 @@ func rolloutTelemeterClientPods(clientset *kubernetes.Clientset, namespace, sele
 	return nil
 }
 
+func verifyClusterPullSecret(clientset *kubernetes.Clientset, expectedPullSecret string) error {
+	// Retrieve the pull secret from the "openshift-config" namespace
+	pullSecret, err := clientset.CoreV1().Secrets("openshift-config").Get(context.TODO(), "pull", metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get pull secret: %w", err)
+	}
+
+	// Print the actual pull secret data
+	pullSecretData, ok := pullSecret.Data[".dockerconfigjson"]
+	if !ok {
+		return fmt.Errorf("pull secret data not found in the secret")
+	}
+
+	fmt.Println("Actual Cluster Pull Secret:")
+	fmt.Println(string(pullSecretData))
+
+	// Print the expected pull secret
+	fmt.Println("\nExpected Cluster Pull Secret:")
+	fmt.Println(expectedPullSecret)
+
+	// Ask the user to confirm if the actual pull secret matches their expectation
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("\nDoes the actual pull secret match your expectation? (yes/no): ")
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read user input: %w", err)
+	}
+
+	response = strings.ToLower(strings.TrimSpace(response))
+	if response != "yes" {
+		return fmt.Errorf("operation aborted by the user")
+	}
+
+	fmt.Println("Pull secret verification successful.")
+
+	return nil
+}
+
 func (o *transferOwnerOptions) run() error {
 	fmt.Println("Notify the customer before ownership transfer commences. Sending service log.")
 	postCmd := generateServiceLog(o.clusterID, "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_starting.json")
@@ -291,6 +331,23 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("failed to marshal pull secret data: %w", err)
 	}
 
+	// Print the pull secret
+	fmt.Println("Pull Secret:")
+	fmt.Println(string(pullSecret))
+
+	// Ask the user if they would like to continue
+	var continueConfirmation string
+	fmt.Print("Do you want to continue? (yes/no): ")
+	_, err = fmt.Scanln(&continueConfirmation)
+	if err != nil {
+		return fmt.Errorf("failed to read user input: %w", err)
+	}
+
+	// Check the user's response
+	if continueConfirmation != "yes" {
+		return fmt.Errorf("operation aborted by the user")
+	}
+
 	err = updatePullSecret(ocm, hiveKubeCli, hivecClientset, o.clusterID, pullSecret)
 	if err != nil {
 		return fmt.Errorf("failed to update pull secret for Hive cluster with ID %s: %w", o.clusterID, err)
@@ -304,6 +361,11 @@ func (o *transferOwnerOptions) run() error {
 	err = rolloutTelemeterClientPods(clientset, "openshift-monitoring", "app.kubernetes.io/name=telemeter-client")
 	if err != nil {
 		return fmt.Errorf("failed to roll out Telemeter Client pods in namespace 'openshift-monitoring' with label selector 'app.kubernetes.io/name=telemeter-client': %w", err)
+	}
+
+	err = verifyClusterPullSecret(clientset, string(pullSecret))
+	if err != nil {
+		return fmt.Errorf("error verifying cluster pull secret: %w", err)
 	}
 
 	cluster, err = utils.GetCluster(ocm, o.clusterID)
