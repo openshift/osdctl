@@ -284,7 +284,15 @@ osdctl sts policy-diff <old version> <new version>
 ### Hive ClusterDeployment CR list
 
 ```bash
-osdctl clusterdeployment list
+# Login into the hive cluster
+osdctl hive clusterdeployment list
+```
+
+### Hive ClusterSync Failures list
+
+```bash
+# Login into the hive cluster
+osdctl hive clustersync-failures
 ```
 
 ### AWS Account Federated Role Apply

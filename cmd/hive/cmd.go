@@ -17,7 +17,7 @@ func NewCmdHive(streams genericclioptions.IOStreams, flags *genericclioptions.Co
 		DisableAutoGenTag: true,
 	}
 
-	hiveCmd.AddCommand(newCmdClusterSyncFailures(streams, flags, client))
+	hiveCmd.AddCommand(NewCmdClusterSyncFailures(streams, flags, client))
 	hiveCmd.AddCommand(cd.NewCmdClusterDeployment(streams, flags, client))
 	return hiveCmd
 }
