@@ -72,6 +72,9 @@ func newPostCmd() *cobra.Command {
 }
 
 func (o *PostCmdOptions) Init() error {
+	userParameterNames = []string{}
+	userParameterValues = []string{}
+	filterParams = []string{}
 	o.successfulClusters = make(map[string]string)
 	o.failedClusters = make(map[string]string)
 	return nil

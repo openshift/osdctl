@@ -1,8 +1,21 @@
 package cluster
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	hiveapiv1 "github.com/openshift/hive/apis/hive/v1"
+	hiveinternalv1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
+	"github.com/openshift/osdctl/cmd/servicelog"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"os"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strings"
+	"time"
 
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
@@ -14,12 +27,15 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
+const CheckSyncMaxAttempts = 24
+
 // transferOwnerOptions defines the struct for running transferOwner command
 type transferOwnerOptions struct {
 	output       string
 	clusterID    string
 	newOwnerName string
 	dryrun       bool
+	cluster      *cmv1.Cluster
 
 	genericclioptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
@@ -54,27 +70,307 @@ func newTransferOwnerOptions(streams genericclioptions.IOStreams, globalOpts *gl
 	}
 }
 
+func generateServiceLog(clusterId string, template string) servicelog.PostCmdOptions {
+	return servicelog.PostCmdOptions{
+		Template:       template,
+		ClusterId:      clusterId,
+		TemplateParams: []string{fmt.Sprintf("DATE=%v", time.Now().UTC().Format(time.RFC3339))},
+	}
+}
+
+func updatePullSecret(conn *sdk.Connection, kubeCli client.Client, clientset *kubernetes.Clientset, clusterID string, pullsecret []byte) error {
+	currentEnv := utils.GetCurrentOCMEnv(conn)
+	secretName := "pull"
+	hiveNamespace := "uhc-" + currentEnv + "-" + clusterID
+
+	clusterDeployments := &hiveapiv1.ClusterDeploymentList{}
+	if err := kubeCli.List(context.TODO(), clusterDeployments, client.InNamespace(hiveNamespace)); err != nil {
+		return fmt.Errorf("failed to list cluster deployments in namespace %v: %w", hiveNamespace, err)
+	}
+
+	if len(clusterDeployments.Items) == 0 {
+		return fmt.Errorf("failed to retreive cluster deployments")
+	}
+	cdName := clusterDeployments.Items[0].ObjectMeta.Name
+
+	// Delete the secret
+	err := clientset.CoreV1().Secrets(hiveNamespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete secret %v in namespacd %v: %w", secretName, hiveNamespace, err)
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: hiveNamespace,
+		},
+		Type: corev1.SecretTypeDockerConfigJson,
+		Data: map[string][]byte{
+			".dockerconfigjson": pullsecret,
+		},
+	}
+	_, err = clientset.CoreV1().Secrets(hiveNamespace).Create(context.TODO(), secret, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to create new secret in namespace %v: %w", hiveNamespace, err)
+	}
+
+	err = awaitPullSecretSyncSet(hiveNamespace, cdName, kubeCli)
+	if err != nil {
+		return fmt.Errorf("failed to synchronize pull secret for Hive namespace '%s' and ClusterDeployment '%s': %w", hiveNamespace, cdName, err)
+	}
+
+	return nil
+
+}
+
+func awaitPullSecretSyncSet(hiveNamespace string, cdName string, kubeCli client.Client) error {
+	ctx := context.TODO()
+
+	syncSet := &hiveapiv1.SyncSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pull-secret-replacement",
+			Namespace: hiveNamespace,
+		},
+		Spec: hiveapiv1.SyncSetSpec{
+			ClusterDeploymentRefs: []corev1.LocalObjectReference{
+				{
+					Name: cdName,
+				},
+			},
+			SyncSetCommonSpec: hiveapiv1.SyncSetCommonSpec{
+				ResourceApplyMode: "Upsert",
+				Secrets: []hiveapiv1.SecretMapping{
+					{
+						SourceRef: hiveapiv1.SecretReference{
+							Name:      "pull",
+							Namespace: hiveNamespace,
+						},
+						TargetRef: hiveapiv1.SecretReference{
+							Name:      "pull-secret",
+							Namespace: "openshift-config",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := kubeCli.Create(ctx, syncSet)
+	if err != nil {
+		return fmt.Errorf("failed to create SyncSet: %w", err)
+	}
+
+	fmt.Printf("SyncSet pull-secret-replacement in namespace %s has been created.\n", hiveNamespace)
+
+	err = hiveinternalv1alpha1.AddToScheme(kubeCli.Scheme())
+	if err != nil {
+		return fmt.Errorf("failed to add scheme: %w", err)
+	}
+
+	searchStatus := &hiveinternalv1alpha1.ClusterSync{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cdName,
+			Namespace: hiveNamespace,
+		},
+	}
+	foundStatus := &hiveinternalv1alpha1.ClusterSync{}
+	isSSSynced := false
+	for i := 0; i < CheckSyncMaxAttempts; i++ {
+		err = kubeCli.Get(ctx, client.ObjectKeyFromObject(searchStatus), foundStatus)
+		if err != nil {
+			return fmt.Errorf("failed to get status for resource %s: %w", searchStatus.GetName(), err)
+		}
+
+		for _, status := range foundStatus.Status.SyncSets {
+			if status.Name == "pull-secret-replacement" {
+				if status.FirstSuccessTime != nil {
+					isSSSynced = true
+					break
+				}
+			}
+		}
+
+		if isSSSynced {
+			fmt.Printf("\nSync completed...\n")
+			break
+		}
+
+		fmt.Printf(".")
+		time.Sleep(time.Second * 5)
+	}
+	if !isSSSynced {
+		return fmt.Errorf("syncset failed to sync. Please verify syncset is still there and manually delete syncset ")
+	}
+
+	// Clean up the SS on hive
+	err = kubeCli.Delete(ctx, syncSet)
+	if err != nil {
+		return fmt.Errorf("failed to delete SyncSet: %w", err)
+	}
+
+	return nil
+}
+
+func rolloutTelemeterClientPods(clientset *kubernetes.Clientset, namespace, selector string) error {
+	// Delete pods with the specified label selector in the specified namespace.
+	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: selector,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list pods in namespace '%s' with label selector '%s': %w", namespace, selector, err)
+	}
+
+	for _, pod := range pods.Items {
+		err = clientset.CoreV1().Pods(namespace).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to delete pod '%s' in namespace '%s': %w", pod.Name, namespace, err)
+		}
+		fmt.Printf("Pod %s in namespace %s has been deleted.\n", pod.Name, namespace)
+	}
+
+	fmt.Printf("Pods in namespace %s with label selector '%s' have been deleted.\n", namespace, selector)
+	return nil
+}
+
+func verifyClusterPullSecret(clientset *kubernetes.Clientset, expectedPullSecret string) error {
+	// Retrieve the pull secret from the "openshift-config" namespace
+	pullSecret, err := clientset.CoreV1().Secrets("openshift-config").Get(context.TODO(), "pull", metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get pull secret: %w", err)
+	}
+
+	// Print the actual pull secret data
+	pullSecretData, ok := pullSecret.Data[".dockerconfigjson"]
+	if !ok {
+		return fmt.Errorf("pull secret data not found in the secret")
+	}
+
+	fmt.Println("Actual Cluster Pull Secret:")
+	fmt.Println(string(pullSecretData))
+
+	// Print the expected pull secret
+	fmt.Println("\nExpected Cluster Pull Secret:")
+	fmt.Println(expectedPullSecret)
+
+	// Ask the user to confirm if the actual pull secret matches their expectation
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("\nDoes the actual pull secret match your expectation? (yes/no): ")
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read user input: %w", err)
+	}
+
+	response = strings.ToLower(strings.TrimSpace(response))
+	if response != "yes" {
+		return fmt.Errorf("operation aborted by the user")
+	}
+
+	fmt.Println("Pull secret verification successful.")
+
+	return nil
+}
+
 func (o *transferOwnerOptions) run() error {
-	fmt.Print("Before making changes in OCM, the cluster must have the pull secret updated to be the new owner's. ")
-	fmt.Print("See: https://github.com/openshift/ops-sop/blob/master/v4/howto/replace-pull-secret.md\n")
+	fmt.Println("Notify the customer before ownership transfer commences. Sending service log.")
+	postCmd := generateServiceLog(o.clusterID, "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_starting.json")
+	if err := postCmd.Run(); err != nil {
+		fmt.Println("Failed to generate service log. Please manually send a service log to Notify the customer before ownership transfer commences:")
+		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
+			o.clusterID, "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_starting.json", strings.Join(postCmd.TemplateParams, " -p "))
+	}
 
 	// Create an OCM client to talk to the cluster API
 	// the user has to be logged in (e.g. 'ocm login')
 	ocm, err := utils.CreateConnection()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create OCM client: %w", err)
 	}
 	defer func() {
 		if ocmCloseErr := ocm.Close(); ocmCloseErr != nil {
 			fmt.Printf("Cannot close the ocm (possible memory leak): %q", ocmCloseErr)
 		}
 	}()
+	cluster, err := utils.GetClusterAnyStatus(ocm, o.clusterID)
+	o.cluster = cluster
+	o.clusterID = cluster.ID()
+
+	userDetails, err := ocm.AccountsMgmt().V1().Accounts().Account(o.newOwnerName).Get().Send()
+	userName, ok := userDetails.Body().GetUsername()
+	if !ok {
+		return fmt.Errorf("Failed to get username from new user id")
+	}
 
 	// Find and setup all resources that are needed
-
-	cluster, err := utils.GetCluster(ocm, o.clusterID)
+	hiveCluster, err := utils.GetHiveCluster(o.clusterID)
+	hiveKubeCli, _, hivecClientset, err := getKubeConfigAndClient(hiveCluster.ID())
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for Hive cluster ID %s: %w", hiveCluster.ID(), err)
+	}
+
+	response, err := ocm.AccountsMgmt().V1().AccessToken().Post().Impersonate(userName).Parameter("body", nil).Send()
+	if err != nil {
+		return fmt.Errorf("Can't send request: %w", err)
+	}
+
+	auths, ok := response.Body().GetAuths()
+	if !ok {
+		return fmt.Errorf("Error validating pull secret structure. This shouldn't happen, so you might need to contact SDB")
+	}
+	authsMap := map[string]map[string]string{}
+	for k, auth := range auths {
+		authsMap[k] = map[string]string{
+			"auth":  auth.Auth(),
+			"email": auth.Email(),
+		}
+	}
+
+	pullSecret, err := json.Marshal(map[string]map[string]map[string]string{
+		"auths": authsMap,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal pull secret data: %w", err)
+	}
+
+	// Print the pull secret
+	fmt.Println("Pull Secret:")
+	fmt.Println(string(pullSecret))
+
+	// Ask the user if they would like to continue
+	var continueConfirmation string
+	fmt.Print("Do you want to continue? (yes/no): ")
+	_, err = fmt.Scanln(&continueConfirmation)
+	if err != nil {
+		return fmt.Errorf("failed to read user input: %w", err)
+	}
+
+	// Check the user's response
+	if continueConfirmation != "yes" {
+		return fmt.Errorf("operation aborted by the user")
+	}
+
+	err = updatePullSecret(ocm, hiveKubeCli, hivecClientset, o.clusterID, pullSecret)
+	if err != nil {
+		return fmt.Errorf("failed to update pull secret for Hive cluster with ID %s: %w", o.clusterID, err)
+	}
+
+	_, _, clientset, err := getKubeConfigAndClient(o.clusterID)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", o.clusterID, err)
+	}
+
+	err = rolloutTelemeterClientPods(clientset, "openshift-monitoring", "app.kubernetes.io/name=telemeter-client")
+	if err != nil {
+		return fmt.Errorf("failed to roll out Telemeter Client pods in namespace 'openshift-monitoring' with label selector 'app.kubernetes.io/name=telemeter-client': %w", err)
+	}
+
+	err = verifyClusterPullSecret(clientset, string(pullSecret))
+	if err != nil {
+		return fmt.Errorf("error verifying cluster pull secret: %w", err)
+	}
+
+	cluster, err = utils.GetCluster(ocm, o.clusterID)
+	if err != nil {
+		return fmt.Errorf("failed to get cluster information for cluster with ID %s: %w", o.clusterID, err)
 	}
 
 	externalClusterID, ok := cluster.GetExternalID()
@@ -211,7 +507,7 @@ func (o *transferOwnerOptions) run() error {
 	err = deleteOldRoleBinding(ocm, subscriptionID)
 
 	if err != nil {
-		fmt.Printf("can' delete old rolebinding %v \n", err)
+		fmt.Printf("can't delete old rolebinding %v \n", err)
 	}
 
 	// create new rolebinding
@@ -249,6 +545,15 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("error while validating transfer %w", err)
 	}
 	fmt.Print("Transfer complete\n")
+
+	fmt.Println("Notify the customer the ownership transfer is completed. Sending service log.")
+	postCmd = generateServiceLog(o.clusterID, "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_completed.json")
+	if err := postCmd.Run(); err != nil {
+		fmt.Println("Failed to generate service log. Please manually send a service log to Notify the customer  the ownership transfer is completed:")
+		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
+			o.clusterID, "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_completed.json", strings.Join(postCmd.TemplateParams, " -p "))
+	}
+
 	return nil
 }
 
