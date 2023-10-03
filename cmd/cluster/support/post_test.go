@@ -6,39 +6,74 @@ import (
 	"testing"
 )
 
-func Test_buildLimitedSupport(t *testing.T) {
-	type args struct {
-		misconfiguration string
-		problem          string
-		resolution       string
+func Test_setup(t *testing.T) {
+	tests := []struct {
+		name      string
+		post      *Post
+		expectErr bool
+	}{
+		{
+			name: "Error - Ends in period",
+			post: &Post{
+				Problem:    "A problem sentence.",
+				Resolution: "A resolution sentence.",
+			},
+			expectErr: true,
+		},
+		{
+			name: "No error",
+			post: &Post{
+				Problem:    "A problem sentence",
+				Resolution: "A resolution sentence",
+			},
+			expectErr: false,
+		},
 	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := test.post.setup()
+			if err != nil {
+				if !test.expectErr {
+					t.Errorf("expected no err, got %v", err)
+				}
+			} else {
+				if test.expectErr {
+					t.Error("expected err, got nil")
+				}
+			}
+		})
+	}
+}
+
+func Test_buildLimitedSupport(t *testing.T) {
 	tests := []struct {
 		name        string
-		args        args
+		post        *Post
 		wantSummary string
 	}{
 		{
 			name: "Builds a limited support struct for cloud misconfiguration",
-			args: args{
-				misconfiguration: "cloud",
-				problem:          "test problem cloud",
-				resolution:       "test resolution cloud",
+			post: &Post{
+				Misconfiguration: cloud,
+				Problem:          "test problem cloud",
+				Resolution:       "test resolution cloud",
 			},
 			wantSummary: LimitedSupportSummaryCloud,
 		},
 		{
 			name: "Builds a limited support struct for cluster misconfiguration",
-			args: args{
-				misconfiguration: "cluster",
-				problem:          "test problem cluster",
-				resolution:       "test resolution cluster",
+			post: &Post{
+				Misconfiguration: cluster,
+				Problem:          "test problem cluster",
+				Resolution:       "test resolution cluster",
 			},
 			wantSummary: LimitedSupportSummaryCluster,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := buildLimitedSupport(tt.args.misconfiguration, tt.args.problem, tt.args.resolution)
+			got, err := tt.post.buildLimitedSupport()
 			if err != nil {
 				t.Errorf("buildLimitedSupport() error = %v, wantErr %v", err, false)
 				return
@@ -49,17 +84,20 @@ func Test_buildLimitedSupport(t *testing.T) {
 			if detectionType := got.DetectionType(); detectionType != cmv1.DetectionTypeManual {
 				t.Errorf("buildLimitedSupport() got detectionType = %v, want %v", detectionType, cmv1.DetectionTypeManual)
 			}
-			if details := got.Details(); details != fmt.Sprintf("%v. %v", tt.args.problem, tt.args.resolution) {
-				t.Errorf("buildLimitedSupport() got details = %v, want %v", details, fmt.Sprintf("%v. %v", tt.args.problem, tt.args.resolution))
+			if details := got.Details(); details != fmt.Sprintf("%v. %v", tt.post.Problem, tt.post.Resolution) {
+				t.Errorf("buildLimitedSupport() got details = %v, want %v", details, fmt.Sprintf("%v. %v", tt.post.Problem, tt.post.Resolution))
 			}
 		})
 	}
 }
 
 func Test_buildInternalServiceLog(t *testing.T) {
+	const (
+		externalId = "abc-123"
+		internalId = "def456"
+	)
+
 	type args struct {
-		externalId       string
-		internalId       string
 		limitedSupportId string
 		evidence         string
 		subscriptionId   string
@@ -71,18 +109,14 @@ func Test_buildInternalServiceLog(t *testing.T) {
 		{
 			name: "Builds a log entry struct with subscription ID",
 			args: args{
-				externalId:       "abc-123",
-				internalId:       "def456",
 				limitedSupportId: "test-ls-id",
 				evidence:         "this is evidence",
 				subscriptionId:   "subid123",
 			},
 		},
 		{
-			name: "Builds a log entry struct with subscription ID",
+			name: "Builds a log entry struct without subscription ID",
 			args: args{
-				externalId:       "abc-123",
-				internalId:       "def456",
 				limitedSupportId: "test-ls-id",
 				evidence:         "this is evidence",
 				subscriptionId:   "",
@@ -91,17 +125,24 @@ func Test_buildInternalServiceLog(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := buildInternalServiceLog(tt.args.externalId, tt.args.internalId, tt.args.limitedSupportId, tt.args.evidence, tt.args.subscriptionId)
+			cluster, err := cmv1.NewCluster().ExternalID(externalId).ID(internalId).Build()
+			if err != nil {
+				t.Error(err)
+			}
+
+			p := &Post{cluster: cluster, Evidence: tt.args.evidence}
+
+			got, err := p.buildInternalServiceLog(tt.args.limitedSupportId, tt.args.subscriptionId)
 			if err != nil {
 				t.Errorf("buildInternalServiceLog() error = %v, wantErr %v", err, false)
 				return
 			}
-			if clusterUUID := got.ClusterUUID(); clusterUUID != tt.args.externalId {
-				t.Errorf("buildInternalServiceLog() got clusterUUID = %v, want %v", clusterUUID, tt.args.externalId)
+			if clusterUUID := got.ClusterUUID(); clusterUUID != externalId {
+				t.Errorf("buildInternalServiceLog() got clusterUUID = %v, want %v", clusterUUID, externalId)
 			}
 
-			if clusterID := got.ClusterID(); clusterID != tt.args.internalId {
-				t.Errorf("buildInternalServiceLog() got clusterUUID = %v, want %v", clusterID, tt.args.internalId)
+			if clusterID := got.ClusterID(); clusterID != internalId {
+				t.Errorf("buildInternalServiceLog() got clusterUUID = %v, want %v", clusterID, internalId)
 			}
 
 			if internalOnly := got.InternalOnly(); internalOnly != true {
