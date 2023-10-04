@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/openshift/osdctl/cmd/jira"
 	"os"
 	"strings"
 
@@ -93,6 +94,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(org.NewCmdOrg())
 	rootCmd.AddCommand(sts.NewCmdSts(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(promote.NewCmdPromote(kubeFlags, globalOpts))
+	rootCmd.AddCommand(jira.Cmd)
 
 	// add completion command
 	rootCmd.AddCommand(newCmdCompletion(streams))
