@@ -1,6 +1,6 @@
 module github.com/openshift/osdctl
 
-go 1.20
+go 1.21
 
 require (
 	cloud.google.com/go/compute v1.19.3
