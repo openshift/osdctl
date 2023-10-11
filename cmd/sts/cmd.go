@@ -3,12 +3,10 @@ package sts
 import (
 	"fmt"
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // NewCmdSts implements the STS utilities
-func NewCmdSts(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+func NewCmdSts() *cobra.Command {
 	clusterCmd := &cobra.Command{
 		Use:               "sts",
 		Short:             "STS related utilities",
@@ -16,8 +14,8 @@ func NewCmdSts(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 		DisableAutoGenTag: true,
 	}
 
-	clusterCmd.AddCommand(newCmdPolicyDiff(streams, flags, client))
-	clusterCmd.AddCommand(newCmdPolicy(streams, flags, client))
+	clusterCmd.AddCommand(newCmdPolicyDiff())
+	clusterCmd.AddCommand(newCmdPolicy())
 	return clusterCmd
 }
 

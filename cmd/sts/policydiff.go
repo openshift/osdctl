@@ -4,33 +4,18 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/spf13/cobra"
-
 	"github.com/coreos/go-semver/semver"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type policyDiffOptions struct {
 	oldReleaseVersion string
 	newReleaseVersion string
-
-	flags *genericclioptions.ConfigFlags
-	genericclioptions.IOStreams
-	kubeCli client.Client
 }
 
-func newPolicyDiffOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *policyDiffOptions {
-	return &policyDiffOptions{
-		flags:     flags,
-		IOStreams: streams,
-		kubeCli:   client,
-	}
-}
-
-func newCmdPolicyDiff(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
-	ops := newPolicyDiffOptions(streams, flags, client)
+func newCmdPolicyDiff() *cobra.Command {
+	ops := &policyDiffOptions{}
 	policyDiffCmd := &cobra.Command{
 		Use:               "policy-diff",
 		Short:             "Get diff between two versions of OCP STS policy",

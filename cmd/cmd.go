@@ -92,8 +92,8 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(servicelog.NewCmdServiceLog())
 	rootCmd.AddCommand(org.NewCmdOrg())
-	rootCmd.AddCommand(sts.NewCmdSts(streams, kubeFlags, kubeClient))
-	rootCmd.AddCommand(promote.NewCmdPromote(kubeFlags, globalOpts))
+	rootCmd.AddCommand(sts.NewCmdSts())
+	rootCmd.AddCommand(promote.NewCmdPromote())
 	rootCmd.AddCommand(jira.Cmd)
 
 	// Add cost command to use AWS Cost Manager

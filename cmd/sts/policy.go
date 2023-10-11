@@ -4,32 +4,17 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/spf13/cobra"
-
 	"github.com/coreos/go-semver/semver"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type policyOptions struct {
 	ReleaseVersion string
-
-	flags *genericclioptions.ConfigFlags
-	genericclioptions.IOStreams
-	kubeCli client.Client
 }
 
-func newPolicyOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *policyOptions {
-	return &policyOptions{
-		flags:     flags,
-		IOStreams: streams,
-		kubeCli:   client,
-	}
-}
-
-func newCmdPolicy(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
-	ops := newPolicyOptions(streams, flags, client)
+func newCmdPolicy() *cobra.Command {
+	ops := &policyOptions{}
 	policyCmd := &cobra.Command{
 		Use:               "policy",
 		Short:             "Get OCP STS policy",
