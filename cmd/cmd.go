@@ -81,12 +81,12 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	kubeClient := k8s.NewClient(kubeFlags)
 
 	// add sub commands
-	rootCmd.AddCommand(aao.NewCmdAao(streams, kubeClient))
+	rootCmd.AddCommand(aao.NewCmdAao(kubeClient))
 	rootCmd.AddCommand(account.NewCmdAccount(streams, kubeFlags, kubeClient, globalOpts))
 	rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeFlags, kubeClient, globalOpts))
 	rootCmd.AddCommand(clusterdeployment.NewCmdClusterDeployment(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(newCmdCompletion())
-	rootCmd.AddCommand(env.NewCmdEnv(streams, kubeFlags))
+	rootCmd.AddCommand(env.NewCmdEnv())
 	rootCmd.AddCommand(federatedrole.NewCmdFederatedRole(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(jumphost.NewCmdJumphost())
 	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeFlags, kubeClient))

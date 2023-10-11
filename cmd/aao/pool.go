@@ -10,14 +10,13 @@ import (
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // newCmdPool gets the current status of the AWS Account Operator AccountPool
-func newCmdPool(streams genericclioptions.IOStreams, client client.Client) *cobra.Command {
-	ops := newPoolOptions(streams, client)
+func newCmdPool(client client.Client) *cobra.Command {
+	ops := newPoolOptions(client)
 	poolCmd := &cobra.Command{
 		Use:               "pool",
 		Short:             "Get the status of the AWS Account Operator AccountPool",
@@ -34,14 +33,12 @@ func newCmdPool(streams genericclioptions.IOStreams, client client.Client) *cobr
 
 // poolOptions defines the struct for running the pool command
 type poolOptions struct {
-	genericclioptions.IOStreams
 	kubeCli client.Client
 }
 
-func newPoolOptions(streams genericclioptions.IOStreams, client client.Client) *poolOptions {
+func newPoolOptions(client client.Client) *poolOptions {
 	return &poolOptions{
-		IOStreams: streams,
-		kubeCli:   client,
+		kubeCli: client,
 	}
 }
 
