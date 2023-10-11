@@ -86,6 +86,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(account.NewCmdAccount(streams, kubeFlags, kubeClient, globalOpts))
 	rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeFlags, kubeClient, globalOpts))
 	rootCmd.AddCommand(clusterdeployment.NewCmdClusterDeployment(streams, kubeFlags, kubeClient))
+	rootCmd.AddCommand(newCmdCompletion())
 	rootCmd.AddCommand(env.NewCmdEnv(streams, kubeFlags))
 	rootCmd.AddCommand(federatedrole.NewCmdFederatedRole(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(jumphost.NewCmdJumphost())
@@ -95,9 +96,6 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(sts.NewCmdSts(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(promote.NewCmdPromote(kubeFlags, globalOpts))
 	rootCmd.AddCommand(jira.Cmd)
-
-	// add completion command
-	rootCmd.AddCommand(newCmdCompletion(streams))
 
 	// add options command to list global flags
 	rootCmd.AddCommand(newCmdOptions(streams))
