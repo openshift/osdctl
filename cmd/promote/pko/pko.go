@@ -5,14 +5,12 @@ import (
 
 	"github.com/openshift/osdctl/cmd/promote/git"
 	"github.com/openshift/osdctl/cmd/promote/saas"
-	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-func NewCmdPKO(flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newPKOOptions(flags, globalOpts)
+func NewCmdPKO() *cobra.Command {
+	ops := &pkoOptions{}
 	pkoCmd := &cobra.Command{
 		Use:               "package",
 		Short:             "Utilities to promote package-operator services",
@@ -39,17 +37,6 @@ type pkoOptions struct {
 	serviceName string
 	packageTag  string
 	hcp         bool
-
-	*genericclioptions.ConfigFlags
-	*globalflags.GlobalOptions
-}
-
-func newPKOOptions(flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *pkoOptions {
-	opts := &pkoOptions{
-		ConfigFlags:   flags,
-		GlobalOptions: globalOpts,
-	}
-	return opts
 }
 
 func (p pkoOptions) ValidatePKOOptions() error {

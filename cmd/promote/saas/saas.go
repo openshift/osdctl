@@ -5,9 +5,7 @@ import (
 	"os"
 
 	"github.com/openshift/osdctl/cmd/promote/git"
-	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 type saasOptions struct {
@@ -20,8 +18,8 @@ type saasOptions struct {
 }
 
 // newCmdSaas implementes the saas command to interact with promoting SaaS services/operators
-func NewCmdSaas(flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newSaasOptions(flags, globalOpts)
+func NewCmdSaas() *cobra.Command {
+	ops := &saasOptions{}
 	saasCmd := &cobra.Command{
 		Use:               "saas",
 		Short:             "Utilities to promote SaaS services/operators",
@@ -73,10 +71,6 @@ func NewCmdSaas(flags *genericclioptions.ConfigFlags, globalOpts *globalflags.Gl
 	saasCmd.Flags().BoolVarP(&ops.hcp, "hcp", "", false, "Git hash of the SaaS service/operator commit getting promoted")
 
 	return saasCmd
-}
-
-func newSaasOptions(flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *saasOptions {
-	return &saasOptions{}
 }
 
 func (o *saasOptions) validateSaasFlow() {
