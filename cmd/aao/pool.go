@@ -16,8 +16,8 @@ import (
 )
 
 // newCmdPool gets the current status of the AWS Account Operator AccountPool
-func newCmdPool(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
-	ops := newPoolOptions(streams, flags, client)
+func newCmdPool(streams genericclioptions.IOStreams, client client.Client) *cobra.Command {
+	ops := newPoolOptions(streams, client)
 	poolCmd := &cobra.Command{
 		Use:               "pool",
 		Short:             "Get the status of the AWS Account Operator AccountPool",
@@ -38,7 +38,7 @@ type poolOptions struct {
 	kubeCli client.Client
 }
 
-func newPoolOptions(streams genericclioptions.IOStreams, _ *genericclioptions.ConfigFlags, client client.Client) *poolOptions {
+func newPoolOptions(streams genericclioptions.IOStreams, client client.Client) *poolOptions {
 	return &poolOptions{
 		IOStreams: streams,
 		kubeCli:   client,

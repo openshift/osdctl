@@ -9,7 +9,7 @@ import (
 )
 
 // NewCmdAao implements the base aao command
-func NewCmdAao(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+func NewCmdAao(streams genericclioptions.IOStreams, client client.Client) *cobra.Command {
 	aaoCmd := &cobra.Command{
 		Use:               "aao",
 		Short:             "AWS Account Operator Debugging Utilities",
@@ -17,7 +17,7 @@ func NewCmdAao(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 		DisableAutoGenTag: true,
 	}
 
-	aaoCmd.AddCommand(newCmdPool(streams, flags, client))
+	aaoCmd.AddCommand(newCmdPool(streams, client))
 
 	return aaoCmd
 }
