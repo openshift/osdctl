@@ -24,7 +24,6 @@ import (
 	"github.com/openshift/osdctl/cmd/clusterdeployment"
 	"github.com/openshift/osdctl/cmd/cost"
 	"github.com/openshift/osdctl/cmd/env"
-	"github.com/openshift/osdctl/cmd/federatedrole"
 	"github.com/openshift/osdctl/cmd/jira"
 	"github.com/openshift/osdctl/cmd/jumphost"
 	"github.com/openshift/osdctl/cmd/network"
@@ -87,7 +86,6 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(clusterdeployment.NewCmdClusterDeployment(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(newCmdCompletion())
 	rootCmd.AddCommand(env.NewCmdEnv())
-	rootCmd.AddCommand(federatedrole.NewCmdFederatedRole(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(jumphost.NewCmdJumphost())
 	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(servicelog.NewCmdServiceLog())
