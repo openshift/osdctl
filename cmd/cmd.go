@@ -92,7 +92,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(servicelog.NewCmdServiceLog())
 	rootCmd.AddCommand(org.NewCmdOrg())
-	rootCmd.AddCommand(sts.NewCmdSts(streams, kubeFlags, kubeClient))
+	rootCmd.AddCommand(sts.NewCmdSts())
 	rootCmd.AddCommand(promote.NewCmdPromote(kubeFlags, globalOpts))
 	rootCmd.AddCommand(jira.Cmd)
 
