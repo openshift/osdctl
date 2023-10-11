@@ -16,7 +16,6 @@ import (
 	ocmconfig "github.com/openshift-online/ocm-cli/pkg/config"
 	config "github.com/openshift/osdctl/pkg/envConfig"
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 type Options struct {
@@ -71,7 +70,7 @@ To log in to a cluster within the environment using backplane, osdctl creates th
 The ocb command is created in the bin directory in the environment folder and added to the PATH when inside the environment.
 `
 
-func NewCmdEnv(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
+func NewCmdEnv() *cobra.Command {
 	options := Options{}
 	config := config.LoadYaml(Config_Filepath)
 
