@@ -270,3 +270,13 @@ func StreamRead(stream genericclioptions.IOStreams, delim byte) (string, error) 
 	reader := bufio.NewReader(stream.In)
 	return reader.ReadString(delim)
 }
+
+// Contains returns true if the given key is present in the provided list
+func Contains(list []string, key string) bool {
+	for _, item := range list {
+		if item == key {
+			return true
+		}
+	}
+	return false
+}

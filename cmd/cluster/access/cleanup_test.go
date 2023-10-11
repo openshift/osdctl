@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 	"testing"
 
@@ -13,6 +12,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	osdctlutil "github.com/openshift/osdctl/pkg/utils"
 )
 
 func TestCleanupAccessOptions_dropPrivateLinkAccess(t *testing.T) {
@@ -125,7 +126,7 @@ func TestCleanupAccessOptions_dropPrivateLinkAccess(t *testing.T) {
 			t.Errorf("Failed '%s': unexpected number of pods remain after test: expected %d, got %d", test.Name, len(test.ExpectedPodsAfter), len(podsAfter.Items))
 		}
 		for _, pod := range podsAfter.Items {
-			if !slices.Contains(test.ExpectedPodsAfter, pod.Name) {
+			if !osdctlutil.Contains(test.ExpectedPodsAfter, pod.Name) {
 				t.Errorf("Failed '%s': unexpected pod remains after test: %s", test.Name, pod.Name)
 			}
 		}
