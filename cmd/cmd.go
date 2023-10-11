@@ -2,20 +2,17 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/openshift/osdctl/cmd/jira"
 	"os"
 	"strings"
-
-	"github.com/openshift/osdctl/pkg/provider/aws"
-	"github.com/spf13/viper"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
 	gcpv1alpha1 "github.com/openshift/gcp-project-operator/api/v1alpha1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
-	"github.com/spf13/cobra"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/kubectl/pkg/util/slice"
@@ -28,6 +25,7 @@ import (
 	"github.com/openshift/osdctl/cmd/cost"
 	"github.com/openshift/osdctl/cmd/env"
 	"github.com/openshift/osdctl/cmd/federatedrole"
+	"github.com/openshift/osdctl/cmd/jira"
 	"github.com/openshift/osdctl/cmd/jumphost"
 	"github.com/openshift/osdctl/cmd/network"
 	"github.com/openshift/osdctl/cmd/org"
@@ -36,6 +34,7 @@ import (
 	"github.com/openshift/osdctl/cmd/sts"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/k8s"
+	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
 )
 
@@ -96,9 +95,6 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(sts.NewCmdSts(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(promote.NewCmdPromote(kubeFlags, globalOpts))
 	rootCmd.AddCommand(jira.Cmd)
-
-	// add options command to list global flags
-	rootCmd.AddCommand(newCmdOptions(streams))
 
 	// Add cost command to use AWS Cost Manager
 	rootCmd.AddCommand(cost.NewCmdCost(streams, globalOpts))
