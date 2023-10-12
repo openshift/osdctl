@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/aws/aws-sdk-go-v2/service/sts/types"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -117,14 +117,11 @@ func GetAssumeRoleCredentials(awsClient Client, durationSeconds *int32, roleSess
 		RoleArn:         roleArn,
 	})
 	if err != nil {
-		// Get error details
-		klog.Errorf("Failed to assume role: %v", err)
-
-		return nil, err
+		return nil, fmt.Errorf("failed to assume role: %v", err)
 	}
 
 	if assumeRoleOutput == nil {
-		klog.Errorf("Get assume role output nil %v", awsv1alpha1.ErrFederationTokenOutputNil)
+		log.Printf("Get assume role output nil %v", awsv1alpha1.ErrFederationTokenOutputNil)
 		return nil, awsv1alpha1.ErrFederationTokenOutputNil
 	}
 
@@ -142,8 +139,7 @@ func getSignInToken(baseURL string, creds *types.Credentials) (string, error) {
 
 	data, err := json.Marshal(credsPayload)
 	if err != nil {
-		klog.Errorf("Failed to marshal credentials to json %v", err)
-		return "", err
+		return "", fmt.Errorf("failed to marshal credentials to json: %v", err)
 	}
 
 	token, err := requestSignedURL(baseURL, data)
@@ -173,20 +169,17 @@ func requestSignedURL(baseUrl string, jsonCredentials []byte) (string, error) {
 	// Make HTTP request to retrieve Federated SignIn Token
 	res, err := http.Get(baseFederationURL.String())
 	if err != nil {
-		klog.Errorf("Failed to request Signin token from: %s, %v", baseFederationURL, err)
-		return "", err
+		return "", fmt.Errorf("failed to request SignIn token from %s: %v", baseFederationURL, err)
 	}
 
 	if res.StatusCode != http.StatusOK {
-		klog.Errorf("failed to request Sign-In token from: %s, status code %d", baseFederationURL, res.StatusCode)
-		return "", fmt.Errorf("bad response code %d", res.StatusCode)
+		return "", fmt.Errorf("failed to request Sign-In token from: %s, status code %d", baseFederationURL, res.StatusCode)
 	}
 	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		klog.Errorf("Failed to read response body %v", err)
-		return "", err
+		return "", fmt.Errorf("failed to read response body: %v", err)
 	}
 
 	var resp awsSignInTokenResponse

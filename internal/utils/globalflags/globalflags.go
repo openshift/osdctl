@@ -1,8 +1,6 @@
 package globalflags
 
 import (
-	"flag"
-
 	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
@@ -18,7 +16,6 @@ type GlobalOptions struct {
 
 // AddGlobalFlags adds the Global Flags to the root command
 func AddGlobalFlags(cmd *cobra.Command, opts *GlobalOptions) {
-	cmd.PersistentFlags().AddGoFlagSet(flag.CommandLine)
 	cmd.PersistentFlags().StringVarP(&opts.Output, "output", "o", "", "Valid formats are ['', 'json', 'yaml', 'env']")
 	cmd.PersistentFlags().BoolVarP(&opts.SkipVersionCheck, "skip-version-check", "S", false, "skip checking to see if this is the most recent release")
 	cmd.PersistentFlags().BoolVar(&opts.NoAwsProxy, aws.NoProxyFlag, false, "Don't use the configured `aws_proxy` value")

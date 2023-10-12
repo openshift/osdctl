@@ -1,11 +1,12 @@
 package aws
 
 import (
+	"fmt"
+	"log"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
-	"k8s.io/klog/v2"
 )
 
 // DeleteS3BucketsWithPrefix Delete all S3 buckets with the specified prefix
@@ -17,7 +18,7 @@ func DeleteS3BucketsWithPrefix(awsClient Client, prefix string) error {
 
 	for _, bucket := range resp.Buckets {
 		if strings.HasPrefix(*bucket.Name, prefix) {
-			klog.Infoln("Deleting bucket", *bucket.Name)
+			log.Println("Deleting bucket", *bucket.Name)
 
 			objects, err := awsClient.ListObjects(&s3.ListObjectsInput{
 				Bucket: bucket.Name,
@@ -39,15 +40,13 @@ func DeleteS3BucketsWithPrefix(awsClient Client, prefix string) error {
 						Bucket: bucket.Name,
 					},
 				); err != nil {
-					klog.Errorf("Failed to delete objects in bucket %s: %v", *bucket.Name, err)
-					return err
+					return fmt.Errorf("failed to delete objects in bucket %s: %v", *bucket.Name, err)
 				}
 			}
 
 			if _, err = awsClient.DeleteBucket(&s3.DeleteBucketInput{
 				Bucket: bucket.Name}); err != nil {
-				klog.Errorf("Failed to delete bucket %s: %v", *bucket.Name, err)
-				return err
+				return fmt.Errorf("failed to delete bucket %s: %v", *bucket.Name, err)
 			}
 		}
 	}
