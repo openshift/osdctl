@@ -21,6 +21,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.37.0
 	github.com/aws/aws-sdk-go-v2/service/servicequotas v1.14.15
 	github.com/aws/aws-sdk-go-v2/service/sts v1.19.0
+	github.com/aws/smithy-go v1.14.0
 	github.com/brianvoe/gofakeit/v6 v6.23.2
 	github.com/coreos/go-semver v0.3.0
 	github.com/deckarep/golang-set v1.7.1
@@ -78,7 +79,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.14.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.12.10 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.14.10 // indirect
-	github.com/aws/smithy-go v1.14.0 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
