@@ -6,7 +6,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/iam/types"
-	"k8s.io/klog/v2"
 )
 
 func CreateIAMUserAndAttachPolicy(awsClient Client, username, policyArn *string) error {
@@ -48,9 +47,7 @@ func DeleteUserAccessKeys(awsClient Client, username *string) error {
 				UserName:    username,
 				AccessKeyId: key.AccessKeyId,
 			}); err != nil {
-				klog.Errorf("Failed to delete access key %s for user %s",
-					*key.AccessKeyId, *username)
-				return err
+				return fmt.Errorf("failed to delete access key %s for user %s", *key.AccessKeyId, *username)
 			}
 		}
 	}

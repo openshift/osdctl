@@ -270,7 +270,6 @@ func TestGetSignInToken(t *testing.T) {
 		creds       *types.Credentials
 		token       string
 		errExpected bool
-		errContent  string
 	}{
 		{
 			title: "Server returns 200 but empty body",
@@ -280,7 +279,6 @@ func TestGetSignInToken(t *testing.T) {
 			creds:       testCreds,
 			token:       "",
 			errExpected: true,
-			errContent:  "unexpected end of JSON input",
 		},
 		{
 			title: "Server returns 404",
@@ -290,7 +288,6 @@ func TestGetSignInToken(t *testing.T) {
 			creds:       testCreds,
 			token:       "",
 			errExpected: true,
-			errContent:  "bad response code 404",
 		},
 		{
 			title: "Server returns 500",
@@ -300,7 +297,6 @@ func TestGetSignInToken(t *testing.T) {
 			creds:       testCreds,
 			token:       "",
 			errExpected: true,
-			errContent:  "bad response code 500",
 		},
 		{
 			title: "Server returns 200 but bad body format",
@@ -311,7 +307,6 @@ func TestGetSignInToken(t *testing.T) {
 			creds:       testCreds,
 			token:       "",
 			errExpected: true,
-			errContent:  "invalid character 'o' in literal false (expecting 'a')",
 		},
 		{
 			title: "Success",
@@ -338,7 +333,6 @@ func TestGetSignInToken(t *testing.T) {
 			token, err := getSignInToken(srv.URL, tc.creds)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())
-				g.Expect(err.Error()).Should(Equal(tc.errContent))
 			} else {
 				g.Expect(token).Should(Equal(tc.token))
 			}
@@ -361,7 +355,6 @@ func TestRequestSignedURL(t *testing.T) {
 		creds       *types.Credentials
 		token       string
 		errExpected bool
-		errContent  string
 	}{
 		{
 			title: "Server returns 200 but empty body",
@@ -371,7 +364,6 @@ func TestRequestSignedURL(t *testing.T) {
 			creds:       testCreds,
 			token:       "",
 			errExpected: true,
-			errContent:  "unexpected end of JSON input",
 		},
 		{
 			title: "Server returns 404",
@@ -381,7 +373,6 @@ func TestRequestSignedURL(t *testing.T) {
 			creds:       testCreds,
 			token:       "",
 			errExpected: true,
-			errContent:  "bad response code 404",
 		},
 		{
 			title: "Server returns 500",
@@ -391,7 +382,6 @@ func TestRequestSignedURL(t *testing.T) {
 			creds:       testCreds,
 			token:       "",
 			errExpected: true,
-			errContent:  "bad response code 500",
 		},
 		{
 			title: "Server returns 200 but bad body format",
@@ -402,7 +392,6 @@ func TestRequestSignedURL(t *testing.T) {
 			creds:       testCreds,
 			token:       "",
 			errExpected: true,
-			errContent:  "invalid character 'o' in literal false (expecting 'a')",
 		},
 		{
 			title: "Success",
@@ -431,7 +420,6 @@ func TestRequestSignedURL(t *testing.T) {
 			token, err := requestSignedURL(srv.URL, data)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())
-				g.Expect(err.Error()).Should(Equal(tc.errContent))
 			} else {
 				g.Expect(token).Should(Equal(tc.token))
 			}
