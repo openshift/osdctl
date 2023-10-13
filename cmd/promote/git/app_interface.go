@@ -48,7 +48,6 @@ func checkAppInterfaceCheckout() error {
 	// Check if the output contains the app-interface repository URL
 	if !strings.Contains(outputString, "gitlab.cee.redhat.com") && !strings.Contains(outputString, "app-interface") {
 		return fmt.Errorf("not running in checkout of app-interface")
-
 	}
 	fmt.Println("Running in checkout of app-interface.")
 
@@ -64,7 +63,16 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string) 
 		log.Fatal(err)
 	}
 
-	if strings.Contains(service.Name, "configuration-anomaly-detection") {
+	if service.Name == "saas-configuration-anomaly-detection-db" {
+		for _, resourceTemplate := range service.ResourceTemplates {
+			for _, target := range resourceTemplate.Targets {
+				if strings.Contains(target.Namespace["$ref"], "app-sre-observability-production-int.yml") {
+					currentGitHash = target.Ref
+					break
+				}
+			}
+		}
+	} else if strings.Contains(service.Name, "configuration-anomaly-detection") {
 		for _, resourceTemplate := range service.ResourceTemplates {
 			for _, target := range resourceTemplate.Targets {
 				if strings.Contains(target.Namespace["$ref"], "configuration-anomaly-detection-production") {
