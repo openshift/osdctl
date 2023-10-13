@@ -12,6 +12,7 @@ func NewCmdClusterDeployment(streams genericclioptions.IOStreams, flags *generic
 	cdCmd := &cobra.Command{
 		Use:               "clusterdeployment",
 		Short:             "cluster deployment related utilities",
+		Aliases:           []string{"cd"},
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 	}
