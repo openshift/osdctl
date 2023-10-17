@@ -318,12 +318,17 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 
 	// For PD query dependencies
 	pdwg := sync.WaitGroup{}
+	var skipPagerDutyCollection bool
 	pdProvider, err := pagerduty.NewClient().
 		WithUserToken(o.usertoken).
 		WithOauthToken(o.oauthtoken).
 		WithBaseDomain(o.baseDomain).
 		WithTeamIdList(viper.GetStringSlice(pagerduty.PagerDutyTeamIDsKey)).
 		Init()
+	if err != nil {
+		skipPagerDutyCollection = true
+		errors = append(errors, fmt.Errorf("Skipping PagerDuty context collection: %v", err))
+	}
 
 	ocmClient, err := utils.CreateConnection()
 	if err != nil {
@@ -393,6 +398,10 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		defer wg.Done()
 		defer pdwg.Done()
 
+		if skipPagerDutyCollection {
+			return
+		}
+
 		if o.verbose {
 			fmt.Fprintln(os.Stderr, "Getting PagerDuty Service...")
 		}
@@ -400,8 +409,6 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		if err != nil {
 			errors = append(errors, fmt.Errorf("Error getting PD Service ID: %v", err))
 		}
-
-		fmt.Printf("PD Service IDs: %+v\n", data.pdServiceID)
 
 		if o.verbose {
 			fmt.Fprintln(os.Stderr, "Getting current PagerDuty Alerts...")
