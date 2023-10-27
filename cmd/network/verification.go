@@ -297,7 +297,6 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 
 		// The actual trust bundle is redacted in OCM, but is an indicator that --cacert is required
 		if e.cluster.AdditionalTrustBundle() != "" && e.CaCert == "" {
-			e.log.Info(ctx, "cluster has an additional trusted CA bundle, but none specified - attempting to retrieve from hive")
 			caBundle, err := e.getCABundle(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get additional CA trust bundle from hive with error: %v, consider specifying --cacert", err)
@@ -482,13 +481,71 @@ func (e *EgressVerification) getSecurityGroupId(ctx context.Context) (string, er
 	return *resp.SecurityGroups[0].GroupId, nil
 }
 
-// getCABundle retrieves a cluster's CA Trust Bundle from Hive
+// getCABundle retrieves a cluster's CA Trust Bundle
+// The contents are available on a working cluster in a ConfigMap openshift-config/user-ca-bundle, however we get the
+// contents from either the cluster's Hive (classic) or Management Cluster (HCP) to cover scenarios where the cluster
+// is not ready yet.
 func (e *EgressVerification) getCABundle(ctx context.Context) (string, error) {
 	if e.cluster == nil || e.cluster.AdditionalTrustBundle() == "" {
 		// No CA Bundle to retrieve for this cluster
 		return "", nil
 	}
 
+	if e.cluster.Hypershift().Enabled() {
+		e.log.Info(ctx, "cluster has an additional trusted CA bundle, but none specified - attempting to retrieve from the management cluster")
+		return e.getCaBundleFromManagementCluster(ctx)
+	}
+
+	e.log.Info(ctx, "cluster has an additional trusted CA bundle, but none specified - attempting to retrieve from hive")
+	return e.getCaBundleFromHive(ctx)
+}
+
+// getCaBundleFromManagementCluster returns a HCP cluster's additional trust bundle from its management cluster
+func (e *EgressVerification) getCaBundleFromManagementCluster(ctx context.Context) (string, error) {
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		return "", err
+	}
+
+	mc, err := utils.GetManagementCluster(e.cluster.ID())
+	if err != nil {
+		return "", err
+	}
+
+	e.log.Debug(ctx, "assembling K8s client for %s (%s)", mc.ID(), mc.Name())
+	mcClient, err := k8s.New(mc.ID(), client.Options{Scheme: scheme})
+	if err != nil {
+		return "", err
+	}
+
+	e.log.Debug(ctx, "searching for user-ca-bundle ConfigMap")
+	nsList := &corev1.NamespaceList{}
+	clusterSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{MatchLabels: map[string]string{
+		"api.openshift.com/id": e.cluster.ID(),
+	}})
+	if err != nil {
+		return "", err
+	}
+	if err := mcClient.List(ctx, nsList, &client.ListOptions{LabelSelector: clusterSelector}); err != nil {
+		return "", err
+	}
+	if len(nsList.Items) != 1 {
+		return "", fmt.Errorf("one namespace expected matching: api.openshift.com/id=%s, found %d", e.cluster.ID(), len(nsList.Items))
+	}
+
+	cm := &corev1.ConfigMap{}
+	if err := mcClient.Get(ctx, client.ObjectKey{Name: "user-ca-bundle", Namespace: nsList.Items[0].Name}, cm); err != nil {
+		return "", err
+	}
+
+	if _, ok := cm.Data[caBundleConfigMapKey]; ok {
+		return cm.Data[caBundleConfigMapKey], nil
+	}
+
+	return "", fmt.Errorf("%s data not found in the ConfigMap %s/user-ca-bundle on %s", caBundleConfigMapKey, nsList.Items[0].Name, mc.Name())
+}
+
+func (e *EgressVerification) getCaBundleFromHive(ctx context.Context) (string, error) {
 	scheme := runtime.NewScheme()
 	if err := corev1.AddToScheme(scheme); err != nil {
 		return "", err
