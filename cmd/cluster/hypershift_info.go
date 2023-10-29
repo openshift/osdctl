@@ -275,6 +275,16 @@ func createGraphViz(ai *aggregateClusterInfo) map[graphviz.Node][]graphviz.Node 
 			}
 			connections[node] = append(connections[node], lb)
 		}
+		for _, ceps := range ai.clusterInfo.Endpoints {
+			customerEndpointNode := graphviz.Node{
+				Id:                    *ceps.VpcEndpointId,
+				AdditionalInformation: "VPC Endpoint (C)",
+				Subgraph:              "customer",
+			}
+			if *ceps.VpcEndpointId == *conn.VpcEndpointId {
+				connections[node] = append(connections[node], customerEndpointNode)
+			}
+		}
 	}
 	for _, hz := range ai.clusterInfo.HostedZones {
 		hzn := graphviz.Node{
@@ -860,17 +870,18 @@ func render(ainfo *aggregateClusterInfo) {
 	table.SetAutoMergeCells(true)
 	for _, rtb := range ainfo.clusterInfo.SubnetRouteTables {
 		for _, route := range rtb.Routes {
-			var destination string
+			var destination, targetId string
 			if route.DestinationCidrBlock != nil {
 				destination = *route.DestinationCidrBlock
 			} else {
 				destination = *route.DestinationPrefixListId
 			}
-			var targetId string
 			if route.GatewayId != nil {
 				targetId = *route.GatewayId
-			} else {
+			} else if route.NatGatewayId != nil {
 				targetId = *route.NatGatewayId
+			} else {
+				targetId = *route.TransitGatewayId
 			}
 			table.Append([]string{*rtb.RouteTableId, *rtb.VpcId, destination, targetId})
 		}
