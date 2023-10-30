@@ -419,6 +419,30 @@ func GetHiveCluster(clusterId string) (*cmv1.Cluster, error) {
 	return resp.Items().Get(0), nil
 }
 
+// GetManagementCluster returns the OCM Cluster object for a provided clusterId
+func GetManagementCluster(clusterId string) (*cmv1.Cluster, error) {
+	conn, err := CreateConnection()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	hypershiftResp, err := conn.ClustersMgmt().V1().Clusters().
+		Cluster(clusterId).
+		Hypershift().
+		Get().
+		Send()
+	if err != nil {
+		return nil, err
+	}
+
+	if mgmtClusterName, ok := hypershiftResp.Body().GetManagementCluster(); ok {
+		return GetClusterAnyStatus(conn, mgmtClusterName)
+	}
+
+	return nil, fmt.Errorf("no management cluster found for %s", clusterId)
+}
+
 func SendRequest(request *sdk.Request) (*sdk.Response, error) {
 	response, err := request.Send()
 	if err != nil {
