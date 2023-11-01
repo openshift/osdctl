@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/openshift/osdctl/pkg/provider/aws"
-	"github.com/spf13/viper"
 	"os"
 	"strings"
+
+	"github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/spf13/viper"
 
 	routev1 "github.com/openshift/api/route/v1"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
@@ -20,6 +21,7 @@ import (
 	"github.com/openshift/osdctl/cmd/aao"
 	"github.com/openshift/osdctl/cmd/account"
 	"github.com/openshift/osdctl/cmd/capability"
+	"github.com/openshift/osdctl/cmd/cloudtrail"
 	"github.com/openshift/osdctl/cmd/cluster"
 	"github.com/openshift/osdctl/cmd/clusterdeployment"
 	"github.com/openshift/osdctl/cmd/cost"
@@ -90,6 +92,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(org.NewCmdOrg())
 	rootCmd.AddCommand(sts.NewCmdSts(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(promote.NewCmdPromote(kubeFlags, globalOpts))
+	rootCmd.AddCommand(cloudtrail.CloudtrailCmd)
 
 	// add docs command
 	rootCmd.AddCommand(newCmdDocs(streams))
