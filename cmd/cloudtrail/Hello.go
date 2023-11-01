@@ -12,7 +12,7 @@ import (
 // HelloCmd represents the Hello command
 var helloCmd = &cobra.Command{
 	Use:   "Hello",
-	Short: "Prints out Hello Cloundtrail",
+	Short: "Prints out Hello Cloundtrail to the console",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Hello Cloudtrail")
