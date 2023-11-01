@@ -1,5 +1,7 @@
 package resize
 
+// cspell:ignore embiggen
+
 import (
 	"context"
 	"errors"
@@ -8,14 +10,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/smithy-go"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"github.com/openshift/osdctl/cmd/servicelog"
+	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -24,6 +30,8 @@ const (
 	twentyMinuteTimeout                = 20 * time.Minute
 	twentySecondIncrement              = 20 * time.Second
 	resizedInfraNodeServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_resized_auto.json"
+	infraNodeLabel                     = "node-role.kubernetes.io/infra"
+	temporaryInfraNodeLabel            = "osdctl.openshift.io/infra-resize-temporary-machinepool"
 )
 
 func newCmdResizeInfra() *cobra.Command {
@@ -79,6 +87,7 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 	tempMp := newMp.DeepCopy()
 	tempMp.Name = fmt.Sprintf("%s2", tempMp.Name)
 	tempMp.Spec.Name = fmt.Sprintf("%s2", tempMp.Spec.Name)
+	tempMp.Spec.Labels[temporaryInfraNodeLabel] = ""
 
 	instanceType, err := getInstanceType(tempMp)
 	if err != nil {
@@ -97,12 +106,14 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 		return err
 	}
 
+	// This selector will match all infra nodes
+	selector, err := labels.Parse(infraNodeLabel)
+	if err != nil {
+		return err
+	}
+
 	if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
 		nodes := &corev1.NodeList{}
-		selector, err := labels.Parse("node-role.kubernetes.io/infra=")
-		if err != nil {
-			return false, err
-		}
 
 		if err := r.client.List(ctx, nodes, &client.ListOptions{LabelSelector: selector}); err != nil {
 			return false, err
@@ -132,13 +143,43 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 		return err
 	}
 
+	// Identify the original nodes and temp nodes
+	// requireInfra matches all infra nodes using the selector from above
+	requireInfra, err := labels.NewRequirement(infraNodeLabel, selection.Exists, nil)
+	if err != nil {
+		return err
+	}
+
+	// requireNotTempNode matches all nodes that do not have the temporaryInfraNodeLabel, created with the new (temporary) machine pool
+	requireNotTempNode, err := labels.NewRequirement(temporaryInfraNodeLabel, selection.DoesNotExist, nil)
+	if err != nil {
+		return err
+	}
+
+	// requireTempNode matches the opposite of above, all nodes that *do* have the temporaryInfraNodeLabel
+	requireTempNode, err := labels.NewRequirement(temporaryInfraNodeLabel, selection.Exists, nil)
+	if err != nil {
+		return err
+	}
+
+	// infraNode + notTempNode = original nodes
+	originalNodeSelector := selector.Add(*requireInfra, *requireNotTempNode)
+
+	// infraNode + tempNode = temp nodes
+	tempNodeSelector := selector.Add(*requireInfra, *requireTempNode)
+
+	originalNodes := &corev1.NodeList{}
+	if err := r.client.List(ctx, originalNodes, &client.ListOptions{LabelSelector: originalNodeSelector}); err != nil {
+		return err
+	}
+
 	// Delete original machinepool
 	log.Printf("deleting original machinepool %s, with instance type %s", originalMp.Name, instanceType)
 	if err := r.hiveAdmin.Delete(ctx, originalMp); err != nil {
 		return err
 	}
 
-	// Wait for original machines to delete
+	// Wait for original machinepool to delete
 	if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
 		mp := &hivev1.MachinePool{}
 		err := r.hive.Get(ctx, client.ObjectKey{Namespace: originalMp.Namespace, Name: originalMp.Name}, mp)
@@ -153,6 +194,35 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 		return false, nil
 	}); err != nil {
 		return err
+	}
+
+	// Wait for original nodes to delete
+	if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
+		// Re-check for originalNodes to see if they have been deleted
+		return r.nodesMatchExpectedCount(ctx, originalNodeSelector, 0)
+	}); err != nil {
+		switch {
+		case errors.Is(err, wait.ErrWaitTimeout):
+			log.Printf("Warning: timed out waiting for nodes to drain: %v. Terminating backing cloud instances.", err.Error())
+
+			// Terminate the backing cloud instances if they are not removed by the 20 minute timeout
+			err := r.terminateCloudInstances(ctx, originalNodes)
+			if err != nil {
+				return err
+			}
+
+			if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
+				log.Printf("waiting for nodes to terminate")
+				return r.nodesMatchExpectedCount(ctx, originalNodeSelector, 0)
+			}); err != nil {
+				if errors.Is(err, wait.ErrWaitTimeout) {
+					log.Printf("timed out waiting for nodes to terminate: %v.", err.Error())
+				}
+				return err
+			}
+		default:
+			return err
+		}
 	}
 
 	// Create new permanent machinepool
@@ -194,6 +264,11 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 			return false, nil
 		}
 	}); err != nil {
+		return err
+	}
+
+	tempNodes := &corev1.NodeList{}
+	if err := r.client.List(ctx, tempNodes, &client.ListOptions{LabelSelector: tempNodeSelector}); err != nil {
 		return err
 	}
 
@@ -242,7 +317,27 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 			return false, nil
 		}
 	}); err != nil {
-		return err
+		switch {
+		case errors.Is(err, wait.ErrWaitTimeout):
+			log.Printf("Warning: timed out waiting for nodes to drain: %v. Terminating backing cloud instances.", err.Error())
+
+			err := r.terminateCloudInstances(ctx, tempNodes)
+			if err != nil {
+				return err
+			}
+
+			if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
+				log.Printf("waiting for nodes to terminate")
+				return r.nodesMatchExpectedCount(ctx, tempNodeSelector, 0)
+			}); err != nil {
+				if errors.Is(err, wait.ErrWaitTimeout) {
+					log.Printf("timed out waiting for nodes to terminate: %v.", err.Error())
+				}
+				return err
+			}
+		default:
+			return err
+		}
 	}
 
 	postCmd := generateServiceLog(r.instanceType, r.clusterId)
@@ -354,4 +449,79 @@ func generateServiceLog(instanceType, clusterId string) servicelog.PostCmdOption
 		ClusterId:      clusterId,
 		TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
 	}
+}
+
+func (r *Resize) terminateCloudInstances(ctx context.Context, nodeList *corev1.NodeList) error {
+	if len(nodeList.Items) == 0 {
+		return nil
+	}
+
+	var instanceIDs []string
+
+	for _, node := range nodeList.Items {
+		instanceIDs = append(instanceIDs, convertProviderIDtoInstanceID(node.Spec.ProviderID))
+	}
+
+	switch r.cluster.CloudProvider().ID() {
+	case "aws":
+		cfg, err := osdCloud.CreateAWSV2Config(r.clusterId)
+		if err != nil {
+			return err
+		}
+
+		awsClient := ec2.NewFromConfig(cfg)
+		_, err = awsClient.TerminateInstances(ctx, &ec2.TerminateInstancesInput{
+			InstanceIds: instanceIDs,
+		})
+		if err != nil {
+			var apiErr smithy.APIError
+			if errors.As(err, &apiErr) {
+				code := apiErr.ErrorCode()
+				message := apiErr.ErrorMessage()
+				log.Printf("AWS ERROR: %v - %v\n", code, message)
+			} else {
+				log.Printf("ERROR: %v\n", err.Error())
+			}
+			return err
+		}
+
+	case "gcp":
+		// There isn't currently a way to programmatically retrieve backplane credentials for GCP
+		log.Printf("GCP support for manually terminating instances not yet supported. "+
+			"Please use backplane to login and terminate the instances manually: %v", strings.Join(instanceIDs, ", "))
+		return nil
+
+	default:
+		return fmt.Errorf("cloud provider not supported: %s, only AWS is supported", r.cluster.CloudProvider().ID())
+	}
+
+	log.Printf("requested termination of instances: %v", strings.Join(instanceIDs, ", "))
+
+	return nil
+}
+
+// convertProviderIDtoInstanceID converts a provider ID to an instance ID
+// ProviderIDs come in the format: aws:///us-east-1a/i-0a1b2c3d4e5f6g7h8
+// or: gce://some-string/europe-west4-a/my-cluster-name-n65hp-infra-a-4fbrd
+// InstanceIDs come in the format: i-0a1b2c3d4e5f6g7h8
+// or: my-cluster-name-n65hp-infra-a-4fbrd
+func convertProviderIDtoInstanceID(providerID string) string {
+	providerIDSplit := strings.Split(providerID, "/")
+	return providerIDSplit[len(providerIDSplit)-1]
+}
+
+// nodesMatchExpectedCount accepts a context, labelselector and count of expected nodes, and ]
+// returns true if the nodelist matching the labelselector is equal to the expected count
+func (r *Resize) nodesMatchExpectedCount(ctx context.Context, labelSelector labels.Selector, count int) (bool, error) {
+	nodeList := &corev1.NodeList{}
+
+	if err := r.client.List(ctx, nodeList, &client.ListOptions{LabelSelector: labelSelector}); err != nil {
+		return false, err
+	}
+
+	if len(nodeList.Items) == count {
+		return true, nil
+	}
+
+	return false, nil
 }

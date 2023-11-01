@@ -104,3 +104,28 @@ func TestResize_embiggenMachinePool(t *testing.T) {
 		})
 	}
 }
+
+func TestConvertProviderIDtoInstanceID(t *testing.T) {
+	tests := []struct {
+		providerID string
+		expected   string
+	}{
+		{
+			providerID: "aws:///us-east-1a/i-0a1b2c3d4e5f6g7h8",
+			expected:   "i-0a1b2c3d4e5f6g7h8",
+		},
+		{
+			providerID: "gce://some-string/europe-west4-a/my-cluster-name-n65hp-infra-a-4fbrd",
+			expected:   "my-cluster-name-n65hp-infra-a-4fbrd",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.providerID, func(t *testing.T) {
+			actual := convertProviderIDtoInstanceID(test.providerID)
+			if test.expected != actual {
+				t.Errorf("expected: %s, got %s", test.expected, actual)
+			}
+		})
+	}
+}
