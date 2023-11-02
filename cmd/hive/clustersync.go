@@ -22,6 +22,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 // failingClusterSync represents a failing ClusterSync
@@ -50,6 +51,31 @@ type clusterSyncFailuresOptions struct {
 	kubeCli client.Client
 }
 
+const (
+	clusterSyncFailuresLongDescription = `
+  Helps investigate ClusterSyncs in a failure state on OSD/ROSA hive shards.
+
+  This command by default will list ClusterSyncs that are in a failure state
+  for clusters that are not in limited support or hibernating.
+
+  Error messages are include in all output format except the text format.
+`
+	clusterSyncFailuresExample = `
+  # List clustersync failures using the short version of the command
+  $ osdctl hive csf
+
+  # Output in a yaml format, excluding which syncsets are failing and sorting
+  # by timestamp in a descending order
+  $ osdctl hive csf --syncsets=false --output=yaml --sort-by=timestamp --order=desc
+
+  # Include limited support and hibernating clusters
+  $ osdctl hive csf --limited-support -hibernating
+
+  # List failures and error message for a single cluster
+  $ osdctl hive csf -C <cluster-id>
+`
+)
+
 // NewCmdList implements the list command to list cluster deployment crs
 func NewCmdClusterSyncFailures(streams genericclioptions.IOStreams, _ *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
 	opts := &clusterSyncFailuresOptions{
@@ -59,6 +85,8 @@ func NewCmdClusterSyncFailures(streams genericclioptions.IOStreams, _ *genericcl
 	clusterSyncCmd := &cobra.Command{
 		Use:               "clustersync-failures [flags]",
 		Short:             "List clustersync failures",
+		Long:              clusterSyncFailuresLongDescription,
+		Example:           clusterSyncFailuresExample,
 		Args:              cobra.NoArgs,
 		Aliases:           []string{"csf"},
 		DisableAutoGenTag: true,
@@ -90,6 +118,10 @@ func (o *clusterSyncFailuresOptions) complete(cmd *cobra.Command, args []string)
 
 	if o.output != "yaml" && o.output != "json" && o.output != "csv" && o.output != "text" {
 		return cmdutil.UsageErrorf(cmd, "invalid output field")
+	}
+
+	if _, err := config.GetConfig(); err != nil {
+		return cmdutil.UsageErrorf(cmd, "could not find KUBECONFIG, please make sure you are logged into an hive shard")
 	}
 
 	return nil
