@@ -6,6 +6,7 @@ package cloudtrail
 import (
 	"fmt"
 
+	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/spf13/cobra"
 )
 
@@ -17,6 +18,20 @@ var helloCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Hello Cloudtrail")
 	},
+}
+
+type required struct {
+	clusterID string
+}
+
+func test(i *required) {
+	cfg, err := osdCloud.CreateAWSV2Config(i.clusterID)
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
 }
 
 func init() {
