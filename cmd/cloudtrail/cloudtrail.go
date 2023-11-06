@@ -18,7 +18,7 @@ var CloudtrailCmd = &cobra.Command{
 }
 
 func init() {
-	CloudtrailCmd.AddCommand(helloCmd)
+	CloudtrailCmd.AddCommand(whoamiCmd)
 
 	// Here you will define your flags and configuration settings.
 
