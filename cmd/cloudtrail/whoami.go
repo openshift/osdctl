@@ -56,11 +56,10 @@ func (o *requiredID) run() error {
 		return err
 	}
 
-	id, err = whoami(*awsClient)
 	if err != nil {
 		return err
 	}
-	fmt.Println()
+	fmt.Println(whoami(*awsClient))
 	return err
 
 }
