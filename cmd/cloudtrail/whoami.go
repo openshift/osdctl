@@ -5,11 +5,10 @@ package cloudtrail
 
 import (
 	"fmt"
-	"os/exec"
-	"strings"
 
-	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/openshift-online/ocm-sdk-go/logging"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
+
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/spf13/cobra"
@@ -20,23 +19,27 @@ var whoamiCmd = &cobra.Command{
 	Use:   "whoami",
 	Short: "Prints out Hello Cloundtrail to the console",
 	Long:  ``,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("Hello Cloudtrail")
+	},
 }
 
 type requiredID struct {
 	clusterID string
-	log       logging.Logger
 }
 
-func whoami() error {
+func whoami(awsClient sts.Client) (string, error) {
 
-	cmd := fmt.Sprintf("whoami %s")
-	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
-
+	callerIdentityOutput, err := awsClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
 	if err != nil {
-		fmt.Printf("Failed: %s", strings.TrimSpace(string(output)))
-		return err
+		return "", err
 	}
-	return nil
+	userID, err := arn.Parse(*callerIdentityOutput.UserId)
+	if err != nil {
+		return "", err
+	}
+
+	return userID.AccountID, nil
 }
 
 func (o *requiredID) run() error {
@@ -47,9 +50,18 @@ func (o *requiredID) run() error {
 		fmt.Errorf("Failed to get credentials", err)
 		return err
 	}
-	awsClient := ec2.NewFromConfig(cfg)
 	fmt.Println("[+] Getting Credentials")
-	resp := whoami()
+	awsClient := sts.NewFromConfig(cfg)
+	if err != nil {
+		return err
+	}
+
+	id, err = whoami(*awsClient)
+	if err != nil {
+		return err
+	}
+	fmt.Println()
+	return err
 
 }
 func init() {
