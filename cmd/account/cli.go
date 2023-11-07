@@ -3,7 +3,6 @@ package account
 import (
 	"fmt"
 
-	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/service/sts/types"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
@@ -31,7 +30,6 @@ func newCmdCli() *cobra.Command {
 	cliCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", "", "AWS Profile")
 	cliCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output type")
 	cliCmd.Flags().StringVarP(&ops.region, "region", "r", "", "Region")
-	cliCmd.Flags().StringVarP(&ops.clusterID, "clusterID", "C", "", "Cluster ID")
 
 	return cliCmd
 }
@@ -44,7 +42,6 @@ type cliOptions struct {
 	awsAccountID string
 	awsProfile   string
 	region       string
-	clusterID    string
 }
 
 func (o *cliOptions) complete(cmd *cobra.Command) error {
@@ -57,19 +54,8 @@ func (o *cliOptions) complete(cmd *cobra.Command) error {
 	}
 	defer ocmClient.Close()
 
-	if o.awsAccountID == "" && o.clusterID == "" {
-		return fmt.Errorf("please specify -i or -C")
-	}
-
-	if o.awsAccountID != "" && o.clusterID != "" {
-		return fmt.Errorf("-i and -c are mutually exclusive, please only specify one")
-	}
-
-	if o.clusterID != "" {
-		o.awsAccountID, err = utils.GetAWSAccountIdForCluster(ocmClient, o.clusterID)
-		if err != nil {
-			return err
-		}
+	if o.awsAccountID == "" {
+		return fmt.Errorf("please specify account number with '-i'")
 	}
 
 	if o.region == "" {
@@ -82,21 +68,12 @@ func (o *cliOptions) complete(cmd *cobra.Command) error {
 func (o *cliOptions) run() error {
 
 	var err error
-	isCCS := false
 
 	ocmClient, err := utils.CreateConnection()
 	if err != nil {
 		return err
 	}
 	defer ocmClient.Close()
-
-	// If a cluster ID was provided, determine if the cluster is CCS
-	if o.clusterID != "" {
-		isCCS, err = utils.IsClusterCCS(ocmClient, o.clusterID)
-		if err != nil {
-			return err
-		}
-	}
 
 	// Build the base AWS client using the provide credentials (profile or env vars)
 	awsClient, err := aws.NewAwsClient(o.awsProfile, o.region, "")
@@ -119,36 +96,11 @@ func (o *cliOptions) run() error {
 	}
 
 	var assumedRoleCreds *types.Credentials
-	if isCCS {
-		// If the cluster is CCS, the target role needs to be determined, and the jump role chain needs to be executed
-
-		// Determine the right jump role
-		targetRoleArnString, err := utils.GetSupportRoleArnForCluster(ocmClient, o.clusterID)
-		if err != nil {
-			return err
-		}
-
-		targetRoleArn, err := arn.Parse(targetRoleArnString)
-		if err != nil {
-			return err
-		}
-
-		targetRoleArn.Partition = partition
-
-		// Start the jump role chain. Result should be credentials for the ManagedOpenShift Support role for the target cluster
-		assumedRoleCreds, err = osdCloud.GenerateSupportRoleCredentials(awsClient, o.region, sessionName, targetRoleArn.String())
-		if err != nil {
-			return err
-		}
-
-	} else {
-
-		// If the cluster is non-CCS, or an AWS Account ID was provided with -i, try and use OrganizationAccountAccessRole
-		assumedRoleCreds, err = osdCloud.GenerateOrganizationAccountAccessCredentials(awsClient, o.awsAccountID, sessionName, partition)
-		if err != nil {
-			fmt.Printf("Could not build AWS Client for OrganizationAccountAccessRole: %s\n", err)
-			return err
-		}
+	// If the cluster is non-CCS, or an AWS Account ID was provided with -i, try and use OrganizationAccountAccessRole
+	assumedRoleCreds, err = osdCloud.GenerateOrganizationAccountAccessCredentials(awsClient, o.awsAccountID, sessionName, partition)
+	if err != nil {
+		fmt.Printf("Could not build AWS Client for OrganizationAccountAccessRole: %s\n", err)
+		return err
 	}
 
 	// Output section
