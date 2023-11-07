@@ -57,7 +57,7 @@ func GetJiraSupportExceptionsForOrg(organizationID string) ([]jira.Issue, error)
 
 	jql := fmt.Sprintf(
 		`project = "Support Exceptions" AND type = Story AND Status = Approved AND
-		 Resolution = Unresolved AND "Customer Name" ~ "%s"`,
+		 Resolution = Unresolved AND ("Customer Name" ~ "%[1]s" OR "Organization ID" ~ "%[1]s")`,
 		organizationID,
 	)
 
