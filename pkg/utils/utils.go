@@ -188,6 +188,19 @@ func GetSubscription(connection *sdk.Connection, key string) (subscription *amv1
 	return
 }
 
+// GetOrganization returns an *amv1.Organization given an OCM cluster name, external id, or internal id as key
+func GetOrganization(connection *sdk.Connection, key string) (*amv1.Organization, error) {
+	subscription, err := GetSubscription(connection, key)
+	if err != nil {
+		return nil, err
+	}
+	orgResponse, err := connection.AccountsMgmt().V1().Organizations().Organization(subscription.OrganizationID()).Get().Send()
+	if err != nil {
+		return nil, err
+	}
+	return orgResponse.Body(), nil
+}
+
 // GetAccount Function allows to get a single account with any identifier (username, ID)
 func GetAccount(connection *sdk.Connection, key string) (account *amv1.Account, err error) {
 	// Prepare the resources that we will be using:
