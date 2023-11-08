@@ -234,7 +234,7 @@ func rolloutTelemeterClientPods(clientset *kubernetes.Clientset, namespace, sele
 
 func verifyClusterPullSecret(clientset *kubernetes.Clientset, expectedPullSecret string) error {
 	// Retrieve the pull secret from the "openshift-config" namespace
-	pullSecret, err := clientset.CoreV1().Secrets("openshift-config").Get(context.TODO(), "pull", metav1.GetOptions{})
+	pullSecret, err := clientset.CoreV1().Secrets("openshift-config").Get(context.TODO(), "pull-secret", metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to get pull secret: %w", err)
 	}
