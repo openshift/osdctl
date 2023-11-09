@@ -27,10 +27,10 @@ var quickTaskCmd = &cobra.Command{
 The ticket will be assigned to the caller and added to their team's current sprint as an OSD Task.
 A link to the created ticket will be printed to the console.`,
 	Example: `#Create a new Jira issue
-osdctl jira create "Update command to take new flag"
+osdctl jira quick-task "Update command to take new flag"
 
 #Create a new Jira issue and add to the caller's current sprint
-osdctl jira create "Update command to take new flag" --add-to-sprint
+osdctl jira quick-task "Update command to take new flag" --add-to-sprint
 `,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

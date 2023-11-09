@@ -38,6 +38,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 	clusterCmd.AddCommand(newCmdEtcdMemberReplacement())
 	clusterCmd.AddCommand(newCmdFromInfraId(globalOpts))
 	clusterCmd.AddCommand(NewCmdHypershiftInfo(streams))
+	clusterCmd.AddCommand(newCmdOrgId())
 	return clusterCmd
 }
 
