@@ -79,7 +79,7 @@ func servicePromotion(serviceName, gitHash string, osd, hcp bool) error {
 		fmt.Printf("FAILURE: %v\n", err)
 	}
 
-	commitMessage := fmt.Sprintf("Promote %s to %s", serviceName, promotionGitHash)
+	commitMessage := fmt.Sprintf("Promote %s to %s\n\nSee %s/compare/%s...%s for contents of the promotion.", serviceName, promotionGitHash, serviceRepo, currentGitHash, promotionGitHash)
 	err = git.CommitSaasFile(saasDir, commitMessage)
 	if err != nil {
 		return fmt.Errorf("failed to commit changes to app-interface: %w", err)
