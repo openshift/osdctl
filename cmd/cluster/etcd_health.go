@@ -80,6 +80,7 @@ func newCmdEtcdHealthCheck() *cobra.Command {
 		Long:              `Checks etcd component health status for member replacement`,
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
+		Deprecated:        "please use the managed-script SREP/etcd-complete-health-check to avoid backplane elevation",
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(EtcdHealthCheck(args[0]))
 		},
