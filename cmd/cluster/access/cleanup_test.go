@@ -99,7 +99,7 @@ func TestCleanupAccessOptions_dropPrivateLinkAccess(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed '%s': to add corev1 to scheme: %v", test.Name, err)
 		}
-		client := fake.NewFakeClientWithScheme(scheme, objs...)
+		client := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...).Build()
 
 		streams := genericclioptions.IOStreams{In: strings.NewReader("y\n"), Out: os.Stdout, ErrOut: os.Stderr}
 		flags := genericclioptions.ConfigFlags{}

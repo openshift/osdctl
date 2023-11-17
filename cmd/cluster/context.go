@@ -3,13 +3,14 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
-	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"os"
 	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+
+	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 
 	"github.com/openshift/osdctl/cmd/servicelog"
 
@@ -68,6 +69,9 @@ type contextData struct {
 
 	// Current OCM environment (e.g., "production" or "stage")
 	OCMEnv string
+
+	// Dynatrace Environment URL
+	DyntraceEnvURL string
 
 	// limited Support Status
 	LimitedSupportReasons []*cmv1.LimitedSupportReason
@@ -230,6 +234,9 @@ func (o *contextOptions) printLongOutput(data *contextData) {
 
 	// Print other helpful links
 	o.printOtherLinks(data)
+
+	// Print Dynatrace URL
+	printDynatraceEnvURL(data)
 }
 
 func (o *contextOptions) printShortOutput(data *contextData) {
@@ -393,6 +400,24 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		}
 	}
 
+	GetDynatraceURL := func() {
+		defer wg.Done()
+		if o.verbose {
+			fmt.Fprintln(os.Stderr, "Getting Dynatrace URL...")
+		}
+		if !isManagementCluster(ocmClient, cluster) {
+			errors = append(errors, fmt.Errorf("cluster is not a management cluster"))
+			data.DyntraceEnvURL = "cluster is Not a Management Cluster"
+			return
+		}
+
+		data.DyntraceEnvURL, err = GetDynatraceURLFromCluster(cluster)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("Error The Dynatrace Environemnt URL could not be determined %s", err))
+			data.DyntraceEnvURL = "the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there"
+		}
+	}
+
 	GetPagerDutyAlerts := func() {
 		pdwg.Add(1)
 		defer wg.Done()
@@ -428,6 +453,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		GetJiraIssues,
 		GetSupportExceptions,
 		GetPagerDutyAlerts,
+		GetDynatraceURL,
 	)
 
 	if o.full {
@@ -665,4 +691,10 @@ func skippableEvent(eventName string) bool {
 		}
 	}
 	return false
+}
+
+func printDynatraceEnvURL(data *contextData) {
+	var name string = "Dynatrace Environment URL"
+	fmt.Println(delimiter + name)
+	fmt.Println(data.DyntraceEnvURL)
 }

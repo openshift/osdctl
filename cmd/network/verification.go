@@ -599,10 +599,7 @@ func (e *EgressVerification) getCaBundleFromHive(ctx context.Context) (string, e
 
 // getCaBundleFromSyncSet returns a cluster's proxy CA Bundle given a Hive SyncSet
 func getCaBundleFromSyncSet(ss *hivev1.SyncSet) (string, error) {
-	decoder, err := admission.NewDecoder(runtime.NewScheme())
-	if err != nil {
-		return "", err
-	}
+	decoder := admission.NewDecoder(runtime.NewScheme())
 
 	for i := range ss.Spec.Resources {
 		cm := &corev1.ConfigMap{}

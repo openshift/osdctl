@@ -147,7 +147,7 @@ func TestGetClusterNamespaces(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed '%s': could not add corev1 to scheme: %v", test.Name, err)
 		}
-		client := fake.NewFakeClientWithScheme(scheme, objs...)
+		client := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...).Build()
 
 		// Run test
 		ns, err := getClusterNamespace(client, test.Clusterid)

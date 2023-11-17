@@ -65,7 +65,7 @@ func TestGetAWSAccount(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
 			ctx := context.TODO()
-			client := fake.NewFakeClientWithScheme(scheme.Scheme, tc.localObjects...)
+			client := fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(tc.localObjects...).Build()
 			account, err := GetAWSAccount(ctx, client, tc.namespace, tc.accountName)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())
@@ -124,7 +124,7 @@ func TestGetAccountClaimFromClusterID(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
 			ctx := context.TODO()
-			client := fake.NewFakeClientWithScheme(scheme.Scheme, tc.localObjects...)
+			client := fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(tc.localObjects...).Build()
 			accountClaim, err := GetAccountClaimFromClusterID(ctx, client, tc.clusterID)
 			if tc.nilExpected {
 				g.Expect(accountClaim).Should(BeNil())
@@ -186,7 +186,7 @@ func TestGetAWSAccountClaim(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
 			ctx := context.TODO()
-			client := fake.NewFakeClientWithScheme(scheme.Scheme, tc.localObjects...)
+			client := fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(tc.localObjects...).Build()
 			accountClaim, err := GetAWSAccountClaim(ctx, client, tc.namespace, tc.claimName)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())
@@ -277,7 +277,7 @@ func TestGetAWSAccountCredentials(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
 			ctx := context.TODO()
-			client := fake.NewFakeClientWithScheme(scheme.Scheme, tc.localObjects...)
+			client := fake.NewClientBuilder().WithScheme(scheme.Scheme).WithRuntimeObjects(tc.localObjects...).Build()
 			creds, err := GetAWSAccountCredentials(ctx, client, tc.namespace, tc.secretName)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())
