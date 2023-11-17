@@ -2,6 +2,7 @@ package sts
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 
 	"github.com/coreos/go-semver/semver"
@@ -36,25 +37,40 @@ func (o *policyOptions) complete(cmd *cobra.Command, args []string) error {
 		return cmdutil.UsageErrorf(cmd, "Release version is required for policy command")
 	}
 
-	_, err := semver.NewVersion(args[0])
-	if err != nil {
-		return cmdutil.UsageErrorf(cmd, "Release version must satisfy the semantic version format: %s", err.Error())
-	}
-
 	return nil
 }
 
 func (o *policyOptions) run(args []string) error {
-	// save crs files in /tmp/crs- dir for given release version
-	crs := "oc adm release extract quay.io/openshift-release-dev/ocp-release:" + args[0] + "-x86_64 --credentials-requests --cloud=aws --to=/tmp/crs-" + args[0]
-	_, err := exec.Command("bash", "-c", crs).Output() //#nosec G204 -- Subprocess launched with variable
+	directory, err := getPolicyFiles(args[0])
 	if err != nil {
-		fmt.Print(err)
 		return err
 	}
 
-	output := "OCP STS policy files have been saved in /tmp/crs-" + args[0] + " directory"
+	output := "OCP STS policy files have been saved in " + directory + " directory"
 	fmt.Println(output)
 
 	return nil
+}
+
+// getPolicyFiles creates a temp directory and extracts credential request
+// manifests from a given release payload
+func getPolicyFiles(value string) (string, error) {
+	directory, err := os.MkdirTemp("", "osdctl-crs-")
+	if err != nil {
+		return "", err
+	}
+
+	// try parsing the value for released versions
+	_, err = semver.NewVersion(value)
+	if err == nil {
+		value = fmt.Sprintf("quay.io/openshift-release-dev/ocp-release:%s-x86_64", value)
+	}
+
+	crs := fmt.Sprintf("oc adm release extract %s --credentials-requests --cloud=aws --to=%s", value, directory)
+	_, err = exec.Command("bash", "-c", crs).Output() //#nosec G204 -- Subprocess launched with variable
+	if err != nil {
+		return "", fmt.Errorf("failed to run command: %w", err)
+	}
+
+	return directory, nil
 }

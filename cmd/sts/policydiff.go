@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/coreos/go-semver/semver"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
@@ -38,28 +37,21 @@ func (o *policyDiffOptions) complete(cmd *cobra.Command, args []string) error {
 		return cmdutil.UsageErrorf(cmd, "Previous and new release version is required for policy-diff command")
 	}
 
-	for _, s := range args {
-		_, err := semver.NewVersion(s)
-		if err != nil {
-			return cmdutil.UsageErrorf(cmd, "Release version must satisfy the semantic version format: %s", err.Error())
-		}
-	}
-
 	return nil
 }
 
 func (o *policyDiffOptions) run(args []string) error {
-	// save crs files in /tmp/crs- dirs for each release version
-	for _, s := range args {
-		crs := "oc adm release extract quay.io/openshift-release-dev/ocp-release:" + s + "-x86_64 --credentials-requests --cloud=aws --to=/tmp/crs-" + s
-		_, err := exec.Command("bash", "-c", crs).Output() //#nosec G204 -- Subprocess launched with variable
-		if err != nil {
-			fmt.Print(err)
-			return err
-		}
+	dir1, err := getPolicyFiles(args[0])
+	if err != nil {
+		return err
 	}
 
-	diff := "diff /tmp/crs-" + string(args[0]) + " /tmp/crs-" + string(args[1])
+	dir2, err := getPolicyFiles(args[1])
+	if err != nil {
+		return err
+	}
+
+	diff := fmt.Sprintf("diff %s %s", dir1, dir2)
 	output, _ := exec.Command("bash", "-c", diff).Output() //#nosec G204 -- Subprocess launched with variable
 	fmt.Println(string(output))
 
