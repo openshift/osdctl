@@ -225,7 +225,7 @@ func TestClusterAccessOptions_createLocalKubeconfigAccess(t *testing.T) {
 			updateEnvResponse := fmt.Sprintf("%s\n", test.UpdateEnvResp)
 			streams := genericclioptions.IOStreams{In: strings.NewReader(updateEnvResponse), Out: os.Stdout, ErrOut: os.Stderr}
 			flags := genericclioptions.ConfigFlags{}
-			client := fake.NewFakeClientWithScheme(runtime.NewScheme())
+			client := fake.NewClientBuilder().WithScheme(runtime.NewScheme()).Build()
 			access := newClusterAccessOptions(client, streams, &flags)
 
 			// Generate test objects
@@ -363,7 +363,7 @@ func TestClusterAccessOptions_createJumpPod(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to add corev1 to scheme: %v", err)
 		}
-		client := fake.NewFakeClientWithScheme(scheme)
+		client := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 		flags := genericclioptions.ConfigFlags{}
 		streams := genericclioptions.IOStreams{In: genericclioptions.NewTestIOStreamsDiscard().In, Out: os.Stdout, ErrOut: os.Stderr}

@@ -2,29 +2,23 @@ package cluster
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
-	"strings"
+	"os"
 
-	bplogin "github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
-	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
+	"github.com/Dynatrace/dynatrace-operator/src/api/v1beta1"
+	"github.com/Dynatrace/dynatrace-operator/src/api/v1beta1/dynakube"
+	sdk "github.com/openshift-online/ocm-sdk-go"
+	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	"github.com/openshift/osdctl/pkg/k8s"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/apimachinery/pkg/runtime"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var DynatraceURLStaging = map[string]string{
-	"us": "https://hrm15629.apps.dynatrace.com/",
-	"eu": "https://wmb10400.apps.dynatrace.com/",
-}
-
-var DynatraceURLProduction = map[string]string{
-	"us": "https://jgn20300.apps.dynatrace.com/",
-	"eu": "https://vap62935.apps.dynatrace.com/",
-	"ap": "https://zwz85475.apps.dynatrace.com/",
-}
+const HypershiftClusterTypeLabel string = "ext-hypershift.openshift.io/cluster-type"
 
 func newCmdDynatraceURL() *cobra.Command {
 	orgIdCmd := &cobra.Command{
@@ -52,79 +46,75 @@ func fetchDetails(clusterID string) error {
 	if err != nil {
 		return err
 	}
-	region := cluster.Region().ID()
-	if !strings.HasPrefix(cluster.Name(), "hs-mc-") {
-		return fmt.Errorf("cluster is Not a Management Cluster")
+
+	if !isManagementCluster(connection, cluster) {
+		return fmt.Errorf("cluster is not a management cluster")
 	}
-	url, err := GetDynatraceURLFromCluster(cluster.ID())
+
+	url, err := GetDynatraceURLFromCluster(cluster)
 	if err != nil {
-		OCMEnv := ocmutils.GetCurrentOCMEnv(connection)
-		url = getDynatraceURLFromRegion(region, OCMEnv)
-		if url == "" {
-			return fmt.Errorf("the Dynatrace Environemnt URL could not be determined")
-		}
+		return fmt.Errorf("the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there \n\nError Details - %s", err)
 	}
 	fmt.Println("Dynatrace Environment URL - ", url)
 	return nil
 }
 
-func GetDynatraceURLFromCluster(clusterID string) (string, error) {
-	// Login into Cluster
-	bp, err := bpconfig.GetBackplaneConfiguration()
+// Sanity Check for MC Cluster
+func isManagementCluster(connection *sdk.Connection, cluster *v1.Cluster) bool {
+	collection := connection.ClustersMgmt().V1().Clusters()
+	// Get the labels externally available for the cluster
+	resource := collection.Cluster(cluster.ID()).ExternalConfiguration().Labels()
+	// Send the request to retrieve the list of external cluster labels:
+	response, err := resource.List().Send()
 	if err != nil {
-		return "", fmt.Errorf("failed to load backplane-cli config: %v", err)
+		fmt.Fprintf(os.Stderr, "Can't retrieve cluster labels: %v\n", err)
+		os.Exit(1)
 	}
 
-	kubeconfig, err := bplogin.GetRestConfig(bp, clusterID)
-	if err != nil {
-		return "", err
-	}
-	// Create the clientset
-	clientset, err := kubernetes.NewForConfig(kubeconfig)
-	if err != nil {
-		return "", err
-	}
-	// Fetch Dynakube CRD
-	var dynakubeCRD map[string]interface{}
-	data, err := clientset.RESTClient().
-		Get().
-		AbsPath("/apis/dynatrace.com/v1beta1").
-		Namespace("dynatrace").
-		Resource("dynakubes").
-		DoRaw(context.TODO())
-	if err != nil {
-		return "", err
-	}
-	err = json.Unmarshal(data, &dynakubeCRD)
-	if err != nil {
-		return "", err
+	labels, ok := response.GetItems()
+	if !ok {
+		return false
 	}
 
-	// Access the spec.apiUrl field
-	var result map[string]interface{}
-	if err := json.Unmarshal(data, &result); err != nil {
-		return "", err
-	}
-	var DTUrl string
-	for _, item := range result["items"].([]interface{}) {
-		apiUrl := item.(map[string]interface{})["spec"].(map[string]interface{})["apiUrl"].(string)
-		u, err := url.Parse(apiUrl)
-		if err != nil {
-			return "", err
+	for _, label := range labels.Slice() {
+		if l, ok := label.GetKey(); ok {
+			// If the label is found as the key, we know its an Managemnt Cluster
+			if l == HypershiftClusterTypeLabel {
+				return true
+			}
 		}
-		DTUrl = fmt.Sprintf("%s://%s", u.Scheme, u.Host)
 	}
-	return DTUrl, nil
+	return false
 }
 
-func getDynatraceURLFromRegion(regionID string, OCMEnv string) string {
-	regionPrefix := strings.Split(regionID, "-")[0]
-	switch OCMEnv {
-	case "production":
-		return DynatraceURLProduction[regionPrefix]
-	case "stage":
-		return DynatraceURLStaging[regionPrefix]
-	default:
-		return ""
+func GetDynatraceURLFromCluster(cluster *v1.Cluster) (string, error) {
+	// Register v1beta1 for DynaKube
+	scheme := runtime.NewScheme()
+	if err := v1beta1.AddToScheme(scheme); err != nil {
+		return "", err
 	}
+	c, err := k8s.New(cluster.ID(), client.Options{Scheme: scheme})
+	if err != nil {
+		return "", err
+	}
+
+	// Fetch the DynaKube Resource
+	var dynaKubeList dynakube.DynaKubeList
+	err = c.List(context.TODO(),
+		&dynaKubeList,
+		&client.ListOptions{Namespace: "dynatrace"})
+	if err != nil {
+		return "", err
+	}
+	if len(dynaKubeList.Items) == 0 {
+		return "", fmt.Errorf("could not locate dynaKube resource on the cluster")
+	}
+
+	// Parse the DT URL
+	DTApiURL, err := url.Parse(dynaKubeList.Items[0].Spec.APIURL)
+	if err != nil {
+		return "", err
+	}
+	DTURL := fmt.Sprintf("%s://%s", DTApiURL.Scheme, DTApiURL.Host)
+	return DTURL, nil
 }
