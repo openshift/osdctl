@@ -26,6 +26,7 @@ import (
 	"github.com/openshift/osdctl/cmd/hive"
 	"github.com/openshift/osdctl/cmd/jira"
 	"github.com/openshift/osdctl/cmd/jumphost"
+	"github.com/openshift/osdctl/cmd/mc"
 	"github.com/openshift/osdctl/cmd/network"
 	"github.com/openshift/osdctl/cmd/org"
 	"github.com/openshift/osdctl/cmd/promote"
@@ -88,6 +89,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(newCmdCompletion())
 	rootCmd.AddCommand(env.NewCmdEnv())
 	rootCmd.AddCommand(jumphost.NewCmdJumphost())
+	rootCmd.AddCommand(mc.NewCmdMC())
 	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(servicelog.NewCmdServiceLog())
 	rootCmd.AddCommand(org.NewCmdOrg())
