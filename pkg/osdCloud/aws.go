@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	stsTypes "github.com/aws/aws-sdk-go-v2/service/sts/types"
 	sdk "github.com/openshift-online/ocm-sdk-go"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	bpcloud "github.com/openshift/backplane-cli/cmd/ocm-backplane/cloud"
 	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
 	"github.com/openshift/osdctl/pkg/provider/aws"
@@ -180,13 +181,13 @@ func GenerateRoleSessionName(client aws.Client) (string, error) {
 }
 
 // CreateAWSV2Config creates an aws-sdk-go-v2 config via Backplane given an internal cluster id
-func CreateAWSV2Config(clusterID string) (awsSdk.Config, error) {
+func CreateAWSV2Config(cluster *cmv1.Cluster) (awsSdk.Config, error) {
 	bp, err := bpconfig.GetBackplaneConfiguration()
 	if err != nil {
 		return awsSdk.Config{}, fmt.Errorf("failed to load backplane-cli config: %v", err)
 	}
 
-	return bpcloud.GetAWSV2Config(bp.URL, clusterID)
+	return bpcloud.GetAWSV2Config(bp.URL, cluster)
 }
 
 func GenerateCCSClusterAWSClient(ocmClient *sdk.Connection, awsClient aws.Client, clusterID string, clusterRegion string, partition string, sessionName string) (aws.Client, error) {

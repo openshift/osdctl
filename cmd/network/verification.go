@@ -213,7 +213,7 @@ func (e *EgressVerification) setup(ctx context.Context) (*aws.Config, error) {
 		e.cluster = cluster
 
 		e.log.Info(ctx, "getting AWS credentials from backplane-api")
-		cfg, err := osdCloud.CreateAWSV2Config(cluster.ID())
+		cfg, err := osdCloud.CreateAWSV2Config(cluster)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get credentials automatically from backplane-api: %v."+
 				" You can still try this command by exporting AWS credentials as environment variables and specifying"+

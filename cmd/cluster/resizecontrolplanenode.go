@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/printer"
@@ -27,6 +28,7 @@ type resizeControlPlaneNodeOptions struct {
 	clusterID      string
 	node           string
 	newMachineType string
+	cluster        *cmv1.Cluster
 
 	genericclioptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
@@ -78,6 +80,8 @@ func (o *resizeControlPlaneNodeOptions) complete(cmd *cobra.Command, _ []string)
 	if err != nil {
 		return err
 	}
+
+	o.cluster = cluster
 
 	// Ensure we store the internal OCM cluster id
 	o.clusterID = cluster.ID()
@@ -394,7 +398,7 @@ type resizeControlPlaneNodeAWSClient interface {
 }
 
 func (o *resizeControlPlaneNodeOptions) run() error {
-	cfg, err := osdCloud.CreateAWSV2Config(o.clusterID)
+	cfg, err := osdCloud.CreateAWSV2Config(o.cluster)
 	if err != nil {
 		return err
 	}
