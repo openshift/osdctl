@@ -464,7 +464,7 @@ func (r *Resize) terminateCloudInstances(ctx context.Context, nodeList *corev1.N
 
 	switch r.cluster.CloudProvider().ID() {
 	case "aws":
-		cfg, err := osdCloud.CreateAWSV2Config(r.clusterId)
+		cfg, err := osdCloud.CreateAWSV2Config(r.cluster)
 		if err != nil {
 			return err
 		}
