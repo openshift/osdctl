@@ -407,25 +407,14 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			fmt.Fprintln(os.Stderr, "Getting Dynatrace URL...")
 		}
 
-		// Get MC Cluster if HCP
-		if cluster.Hypershift().Enabled() {
-			ManagementCluster, err := utils.GetManagementCluster(cluster.ID())
-			if err != nil {
-				errors = append(errors, fmt.Errorf("Dynatrace - Cannot determine MC Cluster"))
-				data.DyntraceEnvURL = "Cannot determine MC Cluster"
-				return
-			}
-			clusterID = ManagementCluster.ID()
-		}
-
-		// Sanity Check for MC/HCP Cluster
-		if !isManagementCluster(ocmClient, clusterID) && !cluster.Hypershift().Enabled() {
-			errors = append(errors, fmt.Errorf("Dynatrace - cluster is not a HCP/Management cluster"))
-			data.DyntraceEnvURL = "cluster is Not a HCP/Management Cluster"
+		clusterID, err := determineManagementCluster(ocmClient, cluster)
+		if err != nil {
+			errors = append(errors, err)
+			data.DyntraceEnvURL = err.Error()
 			return
 		}
 
-		data.DyntraceEnvURL, err = GetDynatraceURLFromCluster(clusterID)
+		data.DyntraceEnvURL, err = GetDynatraceURLFromManagementCluster(clusterID)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("Error The Dynatrace Environemnt URL could not be determined %s", err))
 			data.DyntraceEnvURL = "the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there"
