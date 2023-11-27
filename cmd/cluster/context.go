@@ -401,17 +401,20 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	}
 
 	GetDynatraceURL := func() {
+		var clusterID string = o.clusterID
 		defer wg.Done()
 		if o.verbose {
 			fmt.Fprintln(os.Stderr, "Getting Dynatrace URL...")
 		}
-		if !isManagementCluster(ocmClient, cluster) {
-			errors = append(errors, fmt.Errorf("cluster is not a management cluster"))
-			data.DyntraceEnvURL = "cluster is Not a Management Cluster"
+
+		clusterID, err := determineManagementCluster(ocmClient, cluster)
+		if err != nil {
+			errors = append(errors, err)
+			data.DyntraceEnvURL = err.Error()
 			return
 		}
 
-		data.DyntraceEnvURL, err = GetDynatraceURLFromCluster(cluster)
+		data.DyntraceEnvURL, err = GetDynatraceURLFromManagementCluster(clusterID)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("Error The Dynatrace Environemnt URL could not be determined %s", err))
 			data.DyntraceEnvURL = "the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there"
