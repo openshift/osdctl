@@ -32,6 +32,7 @@ type UserItems struct {
 
 type userModel struct {
 	UserName string   `json:"user-name"`
+	Email    string   `json:"email"`
 	UserID   string   `json:"user-id"`
 	Roles    []string `json:"roles"`
 }
@@ -98,6 +99,7 @@ func getUsers(orgID string) error {
 		usersResponse.Items().Each(func(account *amv1.Account) bool {
 			accountList = append(accountList, account)
 			accountMap[account] = &userModel{
+				Email:    account.Email(),
 				UserName: account.Username(),
 				UserID:   account.ID(),
 			}
