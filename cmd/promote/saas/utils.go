@@ -58,7 +58,7 @@ func servicePromotion(serviceName, gitHash string, osd, hcp bool) error {
 		return fmt.Errorf("failed to read SAAS file: %v", err)
 	}
 
-	currentGitHash, serviceRepo, err := git.GetCurrentGitHashFromAppInterface(serviceData, serviceName)
+	currentGitHash, serviceRepo, err := git.GetCurrentGitHashFromAppInterface(serviceData, serviceName, osd, hcp)
 	if err != nil {
 		return fmt.Errorf("failed to get current git hash or service repo: %v", err)
 	}

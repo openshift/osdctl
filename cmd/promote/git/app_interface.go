@@ -10,13 +10,29 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Service struct {
+type ServiceOsd struct {
 	Name              string `yaml:"name"`
 	ResourceTemplates []struct {
 		Name    string `yaml:"name"`
 		URL     string `yaml:"url"`
 		Targets []struct {
 			Namespace  map[string]string `yaml:"namespace"`
+			Ref        string            `yaml:"ref"`
+			Parameters map[string]string `yaml:"parameters"`
+		} `yaml:"targets"`
+	} `yaml:"resourceTemplates"`
+}
+
+type ServiceHcp struct {
+	Name              string `yaml:"name"`
+	ResourceTemplates []struct {
+		URL     string `yaml:"url"`
+		Targets []struct {
+			NamespaceSelector struct {
+				JSONPathSelectors struct {
+					Include []string `yaml:"include"`
+				} `yaml:"jsonPathSelectors"`
+			} `yaml:"namespaceSelector"`
 			Ref        string            `yaml:"ref"`
 			Parameters map[string]string `yaml:"parameters"`
 		} `yaml:"targets"`
@@ -54,61 +70,93 @@ func checkAppInterfaceCheckout() error {
 	return nil
 }
 
-func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string) (string, string, error) {
+func GetCurrentGitHashFromAppInterface(saasYamlFile []byte, serviceName string, osd, hcp bool) (string, string, error) {
 	var currentGitHash string
 	var serviceRepo string
-	var service Service
-	err := yaml.Unmarshal(saarYamlFile, &service)
-	if err != nil {
-		log.Fatal(err)
-	}
+	var serviceOsd ServiceOsd
+	var serviceHcp ServiceHcp
 
-	if service.Name == "saas-configuration-anomaly-detection-db" {
-		for _, resourceTemplate := range service.ResourceTemplates {
-			for _, target := range resourceTemplate.Targets {
-				if strings.Contains(target.Namespace["$ref"], "app-sre-observability-production-int.yml") {
-					currentGitHash = target.Ref
-					break
-				}
-			}
+	if osd {
+		err := yaml.Unmarshal(saasYamlFile, &serviceOsd)
+		if err != nil {
+			log.Fatal(err)
 		}
-	} else if strings.Contains(service.Name, "configuration-anomaly-detection") {
-		for _, resourceTemplate := range service.ResourceTemplates {
-			for _, target := range resourceTemplate.Targets {
-				if strings.Contains(target.Namespace["$ref"], "configuration-anomaly-detection-production") {
-					currentGitHash = target.Ref
-					break
-				}
-			}
-		}
-	} else if strings.Contains(service.Name, "rhobs-rules-and-dashboards") {
-		for _, resourceTemplate := range service.ResourceTemplates {
-			for _, target := range resourceTemplate.Targets {
-				if strings.Contains(service.Name, "rhobsp02ue1-production") {
-					currentGitHash = target.Ref
-					break
-				}
-			}
-		}
-	} else {
-		for _, resourceTemplate := range service.ResourceTemplates {
-			if !strings.Contains(resourceTemplate.Name, "package") {
+
+		if serviceOsd.Name == "saas-configuration-anomaly-detection-db" {
+			for _, resourceTemplate := range serviceOsd.ResourceTemplates {
 				for _, target := range resourceTemplate.Targets {
-					if strings.Contains(target.Namespace["$ref"], "hivep") {
+					if strings.Contains(target.Namespace["$ref"], "app-sre-observability-production-int.yml") {
 						currentGitHash = target.Ref
 						break
 					}
 				}
 			}
+		} else if strings.Contains(serviceOsd.Name, "configuration-anomaly-detection") {
+			for _, resourceTemplate := range serviceOsd.ResourceTemplates {
+				for _, target := range resourceTemplate.Targets {
+					if strings.Contains(target.Namespace["$ref"], "configuration-anomaly-detection-production") {
+						currentGitHash = target.Ref
+						break
+					}
+				}
+			}
+		} else if strings.Contains(serviceOsd.Name, "rhobs-rules-and-dashboards") {
+			for _, resourceTemplate := range serviceOsd.ResourceTemplates {
+				for _, target := range resourceTemplate.Targets {
+					if strings.Contains(serviceOsd.Name, "rhobsp02ue1-production") {
+						currentGitHash = target.Ref
+						break
+					}
+				}
+			}
+		} else if strings.Contains(serviceOsd.Name, "rhobs-rules-and-dashboards") {
+			for _, resourceTemplate := range serviceOsd.ResourceTemplates {
+				for _, target := range resourceTemplate.Targets {
+					if strings.Contains(serviceOsd.Name, "rhobsp02ue1-production") {
+						currentGitHash = target.Ref
+						break
+					}
+				}
+			}
+		} else {
+			for _, resourceTemplate := range serviceOsd.ResourceTemplates {
+				if !strings.Contains(resourceTemplate.Name, "package") {
+					for _, target := range resourceTemplate.Targets {
+						if strings.Contains(target.Namespace["$ref"], "hivep") {
+							currentGitHash = target.Ref
+							break
+						}
+					}
+				}
+			}
 		}
+
+		if len(serviceOsd.ResourceTemplates) > 0 {
+			serviceRepo = serviceOsd.ResourceTemplates[0].URL
+		}
+	} else if hcp {
+		err := yaml.Unmarshal(saasYamlFile, &serviceHcp)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		for _, resourceTemplate := range serviceHcp.ResourceTemplates {
+			for _, target := range resourceTemplate.Targets {
+				if strings.Contains(target.NamespaceSelector.JSONPathSelectors.Include[0], "@.name==\"production\"") && target.Parameters["REGION"] == "us-east-1" && target.Parameters["SECTOR"] == "canary" {
+					currentGitHash = target.Ref
+					break
+				}
+			}
+		}
+
+		if len(serviceHcp.ResourceTemplates) > 0 {
+			serviceRepo = serviceHcp.ResourceTemplates[0].URL
+		}
+
 	}
 
 	if currentGitHash == "" {
 		return "", "", fmt.Errorf("production namespace not found for service %s", serviceName)
-	}
-
-	if len(service.ResourceTemplates) > 0 {
-		serviceRepo = service.ResourceTemplates[0].URL
 	}
 
 	if serviceRepo == "" {
@@ -124,7 +172,7 @@ func GetCurrentPackageTagFromAppInterface(saasFile string) (string, error) {
 		return "", fmt.Errorf("failed to read file '%s': %w", saasFile, err)
 	}
 
-	service := Service{}
+	service := ServiceOsd{}
 	err = yaml.Unmarshal(saasData, &service)
 	if err != nil {
 		return "", fmt.Errorf("failed to unmarshal service definition: %w", err)
