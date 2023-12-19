@@ -42,7 +42,7 @@ func servicePromotion(serviceName, gitHash string, osd, hcp bool) error {
 		return err
 	}
 
-	err = ValidateServiceName(ServicesSlice, serviceName)
+	serviceName, err = ValidateServiceName(ServicesSlice, serviceName)
 	if err != nil {
 		return err
 	}
@@ -113,16 +113,20 @@ func GetServiceNames(saaDirs ...string) ([]string, error) {
 	return ServicesSlice, nil
 }
 
-func ValidateServiceName(serviceSlice []string, serviceName string) error {
+func ValidateServiceName(serviceSlice []string, serviceName string) (string, error) {
 	fmt.Printf("### Checking if service %s exists ###\n", serviceName)
 	for _, service := range serviceSlice {
 		if service == serviceName {
 			fmt.Printf("Service %s found\n", serviceName)
-			return nil
+			return serviceName, nil
+		}
+		if service == "saas-"+serviceName {
+			fmt.Printf("Service %s found\n", serviceName)
+			return "saas-" + serviceName, nil
 		}
 	}
 
-	return fmt.Errorf("service %s not found", serviceName)
+	return serviceName, fmt.Errorf("service %s not found", serviceName)
 }
 
 func GetSaasDir(serviceName string, osd bool, hcp bool) (string, error) {

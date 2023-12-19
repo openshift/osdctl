@@ -16,9 +16,9 @@ type Service struct {
 		Name    string `yaml:"name"`
 		URL     string `yaml:"url"`
 		Targets []struct {
-			Namespace  map[string]string `yaml:"namespace"`
-			Ref        string            `yaml:"ref"`
-			Parameters map[string]string `yaml:"parameters"`
+			Namespace  map[string]string      `yaml:"namespace"`
+			Ref        string                 `yaml:"ref"`
+			Parameters map[string]interface{} `yaml:"parameters"`
 		} `yaml:"targets"`
 	} `yaml:"resourceTemplates"`
 }
@@ -60,7 +60,7 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string) 
 	var service Service
 	err := yaml.Unmarshal(saarYamlFile, &service)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(fmt.Errorf("cannot unmarshal yaml data of service %s: %v", serviceName, err))
 	}
 
 	if service.Name == "saas-configuration-anomaly-detection-db" {
@@ -141,7 +141,7 @@ func GetCurrentPackageTagFromAppInterface(saasFile string) (string, error) {
 		if strings.Contains(resourceTemplate.Name, "package") {
 			for _, target := range resourceTemplate.Targets {
 				if strings.Contains(target.Namespace["$ref"], "hivep") {
-					currentPackageTag = target.Parameters["PACKAGE_TAG"]
+					currentPackageTag = target.Parameters["PACKAGE_TAG"].(string)
 				}
 			}
 		}
@@ -154,7 +154,7 @@ func UpdateAppInterface(serviceName, saasFile, currentGitHash, promotionGitHash,
 	cmd.Dir = BaseDir
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("failed to create branch %s: %v", branchName, err)
+		return fmt.Errorf("failed to create branch %s: %v, does it already exist? If so, please delete it with `git branch -D %s` first", branchName, err, branchName)
 	}
 
 	// Update the hash in the SAAS file
@@ -179,7 +179,7 @@ func UpdatePackageTag(saasFile, oldTag, promotionTag, branchName string) error {
 	cmd.Dir = BaseDir
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("failed to create branch %s: %v", branchName, err)
+		return fmt.Errorf("failed to create branch %s: %v, does it already exist? If so, please delete it with `git branch -D %s` first", branchName, err, branchName)
 	}
 
 	// Update the hash in the SAAS file
