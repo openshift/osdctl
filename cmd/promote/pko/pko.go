@@ -55,7 +55,7 @@ func PromotePackage(serviceName string, packageTag string, hcp bool) error {
 		return err
 	}
 
-	err = saas.ValidateServiceName(services, serviceName)
+	serviceName, err = saas.ValidateServiceName(services, serviceName)
 	if err != nil {
 		return err
 	}
