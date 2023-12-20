@@ -3,9 +3,10 @@ package servicelog
 import (
 	"encoding/json"
 	"fmt"
-	slv1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"os"
 	"time"
+
+	slv1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	"github.com/spf13/cobra"
@@ -89,6 +90,7 @@ type LogEntryView struct {
 	CreatedAt     time.Time `json:"created_at"`
 	CreatedBy     string    `json:"created_by"`
 	Description   string    `json:"description"`
+	DocReferences []string  `json:"doc_references"`
 	EventStreamID string    `json:"event_stream_id"`
 	Href          string    `json:"href"`
 	ID            string    `json:"id"`
@@ -111,6 +113,7 @@ func logEntryToView(entries []*slv1.LogEntry) []*LogEntryView {
 			CreatedAt:     entry.CreatedAt(),
 			CreatedBy:     entry.CreatedBy(),
 			Description:   entry.Description(),
+			DocReferences: entry.DocReferences(),
 			EventStreamID: entry.EventStreamID(),
 			Href:          entry.HREF(),
 			ID:            entry.ID(),
