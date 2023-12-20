@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/graphviz"
 	"github.com/openshift/osdctl/pkg/osdCloud"
+	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -368,11 +370,43 @@ func (i *infoOptions) getClusters() (*infoClusters, error) {
 }
 
 func (i *infoOptions) getAWSSessions(clusters *infoClusters) (*hypershiftAWSClients, error) {
-	customerClient, err := osdCloud.GenerateAWSClientForCluster(i.awsProfile, clusters.customerCluster.ID())
+	customerConfig, err := osdCloud.CreateAWSV2Config(clusters.customerCluster)
+	// We have to overwrite the fact that backplane just mangled our configuration.
+	// TODO: Do not use the global configuration instead (https://issues.redhat.com/browse/OSD-19773)
+	osdctlConfig.EnsureConfigFile()
 	if err != nil {
 		return nil, err
 	}
-	managementClient, err := osdCloud.GenerateAWSClientForCluster(i.awsProfile, clusters.managementCluster.ID())
+	customerCreds, err := customerConfig.Credentials.Retrieve(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+	customerClient, err := aws.NewAwsClientWithInput(&aws.ClientInput{
+		AccessKeyID:     customerCreds.AccessKeyID,
+		SecretAccessKey: customerCreds.SecretAccessKey,
+		SessionToken:    customerCreds.SessionToken,
+		Region:          customerConfig.Region,
+	})
+	if err != nil {
+		return nil, err
+	}
+	managementConfig, err := osdCloud.CreateAWSV2Config(clusters.managementCluster)
+	if err != nil {
+		return nil, err
+	}
+	// We have to overwrite the fact that backplane just mangled our configuration.
+	// TODO: Do not use the global configuration instead (https://issues.redhat.com/browse/OSD-19773)
+	osdctlConfig.EnsureConfigFile()
+	managementCreds, err := managementConfig.Credentials.Retrieve(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+	managementClient, err := aws.NewAwsClientWithInput(&aws.ClientInput{
+		AccessKeyID:     managementCreds.AccessKeyID,
+		SecretAccessKey: managementCreds.SecretAccessKey,
+		SessionToken:    managementCreds.SessionToken,
+		Region:          managementConfig.Region,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -851,7 +885,7 @@ func render(ainfo *aggregateClusterInfo) {
 	table.SetAutoMergeCells(true)
 	for _, rr := range ainfo.clusterInfo.ResourceRecords {
 		for _, subr := range rr.ResourceRecords {
-			table.Append([]string{*rr.Name, *subr.Value})
+			table.Append([]string{safeDeref(rr.Name), safeDeref(subr.Value)})
 		}
 	}
 	table.Render()
@@ -861,7 +895,7 @@ func render(ainfo *aggregateClusterInfo) {
 	for _, ep := range ainfo.clusterInfo.Endpoints {
 		eptype := string(ep.VpcEndpointType)
 		state := string(ep.State)
-		table.Append([]string{*ep.VpcEndpointId, eptype, *ep.VpcId, *ep.ServiceName, state})
+		table.Append([]string{safeDeref(ep.VpcEndpointId), eptype, safeDeref(ep.VpcId), safeDeref(ep.ServiceName), state})
 	}
 	table.Render()
 
@@ -880,13 +914,24 @@ func render(ainfo *aggregateClusterInfo) {
 				targetId = *route.GatewayId
 			} else if route.NatGatewayId != nil {
 				targetId = *route.NatGatewayId
-			} else {
+			} else if route.TransitGatewayId != nil {
 				targetId = *route.TransitGatewayId
+			} else if route.LocalGatewayId != nil {
+				targetId = *route.LocalGatewayId
+			} else {
+				targetId = "Unknown"
 			}
-			table.Append([]string{*rtb.RouteTableId, *rtb.VpcId, destination, targetId})
+			table.Append([]string{safeDeref(rtb.RouteTableId), safeDeref(rtb.VpcId), destination, targetId})
 		}
 	}
 	table.Render()
+}
+
+func safeDeref(s *string) string {
+	if s != nil {
+		return *s
+	}
+	return ""
 }
 
 func verboseLog(msg ...interface{}) {
