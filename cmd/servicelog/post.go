@@ -195,8 +195,8 @@ func (o *PostCmdOptions) Run() error {
 		log.Fatal("servicelog post command terminated")
 	}()
 
-	// cluster type for which documentation link is provided in servicelog description 
-	docClusterType := getDocClusterType(o.Message.Description) 
+	// cluster type for which documentation link is provided in servicelog description
+	docClusterType := getDocClusterType(o.Message.Description)
 
 	for _, cluster := range clusters {
 		request, err := o.createPostRequest(ocmClient, cluster)
@@ -205,18 +205,18 @@ func (o *PostCmdOptions) Run() error {
 			continue
 		}
 
-		// if servicelog description contains a documentation link, verify that  
+		// if servicelog description contains a documentation link, verify that
 		// documentation link matches the cluster product (rosa, dedicated)
-		if  !o.skipPrompts && docClusterType != "" {  			
+		if !o.skipPrompts && docClusterType != "" {
 			clusterType := cluster.Product().ID()
 
-			if(docClusterType != clusterType){
+			if docClusterType != clusterType {
 				log.Info("The documentation link in the servicelog is for '", docClusterType, "' while the servicelog itself is for cluster type '", clusterType, "'.")
 				if !ocmutils.ConfirmPrompt() {
-					log.Info("Skipping cluster ID: ", cluster.ID() , ", Name: ", cluster.Name())
+					log.Info("Skipping cluster ID: ", cluster.ID(), ", Name: ", cluster.Name())
 					continue
 				}
-			} 
+			}
 		}
 
 		response, err := ocmutils.SendRequest(request)
@@ -231,20 +231,19 @@ func (o *PostCmdOptions) Run() error {
 	o.printPostOutput()
 	return nil
 }
- 
 
 // if servicelog description contains documentation link, parse and return the cluster type from the url
-func getDocClusterType(message string) string{
+func getDocClusterType(message string) string {
 	descSubstrings := strings.Split(message, " ")
 
 	for _, s := range descSubstrings {
-		if strings.Contains(s, documentationBaseURL) { 
+		if strings.Contains(s, documentationBaseURL) {
 			t := strings.Split(s, "/")
 			p := t[3]
 			if p == "dedicated" {
-				// the documentation urls for osd use "dedicated" as the differentiator 
+				// the documentation urls for osd use "dedicated" as the differentiator
 				// e.g. https://docs.openshift.com/dedicated/welcome/index.html
-				// for proper comparison with cluster product types, return "osd" 
+				// for proper comparison with cluster product types, return "osd"
 				// where "dedicated" is used in the documentation urls
 				p = "osd"
 			}
