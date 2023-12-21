@@ -242,8 +242,10 @@ func getDocClusterType(message string) string{
 			t := strings.Split(s, "/")
 			p := t[3]
 			if p == "dedicated" {
-				// the documentation urls for osd use "dedicated" as the differentiator e.g. https://docs.openshift.com/dedicated/welcome/index.html
-				// for proper comparison with cluster product types, return "osd" where "dedicated" is used in the documentation urls
+				// the documentation urls for osd use "dedicated" as the differentiator 
+				// e.g. https://docs.openshift.com/dedicated/welcome/index.html
+				// for proper comparison with cluster product types, return "osd" 
+				// where "dedicated" is used in the documentation urls
 				p = "osd"
 			}
 			return p
