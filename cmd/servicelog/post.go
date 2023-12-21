@@ -195,8 +195,9 @@ func (o *PostCmdOptions) Run() error {
 		log.Fatal("servicelog post command terminated")
 	}()
 
-	
-	docLinkProduct := parsePayload(o.Message.Description) // product for which documentation link is provided in servicelog description 
+	// cluster type for which documentation link is provided in servicelog description 
+	docClusterType := getDocClusterType(o.Message.Description) 
+
 	for _, cluster := range clusters {
 		request, err := o.createPostRequest(ocmClient, cluster)
 		if err != nil {
@@ -204,18 +205,20 @@ func (o *PostCmdOptions) Run() error {
 			continue
 		}
 
-		// if servicelog description contains a documentation link, verify that  documentation link matches the cluster product (rosa, dedicated)
-		if  !o.skipPrompts && docLinkProduct != "" {  			
+		// if servicelog description contains a documentation link, verify that  
+		// documentation link matches the cluster product (rosa, dedicated)
+		if  !o.skipPrompts && docClusterType != "" {  			
 			clusterType := cluster.Product().ID()
-			if(docLinkProduct != clusterType){
-					log.Info("The documentation link in the payload is for '", docLinkProduct, "' while the cluster type is for '",  clusterType, "'")
-					if !ocmutils.ConfirmPrompt() {
-						log.Info("Skipping cluster ID: ", cluster.ID() , ", Name: ", cluster.Name())
-						continue
+
+			if(docClusterType != clusterType){
+				log.Info("The documentation link in the servicelog is for '", docClusterType, "' while the servicelog itself is for cluster type '", clusterType, "'.")
+				if !ocmutils.ConfirmPrompt() {
+					log.Info("Skipping cluster ID: ", cluster.ID() , ", Name: ", cluster.Name())
+					continue
 				}
 			} 
 		}
-		
+
 		response, err := ocmutils.SendRequest(request)
 		if err != nil {
 			o.failedClusters[cluster.ExternalID()] = err.Error()
@@ -230,8 +233,8 @@ func (o *PostCmdOptions) Run() error {
 }
  
 
-// if servicelog description contains documentation link, parse and return the product from the url
-func parsePayload(message string) string{
+// if servicelog description contains documentation link, parse and return the cluster type from the url
+func getDocClusterType(message string) string{
 	descSubstrings := strings.Split(message, " ")
 
 	for _, s := range descSubstrings {
