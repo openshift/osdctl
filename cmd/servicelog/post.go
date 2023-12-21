@@ -44,6 +44,8 @@ type PostCmdOptions struct {
 	failedClusters     map[string]string
 }
 
+const documentationBaseURL = "https://docs.openshift.com"
+
 func newPostCmd() *cobra.Command {
 	var opts = PostCmdOptions{}
 	postCmd := &cobra.Command{
@@ -193,6 +195,8 @@ func (o *PostCmdOptions) Run() error {
 		log.Fatal("servicelog post command terminated")
 	}()
 
+	
+	docLinkProduct := parsePayload(o.Message.Description) // product for which documentation link is provided in servicelog description 
 	for _, cluster := range clusters {
 		request, err := o.createPostRequest(ocmClient, cluster)
 		if err != nil {
@@ -200,6 +204,18 @@ func (o *PostCmdOptions) Run() error {
 			continue
 		}
 
+		// if servicelog description contains a documentation link, verify that  documentation link matches the cluster product (rosa, dedicated)
+		if  !o.skipPrompts && docLinkProduct != "" {  			
+			clusterType := cluster.Product().ID()
+			if(docLinkProduct != clusterType){
+					log.Info("The documentation link in the payload is for '", docLinkProduct, "' while the cluster type is for '",  clusterType, "'")
+					if !ocmutils.ConfirmPrompt() {
+						log.Info("Skipping cluster ID: ", cluster.ID() , ", Name: ", cluster.Name())
+						continue
+				}
+			} 
+		}
+		
 		response, err := ocmutils.SendRequest(request)
 		if err != nil {
 			o.failedClusters[cluster.ExternalID()] = err.Error()
@@ -211,6 +227,27 @@ func (o *PostCmdOptions) Run() error {
 
 	o.printPostOutput()
 	return nil
+}
+ 
+
+// if servicelog description contains documentation link, parse and return the product from the url
+func parsePayload(message string) string{
+	descSubstrings := strings.Split(message, " ")
+
+	for _, s := range descSubstrings {
+		if strings.Contains(s, documentationBaseURL) { 
+			t := strings.Split(s, "/")
+			p := t[3]
+			if p == "dedicated" {
+				// the documentation urls for osd use "dedicated" as the differentiator e.g. https://docs.openshift.com/dedicated/welcome/index.html
+				// for proper comparison with cluster product types, return "osd" where "dedicated" is used in the documentation urls
+				p = "osd"
+			}
+			return p
+		}
+	}
+
+	return ""
 }
 
 func (o *PostCmdOptions) check(response *sdk.Response, clusterMessage servicelog.Message) {
