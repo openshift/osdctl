@@ -211,7 +211,7 @@ func (o *PostCmdOptions) Run() error {
 			clusterType := cluster.Product().ID()
 
 			if docClusterType != clusterType {
-				log.Info("The documentation link in the servicelog is for '", docClusterType, "' while the servicelog itself is for cluster type '", clusterType, "'.")
+				log.Warn("The documentation mentioned in the servicelog is for '", docClusterType, "' while the product is '", clusterType, "'.")
 				if !ocmutils.ConfirmPrompt() {
 					log.Info("Skipping cluster ID: ", cluster.ID(), ", Name: ", cluster.Name())
 					continue
@@ -234,23 +234,23 @@ func (o *PostCmdOptions) Run() error {
 
 // if servicelog description contains documentation link, parse and return the cluster type from the url
 func getDocClusterType(message string) string {
-	descSubstrings := strings.Split(message, " ")
 
-	for _, s := range descSubstrings {
-		if strings.Contains(s, documentationBaseURL) {
-			t := strings.Split(s, "/")
-			p := t[3]
-			if p == "dedicated" {
+	if strings.Contains(message, documentationBaseURL) {
+		pattern := `https://docs.openshift.com/([^/]+)/`
+		re := regexp.MustCompile(pattern)
+		match := re.FindStringSubmatch(message)
+		if len(match) >= 2 {
+			productType := match[1]
+			if productType == "dedicated" {
 				// the documentation urls for osd use "dedicated" as the differentiator
 				// e.g. https://docs.openshift.com/dedicated/welcome/index.html
 				// for proper comparison with cluster product types, return "osd"
 				// where "dedicated" is used in the documentation urls
-				p = "osd"
+				productType = "osd"
 			}
-			return p
+			return productType
 		}
 	}
-
 	return ""
 }
 
