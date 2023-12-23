@@ -398,7 +398,13 @@ type resizeControlPlaneNodeAWSClient interface {
 }
 
 func (o *resizeControlPlaneNodeOptions) run() error {
-	cfg, err := osdCloud.CreateAWSV2Config(o.cluster)
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
+	defer ocmClient.Close()
+
+	cfg, err := osdCloud.CreateAWSV2Config(ocmClient, o.cluster)
 	if err != nil {
 		return err
 	}
