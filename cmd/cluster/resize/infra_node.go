@@ -464,7 +464,12 @@ func (r *Resize) terminateCloudInstances(ctx context.Context, nodeList *corev1.N
 
 	switch r.cluster.CloudProvider().ID() {
 	case "aws":
-		cfg, err := osdCloud.CreateAWSV2Config(r.cluster)
+		ocmClient, err := utils.CreateConnection()
+		if err != nil {
+			return err
+		}
+		defer ocmClient.Close()
+		cfg, err := osdCloud.CreateAWSV2Config(ocmClient, r.cluster)
 		if err != nil {
 			return err
 		}

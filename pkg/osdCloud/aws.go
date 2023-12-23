@@ -181,13 +181,19 @@ func GenerateRoleSessionName(client aws.Client) (string, error) {
 }
 
 // CreateAWSV2Config creates an aws-sdk-go-v2 config via Backplane given an internal cluster id
-func CreateAWSV2Config(cluster *cmv1.Cluster) (awsSdk.Config, error) {
+func CreateAWSV2Config(conn *sdk.Connection, cluster *cmv1.Cluster) (awsSdk.Config, error) {
 	bp, err := bpconfig.GetBackplaneConfiguration()
 	if err != nil {
 		return awsSdk.Config{}, fmt.Errorf("failed to load backplane-cli config: %v", err)
 	}
 
-	return bpcloud.GetAWSV2Config(bp.URL, cluster)
+	qc := &bpcloud.QueryConfig{
+		BackplaneConfiguration: bp,
+		OcmConnection:          conn,
+		Cluster:                cluster,
+	}
+
+	return qc.GetAWSV2Config()
 }
 
 func GenerateCCSClusterAWSClient(ocmClient *sdk.Connection, awsClient aws.Client, clusterID string, clusterRegion string, partition string, sessionName string) (aws.Client, error) {
