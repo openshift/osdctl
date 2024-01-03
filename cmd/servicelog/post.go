@@ -44,6 +44,8 @@ type PostCmdOptions struct {
 	failedClusters     map[string]string
 }
 
+const documentationBaseURL = "https://docs.openshift.com"
+
 func newPostCmd() *cobra.Command {
 	var opts = PostCmdOptions{}
 	postCmd := &cobra.Command{
@@ -193,11 +195,28 @@ func (o *PostCmdOptions) Run() error {
 		log.Fatal("servicelog post command terminated")
 	}()
 
+	// cluster type for which documentation link is provided in servicelog description
+	docClusterType := getDocClusterType(o.Message.Description)
+
 	for _, cluster := range clusters {
 		request, err := o.createPostRequest(ocmClient, cluster)
 		if err != nil {
 			o.failedClusters[cluster.ExternalID()] = err.Error()
 			continue
+		}
+
+		// if servicelog description contains a documentation link, verify that
+		// documentation link matches the cluster product (rosa, dedicated)
+		if !o.skipPrompts && docClusterType != "" {
+			clusterType := cluster.Product().ID()
+
+			if docClusterType != clusterType {
+				log.Warn("The documentation mentioned in the servicelog is for '", docClusterType, "' while the product is '", clusterType, "'.")
+				if !ocmutils.ConfirmPrompt() {
+					log.Info("Skipping cluster ID: ", cluster.ID(), ", Name: ", cluster.Name())
+					continue
+				}
+			}
 		}
 
 		response, err := ocmutils.SendRequest(request)
@@ -211,6 +230,28 @@ func (o *PostCmdOptions) Run() error {
 
 	o.printPostOutput()
 	return nil
+}
+
+// if servicelog description contains documentation link, parse and return the cluster type from the url
+func getDocClusterType(message string) string {
+
+	if strings.Contains(message, documentationBaseURL) {
+		pattern := `https://docs.openshift.com/([^/]+)/`
+		re := regexp.MustCompile(pattern)
+		match := re.FindStringSubmatch(message)
+		if len(match) >= 2 {
+			productType := match[1]
+			if productType == "dedicated" {
+				// the documentation urls for osd use "dedicated" as the differentiator
+				// e.g. https://docs.openshift.com/dedicated/welcome/index.html
+				// for proper comparison with cluster product types, return "osd"
+				// where "dedicated" is used in the documentation urls
+				productType = "osd"
+			}
+			return productType
+		}
+	}
+	return ""
 }
 
 func (o *PostCmdOptions) check(response *sdk.Response, clusterMessage servicelog.Message) {
