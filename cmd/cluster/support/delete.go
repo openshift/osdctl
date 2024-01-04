@@ -129,7 +129,7 @@ func (o *deleteOptions) run() error {
 		}
 	} else {
 		if len(limitedSupportReasons) > 1 && o.limitedSupportReasonID == "" {
-			fmt.Fprintf(os.Stderr, "This cluster has multiple limited support reason IDs. Please specify the exact one \n")
+			fmt.Fprintf(os.Stderr, "This cluster has multiple limited support reason IDs.\nPlease specify the exact reason ID or the `all` flag \n")
 			os.Exit(1)
 		} else {
 			if len(limitedSupportReasons) == 1 && o.limitedSupportReasonID == "" {
