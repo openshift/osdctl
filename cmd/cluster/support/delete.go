@@ -67,10 +67,6 @@ func (o *deleteOptions) complete(cmd *cobra.Command, args []string) error {
 		return cmdutil.UsageErrorf(cmd, "Provide exactly one internal cluster ID")
 	}
 
-	if o.limitedSupportReasonID == "" && !o.removeAll {
-		return cmdutil.UsageErrorf(cmd, "Must provide a reason ID or the `all` flag")
-	}
-
 	if o.limitedSupportReasonID != "" && o.removeAll {
 		return cmdutil.UsageErrorf(cmd, "Cannot provide a reason ID with the `all` flag. Please provide one or the other.")
 	}
