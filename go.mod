@@ -47,6 +47,7 @@ require (
 	github.com/spf13/viper v1.18.1
 	go.uber.org/mock v0.3.0
 	golang.org/x/sync v0.5.0
+	golang.org/x/term v0.15.0
 	google.golang.org/api v0.153.0
 	google.golang.org/genproto v0.0.0-20231106174013-bbf56f31fb17
 	gopkg.in/yaml.v2 v2.4.0
@@ -177,7 +178,6 @@ require (
 	golang.org/x/net v0.19.0 // indirect
 	golang.org/x/oauth2 v0.15.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
-	golang.org/x/term v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 
@@ -372,7 +373,8 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		if o.verbose {
 			fmt.Fprintln(os.Stderr, "Getting Service Logs...")
 		}
-		data.ServiceLogs, err = servicelog.GetServiceLogsSince(cluster.ID(), o.days, false, false)
+		timeToCheckSvcLogs := time.Now().AddDate(0, 0, -o.days)
+		data.ServiceLogs, err = servicelog.GetServiceLogsSince(cluster.ID(), timeToCheckSvcLogs, false, false)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("Error while getting the service logs: %v", err))
 		}

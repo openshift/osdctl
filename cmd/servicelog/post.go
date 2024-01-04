@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/utils/strings/slices"
@@ -24,6 +25,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 type PostCmdOptions struct {
@@ -89,6 +91,24 @@ func (o *PostCmdOptions) Validate() error {
 	return nil
 }
 
+func (o *PostCmdOptions) CheckServiceLogsLastHour() bool {
+	getAllMessages := false      // we need just manual entries
+	getInternalLogsOnly := false // we need all messages
+	numberOfHours := 1           // number of hours we need to wait for svc logs
+	timeStampToCompare := time.Now().Add(-time.Hour * time.Duration(numberOfHours))
+	serviceLogs, err := GetServiceLogsSince(o.ClusterId, timeStampToCompare, getAllMessages, getInternalLogsOnly)
+	if err != nil {
+		log.Fatalf("failed to fetch service logs: %q", err)
+	}
+	if len(serviceLogs) > 0 {
+		for _, svclog := range serviceLogs {
+			fmt.Println("Below service Log has been subitted in last 60 minutes\nDescription: ", svclog.Description())
+		}
+		return true
+	}
+	return false
+}
+
 func (o *PostCmdOptions) Run() error {
 	if err := o.Init(); err != nil {
 		return err
@@ -96,7 +116,11 @@ func (o *PostCmdOptions) Run() error {
 	if err := o.Validate(); err != nil {
 		return err
 	}
-
+	if term.IsTerminal(int(os.Stdout.Fd())) && o.CheckServiceLogsLastHour() {
+		if !ocmutils.ConfirmPrompt() {
+			return nil
+		}
+	}
 	o.parseUserParameters() // parse all the '-p' user flags
 	o.readFilterFile()      // parse the ocm filters in file provided via '-f' flag
 	o.readTemplate()        // parse the given JSON template provided via '-t' flag
