@@ -127,17 +127,13 @@ func (o *deleteOptions) run() error {
 		for _, limitedSupportReason := range limitedSupportReasons {
 			limitedSupportReasonIds = append(limitedSupportReasonIds, limitedSupportReason.ID())
 		}
+	} else if len(limitedSupportReasons) > 1 && o.limitedSupportReasonID == "" {
+		fmt.Fprintf(os.Stderr, "This cluster has multiple limited support reason IDs.\nPlease specify the exact reason ID or the `all` flag \n")
+		os.Exit(1)
+	} else if len(limitedSupportReasons) == 1 && o.limitedSupportReasonID == "" {
+		limitedSupportReasonIds = append(limitedSupportReasonIds, limitedSupportReasons[0].ID())
 	} else {
-		if len(limitedSupportReasons) > 1 && o.limitedSupportReasonID == "" {
-			fmt.Fprintf(os.Stderr, "This cluster has multiple limited support reason IDs.\nPlease specify the exact reason ID or the `all` flag \n")
-			os.Exit(1)
-		} else {
-			if len(limitedSupportReasons) == 1 && o.limitedSupportReasonID == "" {
-				limitedSupportReasonIds = append(limitedSupportReasonIds, limitedSupportReasons[0].ID())
-			} else {
-				limitedSupportReasonIds = append(limitedSupportReasonIds, o.limitedSupportReasonID)
-			}
-		}
+		limitedSupportReasonIds = append(limitedSupportReasonIds, o.limitedSupportReasonID)
 	}
 
 	for _, limitedSupportReasonId := range limitedSupportReasonIds {
