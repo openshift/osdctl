@@ -116,17 +116,28 @@ func (o *deleteOptions) run() error {
 	}
 
 	var limitedSupportReasonIds []string
+	limitedSupportReasons, err := getLimitedSupportReasons(o.clusterID)
+
+	if len(limitedSupportReasons) == 0 {
+		fmt.Fprintf(os.Stderr, "Cluster does not has any limited support reason ID \n")
+		os.Exit(1)
+	}
+
 	if o.removeAll {
-		limitedSupportReasons, err := getLimitedSupportReasons(o.clusterID)
 		for _, limitedSupportReason := range limitedSupportReasons {
 			limitedSupportReasonIds = append(limitedSupportReasonIds, limitedSupportReason.ID())
 		}
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to get limited support reasons: %v\n", err)
-			return err
-		}
 	} else {
-		limitedSupportReasonIds = append(limitedSupportReasonIds, o.limitedSupportReasonID)
+		if len(limitedSupportReasons) > 1 && o.limitedSupportReasonID == "" {
+			fmt.Fprintf(os.Stderr, "This cluster has multiple limited support reason IDs. Please specify the exact one \n")
+			os.Exit(1)
+		} else {
+			if len(limitedSupportReasons) == 1 && o.limitedSupportReasonID == "" {
+				limitedSupportReasonIds = append(limitedSupportReasonIds, limitedSupportReasons[0].ID())
+			} else {
+				limitedSupportReasonIds = append(limitedSupportReasonIds, o.limitedSupportReasonID)
+			}
+		}
 	}
 
 	for _, limitedSupportReasonId := range limitedSupportReasonIds {
