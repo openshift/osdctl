@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	pd "github.com/PagerDuty/go-pagerduty"
 	"github.com/andygrunwald/go-jira"
@@ -285,7 +286,8 @@ func addLimitedSupportReasons(clusterInfo *ClusterInfo, ocmClient *sdk.Connectio
 
 func addServiceLogs(clusterInfo *ClusterInfo) error {
 	var err error
-	clusterInfo.ServiceLogs, err = servicelog.GetServiceLogsSince(clusterInfo.ID, ServiceLogDaysSince, false, false)
+	timeToCheckSvcLogs := time.Now().AddDate(0, 0, -ServiceLogDaysSince)
+	clusterInfo.ServiceLogs, err = servicelog.GetServiceLogsSince(clusterInfo.ID, timeToCheckSvcLogs, false, false)
 	if err != nil {
 		return fmt.Errorf("failed to fetch service logs for cluster %v: %w", clusterInfo.ID, err)
 	}

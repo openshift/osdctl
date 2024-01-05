@@ -64,9 +64,8 @@ func validateBadResponse(body []byte) (badReply *servicelog.BadReply, err error)
 // time.Now() and time.Now()-duration. the first parameter will contain a slice
 // of the service logs from the given time period, while the second return value
 // indicates if an error has happened.
-func GetServiceLogsSince(clusterID string, days int, allMessages bool, internalOnly bool) ([]*v1.LogEntry, error) {
-	// time.Now().Sub() returns the duration between two times, so we negate the duration in Add()
-	earliestTime := time.Now().AddDate(0, 0, -days)
+func GetServiceLogsSince(clusterID string, timeSince time.Time, allMessages bool, internalOnly bool) ([]*v1.LogEntry, error) {
+	earliestTime := timeSince
 
 	slResponse, err := FetchServiceLogs(clusterID, allMessages, internalOnly)
 	if err != nil {
