@@ -5,39 +5,29 @@ import (
 	"os/exec"
 
 	"github.com/spf13/cobra"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-type policyDiffOptions struct {
-	oldReleaseVersion string
-	newReleaseVersion string
-}
+type policyDiffOptions struct{}
 
 func newCmdPolicyDiff() *cobra.Command {
 	ops := &policyDiffOptions{}
 	policyDiffCmd := &cobra.Command{
-		Use:               "policy-diff",
-		Short:             "Get diff between two versions of OCP STS policy",
+		Use:   "policy-diff",
+		Short: "Get diff between two versions of OCP STS policy",
+		Example: `
+  # Compare 4.14.0 and 4.15.0-rc.0 AWS CloudCredentialRequests
+  osdctl sts policy 4.14.0
+  osdctl sts policy 4.15.0-rc.0
+  osdctl sts policy-diff 4.14.0 4.15.0-rc.0
+`,
 		Args:              cobra.ExactArgs(2),
 		DisableAutoGenTag: true,
-		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(ops.complete(cmd, args))
-			cmdutil.CheckErr(ops.run(args))
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return ops.run(args)
 		},
 	}
 
-	policyDiffCmd.Flags().StringVarP(&ops.oldReleaseVersion, "previous-version", "p", "", "")
-	policyDiffCmd.Flags().StringVarP(&ops.newReleaseVersion, "new-version", "n", "", "")
-
 	return policyDiffCmd
-}
-
-func (o *policyDiffOptions) complete(cmd *cobra.Command, args []string) error {
-	if len(args) != 2 {
-		return cmdutil.UsageErrorf(cmd, "Previous and new release version is required for policy-diff command")
-	}
-
-	return nil
 }
 
 func (o *policyDiffOptions) run(args []string) error {
