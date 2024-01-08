@@ -40,6 +40,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 	clusterCmd.AddCommand(NewCmdHypershiftInfo(streams))
 	clusterCmd.AddCommand(newCmdOrgId())
 	clusterCmd.AddCommand(newCmdDynatraceURL())
+	clusterCmd.AddCommand(newCmdDetachStuckVolume())
 	return clusterCmd
 }
 
