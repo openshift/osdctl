@@ -16,6 +16,9 @@ import (
 
 const NameSpace = "openshift-monitoring"
 
+var Region []string
+var VolumeId []string
+
 type detachStuckVolumeOptions struct {
 	clusterID string
 	cluster   *cmv1.Cluster
@@ -81,6 +84,18 @@ func (d *detachStuckVolumeOptions) run() error {
 		return err
 	}
 
+	// If the volIdRegion found no pv is utilized by non running state pod. Which make global variable nil.
+	// Thus there's a panic exit. In order to prevent it we're using following logic to prevent panic exit.
+	if len(Region) == 0 && len(VolumeId) == 0 {
+		return fmt.Errorf("there's no pv utilized by non running state pod in cluster: %s\nNo action prequired", d.clusterID)
+	}
+
+	if len(Region) != 1 {
+		fmt.Printf("Got more than one region value: %v", len(Region))
+	}
+	fmt.Println(Region[0])
+
+	fmt.Println(VolumeId)
 	// aws ec2 detach-volume --volume-id $VOLUME_ID --region $REGION --force
 	// WiP - Need to convert above cmd to function once volIdRegion gets completed
 
@@ -88,6 +103,7 @@ func (d *detachStuckVolumeOptions) run() error {
 
 }
 
+// Following function gets the volumeID & region of pv for non running state pod & value into global variable
 func volIdRegion(clientset *kubernetes.Clientset, namespace, selector string) error {
 
 	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), v1.ListOptions{})
@@ -95,24 +111,56 @@ func volIdRegion(clientset *kubernetes.Clientset, namespace, selector string) er
 		return fmt.Errorf("failed to list pods in namespace '%s'", NameSpace)
 
 	}
+	pV, err := clientset.CoreV1().PersistentVolumes().List(context.TODO(), v1.ListOptions{})
+
+	if err != nil {
+		return fmt.Errorf("failed to list pv in namespace '%s'", NameSpace)
+
+	}
 
 	for _, pod := range pods.Items {
-		//if pod.Status.Phase != "Running" {  // IMP: We only need to pass the following condition for non running state pods. Will un-comment once the testing is complete.
+		//if pod.Status.Phase != "Running" { // IMP: We only need to pass the following condition for non running state pods. Will un-comment once the testing is complete.
 		for _, volume := range pod.Spec.Volumes {
-			if volume.PersistentVolumeClaim != nil && volume.VolumeSource.AWSElasticBlockStore != nil {
-				//Didn't get valid cluster from stg enviroment to pass above condition. AWSElasticBlockStore response is nil in all case which i tested.
-				fmt.Print("test")
+			if volume.PersistentVolumeClaim != nil {
+				for _, pVol := range pV.Items {
+					if pVol.Spec.AWSElasticBlockStore != nil {
+						// Most of the cluster return AWSElasticBlockStore as nil. Could write code, not sure what'll be actual response.
+						fmt.Println("Gathering info from AWSElastic")
+						// Logic -
+
+					} else if pVol.Spec.CSI != nil {
+						for _, pvItems := range pV.Items {
+							for _, volumeNodeAffinity := range pvItems.Spec.NodeAffinity.Required.NodeSelectorTerms {
+								for _, reg := range volumeNodeAffinity.MatchExpressions {
+									Region = removeDuplicates(reg.Values)
+									vId := append(VolumeId, pvItems.Spec.CSI.VolumeHandle)
+									VolumeId = removeDuplicates(vId)
+
+								}
+							}
+
+						}
+					}
+
+				}
 			}
 		}
+
 	}
 
 	return nil
 }
 
-// Thought to created an object from volIdRegion func & then pass it aws cmd.
-/*
-type poPvPvC struct {
-	volumeID string
-	Region      string
+// Since we're using for loop in above code. It's adding duplicate entry to global variable.
+// To prevent it we're using following function
+func removeDuplicates(s []string) []string {
+	bucket := make(map[string]bool)
+	var result []string
+	for _, str := range s {
+		if _, ok := bucket[str]; !ok {
+			bucket[str] = true
+			result = append(result, str)
+		}
+	}
+	return result
 }
-*/
