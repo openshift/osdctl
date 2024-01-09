@@ -9,6 +9,7 @@ import (
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	"github.com/openshift/gcp-project-operator/pkg/util/errors"
 	"github.com/openshift/osdctl/internal/support"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -119,40 +120,42 @@ func (o *deleteOptions) run() error {
 	limitedSupportReasons, err := getLimitedSupportReasons(o.clusterID)
 
 	if len(limitedSupportReasons) == 0 {
-		fmt.Fprintf(os.Stderr, "Cluster does not has any limited support reason ID \n")
-		os.Exit(1)
+		return errors.New("Cluster is not in limited support. \n")
 	}
 
-	if o.removeAll {
-		for _, limitedSupportReason := range limitedSupportReasons {
-			limitedSupportReasonIds = append(limitedSupportReasonIds, limitedSupportReason.ID())
+	if o.removeAll || (len(limitedSupportReasons) > 1 && o.limitedSupportReasonID == "") {
+		if !o.removeAll && o.limitedSupportReasonID == "" {
+			return fmt.Errorf("This cluster has multiple limited support reason IDs.\nPlease specify the exact reason ID or the `all` flag \n")
 		}
-	} else if len(limitedSupportReasons) > 1 && o.limitedSupportReasonID == "" {
-		fmt.Fprintf(os.Stderr, "This cluster has multiple limited support reason IDs.\nPlease specify the exact reason ID or the `all` flag \n")
-		os.Exit(1)
-	} else if len(limitedSupportReasons) == 1 && o.limitedSupportReasonID == "" {
-		limitedSupportReasonIds = append(limitedSupportReasonIds, limitedSupportReasons[0].ID())
+		fmt.Printf("\nWithin if  .... len(limitedSupportReasons)= %v \t cap(limitedSupportReasons)= %v\n", len(limitedSupportReasons), cap(limitedSupportReasons))
+		for _, limitedSupportReason := range limitedSupportReasons {
+			deleteLimitedSupportReason(connection, cluster, limitedSupportReason.ID())
+		}
 	} else {
 		limitedSupportReasonIds = append(limitedSupportReasonIds, o.limitedSupportReasonID)
-	}
-
-	for _, limitedSupportReasonId := range limitedSupportReasonIds {
-		deleteRequest, err := createDeleteRequest(connection, cluster, limitedSupportReasonId)
-		if err != nil {
-			fmt.Printf("failed post call %q\n", err)
-		}
-		deleteResponse, err := utils.SendRequest(deleteRequest)
-		if err != nil {
-			fmt.Printf("Failed to get delete call response: %q\n", err)
-		}
-
-		err = checkDelete(deleteResponse)
-		if err != nil {
-			fmt.Printf("check for delete call failed: %q", err)
+		fmt.Printf("\n Within else .... len(limitedSupportReasonIds)= %v \t cap(limitedSupportReasonIds)= %v ", len(limitedSupportReasonIds), cap(limitedSupportReasonIds))
+		for _, limitedSupportReasonId := range limitedSupportReasonIds {
+			deleteLimitedSupportReason(connection, cluster, limitedSupportReasonId)
 		}
 	}
+	return err
+}
 
-	return nil
+func deleteLimitedSupportReason(connection SDKConnection, cluster *v1.Cluster, reasonID string) (request *sdk.Request, err error) {
+	deleteRequest, err := createDeleteRequest(connection, cluster, reasonID)
+	if err != nil {
+		fmt.Printf("failed post call %q\n", err)
+	}
+	deleteResponse, err := utils.SendRequest(deleteRequest)
+	if err != nil {
+		fmt.Printf("Failed to get delete call response: %q\n", err)
+	}
+
+	err = checkDelete(deleteResponse)
+	if err != nil {
+		fmt.Printf("check for delete call failed: %q", err)
+	}
+	return request, err
 }
 
 // createDeleteRequest sets the delete API and returns a request
