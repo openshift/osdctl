@@ -127,13 +127,11 @@ func (o *deleteOptions) run() error {
 		if !o.removeAll && o.limitedSupportReasonID == "" {
 			return fmt.Errorf("This cluster has multiple limited support reason IDs.\nPlease specify the exact reason ID or the `all` flag \n")
 		}
-		fmt.Printf("\nWithin if  .... len(limitedSupportReasons)= %v \t cap(limitedSupportReasons)= %v\n", len(limitedSupportReasons), cap(limitedSupportReasons))
 		for _, limitedSupportReason := range limitedSupportReasons {
 			deleteLimitedSupportReason(connection, cluster, limitedSupportReason.ID())
 		}
 	} else {
 		limitedSupportReasonIds = append(limitedSupportReasonIds, o.limitedSupportReasonID)
-		fmt.Printf("\n Within else .... len(limitedSupportReasonIds)= %v \t cap(limitedSupportReasonIds)= %v ", len(limitedSupportReasonIds), cap(limitedSupportReasonIds))
 		for _, limitedSupportReasonId := range limitedSupportReasonIds {
 			deleteLimitedSupportReason(connection, cluster, limitedSupportReasonId)
 		}
