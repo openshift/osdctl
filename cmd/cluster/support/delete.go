@@ -67,10 +67,6 @@ func (o *deleteOptions) complete(cmd *cobra.Command, args []string) error {
 		return cmdutil.UsageErrorf(cmd, "Provide exactly one internal cluster ID")
 	}
 
-	if o.limitedSupportReasonID == "" && !o.removeAll {
-		return cmdutil.UsageErrorf(cmd, "Must provide a reason ID or the `all` flag")
-	}
-
 	if o.limitedSupportReasonID != "" && o.removeAll {
 		return cmdutil.UsageErrorf(cmd, "Cannot provide a reason ID with the `all` flag. Please provide one or the other.")
 	}
@@ -115,40 +111,51 @@ func (o *deleteOptions) run() error {
 	//getting the cluster
 	cluster, err := ctlutil.GetCluster(connection, o.clusterID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't retrieve cluster: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("Can't retrieve cluster: %v\n", err)
 	}
 
+	/*conditions to check the presence of --all & -i flags;
+	also, checking if there is one or more limited support resonID before deleting the same */
 	var limitedSupportReasonIds []string
-	if o.removeAll {
-		limitedSupportReasons, err := getLimitedSupportReasons(o.clusterID)
-		for _, limitedSupportReason := range limitedSupportReasons {
-			limitedSupportReasonIds = append(limitedSupportReasonIds, limitedSupportReason.ID())
+	limitedSupportReasons, err := getLimitedSupportReasons(o.clusterID)
+
+	if len(limitedSupportReasons) == 0 {
+		return fmt.Errorf("Cluster is not in limited support. \n")
+	}
+
+	if o.removeAll || (len(limitedSupportReasons) > 1 && o.limitedSupportReasonID == "") {
+		if !o.removeAll && o.limitedSupportReasonID == "" {
+			return fmt.Errorf("This cluster has multiple limited support reason IDs.\nPlease specify the exact reason ID or the `all` flag \n")
 		}
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to get limited support reasons: %v\n", err)
-			return err
+		for _, limitedSupportReason := range limitedSupportReasons {
+			err = deleteLimitedSupportReason(connection, cluster, limitedSupportReason.ID())
 		}
 	} else {
+		if len(limitedSupportReasons) == 1 {
+			o.limitedSupportReasonID = limitedSupportReasons[0].ID()
+		}
 		limitedSupportReasonIds = append(limitedSupportReasonIds, o.limitedSupportReasonID)
-	}
-
-	for _, limitedSupportReasonId := range limitedSupportReasonIds {
-		deleteRequest, err := createDeleteRequest(connection, cluster, limitedSupportReasonId)
-		if err != nil {
-			fmt.Printf("failed post call %q\n", err)
-		}
-		deleteResponse, err := utils.SendRequest(deleteRequest)
-		if err != nil {
-			fmt.Printf("Failed to get delete call response: %q\n", err)
-		}
-
-		err = checkDelete(deleteResponse)
-		if err != nil {
-			fmt.Printf("check for delete call failed: %q", err)
+		for _, limitedSupportReasonId := range limitedSupportReasonIds {
+			err = deleteLimitedSupportReason(connection, cluster, limitedSupportReasonId)
 		}
 	}
+	return err
+}
 
+func deleteLimitedSupportReason(connection SDKConnection, cluster *v1.Cluster, reasonID string) (err error) {
+	deleteRequest, err := createDeleteRequest(connection, cluster, reasonID)
+	if err != nil {
+		return fmt.Errorf("failed post call %q\n", err)
+	}
+	deleteResponse, err := utils.SendRequest(deleteRequest)
+	if err != nil {
+		return fmt.Errorf("Failed to get delete call response: %q\n", err)
+	}
+
+	err = checkDelete(deleteResponse)
+	if err != nil {
+		return fmt.Errorf("check for delete call failed: %q", err)
+	}
 	return nil
 }
 
