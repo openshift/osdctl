@@ -11,7 +11,7 @@ SHELL := /bin/bash
 
 all: format mod build test lint
 
-format: vet mod fmt mockgen ci-build docs
+format: vet mod fmt mockgen ci-build
 
 fmt:
 	@echo "gofmt"
@@ -22,7 +22,7 @@ OS := $(shell go env GOOS | sed 's/[a-z]/\U&/')
 ARCH := $(shell go env GOARCH)
 .PHONY: download-goreleaser
 download-goreleaser:
-	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser@v1.15.0
+	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser@v1.21.2
 
 # CI build containers don't include goreleaser by default,
 # so they need to get it first, and then run the build
@@ -50,11 +50,6 @@ vet:
 mod:
 	go mod tidy
 	@git diff --exit-code -- go.mod
-
-.PHONY: docs
-docs:
-	./dist/osdctl_$(shell  uname | tr [:upper:] [:lower:])_amd64_v1/osdctl docs ./docs/command
-	@git diff --exit-code -- ./docs/command/
 
 mockgen: ensure-mockgen
 	go generate ${BUILDFLAGS} ./...

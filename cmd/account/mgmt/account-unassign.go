@@ -6,11 +6,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/iam"
-	"github.com/aws/aws-sdk-go/service/organizations"
-	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
-	"github.com/aws/aws-sdk-go/service/sts"
+	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/organizations"
+	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
+	resourceGroupsTaggingApiTypes "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi/types"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
@@ -156,7 +157,7 @@ func (o *accountUnassignOptions) run() error {
 			fmt.Println(err)
 		}
 		// list iam users created by each account and append to slice
-		users, err := listUsersFromAccount(assumedRoleAwsClient, id)
+		users, err := listUsersFromAccount(assumedRoleAwsClient)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -207,13 +208,13 @@ func (o *accountUnassignOptions) run() error {
 	return nil
 }
 
-func (o *accountUnassignOptions) assumeRoleForAccount(account_id string) (awsprovider.Client, error) {
+func (o *accountUnassignOptions) assumeRoleForAccount(accountId string) (awsprovider.Client, error) {
 
-	roleArn := fmt.Sprintf("arn:aws:iam::%s:role/OrganizationAccountAccessRole", account_id)
+	roleArn := fmt.Sprintf("arn:aws:iam::%s:role/OrganizationAccountAccessRole", accountId)
 
 	input := &sts.AssumeRoleInput{
-		RoleArn:         aws.String(roleArn),
-		RoleSessionName: aws.String("osdctl-account-unassignment"),
+		RoleArn:         &roleArn,
+		RoleSessionName: awsSdk.String("osdctl-account-unassignment"),
 	}
 
 	result, err := o.awsClient.AssumeRole(input)
@@ -221,7 +222,7 @@ func (o *accountUnassignOptions) assumeRoleForAccount(account_id string) (awspro
 		return nil, err
 	}
 
-	newAwsClientInput := &awsprovider.AwsClientInput{
+	newAwsClientInput := &awsprovider.ClientInput{
 		AccessKeyID:     *result.Credentials.AccessKeyId,
 		SecretAccessKey: *result.Credentials.SecretAccessKey,
 		SessionToken:    *result.Credentials.SessionToken,
@@ -236,7 +237,7 @@ func (o *accountUnassignOptions) assumeRoleForAccount(account_id string) (awspro
 	return newAWSClient, nil
 }
 
-func listUsersFromAccount(newAWSClient awsprovider.Client, account_id string) ([]string, error) {
+func listUsersFromAccount(newAWSClient awsprovider.Client) ([]string, error) {
 
 	listInput := &iam.ListUsersInput{}
 
@@ -254,8 +255,8 @@ func listUsersFromAccount(newAWSClient awsprovider.Client, account_id string) ([
 	return userList, nil
 }
 
-var ErrHiveNameProvided error = fmt.Errorf("hive-managed account provided, only developers account accepted")
-var ErrAccountPartiallyTagged error = fmt.Errorf("account is only partially tagged")
+var ErrHiveNameProvided = fmt.Errorf("hive-managed account provided, only developers account accepted")
+var ErrAccountPartiallyTagged = fmt.Errorf("account is only partially tagged")
 
 func (o *accountUnassignOptions) checkForHiveNameTag(id string) (string, error) {
 
@@ -286,9 +287,9 @@ func (o *accountUnassignOptions) untagAccount(id string) error {
 
 	inputUntag := &organizations.UntagResourceInput{
 		ResourceId: &id,
-		TagKeys: []*string{
-			aws.String("owner"),
-			aws.String("claimed"),
+		TagKeys: []string{
+			"owner",
+			"claimed",
 		},
 	}
 	_, err := o.awsClient.UntagResource(inputUntag)
@@ -301,9 +302,9 @@ func (o *accountUnassignOptions) untagAccount(id string) error {
 func (o *accountUnassignOptions) moveAccount(id string, rootID string, destinationOU string) error {
 
 	inputMove := &organizations.MoveAccountInput{
-		AccountId:           aws.String(id),
-		DestinationParentId: aws.String(rootID),
-		SourceParentId:      aws.String(destinationOU),
+		AccountId:           &id,
+		DestinationParentId: &rootID,
+		SourceParentId:      &destinationOU,
 	}
 	_, err := o.awsClient.MoveAccount(inputMove)
 	if err != nil {
@@ -312,16 +313,16 @@ func (o *accountUnassignOptions) moveAccount(id string, rootID string, destinati
 	return nil
 }
 
-var ErrNoAccountsForUser error = fmt.Errorf("user has no aws accounts")
+var ErrNoAccountsForUser = fmt.Errorf("user has no aws accounts")
 
 func (o *accountUnassignOptions) listAccountsFromUser(user string) ([]string, error) {
 
 	inputFilterTag := &resourcegroupstaggingapi.GetResourcesInput{
-		TagFilters: []*resourcegroupstaggingapi.TagFilter{
+		TagFilters: []resourceGroupsTaggingApiTypes.TagFilter{
 			{
-				Key: aws.String("owner"),
-				Values: []*string{
-					aws.String(user),
+				Key: awsSdk.String("owner"),
+				Values: []string{
+					user,
 				},
 			},
 		},
@@ -410,7 +411,7 @@ func (o *accountUnassignOptions) deleteUserPolicies(user string) error {
 	}
 	for _, p := range policies.PolicyNames {
 		inputDelPolicies := &iam.DeleteUserPolicyInput{
-			PolicyName: p,
+			PolicyName: &p,
 			UserName:   &user,
 		}
 		_, err = o.awsClient.DeleteUserPolicy(inputDelPolicies)
@@ -468,7 +469,7 @@ func detachRolePolicies(rolename *string, newAWSClient awsprovider.Client) error
 func deleteAccountPolicies(newAWSClient awsprovider.Client) error {
 
 	listAcctPoliciesInput := &iam.ListPoliciesInput{
-		Scope: aws.String("Local"),
+		Scope: "Local",
 	}
 
 	policies, err := newAWSClient.ListPolicies(listAcctPoliciesInput)

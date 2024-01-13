@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
-	osdCloud "github.com/openshift/osdctl/pkg/osdCloud"
+	"github.com/openshift/osdctl/pkg/osdCloud"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -112,7 +112,7 @@ func (o *iamOptions) run() error {
 	}
 
 	// Variable with credential to be used by the impersonate aws client
-	impersonateAwsCredentials := awsprovider.AwsClientInput{
+	impersonateAwsCredentials := awsprovider.ClientInput{
 		AccessKeyID:     *assumedRoleCreds.AccessKeyId,
 		SecretAccessKey: *assumedRoleCreds.SecretAccessKey,
 		SessionToken:    *assumedRoleCreds.SessionToken,

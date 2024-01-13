@@ -26,6 +26,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 	clusterCmd.AddCommand(newCmdOwner(streams, flags, globalOpts))
 	clusterCmd.AddCommand(support.NewCmdSupport(streams, flags, client, globalOpts))
 	clusterCmd.AddCommand(resize.NewCmdResize())
+	clusterCmd.AddCommand(newCmdResync())
 	clusterCmd.AddCommand(newCmdContext())
 	clusterCmd.AddCommand(newCmdTransferOwner(streams, globalOpts))
 	clusterCmd.AddCommand(access.NewCmdAccess(streams, flags))
@@ -33,7 +34,12 @@ func NewCmdCluster(streams genericclioptions.IOStreams, flags *genericclioptions
 	clusterCmd.AddCommand(newCmdCpd())
 	clusterCmd.AddCommand(newCmdCheckBannedUser())
 	clusterCmd.AddCommand(newCmdValidatePullSecret(client, flags))
+	clusterCmd.AddCommand(newCmdEtcdHealthCheck())
+	clusterCmd.AddCommand(newCmdEtcdMemberReplacement())
 	clusterCmd.AddCommand(newCmdFromInfraId(globalOpts))
+	clusterCmd.AddCommand(NewCmdHypershiftInfo(streams))
+	clusterCmd.AddCommand(newCmdOrgId())
+	clusterCmd.AddCommand(newCmdDynatraceURL())
 	return clusterCmd
 }
 

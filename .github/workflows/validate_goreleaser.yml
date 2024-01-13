@@ -16,21 +16,21 @@ jobs:
 
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v3.3.0
+        uses: actions/checkout@v4.1.0
         with:
           fetch-depth: 0 # See: https://goreleaser.com/ci/actions/
 
       - name: Set up Go
-        uses: actions/setup-go@v3.5.0
+        uses: actions/setup-go@v4.1.0
         with:
-          go-version: 1.19.5
+          go-version: 1.21
         id: go
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v4.2.0
+        uses: goreleaser/goreleaser-action@v5.0.0
         with:
           distribution: goreleaser
-          version: 'v1.15.0'
+          version: 'v1.21.2'
           args: check
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

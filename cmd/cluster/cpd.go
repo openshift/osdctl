@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	awsSdk "github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/openshift/osdctl/cmd/network"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
@@ -20,8 +21,7 @@ type cpdOptions struct {
 }
 
 const (
-	unknownProvisionCode = "OCM3999"
-	cpdLongDescription   = `
+	cpdLongDescription = `
 Helps investigate OSD/ROSA cluster provisioning delays (CPD) or failures
 
   This command only supports AWS at the moment and will:
@@ -58,7 +58,10 @@ func newCmdCpd() *cobra.Command {
 
 func (o *cpdOptions) run() error {
 	// Get the cluster info
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer ocmClient.Close()
 
 	cluster, err := utils.GetClusterAnyStatus(ocmClient, o.clusterID)
@@ -78,12 +81,6 @@ func (o *cpdOptions) run() error {
 		fmt.Println("DNS not ready. Investigate reasons using the dnszones CR in the cluster namespace:")
 		fmt.Printf("oc get dnszones -n uhc-production-%s -o yaml --as backplane-cluster-admin\n", o.clusterID)
 		return nil
-	}
-
-	fmt.Println("Checking if OCM error code is already known")
-	// Check if the OCM Error code is a known error
-	if len(cluster.Status().ProvisionErrorCode()) > 0 && cluster.Status().ProvisionErrorCode() != unknownProvisionCode {
-		fmt.Printf("Error code '%s' is known, customer already received Service Log\n", cluster.Status().ProvisionErrorCode())
 	}
 
 	fmt.Println("Checking if cluster is GCP")
@@ -130,10 +127,10 @@ func isSubnetRouteValid(awsClient aws.Client, subnetID string) (bool, error) {
 
 	// Try and find a Route Table associated with the given subnet
 	describeRouteTablesOutput, err := awsClient.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
-		Filters: []*ec2.Filter{
+		Filters: []types.Filter{
 			{
 				Name:   awsSdk.String("association.subnet-id"),
-				Values: []*string{awsSdk.String(subnetID)},
+				Values: []string{subnetID},
 			},
 		},
 	})
@@ -145,7 +142,7 @@ func isSubnetRouteValid(awsClient aws.Client, subnetID string) (bool, error) {
 	if len(describeRouteTablesOutput.RouteTables) == 0 {
 		// Get the VPC ID for the subnet
 		describeSubnetOutput, err := awsClient.DescribeSubnets(&ec2.DescribeSubnetsInput{
-			SubnetIds: []*string{&subnetID},
+			SubnetIds: []string{subnetID},
 		})
 		if err != nil {
 			return false, err
@@ -168,7 +165,7 @@ func isSubnetRouteValid(awsClient aws.Client, subnetID string) (bool, error) {
 
 	// Check that the RouteTable for the subnet has a default route to 0.0.0.0/0
 	describeRouteTablesOutput, err = awsClient.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
-		RouteTableIds: []*string{awsSdk.String(routeTable)},
+		RouteTableIds: []string{routeTable},
 	})
 	if err != nil {
 		return false, err
@@ -193,10 +190,10 @@ func isSubnetRouteValid(awsClient aws.Client, subnetID string) (bool, error) {
 // findDefaultRouteTableForVPC returns the AWS Route Table ID of the VPC's default Route Table
 func findDefaultRouteTableForVPC(awsClient aws.Client, vpcID string) (string, error) {
 	describeRouteTablesOutput, err := awsClient.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
-		Filters: []*ec2.Filter{
+		Filters: []types.Filter{
 			{
 				Name:   awsSdk.String("vpc-id"),
-				Values: []*string{awsSdk.String(vpcID)},
+				Values: []string{vpcID},
 			},
 		},
 	})

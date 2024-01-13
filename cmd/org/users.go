@@ -20,7 +20,7 @@ var (
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(checkOrgId(cmd, args))
+			cmdutil.CheckErr(checkOrgId(args))
 			cmdutil.CheckErr(getUsers(args[0]))
 		},
 	}
@@ -32,6 +32,7 @@ type UserItems struct {
 
 type userModel struct {
 	UserName string   `json:"user-name"`
+	Email    string   `json:"email"`
 	UserID   string   `json:"user-id"`
 	Roles    []string `json:"roles"`
 }
@@ -74,7 +75,11 @@ func getUsers(orgID string) error {
 	searchQuery := ""
 
 	searchQuery = fmt.Sprintf("organization_id='%s'", orgID)
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
+	defer ocmClient.Close()
 
 	var userList []*userModel
 	for {
@@ -94,6 +99,7 @@ func getUsers(orgID string) error {
 		usersResponse.Items().Each(func(account *amv1.Account) bool {
 			accountList = append(accountList, account)
 			accountMap[account] = &userModel{
+				Email:    account.Email(),
 				UserName: account.Username(),
 				UserID:   account.ID(),
 			}

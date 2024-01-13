@@ -88,7 +88,10 @@ func (c *cleanupAccessOptions) Readln() (string, error) {
 func (c *cleanupAccessOptions) Run(cmd *cobra.Command, args []string) error {
 	clusteridentifier := args[0]
 
-	conn := osdctlutil.CreateConnection()
+	conn, err := osdctlutil.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		cmdutil.CheckErr(conn.Close())
 	}()

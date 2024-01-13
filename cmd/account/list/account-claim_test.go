@@ -8,7 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/gomega"
 
-	mockk8s "github.com/openshift/osdctl/cmd/clusterdeployment/mock/k8s"
+	mockk8s "github.com/openshift/osdctl/cmd/hive/clusterdeployment/mock/k8s"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )

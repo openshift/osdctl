@@ -6,18 +6,7 @@ import (
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	ctlutil "github.com/openshift/osdctl/pkg/utils"
 	"os"
-
-	sdk "github.com/openshift-online/ocm-sdk-go"
 )
-
-func sendRequest(request *sdk.Request) (*sdk.Response, error) {
-
-	response, err := request.Send()
-	if err != nil {
-		return nil, fmt.Errorf("cannot send request: %q", err)
-	}
-	return response, nil
-}
 
 func getLimitedSupportReasons(clusterId string) ([]*cmv1.LimitedSupportReason, error) {
 	// Check that the cluster key (name, identifier or external identifier) given by the user
@@ -28,7 +17,10 @@ func getLimitedSupportReasons(clusterId string) ([]*cmv1.LimitedSupportReason, e
 	}
 
 	//create connection to sdk
-	connection := ctlutil.CreateConnection()
+	connection, err := ctlutil.CreateConnection()
+	if err != nil {
+		return nil, err
+	}
 	defer func() {
 		if err := connection.Close(); err != nil {
 			fmt.Printf("Cannot close the connection: %q\n", err)

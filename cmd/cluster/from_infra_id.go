@@ -3,6 +3,8 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
+	sdk "github.com/openshift-online/ocm-sdk-go"
+	amv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -10,6 +12,7 @@ import (
 	"gopkg.in/yaml.v2"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -52,10 +55,13 @@ func getClusterNameFromInfraId(infraId string) (string, error) {
 }
 
 func (ops *fromInfraIdOptions) run(cmd *cobra.Command, args []string) error {
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer func() {
-		if err := ocmClient.Close(); err != nil {
-			fmt.Printf("cannot close the ocmClient (possible memory leak): %q", err)
+		if errClose := ocmClient.Close(); errClose != nil {
+			fmt.Printf("cannot close the ocmClient (possible memory leak): %q", errClose)
 		}
 	}()
 
@@ -76,8 +82,37 @@ func (ops *fromInfraIdOptions) run(cmd *cobra.Command, args []string) error {
 			return renderOutput(cluster, ops.globalOpts.Output)
 		}
 	}
-	_, err = fmt.Fprintf(os.Stderr, "No clusters found matching %s\n", infraId)
+	mostRecentMatchingSub, totalMatchingSubs, err := getLatestMatchingSubscription(ocmClient, clusterName)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "No clusters or subscriptions found matching %s\n", infraId)
+	}
+	_, _ = fmt.Fprintf(
+		os.Stderr,
+		"No clusters found for %s.\nThe display name matched %d subscription(s); '%s' was last updated at %s and is currently '%s'.\n",
+		infraId,
+		totalMatchingSubs,
+		mostRecentMatchingSub.ID(),
+		mostRecentMatchingSub.UpdatedAt(),
+		mostRecentMatchingSub.Status(),
+	)
 	return err
+}
+
+func getLatestMatchingSubscription(ocmClient *sdk.Connection, clusterName string) (*amv1.Subscription, int, error) {
+	subResponse, err := ocmClient.AccountsMgmt().V1().Subscriptions().List().Search(fmt.Sprintf("display_name='%s' and managed='true'", clusterName)).Send()
+	if err != nil {
+		return nil, 0, err
+	}
+	if subResponse.Size() == 0 {
+		return nil, 0, fmt.Errorf("no subscriptions found for cluster name %s", clusterName)
+	}
+	subs := subResponse.Items().Slice()
+	sort.SliceStable(subs, func(i, j int) bool {
+		return subs[i].UpdatedAt().After(subs[j].UpdatedAt())
+	})
+	// The same name could be reused so pull the most recent sub
+	mostRecentMatchingSub := subs[0]
+	return mostRecentMatchingSub, len(subs), nil
 }
 
 func renderOutput(cluster *v1.Cluster, outputFormat string) error {

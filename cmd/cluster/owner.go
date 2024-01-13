@@ -59,7 +59,11 @@ func (o *ownerOptions) complete(cmd *cobra.Command, _ []string) error {
 }
 
 func (o *ownerOptions) run() error {
-	connection := utils.CreateConnection()
+	connection, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
 
 	var (
 		accountName = o.userName

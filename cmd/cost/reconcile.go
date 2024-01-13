@@ -2,14 +2,15 @@ package cost
 
 import (
 	"fmt"
-	"github.com/aws/aws-sdk-go/service/costexplorer"
-	"github.com/aws/aws-sdk-go/service/organizations"
+	"log"
+
+	"github.com/aws/aws-sdk-go-v2/service/costexplorer"
+	organizationTypes "github.com/aws/aws-sdk-go-v2/service/organizations/types"
 	"github.com/deckarep/golang-set"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"log"
 )
 
 // reconcileCmd represents the reconcile command
@@ -45,7 +46,7 @@ func newCmdReconcile(streams genericclioptions.IOStreams) *cobra.Command {
 }
 
 // Checks if there's a cost category for every OU. If not, creates the missing cost category. This should be ran every 24 hours.
-func reconcileCostCategories(OU *organizations.OrganizationalUnit, awsClient awsprovider.Client) error {
+func reconcileCostCategories(OU *organizationTypes.OrganizationalUnit, awsClient awsprovider.Client) error {
 	costCategoryCreated := false
 	costCategoriesSet := mapset.NewSet()
 

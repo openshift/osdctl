@@ -3,15 +3,14 @@ package mgmt
 import (
 	"fmt"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/organizations"
-	"github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
+	"github.com/aws/aws-sdk-go-v2/service/organizations"
+	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
+	resourceGroupsTaggingApiTypes "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi/types"
 	outputflag "github.com/openshift/osdctl/cmd/getoutput"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
-
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
@@ -147,8 +146,8 @@ func (o *accountListOptions) run() error {
 	return nil
 }
 
-var ErrNoOwnerTag error = fmt.Errorf("No owner tag on aws account")
-var ErrNoTagsOnAccount error = fmt.Errorf("No tags on aws account")
+var ErrNoOwnerTag = fmt.Errorf("No owner tag on aws account")
+var ErrNoTagsOnAccount = fmt.Errorf("No tags on aws account")
 
 func (o *accountListOptions) listUserName(accountIdInput string) (string, error) {
 
@@ -172,16 +171,17 @@ func (o *accountListOptions) listUserName(accountIdInput string) (string, error)
 	return "", ErrNoOwnerTag
 }
 
-var ErrNoResources error = fmt.Errorf("No resources for AWS tag")
+var ErrNoResources = fmt.Errorf("No resources for AWS tag")
 
 func (o *accountListOptions) listAccountsByUser(user string) ([]string, error) {
 	// Create input to list the accounts from a specific user
+	key := "owner"
 	inputFilterTag := &resourcegroupstaggingapi.GetResourcesInput{
-		TagFilters: []*resourcegroupstaggingapi.TagFilter{
+		TagFilters: []resourceGroupsTaggingApiTypes.TagFilter{
 			{
-				Key: aws.String("owner"),
-				Values: []*string{
-					aws.String(user),
+				Key: &key,
+				Values: []string{
+					user,
 				},
 			},
 		},
@@ -204,8 +204,8 @@ func (o *accountListOptions) listAccountsByUser(user string) ([]string, error) {
 	return tempAccountIDs, nil
 }
 
-var ErrNoAccountsForParent error = fmt.Errorf("no accounts for OU")
-var ErrAccountsWithNoOwner error = fmt.Errorf("aws accounts available but no owner tags present")
+var ErrNoAccountsForParent = fmt.Errorf("no accounts for OU")
+var ErrAccountsWithNoOwner = fmt.Errorf("aws accounts available but no owner tags present")
 
 func (o *accountListOptions) listAllAccounts(OuIdInput string) (map[string][]string, error) {
 

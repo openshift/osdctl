@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/organizations"
+	"github.com/aws/aws-sdk-go-v2/service/organizations"
+	"github.com/aws/aws-sdk-go-v2/service/organizations/types"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -21,11 +21,11 @@ var (
 			cmdutil.CheckErr(searchChildAwsAccounts(cmd))
 		},
 	}
-	ouID string = ""
+	ouID = ""
 )
 
 type AWSAccountItems struct {
-	Accounts []*organizations.Child `json:"items"`
+	Accounts []types.Child `json:"items"`
 }
 
 func init() {
@@ -45,7 +45,7 @@ func init() {
 		"ou-id",
 		"",
 		"",
-		"specify orgnaization unit id",
+		"specify organization unit id",
 	)
 
 	AddOutputFlag(flags)
@@ -57,8 +57,8 @@ func searchChildAwsAccounts(cmd *cobra.Command) error {
 		return fmt.Errorf("could not create AWS client: %q", err)
 	}
 	children, err := awsClient.ListChildren(&organizations.ListChildrenInput{
-		ParentId:  aws.String(ouID),
-		ChildType: aws.String("ACCOUNT"),
+		ParentId:  &ouID,
+		ChildType: "ACCOUNT",
 	})
 	if err != nil {
 		return fmt.Errorf("cannot get organization children: %q", err)
@@ -80,7 +80,7 @@ func printAccounts(children *organizations.ListChildrenOutput) {
 		for _, item := range children.Children {
 			table.AddRow([]string{
 				*item.Id,
-				*item.Type,
+				string(item.Type),
 			})
 		}
 

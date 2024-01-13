@@ -2,17 +2,17 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/openshift/osdctl/pkg/provider/aws"
-	"github.com/spf13/viper"
 	"os"
 	"strings"
 
+	operatorv1 "github.com/openshift/api/operator/v1"
 	routev1 "github.com/openshift/api/route/v1"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
 	gcpv1alpha1 "github.com/openshift/gcp-project-operator/api/v1alpha1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	hivev1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
 	"github.com/spf13/cobra"
-
+	"github.com/spf13/viper"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/kubectl/pkg/util/slice"
@@ -21,11 +21,12 @@ import (
 	"github.com/openshift/osdctl/cmd/account"
 	"github.com/openshift/osdctl/cmd/capability"
 	"github.com/openshift/osdctl/cmd/cluster"
-	"github.com/openshift/osdctl/cmd/clusterdeployment"
 	"github.com/openshift/osdctl/cmd/cost"
 	"github.com/openshift/osdctl/cmd/env"
-	"github.com/openshift/osdctl/cmd/federatedrole"
+	"github.com/openshift/osdctl/cmd/hive"
+	"github.com/openshift/osdctl/cmd/jira"
 	"github.com/openshift/osdctl/cmd/jumphost"
+	"github.com/openshift/osdctl/cmd/mc"
 	"github.com/openshift/osdctl/cmd/network"
 	"github.com/openshift/osdctl/cmd/org"
 	"github.com/openshift/osdctl/cmd/promote"
@@ -33,14 +34,17 @@ import (
 	"github.com/openshift/osdctl/cmd/sts"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/k8s"
+	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
 )
 
 func init() {
+	_ = operatorv1.AddToScheme(scheme.Scheme)
 	_ = awsv1alpha1.AddToScheme(scheme.Scheme)
 	_ = routev1.AddToScheme(scheme.Scheme)
 	_ = hivev1.AddToScheme(scheme.Scheme)
 	_ = gcpv1alpha1.AddToScheme(scheme.Scheme)
+	_ = hivev1alpha1.AddToScheme(scheme.Scheme)
 }
 
 // NewCmdRoot represents the base command when called without any subcommands
@@ -78,27 +82,20 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	kubeClient := k8s.NewClient(kubeFlags)
 
 	// add sub commands
-	rootCmd.AddCommand(aao.NewCmdAao(streams, kubeFlags, kubeClient))
+	rootCmd.AddCommand(aao.NewCmdAao(kubeClient))
 	rootCmd.AddCommand(account.NewCmdAccount(streams, kubeFlags, kubeClient, globalOpts))
 	rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeFlags, kubeClient, globalOpts))
-	rootCmd.AddCommand(clusterdeployment.NewCmdClusterDeployment(streams, kubeFlags, kubeClient))
-	rootCmd.AddCommand(env.NewCmdEnv(streams, kubeFlags))
-	rootCmd.AddCommand(federatedrole.NewCmdFederatedRole(streams, kubeFlags, kubeClient))
+	rootCmd.AddCommand(hive.NewCmdHive(streams, kubeFlags, kubeClient))
+	rootCmd.AddCommand(newCmdCompletion())
+	rootCmd.AddCommand(env.NewCmdEnv())
 	rootCmd.AddCommand(jumphost.NewCmdJumphost())
+	rootCmd.AddCommand(mc.NewCmdMC())
 	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(servicelog.NewCmdServiceLog())
 	rootCmd.AddCommand(org.NewCmdOrg())
-	rootCmd.AddCommand(sts.NewCmdSts(streams, kubeFlags, kubeClient))
-	rootCmd.AddCommand(promote.NewCmdPromote(kubeFlags, globalOpts))
-
-	// add docs command
-	rootCmd.AddCommand(newCmdDocs(streams))
-
-	// add completion command
-	rootCmd.AddCommand(newCmdCompletion(streams))
-
-	// add options command to list global flags
-	rootCmd.AddCommand(newCmdOptions(streams))
+	rootCmd.AddCommand(sts.NewCmdSts())
+	rootCmd.AddCommand(promote.NewCmdPromote())
+	rootCmd.AddCommand(jira.Cmd)
 
 	// Add cost command to use AWS Cost Manager
 	rootCmd.AddCommand(cost.NewCmdCost(streams, globalOpts))
@@ -136,7 +133,7 @@ func canCommandSkipVersionCheck(commandName string) bool {
 
 // Returns allowlist of commands that can skip version check
 func getSkipVersionCommands() []string {
-	return []string{"docs", "upgrade", "version"}
+	return []string{"upgrade", "version"}
 }
 
 func versionCheck() {

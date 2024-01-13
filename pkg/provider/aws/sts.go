@@ -4,20 +4,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/arn"
-	"github.com/aws/aws-sdk-go/aws/endpoints"
-	"github.com/aws/aws-sdk-go/service/sts"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/aws/aws-sdk-go-v2/service/sts/types"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
-	"k8s.io/klog/v2"
 )
 
 const (
-	// default issuer name
 	defaultIssuer = "Red Hat SRE"
+
+	PartitionID      = "aws"        // AWS Standard partition.
+	UsGovPartitionID = "aws-us-gov" // AWS GovCloud (US) partition.
 )
 
 // Type for JSON response from Federation end point
@@ -37,7 +38,7 @@ func GetAwsPartition(awsClient Client) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	userArn, err := arn.Parse(aws.StringValue(callerIdentityOutput.Arn))
+	userArn, err := arn.Parse(*callerIdentityOutput.Arn)
 	if err != nil {
 		return "", err
 	}
@@ -48,10 +49,10 @@ func GetAwsPartition(awsClient Client) (string, error) {
 // GetFederationEndpointUrl returns the default AWS Sign-In Federation endpoint for a given partition
 func GetFederationEndpointUrl(partition string) (string, error) {
 	switch partition {
-	case endpoints.AwsPartitionID:
+	case PartitionID:
 		// us-east-1 endpoint
 		return "https://signin.aws.amazon.com/federation", nil
-	case endpoints.AwsUsGovPartitionID:
+	case UsGovPartitionID:
 		// us-gov-west-1 endpoint
 		return "https://signin.amazonaws-us-gov.com/federation", nil
 	default:
@@ -62,10 +63,10 @@ func GetFederationEndpointUrl(partition string) (string, error) {
 // GetConsoleUrl returns the default AWS Console base URL for a given partition
 func GetConsoleUrl(partition string) (string, error) {
 	switch partition {
-	case endpoints.AwsPartitionID:
+	case PartitionID:
 		// us-east-1 endpoint
 		return "https://console.aws.amazon.com/", nil
-	case endpoints.AwsUsGovPartitionID:
+	case UsGovPartitionID:
 		// us-gov-west-1 endpoint
 		return "https://console.amazonaws-us-gov.com/", nil
 	default:
@@ -74,7 +75,7 @@ func GetConsoleUrl(partition string) (string, error) {
 }
 
 // RequestSignInToken makes an HTTP request to retrieve an AWS Sign-In Token via the AWS Federation endpoint
-func RequestSignInToken(awsClient Client, durationSeconds *int64, sessionName, roleArn *string) (string, error) {
+func RequestSignInToken(awsClient Client, durationSeconds *int32, sessionName, roleArn *string) (string, error) {
 	credentials, err := GetAssumeRoleCredentials(awsClient, durationSeconds, sessionName, roleArn)
 	if err != nil {
 		return "", err
@@ -109,21 +110,18 @@ func RequestSignInToken(awsClient Client, durationSeconds *int64, sessionName, r
 }
 
 // GetAssumeRoleCredentials gets the assume role credentials from AWS.
-func GetAssumeRoleCredentials(awsClient Client, durationSeconds *int64, roleSessionName, roleArn *string) (*sts.Credentials, error) {
+func GetAssumeRoleCredentials(awsClient Client, durationSeconds *int32, roleSessionName, roleArn *string) (*types.Credentials, error) {
 	assumeRoleOutput, err := awsClient.AssumeRole(&sts.AssumeRoleInput{
 		DurationSeconds: durationSeconds,
 		RoleSessionName: roleSessionName,
 		RoleArn:         roleArn,
 	})
 	if err != nil {
-		// Get error details
-		klog.Errorf("Failed to assume role: %v", err)
-
-		return nil, err
+		return nil, fmt.Errorf("failed to assume role: %v", err)
 	}
 
 	if assumeRoleOutput == nil {
-		klog.Errorf("Get assume role output nil %v", awsv1alpha1.ErrFederationTokenOutputNil)
+		log.Printf("Get assume role output nil %v", awsv1alpha1.ErrFederationTokenOutputNil)
 		return nil, awsv1alpha1.ErrFederationTokenOutputNil
 	}
 
@@ -132,7 +130,7 @@ func GetAssumeRoleCredentials(awsClient Client, durationSeconds *int64, roleSess
 
 // getSignInToken makes a request to the federation endpoint to sign signin token
 // Takes a logger, the base url, and the federation token to sign with
-func getSignInToken(baseURL string, creds *sts.Credentials) (string, error) {
+func getSignInToken(baseURL string, creds *types.Credentials) (string, error) {
 	credsPayload := sessionPayload{
 		SessionID:    *creds.AccessKeyId,
 		SessionKey:   *creds.SecretAccessKey,
@@ -141,8 +139,7 @@ func getSignInToken(baseURL string, creds *sts.Credentials) (string, error) {
 
 	data, err := json.Marshal(credsPayload)
 	if err != nil {
-		klog.Errorf("Failed to marshal credentials to json %v", err)
-		return "", err
+		return "", fmt.Errorf("failed to marshal credentials to json: %v", err)
 	}
 
 	token, err := requestSignedURL(baseURL, data)
@@ -172,20 +169,17 @@ func requestSignedURL(baseUrl string, jsonCredentials []byte) (string, error) {
 	// Make HTTP request to retrieve Federated SignIn Token
 	res, err := http.Get(baseFederationURL.String())
 	if err != nil {
-		klog.Errorf("Failed to request Signin token from: %s, %v", baseFederationURL, err)
-		return "", err
+		return "", fmt.Errorf("failed to request SignIn token from %s: %v", baseFederationURL, err)
 	}
 
 	if res.StatusCode != http.StatusOK {
-		klog.Errorf("failed to request Sign-In token from: %s, status code %d", baseFederationURL, res.StatusCode)
-		return "", fmt.Errorf("bad response code %d", res.StatusCode)
+		return "", fmt.Errorf("failed to request Sign-In token from: %s, status code %d", baseFederationURL, res.StatusCode)
 	}
 	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		klog.Errorf("Failed to read response body %v", err)
-		return "", err
+		return "", fmt.Errorf("failed to read response body: %v", err)
 	}
 
 	var resp awsSignInTokenResponse

@@ -4,16 +4,14 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/pkg/browser"
-	"github.com/spf13/cobra"
-
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-
-	awsSdk "github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/arn"
-	osdCloud "github.com/openshift/osdctl/pkg/osdCloud"
+	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
+	"github.com/pkg/browser"
+	"github.com/spf13/cobra"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 // newCmdConsole implements the Console command which Consoles the specified account cr
@@ -32,7 +30,7 @@ func newCmdConsole() *cobra.Command {
 
 	consoleCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 	consoleCmd.Flags().BoolVar(&ops.launch, "launch", false, "Launch web browser directly")
-	consoleCmd.Flags().Int64VarP(&ops.consoleDuration, "duration", "d", 3600, "The duration of the console session. "+
+	consoleCmd.Flags().Int32VarP(&ops.consoleDuration, "duration", "d", 3600, "The duration of the console session. "+
 		"Default value is 3600 seconds(1 hour)")
 	consoleCmd.Flags().StringVarP(&ops.awsAccountID, "accountId", "i", "", "AWS Account ID")
 	consoleCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", "", "AWS Profile")
@@ -52,7 +50,7 @@ type consoleOptions struct {
 	region       string
 	clusterID    string
 
-	consoleDuration int64
+	consoleDuration int32
 }
 
 func newConsoleOptions() *consoleOptions {
@@ -63,7 +61,10 @@ func (o *consoleOptions) complete(cmd *cobra.Command) error {
 
 	var err error
 
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
 
 	if o.awsAccountID == "" && o.clusterID == "" {
 		return fmt.Errorf("please specify -i or -C")
@@ -92,7 +93,11 @@ func (o *consoleOptions) run() error {
 	isCCS := false
 	var err error
 
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
+	defer ocmClient.Close()
 
 	// If a cluster ID was provided, determine if the cluster is CCS
 	if o.clusterID != "" {
@@ -133,17 +138,17 @@ func (o *consoleOptions) run() error {
 		}
 
 		// The AWS client used to generate the URL should be the jump role for CCS clusters
-		jumpRoleCreds, err := osdCloud.GenerateJumpRoleCredentials(awsClient, o.awsAccountID, o.region, sessionName)
+		jumpRoleCreds, err := osdCloud.GenerateJumpRoleCredentials(awsClient, o.region, sessionName)
 		if err != nil {
 			return err
 		}
 
 		awsClient, err = aws.NewAwsClientWithInput(
-			&aws.AwsClientInput{
+			&aws.ClientInput{
 				AccessKeyID:     *jumpRoleCreds.AccessKeyId,
 				SecretAccessKey: *jumpRoleCreds.SecretAccessKey,
 				SessionToken:    *jumpRoleCreds.SessionToken,
-				Region:          *awsSdk.String(o.region),
+				Region:          o.region,
 			},
 		)
 		if err != nil {
@@ -161,7 +166,7 @@ func (o *consoleOptions) run() error {
 	consoleURL, err := aws.RequestSignInToken(
 		awsClient,
 		&o.consoleDuration,
-		awsSdk.String(sessionName),
+		&sessionName,
 		awsSdk.String(targetRoleArn.String()),
 	)
 	if err != nil {

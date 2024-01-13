@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -10,10 +11,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift-online/ocm-sdk-go/logging"
+	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"github.com/openshift/osd-network-verifier/pkg/output"
 	"github.com/openshift/osd-network-verifier/pkg/proxy"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
 	"github.com/openshift/osdctl/cmd/servicelog"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func newTestLogger(t *testing.T) logging.Logger {
@@ -410,23 +413,39 @@ func Test_egressVerificationGetSubnetId(t *testing.T) {
 }
 
 func TestDefaultValidateEgressInput(t *testing.T) {
+	customTags := map[string]string{
+		"a": "b",
+	}
+
 	tests := []struct {
-		region    string
-		expectErr bool
+		region         string
+		withCustomTags bool
+		expectErr      bool
 	}{
 		{
-			region:    "us-east-2",
-			expectErr: false,
+			region:         "us-east-2",
+			withCustomTags: false,
+			expectErr:      false,
 		},
 		{
-			region:    "us-central-1",
-			expectErr: true,
+			region:         "eu-central-1",
+			withCustomTags: true,
+			expectErr:      false,
+		},
+		{
+			region:         "us-central-1",
+			withCustomTags: false,
+			expectErr:      true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.region, func(t *testing.T) {
-			_, err := defaultValidateEgressInput(context.TODO(), test.region)
+			cluster := newTestCluster(t, cmv1.NewCluster().AWS(cmv1.NewAWS()))
+			if test.withCustomTags {
+				cluster = newTestCluster(t, cmv1.NewCluster().AWS(cmv1.NewAWS().Tags(customTags)))
+			}
+			actual, err := defaultValidateEgressInput(context.TODO(), cluster, test.region)
 			if err != nil {
 				if !test.expectErr {
 					t.Errorf("expected no err, got %s", err)
@@ -434,6 +453,16 @@ func TestDefaultValidateEgressInput(t *testing.T) {
 			} else {
 				if test.expectErr {
 					t.Errorf("expected err, got none")
+				}
+				if test.withCustomTags {
+					for k := range customTags {
+						if v, ok := actual.Tags[k]; !ok {
+							t.Errorf("expected %v to contain %v", actual.Tags, k)
+							if v != customTags[k] {
+								t.Errorf("expected %v to contain %v: %v", actual.Tags, k, customTags[k])
+							}
+						}
+					}
 				}
 			}
 		})
@@ -610,6 +639,76 @@ func Test_generateServiceLog(t *testing.T) {
 			out.SetEgressFailures(test.egressUrls)
 			if got := generateServiceLog(out, testClusterId); !reflect.DeepEqual(got, test.want) {
 				t.Errorf("generateServiceLog() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+const (
+	rawCaBundleConfigMapTemplate string = `{
+	"apiVersion": "v1",
+	"kind": "ConfigMap",
+	"metadata": {
+		"name": "user-ca-bundle",
+		"namespace": "openshift-config"
+	},
+	"data": {
+		"%s": "%s"
+	}
+}`
+)
+
+func TestGetCaBundleFromSyncSet(t *testing.T) {
+	tests := []struct {
+		name      string
+		ss        *hivev1.SyncSet
+		expected  string
+		expectErr bool
+	}{
+		{
+			name: "valid",
+			ss: &hivev1.SyncSet{
+				Spec: hivev1.SyncSetSpec{
+					SyncSetCommonSpec: hivev1.SyncSetCommonSpec{
+						Resources: []runtime.RawExtension{
+							{Raw: []byte(fmt.Sprintf(rawCaBundleConfigMapTemplate, caBundleConfigMapKey, "myCABundle"))},
+						},
+					},
+				},
+			},
+			expected:  "myCABundle",
+			expectErr: false,
+		},
+		{
+			name: "invalid",
+			ss: &hivev1.SyncSet{
+				Spec: hivev1.SyncSetSpec{
+					SyncSetCommonSpec: hivev1.SyncSetCommonSpec{
+						Resources: []runtime.RawExtension{
+							{Raw: []byte(fmt.Sprintf(rawCaBundleConfigMapTemplate, "somethingElse", "myCABundle"))},
+						},
+					},
+				},
+			},
+			expectErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual, err := getCaBundleFromSyncSet(test.ss)
+			if err != nil {
+				if !test.expectErr {
+					t.Errorf("expected no err, got %v", err)
+				}
+			} else {
+				if test.expectErr {
+					t.Error("expected error, got nil")
+				}
+
+				if test.expected != actual {
+					t.Errorf("expected: %s, got: %s", test.expected, actual)
+				}
 			}
 		})
 	}

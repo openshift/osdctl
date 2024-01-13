@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -32,27 +33,15 @@ The owner's email to check will be determined by the cluster identifier passed t
 }
 
 func ValidatePullSecret(clusterID string, kubeCli client.Client, flags *genericclioptions.ConfigFlags) error {
-	ocm := utils.CreateConnection()
-	defer func() {
-		if ocmCloseErr := ocm.Close(); ocmCloseErr != nil {
-			fmt.Printf("Cannot close the ocm (possible memory leak): %q", ocmCloseErr)
-		}
-	}()
-
-	fmt.Println("Checking if pull secret email matches user email")
-
-	// This is the flagset for the kubeCli object provided from the root command. Set here to retroactively impersonate backplane-cluster-admin
-	flags.Impersonate = &BackplaneClusterAdmin
-	secret := &corev1.Secret{}
-	err := kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: "openshift-config", Name: "pull-secret"}, secret)
+	ocm, err := utils.CreateConnection()
 	if err != nil {
 		return err
 	}
-
-	clusterPullSecretEmail, err, done := getPullSecretEmail(clusterID, secret, true)
-	if done {
-		return err
-	}
+	defer func() {
+		if ocmCloseErr := ocm.Close(); ocmCloseErr != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Cannot close the ocm (possible memory leak): %q", ocmCloseErr)
+		}
+	}()
 
 	subscription, err := utils.GetSubscription(ocm, clusterID)
 	if err != nil {
@@ -64,8 +53,37 @@ func ValidatePullSecret(clusterID string, kubeCli client.Client, flags *genericc
 		return err
 	}
 
+	registryCredentials, err := utils.GetRegistryCredentials(ocm, account.ID())
+	if err != nil {
+		return err
+	}
+	if len(registryCredentials) == 0 {
+		_, _ = fmt.Fprintln(os.Stderr, "There is no pull secret in OCM. Sending service log.")
+		postCmd := servicelog.PostCmdOptions{
+			Template:       "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/update_pull_secret.json",
+			TemplateParams: []string{"REGISTRY=registry.redhat.io"},
+			ClusterId:      clusterID,
+		}
+		if err = postCmd.Run(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// This is the flagset for the kubeCli object provided from the root command. Set here to retroactively impersonate backplane-cluster-admin
+	flags.Impersonate = &BackplaneClusterAdmin
+	secret := &corev1.Secret{}
+	if err := kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: "openshift-config", Name: "pull-secret"}, secret); err != nil {
+		return err
+	}
+
+	clusterPullSecretEmail, err, done := getPullSecretEmail(clusterID, secret, true)
+	if done {
+		return err
+	}
+
 	if account.Email() != clusterPullSecretEmail {
-		fmt.Println("Pull secret email doesn't match OCM user email. Sending service log.")
+		_, _ = fmt.Fprintln(os.Stderr, "Pull secret email doesn't match OCM user email. Sending service log.")
 		postCmd := servicelog.PostCmdOptions{
 			Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_user_mismatch.json",
 			ClusterId: clusterID,
@@ -84,9 +102,8 @@ func getPullSecretEmail(clusterID string, secret *corev1.Secret, sendServiceLog 
 	dockerConfigJsonBytes, found := secret.Data[".dockerconfigjson"]
 	if !found {
 		// Indicates issue w/ pull-secret, so we can stop evaluating and specify a more direct course of action
-		fmt.Println("Secret does not contain expected key '.dockerconfigjson'.")
+		_, _ = fmt.Fprintln(os.Stderr, "Secret does not contain expected key '.dockerconfigjson'. Sending service log.")
 		if sendServiceLog {
-			fmt.Println("Sending service log.")
 			postCmd := servicelog.PostCmdOptions{
 				Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json",
 				ClusterId: clusterID,
@@ -106,7 +123,7 @@ func getPullSecretEmail(clusterID string, secret *corev1.Secret, sendServiceLog 
 
 	cloudOpenshiftAuth, found := dockerConfigJson.Auths()["cloud.openshift.com"]
 	if !found {
-		fmt.Println("Secret does not contain entry for cloud.openshift.com")
+		_, _ = fmt.Fprintln(os.Stderr, "Secret does not contain entry for cloud.openshift.com")
 		if sendServiceLog {
 			fmt.Println("Sending service log")
 			postCmd := servicelog.PostCmdOptions{
@@ -122,7 +139,7 @@ func getPullSecretEmail(clusterID string, secret *corev1.Secret, sendServiceLog 
 
 	clusterPullSecretEmail := cloudOpenshiftAuth.Email()
 	if clusterPullSecretEmail == "" {
-		fmt.Printf("%v\n%v\n%v\n",
+		_, _ = fmt.Fprintf(os.Stderr, "%v\n%v\n%v\n",
 			"Couldn't extract email address from pull secret for cloud.openshift.com",
 			"This can mean the pull secret is misconfigured. Please verify the pull secret manually:",
 			"  oc get secret -n openshift-config pull-secret -o json | jq -r '.data[\".dockerconfigjson\"]' | base64 -d")

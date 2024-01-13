@@ -14,7 +14,7 @@ Currently, it mainly supports related work for AWS, especially [aws-account-oper
 
 #### Requirements
 
-- Go >= 1.19
+- Go >= 1.21
 - make (gmake if on macOS)
 - [goreleaser](https://github.com/goreleaser)
 - `GOPROXY` contains `proxy.golang.org` as highest priority
@@ -68,15 +68,11 @@ make test
 
 A config file is created at ~/.config/osdctl if it does not already exist when running any command.
 The config file is yaml formatted.
-As as example:
+As an example:
 ```
 key1: value1
 key2: value2
 ```
-
-## Usage
-
-For the detailed usage of each command, please refer to [here](./docs/command).
 
 ### AWS Account CR reset
 
@@ -288,7 +284,15 @@ osdctl sts policy-diff <old version> <new version>
 ### Hive ClusterDeployment CR list
 
 ```bash
-osdctl clusterdeployment list
+# Login into the hive cluster
+osdctl hive clusterdeployment list
+```
+
+### Hive ClusterSync Failures list
+
+```bash
+# Login into the hive cluster
+osdctl hive clustersync-failures
 ```
 
 ### AWS Account Federated Role Apply
@@ -550,3 +554,15 @@ $ osdctl org customers --paying=false
 ```
 $ osdctl org aws-accounts --aws-profile="<aws-profile>" ou-id="<ou-id>"
 ```
+
+
+#### Run etcd health check for a cluster
+```
+osdctl cluster etcd-health-check <internal-cluster-id>
+```
+
+#### Run etcd member replacement for a cluster
+```
+osdctl cluster etcd-member-replace <internal-cluster-id> --node <node-id>
+```
+Note : Here node-id refers to the node that has the unhealthy etcd member. This can be found out from `etcd-health-check`

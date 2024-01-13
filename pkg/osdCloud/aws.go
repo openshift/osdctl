@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"strings"
 
-	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
-	awsSdk "github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/arn"
-	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/aws/aws-sdk-go/service/sts"
-
+	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+	stsTypes "github.com/aws/aws-sdk-go-v2/service/sts/types"
 	sdk "github.com/openshift-online/ocm-sdk-go"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	bpcloud "github.com/openshift/backplane-cli/cmd/ocm-backplane/cloud"
 	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
 	"github.com/openshift/osdctl/pkg/provider/aws"
@@ -26,9 +26,9 @@ const (
 	StageJumproleConfigKey        = "stage_jumprole_account_id"
 )
 
-// Uses the provided IAM Client to try and assume OrganizationAccountAccessRole for the given AWS Account
+// GenerateOrganizationAccountAccessCredentials Uses the provided IAM Client to try and assume OrganizationAccountAccessRole for the given AWS Account
 // This only works when the provided client is a user from the root account of an organization and the AWS account provided is a linked accounts within that organization
-func GenerateOrganizationAccountAccessCredentials(client aws.Client, accountId, sessionName, partition string) (*sts.Credentials, error) {
+func GenerateOrganizationAccountAccessCredentials(client aws.Client, accountId, sessionName, partition string) (*stsTypes.Credentials, error) {
 
 	roleArnString := aws.GenerateRoleARN(accountId, "OrganizationAccountAccessRole")
 
@@ -42,7 +42,7 @@ func GenerateOrganizationAccountAccessCredentials(client aws.Client, accountId, 
 	assumeRoleOutput, err := client.AssumeRole(
 		&sts.AssumeRoleInput{
 			RoleArn:         awsSdk.String(targetRoleArn.String()),
-			RoleSessionName: awsSdk.String(sessionName),
+			RoleSessionName: &sessionName,
 		},
 	)
 	if err != nil {
@@ -53,22 +53,22 @@ func GenerateOrganizationAccountAccessCredentials(client aws.Client, accountId, 
 
 }
 
-// Uses the provided IAM Client to perform the Assume Role chain needed to get to a cluster's Support Role
-func GenerateSupportRoleCredentials(client aws.Client, awsAccountID, region, sessionName, targetRole string) (*sts.Credentials, error) {
+// GenerateSupportRoleCredentials Uses the provided IAM Client to perform the Assume Role chain needed to get to a cluster's Support Role
+func GenerateSupportRoleCredentials(client aws.Client, region, sessionName, targetRole string) (*stsTypes.Credentials, error) {
 
 	// Perform the Assume Role chain to get the jump
-	jumpRoleCreds, err := GenerateJumpRoleCredentials(client, awsAccountID, region, sessionName)
+	jumpRoleCreds, err := GenerateJumpRoleCredentials(client, region, sessionName)
 	if err != nil {
 		return nil, err
 	}
 
 	// Build client for jump role needed for the last step
 	jumpRoleClient, err := aws.NewAwsClientWithInput(
-		&aws.AwsClientInput{
+		&aws.ClientInput{
 			AccessKeyID:     *jumpRoleCreds.AccessKeyId,
 			SecretAccessKey: *jumpRoleCreds.SecretAccessKey,
 			SessionToken:    *jumpRoleCreds.SessionToken,
-			Region:          *awsSdk.String(region),
+			Region:          region,
 		},
 	)
 	if err != nil {
@@ -78,8 +78,8 @@ func GenerateSupportRoleCredentials(client aws.Client, awsAccountID, region, ses
 	// Assume target ManagedOpenShift-Support role in the cluster's AWS Account
 	targetAssumeRoleOutput, err := jumpRoleClient.AssumeRole(
 		&sts.AssumeRoleInput{
-			RoleArn:         awsSdk.String(targetRole),
-			RoleSessionName: awsSdk.String(sessionName),
+			RoleArn:         &targetRole,
+			RoleSessionName: &sessionName,
 		},
 	)
 	if err != nil {
@@ -91,7 +91,7 @@ func GenerateSupportRoleCredentials(client aws.Client, awsAccountID, region, ses
 
 // GenerateJumpRoleCredentials performs the Assume Role chain from IAM User to the Jump role
 // This sequence stays within the Red Hat account boundary, so a failure here indicates an internal misconfiguration
-func GenerateJumpRoleCredentials(client aws.Client, awsAccountID, region, sessionName string) (*sts.Credentials, error) {
+func GenerateJumpRoleCredentials(client aws.Client, region, sessionName string) (*stsTypes.Credentials, error) {
 
 	callerIdentityOutput, err := client.GetCallerIdentity(&sts.GetCallerIdentityInput{})
 	if err != nil {
@@ -107,8 +107,8 @@ func GenerateJumpRoleCredentials(client aws.Client, awsAccountID, region, sessio
 	sreCcsAccessRoleArn := aws.GenerateRoleARN(sreUserArn.AccountID, RhSreCcsAccessRolename)
 	sreCcsAccessAssumeRoleOutput, err := client.AssumeRole(
 		&sts.AssumeRoleInput{
-			RoleArn:         awsSdk.String(sreCcsAccessRoleArn),
-			RoleSessionName: awsSdk.String(sessionName),
+			RoleArn:         &sreCcsAccessRoleArn,
+			RoleSessionName: &sessionName,
 		},
 	)
 	if err != nil {
@@ -117,11 +117,11 @@ func GenerateJumpRoleCredentials(client aws.Client, awsAccountID, region, sessio
 
 	// Build client for RH-SRE-CCS-Access role
 	sreCcsAccessRoleClient, err := aws.NewAwsClientWithInput(
-		&aws.AwsClientInput{
+		&aws.ClientInput{
 			AccessKeyID:     *sreCcsAccessAssumeRoleOutput.Credentials.AccessKeyId,
 			SecretAccessKey: *sreCcsAccessAssumeRoleOutput.Credentials.SecretAccessKey,
 			SessionToken:    *sreCcsAccessAssumeRoleOutput.Credentials.SessionToken,
-			Region:          *awsSdk.String(region),
+			Region:          region,
 		},
 	)
 	if err != nil {
@@ -129,7 +129,12 @@ func GenerateJumpRoleCredentials(client aws.Client, awsAccountID, region, sessio
 	}
 
 	jumpRoleKey := ProdJumproleConfigKey
-	currentEnv := utils.GetCurrentOCMEnv(utils.CreateConnection())
+	conn, err := utils.CreateConnection()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	currentEnv := utils.GetCurrentOCMEnv(conn)
 	if currentEnv == "stage" || currentEnv == "integration" {
 		jumpRoleKey = StageJumproleConfigKey
 	}
@@ -144,8 +149,8 @@ func GenerateJumpRoleCredentials(client aws.Client, awsAccountID, region, sessio
 	jumpRoleArn := aws.GenerateRoleARN(jumproleAccountID, RhTechnicalSupportAccess)
 	jumpAssumeRoleOutput, err := sreCcsAccessRoleClient.AssumeRole(
 		&sts.AssumeRoleInput{
-			RoleArn:         awsSdk.String(jumpRoleArn),
-			RoleSessionName: awsSdk.String(sessionName),
+			RoleArn:         &jumpRoleArn,
+			RoleSessionName: &sessionName,
 		},
 	)
 	if err != nil {
@@ -156,7 +161,7 @@ func GenerateJumpRoleCredentials(client aws.Client, awsAccountID, region, sessio
 
 }
 
-// Uses the current IAM ARN to generate a role name. This should end up being RH-SRE-$kerberosID
+// GenerateRoleSessionName Uses the current IAM ARN to generate a role name. This should end up being RH-SRE-$kerberosID
 func GenerateRoleSessionName(client aws.Client) (string, error) {
 
 	callerIdentityOutput, err := client.GetCallerIdentity(&sts.GetCallerIdentityInput{})
@@ -164,7 +169,7 @@ func GenerateRoleSessionName(client aws.Client) (string, error) {
 		return "", err
 	}
 
-	roleArn, err := arn.Parse(awsSdk.StringValue(callerIdentityOutput.Arn))
+	roleArn, err := arn.Parse(*callerIdentityOutput.Arn)
 	if err != nil {
 		return "", err
 	}
@@ -176,13 +181,19 @@ func GenerateRoleSessionName(client aws.Client) (string, error) {
 }
 
 // CreateAWSV2Config creates an aws-sdk-go-v2 config via Backplane given an internal cluster id
-func CreateAWSV2Config(clusterID string) (awsv2.Config, error) {
+func CreateAWSV2Config(conn *sdk.Connection, cluster *cmv1.Cluster) (awsSdk.Config, error) {
 	bp, err := bpconfig.GetBackplaneConfiguration()
 	if err != nil {
-		return awsv2.Config{}, fmt.Errorf("failed to load backplane-cli config: %v", err)
+		return awsSdk.Config{}, fmt.Errorf("failed to load backplane-cli config: %v", err)
 	}
 
-	return bpcloud.GetAWSV2Config(bp.URL, clusterID)
+	qc := &bpcloud.QueryConfig{
+		BackplaneConfiguration: bp,
+		OcmConnection:          conn,
+		Cluster:                cluster,
+	}
+
+	return qc.GetAWSV2Config()
 }
 
 func GenerateCCSClusterAWSClient(ocmClient *sdk.Connection, awsClient aws.Client, clusterID string, clusterRegion string, partition string, sessionName string) (aws.Client, error) {
@@ -200,12 +211,12 @@ func GenerateCCSClusterAWSClient(ocmClient *sdk.Connection, awsClient aws.Client
 	targetRoleArn.Partition = partition
 
 	// Start the jump role chain. Result should be credentials for the ManagedOpenShift Support role for the target cluster
-	assumedRoleCreds, err := GenerateSupportRoleCredentials(awsClient, targetRoleArn.AccountID, clusterRegion, sessionName, targetRoleArn.String())
+	assumedRoleCreds, err := GenerateSupportRoleCredentials(awsClient, clusterRegion, sessionName, targetRoleArn.String())
 	if err != nil {
 		return nil, err
 	}
 
-	awsClientCCS, err := aws.NewAwsClientWithInput(&aws.AwsClientInput{
+	awsClientCCS, err := aws.NewAwsClientWithInput(&aws.ClientInput{
 		AccessKeyID:     *assumedRoleCreds.AccessKeyId,
 		SecretAccessKey: *assumedRoleCreds.SecretAccessKey,
 		SessionToken:    *assumedRoleCreds.SessionToken,
@@ -229,7 +240,7 @@ func GenerateNonCCSClusterAWSClient(ocmClient *sdk.Connection, awsClient aws.Cli
 		return nil, err
 	}
 
-	awsClientNonCCS, err := aws.NewAwsClientWithInput(&aws.AwsClientInput{
+	awsClientNonCCS, err := aws.NewAwsClientWithInput(&aws.ClientInput{
 		AccessKeyID:     *assumedRoleCreds.AccessKeyId,
 		SecretAccessKey: *assumedRoleCreds.SecretAccessKey,
 		SessionToken:    *assumedRoleCreds.SessionToken,
@@ -245,7 +256,10 @@ func GenerateNonCCSClusterAWSClient(ocmClient *sdk.Connection, awsClient aws.Cli
 // If an AWS profile name is not specified, this function will also read the AWS_PROFILE environment
 // variable or use the default AWS profile.
 func GenerateAWSClientForCluster(awsProfile string, clusterID string) (aws.Client, error) {
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return nil, err
+	}
 	defer ocmClient.Close()
 
 	cluster, err := utils.GetClusterAnyStatus(ocmClient, clusterID)
@@ -285,7 +299,7 @@ func GenerateAWSClientForCluster(awsProfile string, clusterID string) (aws.Clien
 	return awsClient, err
 }
 
-// Concrete struct with fields required only for interacting with the AWS cloud.
+// AwsCluster Concrete struct with fields required only for interacting with the AWS cloud.
 type AwsCluster struct {
 	*BaseClient
 	AZs        []string
@@ -327,12 +341,12 @@ func (a *AwsCluster) GetAZs() []string {
 	return a.AZs
 }
 
-func (a *AwsCluster) GetAllVirtualMachines(region string) ([]VirtualMachine, error) {
+func (a *AwsCluster) GetAllVirtualMachines(string) ([]VirtualMachine, error) {
 	vms := make([]VirtualMachine, 5)
 	var nextToken *string
 	for {
 		instances, err := a.AwsClient.DescribeInstances(&ec2.DescribeInstancesInput{
-			MaxResults: awsSdk.Int64(5),
+			MaxResults: awsSdk.Int32(5),
 			NextToken:  nextToken,
 		})
 		if err != nil {
@@ -341,9 +355,9 @@ func (a *AwsCluster) GetAllVirtualMachines(region string) ([]VirtualMachine, err
 		for idx := range instances.Reservations {
 			for _, instance := range instances.Reservations[idx].Instances {
 				stringTags := make(map[string]string, 0)
-				var name, size, state string
-				size = *instance.InstanceType
-				state = *instance.State.Name
+				var name string
+				size := instance.InstanceType
+				state := instance.State.Name
 				for _, t := range instance.Tags {
 					stringTags[*t.Key] = *t.Value
 					if *t.Key == "Name" {
@@ -353,8 +367,8 @@ func (a *AwsCluster) GetAllVirtualMachines(region string) ([]VirtualMachine, err
 				vm := VirtualMachine{
 					Original: instance,
 					Name:     name,
-					Size:     size,
-					State:    state,
+					Size:     string(size),
+					State:    string(state),
 					Labels:   stringTags,
 				}
 				vms = append(vms, vm)

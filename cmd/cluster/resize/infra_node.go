@@ -1,25 +1,37 @@
 package resize
 
+// cspell:ignore embiggen
+
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/smithy-go"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	"github.com/openshift/osdctl/cmd/servicelog"
+	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	twentyMinuteTimeout   = 20 * time.Minute
-	twentySecondIncrement = 20 * time.Second
+	twentyMinuteTimeout                = 20 * time.Minute
+	twentySecondIncrement              = 20 * time.Second
+	resizedInfraNodeServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_resized_auto.json"
+	infraNodeLabel                     = "node-role.kubernetes.io/infra"
+	temporaryInfraNodeLabel            = "osdctl.openshift.io/infra-resize-temporary-machinepool"
 )
 
 func newCmdResizeInfra() *cobra.Command {
@@ -49,8 +61,8 @@ func newCmdResizeInfra() *cobra.Command {
 		},
 	}
 
-	infraResizeCmd.Flags().StringVarP(&r.clusterId, "cluster-id", "C", "", "OCM internal cluster id to resize infra nodes for.")
-	infraResizeCmd.Flags().StringVar(&r.instanceType, "instance-type", "", "(optional) AWS EC2 instance type to resize the infra nodes to.")
+	infraResizeCmd.Flags().StringVarP(&r.clusterId, "cluster-id", "C", "", "OCM internal/external cluster id or cluster name to resize infra nodes for.")
+	infraResizeCmd.Flags().StringVar(&r.instanceType, "instance-type", "", "(optional) Override for an AWS or GCP instance type to resize the infra nodes to, by default supported instance types are automatically selected.")
 
 	infraResizeCmd.MarkFlagRequired("cluster-id")
 
@@ -58,11 +70,11 @@ func newCmdResizeInfra() *cobra.Command {
 }
 
 func (r *Resize) RunInfra(ctx context.Context) error {
-	if err := r.New(r.clusterId); err != nil {
-		return err
+	if err := r.New(); err != nil {
+		return fmt.Errorf("failed to initialize command: %v", err)
 	}
 
-	log.Printf("resizing infra nodes for %s", r.clusterId)
+	log.Printf("resizing infra nodes for %s - %s", r.cluster.Name(), r.clusterId)
 	originalMp, err := r.getInfraMachinePool(ctx)
 	if err != nil {
 		return err
@@ -75,26 +87,33 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 	tempMp := newMp.DeepCopy()
 	tempMp.Name = fmt.Sprintf("%s2", tempMp.Name)
 	tempMp.Spec.Name = fmt.Sprintf("%s2", tempMp.Spec.Name)
+	tempMp.Spec.Labels[temporaryInfraNodeLabel] = ""
+
+	instanceType, err := getInstanceType(tempMp)
+	if err != nil {
+		return fmt.Errorf("failed to parse instance type from machinepool: %v", err)
+	}
 
 	// Create the temporary machinepool
-	log.Printf("planning to resize to machine type %s", tempMp.Spec.Platform.AWS.InstanceType)
-	log.Printf("[REMINDER] follow the preparation tasks described in https://github.com/openshift/ops-sop/blob/master/v4/howto/resize-infras-workers.md#prepare")
+	log.Printf("planning to resize to instance type %s", instanceType)
 	if !utils.ConfirmPrompt() {
 		log.Printf("exiting")
 		return nil
 	}
 
-	log.Printf("creating temporary machinepool %s, with machine type %s", tempMp.Name, tempMp.Spec.Platform.AWS.InstanceType)
+	log.Printf("creating temporary machinepool %s, with instance type %s", tempMp.Name, instanceType)
 	if err := r.hiveAdmin.Create(ctx, tempMp); err != nil {
+		return err
+	}
+
+	// This selector will match all infra nodes
+	selector, err := labels.Parse(infraNodeLabel)
+	if err != nil {
 		return err
 	}
 
 	if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
 		nodes := &corev1.NodeList{}
-		selector, err := labels.Parse("node-role.kubernetes.io/infra=")
-		if err != nil {
-			return false, err
-		}
 
 		if err := r.client.List(ctx, nodes, &client.ListOptions{LabelSelector: selector}); err != nil {
 			return false, err
@@ -124,13 +143,43 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 		return err
 	}
 
+	// Identify the original nodes and temp nodes
+	// requireInfra matches all infra nodes using the selector from above
+	requireInfra, err := labels.NewRequirement(infraNodeLabel, selection.Exists, nil)
+	if err != nil {
+		return err
+	}
+
+	// requireNotTempNode matches all nodes that do not have the temporaryInfraNodeLabel, created with the new (temporary) machine pool
+	requireNotTempNode, err := labels.NewRequirement(temporaryInfraNodeLabel, selection.DoesNotExist, nil)
+	if err != nil {
+		return err
+	}
+
+	// requireTempNode matches the opposite of above, all nodes that *do* have the temporaryInfraNodeLabel
+	requireTempNode, err := labels.NewRequirement(temporaryInfraNodeLabel, selection.Exists, nil)
+	if err != nil {
+		return err
+	}
+
+	// infraNode + notTempNode = original nodes
+	originalNodeSelector := selector.Add(*requireInfra, *requireNotTempNode)
+
+	// infraNode + tempNode = temp nodes
+	tempNodeSelector := selector.Add(*requireInfra, *requireTempNode)
+
+	originalNodes := &corev1.NodeList{}
+	if err := r.client.List(ctx, originalNodes, &client.ListOptions{LabelSelector: originalNodeSelector}); err != nil {
+		return err
+	}
+
 	// Delete original machinepool
-	log.Printf("deleting original machinepool %s, with machine type %s", originalMp.Name, originalMp.Spec.Platform.AWS.InstanceType)
+	log.Printf("deleting original machinepool %s, with instance type %s", originalMp.Name, instanceType)
 	if err := r.hiveAdmin.Delete(ctx, originalMp); err != nil {
 		return err
 	}
 
-	// Wait for original machines to delete
+	// Wait for original machinepool to delete
 	if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
 		mp := &hivev1.MachinePool{}
 		err := r.hive.Get(ctx, client.ObjectKey{Namespace: originalMp.Namespace, Name: originalMp.Name}, mp)
@@ -147,8 +196,37 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 		return err
 	}
 
+	// Wait for original nodes to delete
+	if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
+		// Re-check for originalNodes to see if they have been deleted
+		return r.nodesMatchExpectedCount(ctx, originalNodeSelector, 0)
+	}); err != nil {
+		switch {
+		case errors.Is(err, wait.ErrWaitTimeout):
+			log.Printf("Warning: timed out waiting for nodes to drain: %v. Terminating backing cloud instances.", err.Error())
+
+			// Terminate the backing cloud instances if they are not removed by the 20 minute timeout
+			err := r.terminateCloudInstances(ctx, originalNodes)
+			if err != nil {
+				return err
+			}
+
+			if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
+				log.Printf("waiting for nodes to terminate")
+				return r.nodesMatchExpectedCount(ctx, originalNodeSelector, 0)
+			}); err != nil {
+				if errors.Is(err, wait.ErrWaitTimeout) {
+					log.Printf("timed out waiting for nodes to terminate: %v.", err.Error())
+				}
+				return err
+			}
+		default:
+			return err
+		}
+	}
+
 	// Create new permanent machinepool
-	log.Printf("creating new machinepool %s, with machine type %s", newMp.Name, newMp.Spec.Platform.AWS.InstanceType)
+	log.Printf("creating new machinepool %s, with instance type %s", newMp.Name, instanceType)
 	if err := r.hiveAdmin.Create(ctx, newMp); err != nil {
 		return err
 	}
@@ -189,8 +267,13 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 		return err
 	}
 
+	tempNodes := &corev1.NodeList{}
+	if err := r.client.List(ctx, tempNodes, &client.ListOptions{LabelSelector: tempNodeSelector}); err != nil {
+		return err
+	}
+
 	// Delete temp machinepool
-	log.Printf("deleting temporary machinepool %s, with machine type %s", tempMp.Name, tempMp.Spec.Platform.AWS.InstanceType)
+	log.Printf("deleting temporary machinepool %s, with instance type %s", tempMp.Name, instanceType)
 	if err := r.hiveAdmin.Delete(ctx, tempMp); err != nil {
 		return err
 	}
@@ -234,10 +317,36 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 			return false, nil
 		}
 	}); err != nil {
-		return err
+		switch {
+		case errors.Is(err, wait.ErrWaitTimeout):
+			log.Printf("Warning: timed out waiting for nodes to drain: %v. Terminating backing cloud instances.", err.Error())
+
+			err := r.terminateCloudInstances(ctx, tempNodes)
+			if err != nil {
+				return err
+			}
+
+			if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
+				log.Printf("waiting for nodes to terminate")
+				return r.nodesMatchExpectedCount(ctx, tempNodeSelector, 0)
+			}); err != nil {
+				if errors.Is(err, wait.ErrWaitTimeout) {
+					log.Printf("timed out waiting for nodes to terminate: %v.", err.Error())
+				}
+				return err
+			}
+		default:
+			return err
+		}
 	}
 
-	log.Printf("[REMINDER] follow the cleanup tasks in https://github.com/openshift/ops-sop/blob/master/v4/howto/resize-infras-workers.md#sending-the-all-clear")
+	postCmd := generateServiceLog(r.instanceType, r.clusterId)
+	if err := postCmd.Run(); err != nil {
+		fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
+		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
+			r.clusterId, resizedInfraNodeServiceLogTemplate, strings.Join(postCmd.TemplateParams, " -p "))
+	}
+
 	return nil
 }
 
@@ -265,7 +374,7 @@ func (r *Resize) getInfraMachinePool(ctx context.Context) (*hivev1.MachinePool, 
 	for _, mp := range mpList.Items {
 		mp := mp
 		if mp.Spec.Name == "infra" {
-			log.Printf("found machinepool %s, with machine type %s", mp.Name, mp.Spec.Platform.AWS.InstanceType)
+			log.Printf("found machinepool %s", mp.Name)
 			return &mp, nil
 		}
 	}
@@ -280,6 +389,9 @@ func (r *Resize) embiggenMachinePool(mp *hivev1.MachinePool) (*hivev1.MachinePoo
 		"r5.xlarge":  "r5.2xlarge",
 		"r5.2xlarge": "r5.4xlarge",
 		"r5.4xlarge": "r5.8xlarge",
+		// GCP
+		"custom-4-32768-ext": "custom-8-65536-ext",
+		"custom-8-65536-ext": "custom-16-131072-ext",
 	}
 
 	newMp := &hivev1.MachinePool{}
@@ -297,13 +409,124 @@ func (r *Resize) embiggenMachinePool(mp *hivev1.MachinePool) (*hivev1.MachinePoo
 	// Update instance type sizing
 	if r.instanceType != "" {
 		log.Printf("using override instance type: %s", r.instanceType)
-		newMp.Spec.Platform.AWS.InstanceType = r.instanceType
 	} else {
-		if _, ok := embiggen[mp.Spec.Platform.AWS.InstanceType]; !ok {
-			return nil, fmt.Errorf("resizing instance type %s not supported", mp.Spec.Platform.AWS.InstanceType)
+		instanceType, err := getInstanceType(mp)
+		if err != nil {
+			return nil, err
 		}
-		newMp.Spec.Platform.AWS.InstanceType = embiggen[mp.Spec.Platform.AWS.InstanceType]
+		if _, ok := embiggen[instanceType]; !ok {
+			return nil, fmt.Errorf("resizing instance type %s not supported", instanceType)
+		}
+
+		r.instanceType = embiggen[instanceType]
+	}
+
+	switch r.cluster.CloudProvider().ID() {
+	case "aws":
+		newMp.Spec.Platform.AWS.InstanceType = r.instanceType
+	case "gcp":
+		newMp.Spec.Platform.GCP.InstanceType = r.instanceType
+	default:
+		return nil, fmt.Errorf("cloud provider not supported: %s, only AWS and GCP are supported", r.cluster.CloudProvider().ID())
 	}
 
 	return newMp, nil
+}
+
+func getInstanceType(mp *hivev1.MachinePool) (string, error) {
+	if mp.Spec.Platform.AWS != nil {
+		return mp.Spec.Platform.AWS.InstanceType, nil
+	} else if mp.Spec.Platform.GCP != nil {
+		return mp.Spec.Platform.GCP.InstanceType, nil
+	}
+
+	return "", errors.New("unsupported platform, only AWS and GCP are supported")
+}
+
+func generateServiceLog(instanceType, clusterId string) servicelog.PostCmdOptions {
+	return servicelog.PostCmdOptions{
+		Template:       resizedInfraNodeServiceLogTemplate,
+		ClusterId:      clusterId,
+		TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
+	}
+}
+
+func (r *Resize) terminateCloudInstances(ctx context.Context, nodeList *corev1.NodeList) error {
+	if len(nodeList.Items) == 0 {
+		return nil
+	}
+
+	var instanceIDs []string
+
+	for _, node := range nodeList.Items {
+		instanceIDs = append(instanceIDs, convertProviderIDtoInstanceID(node.Spec.ProviderID))
+	}
+
+	switch r.cluster.CloudProvider().ID() {
+	case "aws":
+		ocmClient, err := utils.CreateConnection()
+		if err != nil {
+			return err
+		}
+		defer ocmClient.Close()
+		cfg, err := osdCloud.CreateAWSV2Config(ocmClient, r.cluster)
+		if err != nil {
+			return err
+		}
+
+		awsClient := ec2.NewFromConfig(cfg)
+		_, err = awsClient.TerminateInstances(ctx, &ec2.TerminateInstancesInput{
+			InstanceIds: instanceIDs,
+		})
+		if err != nil {
+			var apiErr smithy.APIError
+			if errors.As(err, &apiErr) {
+				code := apiErr.ErrorCode()
+				message := apiErr.ErrorMessage()
+				log.Printf("AWS ERROR: %v - %v\n", code, message)
+			} else {
+				log.Printf("ERROR: %v\n", err.Error())
+			}
+			return err
+		}
+
+	case "gcp":
+		// There isn't currently a way to programmatically retrieve backplane credentials for GCP
+		log.Printf("GCP support for manually terminating instances not yet supported. "+
+			"Please use backplane to login and terminate the instances manually: %v", strings.Join(instanceIDs, ", "))
+		return nil
+
+	default:
+		return fmt.Errorf("cloud provider not supported: %s, only AWS is supported", r.cluster.CloudProvider().ID())
+	}
+
+	log.Printf("requested termination of instances: %v", strings.Join(instanceIDs, ", "))
+
+	return nil
+}
+
+// convertProviderIDtoInstanceID converts a provider ID to an instance ID
+// ProviderIDs come in the format: aws:///us-east-1a/i-0a1b2c3d4e5f6g7h8
+// or: gce://some-string/europe-west4-a/my-cluster-name-n65hp-infra-a-4fbrd
+// InstanceIDs come in the format: i-0a1b2c3d4e5f6g7h8
+// or: my-cluster-name-n65hp-infra-a-4fbrd
+func convertProviderIDtoInstanceID(providerID string) string {
+	providerIDSplit := strings.Split(providerID, "/")
+	return providerIDSplit[len(providerIDSplit)-1]
+}
+
+// nodesMatchExpectedCount accepts a context, labelselector and count of expected nodes, and ]
+// returns true if the nodelist matching the labelselector is equal to the expected count
+func (r *Resize) nodesMatchExpectedCount(ctx context.Context, labelSelector labels.Selector, count int) (bool, error) {
+	nodeList := &corev1.NodeList{}
+
+	if err := r.client.List(ctx, nodeList, &client.ListOptions{LabelSelector: labelSelector}); err != nil {
+		return false, err
+	}
+
+	if len(nodeList.Items) == count {
+		return true, nil
+	}
+
+	return false, nil
 }

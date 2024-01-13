@@ -188,6 +188,19 @@ func GetSubscription(connection *sdk.Connection, key string) (subscription *amv1
 	return
 }
 
+// GetOrganization returns an *amv1.Organization given an OCM cluster name, external id, or internal id as key
+func GetOrganization(connection *sdk.Connection, key string) (*amv1.Organization, error) {
+	subscription, err := GetSubscription(connection, key)
+	if err != nil {
+		return nil, err
+	}
+	orgResponse, err := connection.AccountsMgmt().V1().Organizations().Organization(subscription.OrganizationID()).Get().Send()
+	if err != nil {
+		return nil, err
+	}
+	return orgResponse.Body(), nil
+}
+
 // GetAccount Function allows to get a single account with any identifier (username, ID)
 func GetAccount(connection *sdk.Connection, key string) (account *amv1.Account, err error) {
 	// Prepare the resources that we will be using:
@@ -224,10 +237,19 @@ func GetAccount(connection *sdk.Connection, key string) (account *amv1.Account, 
 	return
 }
 
+func GetRegistryCredentials(connection *sdk.Connection, accountId string) ([]*amv1.RegistryCredential, error) {
+	searchString := fmt.Sprintf("account_id = '%s'", accountId)
+	registryCredentials, err := connection.AccountsMgmt().V1().RegistryCredentials().List().Search(searchString).Send()
+	if err != nil {
+		return nil, err
+	}
+	return registryCredentials.Items().Slice(), nil
+}
+
 func ConfirmPrompt() bool {
 	fmt.Print("Continue? (y/N): ")
 
-	var response string
+	var response string = "n"
 	_, _ = fmt.Scanln(&response) // Erroneous input will be handled by the default case below
 
 	switch strings.ToLower(response) {
@@ -260,14 +282,4 @@ func StreamErrorln(stream genericclioptions.IOStreams, msg string) {
 func StreamRead(stream genericclioptions.IOStreams, delim byte) (string, error) {
 	reader := bufio.NewReader(stream.In)
 	return reader.ReadString(delim)
-}
-
-// Contains returns true if the given key is present in the provided list
-func Contains(list []string, key string) bool {
-	for _, item := range list {
-		if item == key {
-			return true
-		}
-	}
-	return false
 }

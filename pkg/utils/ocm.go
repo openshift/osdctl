@@ -2,13 +2,14 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws/arn"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 )
@@ -16,23 +17,28 @@ import (
 const ClusterServiceClusterSearch = "id = '%s' or name = '%s' or external_id = '%s'"
 
 const (
-	productionURL  = "https://api.openshift.com"
-	stagingURL     = "https://api.stage.openshift.com"
-	integrationURL = "https://api.integration.openshift.com"
+	productionURL    = "https://api.openshift.com"
+	stagingURL       = "https://api.stage.openshift.com"
+	integrationURL   = "https://api.integration.openshift.com"
+	productionGovURL = "https://api.openshiftusgov.com"
 )
 
 var urlAliases = map[string]string{
-	"production":   productionURL,
-	"prod":         productionURL,
-	"prd":          productionURL,
-	productionURL:  productionURL,
-	"staging":      stagingURL,
-	"stage":        stagingURL,
-	"stg":          stagingURL,
-	stagingURL:     stagingURL,
-	"integration":  integrationURL,
-	"int":          integrationURL,
-	integrationURL: integrationURL,
+	"production":     productionURL,
+	"prod":           productionURL,
+	"prd":            productionURL,
+	productionURL:    productionURL,
+	"staging":        stagingURL,
+	"stage":          stagingURL,
+	"stg":            stagingURL,
+	stagingURL:       stagingURL,
+	"integration":    integrationURL,
+	"int":            integrationURL,
+	integrationURL:   integrationURL,
+	"productiongov":  productionGovURL,
+	"prodgov":        productionGovURL,
+	"prdgov":         productionGovURL,
+	productionGovURL: productionGovURL,
 }
 
 // Config describes the OCM client configuration
@@ -245,27 +251,26 @@ func getOcmConfiguration(ocmConfigLoader func() (*Config, error)) (*Config, erro
 	return config, nil
 }
 
-func CreateConnection() *sdk.Connection {
+func CreateConnection() (*sdk.Connection, error) {
 	ocmConfigError := "Unable to load OCM config\nLogin with 'ocm login' or set OCM_TOKEN, OCM_URL and OCM_REFRESH_TOKEN environment variables"
 
 	connectionBuilder := sdk.NewConnectionBuilder()
 
 	config, err := getOcmConfiguration(loadOCMConfig)
 	if err != nil {
-		log.Fatal(ocmConfigError)
+		return nil, errors.New(ocmConfigError)
 	}
 
 	connectionBuilder.Tokens(config.AccessToken, config.RefreshToken)
 
 	if config.URL == "" {
-		log.Fatal(ocmConfigError)
-		return nil
+		return nil, errors.New(ocmConfigError)
 	}
 
 	// Parse the URL in case it is an alias
 	gatewayURL, ok := urlAliases[config.URL]
 	if !ok {
-		log.Fatalf("Invalid OCM_URL found: %s\nValid URL aliases are: 'production', 'staging', 'integration'", config.URL)
+		return nil, fmt.Errorf("invalid OCM_URL found: %s\nValid URL aliases are: 'production', 'staging', 'integration'", config.URL)
 	}
 	connectionBuilder.URL(gatewayURL)
 
@@ -273,12 +278,12 @@ func CreateConnection() *sdk.Connection {
 
 	if err != nil {
 		if strings.Contains(err.Error(), "Not logged in, run the") {
-			log.Fatal(ocmConfigError)
+			return nil, errors.New(ocmConfigError)
 		}
-		log.Fatalf("Failed to create OCM connection: %v", err)
+		return nil, fmt.Errorf("failed to create OCM connection: %v", err)
 	}
 
-	return connection
+	return connection, nil
 }
 
 func GetSupportRoleArnForCluster(ocmClient *sdk.Connection, clusterID string) (string, error) {
@@ -350,7 +355,10 @@ func IsClusterCCS(ocmClient *sdk.Connection, clusterID string) (bool, error) {
 // Returns the hive shard corresponding to a cluster
 // e.g. https://api.<hive_cluster>.byo5.p1.openshiftapps.com:6443
 func GetHiveShard(clusterID string) (string, error) {
-	connection := CreateConnection()
+	connection, err := CreateConnection()
+	if err != nil {
+		return "", err
+	}
 	defer connection.Close()
 
 	shardPath, err := connection.ClustersMgmt().V1().Clusters().
@@ -377,7 +385,10 @@ func GetHiveShard(clusterID string) (string, error) {
 }
 
 func GetHiveCluster(clusterId string) (*cmv1.Cluster, error) {
-	conn := CreateConnection()
+	conn, err := CreateConnection()
+	if err != nil {
+		return nil, err
+	}
 	defer conn.Close()
 
 	provisionShard, err := conn.ClustersMgmt().V1().Clusters().
@@ -406,4 +417,36 @@ func GetHiveCluster(clusterId string) (*cmv1.Cluster, error) {
 	}
 
 	return resp.Items().Get(0), nil
+}
+
+// GetManagementCluster returns the OCM Cluster object for a provided clusterId
+func GetManagementCluster(clusterId string) (*cmv1.Cluster, error) {
+	conn, err := CreateConnection()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	hypershiftResp, err := conn.ClustersMgmt().V1().Clusters().
+		Cluster(clusterId).
+		Hypershift().
+		Get().
+		Send()
+	if err != nil {
+		return nil, err
+	}
+
+	if mgmtClusterName, ok := hypershiftResp.Body().GetManagementCluster(); ok {
+		return GetClusterAnyStatus(conn, mgmtClusterName)
+	}
+
+	return nil, fmt.Errorf("no management cluster found for %s", clusterId)
+}
+
+func SendRequest(request *sdk.Request) (*sdk.Response, error) {
+	response, err := request.Send()
+	if err != nil {
+		return nil, fmt.Errorf("cannot send request: %q", err)
+	}
+	return response, nil
 }

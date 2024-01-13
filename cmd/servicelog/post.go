@@ -3,14 +3,16 @@ package servicelog
 import (
 	"encoding/json"
 	"fmt"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"k8s.io/utils/strings/slices"
 	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
+
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"k8s.io/utils/strings/slices"
 
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
@@ -19,11 +21,11 @@ import (
 	"github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/internal/utils"
 	"github.com/openshift/osdctl/pkg/printer"
-	ctlutil "github.com/openshift/osdctl/pkg/utils"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 type PostCmdOptions struct {
@@ -43,6 +45,8 @@ type PostCmdOptions struct {
 	successfulClusters map[string]string
 	failedClusters     map[string]string
 }
+
+const documentationBaseURL = "https://docs.openshift.com"
 
 func newPostCmd() *cobra.Command {
 	var opts = PostCmdOptions{}
@@ -72,6 +76,9 @@ func newPostCmd() *cobra.Command {
 }
 
 func (o *PostCmdOptions) Init() error {
+	userParameterNames = []string{}
+	userParameterValues = []string{}
+	filterParams = []string{}
 	o.successfulClusters = make(map[string]string)
 	o.failedClusters = make(map[string]string)
 	return nil
@@ -84,6 +91,24 @@ func (o *PostCmdOptions) Validate() error {
 	return nil
 }
 
+func (o *PostCmdOptions) CheckServiceLogsLastHour() bool {
+	getAllMessages := false      // we need just manual entries
+	getInternalLogsOnly := false // we need all messages
+	numberOfHours := 1           // number of hours we need to wait for svc logs
+	timeStampToCompare := time.Now().Add(-time.Hour * time.Duration(numberOfHours))
+	serviceLogs, err := GetServiceLogsSince(o.ClusterId, timeStampToCompare, getAllMessages, getInternalLogsOnly)
+	if err != nil {
+		log.Fatalf("failed to fetch service logs: %q", err)
+	}
+	if len(serviceLogs) > 0 {
+		for _, svclog := range serviceLogs {
+			fmt.Println("Below service Log has been subitted in last 60 minutes\nDescription: ", svclog.Description())
+		}
+		return true
+	}
+	return false
+}
+
 func (o *PostCmdOptions) Run() error {
 	if err := o.Init(); err != nil {
 		return err
@@ -91,20 +116,14 @@ func (o *PostCmdOptions) Run() error {
 	if err := o.Validate(); err != nil {
 		return err
 	}
-
+	if term.IsTerminal(int(os.Stdout.Fd())) && o.CheckServiceLogsLastHour() {
+		if !ocmutils.ConfirmPrompt() {
+			return nil
+		}
+	}
 	o.parseUserParameters() // parse all the '-p' user flags
 	o.readFilterFile()      // parse the ocm filters in file provided via '-f' flag
 	o.readTemplate()        // parse the given JSON template provided via '-t' flag
-
-	var queries []string
-	queries = append(queries, ocmutils.GenerateQuery(o.ClusterId))
-
-	if len(queries) > 0 {
-		if len(filterParams) > 0 {
-			log.Warnf("A cluster identifier was passed with the '-q' flag. This will apply logical AND between the search query and the cluster given, potentially resulting in no matches")
-		}
-		filterParams = append(filterParams, strings.Join(queries, " or "))
-	}
 
 	// For every '-p' flag, replace its related placeholder in the template & filterFiles
 	for k := range userParameterNames {
@@ -117,7 +136,10 @@ func (o *PostCmdOptions) Run() error {
 
 	// Create an OCM client to talk to the cluster API
 	// the user has to be logged in (e.g. 'ocm login')
-	ocmClient := ocmutils.CreateConnection()
+	ocmClient, err := ocmutils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		if err := ocmClient.Close(); err != nil {
 			log.Errorf("Cannot close the ocmClient (possible memory leak): %q", err)
@@ -132,7 +154,7 @@ func (o *PostCmdOptions) Run() error {
 		filters := strings.Join(strings.Split(strings.TrimSpace(o.filtersFromFile), "\n"), " ")
 		filterParams = append(filterParams, filters)
 	}
-
+	var queries []string
 	if o.clustersFile != "" {
 		contents, err := o.accessFile(o.clustersFile)
 		if err != nil {
@@ -142,14 +164,20 @@ func (o *PostCmdOptions) Run() error {
 		if err != nil {
 			log.Fatalf("Cannot parse file %s: %q", o.clustersFile, err)
 		}
-		query := []string{}
 		for i := range o.ClustersFile.Clusters {
 			cluster := o.ClustersFile.Clusters[i]
-			query = append(query, ocmutils.GenerateQuery(cluster))
+			queries = append(queries, ocmutils.GenerateQuery(cluster))
 		}
-		filterParams = append(filterParams, strings.Join(query, " or "))
+	} else {
+		queries = append(queries, ocmutils.GenerateQuery(o.ClusterId))
+	}
+	if len(queries) > 0 {
+		if len(filterParams) > 0 {
+			log.Warnf("A cluster identifier was passed with the '-q' flag. This will apply logical AND between the search query and the cluster given, potentially resulting in no matches")
+		}
 	}
 
+	filterParams = append(filterParams, strings.Join(queries, " or "))
 	clusters, err := ocmutils.ApplyFilters(ocmClient, filterParams)
 
 	if err != nil {
@@ -174,7 +202,7 @@ func (o *PostCmdOptions) Run() error {
 	}
 
 	if !o.skipPrompts {
-		if !ctlutil.ConfirmPrompt() {
+		if !ocmutils.ConfirmPrompt() {
 			return nil
 		}
 	}
@@ -191,6 +219,9 @@ func (o *PostCmdOptions) Run() error {
 		log.Fatal("servicelog post command terminated")
 	}()
 
+	// cluster type for which documentation link is provided in servicelog description
+	docClusterType := getDocClusterType(o.Message.Description)
+
 	for _, cluster := range clusters {
 		request, err := o.createPostRequest(ocmClient, cluster)
 		if err != nil {
@@ -198,7 +229,21 @@ func (o *PostCmdOptions) Run() error {
 			continue
 		}
 
-		response, err := sendRequest(request)
+		// if servicelog description contains a documentation link, verify that
+		// documentation link matches the cluster product (rosa, dedicated)
+		if !o.skipPrompts && docClusterType != "" {
+			clusterType := cluster.Product().ID()
+
+			if docClusterType != clusterType {
+				log.Warn("The documentation mentioned in the servicelog is for '", docClusterType, "' while the product is '", clusterType, "'.")
+				if !ocmutils.ConfirmPrompt() {
+					log.Info("Skipping cluster ID: ", cluster.ID(), ", Name: ", cluster.Name())
+					continue
+				}
+			}
+		}
+
+		response, err := ocmutils.SendRequest(request)
 		if err != nil {
 			o.failedClusters[cluster.ExternalID()] = err.Error()
 			continue
@@ -209,6 +254,28 @@ func (o *PostCmdOptions) Run() error {
 
 	o.printPostOutput()
 	return nil
+}
+
+// if servicelog description contains documentation link, parse and return the cluster type from the url
+func getDocClusterType(message string) string {
+
+	if strings.Contains(message, documentationBaseURL) {
+		pattern := `https://docs.openshift.com/([^/]+)/`
+		re := regexp.MustCompile(pattern)
+		match := re.FindStringSubmatch(message)
+		if len(match) >= 2 {
+			productType := match[1]
+			if productType == "dedicated" {
+				// the documentation urls for osd use "dedicated" as the differentiator
+				// e.g. https://docs.openshift.com/dedicated/welcome/index.html
+				// for proper comparison with cluster product types, return "osd"
+				// where "dedicated" is used in the documentation urls
+				productType = "osd"
+			}
+			return productType
+		}
+	}
+	return ""
 }
 
 func (o *PostCmdOptions) check(response *sdk.Response, clusterMessage servicelog.Message) {

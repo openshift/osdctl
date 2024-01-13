@@ -3,12 +3,11 @@ package account
 import (
 	"fmt"
 
+	"github.com/openshift/osdctl/cmd/common"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-
-	"github.com/openshift/osdctl/cmd/common"
-	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 )
 
 const (
@@ -75,7 +74,7 @@ func (o *cleanVeleroSnapshotsOptions) run() error {
 	if o.accessKeyID == "" && o.secretAccessKey == "" {
 		awsClient, err = awsprovider.NewAwsClient(o.profile, o.region, o.configFile)
 	} else {
-		awsClient, err = awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+		awsClient, err = awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
 			AccessKeyID:     o.accessKeyID,
 			SecretAccessKey: o.secretAccessKey,
 			Region:          o.region,

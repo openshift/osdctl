@@ -4,15 +4,12 @@ import (
 	"errors"
 	"fmt"
 
-	//"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/servicequotas"
-
-	"github.com/spf13/cobra"
-
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-
+	"github.com/aws/aws-sdk-go-v2/service/servicequotas"
+	"github.com/aws/aws-sdk-go-v2/service/servicequotas/types"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/spf13/cobra"
+	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 // newCmdDescribe implements servicequotas describe
@@ -65,25 +62,25 @@ func (o *describeOptions) run() error {
 		return err
 	}
 
-	var foundServiceQuotas []*servicequotas.ServiceQuota
+	var foundServiceQuotas []types.ServiceQuota
 
 	searchQuery := &servicequotas.ListServiceQuotasInput{
 		ServiceCode: &o.queryServiceCode,
 	}
 
 	for {
-		servicequotas, err := awsprovider.Client.ListServiceQuotas(awsClient, searchQuery)
+		listServiceQuotasResult, err := awsprovider.Client.ListServiceQuotas(awsClient, searchQuery)
 		if err != nil {
 			return err
 		}
 
-		for _, foundQuota := range servicequotas.Quotas {
+		for _, foundQuota := range listServiceQuotasResult.Quotas {
 			foundServiceQuotas = append(foundServiceQuotas, foundQuota)
 		}
 
 		// for pagination
-		searchQuery.NextToken = servicequotas.NextToken
-		if servicequotas.NextToken == nil {
+		searchQuery.NextToken = listServiceQuotasResult.NextToken
+		if listServiceQuotasResult.NextToken == nil {
 			break
 		}
 	}

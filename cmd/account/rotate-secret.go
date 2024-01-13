@@ -2,29 +2,28 @@ package account
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/iam"
-	"github.com/aws/aws-sdk-go/service/sts"
+	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	iamTypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+	stsTypes "github.com/aws/aws-sdk-go-v2/service/sts/types"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
-	"github.com/spf13/cobra"
-
 	hiveapiv1 "github.com/openshift/hive/apis/hive/v1"
 	hiveinternalv1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
+	"github.com/openshift/osdctl/cmd/common"
+	"github.com/openshift/osdctl/pkg/k8s"
+	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/openshift/osdctl/cmd/common"
-	"github.com/openshift/osdctl/pkg/k8s"
-	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 )
 
 // newCmdRotateSecret implements the rotate-secret command which rotate IAM User credentials
@@ -52,7 +51,7 @@ type rotateSecretOptions struct {
 	accountCRName     string
 	profile           string
 	updateCcsCreds    bool
-	awsAccountTimeout *int64
+	awsAccountTimeout *int32
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
@@ -81,7 +80,7 @@ func (o *rotateSecretOptions) complete(cmd *cobra.Command, args []string) error 
 
 	// The aws account timeout. The min the API supports is 15mins.
 	// 900 sec is 15min
-	o.awsAccountTimeout = aws.Int64(900)
+	o.awsAccountTimeout = awsSdk.Int32(900)
 
 	return nil
 }
@@ -123,7 +122,7 @@ func (o *rotateSecretOptions) run() error {
 		return err
 	}
 
-	var credentials *sts.Credentials
+	var credentials *stsTypes.Credentials
 	// Need to role chain if the cluster is CCS
 	if account.Spec.BYOC {
 		// Get the aws-account-operator configmap
@@ -145,7 +144,7 @@ func (o *rotateSecretOptions) run() error {
 		}
 
 		// Create client with the SREP role
-		srepRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+		srepRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
 			AccessKeyID:     *srepRoleCredentials.AccessKeyId,
 			SecretAccessKey: *srepRoleCredentials.SecretAccessKey,
 			SessionToken:    *srepRoleCredentials.SessionToken,
@@ -166,7 +165,7 @@ func (o *rotateSecretOptions) run() error {
 			return err
 		}
 		// Create client with the Jump role
-		jumpRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+		jumpRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
 			AccessKeyID:     *jumpRoleCreds.AccessKeyId,
 			SecretAccessKey: *jumpRoleCreds.SecretAccessKey,
 			SessionToken:    *jumpRoleCreds.SessionToken,
@@ -176,7 +175,7 @@ func (o *rotateSecretOptions) run() error {
 			return err
 		}
 		// Role chain to assume ManagedOpenShift-Support-{uid}
-		roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, "ManagedOpenShift-Support-"+accountIDSuffixLabel))
+		roleArn := awsSdk.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, "ManagedOpenShift-Support-"+accountIDSuffixLabel))
 		credentials, err = awsprovider.GetAssumeRoleCredentials(jumpRoleClient, o.awsAccountTimeout,
 			callerIdentityOutput.UserId, roleArn)
 		if err != nil {
@@ -185,7 +184,7 @@ func (o *rotateSecretOptions) run() error {
 
 	} else {
 		// Assume the OrganizationAdminAccess role
-		roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, awsv1alpha1.AccountOperatorIAMRole))
+		roleArn := awsSdk.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, awsv1alpha1.AccountOperatorIAMRole))
 		credentials, err = awsprovider.GetAssumeRoleCredentials(awsSetupClient, o.awsAccountTimeout,
 			callerIdentityOutput.UserId, roleArn)
 		if err != nil {
@@ -194,7 +193,7 @@ func (o *rotateSecretOptions) run() error {
 	}
 
 	// Build a new client with the assumed role
-	awsClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+	awsClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
 		AccessKeyID:     *credentials.AccessKeyId,
 		SecretAccessKey: *credentials.SecretAccessKey,
 		SessionToken:    *credentials.SessionToken,
@@ -209,12 +208,13 @@ func (o *rotateSecretOptions) run() error {
 	osdManagedAdminUsername := common.OSDManagedAdminIAM + "-" + accountIDSuffixLabel
 
 	// Create new access key
-	createAccessKeyOutput, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{UserName: aws.String(osdManagedAdminUsername)})
+	createAccessKeyOutput, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{UserName: awsSdk.String(osdManagedAdminUsername)})
 	if err != nil {
-		if awsErr, ok := err.(awserr.Error); ok && awsErr.Code() == "NoSuchEntity" {
+		var nse *iamTypes.NoSuchEntityException
+		if errors.As(err, &nse) {
 			// try removing accountIDSuffixLabel from the end of the username
 			osdManagedAdminUsername = common.OSDManagedAdminIAM
-			createAccessKeyOutput, err = awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{UserName: aws.String(osdManagedAdminUsername)})
+			createAccessKeyOutput, err = awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{UserName: awsSdk.String(osdManagedAdminUsername)})
 			if err != nil {
 				return err
 			}
@@ -345,7 +345,7 @@ func (o *rotateSecretOptions) run() error {
 		if account.Spec.BYOC {
 			// Rotate osdCcsAdmin creds
 			createAccessKeyOutputCCS, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{
-				UserName: aws.String("osdCcsAdmin"),
+				UserName: awsSdk.String("osdCcsAdmin"),
 			})
 			if err != nil {
 				return err

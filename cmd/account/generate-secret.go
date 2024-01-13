@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/arn"
-	"github.com/aws/aws-sdk-go/service/iam"
-	"github.com/aws/aws-sdk-go/service/sts"
+	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/pkg/k8s"
@@ -19,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -68,7 +67,7 @@ type generateSecretOptions struct {
 	region            string
 	profile           string
 	cfgFile           string
-	awsAccountTimeout *int64
+	awsAccountTimeout *int32
 
 	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
@@ -111,7 +110,7 @@ func (o *generateSecretOptions) complete(cmd *cobra.Command, args []string) erro
 
 	// The aws account timeout. The min the API supports is 15mins.
 	// 900 sec is 15min
-	o.awsAccountTimeout = aws.Int64(900)
+	o.awsAccountTimeout = awsSdk.Int32(900)
 
 	return nil
 }
@@ -154,20 +153,20 @@ func (o *generateSecretOptions) run() error {
 		return err
 	}
 
-	arn, err := arn.Parse(aws.StringValue(callerIdentityOutput.Arn))
+	callerIdentityArn, err := arn.Parse(*callerIdentityOutput.Arn)
 	if err != nil {
 		return err
 	}
 
 	// Assume
-	roleArn := aws.String(fmt.Sprintf("arn:%s:iam::%s:role/%s", arn.Partition, accountID, awsv1alpha1.AccountOperatorIAMRole))
-	credentials, err := awsprovider.GetAssumeRoleCredentials(awsSetupClient, aws.Int64(900),
+	roleArn := awsSdk.String(fmt.Sprintf("arn:%s:iam::%s:role/%s", callerIdentityArn.Partition, accountID, awsv1alpha1.AccountOperatorIAMRole))
+	credentials, err := awsprovider.GetAssumeRoleCredentials(awsSetupClient, awsSdk.Int32(900),
 		callerIdentityOutput.UserId, roleArn)
 	if err != nil {
 		return err
 	}
 
-	awsClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+	awsClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
 		AccessKeyID:     *credentials.AccessKeyId,
 		SecretAccessKey: *credentials.SecretAccessKey,
 		SessionToken:    *credentials.SessionToken,
@@ -177,7 +176,7 @@ func (o *generateSecretOptions) run() error {
 		return err
 	}
 
-	username := aws.String(o.iamUsername)
+	username := awsSdk.String(o.iamUsername)
 	ok, err := awsprovider.CheckIAMUserExists(awsClient, username)
 	if err != nil {
 		return err
@@ -185,7 +184,7 @@ func (o *generateSecretOptions) run() error {
 
 	// if the specified user does not exist, create one
 	if !ok {
-		policyArn := aws.String("arn:aws:iam::aws:policy/AdministratorAccess")
+		policyArn := awsSdk.String("arn:aws:iam::aws:policy/AdministratorAccess")
 		if err := awsprovider.CreateIAMUserAndAttachPolicy(awsClient,
 			username, policyArn); err != nil {
 			return err
@@ -264,13 +263,13 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 	}
 
 	// Assume the ARN
-	srepRoleCredentials, err := awsprovider.GetAssumeRoleCredentials(awsSetupClient, aws.Int64(900), callerIdentityOutput.UserId, &SREAccessARN)
+	srepRoleCredentials, err := awsprovider.GetAssumeRoleCredentials(awsSetupClient, awsSdk.Int32(900), callerIdentityOutput.UserId, &SREAccessARN)
 	if err != nil {
 		return err
 	}
 
 	// Create client with the SREP role
-	srepRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+	srepRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
 		AccessKeyID:     *srepRoleCredentials.AccessKeyId,
 		SecretAccessKey: *srepRoleCredentials.SecretAccessKey,
 		SessionToken:    *srepRoleCredentials.SessionToken,
@@ -291,7 +290,7 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 		return err
 	}
 	// Create client with the Jump role
-	jumpRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+	jumpRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
 		AccessKeyID:     *jumpRoleCreds.AccessKeyId,
 		SecretAccessKey: *jumpRoleCreds.SecretAccessKey,
 		SessionToken:    *jumpRoleCreds.SessionToken,
@@ -301,7 +300,7 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 		return err
 	}
 	// Role chain to assume ManagedOpenShift-Support-{uid}
-	roleArn := aws.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", account.Spec.AwsAccountID, "ManagedOpenShift-Support-"+accountIDSuffixLabel))
+	roleArn := awsSdk.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", account.Spec.AwsAccountID, "ManagedOpenShift-Support-"+accountIDSuffixLabel))
 	credentials, err := awsprovider.GetAssumeRoleCredentials(jumpRoleClient, o.awsAccountTimeout,
 		callerIdentityOutput.UserId, roleArn)
 	if err != nil {
@@ -309,7 +308,7 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 	}
 
 	// Create client with the chain assumed role
-	awsAssumedRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.AwsClientInput{
+	awsAssumedRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
 		AccessKeyID:     *credentials.AccessKeyId,
 		SecretAccessKey: *credentials.SecretAccessKey,
 		SessionToken:    *credentials.SessionToken,
@@ -321,14 +320,14 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 
 	// Create new set of Access Keys for osdCcsAdmin
 	newKey, err := awsAssumedRoleClient.CreateAccessKey(&iam.CreateAccessKeyInput{
-		UserName: aws.String(common.OSDCcsAdminIAM),
+		UserName: awsSdk.String(common.OSDCcsAdminIAM),
 	})
 	if err != nil {
 		return err
 	}
 
 	// Escalte to backplane cluster admin
-	o.flags.Impersonate = pointer.StringPtr("backplane-cluster-admin")
+	o.flags.Impersonate = awsSdk.String("backplane-cluster-admin")
 
 	secret := k8s.NewAWSSecret(
 		o.secretName,

@@ -8,6 +8,7 @@ import (
 	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -15,6 +16,16 @@ import (
 type LazyClient struct {
 	client client.Client
 	flags  *genericclioptions.ConfigFlags
+}
+
+// GroupVersionKindFor implements client.Client.
+func (*LazyClient) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
+	panic("unimplemented")
+}
+
+// IsObjectNamespaced implements client.Client.
+func (*LazyClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
+	panic("unimplemented")
 }
 
 func (s *LazyClient) Scheme() *runtime.Scheme {
@@ -59,6 +70,10 @@ func (s *LazyClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ..
 
 func (s *LazyClient) Status() client.StatusWriter {
 	return s.getClient().Status()
+}
+
+func (s *LazyClient) SubResource(subResource string) client.SubResourceClient {
+	return s.getClient().SubResource(subResource)
 }
 
 func NewClient(flags *genericclioptions.ConfigFlags) client.Client {

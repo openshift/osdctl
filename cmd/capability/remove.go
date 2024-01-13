@@ -68,7 +68,10 @@ func (o *removeOptions) complete(cmd *cobra.Command, args []string) error {
 func (o *removeOptions) run(cmd *cobra.Command, capability string) error {
 
 	// Initalize OCM connection
-	ocmClient := utils.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		if err := ocmClient.Close(); err != nil {
 			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)

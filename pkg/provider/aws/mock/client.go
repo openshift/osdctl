@@ -7,15 +7,18 @@ package mock
 import (
 	reflect "reflect"
 
-	cloudtrail "github.com/aws/aws-sdk-go/service/cloudtrail"
-	costexplorer "github.com/aws/aws-sdk-go/service/costexplorer"
-	ec2 "github.com/aws/aws-sdk-go/service/ec2"
-	iam "github.com/aws/aws-sdk-go/service/iam"
-	organizations "github.com/aws/aws-sdk-go/service/organizations"
-	resourcegroupstaggingapi "github.com/aws/aws-sdk-go/service/resourcegroupstaggingapi"
-	s3 "github.com/aws/aws-sdk-go/service/s3"
-	servicequotas "github.com/aws/aws-sdk-go/service/servicequotas"
-	sts "github.com/aws/aws-sdk-go/service/sts"
+	cloudtrail "github.com/aws/aws-sdk-go-v2/service/cloudtrail"
+	costexplorer "github.com/aws/aws-sdk-go-v2/service/costexplorer"
+	ec2 "github.com/aws/aws-sdk-go-v2/service/ec2"
+	elasticloadbalancing "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancing"
+	elasticloadbalancingv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
+	iam "github.com/aws/aws-sdk-go-v2/service/iam"
+	organizations "github.com/aws/aws-sdk-go-v2/service/organizations"
+	resourcegroupstaggingapi "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
+	route53 "github.com/aws/aws-sdk-go-v2/service/route53"
+	s3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	servicequotas "github.com/aws/aws-sdk-go-v2/service/servicequotas"
+	sts "github.com/aws/aws-sdk-go-v2/service/sts"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -342,6 +345,21 @@ func (mr *MockClientMockRecorder) DescribeInstances(arg0 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeInstances", reflect.TypeOf((*MockClient)(nil).DescribeInstances), arg0)
 }
 
+// DescribeLoadBalancers mocks base method.
+func (m *MockClient) DescribeLoadBalancers(input *elasticloadbalancing.DescribeLoadBalancersInput) (*elasticloadbalancing.DescribeLoadBalancersOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescribeLoadBalancers", input)
+	ret0, _ := ret[0].(*elasticloadbalancing.DescribeLoadBalancersOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeLoadBalancers indicates an expected call of DescribeLoadBalancers.
+func (mr *MockClientMockRecorder) DescribeLoadBalancers(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeLoadBalancers", reflect.TypeOf((*MockClient)(nil).DescribeLoadBalancers), input)
+}
+
 // DescribeOrganizationalUnit mocks base method.
 func (m *MockClient) DescribeOrganizationalUnit(input *organizations.DescribeOrganizationalUnitInput) (*organizations.DescribeOrganizationalUnitOutput, error) {
 	m.ctrl.T.Helper()
@@ -385,6 +403,96 @@ func (m *MockClient) DescribeSubnets(arg0 *ec2.DescribeSubnetsInput) (*ec2.Descr
 func (mr *MockClientMockRecorder) DescribeSubnets(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeSubnets", reflect.TypeOf((*MockClient)(nil).DescribeSubnets), arg0)
+}
+
+// DescribeTags mocks base method.
+func (m *MockClient) DescribeTags(input *elasticloadbalancing.DescribeTagsInput) (*elasticloadbalancing.DescribeTagsOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescribeTags", input)
+	ret0, _ := ret[0].(*elasticloadbalancing.DescribeTagsOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeTags indicates an expected call of DescribeTags.
+func (mr *MockClientMockRecorder) DescribeTags(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeTags", reflect.TypeOf((*MockClient)(nil).DescribeTags), input)
+}
+
+// DescribeV2LoadBalancers mocks base method.
+func (m *MockClient) DescribeV2LoadBalancers(input *elasticloadbalancingv2.DescribeLoadBalancersInput) (*elasticloadbalancingv2.DescribeLoadBalancersOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescribeV2LoadBalancers", input)
+	ret0, _ := ret[0].(*elasticloadbalancingv2.DescribeLoadBalancersOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeV2LoadBalancers indicates an expected call of DescribeV2LoadBalancers.
+func (mr *MockClientMockRecorder) DescribeV2LoadBalancers(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeV2LoadBalancers", reflect.TypeOf((*MockClient)(nil).DescribeV2LoadBalancers), input)
+}
+
+// DescribeV2Tags mocks base method.
+func (m *MockClient) DescribeV2Tags(input *elasticloadbalancingv2.DescribeTagsInput) (*elasticloadbalancingv2.DescribeTagsOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescribeV2Tags", input)
+	ret0, _ := ret[0].(*elasticloadbalancingv2.DescribeTagsOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeV2Tags indicates an expected call of DescribeV2Tags.
+func (mr *MockClientMockRecorder) DescribeV2Tags(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeV2Tags", reflect.TypeOf((*MockClient)(nil).DescribeV2Tags), input)
+}
+
+// DescribeVpcEndpointConnections mocks base method.
+func (m *MockClient) DescribeVpcEndpointConnections(arg0 *ec2.DescribeVpcEndpointConnectionsInput) (*ec2.DescribeVpcEndpointConnectionsOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescribeVpcEndpointConnections", arg0)
+	ret0, _ := ret[0].(*ec2.DescribeVpcEndpointConnectionsOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeVpcEndpointConnections indicates an expected call of DescribeVpcEndpointConnections.
+func (mr *MockClientMockRecorder) DescribeVpcEndpointConnections(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeVpcEndpointConnections", reflect.TypeOf((*MockClient)(nil).DescribeVpcEndpointConnections), arg0)
+}
+
+// DescribeVpcEndpointServices mocks base method.
+func (m *MockClient) DescribeVpcEndpointServices(arg0 *ec2.DescribeVpcEndpointServicesInput) (*ec2.DescribeVpcEndpointServicesOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescribeVpcEndpointServices", arg0)
+	ret0, _ := ret[0].(*ec2.DescribeVpcEndpointServicesOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeVpcEndpointServices indicates an expected call of DescribeVpcEndpointServices.
+func (mr *MockClientMockRecorder) DescribeVpcEndpointServices(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeVpcEndpointServices", reflect.TypeOf((*MockClient)(nil).DescribeVpcEndpointServices), arg0)
+}
+
+// DescribeVpcEndpoints mocks base method.
+func (m *MockClient) DescribeVpcEndpoints(arg0 *ec2.DescribeVpcEndpointsInput) (*ec2.DescribeVpcEndpointsOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescribeVpcEndpoints", arg0)
+	ret0, _ := ret[0].(*ec2.DescribeVpcEndpointsOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeVpcEndpoints indicates an expected call of DescribeVpcEndpoints.
+func (mr *MockClientMockRecorder) DescribeVpcEndpoints(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeVpcEndpoints", reflect.TypeOf((*MockClient)(nil).DescribeVpcEndpoints), arg0)
 }
 
 // DescribeVpcs mocks base method.
@@ -642,6 +750,21 @@ func (mr *MockClientMockRecorder) ListGroupsForUser(arg0 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListGroupsForUser", reflect.TypeOf((*MockClient)(nil).ListGroupsForUser), arg0)
 }
 
+// ListHostedZones mocks base method.
+func (m *MockClient) ListHostedZones(input *route53.ListHostedZonesInput) (*route53.ListHostedZonesOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListHostedZones", input)
+	ret0, _ := ret[0].(*route53.ListHostedZonesOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListHostedZones indicates an expected call of ListHostedZones.
+func (mr *MockClientMockRecorder) ListHostedZones(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListHostedZones", reflect.TypeOf((*MockClient)(nil).ListHostedZones), input)
+}
+
 // ListObjects mocks base method.
 func (m *MockClient) ListObjects(arg0 *s3.ListObjectsInput) (*s3.ListObjectsOutput, error) {
 	m.ctrl.T.Helper()
@@ -700,6 +823,21 @@ func (m *MockClient) ListPolicies(arg0 *iam.ListPoliciesInput) (*iam.ListPolicie
 func (mr *MockClientMockRecorder) ListPolicies(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPolicies", reflect.TypeOf((*MockClient)(nil).ListPolicies), arg0)
+}
+
+// ListResourceRecordSets mocks base method.
+func (m *MockClient) ListResourceRecordSets(input *route53.ListResourceRecordSetsInput) (*route53.ListResourceRecordSetsOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListResourceRecordSets", input)
+	ret0, _ := ret[0].(*route53.ListResourceRecordSetsOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListResourceRecordSets indicates an expected call of ListResourceRecordSets.
+func (mr *MockClientMockRecorder) ListResourceRecordSets(input interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListResourceRecordSets", reflect.TypeOf((*MockClient)(nil).ListResourceRecordSets), input)
 }
 
 // ListRoles mocks base method.
