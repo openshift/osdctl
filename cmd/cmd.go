@@ -19,8 +19,8 @@ import (
 
 	"github.com/openshift/osdctl/cmd/aao"
 	"github.com/openshift/osdctl/cmd/account"
+	"github.com/openshift/osdctl/cmd/alerts"
 	"github.com/openshift/osdctl/cmd/capability"
-  "github.com/openshift/osdctl/cmd/alerts"
 	"github.com/openshift/osdctl/cmd/cluster"
 	"github.com/openshift/osdctl/cmd/cost"
 	"github.com/openshift/osdctl/cmd/env"
@@ -86,7 +86,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(aao.NewCmdAao(kubeClient))
 	rootCmd.AddCommand(account.NewCmdAccount(streams, kubeFlags, kubeClient, globalOpts))
 	rootCmd.AddCommand(alerts.NewCmdAlerts())
-  rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeFlags, kubeClient, globalOpts))
+  	rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeFlags, kubeClient, globalOpts))
 	rootCmd.AddCommand(hive.NewCmdHive(streams, kubeFlags, kubeClient))
 	rootCmd.AddCommand(newCmdCompletion())
 	rootCmd.AddCommand(env.NewCmdEnv())

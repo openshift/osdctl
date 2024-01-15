@@ -72,10 +72,10 @@ func getKubeCli(clusterID string) (client.Client, *rest.Config , error) {
  		fmt.Print("failed to register scheme")
  	}
 
-  bp, err := config.GetBackplaneConfiguration()
-	 if err != nil {
-		 log.Fatalf("failed to load backplane-cli config: %v", err)
-	 }
+  	bp, err := config.GetBackplaneConfiguration()
+	if err != nil {
+		log.Fatalf("failed to load backplane-cli config: %v", err)
+	}
 
 	kubeconfig, err := login.GetRestConfig(bp, clusterID)
  	if err != nil {
