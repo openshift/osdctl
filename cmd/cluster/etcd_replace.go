@@ -53,7 +53,7 @@ func newCmdEtcdMemberReplacement() *cobra.Command {
 }
 
 func (opts *etcdOptions) EtcdReplaceMember(clusterId string) error {
-	kubeCli, kconfig, clientset, err := getKubeConfigAndClient(clusterId)
+	kubeCli, kconfig, clientset, err := getKubeConfigAndClient(clusterId, "backplane-cluster-admin", "Replacing unhealthy etcd member using osdctl")
 	if err != nil {
 		return err
 	}
