@@ -21,6 +21,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+//oc -n openshift-monitoring exec -c prometheus prometheus-k8s-0 -- curl -s   'http://localhost:9090/api/v1/alerts' 
+var containerCmd string = "-- curl -s http://localhost:9090/api/v1/alerts"
+
 const ContainerName string = "prometheus"
 
 var accountNamespace string = "openshift-monitoring"
@@ -55,6 +58,8 @@ func NewCmdList() *cobra.Command {
 }
 
 func ListCheck(clusterID string) {
+	//var url string = "http://localhost:9090/api/v1/alerts"
+
 	defer func() {
 		if err := recover(); err != nil {
 			log.Fatal("error : ", err)
@@ -86,15 +91,23 @@ func ListCheck(clusterID string) {
 	posturl := "/api/v1/alerts"
 	routeurl := route.Spec.Host
 	url :=  routeurl + posturl
-	fmt.Printf("Retrieved route to host: %s\n", url)*/
-	url := "http://localhost:9090/api/v1/alerts"
+	fmt.Printf("Retrieved route to host: %s\n", url)
 
-	output, err := getAlerts(kubeconfig, clientset, PodName, url)
-	if err != nil {
-		fmt.Println("Could not execute the oc exec command")
-		return
-   	}
-	fmt.Println(output)
+	for _, v := range containerCmd {
+		output, err := getAlerts(kubeconfig, clientset, v, PodName)
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Printf("$ %s\n", v)
+		fmt.Println(output)
+	}*/
+
+	output, err := getAlerts(kubeconfig, clientset, containerCmd, PodName)
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Printf("$ %s\n", containerCmd)
+		fmt.Println(output)
     
 }
 
@@ -130,36 +143,29 @@ func getKubeCli(clusterID string) (client.Client, *rest.Config , *kubernetes.Cli
 	return kubeCli, kubeconfig, clientset, err
 }
 
-//c.Println(fmt.Sprintf("Use \n\n    oc exec -it --as %s -n %s %s -- /bin/bash\n\nto run commands in the pod. All 'oc' commands run within the pod will be executed against the cluster '%s' (this can be verified by running `oc cluster-info` in the pod)" pod.Namespace, pod.Name)
-//oc -n openshift-monitoring exec -c prometheus prometheus-k8s-0 -- curl -s   'http://localhost:9090/api/v1/alerts'
 
-func getAlerts(kubeconfig *rest.Config, clientset *kubernetes.Clientset, PodName string, url string) (string, error) {
+func getAlerts(kubeconfig *rest.Config, clientset *kubernetes.Clientset, containerCmd string, PodName string) (string, error) {
 
 	cmd := []string{
 		"sh",
 		"-c",
-		"-- curl",
-		"-s",
+		containerCmd,
 	}
 	req := clientset.CoreV1().RESTClient().Post().Resource("pods").Name(PodName).
-		Namespace(accountNamespace).RequestURI(url).SubResource("exec")
+		Namespace(accountNamespace).SubResource("exec")
 	option := &corev1.PodExecOptions{
 		Container: ContainerName,
 		Command:   cmd,
 		Stdin:     true,
 		Stdout:    true,
 		Stderr:    true,
-		TTY:       false,
+		TTY:       true,	//changed to true
 	}
 
 	if os.Stdin == nil {
-		option.Stdin = false
+		option.Stdin = true
 	}
-	req.VersionedParams(
-		option,
-		scheme.ParameterCodec,
-	)
-
+	req.VersionedParams(option, scheme.ParameterCodec)
 
 	exec, err := remotecommand.NewSPDYExecutor(kubeconfig, "POST", req.URL())
 	if err != nil {
@@ -173,7 +179,7 @@ func getAlerts(kubeconfig *rest.Config, clientset *kubernetes.Clientset, PodName
 		Stdin:  bytes.NewReader([]byte{}),
 		Stdout: capture,
 		Stderr: errorCapture,
-		Tty:    false,
+		Tty:    true,	//changed to true
 	})
 
 	if err != nil {
