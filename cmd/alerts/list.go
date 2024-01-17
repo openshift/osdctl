@@ -21,14 +21,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-//oc -n openshift-monitoring exec -c prometheus prometheus-k8s-0 -- curl -s   'http://localhost:9090/api/v1/alerts' 
-var containerCmd string = "-- curl -s http://localhost:9090/api/v1/alerts"
-
-const ContainerName string = "prometheus"
-
+var alerturl string = "http://localhost:9093"
+//const ContainerName string = "prometheus"
+const ContainerName string = "alertmanager"
 var accountNamespace string = "openshift-monitoring"
 var alertprom string = "alertmanager-main"
-var PodName string = "prometheus-k8s-0"
+//var PodName string = "prometheus-k8s-0"
+var PodName string = "alertmanager-main-0"
 
 type logCapture struct {
 	buffer bytes.Buffer
@@ -58,8 +57,6 @@ func NewCmdList() *cobra.Command {
 }
 
 func ListCheck(clusterID string) {
-	//var url string = "http://localhost:9090/api/v1/alerts"
-
 	defer func() {
 		if err := recover(); err != nil {
 			log.Fatal("error : ", err)
@@ -67,7 +64,7 @@ func ListCheck(clusterID string) {
 	}()
 
 	kClient, kubeconfig, clientset, err := getKubeCli(clusterID)
-	if err != nil{
+	if err != nil {
 		log.Fatal(err)
 	}
 
@@ -75,49 +72,41 @@ func ListCheck(clusterID string) {
 	if err != nil {
 		fmt.Println("Could not add route scheme")
 		return
- 	}	
+	}
 
 	route := routev1.Route{}
 	err = kClient.Get(context.TODO(), types.NamespacedName{
-	 		Namespace: accountNamespace,
-	 		Name: alertprom,
-	 	}, &route)
+		Namespace: accountNamespace,
+		Name:      alertprom,
+	}, &route)
 	if err != nil {
-	 	fmt.Println("Could not retrieve desired alertmanager-main route.")
-	 	return
+		fmt.Println("Could not retrieve desired alertmanager-main route.")
+		return
 	}
 
-	/*fmt.Printf("Retrieved route to host: %s\n", route.Spec.Host)
+	fmt.Printf("Retrieved route to host: %s\n", route.Spec.Host)
+	/*header := "http://"
 	posturl := "/api/v1/alerts"
 	routeurl := route.Spec.Host
-	url :=  routeurl + posturl
-	fmt.Printf("Retrieved route to host: %s\n", url)
+	url := header + routeurl + posturl
+	fmt.Printf("Retrieved route to host after changes passed to getAlerts func: %s\n", url)
+`*/
+	output, err := getAlerts(kubeconfig, clientset, alerturl, PodName)
+	if err != nil {
+		fmt.Println(err)
+	}
+	//fmt.Printf("$ %s\n", containerCmd)
+	fmt.Println("Print information from all alert", output)
 
-	for _, v := range containerCmd {
-		output, err := getAlerts(kubeconfig, clientset, v, PodName)
-		if err != nil {
-			fmt.Println(err)
-		}
-		fmt.Printf("$ %s\n", v)
-		fmt.Println(output)
-	}*/
-
-	output, err := getAlerts(kubeconfig, clientset, containerCmd, PodName)
-		if err != nil {
-			fmt.Println(err)
-		}
-		fmt.Printf("$ %s\n", containerCmd)
-		fmt.Println(output)
-    
 }
 
-func getKubeCli(clusterID string) (client.Client, *rest.Config , *kubernetes.Clientset, error) {
+func getKubeCli(clusterID string) (client.Client, *rest.Config, *kubernetes.Clientset, error) {
 
 	scheme := runtime.NewScheme()
 	err := routev1.AddToScheme(scheme) // added to scheme
- 	if err != nil {
- 		fmt.Print("failed to register scheme")
- 	}
+	if err != nil {
+		fmt.Print("failed to register scheme")
+	}
 
 	bp, err := config.GetBackplaneConfiguration()
 	if err != nil {
@@ -125,9 +114,9 @@ func getKubeCli(clusterID string) (client.Client, *rest.Config , *kubernetes.Cli
 	}
 
 	kubeconfig, err := login.GetRestConfig(bp, clusterID)
- 	if err != nil {
- 		log.Fatalf("failed to load backplane admin: %v", err)
- 	}
+	if err != nil {
+		log.Fatalf("failed to load backplane admin: %v", err)
+	}
 
 	// create the clientset
 	clientset, err := kubernetes.NewForConfig(kubeconfig)
@@ -143,23 +132,23 @@ func getKubeCli(clusterID string) (client.Client, *rest.Config , *kubernetes.Cli
 	return kubeCli, kubeconfig, clientset, err
 }
 
-
-func getAlerts(kubeconfig *rest.Config, clientset *kubernetes.Clientset, containerCmd string, PodName string) (string, error) {
+func getAlerts(kubeconfig *rest.Config, clientset *kubernetes.Clientset, alerturlurl string, PodName string) (string, error) {
 
 	cmd := []string{
-		"sh",
-		"-c",
-		containerCmd,
+		"amtool",
+		"--alertmanager.url",
+		alerturl,
+		"alert",
 	}
 	req := clientset.CoreV1().RESTClient().Post().Resource("pods").Name(PodName).
 		Namespace(accountNamespace).SubResource("exec")
 	option := &corev1.PodExecOptions{
 		Container: ContainerName,
 		Command:   cmd,
-		Stdin:     true,
+		Stdin:     false, //changed to false
 		Stdout:    true,
 		Stderr:    true,
-		TTY:       true,	//changed to true
+		TTY:       false, 
 	}
 
 	if os.Stdin == nil {
@@ -176,10 +165,10 @@ func getAlerts(kubeconfig *rest.Config, clientset *kubernetes.Clientset, contain
 	errorCapture := &logCapture{}
 
 	err = exec.StreamWithContext(context.TODO(), remotecommand.StreamOptions{
-		Stdin:  bytes.NewReader([]byte{}),
+		Stdin:  nil, //bytes.NewReader([]byte{}), //changed to nil
 		Stdout: capture,
 		Stderr: errorCapture,
-		Tty:    true,	//changed to true
+		Tty:    false, 
 	})
 
 	if err != nil {
