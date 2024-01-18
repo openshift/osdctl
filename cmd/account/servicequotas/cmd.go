@@ -8,7 +8,7 @@ import (
 )
 
 // NewCmdServiceQuotas implements commands related to AWS service-quotas
-func NewCmdServiceQuotas(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
+func NewCmdServiceQuotas(streams genericclioptions.IOStreams) *cobra.Command {
 	baseCmd := &cobra.Command{
 		Use:               "servicequotas",
 		Short:             "Interact with AWS service-quotas",

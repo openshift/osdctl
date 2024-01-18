@@ -20,7 +20,8 @@ import (
 	kclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func newCmdCleanup(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
+func newCmdCleanup(client *k8s.LazyClient, streams genericclioptions.IOStreams) *cobra.Command {
+	ops := newCleanupAccessOptions(client, streams)
 	cleanupCmd := &cobra.Command{
 		Use:               "cleanup <cluster identifier>",
 		Short:             "Drop emergency access to a cluster",
@@ -29,12 +30,11 @@ func newCmdCleanup(streams genericclioptions.IOStreams, flags *genericclioptions
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(cleanupCmdComplete(cmd, args))
-			cmdutil.CheckErr(verifyPermissions(streams, flags))
-			client := k8s.NewClient(flags)
-			cleanupAccess := newCleanupAccessOptions(client, streams, flags)
-			cmdutil.CheckErr(cleanupAccess.Run(cmd, args))
+			cmdutil.CheckErr(ops.Run(cmd, args))
 		},
 	}
+	cleanupCmd.Flags().StringVar(&ops.reason, "reason", "", "[Mandatory for PrivateLink clusters] The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+
 	return cleanupCmd
 }
 
@@ -47,17 +47,17 @@ func cleanupCmdComplete(cmd *cobra.Command, args []string) error {
 
 // cleanupAccessOptions contains the objects and information required to drop access to a cluster
 type cleanupAccessOptions struct {
-	*genericclioptions.ConfigFlags
+	reason string
+
 	genericclioptions.IOStreams
-	kclient.Client
+	kubeCli *k8s.LazyClient
 }
 
 // newCleanupAccessOptions creates a cleanupAccessOptions object
-func newCleanupAccessOptions(client kclient.Client, streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) cleanupAccessOptions {
+func newCleanupAccessOptions(client *k8s.LazyClient, streams genericclioptions.IOStreams) cleanupAccessOptions {
 	c := cleanupAccessOptions{
-		IOStreams:   streams,
-		ConfigFlags: flags,
-		Client:      client,
+		IOStreams: streams,
+		kubeCli:   client,
 	}
 	return c
 }
@@ -86,7 +86,7 @@ func (c *cleanupAccessOptions) Readln() (string, error) {
 
 // Run executes the 'cleanup' access subcommand
 func (c *cleanupAccessOptions) Run(cmd *cobra.Command, args []string) error {
-	clusteridentifier := args[0]
+	clusterIdentifier := args[0]
 
 	conn, err := osdctlutil.CreateConnection()
 	if err != nil {
@@ -96,7 +96,7 @@ func (c *cleanupAccessOptions) Run(cmd *cobra.Command, args []string) error {
 		cmdutil.CheckErr(conn.Close())
 	}()
 
-	cluster, err := osdctlutil.GetCluster(conn, clusteridentifier)
+	cluster, err := osdctlutil.GetCluster(conn, clusterIdentifier)
 	if err != nil {
 		return err
 	}
@@ -111,8 +111,13 @@ func (c *cleanupAccessOptions) Run(cmd *cobra.Command, args []string) error {
 // dropPrivateLinkAccess removes access to a PrivateLink cluster.
 // This primarily consists of deleting any jump pods found to be running against the cluster in hive.
 func (c *cleanupAccessOptions) dropPrivateLinkAccess(cluster *clustersmgmtv1.Cluster) error {
+	if c.reason == "" {
+		c.Errorln("flag \"reason\" not set and is required when Cluster is PrivateLin")
+	}
+	c.kubeCli.Impersonate("backplane-cluster-admin", c.reason, fmt.Sprintf("Elevation required to clean break-glass on PrivateLink Clusters"))
+
 	c.Println("Cluster is PrivateLink - removing jump pods in the cluster's namespace.")
-	ns, err := getClusterNamespace(c.Client, cluster.ID())
+	ns, err := getClusterNamespace(c.kubeCli, cluster.ID())
 	if err != nil {
 		c.Errorln("Failed to retrieve cluster namespace")
 		return err
@@ -128,7 +133,7 @@ func (c *cleanupAccessOptions) dropPrivateLinkAccess(cluster *clustersmgmtv1.Clu
 
 	listOpts := kclient.ListOptions{Namespace: ns.Name, LabelSelector: selector}
 	pods := corev1.PodList{}
-	err = c.Client.List(context.TODO(), &pods, &listOpts)
+	err = c.kubeCli.List(context.TODO(), &pods, &listOpts)
 	if err != nil {
 		c.Errorln(fmt.Sprintf("Failed to list pods in cluster namespace '%s'", ns.Name))
 		return err
@@ -155,7 +160,7 @@ func (c *cleanupAccessOptions) dropPrivateLinkAccess(cluster *clustersmgmtv1.Clu
 	}
 	if isAffirmative(input) {
 		pod := corev1.Pod{}
-		err = c.Client.DeleteAllOf(context.TODO(), &pod, &kclient.DeleteAllOfOptions{ListOptions: listOpts})
+		err = c.kubeCli.DeleteAllOf(context.TODO(), &pod, &kclient.DeleteAllOfOptions{ListOptions: listOpts})
 		if err != nil {
 			c.Errorln("Failed to delete pod(s)")
 			return err
@@ -167,7 +172,7 @@ func (c *cleanupAccessOptions) dropPrivateLinkAccess(cluster *clustersmgmtv1.Clu
 			// and we end up waiting for irrelevant pods. I've tried reproducing this bug in other places, but I haven't been able to
 			// figure it out. If someone does, please fix it.
 			pods := corev1.PodList{}
-			err = c.Client.List(context.TODO(), &pods, &listOpts)
+			err = c.kubeCli.List(context.TODO(), &pods, &listOpts)
 			if err != nil || len(pods.Items) != 0 {
 				return false, err
 			}

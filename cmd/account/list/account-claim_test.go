@@ -17,7 +17,6 @@ func TestGetAccountClaimCmdComplete(t *testing.T) {
 	g := NewGomegaWithT(t)
 	mockCtrl := gomock.NewController(t)
 	streams := genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr}
-	kubeFlags := genericclioptions.NewConfigFlags(false)
 	globalFlags := globalflags.GlobalOptions{Output: ""}
 	testCases := []struct {
 		title       string
@@ -29,7 +28,6 @@ func TestGetAccountClaimCmdComplete(t *testing.T) {
 			title: "incorrect state",
 			option: &listAccountClaimOptions{
 				state:         "foo",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: true,
@@ -39,7 +37,6 @@ func TestGetAccountClaimCmdComplete(t *testing.T) {
 			title: "empty state",
 			option: &listAccountClaimOptions{
 				state:         "",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
@@ -48,7 +45,6 @@ func TestGetAccountClaimCmdComplete(t *testing.T) {
 			title: "error state",
 			option: &listAccountClaimOptions{
 				state:         "Error",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
@@ -57,7 +53,6 @@ func TestGetAccountClaimCmdComplete(t *testing.T) {
 			title: "pending state",
 			option: &listAccountClaimOptions{
 				state:         "Pending",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
@@ -66,7 +61,6 @@ func TestGetAccountClaimCmdComplete(t *testing.T) {
 			title: "ready state",
 			option: &listAccountClaimOptions{
 				state:         "Ready",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
@@ -75,7 +69,7 @@ func TestGetAccountClaimCmdComplete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
-			cmd := newCmdListAccountClaim(streams, kubeFlags, mockk8s.NewMockClient(mockCtrl), &globalFlags)
+			cmd := newCmdListAccountClaim(streams, mockk8s.NewMockClient(mockCtrl), &globalFlags)
 			err := tc.option.complete(cmd, nil)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())

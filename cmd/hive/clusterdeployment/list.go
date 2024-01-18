@@ -16,8 +16,8 @@ import (
 const hiveVersionMajorMinorPatchLabel string = "hive.openshift.io/version-major-minor-patch"
 
 // newCmdList implements the list command to list cluster deployment crs
-func newCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
-	ops := newListOptions(streams, flags, client)
+func newCmdList(streams genericclioptions.IOStreams, client client.Client) *cobra.Command {
+	ops := newListOptions(streams, client)
 	listCmd := &cobra.Command{
 		Use:               "list",
 		Short:             "List cluster deployment crs",
@@ -34,14 +34,12 @@ func newCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.Co
 
 // listOptions defines the struct for running list command
 type listOptions struct {
-	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
 	kubeCli client.Client
 }
 
-func newListOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *listOptions {
+func newListOptions(streams genericclioptions.IOStreams, client client.Client) *listOptions {
 	return &listOptions{
-		flags:     flags,
 		IOStreams: streams,
 		kubeCli:   client,
 	}

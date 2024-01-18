@@ -12,6 +12,7 @@ import (
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	hiveapiv1 "github.com/openshift/hive/apis/hive/v1"
 	hiveinternalv1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
+	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,6 +36,7 @@ type transferOwnerOptions struct {
 	output       string
 	clusterID    string
 	newOwnerName string
+	reason       string
 	dryrun       bool
 	cluster      *cmv1.Cluster
 
@@ -57,9 +59,11 @@ func newCmdTransferOwner(streams genericclioptions.IOStreams, globalOpts *global
 	transferOwnerCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "The Internal Cluster ID/External Cluster ID/ Cluster Name")
 	transferOwnerCmd.Flags().StringVar(&ops.newOwnerName, "new-owner", ops.newOwnerName, "The new owners username to transfer the cluster to")
 	transferOwnerCmd.Flags().BoolVarP(&ops.dryrun, "dry-run", "d", false, "Dry-run - show all changes but do not apply them")
+	transferOwnerCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
 
 	_ = transferOwnerCmd.MarkFlagRequired("cluster-id")
 	_ = transferOwnerCmd.MarkFlagRequired("new-owner")
+	_ = transferOwnerCmd.MarkFlagRequired("reason")
 
 	return transferOwnerCmd
 }
@@ -303,7 +307,11 @@ func (o *transferOwnerOptions) run() error {
 
 	// Find and setup all resources that are needed
 	hiveCluster, err := utils.GetHiveCluster(o.clusterID)
-	hiveKubeCli, _, hivecClientset, err := getKubeConfigAndClient(hiveCluster.ID(), "backplane-cluster-admin", "Updating pull secret using osdctl")
+	elevationReasons := []string{
+		o.reason,
+		fmt.Sprintf("Updating pull secret using osdctl to tranfert owner to %s", o.newOwnerName),
+	}
+	hiveKubeCli, _, hivecClientset, err := common.GetKubeConfigAndClient(hiveCluster.ID(), elevationReasons...)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for Hive cluster ID %s: %w", hiveCluster.ID(), err)
 	}
@@ -354,7 +362,7 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("failed to update pull secret for Hive cluster with ID %s: %w", o.clusterID, err)
 	}
 
-	_, _, clientset, err := getKubeConfigAndClient(o.clusterID, "backplane-cluster-admin", "Updating pull secret using osdctl")
+	_, _, clientset, err := common.GetKubeConfigAndClient(o.clusterID, elevationReasons...)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", o.clusterID, err)
 	}

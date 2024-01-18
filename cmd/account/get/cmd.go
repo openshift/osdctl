@@ -14,7 +14,7 @@ const (
 )
 
 // NewCmdGet implements the get command to get AWS Account related resources
-func NewCmdGet(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+func NewCmdGet(streams genericclioptions.IOStreams, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	getCmd := &cobra.Command{
 		Use:               "get",
 		Short:             "Get resources",
@@ -22,11 +22,11 @@ func NewCmdGet(streams genericclioptions.IOStreams, flags *genericclioptions.Con
 		DisableAutoGenTag: true,
 	}
 
-	getCmd.AddCommand(newCmdGetAccount(streams, flags, client, globalOpts))
-	getCmd.AddCommand(newCmdGetAccountClaim(streams, flags, client, globalOpts))
-	getCmd.AddCommand(newCmdGetLegalEntity(streams, flags, client, globalOpts))
-	getCmd.AddCommand(newCmdGetSecrets(streams, flags, client, globalOpts))
-	getCmd.AddCommand(newCmdGetAWSAccount(streams, flags, client))
+	getCmd.AddCommand(newCmdGetAccount(streams, client, globalOpts))
+	getCmd.AddCommand(newCmdGetAccountClaim(streams, client, globalOpts))
+	getCmd.AddCommand(newCmdGetLegalEntity(streams, client, globalOpts))
+	getCmd.AddCommand(newCmdGetSecrets(streams, client, globalOpts))
+	getCmd.AddCommand(newCmdGetAWSAccount(streams, client))
 
 	return getCmd
 }

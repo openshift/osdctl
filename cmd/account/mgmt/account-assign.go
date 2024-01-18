@@ -33,7 +33,6 @@ type accountAssignOptions struct {
 	output       string
 	iamUser      bool
 
-	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
@@ -48,9 +47,8 @@ func (f assignResponse) String() string {
 	return fmt.Sprintf("  Username: %s\n  Account: %s\n", f.Username, f.Id)
 }
 
-func newAccountAssignOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *accountAssignOptions {
+func newAccountAssignOptions(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *accountAssignOptions {
 	return &accountAssignOptions{
-		flags:         flags,
 		printFlags:    printer.NewPrintFlags(),
 		IOStreams:     streams,
 		GlobalOptions: globalOpts,
@@ -58,8 +56,8 @@ func newAccountAssignOptions(streams genericclioptions.IOStreams, flags *generic
 }
 
 // assignCmd assigns an aws account to user under osd-staging-2 by default unless osd-staging-1 is specified
-func newCmdAccountAssign(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newAccountAssignOptions(streams, flags, globalOpts)
+func newCmdAccountAssign(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newAccountAssignOptions(streams, globalOpts)
 	accountAssignCmd := &cobra.Command{
 		Use:               "assign",
 		Short:             "Assign account to user",

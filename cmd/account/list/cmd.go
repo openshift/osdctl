@@ -9,7 +9,7 @@ import (
 )
 
 // NewCmdList implements the list command
-func NewCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+func NewCmdList(streams genericclioptions.IOStreams, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	listCmd := &cobra.Command{
 		Use:               "list",
 		Short:             "List resources",
@@ -17,8 +17,8 @@ func NewCmdList(streams genericclioptions.IOStreams, flags *genericclioptions.Co
 		DisableAutoGenTag: true,
 	}
 
-	listCmd.AddCommand(newCmdListAccount(streams, flags, client, globalOpts))
-	listCmd.AddCommand(newCmdListAccountClaim(streams, flags, client, globalOpts))
+	listCmd.AddCommand(newCmdListAccount(streams, client, globalOpts))
+	listCmd.AddCommand(newCmdListAccountClaim(streams, client, globalOpts))
 
 	return listCmd
 }

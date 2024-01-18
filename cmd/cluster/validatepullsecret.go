@@ -3,22 +3,28 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"os"
+
 	v1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	"github.com/openshift/osdctl/cmd/servicelog"
+	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"os"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var BackplaneClusterAdmin = "backplane-cluster-admin"
+// transferOwnerOptions defines the struct for running transferOwner command
+type validatePullSecret struct {
+	clusterID string
+	reason    string
+	kubeCli   *k8s.LazyClient
+}
 
-func newCmdValidatePullSecret(kubeCli client.Client, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	return &cobra.Command{
+func newCmdValidatePullSecret(kubeCli *k8s.LazyClient) *cobra.Command {
+	ops := newValidatePullSecret(kubeCli)
+	validatePullSecretCmd := &cobra.Command{
 		Use:   "validate-pull-secret [CLUSTER_ID]",
 		Short: "Checks if the pull secret email matches the owner email",
 		Long: `Checks if the pull secret email matches the owner email.
@@ -27,12 +33,22 @@ The owner's email to check will be determined by the cluster identifier passed t
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(ValidatePullSecret(args[0], kubeCli, flags))
+			ops.clusterID = args[0]
+			cmdutil.CheckErr(ops.ValidatePullSecret())
 		},
+	}
+	validatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	_ = validatePullSecretCmd.MarkFlagRequired("reason")
+	return validatePullSecretCmd
+}
+
+func newValidatePullSecret(client *k8s.LazyClient) *validatePullSecret {
+	return &validatePullSecret{
+		kubeCli: client,
 	}
 }
 
-func ValidatePullSecret(clusterID string, kubeCli client.Client, flags *genericclioptions.ConfigFlags) error {
+func (o *validatePullSecret) ValidatePullSecret() error {
 	ocm, err := utils.CreateConnection()
 	if err != nil {
 		return err
@@ -43,7 +59,7 @@ func ValidatePullSecret(clusterID string, kubeCli client.Client, flags *genericc
 		}
 	}()
 
-	subscription, err := utils.GetSubscription(ocm, clusterID)
+	subscription, err := utils.GetSubscription(ocm, o.clusterID)
 	if err != nil {
 		return err
 	}
@@ -62,7 +78,7 @@ func ValidatePullSecret(clusterID string, kubeCli client.Client, flags *genericc
 		postCmd := servicelog.PostCmdOptions{
 			Template:       "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/update_pull_secret.json",
 			TemplateParams: []string{"REGISTRY=registry.redhat.io"},
-			ClusterId:      clusterID,
+			ClusterId:      o.clusterID,
 		}
 		if err = postCmd.Run(); err != nil {
 			return err
@@ -70,14 +86,14 @@ func ValidatePullSecret(clusterID string, kubeCli client.Client, flags *genericc
 		return nil
 	}
 
-	// This is the flagset for the kubeCli object provided from the root command. Set here to retroactively impersonate backplane-cluster-admin
-	flags.Impersonate = &BackplaneClusterAdmin
+	// We need to specify we will need elevation before using the client for the first time
+	o.kubeCli.Impersonate("backplane-cluster-admin", o.reason, fmt.Sprintf("Elevation required to get pull secret email to check if it matches the owner email for %s cluster", o.clusterID))
 	secret := &corev1.Secret{}
-	if err := kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: "openshift-config", Name: "pull-secret"}, secret); err != nil {
+	if err := o.kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: "openshift-config", Name: "pull-secret"}, secret); err != nil {
 		return err
 	}
 
-	clusterPullSecretEmail, err, done := getPullSecretEmail(clusterID, secret, true)
+	clusterPullSecretEmail, err, done := getPullSecretEmail(o.clusterID, secret, true)
 	if done {
 		return err
 	}
@@ -86,7 +102,7 @@ func ValidatePullSecret(clusterID string, kubeCli client.Client, flags *genericc
 		_, _ = fmt.Fprintln(os.Stderr, "Pull secret email doesn't match OCM user email. Sending service log.")
 		postCmd := servicelog.PostCmdOptions{
 			Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_user_mismatch.json",
-			ClusterId: clusterID,
+			ClusterId: o.clusterID,
 		}
 		if err = postCmd.Run(); err != nil {
 			return err

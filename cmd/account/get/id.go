@@ -17,8 +17,8 @@ import (
 )
 
 // newCmdGetAWSAccount implements the reset command which resets the specified account cr
-func newCmdGetAWSAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
-	ops := newGetAWSAccountOptions(streams, flags, client)
+func newCmdGetAWSAccount(streams genericclioptions.IOStreams, client client.Client) *cobra.Command {
+	ops := newGetAWSAccountOptions(streams, client)
 	getAWSAccountCmd := &cobra.Command{
 		Use:               "aws-account",
 		Short:             "Get AWS Account ID",
@@ -46,14 +46,12 @@ type getAWSAccountOptions struct {
 	accountClaimName      string
 	accountClaimNamespace string
 
-	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
 	kubeCli client.Client
 }
 
-func newGetAWSAccountOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *getAWSAccountOptions {
+func newGetAWSAccountOptions(streams genericclioptions.IOStreams, client client.Client) *getAWSAccountOptions {
 	return &getAWSAccountOptions{
-		flags:     flags,
 		IOStreams: streams,
 		kubeCli:   client,
 	}

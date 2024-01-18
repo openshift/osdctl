@@ -9,8 +9,7 @@ import (
 	"strings"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
-	bplogin "github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
-	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
+	"github.com/openshift/osdctl/cmd/common"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -51,32 +50,6 @@ func (capture *logCapture) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func getKubeConfigAndClient(clusterID string, user string, elevationReason string) (client.Client, *rest.Config, *kubernetes.Clientset, error) {
-	bp, err := bpconfig.GetBackplaneConfiguration()
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
-	}
-	var kubeconfig *rest.Config
-	if user == "" && elevationReason == "" {
-		kubeconfig, err = bplogin.GetRestConfig(bp, clusterID)
-	} else {
-		kubeconfig, err = bplogin.GetRestConfigAsUser(bp, clusterID, user, elevationReason)
-	}
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	// create the clientset
-	clientset, err := kubernetes.NewForConfig(kubeconfig)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	kubeCli, err := client.New(kubeconfig, client.Options{})
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return kubeCli, kubeconfig, clientset, err
-}
-
 func newCmdEtcdHealthCheck() *cobra.Command {
 	return &cobra.Command{
 		Use:               "etcd-health-check <cluster-id>",
@@ -97,7 +70,7 @@ func EtcdHealthCheck(clusterId string) error {
 		}
 	}()
 
-	kubeCli, kconfig, clientset, err := getKubeConfigAndClient(clusterId, "", "")
+	kubeCli, kconfig, clientset, err := common.GetKubeConfigAndClient(clusterId)
 	if err != nil {
 		return err
 	}

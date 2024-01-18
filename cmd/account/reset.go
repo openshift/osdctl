@@ -24,8 +24,8 @@ import (
 )
 
 // newCmdReset implements the reset command which resets the specified account cr
-func newCmdReset(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
-	ops := newResetOptions(streams, flags, client)
+func newCmdReset(streams genericclioptions.IOStreams, client client.Client) *cobra.Command {
+	ops := newResetOptions(streams, client)
 	resetCmd := &cobra.Command{
 		Use:               "reset <account name>",
 		Short:             "Reset AWS Account CR",
@@ -56,14 +56,12 @@ type resetOptions struct {
 	skipCheck        bool
 	resetLegalEntity bool
 
-	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
 	kubeCli client.Client
 }
 
-func newResetOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *resetOptions {
+func newResetOptions(streams genericclioptions.IOStreams, client client.Client) *resetOptions {
 	return &resetOptions{
-		flags:     flags,
 		IOStreams: streams,
 		kubeCli:   client,
 	}

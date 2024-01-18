@@ -17,7 +17,6 @@ func TestGetSecretsCmdComplete(t *testing.T) {
 	g := NewGomegaWithT(t)
 	mockCtrl := gomock.NewController(t)
 	streams := genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr}
-	kubeFlags := genericclioptions.NewConfigFlags(false)
 	globalFlags := globalflags.GlobalOptions{Output: ""}
 	testCases := []struct {
 		title       string
@@ -29,7 +28,6 @@ func TestGetSecretsCmdComplete(t *testing.T) {
 			title: "empty account id",
 			option: &getSecretsOptions{
 				accountID:     "",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: true,
@@ -39,7 +37,6 @@ func TestGetSecretsCmdComplete(t *testing.T) {
 			title: "succeed",
 			option: &getSecretsOptions{
 				accountID:     "foo",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
@@ -48,7 +45,7 @@ func TestGetSecretsCmdComplete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
-			cmd := newCmdGetSecrets(streams, kubeFlags, mockk8s.NewMockClient(mockCtrl), &globalFlags)
+			cmd := newCmdGetSecrets(streams, mockk8s.NewMockClient(mockCtrl), &globalFlags)
 			err := tc.option.complete(cmd, nil)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())
