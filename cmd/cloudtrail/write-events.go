@@ -5,15 +5,19 @@ package cloudtrail
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/osdCloud"
+	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -26,6 +30,7 @@ type LookupEventsoptions struct {
 	clusterID string
 	since     string
 	pages     int
+	cluster   *cmv1.Cluster
 }
 
 func newwrite_eventsCmd() *cobra.Command {
@@ -50,6 +55,42 @@ func newWrite_eventsOptions() *LookupEventsoptions {
 
 	return &LookupEventsoptions{}
 
+}
+
+func (o *LookupEventsoptions) complete(cmd *cobra.Command, _ []string) error {
+	err := utils.IsValidClusterKey(o.clusterID)
+	if err != nil {
+		return err
+	}
+
+	connection, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
+
+	cluster, err := utils.GetCluster(connection, o.clusterID)
+	if err != nil {
+		return err
+	}
+
+	o.cluster = cluster
+
+	o.clusterID = cluster.ID()
+
+	if strings.ToUpper(cluster.CloudProvider().ID()) != "AWS" {
+		return errors.New("this command is only available for AWS clusters")
+	}
+	/*
+		Ideally we would want additional validation here for:
+		- the machine type exists
+		- the node exists on the cluster
+
+		As this command is idempotent, it will just fail on a later stage if e.g. the
+		machine type doesn't exist and can be re-run.
+	*/
+
+	return nil
 }
 func parseDurationToUTC(input string) (time.Time, error) {
 	duration, err := time.ParseDuration(input)
@@ -87,24 +128,15 @@ func GetUserID(awsClient sts.Client) (string, error) {
 
 	return userID.AccountID, nil
 }
-func GetEvents(clusterID string, since string, pages int) ([]*cloudtrail.LookupEventsOutput, error) {
+func GetEvents(since string, client *cloudtrail.Client, pages int) ([]*cloudtrail.LookupEventsOutput, error) {
 	ctx := context.TODO()
-	id := clusterID
 	starttime, err := parseDurationToUTC(since)
-	if err != nil {
-		return nil, err
-	}
-	cfg, err := osdCloud.CreateAWSV2Config(clusterID)
-	if err != nil {
-		fmt.Println("Could Not get cfg!")
-		return nil, err
-	}
 
 	stsClient := sts.NewFromConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
-	cloudtrailClient := cloudtrail.NewFromConfig(cfg)
+	cloudtrailClient := client
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +173,7 @@ func GetEvents(clusterID string, since string, pages int) ([]*cloudtrail.LookupE
 		}
 
 	}
-	fmt.Printf("\n\n[+] Fetching %s Event History..\n", cfg.Region)
+
 	return Events, nil
 }
 
@@ -214,14 +246,31 @@ func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput) (*[]types.Event
 	return &filteredEvents, nil
 }
 
-func (o *LookupEventsoptions) complete(cmd *cobra.Command, _ []string) error {
-
-	outputs, err := GetEvents(o.clusterID, o.since, o.pages)
+func (o *LookupEventsoptions) run(cmd *cobra.Command, _ []string) error {
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
+	defer ocmClient.Close()
 
 	if err != nil {
 		return err
 	}
-	filtered, err := filterUsers(outputs)
+	cfg, err := osdCloud.CreateAWSV2Config(ocmClient, o.cluster)
+	if err != nil {
+		fmt.Println("Could Not get cfg!")
+		return err
+	}
+
+	cloudtrailClient := cloudtrail.NewFromConfig(cfg)
+
+	lookupOutput, err := GetEvents(o.since, cloudtrailClient, o.pages)
+
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\n\n[+] Fetching %s Event History..\n", cfg.Region)
+	filtered, err := filterUsers(lookupOutput)
 	printEvents(*filtered)
 
 	fmt.Println("")
