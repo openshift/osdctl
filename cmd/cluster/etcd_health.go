@@ -51,13 +51,17 @@ func (capture *logCapture) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func getKubeConfigAndClient(clusterID string) (client.Client, *rest.Config, *kubernetes.Clientset, error) {
+func getKubeConfigAndClient(clusterID string, user string, elevationReason string) (client.Client, *rest.Config, *kubernetes.Clientset, error) {
 	bp, err := bpconfig.GetBackplaneConfiguration()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
 	}
-
-	kubeconfig, err := bplogin.GetRestConfigAsUser(bp, clusterID, "backplane-cluster-admin")
+	var kubeconfig *rest.Config
+	if user == "" && elevationReason == "" {
+		kubeconfig, err = bplogin.GetRestConfig(bp, clusterID)
+	} else {
+		kubeconfig, err = bplogin.GetRestConfigAsUser(bp, clusterID, user, elevationReason)
+	}
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -80,7 +84,6 @@ func newCmdEtcdHealthCheck() *cobra.Command {
 		Long:              `Checks etcd component health status for member replacement`,
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
-		Deprecated:        "please use the managed-script SREP/etcd-complete-health-check to avoid backplane elevation",
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(EtcdHealthCheck(args[0]))
 		},
@@ -94,7 +97,7 @@ func EtcdHealthCheck(clusterId string) error {
 		}
 	}()
 
-	kubeCli, kconfig, clientset, err := getKubeConfigAndClient(clusterId)
+	kubeCli, kconfig, clientset, err := getKubeConfigAndClient(clusterId, "", "")
 	if err != nil {
 		return err
 	}
