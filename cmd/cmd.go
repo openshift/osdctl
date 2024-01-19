@@ -96,6 +96,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(sts.NewCmdSts())
 	rootCmd.AddCommand(promote.NewCmdPromote())
 	rootCmd.AddCommand(jira.Cmd)
+	rootCmd.AddCommand(cloudtrail)
 
 	// Add cost command to use AWS Cost Manager
 	rootCmd.AddCommand(cost.NewCmdCost(streams, globalOpts))

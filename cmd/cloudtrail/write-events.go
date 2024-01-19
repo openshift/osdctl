@@ -1,6 +1,3 @@
-/*
-Copyright © 2024 NAME HERE <EMAIL ADDRESS>
-*/
 package cloudtrail
 
 import (
@@ -132,20 +129,10 @@ func GetEvents(since string, client *cloudtrail.Client, pages int) ([]*cloudtrai
 	ctx := context.TODO()
 	starttime, err := parseDurationToUTC(since)
 
-	stsClient := sts.NewFromConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
 	cloudtrailClient := client
-	if err != nil {
-		return nil, err
-	}
-
-	arn, err := GetARN(*stsClient)
-	if err != nil {
-		return nil, err
-	}
-	userID, err := GetUserID(*stsClient)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +144,7 @@ func GetEvents(since string, client *cloudtrail.Client, pages int) ([]*cloudtrai
 		return nil, err
 	}
 	maxPages := pages
-	fmt.Printf("Checking write event history since %s for AWS Account %s as %s \n\n", starttime, userID, arn)
+	fmt.Printf("Checking write event history since %s for AWS Account (&your account ID) as (&UserARN) \n\n", starttime)
 	for counter := 0; counter <= maxPages; counter++ {
 
 		cloudTrailEvents, err := cloudtrailClient.LookupEvents(ctx, &input)
