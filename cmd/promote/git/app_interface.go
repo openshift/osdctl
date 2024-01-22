@@ -24,7 +24,7 @@ type Service struct {
 	} `yaml:"resourceTemplates"`
 }
 
-type AppInteface struct {
+type AppInterface struct {
 	GitDirectory string
 }
 
@@ -32,8 +32,8 @@ func DefaultAppInterfaceDirectory() string {
 	return filepath.Join(os.Getenv("HOME"), "git", "app-interface")
 }
 
-func BootstrapOsdCtlForAppInterfaceAndServicePromotions(appInterfaceCheckoutDir string) AppInteface {
-	a := AppInteface{}
+func BootstrapOsdCtlForAppInterfaceAndServicePromotions(appInterfaceCheckoutDir string) AppInterface {
+	a := AppInterface{}
 	if appInterfaceCheckoutDir != "" {
 		a.GitDirectory = appInterfaceCheckoutDir
 		err := checkAppInterfaceCheckout(a.GitDirectory)
@@ -178,7 +178,7 @@ func GetCurrentPackageTagFromAppInterface(saasFile string) (string, error) {
 	return currentPackageTag, nil
 }
 
-func (a AppInteface) UpdateAppInterface(serviceName, saasFile, currentGitHash, promotionGitHash, branchName string) error {
+func (a AppInterface) UpdateAppInterface(serviceName, saasFile, currentGitHash, promotionGitHash, branchName string) error {
 	cmd := exec.Command("git", "checkout", "master")
 	cmd.Dir = a.GitDirectory
 	err := cmd.Run()
@@ -217,7 +217,7 @@ func (a AppInteface) UpdateAppInterface(serviceName, saasFile, currentGitHash, p
 	return nil
 }
 
-func (a AppInteface) UpdatePackageTag(saasFile, oldTag, promotionTag, branchName string) error {
+func (a AppInterface) UpdatePackageTag(saasFile, oldTag, promotionTag, branchName string) error {
 	cmd := exec.Command("git", "checkout", "master")
 	cmd.Dir = a.GitDirectory
 	err := cmd.Run()
@@ -248,7 +248,7 @@ func (a AppInteface) UpdatePackageTag(saasFile, oldTag, promotionTag, branchName
 	return nil
 }
 
-func (a AppInteface) CommitSaasFile(saasFile, commitMessage string) error {
+func (a AppInterface) CommitSaasFile(saasFile, commitMessage string) error {
 	// Commit the change
 	cmd := exec.Command("git", "add", saasFile)
 	cmd.Dir = a.GitDirectory

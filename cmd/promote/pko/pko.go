@@ -51,7 +51,7 @@ func (p pkoOptions) ValidatePKOOptions() error {
 	return nil
 }
 
-func PromotePackage(appInterface git.AppInteface, serviceName string, packageTag string, hcp bool) error {
+func PromotePackage(appInterface git.AppInterface, serviceName string, packageTag string, hcp bool) error {
 	services, err := saas.GetServiceNames(appInterface, saas.OSDSaasDir, saas.BPSaasDir, saas.CADSaasDir)
 	if err != nil {
 		return err

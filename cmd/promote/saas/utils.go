@@ -21,7 +21,7 @@ var (
 	ServicesFilesMap = map[string]string{}
 )
 
-func listServiceNames(appInterface git.AppInteface) error {
+func listServiceNames(appInterface git.AppInterface) error {
 	_, err := GetServiceNames(appInterface, OSDSaasDir, BPSaasDir, CADSaasDir)
 	if err != nil {
 		return err
@@ -36,7 +36,7 @@ func listServiceNames(appInterface git.AppInteface) error {
 	return nil
 }
 
-func servicePromotion(appInterface git.AppInteface, serviceName, gitHash string, osd, hcp bool) error {
+func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string, osd, hcp bool) error {
 	_, err := GetServiceNames(appInterface, OSDSaasDir, BPSaasDir, CADSaasDir)
 	if err != nil {
 		return err
@@ -94,7 +94,7 @@ func servicePromotion(appInterface git.AppInteface, serviceName, gitHash string,
 	return nil
 }
 
-func GetServiceNames(appInterface git.AppInteface, saaDirs ...string) ([]string, error) {
+func GetServiceNames(appInterface git.AppInterface, saaDirs ...string) ([]string, error) {
 	baseDir := appInterface.GitDirectory
 
 	for _, dir := range saaDirs {
