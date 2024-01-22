@@ -1,57 +1,40 @@
 package alerts
 
 import (
-	"bytes"
-	"context"
+	"encoding/json"
 	"fmt"
 	"log"
-	"os"
-
-	routev1 "github.com/openshift/api/route/v1"
-	"github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
-	"github.com/openshift/backplane-cli/pkg/cli/config"
 	"github.com/spf13/cobra"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/remotecommand"
-	"k8s.io/kubectl/pkg/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	AccountNamespace string = "openshift-monitoring"
-	Alertprom string = "alertmanager-main"
-	ContainerName string = "alertmanager"
-	LocalHostUrl string = "http://localhost:9093"
-	PodName string = "alertmanager-main-0"
+var (
+	levelCmd string
+	cmdStatus []string
 )
 
-var levelCmd string
-
-type logCapture struct {
-	buffer bytes.Buffer
-}
 
 type alertCmd struct {
-	clusterID string
-	getLevel  string
-	//active    bool
+	clusterID	string
+	alertLevel	string
+	active	bool
 }
 
-func (capture *logCapture) GetStdOut() string {
-	return capture.buffer.String()
-}
+type alertJson struct{
+	Labels struct {
+		Alertname string `json:"alertname"`
+		Severity string `json:"severity"`
+	}`json:"labels"`
 
-func (capture *logCapture) Write(p []byte) (n int, err error) {
-	a := string(p)
-	capture.buffer.WriteString(a)
-	return len(p), nil
+	Status struct {
+		State string `json:"state"`
+	}`json:"status"`
+
+	Annotations struct{
+		Summary string `json:"summary"`
+	}`json:"annotations"`
 }
 
 //osdctl alerts list ${CLUSTERID} --level [warning, critical, firing, pending, all] --active bool 
-
 func NewCmdListAlerts() *cobra.Command {
 	alertCmd := &alertCmd{}
 	newCmd := &cobra.Command{
@@ -62,17 +45,17 @@ func NewCmdListAlerts() *cobra.Command {
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			alertCmd.clusterID = args[0]
-			ListCheck(alertCmd)
+			ListAlerts(alertCmd)
 		},
 	}
 
-	newCmd.Flags().StringVarP(&alertCmd.getLevel, "level", "", "", "Alert level [warning, critical, firing, pending, all]")
-	//newCmd.Flags().BoolVar(&alertCmd.active, "active", false, "Show only active alerts")
+	newCmd.Flags().StringVarP(&alertCmd.alertLevel, "level", "l", "", "Alert level [warning, critical, firing, pending, all]")
+	newCmd.Flags().BoolVar(&alertCmd.active, "active", false, "Show only active alerts")
 
 	return newCmd
 }
 
-func getLevel(level string) string{
+func alertLevel(level string) string{
 	switch level{
 	case "warning":
 		levelCmd = "warning"
@@ -91,10 +74,7 @@ func getLevel(level string) string{
 	return levelCmd
 }
 
-func ListCheck(cmd *alertCmd) {
-	clusterID := cmd.clusterID
-	levelCmd := cmd.getLevel
-	//active := cmd.active
+func ListAlerts(cmd *alertCmd) {
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -102,96 +82,58 @@ func ListCheck(cmd *alertCmd) {
 		}
 	}()
 
-	_, kubeconfig, clientset, err := GetKubeCli(clusterID)
+	clusterID := cmd.clusterID
+	levelcmd := cmd.alertLevel
+	active := cmd.active
+
+	cmd1 := []string{"amtool","--alertmanager.url",LocalHostUrl,"alert","-o","json"}
+	
+	//Show all active alerts
+	cmd_active := []string{"amtool","--alertmanager.url",LocalHostUrl,"alert","query","-a"}
+	//Show unprocessed alerts
+	//cmd0 := []string{"amtool","--alertmanager.url",utils.LocalHostUrl,"alert","-o","extended"}
+
+	if active{
+		cmdStatus = cmd_active
+	}
+
+	kubeconfig, clientset, err := GetKubeConfigClient(clusterID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	output, err := getAlerts(kubeconfig, clientset, LocalHostUrl, levelCmd, PodName)
+	output, err := GetAlerts(kubeconfig, clientset,LocalHostUrl, cmd1,PodName)
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	fmt.Println("Print information from all alert", output)
+	outputSlice := []byte(output)
 
-}
+	var alerts []alertJson
+	var foundAlert bool = false
 
-func GetKubeCli(clusterID string) (client.Client, *rest.Config, *kubernetes.Clientset, error) {
-
-	scheme := runtime.NewScheme()
-	err := routev1.AddToScheme(scheme)
+	err = json.Unmarshal(outputSlice, &alerts)
 	if err != nil {
-		fmt.Print("failed to register scheme")
+		fmt.Println("Error in unmarshal:", err)
+		return
+	}
+	
+	for _, a := range alerts {
+		labels, status, annotations := a.Labels, a.Status, a.Annotations
+		if levelcmd == labels.Severity{
+			fmt.Printf("AlertName:%s\t Severity:%s\t State:%s\t Message:%s\n",
+				labels.Alertname,
+				labels.Severity,
+				status.State,
+				annotations.Summary)
+			foundAlert = true
+			break
+		}
 	}
 
-	bp, err := config.GetBackplaneConfiguration()
-	if err != nil {
-		log.Fatalf("failed to load backplane-cli config: %v", err)
+	if !foundAlert {
+		fmt.Printf("No such Alert found with requested severity %s\n", levelcmd)
 	}
 
-	kubeconfig, err := login.GetRestConfig(bp, clusterID)
-	if err != nil {
-		log.Fatalf("failed to load backplane admin: %v", err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(kubeconfig)
-	if err != nil {
-		log.Fatalf("failed to create clientset : %v", err)
-	}
-
-	kubeCli, err := client.New(kubeconfig, client.Options{})
-	if err != nil {
-		log.Fatalf("failed to load kubecli : %v", err)
-	}
-
-	return kubeCli, kubeconfig, clientset, err
-}
-
-func getAlerts(kubeconfig *rest.Config, clientset *kubernetes.Clientset, LocalHostUrl string, levelCmd string, PodName string) (string, error) {
-
-	cmd := []string{
-		"amtool",
-		"--alertmanager.url",
-		LocalHostUrl,
-		"alert",
-		levelCmd,
-	}
-	req := clientset.CoreV1().RESTClient().Post().Resource("pods").Name(PodName).
-		Namespace(AccountNamespace).SubResource("exec")
-	option := &corev1.PodExecOptions{
-		Container: ContainerName,
-		Command:   cmd,
-		Stdin:     false,
-		Stdout:    true,
-		Stderr:    true,
-		TTY:       false, 
-	}
-
-	if os.Stdin == nil {
-		option.Stdin = true
-	}
-	req.VersionedParams(option, scheme.ParameterCodec)
-
-	exec, err := remotecommand.NewSPDYExecutor(kubeconfig, "POST", req.URL())
-	if err != nil {
-		return "", err
-	}
-
-	capture := &logCapture{}
-	errorCapture := &logCapture{}
-
-	err = exec.StreamWithContext(context.TODO(), remotecommand.StreamOptions{
-		Stdin:  nil,
-		Stdout: capture,
-		Stderr: errorCapture,
-		Tty:    false, 
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	cmdOutput := capture.GetStdOut()
-	return cmdOutput, nil
 }
 

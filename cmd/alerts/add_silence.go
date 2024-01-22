@@ -1,104 +1,45 @@
 package alerts
 
 import (
-	"context"
 	"fmt"
 	"log"
-	"os"
-
 	"github.com/spf13/cobra"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/remotecommand"
-	"k8s.io/kubectl/pkg/scheme"
 )
 
 func NewCmdAddSilence() *cobra.Command {
 	return &cobra.Command{
-		Use:               "add-silence <cluster-id>",
+		Use:               "add-silence <cluster-id> <alertname> <comment>",
 		Short:             "add a new silence",
 		Long:              `add new silence`,
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.ExactArgs(3),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			AddSilence(args[0])
+			AddSilence(args[0],args[1],args[2])
 		},
 	}
 }
 
-var (
-	alertName = "alert01"
-	comment = "some info"
-)
-
-//osdctl alerts add-silence ${CLUSTERID} 
-func AddSilence(clusterID string){
-
-	_, kubeconfig, clientset, err := GetKubeCli(clusterID)
+//osdctl alerts add-silence ${CLUSTERID} ${alertname} ${comment}
+func AddSilence(clusterID string, alertName string, comment string){
+	kubeconfig, clientset, err := GetKubeConfigClient(clusterID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	output, err := getSilence(kubeconfig, clientset, LocalHostUrl, PodName)
+	cmd2 := []string{
+        "amtool",
+        "silence",
+        "add",
+        "alertname=" + alertName,
+        "--alertmanager.url=" + LocalHostUrl,
+        "--comment=" + comment,
+    }
+
+	output, err := GetAlerts(kubeconfig, clientset, LocalHostUrl, cmd2, PodName)
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	fmt.Println("Print information from created silence", output)
+	fmt.Printf("%v", output)
 }
-
-func getSilence(kubeconfig *rest.Config, clientset *kubernetes.Clientset, LocalHostUrl string, PodName string) (string, error) {
-
-	cmd := []string{
-		"amtool",
-		"silence",
-		"add",
-		"alertname",
-		alertName,
-		"--alertmanager.url",
-		LocalHostUrl,
-		"--comment",
-		comment,
-	}
-	req := clientset.CoreV1().RESTClient().Post().Resource("pods").Name(PodName).
-		Namespace(AccountNamespace).SubResource("exec")
-	option := &corev1.PodExecOptions{
-		Container: ContainerName,
-		Command:   cmd,
-		Stdin:     false, //changed to false
-		Stdout:    true,
-		Stderr:    true,
-		TTY:       false, 
-	}
-
-	if os.Stdin == nil {
-		option.Stdin = true
-	}
-	req.VersionedParams(option, scheme.ParameterCodec)
-
-	exec, err := remotecommand.NewSPDYExecutor(kubeconfig, "POST", req.URL())
-	if err != nil {
-		return "", err
-	}
-
-	capture := &logCapture{}
-	errorCapture := &logCapture{}
-
-	err = exec.StreamWithContext(context.TODO(), remotecommand.StreamOptions{
-		Stdin:  nil, //bytes.NewReader([]byte{}), //changed to nil
-		Stdout: capture,
-		Stderr: errorCapture,
-		Tty:    false, 
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	cmdOutput := capture.GetStdOut()
-	return cmdOutput, nil
-}
-
-
-
+	
