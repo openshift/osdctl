@@ -21,22 +21,24 @@ func NewCmdPKO() *cobra.Command {
 		osdctl promote package --serviceName <serviceName> --gitHash <git-hash>`,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.ValidatePKOOptions())
-			git.BootstrapOsdCtlForAppInterfaceAndServicePromotions()
+			appInterface := git.BootstrapOsdCtlForAppInterfaceAndServicePromotions(ops.appInterfaceCheckoutDir)
 
-			cmdutil.CheckErr(PromotePackage(ops.serviceName, ops.packageTag, ops.hcp))
+			cmdutil.CheckErr(PromotePackage(appInterface, ops.serviceName, ops.packageTag, ops.hcp))
 		},
 	}
 	pkoCmd.Flags().StringVarP(&ops.serviceName, "serviceName", "n", "", "Service getting promoted")
 	pkoCmd.Flags().StringVarP(&ops.packageTag, "tag", "t", "", "Package tag being promoted to")
+	pkoCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "appInterfaceDir", "", "", "location of app-interfache checkout. Falls back to `pwd` and "+git.DefaultAppInterfaceDirectory())
 	pkoCmd.Flags().BoolVar(&ops.hcp, "hcp", false, "The service being promoted conforms to the HyperShift progressive delivery definition")
 	return pkoCmd
 }
 
 // pkoOptions defines the options provided by this command
 type pkoOptions struct {
-	serviceName string
-	packageTag  string
-	hcp         bool
+	serviceName             string
+	packageTag              string
+	appInterfaceCheckoutDir string
+	hcp                     bool
 }
 
 func (p pkoOptions) ValidatePKOOptions() error {
@@ -49,8 +51,8 @@ func (p pkoOptions) ValidatePKOOptions() error {
 	return nil
 }
 
-func PromotePackage(serviceName string, packageTag string, hcp bool) error {
-	services, err := saas.GetServiceNames(saas.OSDSaasDir, saas.BPSaasDir, saas.CADSaasDir)
+func PromotePackage(appInterface git.AppInterface, serviceName string, packageTag string, hcp bool) error {
+	services, err := saas.GetServiceNames(appInterface, saas.OSDSaasDir, saas.BPSaasDir, saas.CADSaasDir)
 	if err != nil {
 		return err
 	}
@@ -75,13 +77,13 @@ func PromotePackage(serviceName string, packageTag string, hcp bool) error {
 	}
 
 	branchName := fmt.Sprintf("promote-%s-package-%s", serviceName, packageTag)
-	err = git.UpdatePackageTag(saasFile, currentTag, packageTag, branchName)
+	err = appInterface.UpdatePackageTag(saasFile, currentTag, packageTag, branchName)
 	if err != nil {
 		return err
 	}
 
 	commitMessage := fmt.Sprintf("Promote %s package to %s", serviceName, packageTag)
-	err = git.CommitSaasFile(saasFile, commitMessage)
+	err = appInterface.CommitSaasFile(saasFile, commitMessage)
 	if err != nil {
 		return err
 	}
