@@ -96,6 +96,7 @@ func (d *detachStuckVolumeOptions) run() error {
 	fmt.Println(Region[0])
 
 	fmt.Println(VolumeId)
+
 	// aws ec2 detach-volume --volume-id $VOLUME_ID --region $REGION --force
 	// WiP - Need to convert above cmd to function once volIdRegion gets completed
 
@@ -119,29 +120,30 @@ func volIdRegion(clientset *kubernetes.Clientset, namespace, selector string) er
 	}
 
 	for _, pod := range pods.Items {
-		//if pod.Status.Phase != "Running" { // IMP: We only need to pass the following condition for non running state pods. Will un-comment once the testing is complete.
-		for _, volume := range pod.Spec.Volumes {
-			if volume.PersistentVolumeClaim != nil {
-				for _, pVol := range pV.Items {
-					if pVol.Spec.AWSElasticBlockStore != nil {
-						// Most of the cluster return AWSElasticBlockStore as nil. Could write code, not sure what'll be actual response.
-						fmt.Println("Gathering info from AWSElastic")
-						// Logic -
+		if pod.Status.Phase != "Running" { // IMP: We only need to pass the following condition for non running state pods. Will un-comment once the testing is complete.
+			for _, volume := range pod.Spec.Volumes {
+				if volume.PersistentVolumeClaim != nil {
+					for _, pVol := range pV.Items {
+						if pVol.Spec.AWSElasticBlockStore != nil {
+							// Most of the cluster return AWSElasticBlockStore as nil. Could write code, not sure what'll be actual response.
+							fmt.Println("Gathering info from AWSElastic")
+							// Logic -
 
-					} else if pVol.Spec.CSI != nil {
-						for _, pvItems := range pV.Items {
-							for _, volumeNodeAffinity := range pvItems.Spec.NodeAffinity.Required.NodeSelectorTerms {
-								for _, reg := range volumeNodeAffinity.MatchExpressions {
-									Region = removeDuplicates(reg.Values)
-									vId := append(VolumeId, pvItems.Spec.CSI.VolumeHandle)
-									VolumeId = removeDuplicates(vId)
+						} else if pVol.Spec.CSI != nil {
+							for _, pvItems := range pV.Items {
+								for _, volumeNodeAffinity := range pvItems.Spec.NodeAffinity.Required.NodeSelectorTerms {
+									for _, reg := range volumeNodeAffinity.MatchExpressions {
+										Region = removeDuplicates(reg.Values)
+										vId := append(VolumeId, pvItems.Spec.CSI.VolumeHandle)
+										VolumeId = removeDuplicates(vId)
 
+									}
 								}
+
 							}
-
 						}
-					}
 
+					}
 				}
 			}
 		}
