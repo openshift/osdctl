@@ -45,9 +45,13 @@ func newCmdpost() *cobra.Command {
 		Long: `Sends limited support reason to a given cluster, along with an internal service log detailing why the cluster was placed into limited support.
 The caller will be prompted to continue before sending the limited support reason.`,
 		Example: `# Post a limited support reason for a cluster misconfiguration
-osdctl cluster support post 1a2B3c4DefghIjkLMNOpQrSTUV5 --misconfiguration cluster --problem="the cluster has a second failing ingress controller, which is not supported and can cause issues with SLA" \
---resolution="remove the additional ingress controller 'my-custom-ingresscontroller'. 'oc get ingresscontroller -n openshift-ingress-operator' should yield only 'default'" \
---evidence="See OHSS-1234"`,
+osdctl cluster support post 1a2B3c4DefghIjkLMNOpQrSTUV5 --misconfiguration cluster --problem="The cluster has a second failing ingress controller, which is not supported and can cause issues with SLA." \
+--resolution="Remove the additional ingress controller 'my-custom-ingresscontroller'. 'oc get ingresscontroller -n openshift-ingress-operator' should yield only 'default'" \
+--evidence="See OHSS-1234"
+
+Will result in the following limited-support text sent to the customer:
+The cluster has a second failing ingress controller, which is not supported and can cause issues with SLA. Remove the additional ingress controller 'my-custom-ingresscontroller'. 'oc get ingresscontroller -n openshift-ingress-operator' should yield only 'default'.
+`,
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -72,21 +76,15 @@ osdctl cluster support post 1a2B3c4DefghIjkLMNOpQrSTUV5 --misconfiguration clust
 	return postCmd
 }
 
-func (p *Post) setup() error {
-	switch p.Problem[len(p.Problem)-1:] {
-	case ".", "?", "!":
-		return errors.New("--problem should not end in punctuation")
+func validateResolutionString(res string) error {
+	if res[len(res)-1:] == "." {
+		return errors.New("resolution string should not end with a `.` as it is already added in the email template")
 	}
-	switch p.Resolution[len(p.Resolution)-1:] {
-	case ".", "?", "!":
-		return errors.New("--resolution should not end in punctuation")
-	}
-
 	return nil
 }
 
 func (p *Post) Run(clusterID string) error {
-	if err := p.setup(); err != nil {
+	if err := validateResolutionString(p.Resolution); err != nil {
 		return err
 	}
 
@@ -159,7 +157,7 @@ func (p *Post) Run(clusterID string) error {
 
 func (p *Post) buildLimitedSupport() (*cmv1.LimitedSupportReason, error) {
 	limitedSupportBuilder := cmv1.NewLimitedSupportReason().
-		Details(fmt.Sprintf("%v. %v", p.Problem, p.Resolution)).
+		Details(fmt.Sprintf("%s %s", p.Problem, p.Resolution)).
 		DetectionType(cmv1.DetectionTypeManual)
 	switch p.Misconfiguration {
 	case cloud:
