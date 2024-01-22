@@ -29,11 +29,11 @@ func getBaseDir() (string, error) {
 	return BaseDir, baseDirErr
 }
 
-func checkBehindMaster() error {
+func checkBehindMaster(dir string) error {
 	fmt.Printf("### Checking 'master' branch is up to date ###\n")
 
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Dir = BaseDir
+	cmd.Dir = dir
 	output, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("error executing git rev-parse command: %v", err)
@@ -46,14 +46,14 @@ func checkBehindMaster() error {
 
 	// Fetch the latest changes from the upstream repository
 	cmd = exec.Command("git", "fetch", "upstream")
-	cmd.Dir = BaseDir
+	cmd.Dir = dir
 	err = cmd.Run()
 	if err != nil {
 		return fmt.Errorf("error executing git fetch command: %v", err)
 	}
 
 	cmd = exec.Command("git", "rev-list", "--count", "HEAD..upstream/master")
-	cmd.Dir = BaseDir
+	cmd.Dir = dir
 	output, err = cmd.Output()
 	if err != nil {
 		return fmt.Errorf("error executing git rev-list command: %v", err)

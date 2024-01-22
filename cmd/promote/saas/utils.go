@@ -21,8 +21,8 @@ var (
 	ServicesFilesMap = map[string]string{}
 )
 
-func listServiceNames() error {
-	_, err := GetServiceNames(OSDSaasDir, BPSaasDir, CADSaasDir)
+func listServiceNames(appInterface git.AppInteface) error {
+	_, err := GetServiceNames(appInterface, OSDSaasDir, BPSaasDir, CADSaasDir)
 	if err != nil {
 		return err
 	}
@@ -36,8 +36,8 @@ func listServiceNames() error {
 	return nil
 }
 
-func servicePromotion(serviceName, gitHash string, osd, hcp bool) error {
-	_, err := GetServiceNames(OSDSaasDir, BPSaasDir, CADSaasDir)
+func servicePromotion(appInterface git.AppInteface, serviceName, gitHash string, osd, hcp bool) error {
+	_, err := GetServiceNames(appInterface, OSDSaasDir, BPSaasDir, CADSaasDir)
 	if err != nil {
 		return err
 	}
@@ -74,13 +74,13 @@ func servicePromotion(serviceName, gitHash string, osd, hcp bool) error {
 	fmt.Printf("Service: %s will be promoted to %s\n", serviceName, promotionGitHash)
 
 	branchName := fmt.Sprintf("promote-%s-%s", serviceName, promotionGitHash)
-	err = git.UpdateAppInterface(serviceName, saasDir, currentGitHash, promotionGitHash, branchName)
+	err = appInterface.UpdateAppInterface(serviceName, saasDir, currentGitHash, promotionGitHash, branchName)
 	if err != nil {
 		fmt.Printf("FAILURE: %v\n", err)
 	}
 
 	commitMessage := fmt.Sprintf("Promote %s to %s\n\nSee %s/compare/%s...%s for contents of the promotion.", serviceName, promotionGitHash, serviceRepo, currentGitHash, promotionGitHash)
-	err = git.CommitSaasFile(saasDir, commitMessage)
+	err = appInterface.CommitSaasFile(saasDir, commitMessage)
 	if err != nil {
 		return fmt.Errorf("failed to commit changes to app-interface: %w", err)
 	}
@@ -94,8 +94,9 @@ func servicePromotion(serviceName, gitHash string, osd, hcp bool) error {
 	return nil
 }
 
-func GetServiceNames(saaDirs ...string) ([]string, error) {
-	baseDir := git.BaseDir
+func GetServiceNames(appInterface git.AppInteface, saaDirs ...string) ([]string, error) {
+	baseDir := appInterface.GitDirectory
+
 	for _, dir := range saaDirs {
 		dirGlob := filepath.Join(baseDir, dir, "saas-*")
 		filepaths, err := filepath.Glob(dirGlob)
