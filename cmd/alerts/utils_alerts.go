@@ -7,18 +7,18 @@ import (
 
 	"github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
 	"github.com/openshift/backplane-cli/pkg/cli/config"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/scheme"
-	corev1 "k8s.io/api/core/v1"
 )
 
 var (
 	AccountNamespace string = "openshift-monitoring"
-	ContainerName string = "alertmanager"
-	LocalHostUrl string = "http://localhost:9093"
-	PodName string = "alertmanager-main-0"
+	ContainerName    string = "alertmanager"
+	LocalHostUrl     string = "http://localhost:9093"
+	PodName          string = "alertmanager-main-0"
 )
 
 type logCapture struct {
@@ -36,7 +36,7 @@ func (capture *logCapture) Write(p []byte) (n int, err error) {
 }
 
 func GetKubeConfigClient(clusterID string) (*rest.Config, *kubernetes.Clientset, error) {
-	
+
 	bp, err := config.GetBackplaneConfiguration()
 	if err != nil {
 		log.Fatalf("failed to load backplane-cli config: %v", err)
@@ -55,7 +55,7 @@ func GetKubeConfigClient(clusterID string) (*rest.Config, *kubernetes.Clientset,
 	return kubeconfig, clientset, err
 }
 
-func GetAlerts(kubeconfig *rest.Config, clientset *kubernetes.Clientset, localHostUrl string, cmd []string, podName string) (string, error) {
+func ExecInPod(kubeconfig *rest.Config, clientset *kubernetes.Clientset, localHostUrl string, cmd []string, podName string) (string, error) {
 
 	req := clientset.CoreV1().RESTClient().Post().Resource("pods").Name(PodName).
 		Namespace(AccountNamespace).SubResource("exec")
@@ -66,9 +66,9 @@ func GetAlerts(kubeconfig *rest.Config, clientset *kubernetes.Clientset, localHo
 		Stdin:     false,
 		Stdout:    true,
 		Stderr:    true,
-		TTY:       false, 
+		TTY:       false,
 	}
-	
+
 	req.VersionedParams(option, scheme.ParameterCodec)
 
 	exec, err := remotecommand.NewSPDYExecutor(kubeconfig, "POST", req.URL())
@@ -83,7 +83,7 @@ func GetAlerts(kubeconfig *rest.Config, clientset *kubernetes.Clientset, localHo
 		Stdin:  nil,
 		Stdout: capture,
 		Stderr: errorCapture,
-		Tty:    false, 
+		Tty:    false,
 	})
 
 	if err != nil {

@@ -4,37 +4,37 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+
 	"github.com/spf13/cobra"
 )
 
 var (
-	levelCmd string
+	levelCmd  string
 	cmdStatus []string
 )
 
-
 type alertCmd struct {
-	clusterID	string
-	alertLevel	string
-	active	bool
+	clusterID  string
+	alertLevel string
+	active     bool
 }
 
-type alertJson struct{
+type alertJson struct {
 	Labels struct {
 		Alertname string `json:"alertname"`
-		Severity string `json:"severity"`
-	}`json:"labels"`
+		Severity  string `json:"severity"`
+	} `json:"labels"`
 
 	Status struct {
 		State string `json:"state"`
-	}`json:"status"`
+	} `json:"status"`
 
-	Annotations struct{
+	Annotations struct {
 		Summary string `json:"summary"`
-	}`json:"annotations"`
+	} `json:"annotations"`
 }
 
-//osdctl alerts list ${CLUSTERID} --level [warning, critical, firing, pending, all] --active bool 
+// osdctl alerts list ${CLUSTERID} --level [warning, critical, firing, pending, all] --active bool
 func NewCmdListAlerts() *cobra.Command {
 	alertCmd := &alertCmd{}
 	newCmd := &cobra.Command{
@@ -55,8 +55,8 @@ func NewCmdListAlerts() *cobra.Command {
 	return newCmd
 }
 
-func alertLevel(level string) string{
-	switch level{
+func alertLevel(level string) string {
+	switch level {
 	case "warning":
 		levelCmd = "warning"
 	case "critical":
@@ -66,11 +66,11 @@ func alertLevel(level string) string{
 	case "pending":
 		levelCmd = "pending"
 	case "all":
-		levelCmd = "all" 
+		levelCmd = "all"
 	default:
 		log.Fatalf("Invalid alert level: %s\n", level)
 		return ""
-	} 
+	}
 	return levelCmd
 }
 
@@ -86,14 +86,14 @@ func ListAlerts(cmd *alertCmd) {
 	levelcmd := cmd.alertLevel
 	active := cmd.active
 
-	cmd1 := []string{"amtool","--alertmanager.url",LocalHostUrl,"alert","-o","json"}
-	
+	cmd1 := []string{"amtool", "--alertmanager.url", LocalHostUrl, "alert", "-o", "json"}
+
 	//Show all active alerts
-	cmd_active := []string{"amtool","--alertmanager.url",LocalHostUrl,"alert","query","-a"}
+	cmd_active := []string{"amtool", "--alertmanager.url", LocalHostUrl, "alert", "query", "-a"}
 	//Show unprocessed alerts
 	//cmd0 := []string{"amtool","--alertmanager.url",utils.LocalHostUrl,"alert","-o","extended"}
 
-	if active{
+	if active {
 		cmdStatus = cmd_active
 	}
 
@@ -102,7 +102,7 @@ func ListAlerts(cmd *alertCmd) {
 		log.Fatal(err)
 	}
 
-	output, err := GetAlerts(kubeconfig, clientset,LocalHostUrl, cmd1,PodName)
+	output, err := ExecInPod(kubeconfig, clientset, LocalHostUrl, cmd1, PodName)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -117,10 +117,10 @@ func ListAlerts(cmd *alertCmd) {
 		fmt.Println("Error in unmarshal:", err)
 		return
 	}
-	
+
 	for _, a := range alerts {
 		labels, status, annotations := a.Labels, a.Status, a.Annotations
-		if levelcmd == labels.Severity{
+		if levelcmd == labels.Severity {
 			fmt.Printf("AlertName:%s\t Severity:%s\t State:%s\t Message:%s\n",
 				labels.Alertname,
 				labels.Severity,
@@ -136,4 +136,3 @@ func ListAlerts(cmd *alertCmd) {
 	}
 
 }
-
