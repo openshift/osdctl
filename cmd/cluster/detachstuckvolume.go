@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,7 +30,7 @@ type detachStuckVolumeOptions struct {
 func newCmdDetachStuckVolume() *cobra.Command {
 	ops := newdetachStuckVolumeOptions()
 	detachstuckvolumeCmd := &cobra.Command{
-		Use:               "detachstuckvolume",
+		Use:               "detach-stuck-volume",
 		Short:             "Detach openshift-monitoring namespace's volume from a cluster forcefully",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
@@ -91,7 +93,7 @@ func (d *detachStuckVolumeOptions) run() error {
 	}
 
 	if len(Region) != 1 {
-		fmt.Printf("Got more than one region value: %v", len(Region))
+		return fmt.Errorf("Got more than one region value: %v", len(Region))
 	}
 	fmt.Println(Region[0])
 
@@ -99,6 +101,26 @@ func (d *detachStuckVolumeOptions) run() error {
 
 	// aws ec2 detach-volume --volume-id $VOLUME_ID --region $REGION --force
 	// WiP - Need to convert above cmd to function once volIdRegion gets completed
+
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
+	defer ocmClient.Close()
+
+	cfg, err := osdCloud.CreateAWSV2Config(ocmClient, d.cluster)
+	if err != nil {
+		return err
+	}
+	awsClient := ec2.NewFromConfig(cfg)
+
+	for _, Volid := range VolumeId {
+		_, err := awsClient.DetachVolume(context.TODO(), &ec2.DetachVolumeInput{VolumeId: &Volid})
+
+		if err != nil {
+			return fmt.Errorf("failed to detach %s: %s\n", *&Volid, err)
+		}
+	}
 
 	return nil
 
