@@ -16,17 +16,18 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-const NameSpace = "openshift-monitoring"
+const Namespace = "openshift-monitoring"
 
-var Region []string
-var VolumeId []string
+var detachStuckVolumeInput struct {
+	Region   []string
+	VolumeId []string
+}
 
 type detachStuckVolumeOptions struct {
 	clusterID string
 	cluster   *cmv1.Cluster
 }
 
-// detachstuckvolumeCmd represents the detachstuckvolume command
 func newCmdDetachStuckVolume() *cobra.Command {
 	ops := newdetachStuckVolumeOptions()
 	detachstuckvolumeCmd := &cobra.Command{
@@ -81,23 +82,23 @@ func (d *detachStuckVolumeOptions) run() error {
 		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", d.clusterID, err)
 	}
 
-	err = volIdRegion(clientset, "openshift-monitoring", "")
+	err = volIdRegion(clientset, Namespace, "")
 	if err != nil {
 		return err
 	}
 
 	// If the volIdRegion found no pv is utilized by non running state pod. Which make global variable nil.
 	// Thus there's a panic exit. In order to prevent it we're using following logic to prevent panic exit.
-	if len(Region) == 0 && len(VolumeId) == 0 {
+	if len(detachStuckVolumeInput.Region) == 0 && len(detachStuckVolumeInput.VolumeId) == 0 {
 		return fmt.Errorf("there's no pv utilized by non running state pod in cluster: %s\nNo action prequired", d.clusterID)
 	}
 
-	if len(Region) != 1 {
-		return fmt.Errorf("Got more than one region value: %v", len(Region))
+	if len(detachStuckVolumeInput.Region) != 1 {
+		return fmt.Errorf("Got more than one region value: %v", len(detachStuckVolumeInput.Region))
 	}
-	fmt.Println(Region[0])
+	//fmt.Println(detachStuckVolumeInput.Region[0])
 
-	fmt.Println(VolumeId)
+	//fmt.Println(detachStuckVolumeInput.VolumeId)
 
 	// aws ec2 detach-volume --volume-id $VOLUME_ID --region $REGION --force
 	// WiP - Need to convert above cmd to function once volIdRegion gets completed
@@ -114,7 +115,7 @@ func (d *detachStuckVolumeOptions) run() error {
 	}
 	awsClient := ec2.NewFromConfig(cfg)
 
-	for _, Volid := range VolumeId {
+	for _, Volid := range detachStuckVolumeInput.VolumeId {
 		_, err := awsClient.DetachVolume(context.TODO(), &ec2.DetachVolumeInput{VolumeId: &Volid})
 
 		if err != nil {
@@ -131,13 +132,13 @@ func volIdRegion(clientset *kubernetes.Clientset, namespace, selector string) er
 
 	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), v1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to list pods in namespace '%s'", NameSpace)
+		return fmt.Errorf("failed to list pods in namespace '%s'", Namespace)
 
 	}
 	pV, err := clientset.CoreV1().PersistentVolumes().List(context.TODO(), v1.ListOptions{})
 
 	if err != nil {
-		return fmt.Errorf("failed to list pv in namespace '%s'", NameSpace)
+		return fmt.Errorf("failed to list pv in namespace '%s'", Namespace)
 
 	}
 
@@ -155,9 +156,9 @@ func volIdRegion(clientset *kubernetes.Clientset, namespace, selector string) er
 							for _, pvItems := range pV.Items {
 								for _, volumeNodeAffinity := range pvItems.Spec.NodeAffinity.Required.NodeSelectorTerms {
 									for _, reg := range volumeNodeAffinity.MatchExpressions {
-										Region = removeDuplicates(reg.Values)
-										vId := append(VolumeId, pvItems.Spec.CSI.VolumeHandle)
-										VolumeId = removeDuplicates(vId)
+										detachStuckVolumeInput.Region = removeDuplicates(reg.Values)
+										vId := append(detachStuckVolumeInput.VolumeId, pvItems.Spec.CSI.VolumeHandle)
+										detachStuckVolumeInput.VolumeId = removeDuplicates(vId)
 
 									}
 								}
