@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/osdCloud"
@@ -26,6 +28,7 @@ var detachStuckVolumeInput struct {
 type detachStuckVolumeOptions struct {
 	clusterID string
 	cluster   *cmv1.Cluster
+	kubeCli   client.Client
 }
 
 func newCmdDetachStuckVolume() *cobra.Command {
@@ -96,9 +99,10 @@ func (d *detachStuckVolumeOptions) run() error {
 	if len(detachStuckVolumeInput.Region) != 1 {
 		return fmt.Errorf("Got more than one region value: %v", len(detachStuckVolumeInput.Region))
 	}
-	//fmt.Println(detachStuckVolumeInput.Region[0])
 
-	//fmt.Println(detachStuckVolumeInput.VolumeId)
+	fmt.Println(detachStuckVolumeInput.Region[0])
+
+	fmt.Println(detachStuckVolumeInput.VolumeId)
 
 	// aws ec2 detach-volume --volume-id $VOLUME_ID --region $REGION --force
 	// WiP - Need to convert above cmd to function once volIdRegion gets completed
@@ -130,49 +134,67 @@ func (d *detachStuckVolumeOptions) run() error {
 // Following function gets the volumeID & region of pv for non running state pod & value into global variable
 func volIdRegion(clientset *kubernetes.Clientset, namespace, selector string) error {
 
-	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), v1.ListOptions{})
+	//var nonRunningPod []string
+
+	var pvClaim []string
+
+	var pVolume []string
+
+	// Getting pod objects for non-running state pod
+	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), v1.ListOptions{FieldSelector: "status.phase=Running"})
+
 	if err != nil {
 		return fmt.Errorf("failed to list pods in namespace '%s'", Namespace)
 
 	}
-	pV, err := clientset.CoreV1().PersistentVolumes().List(context.TODO(), v1.ListOptions{})
 
-	if err != nil {
-		return fmt.Errorf("failed to list pv in namespace '%s'", Namespace)
+	// Getting pvc name of non-running state pod and passing it into pvClaim slice
+	for _, pod := range pods.Items {
 
+		for _, pvC := range pod.Spec.Volumes {
+			if pvC.PersistentVolumeClaim != nil {
+				pvClaim = append(pvClaim, pvC.PersistentVolumeClaim.ClaimName)
+			}
+		}
 	}
 
-	for _, pod := range pods.Items {
-		if pod.Status.Phase != "Running" { // IMP: We only need to pass the following condition for non running state pods. Will un-comment once the testing is complete.
-			for _, volume := range pod.Spec.Volumes {
-				if volume.PersistentVolumeClaim != nil {
-					for _, pVol := range pV.Items {
-						if pVol.Spec.AWSElasticBlockStore != nil {
-							// Most of the cluster return AWSElasticBlockStore as nil. Could write code, not sure what'll be actual response.
-							fmt.Println("Gathering info from AWSElastic")
-							// Logic -
+	// Gathering persistant volume obj from above gathered pvc & passing it to pVolume slice
+	for _, singlePvc := range pvClaim {
+		pvC, err := clientset.CoreV1().PersistentVolumeClaims(namespace).List(context.TODO(), v1.ListOptions{FieldSelector: "metadata.name=" + singlePvc})
+		if err != nil {
+			return fmt.Errorf("failed to list pvc in namespace '%s'", Namespace)
+		}
+		for _, pvcObject := range pvC.Items {
+			pVolume = append(pVolume, pvcObject.Spec.VolumeName)
+		}
+	}
 
-						} else if pVol.Spec.CSI != nil {
-							for _, pvItems := range pV.Items {
-								for _, volumeNodeAffinity := range pvItems.Spec.NodeAffinity.Required.NodeSelectorTerms {
-									for _, reg := range volumeNodeAffinity.MatchExpressions {
-										detachStuckVolumeInput.Region = removeDuplicates(reg.Values)
-										vId := append(detachStuckVolumeInput.VolumeId, pvItems.Spec.CSI.VolumeHandle)
-										detachStuckVolumeInput.VolumeId = removeDuplicates(vId)
+	// Gathering volumeid & region from PV obj from non running state pod alone
+	for _, singlePv := range pVolume {
+		pV, err := clientset.CoreV1().PersistentVolumes().List(context.TODO(), v1.ListOptions{FieldSelector: "metadata.name=" + singlePv})
 
-									}
-								}
+		if err != nil {
+			return fmt.Errorf("failed to list pv in namespace '%s'", Namespace)
+		}
 
-							}
-						}
+		for _, pVol := range pV.Items {
+			if pVol.Spec.AWSElasticBlockStore != nil {
+				// Most of the cluster return AWSElasticBlockStore as nil - i.e, deprecated. Could write code, not sure what'll be actual response.
+				fmt.Println("Gathering info from AWSElastic")
+				// If required logic can be added below in future
+
+			} else if pVol.Spec.CSI != nil {
+				for _, volumeNodeAffinity := range pVol.Spec.NodeAffinity.Required.NodeSelectorTerms {
+					for _, reg := range volumeNodeAffinity.MatchExpressions {
+						detachStuckVolumeInput.Region = removeDuplicates(reg.Values)
+						vId := append(detachStuckVolumeInput.VolumeId, pVol.Spec.CSI.VolumeHandle)
+						detachStuckVolumeInput.VolumeId = removeDuplicates(vId)
 
 					}
 				}
 			}
 		}
-
 	}
-
 	return nil
 }
 
