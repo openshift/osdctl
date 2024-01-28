@@ -134,14 +134,11 @@ func (d *detachStuckVolumeOptions) run() error {
 // Following function gets the volumeID & region of pv for non running state pod & value into global variable
 func volIdRegion(clientset *kubernetes.Clientset, namespace, selector string) error {
 
-	//var nonRunningPod []string
-
 	var pvClaim []string
-
 	var pVolume []string
 
 	// Getting pod objects for non-running state pod
-	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), v1.ListOptions{FieldSelector: "status.phase=Running"})
+	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), v1.ListOptions{FieldSelector: "status.phase!=Running"})
 
 	if err != nil {
 		return fmt.Errorf("failed to list pods in namespace '%s'", Namespace)
