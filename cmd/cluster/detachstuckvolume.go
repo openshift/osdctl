@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	slices "golang.org/x/exp/slices"
+
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/osdCloud"
@@ -19,7 +21,8 @@ import (
 const Namespace = "openshift-monitoring"
 
 var detachStuckVolumeInput struct {
-	Region   []string
+	// commenting all the function for region. REASON: It seems region isn't a mandatory field in aws sdk detachStuckVolume function
+	//Region   []string
 	VolumeId []string
 }
 
@@ -89,20 +92,23 @@ func (d *detachStuckVolumeOptions) run() error {
 
 	// If the volIdRegion found no pv is utilized by non running state pod. Which make global variable nil.
 	// Thus there's a panic exit. In order to prevent it we're using following logic to prevent panic exit.
-	if len(detachStuckVolumeInput.Region) == 0 && len(detachStuckVolumeInput.VolumeId) == 0 {
+	if len(detachStuckVolumeInput.VolumeId) == 0 {
 		return fmt.Errorf("there's no pv utilized by non running state pod in cluster: %s\nNo action required", d.clusterID)
 	}
 
-	if len(detachStuckVolumeInput.Region) != 1 {
-		return fmt.Errorf("got more than one region value: %v", len(detachStuckVolumeInput.Region))
-	}
+	/*
+		if len(detachStuckVolumeInput.Region) != 1 {
+			return fmt.Errorf("got more than one region value: %v", len(detachStuckVolumeInput.Region))
+		}
+	*/
 
-	fmt.Println(detachStuckVolumeInput.Region[0])
+	//fmt.Println(detachStuckVolumeInput.Region[0])
 
-	fmt.Println(detachStuckVolumeInput.VolumeId)
+	fmt.Printf("The volume id are %v\n", detachStuckVolumeInput.VolumeId)
 
 	// aws ec2 detach-volume --volume-id $VOLUME_ID --region $REGION --force
 	// WiP - Need to convert above cmd to function once volIdRegion gets completed
+	// Tested till line 107 - Couldn't test below aws function getting priv issue. gig acc doesn't have nessary priv
 
 	ocmClient, err := utils.CreateConnection()
 	if err != nil {
@@ -135,7 +141,7 @@ func volIdRegion(clientset *kubernetes.Clientset, namespace, selector string) er
 	var pVolume []string
 
 	// Getting pod objects for non-running state pod
-	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), v1.ListOptions{FieldSelector: "status.phase!=Running"})
+	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), v1.ListOptions{FieldSelector: "status.phase!=Running"}) // For testing function, we can change `!=` to `=`` to remove pv of running state pod
 
 	if err != nil {
 		return fmt.Errorf("failed to list pods in namespace '%s'", Namespace)
@@ -180,30 +186,18 @@ func volIdRegion(clientset *kubernetes.Clientset, namespace, selector string) er
 				// If required logic can be added below in future
 
 			} else if pVol.Spec.CSI != nil {
-				for _, volumeNodeAffinity := range pVol.Spec.NodeAffinity.Required.NodeSelectorTerms {
-					for _, reg := range volumeNodeAffinity.MatchExpressions {
-						detachStuckVolumeInput.Region = removeDuplicates(reg.Values)
-						vId := append(detachStuckVolumeInput.VolumeId, pVol.Spec.CSI.VolumeHandle)
-						detachStuckVolumeInput.VolumeId = removeDuplicates(vId)
+				//for _, volumeNodeAffinity := range pVol.Spec.NodeAffinity.Required.NodeSelectorTerms {
+				// _, reg := range volumeNodeAffinity.MatchExpressions {
 
-					}
+				volIdCheckBool := slices.Contains(detachStuckVolumeInput.VolumeId, pVol.Spec.CSI.VolumeHandle)
+				if !volIdCheckBool {
+					detachStuckVolumeInput.VolumeId = append(detachStuckVolumeInput.VolumeId, pVol.Spec.CSI.VolumeHandle)
 				}
+
+				//}
+				//}
 			}
 		}
 	}
 	return nil
-}
-
-// Since we're using for loop in above code. It's adding duplicate entry to global variable.
-// To prevent it we're using following function
-func removeDuplicates(s []string) []string {
-	bucket := make(map[string]bool)
-	var result []string
-	for _, str := range s {
-		if _, ok := bucket[str]; !ok {
-			bucket[str] = true
-			result = append(result, str)
-		}
-	}
-	return result
 }
