@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/osdCloud"
@@ -28,7 +26,6 @@ var detachStuckVolumeInput struct {
 type detachStuckVolumeOptions struct {
 	clusterID string
 	cluster   *cmv1.Cluster
-	kubeCli   client.Client
 }
 
 func newCmdDetachStuckVolume() *cobra.Command {
@@ -93,11 +90,11 @@ func (d *detachStuckVolumeOptions) run() error {
 	// If the volIdRegion found no pv is utilized by non running state pod. Which make global variable nil.
 	// Thus there's a panic exit. In order to prevent it we're using following logic to prevent panic exit.
 	if len(detachStuckVolumeInput.Region) == 0 && len(detachStuckVolumeInput.VolumeId) == 0 {
-		return fmt.Errorf("there's no pv utilized by non running state pod in cluster: %s\nNo action prequired", d.clusterID)
+		return fmt.Errorf("there's no pv utilized by non running state pod in cluster: %s\nNo action required", d.clusterID)
 	}
 
 	if len(detachStuckVolumeInput.Region) != 1 {
-		return fmt.Errorf("Got more than one region value: %v", len(detachStuckVolumeInput.Region))
+		return fmt.Errorf("got more than one region value: %v", len(detachStuckVolumeInput.Region))
 	}
 
 	fmt.Println(detachStuckVolumeInput.Region[0])
@@ -176,7 +173,9 @@ func volIdRegion(clientset *kubernetes.Clientset, namespace, selector string) er
 
 		for _, pVol := range pV.Items {
 			if pVol.Spec.AWSElasticBlockStore != nil {
-				// Most of the cluster return AWSElasticBlockStore as nil - i.e, deprecated. Could write code, not sure what'll be actual response.
+				// Most of the cluster return AWSElasticBlockStore as nil.
+				// Couldn't write tge logic sure what'll be actual response.
+				// Also it's been deprecated in most of the clusters.
 				fmt.Println("Gathering info from AWSElastic")
 				// If required logic can be added below in future
 
