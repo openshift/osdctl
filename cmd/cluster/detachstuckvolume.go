@@ -53,9 +53,9 @@ func newdetachStuckVolumeOptions() *detachStuckVolumeOptions {
 	return &detachStuckVolumeOptions{}
 }
 
-func (d *detachStuckVolumeOptions) complete(cmd *cobra.Command, args []string) error {
+func (o *detachStuckVolumeOptions) complete(cmd *cobra.Command, args []string) error {
 
-	err := utils.IsValidClusterKey(d.clusterID)
+	err := utils.IsValidClusterKey(o.clusterID)
 	if err != nil {
 		return err
 	}
@@ -64,12 +64,12 @@ func (d *detachStuckVolumeOptions) complete(cmd *cobra.Command, args []string) e
 		return err
 	}
 	defer connection.Close()
-	cluster, err := utils.GetCluster(connection, d.clusterID)
+	cluster, err := utils.GetCluster(connection, o.clusterID)
 	if err != nil {
 		return err
 	}
-	d.cluster = cluster
-	d.clusterID = cluster.ID()
+	o.cluster = cluster
+	o.clusterID = cluster.ID()
 	if strings.ToUpper(cluster.CloudProvider().ID()) != "AWS" {
 		return errors.New("this command is only available for AWS clusters")
 	}
@@ -77,12 +77,12 @@ func (d *detachStuckVolumeOptions) complete(cmd *cobra.Command, args []string) e
 	return nil
 }
 
-func (d *detachStuckVolumeOptions) run() error {
+func (o *detachStuckVolumeOptions) run() error {
 
-	_, _, clientset, err := getKubeConfigAndClient(d.clusterID)
+	_, _, clientset, err := getKubeConfigAndClient(o.clusterID)
 
 	if err != nil {
-		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", d.clusterID, err)
+		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", o.clusterID, err)
 	}
 
 	err = volIdRegion(clientset, Namespace, "")
@@ -93,7 +93,7 @@ func (d *detachStuckVolumeOptions) run() error {
 	// If the volIdRegion found no pv is utilized by non running state pod. Which make global variable nil.
 	// Thus there's a panic exit. In order to prevent it we're using following logic to prevent panic exit.
 	if len(detachStuckVolumeInput.VolumeId) == 0 {
-		return fmt.Errorf("there's no pv utilized by non running state pod in cluster: %s\nNo action required", d.clusterID)
+		return fmt.Errorf("there's no pv utilized by non running state pod in cluster: %s\nNo action required", o.clusterID)
 	}
 
 	/*
@@ -116,7 +116,7 @@ func (d *detachStuckVolumeOptions) run() error {
 	}
 	defer ocmClient.Close()
 
-	cfg, err := osdCloud.CreateAWSV2Config(ocmClient, d.cluster)
+	cfg, err := osdCloud.CreateAWSV2Config(ocmClient, o.cluster)
 	if err != nil {
 		return err
 	}
