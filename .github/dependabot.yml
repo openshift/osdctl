@@ -1,0 +1,9 @@
+version: 2
+updates:
+  - package-ecosystem: 'gomod'
+    directory: '/'
+    allow:
+      - dependency-name: "github.com/openshift/osd-network-verifier"
+      - dependency-name: "github.com/openshift/backplane-cli"
+    schedule:
+      interval: 'daily'
