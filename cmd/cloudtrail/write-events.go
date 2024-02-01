@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -17,19 +16,13 @@ import (
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/openshift/osdctl/pkg/utils"
-	"github.com/savioxavier/termlink"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-// type Configuration struct {
-// 	prod string
-// }
-
 type Configuration struct {
-	AwsProxy string `mapstructure:"aws_proxy"`
-	Ignore   struct {
+	Ignore struct {
 		Users []string `mapstructure:"users_with"`
 	} `mapstructure:"ignore"`
 }
@@ -44,13 +37,15 @@ type LookupEventsoptions struct {
 
 type RawEventDetails struct {
 	EventVersion string `json:"eventVersion"`
-	AccountId    string `json:"accountId"`
+
 	UserIdentity struct {
+		AccountId      string `json:"accountId"`
 		Type           string `json:"type"`
 		SessionContext struct {
 			SessionIssuer struct {
 				Type     string `json:"type"`
 				UserName string `json:"userName"`
+				Arn      string `json:"arn"`
 			} `json:"sessionIssuer"`
 		} `json:"sessionContext"`
 	} `json:"userIdentity"`
@@ -73,7 +68,7 @@ func newwrite_eventsCmd() *cobra.Command {
 	}
 	listEventsCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Cluster ID")
 	listEventsCmd.Flags().StringVarP(&ops.since, "since", "", "", "Duration of lookup")
-	listEventsCmd.Flags().BoolVarP(&ops.url, "url", "u", true, "Print cloud console URL to event")
+	listEventsCmd.Flags().BoolVarP(&ops.url, "url", "u", false, "Print cloud console URL to event")
 	listEventsCmd.Flags().IntVar(&ops.pages, "pages", 50, "Command will display X pages of Cloud Trail logs for the cluster. Pages is set to 40 by default")
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
@@ -184,25 +179,22 @@ func ExtractUserDetails(cloudTrailEvent *string) (*RawEventDetails, error) {
 	}
 	return &res, nil
 }
-func GenerateLink(raw RawEventDetails, aws aws.Config) (url_link string) {
+func GenerateLink(raw RawEventDetails) (url_link string) {
 	str1 := "https://"
 	str2 := ".console.aws.amazon.com/cloudtrailv2/home?region="
 	str3 := "#/events/"
-	configRegion := aws.Region
-	region := raw.EventRegion
+
+	eventRegion := raw.EventRegion
 	eventId := raw.EventId
 
-	var url = str1 + configRegion + str2 + region + str3 + eventId
+	var url = str1 + eventRegion + str2 + eventRegion + str3 + eventId
 	url_link = url
 
 	return url_link
 }
 
-func PrintEvents(filteredEvents []types.Event, aws aws.Config) {
-
-	for _, event := range filteredEvents {
-		// Print the relevant information from the event
-
+func printEvent(filteredEvent []types.Event, printUrl bool) {
+	for _, event := range filteredEvent {
 		if event.EventName != nil {
 			fmt.Printf("%s |", *event.EventName)
 		} else {
@@ -214,22 +206,21 @@ func PrintEvents(filteredEvents []types.Event, aws aws.Config) {
 		} else {
 			fmt.Println("<not available> |")
 		}
+
 		if event.Username != nil {
-			fmt.Printf("User: %s |", *event.Username)
+			fmt.Printf("User: %s |\n", *event.Username)
 		} else {
 			fmt.Println("User: <not available> |")
 		}
-		if event.CloudTrailEvent != nil {
+
+		if printUrl && event.CloudTrailEvent != nil {
 			details, err := ExtractUserDetails(event.CloudTrailEvent)
-			if err != nil {
-				return
+			if err == nil {
+				fmt.Printf("EventLink: %s\n\n", GenerateLink(*details))
+			} else {
+				fmt.Println("EventLink: <not available>")
 			}
-			fmt.Printf("EventLink: %s\n", termlink.Link("click", GenerateLink(*details, aws)))
-
-		} else {
-			fmt.Println("EventLink	: <not available>")
 		}
-
 	}
 
 }
@@ -248,8 +239,8 @@ func LoadConfiguration() (*Configuration, error) {
 
 }
 
-func FilterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput) (*[]types.Event, error) {
-	filteredEvents := []types.Event{}
+func LoadConfigList(*Configuration) ([]string, error) {
+
 	config, err := LoadConfiguration()
 	if err != nil {
 		fmt.Println("Error Loading Configuration: ")
@@ -257,31 +248,49 @@ func FilterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput) (*[]types.Event
 	}
 	osdctlConfig.EnsureConfigFile()
 
-	ignoreUsers := config.Ignore.Users
+	return config.Ignore.Users, err
+
+}
+func eventUsernameKey(event types.Event) string {
+	if event.Username != nil {
+		return *event.Username
+	}
+	return ""
+}
+func ignoreSessionArnKey(ignoreSessionArn *string) string {
+	if ignoreSessionArn != nil {
+		return *ignoreSessionArn
+	}
+	return ""
+}
+
+func FilterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string) (*[]types.Event, error) {
+	filteredEvents := []types.Event{}
+	ignoreUsers := make(map[string]bool)
+	for _, u := range Ignore {
+		ignoreUsers[u] = true
+	}
+
+	matchedUsers := make(map[string]bool)
 
 	for _, lookupOutput := range lookupOutputs {
 		for _, event := range lookupOutput.Events {
+			raw, _ := ExtractUserDetails(event.CloudTrailEvent)
+			SessIssuerArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
 
-			matched := false
-			for _, regStr := range ignoreUsers {
-				regex, err := regexp.Compile(regStr)
-				if err != nil {
-					fmt.Println("Error Compling Regex")
-					return &filteredEvents, err
-				}
-				if event.Username != nil {
-					if regex.MatchString(*event.Username) {
-						matched = true
-						break
-					}
-				} else {
-					continue
-				}
-
-			}
-			if !matched {
+			//fmt.Println(SessIssuerArn)
+			// Early exit if both Username and SessionIssuerUser are nil or empty
+			if (event.Username == nil || *event.Username == "") && SessIssuerArn == "" {
 				filteredEvents = append(filteredEvents, event)
+				continue
+			}
 
+			if (event.Username != nil && ignoreUsers[*event.Username]) ||
+				(ignoreUsers[SessIssuerArn]) {
+				matchedUsers[eventUsernameKey(event)] = true
+				matchedUsers[ignoreSessionArnKey(&SessIssuerArn)] = true
+			} else {
+				filteredEvents = append(filteredEvents, event)
 			}
 
 		}
@@ -309,14 +318,23 @@ func (o *LookupEventsoptions) run() error {
 	cloudtrailClient := cloudtrail.NewFromConfig(cfg)
 
 	lookupOutput, err := GetEvents(o.since, cloudtrailClient, o.pages)
+	if err != nil {
+		return err
+	}
 
+	config, err := LoadConfiguration()
+	if err != nil {
+		return err
+	}
+
+	Ignore, err := LoadConfigList(config)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("\n\n[+] Fetching %s Event History..\n", cfg.Region)
-	filtered, err := FilterUsers(lookupOutput)
-	PrintEvents(*filtered, cfg)
+	filtered, err := FilterUsers(lookupOutput, Ignore)
 
+	printEvent(*filtered, o.url)
 	fmt.Println("")
 	return err
 }
