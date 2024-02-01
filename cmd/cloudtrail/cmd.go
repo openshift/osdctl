@@ -16,6 +16,7 @@ func NewCloudtrailCmd() *cobra.Command {
 	}
 
 	cloudtrailCmd.AddCommand(newwrite_eventsCmd())
+	cloudtrailCmd.AddCommand(newWhoamiCmd())
 
 	return cloudtrailCmd
 }
