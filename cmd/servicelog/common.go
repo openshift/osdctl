@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	userParameterNames, userParameterValues, filterParams []string
+	userParameterNames, userParameterValues []string
 )
 
 const (
