@@ -52,7 +52,7 @@ var (
 func NewCmdAccess(streams genericclioptions.IOStreams, client *k8s.LazyClient) *cobra.Command {
 	ops := newClusterAccessOptions(client, streams)
 	accessCmd := &cobra.Command{
-		Use:               "break-glass <cluster identifier> --reason <OHSS or PD ticket>",
+		Use:               "break-glass <cluster identifier>",
 		Short:             "Emergency access to a cluster",
 		Long:              "Obtain emergency credentials to access the given cluster. You must be logged into the cluster's hive shard",
 		Args:              cobra.ExactArgs(1),
