@@ -2,45 +2,25 @@ package support
 
 import (
 	"fmt"
-	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"testing"
+
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 )
 
-func Test_setup(t *testing.T) {
+func TestValidateResolutionString(t *testing.T) {
 	tests := []struct {
-		name      string
-		post      *Post
-		expectErr bool
+		input         string
+		errorExpected bool
 	}{
-		{
-			name: "Error - Ends in period",
-			post: &Post{
-				Problem:    "A problem sentence.",
-				Resolution: "A resolution sentence.",
-			},
-			expectErr: true,
-		},
-		{
-			name: "No error",
-			post: &Post{
-				Problem:    "A problem sentence",
-				Resolution: "A resolution sentence",
-			},
-			expectErr: false,
-		},
+		{"resolution.", true},
+		{"no-dot-at-end", false},
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			err := test.post.setup()
-			if err != nil {
-				if !test.expectErr {
-					t.Errorf("expected no err, got %v", err)
-				}
-			} else {
-				if test.expectErr {
-					t.Error("expected err, got nil")
-				}
+		t.Run(test.input, func(t *testing.T) {
+			err := validateResolutionString(test.input)
+			if (err == nil) == test.errorExpected {
+				t.Errorf("For input '%s', expected an error: %t, but got: %v", test.input, test.errorExpected, err)
 			}
 		})
 	}
@@ -84,8 +64,8 @@ func Test_buildLimitedSupport(t *testing.T) {
 			if detectionType := got.DetectionType(); detectionType != cmv1.DetectionTypeManual {
 				t.Errorf("buildLimitedSupport() got detectionType = %v, want %v", detectionType, cmv1.DetectionTypeManual)
 			}
-			if details := got.Details(); details != fmt.Sprintf("%v. %v", tt.post.Problem, tt.post.Resolution) {
-				t.Errorf("buildLimitedSupport() got details = %v, want %v", details, fmt.Sprintf("%v. %v", tt.post.Problem, tt.post.Resolution))
+			if details := got.Details(); details != fmt.Sprintf("%s %s", tt.post.Problem, tt.post.Resolution) {
+				t.Errorf("buildLimitedSupport() got details = %s, want %s", details, fmt.Sprintf("%s %s", tt.post.Problem, tt.post.Resolution))
 			}
 		})
 	}

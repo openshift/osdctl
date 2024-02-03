@@ -5,6 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
+	"time"
+
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	hiveapiv1 "github.com/openshift/hive/apis/hive/v1"
 	hiveinternalv1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
@@ -12,10 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strings"
-	"time"
 
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
@@ -302,7 +303,7 @@ func (o *transferOwnerOptions) run() error {
 
 	// Find and setup all resources that are needed
 	hiveCluster, err := utils.GetHiveCluster(o.clusterID)
-	hiveKubeCli, _, hivecClientset, err := getKubeConfigAndClient(hiveCluster.ID())
+	hiveKubeCli, _, hivecClientset, err := getKubeConfigAndClient(hiveCluster.ID(), "backplane-cluster-admin", "Updating pull secret using osdctl")
 	if err != nil {
 		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for Hive cluster ID %s: %w", hiveCluster.ID(), err)
 	}
@@ -353,7 +354,7 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("failed to update pull secret for Hive cluster with ID %s: %w", o.clusterID, err)
 	}
 
-	_, _, clientset, err := getKubeConfigAndClient(o.clusterID)
+	_, _, clientset, err := getKubeConfigAndClient(o.clusterID, "backplane-cluster-admin", "Updating pull secret using osdctl")
 	if err != nil {
 		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", o.clusterID, err)
 	}
