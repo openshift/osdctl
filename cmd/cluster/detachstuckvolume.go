@@ -2,23 +2,18 @@ package cluster
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
 	slices "golang.org/x/exp/slices"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
-	bplogin "github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
-	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
@@ -75,7 +70,7 @@ func (o *detachStuckVolumeOptions) complete(cmd *cobra.Command, args []string) e
 	o.cluster = cluster
 	o.clusterID = cluster.ID()
 	if strings.ToUpper(cluster.CloudProvider().ID()) != "AWS" {
-		return errors.New("this command is only available for AWS clusters")
+		return fmt.Errorf("this command is only available for AWS clusters")
 	}
 
 	return nil
@@ -83,13 +78,13 @@ func (o *detachStuckVolumeOptions) complete(cmd *cobra.Command, args []string) e
 
 func (o *detachStuckVolumeOptions) run() error {
 
-	_, _, clientset, err := getKubeConfig(o.clusterID)
+	_, _, clientset, err := getKubeConfigAndClient(o.clusterID, "", "")
 
 	if err != nil {
 		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", o.clusterID, err)
 	}
 
-	err = volIdRegion(clientset, Namespace, "")
+	err = getVolumeID(clientset, Namespace, "")
 	if err != nil {
 		return err
 	}
@@ -139,7 +134,7 @@ func (o *detachStuckVolumeOptions) run() error {
 }
 
 // Following function gets the volumeID & region of pv for non running state pod & value into global variable
-func volIdRegion(clientset *kubernetes.Clientset, namespace, selector string) error {
+func getVolumeID(clientset *kubernetes.Clientset, namespace, selector string) error {
 
 	var pvClaim []string
 	var pVolume []string
@@ -204,26 +199,4 @@ func volIdRegion(clientset *kubernetes.Clientset, namespace, selector string) er
 		}
 	}
 	return nil
-}
-
-func getKubeConfig(clusterID string) (client.Client, *rest.Config, *kubernetes.Clientset, error) {
-	bp, err := bpconfig.GetBackplaneConfiguration()
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
-	}
-
-	kubeconfig, err := bplogin.GetRestConfigAsUser(bp, clusterID, "backplane-cluster-admin")
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	// create the clientset
-	clientset, err := kubernetes.NewForConfig(kubeconfig)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	kubeCli, err := client.New(kubeconfig, client.Options{})
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return kubeCli, kubeconfig, clientset, err
 }
