@@ -44,6 +44,7 @@ func newTestCluster(t *testing.T, cb *cmv1.ClusterBuilder) *cmv1.Cluster {
 type mockEgressVerificationAWSClient struct {
 	describeSecurityGroupsResp *ec2.DescribeSecurityGroupsOutput
 	describeSubnetsResp        *ec2.DescribeSubnetsOutput
+	describeRouteTablesResp    *ec2.DescribeRouteTablesOutput
 }
 
 func (m mockEgressVerificationAWSClient) DescribeSubnets(ctx context.Context, params *ec2.DescribeSubnetsInput, optFns ...func(options *ec2.Options)) (*ec2.DescribeSubnetsOutput, error) {
@@ -53,7 +54,9 @@ func (m mockEgressVerificationAWSClient) DescribeSubnets(ctx context.Context, pa
 func (m mockEgressVerificationAWSClient) DescribeSecurityGroups(ctx context.Context, params *ec2.DescribeSecurityGroupsInput, optFns ...func(options *ec2.Options)) (*ec2.DescribeSecurityGroupsOutput, error) {
 	return m.describeSecurityGroupsResp, nil
 }
-
+func (m mockEgressVerificationAWSClient) DescribeRouteTables(ctx context.Context, params *ec2.DescribeRouteTablesInput, optFns ...func(options *ec2.Options)) (*ec2.DescribeRouteTablesOutput, error) {
+	return m.describeRouteTablesResp, nil
+}
 func Test_egressVerificationSetup(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -102,6 +105,7 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 		expected  *onv.ValidateEgressInput
 		expectErr bool
 	}{
+
 		{
 			name: "GCP Unsupported",
 			e: &EgressVerification{
@@ -124,6 +128,7 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 			region:    "us-east-2",
 			expectErr: true,
 		},
+
 		{
 			name: "Transparent cluster-wide proxy",
 			e: &EgressVerification{
@@ -139,6 +144,18 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 						Subnets: []types.Subnet{
 							{
 								SubnetId: aws.String("subnet-abcd"),
+							},
+						},
+					},
+					describeRouteTablesResp: &ec2.DescribeRouteTablesOutput{
+						RouteTables: []types.RouteTable{
+							{
+								RouteTableId: aws.String("rt-id"),
+								Routes: []types.Route{
+									{
+										GatewayId: aws.String("gateway"),
+									},
+								},
 							},
 						},
 					},

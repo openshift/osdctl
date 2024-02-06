@@ -131,6 +131,7 @@ func NewCmdValidateEgress() *cobra.Command {
 type egressVerificationAWSClient interface {
 	DescribeSubnets(ctx context.Context, params *ec2.DescribeSubnetsInput, optFns ...func(options *ec2.Options)) (*ec2.DescribeSubnetsOutput, error)
 	DescribeSecurityGroups(ctx context.Context, params *ec2.DescribeSecurityGroupsInput, optFns ...func(options *ec2.Options)) (*ec2.DescribeSecurityGroupsOutput, error)
+	DescribeRouteTables(ctx context.Context, params *ec2.DescribeRouteTablesInput, optFns ...func(options *ec2.Options)) (*ec2.DescribeRouteTablesOutput, error)
 }
 
 // Run parses the EgressVerification input, typically sets values automatically using the ClusterId, and runs
@@ -326,7 +327,16 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+
 	input.SubnetID = subnetId[0]
+
+	checkPublic, err := e.isSubnetPublic(ctx, input.SubnetID)
+	if err != nil {
+		return nil, err
+	}
+	if checkPublic {
+		return nil, fmt.Errorf("subnet %v you provided is public. The network verifier only works for private subnets. Please provide a private subnet ID", input.SubnetID)
+	}
 
 	// Obtain security group id to use
 	sgId, err := e.getSecurityGroupId(context.TODO())
@@ -445,6 +455,101 @@ func (e *EgressVerification) getSubnetIds(ctx context.Context) ([]string, error)
 	// For non-PrivateLink BYOVPC clusters, provided subnets are 50/50 public/private subnets, so make the user decide for now
 	// TODO: Figure out via IGW/NAT GW/Route Tables
 	return nil, fmt.Errorf("unable to determine which non-PrivateLink BYOVPC subnets are private yet, please check manually and provide the --subnet-id flag")
+
+}
+
+// This function checks the gateway attached to the subnet and returns true if the subnet starts with igw- (for InternetGateway) and has a route to 0.0.0.0/0
+func (e *EgressVerification) isSubnetPublic(ctx context.Context, subnetID string) (bool, error) {
+	var routeTable string
+
+	// Try and find a Route Table associated with the given subnet
+	describeRouteTablesOutput, err := e.awsClient.DescribeRouteTables(ctx, &ec2.DescribeRouteTablesInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("association.subnet-id"),
+				Values: []string{subnetID},
+			},
+		},
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to describe route tables associated to subnet %s: %w", subnetID, err)
+	}
+
+	// If there are no associated RouteTables, then the subnet uses the default RoutTable for the VPC
+	if len(describeRouteTablesOutput.RouteTables) == 0 {
+		// Get the VPC ID for the subnet
+		describeSubnetOutput, err := e.awsClient.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{
+			SubnetIds: []string{subnetID},
+		})
+		if err != nil {
+			return false, err
+		}
+		if len(describeSubnetOutput.Subnets) == 0 {
+			return false, fmt.Errorf("no subnets returned for subnet id %v", subnetID)
+		}
+
+		vpcID := *describeSubnetOutput.Subnets[0].VpcId
+
+		// Set the route table to the default for the VPC
+		routeTable, err = e.findDefaultRouteTableForVPC(ctx, vpcID)
+		if err != nil {
+			return false, err
+		}
+	} else {
+		// Set the route table to the one associated with the subnet
+		routeTable = *describeRouteTablesOutput.RouteTables[0].RouteTableId
+	}
+
+	// Check that the RouteTable for the subnet has a default route to 0.0.0.0/0
+	describeRouteTablesOutput, err = e.awsClient.DescribeRouteTables(ctx, &ec2.DescribeRouteTablesInput{
+		RouteTableIds: []string{routeTable},
+	})
+	if err != nil {
+		return false, err
+	}
+
+	if len(describeRouteTablesOutput.RouteTables) == 0 {
+		// Shouldn't happen
+		return false, fmt.Errorf("no route tables found for route table id %v", routeTable)
+	}
+
+	// Checking if the attached gateway starts with igw- for Internet Gateway
+	for _, route := range describeRouteTablesOutput.RouteTables[0].Routes {
+		if route.GatewayId != nil && strings.HasPrefix(*route.GatewayId, "igw-") {
+			// Some routes don't use CIDR blocks as targets, so this needs to be checked
+			if route.DestinationCidrBlock != nil && *route.DestinationCidrBlock == "0.0.0.0/0" {
+				return true, nil
+			}
+		}
+	}
+
+	// We haven't found a default route to the internet, so this subnet can't be public
+	return false, nil
+}
+
+// findDefaultRouteTableForVPC returns the AWS Route Table ID of the VPC's default Route Table
+func (e *EgressVerification) findDefaultRouteTableForVPC(ctx context.Context, vpcID string) (string, error) {
+	describeRouteTablesOutput, err := e.awsClient.DescribeRouteTables(ctx, &ec2.DescribeRouteTablesInput{
+		Filters: []types.Filter{
+			{
+				Name:   aws.String("vpc-id"),
+				Values: []string{vpcID},
+			},
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to describe route tables associated with vpc %s: %w", vpcID, err)
+	}
+
+	for _, rt := range describeRouteTablesOutput.RouteTables {
+		for _, assoc := range rt.Associations {
+			if *assoc.Main {
+				return *rt.RouteTableId, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no default route table found for vpc: %s", vpcID)
 }
 
 // getSecurityGroupId attempts to return a cluster's master node security group id
