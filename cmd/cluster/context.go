@@ -409,17 +409,21 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			fmt.Fprintln(os.Stderr, "Getting Dynatrace URL...")
 		}
 
-		clusterID, err := determineManagementCluster(ocmClient, cluster)
+		clusterID, err := getManagementClusterID(ocmClient, cluster)
 		if err != nil {
 			errors = append(errors, err)
 			data.DyntraceEnvURL = err.Error()
 			return
 		}
-
-		data.DyntraceEnvURL, err = GetDynatraceURLFromManagementCluster(clusterID)
+		data.DyntraceEnvURL, err = getDynatraceURLFromLabel(ocmClient, clusterID)
 		if err != nil {
-			errors = append(errors, fmt.Errorf("Error The Dynatrace Environemnt URL could not be determined %s", err))
-			data.DyntraceEnvURL = "the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there"
+			errors = append(errors, fmt.Errorf("Error The Dynatrace Environemnt URL could not be determined from Label. Using fallback method%s", err))
+			// FallBack method to determine via Cluster Login
+			data.DyntraceEnvURL, err = getDynatraceURLFromManagementCluster(clusterID)
+			if err != nil {
+				errors = append(errors, fmt.Errorf("Error The Dynatrace Environemnt URL could not be determined %s", err))
+				data.DyntraceEnvURL = "the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there"
+			}
 		}
 	}
 
