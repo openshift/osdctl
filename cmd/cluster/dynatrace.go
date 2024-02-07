@@ -18,7 +18,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const HypershiftClusterTypeLabel string = "ext-hypershift.openshift.io/cluster-type"
+const (
+	HypershiftClusterTypeLabel string = "ext-hypershift.openshift.io/cluster-type"
+	DynatraceTenantKeyLabel    string = "sre-capabilities.dtp.tenant"
+)
 
 func newCmdDynatraceURL() *cobra.Command {
 	orgIdCmd := &cobra.Command{
@@ -47,20 +50,23 @@ func fetchDetails(clusterKey string) error {
 		return err
 	}
 
-	clusterID, err := determineManagementCluster(connection, cluster)
+	clusterID, err := getManagementClusterID(connection, cluster)
 	if err != nil {
 		return err
 	}
-
-	url, err := GetDynatraceURLFromManagementCluster(clusterID)
+	url, err := getDynatraceURLFromLabel(connection, clusterID)
 	if err != nil {
-		return fmt.Errorf("the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there \n\nError Details - %s", err)
+		// FallBack method to determine via Cluster Login
+		url, err = getDynatraceURLFromManagementCluster(clusterID)
+		if err != nil {
+			return fmt.Errorf("the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there \n\nError Details - %s", err)
+		}
 	}
 	fmt.Println("Dynatrace Environment URL - ", url)
 	return nil
 }
 
-func determineManagementCluster(connection *sdk.Connection, cluster *v1.Cluster) (string, error) {
+func getManagementClusterID(connection *sdk.Connection, cluster *v1.Cluster) (string, error) {
 	var clusterID = cluster.ID()
 	if cluster.Hypershift().Enabled() {
 		ManagementCluster, err := ocmutils.GetManagementCluster(clusterID)
@@ -104,7 +110,32 @@ func isManagementCluster(connection *sdk.Connection, clusterID string) bool {
 	return false
 }
 
-func GetDynatraceURLFromManagementCluster(clusterID string) (string, error) {
+func getDynatraceURLFromLabel(connection *sdk.Connection, clusterID string) (string, error) {
+	subscription, err := ocmutils.GetSubscription(connection, clusterID)
+	if err != nil {
+		return "", err
+	}
+
+	subscriptionLabels, err := connection.AccountsMgmt().V1().Subscriptions().Subscription(subscription.ID()).Labels().List().Send()
+	labels, ok := subscriptionLabels.GetItems()
+	if !ok {
+		return "", err
+	}
+
+	for _, label := range labels.Slice() {
+		if key, ok := label.GetKey(); ok {
+			if key == DynatraceTenantKeyLabel {
+				if value, ok := label.GetValue(); ok {
+					url := fmt.Sprintf("https://%s.live.dynatrace.com/", value)
+					return url, nil
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("Could not determine URL")
+}
+
+func getDynatraceURLFromManagementCluster(clusterID string) (string, error) {
 	// Register v1beta1 for DynaKube
 	scheme := runtime.NewScheme()
 	if err := v1beta1.AddToScheme(scheme); err != nil {
