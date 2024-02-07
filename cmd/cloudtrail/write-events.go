@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -134,6 +135,7 @@ func GetEvents(since string, client *cloudtrail.Client, pages int) ([]*cloudtrai
 	Events := []*cloudtrail.LookupEventsOutput{}
 	var input = cloudtrail.LookupEventsInput{
 		StartTime: &starttime,
+		EndTime:   aws.Time(time.Now()),
 		LookupAttributes: []types.LookupAttribute{
 			{AttributeKey: "ReadOnly", AttributeValue: aws.String("true")},
 		},
@@ -251,54 +253,45 @@ func LoadConfigList(*Configuration) ([]string, error) {
 	return config.Ignore.Users, err
 
 }
-func eventUsernameKey(event types.Event) string {
-	if event.Username != nil {
-		return *event.Username
+
+func IsMatch(user string, regexList []string) (bool, error) {
+	for _, regStr := range regexList {
+		regex, err := regexp.Compile(regStr)
+		if err != nil {
+			return false, fmt.Errorf("error compiling regex: %v", err)
+		}
+
+		if regex.MatchString(user) {
+			return true, nil
+		}
 	}
-	return ""
-}
-func ignoreSessionArnKey(ignoreSessionArn *string) string {
-	if ignoreSessionArn != nil {
-		return *ignoreSessionArn
-	}
-	return ""
+
+	return false, nil
 }
 
 func FilterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string) (*[]types.Event, error) {
 	filteredEvents := []types.Event{}
-	ignoreUsers := make(map[string]bool)
-	for _, u := range Ignore {
-		ignoreUsers[u] = true
-	}
-
-	matchedUsers := make(map[string]bool)
 
 	for _, lookupOutput := range lookupOutputs {
 		for _, event := range lookupOutput.Events {
 			raw, _ := ExtractUserDetails(event.CloudTrailEvent)
-			SessIssuerArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
+			userArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
 
-			//fmt.Println(SessIssuerArn)
-			// Early exit if both Username and SessionIssuerUser are nil or empty
-			if (event.Username == nil || *event.Username == "") && SessIssuerArn == "" {
-				filteredEvents = append(filteredEvents, event)
-				continue
+			if matches, _ := IsMatch(*event.Username, Ignore); matches {
+				continue // Skip if matched
+			}
+			if matches, _ := IsMatch(userArn, Ignore); matches {
+				fmt.Printf("Users ARN is : %s", userArn)
+				continue // Skip if matched
+
 			}
 
-			if (event.Username != nil && ignoreUsers[*event.Username]) ||
-				(ignoreUsers[SessIssuerArn]) {
-				matchedUsers[eventUsernameKey(event)] = true
-				matchedUsers[ignoreSessionArnKey(&SessIssuerArn)] = true
-			} else {
-				filteredEvents = append(filteredEvents, event)
-			}
-
+			filteredEvents = append(filteredEvents, event)
 		}
 	}
 
 	return &filteredEvents, nil
 }
-
 func (o *LookupEventsoptions) run() error {
 	ocmClient, err := utils.CreateConnection()
 	if err != nil {
