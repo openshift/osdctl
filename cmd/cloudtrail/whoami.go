@@ -16,6 +16,8 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
+var stsClient *sts.Client
+
 type whoamiOptions struct {
 	clusterID string
 	cluster   *cmv1.Cluster
@@ -43,19 +45,19 @@ func newwhoamiOptions() *whoamiOptions {
 	return &whoamiOptions{}
 }
 
-func whoami(awsClient sts.Client) (string, error) {
+func Whoami(stsClient sts.Client) (string, string, error) {
 
 	ctx := context.TODO()
-	callerIdentityOutput, err := awsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	callerIdentityOutput, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	userArn, err := arn.Parse(*callerIdentityOutput.Arn)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return userArn.String(), nil
+	return userArn.String(), userArn.AccountID, nil
 }
 func (o *whoamiOptions) complete(cmd *cobra.Command, _ []string) error {
 	err := utils.IsValidClusterKey(o.clusterID)
@@ -106,13 +108,14 @@ func (o *whoamiOptions) run(cmd *cobra.Command, _ []string) error {
 	}
 
 	fmt.Println("[+] Getting Credentials")
-	awsClient := sts.NewFromConfig(cfg)
+	stsClient = sts.NewFromConfig(cfg)
 
-	outputArn, err := whoami(*awsClient)
+	outputArn, outputID, err := Whoami(*stsClient)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("[+] Your Current User ARN is:\n%s", outputArn)
+	fmt.Printf("[+] Your Current User ID is:\n%s", outputID)
 	fmt.Println("")
 	return err
 
