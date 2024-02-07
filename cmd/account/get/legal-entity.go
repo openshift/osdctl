@@ -19,8 +19,8 @@ import (
 
 // newCmdGetLegalEntity implements the get legal-entity command which get
 // the legal entity information related to the specified AWS Account ID
-func newCmdGetLegalEntity(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newGetLegalEntityOptions(streams, flags, client, globalOpts)
+func newCmdGetLegalEntity(streams genericclioptions.IOStreams, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newGetLegalEntityOptions(streams, client, globalOpts)
 	getLegalEntityCmd := &cobra.Command{
 		Use:               "legal-entity",
 		Short:             "Get AWS Account Legal Entity",
@@ -45,7 +45,6 @@ type getLegalEntityOptions struct {
 	accountNamespace string
 	output           string
 
-	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
 	kubeCli       client.Client
 	GlobalOptions *globalflags.GlobalOptions
@@ -62,9 +61,8 @@ func (f legalEntityResponse) String() string {
 
 }
 
-func newGetLegalEntityOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *getLegalEntityOptions {
+func newGetLegalEntityOptions(streams genericclioptions.IOStreams, client client.Client, globalOpts *globalflags.GlobalOptions) *getLegalEntityOptions {
 	return &getLegalEntityOptions{
-		flags:         flags,
 		IOStreams:     streams,
 		kubeCli:       client,
 		GlobalOptions: globalOpts,

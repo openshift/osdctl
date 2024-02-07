@@ -4,23 +4,18 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
-
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 func TestPacketCaptureCmdComplete(t *testing.T) {
 	g := NewGomegaWithT(t)
-	kubeFlags := genericclioptions.NewConfigFlags(false)
 	testCases := []struct {
 		title       string
 		option      *packetCaptureOptions
 		errExpected bool
 	}{
 		{
-			title: "succeed",
-			option: &packetCaptureOptions{
-				flags: kubeFlags,
-			},
+			title:       "succeed",
+			option:      &packetCaptureOptions{},
 			errExpected: false,
 		},
 	}

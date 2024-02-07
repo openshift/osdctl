@@ -77,7 +77,7 @@ const (
 )
 
 // NewCmdList implements the list command to list cluster deployment crs
-func NewCmdClusterSyncFailures(streams genericclioptions.IOStreams, _ *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+func NewCmdClusterSyncFailures(streams genericclioptions.IOStreams, client client.Client) *cobra.Command {
 	opts := &clusterSyncFailuresOptions{
 		IOStreams: streams,
 		kubeCli:   client,

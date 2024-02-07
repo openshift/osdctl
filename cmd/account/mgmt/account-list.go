@@ -23,7 +23,6 @@ type accountListOptions struct {
 	accountID    string
 	output       string
 
-	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
@@ -40,17 +39,16 @@ func (f listResponse) String() string {
 
 }
 
-func newAccountListOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *accountListOptions {
+func newAccountListOptions(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *accountListOptions {
 	return &accountListOptions{
-		flags:         flags,
 		printFlags:    printer.NewPrintFlags(),
 		IOStreams:     streams,
 		GlobalOptions: globalOpts,
 	}
 }
 
-func newCmdAccountList(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newAccountListOptions(streams, flags, globalOpts)
+func newCmdAccountList(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newAccountListOptions(streams, globalOpts)
 	accountListCmd := &cobra.Command{
 		Use:               "list",
 		Short:             "List out accounts for username",

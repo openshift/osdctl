@@ -25,6 +25,9 @@ type Resize struct {
 
 	// instanceType is the type of instance being resized to
 	instanceType string
+
+	// reason to provide for elevation (eg: OHHS/PG ticket)
+	reason string
 }
 
 func NewCmdResize() *cobra.Command {
@@ -84,7 +87,10 @@ func (r *Resize) New() error {
 		return err
 	}
 
-	hac, err := k8s.NewAsBackplaneClusterAdmin(hive.ID(), client.Options{Scheme: scheme})
+	hac, err := k8s.NewAsBackplaneClusterAdmin(hive.ID(), client.Options{Scheme: scheme}, []string{
+		r.reason,
+		fmt.Sprintf("Need elevation for %s cluster in order to resize it to instance type %s", r.clusterId, r.instanceType),
+	}...)
 	if err != nil {
 		return err
 	}

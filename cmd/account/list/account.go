@@ -18,8 +18,8 @@ import (
 )
 
 // newCmdListAccount implements the list account command to list account crs
-func newCmdListAccount(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newListAccountOptions(streams, flags, client, globalOpts)
+func newCmdListAccount(streams genericclioptions.IOStreams, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newListAccountOptions(streams, client, globalOpts)
 	listAccountCmd := &cobra.Command{
 		Use:               "account",
 		Short:             "List AWS Account CR",
@@ -53,16 +53,14 @@ type listAccountOptions struct {
 
 	output string
 
-	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
 	kubeCli       client.Client
 	GlobalOptions *globalflags.GlobalOptions
 }
 
-func newListAccountOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *listAccountOptions {
+func newListAccountOptions(streams genericclioptions.IOStreams, client client.Client, globalOpts *globalflags.GlobalOptions) *listAccountOptions {
 	return &listAccountOptions{
-		flags:         flags,
 		printFlags:    printer.NewPrintFlags(),
 		IOStreams:     streams,
 		kubeCli:       client,

@@ -19,8 +19,8 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-func newCmdAccountUnassign(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
-	ops := newAccountUnassignOptions(streams, flags)
+func newCmdAccountUnassign(streams genericclioptions.IOStreams) *cobra.Command {
+	ops := newAccountUnassignOptions(streams)
 	accountUnassignCmd := &cobra.Command{
 		Use:               "unassign",
 		Short:             "Unassign account to user",
@@ -42,14 +42,12 @@ type accountUnassignOptions struct {
 	username     string
 	payerAccount string
 	accountID    string
-	flags        *genericclioptions.ConfigFlags
 	printFlags   *printer.PrintFlags
 	genericclioptions.IOStreams
 }
 
-func newAccountUnassignOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *accountUnassignOptions {
+func newAccountUnassignOptions(streams genericclioptions.IOStreams) *accountUnassignOptions {
 	return &accountUnassignOptions{
-		flags:      flags,
 		printFlags: printer.NewPrintFlags(),
 		IOStreams:  streams,
 	}

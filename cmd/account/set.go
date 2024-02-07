@@ -18,8 +18,8 @@ import (
 )
 
 // newCmdSet implements the set command which sets fields in account cr status
-func newCmdSet(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
-	ops := newSetOptions(streams, flags, client)
+func newCmdSet(streams genericclioptions.IOStreams, client client.Client) *cobra.Command {
+	ops := newSetOptions(streams, client)
 	setCmd := &cobra.Command{
 		Use:               "set <account name>",
 		Short:             "Set AWS Account CR status",
@@ -57,14 +57,12 @@ type setOptions struct {
 	patchPayload string
 	patchType    string
 
-	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
 	kubeCli client.Client
 }
 
-func newSetOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *setOptions {
+func newSetOptions(streams genericclioptions.IOStreams, client client.Client) *setOptions {
 	return &setOptions{
-		flags:     flags,
 		IOStreams: streams,
 		kubeCli:   client,
 	}

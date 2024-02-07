@@ -609,9 +609,8 @@ func TestUntagAccount(t *testing.T) {
 
 func TestConflictingOptions(t *testing.T) {
 	s := genericclioptions.IOStreams{}
-	f := genericclioptions.ConfigFlags{}
 	g := globalflags.GlobalOptions{}
-	cmd := newCmdAccountAssign(s, &f, &g)
+	cmd := newCmdAccountAssign(s, &g)
 	o := &accountUnassignOptions{}
 	o.payerAccount = "fake account"
 	o.accountID = "123456"

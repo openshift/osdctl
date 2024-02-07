@@ -2,13 +2,14 @@ package network
 
 import (
 	"fmt"
+
+	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // NewCmdNetwork implements the base cluster deployment command
-func NewCmdNetwork(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+func NewCmdNetwork(streams genericclioptions.IOStreams, client *k8s.LazyClient) *cobra.Command {
 	netCmd := &cobra.Command{
 		Use:               "network",
 		Short:             "network related utilities",
@@ -16,7 +17,7 @@ func NewCmdNetwork(streams genericclioptions.IOStreams, flags *genericclioptions
 		DisableAutoGenTag: true,
 	}
 
-	netCmd.AddCommand(newCmdPacketCapture(streams, flags, client))
+	netCmd.AddCommand(newCmdPacketCapture(streams, client))
 	netCmd.AddCommand(NewCmdValidateEgress())
 	return netCmd
 }

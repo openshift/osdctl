@@ -21,22 +21,27 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+
+	bpelevate "github.com/openshift/backplane-cli/pkg/elevate"
 )
 
 // resizeControlPlaneNodeOptions defines the struct for running resizeControlPlaneNode command
 type resizeControlPlaneNodeOptions struct {
-	clusterID      string
-	node           string
-	newMachineType string
-	cluster        *cmv1.Cluster
+	clusterID         string
+	node              string
+	newMachineType    string
+	reason            string
+	cluster           *cmv1.Cluster
+	kubeconfig        string
+	kubeconfigDefined bool
 
 	genericclioptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
 }
 
 // This command requires to previously be logged in via `ocm login`
-func newCmdResizeControlPlaneNode(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newResizeControlPlaneNodeOptions(streams, flags, globalOpts)
+func newCmdResizeControlPlaneNode(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newResizeControlPlaneNodeOptions(streams, globalOpts)
 	resizeControlPlaneNodeCmd := &cobra.Command{
 		Use:               "resize-control-plane-node",
 		Short:             "Resize a control plane node. Requires previous login to the api server via `ocm login` and being tunneled to the backplane.",
@@ -47,17 +52,19 @@ func newCmdResizeControlPlaneNode(streams genericclioptions.IOStreams, flags *ge
 			cmdutil.CheckErr(ops.run())
 		},
 	}
-	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.node, "node", "", "The control plane node to resize (e.g. ip-127.0.0.1.eu-west-2.compute.internal)")
-	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.newMachineType, "machine-type", "", "The target AWS machine type to resize to (e.g. m5.2xlarge)")
 	resizeControlPlaneNodeCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "The internal ID of the cluster to perform actions on")
+	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.newMachineType, "machine-type", "", "The target AWS machine type to resize to (e.g. m5.2xlarge)")
+	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.node, "node", "", "The control plane node to resize (e.g. ip-127.0.0.1.eu-west-2.compute.internal)")
+	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
 	resizeControlPlaneNodeCmd.MarkFlagRequired("cluster-id")
-	resizeControlPlaneNodeCmd.MarkFlagRequired("node")
 	resizeControlPlaneNodeCmd.MarkFlagRequired("machine-type")
+	resizeControlPlaneNodeCmd.MarkFlagRequired("node")
+	resizeControlPlaneNodeCmd.MarkFlagRequired("reason")
 
 	return resizeControlPlaneNodeCmd
 }
 
-func newResizeControlPlaneNodeOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *resizeControlPlaneNodeOptions {
+func newResizeControlPlaneNodeOptions(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *resizeControlPlaneNodeOptions {
 	return &resizeControlPlaneNodeOptions{
 		IOStreams:     streams,
 		GlobalOptions: globalOpts,
@@ -97,6 +104,9 @@ func (o *resizeControlPlaneNodeOptions) complete(cmd *cobra.Command, _ []string)
 		As this command is idempotent, it will just fail on a later stage if e.g. the
 		machine type doesn't exist and can be re-run.
 	*/
+
+	// As RunElevate is unsetting KUBECONFIG, we need to store its value in order to redefine it if it was defined
+	o.kubeconfig, o.kubeconfigDefined = os.LookupEnv("KUBECONFIG")
 
 	return nil
 }
@@ -187,6 +197,7 @@ func withRetrySkipCancelOption(fn func() error, procedure string) (err error) {
 	if err == nil {
 		return nil
 	}
+	fmt.Println(err)
 	dialogResponse, err := retrySkipCancelDialog(procedure)
 	if err != nil {
 		return err
@@ -233,26 +244,39 @@ func retrySkipForceCancelDialog(procedure string) (optionsDialogResponse, error)
 	}
 }
 
-func forceDrainNode(nodeID string) error {
+func (o *resizeControlPlaneNodeOptions) forceDrainNode(nodeID string, reason string) error {
 	printer.PrintlnGreen("Force draining node... This might take a minute or two...")
-	cmd := fmt.Sprintf("oc adm drain %s --ignore-daemonsets --delete-emptydir-data --force --as backplane-cluster-admin", nodeID)
-	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+	err := bpelevate.RunElevate([]string{
+		fmt.Sprintf("%s - Elevate required to force drain node for resizecontroleplanenode", reason),
+		"adm drain --ignore-daemonsets --delete-emptydir-data --force", nodeID,
+	})
+	// As RunElevate is unsetting KUBECONFIG, we need to redefined it if it was defined
+	if o.kubeconfigDefined {
+		os.Setenv("KUBECONFIG", o.kubeconfig)
+	}
+
 	if err != nil {
-		return fmt.Errorf("failed to force drain:\n%s", strings.TrimSpace(string(output)))
+		return fmt.Errorf("failed to force drain:\n%s", err)
 	}
 	return nil
 }
 
-func drainNode(nodeID string) error {
+func (o *resizeControlPlaneNodeOptions) drainNode(nodeID string, reason string) error {
 	printer.PrintlnGreen("Draining node", nodeID)
 
 	// TODO: replace subprocess call with API call
-	cmd := fmt.Sprintf("oc adm drain %s --ignore-daemonsets --delete-emptydir-data --as backplane-cluster-admin", nodeID)
-	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+	err := bpelevate.RunElevate([]string{
+		fmt.Sprintf("%s - Elevate required to drain node for resizecontroleplanenode", reason),
+		"adm drain --ignore-daemonsets --delete-emptydir-data", nodeID,
+	})
+	// As RunElevate is unsetting KUBECONFIG, we need to redefined it if it was defined
+	if o.kubeconfigDefined {
+		os.Setenv("KUBECONFIG", o.kubeconfig)
+	}
 
 	if err != nil {
 		fmt.Println("Failed to drain node:")
-		fmt.Println(strings.TrimSpace(string(output)))
+		fmt.Println(err)
 
 		dialogResponse, err := retrySkipForceCancelDialog("draining node")
 		if err != nil {
@@ -261,11 +285,11 @@ func drainNode(nodeID string) error {
 
 		switch dialogResponse {
 		case Retry:
-			return drainNode(nodeID)
+			return o.drainNode(nodeID, reason)
 		case Skip:
 			fmt.Println("Skipping node drain")
 		case Force:
-			err = withRetrySkipCancelOption(func() error { return forceDrainNode(nodeID) }, "force draining")
+			err = withRetrySkipCancelOption(func() error { return o.forceDrainNode(nodeID, reason) }, "force draining")
 			if err != nil {
 				return err
 			}
@@ -380,12 +404,18 @@ func getNodeAwsInstanceData(ctx context.Context, node string, awsClient resizeCo
 	return machineName, awsInstanceID, nil
 }
 
-func patchMachineType(machine string, machineType string) error {
+func (o *resizeControlPlaneNodeOptions) patchMachineType(machine string, machineType string, reason string) error {
 	printer.PrintlnGreen("Patching machine type of machine", machine, "to", machineType)
-	cmd := `oc -n openshift-machine-api patch machine ` + machine + ` --patch "{\"spec\":{\"providerSpec\":{\"value\":{\"instanceType\":\"` + machineType + `\"}}}}" --type merge --as backplane-cluster-admin`
-	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+	err := bpelevate.RunElevate([]string{
+		fmt.Sprintf("%s - Elevate required to patch machine type of machine %s to %s", reason, machine, machineType),
+		`-n openshift-machine-api patch machine`, machine, `--patch "{\"spec\":{\"providerSpec\":{\"value\":{\"instanceType\":\"` + machineType + `\"}}}}" --type merge`,
+	})
+	// As RunElevate is unsetting KUBECONFIG, we need to redefined it if it was defined
+	if o.kubeconfigDefined {
+		os.Setenv("KUBECONFIG", o.kubeconfig)
+	}
 	if err != nil {
-		return fmt.Errorf("Could not patch machine type:\n%s", strings.TrimSpace(string(output)))
+		return fmt.Errorf("Could not patch machine type:\n%s", err)
 	}
 	return nil
 }
@@ -418,7 +448,7 @@ func (o *resizeControlPlaneNodeOptions) run() error {
 
 	// drain node with oc adm drain <node> --ignore-daemonsets --delete-emptydir-data
 	// drainNode has its own retry dialog.
-	err = drainNode(o.node)
+	err = o.drainNode(o.node, o.reason)
 	if err != nil {
 		return err
 	}
@@ -466,7 +496,7 @@ func (o *resizeControlPlaneNodeOptions) run() error {
 	fmt.Println() // Add an empty line for better output formatting
 
 	// Patch node machine to update .spec
-	err = withRetryCancelOption(func() error { return patchMachineType(machineName, o.newMachineType) }, "patch machine type")
+	err = withRetryCancelOption(func() error { return o.patchMachineType(machineName, o.newMachineType, o.reason) }, "patch machine type")
 	if err != nil {
 		fmt.Println("Control plane node resized but could not patch machine .spec.")
 		return err

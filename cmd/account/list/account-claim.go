@@ -15,8 +15,8 @@ import (
 )
 
 // newCmdListAccount implements the list account command to list account claim crs
-func newCmdListAccountClaim(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newListAccountClaimOptions(streams, flags, client, globalOpts)
+func newCmdListAccountClaim(streams genericclioptions.IOStreams, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newListAccountClaimOptions(streams, client, globalOpts)
 	listAccountClaimCmd := &cobra.Command{
 		Use:               "account-claim",
 		Short:             "List AWS Account Claim CR",
@@ -38,16 +38,14 @@ type listAccountClaimOptions struct {
 	state  string
 	output string
 
-	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
 	kubeCli       client.Client
 	GlobalOptions *globalflags.GlobalOptions
 }
 
-func newListAccountClaimOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *listAccountClaimOptions {
+func newListAccountClaimOptions(streams genericclioptions.IOStreams, client client.Client, globalOpts *globalflags.GlobalOptions) *listAccountClaimOptions {
 	return &listAccountClaimOptions{
-		flags:         flags,
 		IOStreams:     streams,
 		kubeCli:       client,
 		GlobalOptions: globalOpts,

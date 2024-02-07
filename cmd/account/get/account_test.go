@@ -17,7 +17,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 	g := NewGomegaWithT(t)
 	mockCtrl := gomock.NewController(t)
 	streams := genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr}
-	kubeFlags := genericclioptions.NewConfigFlags(false)
 	globalFlags := globalflags.GlobalOptions{Output: ""}
 	testCases := []struct {
 		title       string
@@ -30,7 +29,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			option: &getAccountOptions{
 				accountID:        "",
 				accountClaimName: "",
-				flags:            kubeFlags,
 				GlobalOptions:    &globalFlags,
 			},
 			errExpected: true,
@@ -41,7 +39,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			option: &getAccountOptions{
 				accountID:        "foo",
 				accountClaimName: "bar",
-				flags:            kubeFlags,
 				GlobalOptions:    &globalFlags,
 			},
 			errExpected: true,
@@ -51,7 +48,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "succeed",
 			option: &getAccountOptions{
 				accountID:     "foo",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
@@ -60,7 +56,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "succeed with account claim",
 			option: &getAccountOptions{
 				accountClaimName: "foo",
-				flags:            kubeFlags,
 				GlobalOptions:    &globalFlags,
 			},
 			errExpected: false,
@@ -69,7 +64,7 @@ func TestGetAccountCmdComplete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
-			cmd := newCmdGetAccount(streams, kubeFlags, mockk8s.NewMockClient(mockCtrl), &globalFlags)
+			cmd := newCmdGetAccount(streams, mockk8s.NewMockClient(mockCtrl), &globalFlags)
 			err := tc.option.complete(cmd, nil)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())

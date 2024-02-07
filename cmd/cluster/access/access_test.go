@@ -12,9 +12,9 @@ import (
 	"time"
 
 	clustersmgmtv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
-	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 
+	"github.com/openshift/osdctl/pkg/k8s"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,140 +23,6 @@ import (
 	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
-
-// TestAccessCmdComplete ensures clusterAccessOptions.Complete allows for only a single cluster to be passed to the 'cluster' subcommand
-func TestAccessCmdComplete(t *testing.T) {
-	tests := []struct {
-		Name          string
-		Args          []string
-		ErrorExpected bool
-	}{
-		{
-			Name:          "Single cluster provided",
-			Args:          []string{"testCluster"},
-			ErrorExpected: false,
-		},
-		{
-			Name:          "No cluster provided",
-			Args:          []string{},
-			ErrorExpected: true,
-		},
-		{
-			Name:          "Multiple clusters provided",
-			Args:          []string{"testCluster", "testCluster2"},
-			ErrorExpected: true,
-		},
-		{
-			Name:          "Invalid cluster provided",
-			Args:          []string{"inv@lid/cluster"},
-			ErrorExpected: true,
-		},
-		{
-			Name:          "Multiple invalid clusters provided",
-			Args:          []string{"inv@lid/cluster1", "inv@lid/cluster2"},
-			ErrorExpected: true,
-		},
-	}
-
-	for _, test := range tests {
-		err := accessCmdComplete(&cobra.Command{}, test.Args)
-		if test.ErrorExpected {
-			if err == nil {
-				t.Fatalf("Test '%s' failed. Expected error, but got none", test.Name)
-			}
-		} else {
-			if err != nil {
-				t.Fatalf("Test '%s' failed. Expected no error, but got '%v'", test.Name, err)
-			}
-		}
-	}
-}
-
-func TestVerifyPermissions(t *testing.T) {
-	privUser := impersonateUser
-	unprivUser := "not-backplane-cluster-admin"
-	noUser := ""
-
-	tests := []struct {
-		Name    string
-		Flags   *genericclioptions.ConfigFlags
-		Streams genericclioptions.IOStreams
-		Allowed bool
-	}{
-		{
-			Name: "Impersonate Privileged User",
-			Flags: &genericclioptions.ConfigFlags{
-				Impersonate: &privUser,
-			},
-			Streams: genericclioptions.NewTestIOStreamsDiscard(),
-			Allowed: true,
-		},
-		{
-			Name: "Impersonate Unprivileged User",
-			Flags: &genericclioptions.ConfigFlags{
-				Impersonate: &unprivUser,
-			},
-			Streams: genericclioptions.NewTestIOStreamsDiscard(),
-			Allowed: false,
-		},
-		{
-			Name:  "No Impersonation, default choice",
-			Flags: &genericclioptions.ConfigFlags{},
-			Streams: genericclioptions.IOStreams{
-				Out:    genericclioptions.NewTestIOStreamsDiscard().Out,
-				ErrOut: genericclioptions.NewTestIOStreamsDiscard().ErrOut,
-				In:     strings.NewReader("\n"),
-			},
-			Allowed: false,
-		},
-		{
-			Name:  "No Impersonation, explicit deny",
-			Flags: &genericclioptions.ConfigFlags{},
-			Streams: genericclioptions.IOStreams{
-				Out:    genericclioptions.NewTestIOStreamsDiscard().Out,
-				ErrOut: genericclioptions.NewTestIOStreamsDiscard().ErrOut,
-				In:     strings.NewReader("n\n"),
-			},
-			Allowed: false,
-		},
-		{
-			Name:  "No Impersonation, nonsense input",
-			Flags: &genericclioptions.ConfigFlags{},
-			Streams: genericclioptions.IOStreams{
-				Out:    genericclioptions.NewTestIOStreamsDiscard().Out,
-				ErrOut: genericclioptions.NewTestIOStreamsDiscard().ErrOut,
-				In:     strings.NewReader("%\n"),
-			},
-			Allowed: false,
-		},
-		{
-			Name: "No Impersonation, explicit accept",
-			Flags: &genericclioptions.ConfigFlags{
-				// Must initialize Impersonate field for acceptance test - else segfault :)
-				Impersonate: &noUser,
-			},
-			Streams: genericclioptions.IOStreams{
-				Out:    genericclioptions.NewTestIOStreamsDiscard().Out,
-				ErrOut: genericclioptions.NewTestIOStreamsDiscard().ErrOut,
-				In:     strings.NewReader("y\n"),
-			},
-			Allowed: true,
-		},
-	}
-	for _, test := range tests {
-		fmt.Printf("Testing '%s'\n", test.Name)
-		err := verifyPermissions(test.Streams, test.Flags)
-		if test.Allowed {
-			if err != nil {
-				t.Errorf("Failed '%s': expected permissions to be sufficient, but found that they were not. Err: %v", test.Name, err)
-			}
-		} else {
-			if err == nil {
-				t.Errorf("Failed '%s': expected permissions to be insufficient, but found that they were not. Err: %v", test.Name, err)
-			}
-		}
-	}
-}
 
 // TestClusterAccessOptions_createLocalKubeconfigAccess tests the clusterAccessOptions' createLocalKubeconfigAccess function
 func TestClusterAccessOptions_createLocalKubeconfigAccess(t *testing.T) {
@@ -224,9 +90,8 @@ func TestClusterAccessOptions_createLocalKubeconfigAccess(t *testing.T) {
 			// Setup Environment
 			updateEnvResponse := fmt.Sprintf("%s\n", test.UpdateEnvResp)
 			streams := genericclioptions.IOStreams{In: strings.NewReader(updateEnvResponse), Out: os.Stdout, ErrOut: os.Stderr}
-			flags := genericclioptions.ConfigFlags{}
-			client := fake.NewClientBuilder().WithScheme(runtime.NewScheme()).Build()
-			access := newClusterAccessOptions(client, streams, &flags)
+			client := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(runtime.NewScheme()))
+			access := newClusterAccessOptions(client, streams)
 
 			// Generate test objects
 			cluster := generateClusterObjectForTesting("test-cluster", "test-cluster-id", false, test.PrivateAPI)
@@ -363,11 +228,9 @@ func TestClusterAccessOptions_createJumpPod(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to add corev1 to scheme: %v", err)
 		}
-		client := fake.NewClientBuilder().WithScheme(scheme).Build()
-
-		flags := genericclioptions.ConfigFlags{}
+		client := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(scheme))
 		streams := genericclioptions.IOStreams{In: genericclioptions.NewTestIOStreamsDiscard().In, Out: os.Stdout, ErrOut: os.Stderr}
-		access := newClusterAccessOptions(client, streams, &flags)
+		access := newClusterAccessOptions(client, streams)
 
 		// Generate test objects
 		serverURL := "https://api.test-cluster.fakedomain.devshift.org:6443"

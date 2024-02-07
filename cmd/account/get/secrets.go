@@ -24,8 +24,8 @@ const (
 
 // newCmdGetSecrets implements the get secrets command which get
 // the name of secrets related to the specified AWS Account ID
-func newCmdGetSecrets(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newGetSecretsOptions(streams, flags, client, globalOpts)
+func newCmdGetSecrets(streams genericclioptions.IOStreams, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newGetSecretsOptions(streams, client, globalOpts)
 	getSecretsCmd := &cobra.Command{
 		Use:               "secrets",
 		Short:             "Get AWS Account CR related secrets",
@@ -50,16 +50,14 @@ type getSecretsOptions struct {
 	accountNamespace string
 	output           string
 
-	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
 	kubeCli       client.Client
 	GlobalOptions *globalflags.GlobalOptions
 }
 
-func newGetSecretsOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *getSecretsOptions {
+func newGetSecretsOptions(streams genericclioptions.IOStreams, client client.Client, globalOpts *globalflags.GlobalOptions) *getSecretsOptions {
 	return &getSecretsOptions{
-		flags:         flags,
 		IOStreams:     streams,
 		kubeCli:       client,
 		GlobalOptions: globalOpts,
