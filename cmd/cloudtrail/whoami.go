@@ -16,8 +16,6 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-var stsClient *sts.Client
-
 type whoamiOptions struct {
 	clusterID string
 	cluster   *cmv1.Cluster
@@ -45,7 +43,7 @@ func newwhoamiOptions() *whoamiOptions {
 	return &whoamiOptions{}
 }
 
-func Whoami(stsClient sts.Client) (string, string, error) {
+func Whoami(stsClient sts.Client) (Arn string, AccountId string, err error) {
 
 	ctx := context.TODO()
 	callerIdentityOutput, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
@@ -108,7 +106,7 @@ func (o *whoamiOptions) run(cmd *cobra.Command, _ []string) error {
 	}
 
 	fmt.Println("[+] Getting Credentials")
-	stsClient = sts.NewFromConfig(cfg)
+	stsClient := sts.NewFromConfig(cfg)
 
 	outputArn, outputID, err := Whoami(*stsClient)
 	if err != nil {
