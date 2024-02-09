@@ -178,7 +178,7 @@ func ExtractUserDetails(cloudTrailEvent *string) (*RawEventDetails, error) {
 	return &res, nil
 }
 
-// GenerateLink generates a hyperlink for the given URL and display text based of value pairs in cloudTrail Event.
+// GenerateLink generates a hyperlink for the given URL and display text based off value pairs in cloudTrail Event.
 func GenerateLink(raw RawEventDetails) (url_link string) {
 	str1 := "https://"
 	str2 := ".console.aws.amazon.com/cloudtrailv2/home?region="
