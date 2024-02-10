@@ -178,7 +178,7 @@ func ExtractUserDetails(cloudTrailEvent *string) (*RawEventDetails, error) {
 	return &res, nil
 }
 
-// GenerateLink generates a hyperlink for the given URL and display text based off value pairs in cloudTrail Event.
+// GenerateLink generates a hyperlink for the given URL and display text based of value pairs in cloudTrail Event.
 func GenerateLink(raw RawEventDetails) (url_link string) {
 	str1 := "https://"
 	str2 := ".console.aws.amazon.com/cloudtrailv2/home?region="
@@ -191,40 +191,6 @@ func GenerateLink(raw RawEventDetails) (url_link string) {
 	url_link = url
 
 	return url_link
-}
-
-// PrintEvents prints the details of each event in the provided slice of events.
-// It takes a slice of types.Event
-func printEvent(filteredEvent []types.Event, printUrl bool) {
-	for _, event := range filteredEvent {
-		if event.EventName != nil {
-			fmt.Printf("%s |", *event.EventName)
-		} else {
-			fmt.Println("<not available> |")
-		}
-
-		if event.EventTime != nil {
-			fmt.Printf("%s |", event.EventTime.String())
-		} else {
-			fmt.Println("<not available> |")
-		}
-
-		if event.Username != nil {
-			fmt.Printf("User: %s |\n", *event.Username)
-		} else {
-			fmt.Println("User: <not available> |")
-		}
-
-		if printUrl && event.CloudTrailEvent != nil {
-			details, err := ExtractUserDetails(event.CloudTrailEvent)
-			if err == nil {
-				fmt.Printf("EventLink: %s\n\n", GenerateLink(*details))
-			} else {
-				fmt.Println("EventLink: <not available>")
-			}
-		}
-	}
-
 }
 
 // unmarshals ~/.config/osdctl
@@ -295,6 +261,40 @@ func FilterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 	}
 
 	return &filteredEvents, nil
+}
+
+// PrintEvents prints the details of each event in the provided slice of events.
+// It takes a slice of types.Event
+func printEvent(filteredEvent []types.Event, printUrl bool) {
+	for _, event := range filteredEvent {
+		if event.EventName != nil {
+			fmt.Printf("%s |", *event.EventName)
+		} else {
+			fmt.Println("<not available> |")
+		}
+
+		if event.EventTime != nil {
+			fmt.Printf("%s |", event.EventTime.String())
+		} else {
+			fmt.Println("<not available> |")
+		}
+
+		if event.Username != nil {
+			fmt.Printf("User: %s |\n", *event.Username)
+		} else {
+			fmt.Println("User: <not available> |")
+		}
+
+		if printUrl && event.CloudTrailEvent != nil {
+			details, err := ExtractUserDetails(event.CloudTrailEvent)
+			if err == nil {
+				fmt.Printf("EventLink: %s\n\n", GenerateLink(*details))
+			} else {
+				fmt.Println("EventLink: <not available>")
+			}
+		}
+	}
+
 }
 func (o *LookupEventsoptions) run() error {
 	ocmClient, err := utils.CreateConnection()
