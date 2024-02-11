@@ -40,6 +40,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, client *k8s.LazyClient, 
 	clusterCmd.AddCommand(NewCmdHypershiftInfo(streams))
 	clusterCmd.AddCommand(newCmdOrgId())
 	clusterCmd.AddCommand(newCmdDynatraceURL())
+	clusterCmd.AddCommand(newCmdCleanupLeakedEC2())
 	return clusterCmd
 }
 
