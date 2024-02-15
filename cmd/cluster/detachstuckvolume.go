@@ -9,6 +9,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -35,15 +36,12 @@ func newCmdDetachStuckVolume() *cobra.Command {
 	detachstuckvolumeCmd := &cobra.Command{
 		Use:               "detach-stuck-volume",
 		Short:             "Detach openshift-monitoring namespace's volume from a cluster forcefully",
-		Args:              cobra.NoArgs,
+		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(ops.complete(cmd, args))
-			cmdutil.CheckErr(ops.run())
+			cmdutil.CheckErr(ops.detachVolume(args[0]))
 		},
 	}
-	detachstuckvolumeCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "The internal ID of the cluster to perform actions on")
-	detachstuckvolumeCmd.MarkFlagRequired("cluster-id")
 	return detachstuckvolumeCmd
 
 }
@@ -52,9 +50,9 @@ func newdetachStuckVolumeOptions() *detachStuckVolumeOptions {
 	return &detachStuckVolumeOptions{}
 }
 
-func (o *detachStuckVolumeOptions) complete(cmd *cobra.Command, args []string) error {
+func (o *detachStuckVolumeOptions) detachVolume(clusterID string) error {
 
-	err := utils.IsValidClusterKey(o.clusterID)
+	err := utils.IsValidClusterKey(clusterID)
 	if err != nil {
 		return err
 	}
@@ -63,7 +61,7 @@ func (o *detachStuckVolumeOptions) complete(cmd *cobra.Command, args []string) e
 		return err
 	}
 	defer connection.Close()
-	cluster, err := utils.GetCluster(connection, o.clusterID)
+	cluster, err := utils.GetCluster(connection, clusterID)
 	if err != nil {
 		return err
 	}
@@ -72,11 +70,6 @@ func (o *detachStuckVolumeOptions) complete(cmd *cobra.Command, args []string) e
 	if strings.ToUpper(cluster.CloudProvider().ID()) != "AWS" {
 		return fmt.Errorf("this command is only available for AWS clusters")
 	}
-
-	return nil
-}
-
-func (o *detachStuckVolumeOptions) run() error {
 
 	_, _, clientset, err := getKubeConfigAndClient(o.clusterID, "", "")
 
@@ -109,13 +102,7 @@ func (o *detachStuckVolumeOptions) run() error {
 	// WiP - Need to convert above cmd to function once volIdRegion gets completed
 	// Tested till line 107 - Couldn't test below aws function getting priv issue. gig acc doesn't have nessary priv
 
-	ocmClient, err := utils.CreateConnection()
-	if err != nil {
-		return err
-	}
-	defer ocmClient.Close()
-
-	cfg, err := osdCloud.CreateAWSV2Config(ocmClient, o.cluster)
+	cfg, err := osdCloud.CreateAWSV2Config(connection, o.cluster)
 	if err != nil {
 		return err
 	}
