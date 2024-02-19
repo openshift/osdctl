@@ -38,14 +38,14 @@ require (
 	github.com/openshift/backplane-cli v0.1.23
 	github.com/openshift/gcp-project-operator v0.0.0-20220920194256-df38e31387a7
 	github.com/openshift/hive/apis v0.0.0-20230314202213-17cb22fc3d7c
-	github.com/openshift/osd-network-verifier v0.4.5
+	github.com/openshift/osd-network-verifier v0.4.6
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/shopspring/decimal v1.3.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace
 	github.com/spf13/viper v1.18.2
-	go.uber.org/mock v0.3.0
+	go.uber.org/mock v0.4.0
 	golang.org/x/sync v0.5.0
 	golang.org/x/term v0.16.0
 	google.golang.org/api v0.153.0
