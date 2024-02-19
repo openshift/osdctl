@@ -1,11 +1,25 @@
 package alerts
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
-
 	"github.com/spf13/cobra"
 )
+
+type ID struct {
+	ID string `json:"id"`
+}
+
+type Matchers struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type Silence struct {
+	ID      string     `json:"id"`
+	Matchers []Matchers `json:"matchers"`
+}
 
 func NewCmdListSilence() *cobra.Command {
 	return &cobra.Command{
@@ -21,18 +35,37 @@ func NewCmdListSilence() *cobra.Command {
 }
 
 // osdctl alerts list-silence ${CLUSTERID}
-func ListSilence(clusterID string) {
-	cmd4 := []string{"amtool", "silence", "--alertmanager.url", LocalHostUrl}
+func ListSilence(clusterID string) string{
+	var silence []Silence
+	var id string
+
+	silenceCmd := []string{"amtool", "silence", "--alertmanager.url", LocalHostUrl, "-o", "json"}
 
 	kubeconfig, clientset, err := GetKubeConfigClient(clusterID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	output, err := ExecInPod(kubeconfig, clientset, LocalHostUrl, cmd4, PodName)
+	op, err := ExecInPod(kubeconfig, clientset, LocalHostUrl, silenceCmd, PodName)
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	fmt.Printf("%v", output)
+	opSlice := []byte(op)
+	//fmt.Println("Output from pod:", string(opSlice))
+
+	err = json.Unmarshal(opSlice, &silence)
+	//fmt.Println("Raw JSON data:", string(opSlice))
+	if err != nil {
+		fmt.Println("Error in unmarshaling the data", err)
+	}
+
+	for _, s := range silence {
+		id, matchers := s.ID, s.Matchers
+		for _, matcher := range matchers{
+			fmt.Printf("Found %v %v with silence id %s\n",matcher.Name, matcher.Value, id) 
+		}
+	}
+	return id
 }
+

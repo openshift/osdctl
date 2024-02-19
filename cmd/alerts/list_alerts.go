@@ -8,30 +8,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	levelCmd  string
-	cmdStatus []string
-)
+var levelCmd string
 
 type alertCmd struct {
 	clusterID  string
 	alertLevel string
-	active     bool
 }
 
-type alertJson struct {
-	Labels struct {
-		Alertname string `json:"alertname"`
-		Severity  string `json:"severity"`
-	} `json:"labels"`
+type Labels struct {
+	Alertname string `json:"alertname"`
+	Severity  string `json:"severity"`
+}
 
-	Status struct {
-		State string `json:"state"`
-	} `json:"status"`
+type Status struct {
+	State string `json:"state"`
+}
 
-	Annotations struct {
-		Summary string `json:"summary"`
-	} `json:"annotations"`
+type Annotations struct {
+	Summary string `json:"summary"`
+}
+
+type Alert struct {
+	Labels      Labels      `json:"labels"`
+	Status      Status      `json:"status"`
+	Annotations Annotations `json:"annotations"`
 }
 
 // osdctl alerts list ${CLUSTERID} --level [warning, critical, firing, pending, all] --active bool
@@ -50,8 +50,6 @@ func NewCmdListAlerts() *cobra.Command {
 	}
 
 	newCmd.Flags().StringVarP(&alertCmd.alertLevel, "level", "l", "", "Alert level [warning, critical, firing, pending, all]")
-	newCmd.Flags().BoolVar(&alertCmd.active, "active", false, "Show only active alerts")
-
 	return newCmd
 }
 
@@ -75,6 +73,7 @@ func alertLevel(level string) string {
 }
 
 func ListAlerts(cmd *alertCmd) {
+	var alerts []Alert
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -84,55 +83,42 @@ func ListAlerts(cmd *alertCmd) {
 
 	clusterID := cmd.clusterID
 	levelcmd := cmd.alertLevel
-	active := cmd.active
 
-	cmd1 := []string{"amtool", "--alertmanager.url", LocalHostUrl, "alert", "-o", "json"}
-
-	//Show all active alerts
-	cmd_active := []string{"amtool", "--alertmanager.url", LocalHostUrl, "alert", "query", "-a"}
-	//Show unprocessed alerts
-	//cmd0 := []string{"amtool","--alertmanager.url",utils.LocalHostUrl,"alert","-o","extended"}
-
-	if active {
-		cmdStatus = cmd_active
-	}
+	ListAlertCmd := []string{"amtool", "--alertmanager.url", LocalHostUrl, "alert", "-o", "json"}
 
 	kubeconfig, clientset, err := GetKubeConfigClient(clusterID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	output, err := ExecInPod(kubeconfig, clientset, LocalHostUrl, cmd1, PodName)
+	output, err := ExecInPod(kubeconfig, clientset, LocalHostUrl, ListAlertCmd, PodName)
 	if err != nil {
 		fmt.Println(err)
 	}
 
 	outputSlice := []byte(output)
 
-	var alerts []alertJson
-	var foundAlert bool = false
-
 	err = json.Unmarshal(outputSlice, &alerts)
 	if err != nil {
-		fmt.Println("Error in unmarshal:", err)
+		fmt.Println("Error in unmarshaling the labels", err)
 		return
 	}
 
-	for _, a := range alerts {
-		labels, status, annotations := a.Labels, a.Status, a.Annotations
-		if levelcmd == labels.Severity {
+	foundAlert := false
+	for _, alert := range alerts {
+		if levelcmd == "" || levelcmd == alert.Labels.Severity || levelcmd == "all" {
+			labels, status, annotations := alert.Labels, alert.Status, alert.Annotations
 			fmt.Printf("AlertName:%s\t Severity:%s\t State:%s\t Message:%s\n",
 				labels.Alertname,
 				labels.Severity,
 				status.State,
 				annotations.Summary)
 			foundAlert = true
-			break
 		}
 	}
 
 	if !foundAlert {
-		fmt.Printf("No such Alert found with requested severity %s\n", levelcmd)
+		fmt.Printf("No such Alert found with requested %s severity.\n", levelcmd)
 	}
 
 }
