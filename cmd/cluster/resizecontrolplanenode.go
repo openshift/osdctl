@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/openshift/osdctl/cmd/servicelog"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"os"
 	"os/exec"
 	"strings"
@@ -19,7 +21,6 @@ import (
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	bpelevate "github.com/openshift/backplane-cli/pkg/elevate"
@@ -35,20 +36,24 @@ type resizeControlPlaneNodeOptions struct {
 	kubeconfig        string
 	kubeconfigDefined bool
 
-	genericclioptions.IOStreams
+	genericiooptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
 }
 
 // This command requires to previously be logged in via `ocm login`
-func newCmdResizeControlPlaneNode(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+func newCmdResizeControlPlaneNode(streams genericiooptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	ops := newResizeControlPlaneNodeOptions(streams, globalOpts)
 	resizeControlPlaneNodeCmd := &cobra.Command{
-		Use:               "resize-control-plane-node",
-		Short:             "Resize a control plane node. Requires previous login to the api server via `ocm login` and being tunneled to the backplane.",
+		Use:   "resize-control-plane-node",
+		Short: "Resize a control plane node.",
+		Long: `Resize a control plane node. Requires previous login to the api server via "ocm backplane login".
+The user will be prompted to send a service log after the resize is complete.`,
+		Example: `# Resize a node to m5.4xlarge
+osdctl cluster resize-control-plane-node -c ab8d922ccd2d2mknfmi12vnb778h1xyz --machine-type m5.4xlarge --node ip-12-3-456-789.us-east-1.compute.internal --reason "OHSS-12345"`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(ops.complete(cmd, args))
+			cmdutil.CheckErr(ops.complete())
 			cmdutil.CheckErr(ops.run())
 		},
 	}
@@ -64,14 +69,14 @@ func newCmdResizeControlPlaneNode(streams genericclioptions.IOStreams, globalOpt
 	return resizeControlPlaneNodeCmd
 }
 
-func newResizeControlPlaneNodeOptions(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *resizeControlPlaneNodeOptions {
+func newResizeControlPlaneNodeOptions(streams genericiooptions.IOStreams, globalOpts *globalflags.GlobalOptions) *resizeControlPlaneNodeOptions {
 	return &resizeControlPlaneNodeOptions{
 		IOStreams:     streams,
 		GlobalOptions: globalOpts,
 	}
 }
 
-func (o *resizeControlPlaneNodeOptions) complete(cmd *cobra.Command, _ []string) error {
+func (o *resizeControlPlaneNodeOptions) complete() error {
 	err := utils.IsValidClusterKey(o.clusterID)
 	if err != nil {
 		return err
@@ -252,9 +257,9 @@ func (o *resizeControlPlaneNodeOptions) forceDrainNode(nodeID string, reason str
 	})
 	// When we call RunElevate the KUBECONFIG variable will be set to a temporary one and not set back to its original (a value or unset), so here we need to redefine it as it was (a value or unset)
 	if o.kubeconfigDefined {
-		os.Setenv("KUBECONFIG", o.kubeconfig)
+		_ = os.Setenv("KUBECONFIG", o.kubeconfig)
 	} else {
-		os.Unsetenv("KUBECONFIG")
+		_ = os.Unsetenv("KUBECONFIG")
 	}
 
 	if err != nil {
@@ -273,9 +278,9 @@ func (o *resizeControlPlaneNodeOptions) drainNode(nodeID string, reason string) 
 	})
 	// // When we call RunElevate the KUBECONFIG variable will be set to a temporary one and not set back to its original (a value or unset), so here we need to redefine it as it was (a value or unset)
 	if o.kubeconfigDefined {
-		os.Setenv("KUBECONFIG", o.kubeconfig)
+		_ = os.Setenv("KUBECONFIG", o.kubeconfig)
 	} else {
-		os.Unsetenv("KUBECONFIG")
+		_ = os.Unsetenv("KUBECONFIG")
 	}
 
 	if err != nil {
@@ -416,9 +421,9 @@ func (o *resizeControlPlaneNodeOptions) patchMachineType(machine string, machine
 	})
 	// // When we call RunElevate the KUBECONFIG variable will be set to a temporary one and not set back to its original (a value or unset), so here we need to redefine it as it was (a value or unset)
 	if o.kubeconfigDefined {
-		os.Setenv("KUBECONFIG", o.kubeconfig)
+		_ = os.Setenv("KUBECONFIG", o.kubeconfig)
 	} else {
-		os.Unsetenv("KUBECONFIG")
+		_ = os.Unsetenv("KUBECONFIG")
 	}
 	if err != nil {
 		return fmt.Errorf("Could not patch machine type:\n%s", err)
@@ -510,5 +515,32 @@ func (o *resizeControlPlaneNodeOptions) run() error {
 
 	fmt.Println("Control plane node successfully resized.")
 
-	return nil
+	return promptGenerateResizeSL(o.clusterID, o.newMachineType)
+}
+
+func promptGenerateResizeSL(clusterID string, newMachineType string) error {
+	fmt.Println("Generating service log - only do this after all nodes have been resized.")
+	if !utils.ConfirmPrompt() {
+		return nil
+	}
+
+	var jiraID string
+	fmt.Print("Please enter the JIRA ID that corresponds to this resize: ")
+	_, _ = fmt.Scanln(&jiraID)
+
+	var justification string
+	fmt.Print("Please enter a justification for the resize: ")
+	_, _ = fmt.Scanln(&justification)
+
+	postCmd := servicelog.PostCmdOptions{
+		Template: "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/controlplane_resized.json",
+		TemplateParams: []string{
+			fmt.Sprintf("INSTANCE_TYPE=%s", newMachineType),
+			fmt.Sprintf("JIRA_ID=%s", jiraID),
+			fmt.Sprintf("JUSTIFICATION=%s", justification),
+		},
+		ClusterId: clusterID,
+	}
+
+	return postCmd.Run()
 }
