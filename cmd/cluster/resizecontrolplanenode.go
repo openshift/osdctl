@@ -105,7 +105,7 @@ func (o *resizeControlPlaneNodeOptions) complete(cmd *cobra.Command, _ []string)
 		machine type doesn't exist and can be re-run.
 	*/
 
-	// As RunElevate is unsetting KUBECONFIG, we need to store its value in order to redefine it if it was defined
+	// As RunElevate is overriding KUBECONFIG, we need to store its value in order to redefine it to its original (value or unset)
 	o.kubeconfig, o.kubeconfigDefined = os.LookupEnv("KUBECONFIG")
 
 	return nil
@@ -250,9 +250,11 @@ func (o *resizeControlPlaneNodeOptions) forceDrainNode(nodeID string, reason str
 		fmt.Sprintf("%s - Elevate required to force drain node for resizecontroleplanenode", reason),
 		"adm drain --ignore-daemonsets --delete-emptydir-data --force", nodeID,
 	})
-	// As RunElevate is unsetting KUBECONFIG, we need to redefined it if it was defined
+	// When we call RunElevate the KUBECONFIG variable will be set to a temporary one and not set back to its original (a value or unset), so here we need to redefine it as it was (a value or unset)
 	if o.kubeconfigDefined {
 		os.Setenv("KUBECONFIG", o.kubeconfig)
+	} else {
+		os.Unsetenv("KUBECONFIG")
 	}
 
 	if err != nil {
@@ -269,9 +271,11 @@ func (o *resizeControlPlaneNodeOptions) drainNode(nodeID string, reason string) 
 		fmt.Sprintf("%s - Elevate required to drain node for resizecontroleplanenode", reason),
 		"adm drain --ignore-daemonsets --delete-emptydir-data", nodeID,
 	})
-	// As RunElevate is unsetting KUBECONFIG, we need to redefined it if it was defined
+	// // When we call RunElevate the KUBECONFIG variable will be set to a temporary one and not set back to its original (a value or unset), so here we need to redefine it as it was (a value or unset)
 	if o.kubeconfigDefined {
 		os.Setenv("KUBECONFIG", o.kubeconfig)
+	} else {
+		os.Unsetenv("KUBECONFIG")
 	}
 
 	if err != nil {
@@ -410,9 +414,11 @@ func (o *resizeControlPlaneNodeOptions) patchMachineType(machine string, machine
 		fmt.Sprintf("%s - Elevate required to patch machine type of machine %s to %s", reason, machine, machineType),
 		`-n openshift-machine-api patch machine`, machine, `--patch "{\"spec\":{\"providerSpec\":{\"value\":{\"instanceType\":\"` + machineType + `\"}}}}" --type merge`,
 	})
-	// As RunElevate is unsetting KUBECONFIG, we need to redefined it if it was defined
+	// // When we call RunElevate the KUBECONFIG variable will be set to a temporary one and not set back to its original (a value or unset), so here we need to redefine it as it was (a value or unset)
 	if o.kubeconfigDefined {
 		os.Setenv("KUBECONFIG", o.kubeconfig)
+	} else {
+		os.Unsetenv("KUBECONFIG")
 	}
 	if err != nil {
 		return fmt.Errorf("Could not patch machine type:\n%s", err)
