@@ -28,13 +28,11 @@ import (
 
 // resizeControlPlaneNodeOptions defines the struct for running resizeControlPlaneNode command
 type resizeControlPlaneNodeOptions struct {
-	clusterID         string
-	node              string
-	newMachineType    string
-	reason            string
-	cluster           *cmv1.Cluster
-	kubeconfig        string
-	kubeconfigDefined bool
+	clusterID      string
+	node           string
+	newMachineType string
+	reason         string
+	cluster        *cmv1.Cluster
 
 	genericiooptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
@@ -109,9 +107,6 @@ func (o *resizeControlPlaneNodeOptions) complete() error {
 		As this command is idempotent, it will just fail on a later stage if e.g. the
 		machine type doesn't exist and can be re-run.
 	*/
-
-	// As RunElevate is overriding KUBECONFIG, we need to store its value in order to redefine it to its original (value or unset)
-	o.kubeconfig, o.kubeconfigDefined = os.LookupEnv("KUBECONFIG")
 
 	return nil
 }
@@ -255,13 +250,6 @@ func (o *resizeControlPlaneNodeOptions) forceDrainNode(nodeID string, reason str
 		fmt.Sprintf("%s - Elevate required to force drain node for resizecontroleplanenode", reason),
 		"adm drain --ignore-daemonsets --delete-emptydir-data --force", nodeID,
 	})
-	// When we call RunElevate the KUBECONFIG variable will be set to a temporary one and not set back to its original (a value or unset), so here we need to redefine it as it was (a value or unset)
-	if o.kubeconfigDefined {
-		_ = os.Setenv("KUBECONFIG", o.kubeconfig)
-	} else {
-		_ = os.Unsetenv("KUBECONFIG")
-	}
-
 	if err != nil {
 		return fmt.Errorf("failed to force drain:\n%s", err)
 	}
@@ -276,13 +264,6 @@ func (o *resizeControlPlaneNodeOptions) drainNode(nodeID string, reason string) 
 		fmt.Sprintf("%s - Elevate required to drain node for resizecontroleplanenode", reason),
 		"adm drain --ignore-daemonsets --delete-emptydir-data", nodeID,
 	})
-	// // When we call RunElevate the KUBECONFIG variable will be set to a temporary one and not set back to its original (a value or unset), so here we need to redefine it as it was (a value or unset)
-	if o.kubeconfigDefined {
-		_ = os.Setenv("KUBECONFIG", o.kubeconfig)
-	} else {
-		_ = os.Unsetenv("KUBECONFIG")
-	}
-
 	if err != nil {
 		fmt.Println("Failed to drain node:")
 		fmt.Println(err)
@@ -419,12 +400,6 @@ func (o *resizeControlPlaneNodeOptions) patchMachineType(machine string, machine
 		fmt.Sprintf("%s - Elevate required to patch machine type of machine %s to %s", reason, machine, machineType),
 		`-n openshift-machine-api patch machine`, machine, `--patch "{\"spec\":{\"providerSpec\":{\"value\":{\"instanceType\":\"` + machineType + `\"}}}}" --type merge`,
 	})
-	// // When we call RunElevate the KUBECONFIG variable will be set to a temporary one and not set back to its original (a value or unset), so here we need to redefine it as it was (a value or unset)
-	if o.kubeconfigDefined {
-		_ = os.Setenv("KUBECONFIG", o.kubeconfig)
-	} else {
-		_ = os.Unsetenv("KUBECONFIG")
-	}
 	if err != nil {
 		return fmt.Errorf("Could not patch machine type:\n%s", err)
 	}
