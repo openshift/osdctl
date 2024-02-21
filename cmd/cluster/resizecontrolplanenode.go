@@ -503,9 +503,17 @@ func promptGenerateResizeSL(clusterID string, newMachineType string) error {
 	fmt.Print("Please enter the JIRA ID that corresponds to this resize: ")
 	_, _ = fmt.Scanln(&jiraID)
 
+	// Use a bufio Scanner since the fmt package cannot read in more than one word
 	var justification string
 	fmt.Print("Please enter a justification for the resize: ")
-	_, _ = fmt.Scanln(&justification)
+	scanner := bufio.NewScanner(os.Stdin)
+	if scanner.Scan() {
+		justification = scanner.Text()
+	} else {
+		errText := "failed to read justification text, send service log manually"
+		_, _ = fmt.Fprintf(os.Stderr, errText)
+		return errors.New(errText)
+	}
 
 	postCmd := servicelog.PostCmdOptions{
 		Template: "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/controlplane_resized.json",
