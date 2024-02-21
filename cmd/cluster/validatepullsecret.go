@@ -49,8 +49,9 @@ In case the managed-script fails, --elevate can be added to get the pull-secret 
 			cmdutil.CheckErr(ops.run())
 		},
 	}
-	validatePullSecretCmd.Flags().BoolVar(&ops.elevate, "elevate", false, "get pull-secret with backplane-cluster-admin without running a managed-script")
-	validatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	validatePullSecretCmd.Flags().BoolVar(&ops.elevate, "elevate", false, "get pull-secret with backplane-cluster-admin without running a managed-script, mandatory when a reason is provided")
+	validatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command to be run (usualy an OHSS or PD ticket), mandatory when using elevate")
+	validatePullSecretCmd.MarkFlagsRequiredTogether("elevate", "reason")
 	return validatePullSecretCmd
 }
 
