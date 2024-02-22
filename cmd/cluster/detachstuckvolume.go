@@ -23,7 +23,7 @@ const Namespace = "openshift-monitoring"
 
 var detachStuckVolumeInput struct {
 	// commenting all the function for region. REASON: It seems region isn't a mandatory field in aws sdk detachStuckVolume function
-	//Region   []string
+	// Region []string
 	VolumeId []string
 }
 
@@ -33,7 +33,7 @@ type detachStuckVolumeOptions struct {
 }
 
 func newCmdDetachStuckVolume() *cobra.Command {
-	ops := newdetachStuckVolumeOptions()
+	ops := &detachStuckVolumeOptions{}
 	detachstuckvolumeCmd := &cobra.Command{
 		Use:               "detach-stuck-volume",
 		Short:             "Detach openshift-monitoring namespace's volume from a cluster forcefully",
@@ -45,10 +45,6 @@ func newCmdDetachStuckVolume() *cobra.Command {
 	}
 	return detachstuckvolumeCmd
 
-}
-
-func newdetachStuckVolumeOptions() *detachStuckVolumeOptions {
-	return &detachStuckVolumeOptions{}
 }
 
 func (o *detachStuckVolumeOptions) detachVolume(clusterID string) error {
@@ -145,7 +141,7 @@ func getVolumeID(clientset *kubernetes.Clientset, namespace, selector string) er
 		}
 	}
 
-	// Gathering persistant volume obj from above gathered pvc & passing it to pVolume slice
+	// Gathering persistent volume obj from above gathered pvc & passing it to pVolume slice
 	for _, singlePvc := range pvClaim {
 		pvC, err := clientset.CoreV1().PersistentVolumeClaims(namespace).List(context.TODO(), v1.ListOptions{FieldSelector: "metadata.name=" + singlePvc})
 		if err != nil {
