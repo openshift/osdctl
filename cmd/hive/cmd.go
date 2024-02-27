@@ -9,7 +9,7 @@ import (
 )
 
 // NewCmdHive implements the base hive command
-func NewCmdHive(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+func NewCmdHive(streams genericclioptions.IOStreams, client client.Client) *cobra.Command {
 	hiveCmd := &cobra.Command{
 		Use:               "hive",
 		Short:             "hive related utilities",
@@ -17,8 +17,8 @@ func NewCmdHive(streams genericclioptions.IOStreams, flags *genericclioptions.Co
 		DisableAutoGenTag: true,
 	}
 
-	hiveCmd.AddCommand(NewCmdClusterSyncFailures(streams, flags, client))
-	hiveCmd.AddCommand(cd.NewCmdClusterDeployment(streams, flags, client))
+	hiveCmd.AddCommand(NewCmdClusterSyncFailures(streams, client))
+	hiveCmd.AddCommand(cd.NewCmdClusterDeployment(streams, client))
 	return hiveCmd
 }
 

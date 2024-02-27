@@ -58,7 +58,7 @@ type Config struct {
 }
 
 // GetClusterAnyStatus returns an OCM cluster object given an OCM connection and cluster id
-// (internal and external ids both supported).
+// (internal id, external id, and name all supported).
 func GetClusterAnyStatus(conn *sdk.Connection, clusterId string) (*cmv1.Cluster, error) {
 	// identifier in the accounts management service. To find those clusters we need to check
 	// directly in the clusters management service.

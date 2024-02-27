@@ -7,13 +7,11 @@ import (
 	. "github.com/onsi/gomega"
 
 	mockk8s "github.com/openshift/osdctl/cmd/hive/clusterdeployment/mock/k8s"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 func TestListCmdComplete(t *testing.T) {
 	g := NewGomegaWithT(t)
 	mockCtrl := gomock.NewController(t)
-	kubeFlags := genericclioptions.NewConfigFlags(false)
 	testCases := []struct {
 		title       string
 		option      *listOptions
@@ -22,7 +20,6 @@ func TestListCmdComplete(t *testing.T) {
 		{
 			title: "succeed",
 			option: &listOptions{
-				flags:   kubeFlags,
 				kubeCli: mockk8s.NewMockClient(mockCtrl),
 			},
 			errExpected: false,

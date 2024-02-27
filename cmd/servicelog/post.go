@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"k8s.io/utils/strings/slices"
 
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
@@ -35,6 +34,7 @@ type PostCmdOptions struct {
 	TemplateParams  []string
 	filterFiles     []string // Path to filter file
 	filtersFromFile string   // Contents of filterFiles
+	filterParams    []string
 	isDryRun        bool
 	skipPrompts     bool
 	clustersFile    string
@@ -52,13 +52,27 @@ func newPostCmd() *cobra.Command {
 	var opts = PostCmdOptions{}
 	postCmd := &cobra.Command{
 		Use:   "post CLUSTER_ID",
-		Short: "Send a servicelog message to a given cluster",
-		Args:  cobra.MaximumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		Short: "Post a service log to a cluster or list of clusters",
+		Long: `Post a service log to a cluster or list of clusters
+
+  Docs: https://docs.openshift.com/rosa/logging/sd-accessing-the-service-logs.html`,
+		Example: `
+  # Post a service log to a single cluster via a local file
+  osdctl servicelog post ${CLUSTER_ID} -t ~/path/to/file.json
+
+  # Post a service log to a single cluster via a remote URL, providing a parameter
+  osdctl servicelog post ${CLUSTER_ID} -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/incident_resolved.json -p ALERT_NAME="alert"
+
+  # Post a service log to a group of clusters, determined by an OCM query
+  ocm list cluster -p search="cloud_provider.id is 'gcp' and managed='true' and state is 'ready'"
+  osdctl servicelog post -q "cloud_provider.id is 'gcp' and managed='true' and state is 'ready'" -t file.json
+`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				opts.ClusterId = args[0]
 			}
-			cmdutil.CheckErr(opts.Run())
+			return opts.Run()
 		},
 	}
 
@@ -66,7 +80,7 @@ func newPostCmd() *cobra.Command {
 	postCmd.Flags().StringVarP(&opts.Template, "template", "t", "", "Message template file or URL")
 	postCmd.Flags().StringArrayVarP(&opts.TemplateParams, "param", "p", opts.TemplateParams, "Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.")
 	postCmd.Flags().BoolVarP(&opts.isDryRun, "dry-run", "d", false, "Dry-run - print the service log about to be sent but don't send it.")
-	postCmd.Flags().StringArrayVarP(&filterParams, "query", "q", filterParams, "Specify a search query (eg. -q \"name like foo\") for a bulk-post to matching clusters.")
+	postCmd.Flags().StringArrayVarP(&opts.filterParams, "query", "q", []string{}, "Specify a search query (eg. -q \"name like foo\") for a bulk-post to matching clusters.")
 	postCmd.Flags().BoolVarP(&opts.skipPrompts, "yes", "y", false, "Skips all prompts.")
 	postCmd.Flags().StringArrayVarP(&opts.filterFiles, "query-file", "f", []string{}, "File containing search queries to apply. All lines in the file will be concatenated into a single query. If this flag is called multiple times, every file's search query will be combined with logical AND.")
 	postCmd.Flags().StringVarP(&opts.clustersFile, "clusters-file", "c", "", `Read a list of clusters to post the servicelog to. the format of the file is: {"clusters":["$CLUSTERID"]}`)
@@ -78,31 +92,29 @@ func newPostCmd() *cobra.Command {
 func (o *PostCmdOptions) Init() error {
 	userParameterNames = []string{}
 	userParameterValues = []string{}
-	filterParams = []string{}
 	o.successfulClusters = make(map[string]string)
 	o.failedClusters = make(map[string]string)
 	return nil
 }
 
 func (o *PostCmdOptions) Validate() error {
-	if o.ClusterId == "" && len(filterParams) == 0 && o.clustersFile == "" {
+	if o.ClusterId == "" && len(o.filterParams) == 0 && o.clustersFile == "" {
 		return fmt.Errorf("no cluster identifier has been found")
 	}
 	return nil
 }
 
-func (o *PostCmdOptions) CheckServiceLogsLastHour() bool {
-	getAllMessages := false      // we need just manual entries
-	getInternalLogsOnly := false // we need all messages
-	numberOfHours := 1           // number of hours we need to wait for svc logs
-	timeStampToCompare := time.Now().Add(-time.Hour * time.Duration(numberOfHours))
-	serviceLogs, err := GetServiceLogsSince(o.ClusterId, timeStampToCompare, getAllMessages, getInternalLogsOnly)
+// CheckServiceLogsLastHour returns true if there were servicelogs sent in the past hour, otherwise false
+func CheckServiceLogsLastHour(clusterId string) bool {
+	timeStampToCompare := time.Now().Add(-time.Hour)
+	serviceLogs, err := GetServiceLogsSince(clusterId, timeStampToCompare, false, false)
 	if err != nil {
-		log.Fatalf("failed to fetch service logs: %q", err)
+		log.Warnf("please verify that you are not sending a duplicate service log that has been recently sent - failed to fetch recent service logs: %v", err)
+		return true
 	}
 	if len(serviceLogs) > 0 {
 		for _, svclog := range serviceLogs {
-			fmt.Println("Below service Log has been subitted in last 60 minutes\nDescription: ", svclog.Description())
+			log.Warnf("A service log has been submitted in last hour\nDescription: %s", svclog.Description())
 		}
 		return true
 	}
@@ -116,11 +128,7 @@ func (o *PostCmdOptions) Run() error {
 	if err := o.Validate(); err != nil {
 		return err
 	}
-	if term.IsTerminal(int(os.Stdout.Fd())) && o.CheckServiceLogsLastHour() {
-		if !ocmutils.ConfirmPrompt() {
-			return nil
-		}
-	}
+
 	o.parseUserParameters() // parse all the '-p' user flags
 	o.readFilterFile()      // parse the ocm filters in file provided via '-f' flag
 	o.readTemplate()        // parse the given JSON template provided via '-t' flag
@@ -146,54 +154,69 @@ func (o *PostCmdOptions) Run() error {
 		}
 	}()
 
-	// Retrieve matching clusters
+	// Merge OCM filters from all custom filter-related flags
 	if o.filtersFromFile != "" {
-		if len(filterParams) != 0 {
+		if len(o.filterParams) != 0 {
 			log.Warnf("Search queries were passed using both the '-q' and '-f' flags. This will apply logical AND between the queries, potentially resulting in no matches")
 		}
 		filters := strings.Join(strings.Split(strings.TrimSpace(o.filtersFromFile), "\n"), " ")
-		filterParams = append(filterParams, filters)
+		o.filterParams = append(o.filterParams, filters)
 	}
+
+	// Combine existing OCM filters with any cluster id-related flags
 	var queries []string
 	if o.clustersFile != "" {
 		contents, err := o.accessFile(o.clustersFile)
 		if err != nil {
-			log.Fatalf("Cannot read file %s: %q", o.clustersFile, err)
+			return fmt.Errorf("cannot read file %s: %w", o.clustersFile, err)
 		}
-		err = o.parseClustersFile(contents)
-		if err != nil {
-			log.Fatalf("Cannot parse file %s: %q", o.clustersFile, err)
+		if err := o.parseClustersFile(contents); err != nil {
+			return fmt.Errorf("cannot parse file %s: %w", o.clustersFile, err)
 		}
 		for i := range o.ClustersFile.Clusters {
 			cluster := o.ClustersFile.Clusters[i]
 			queries = append(queries, ocmutils.GenerateQuery(cluster))
 		}
-	} else {
+	}
+	if o.ClusterId != "" {
 		queries = append(queries, ocmutils.GenerateQuery(o.ClusterId))
 	}
 	if len(queries) > 0 {
-		if len(filterParams) > 0 {
+		if len(o.filterParams) > 0 {
 			log.Warnf("A cluster identifier was passed with the '-q' flag. This will apply logical AND between the search query and the cluster given, potentially resulting in no matches")
 		}
+		o.filterParams = append(o.filterParams, strings.Join(queries, " or "))
 	}
 
-	filterParams = append(filterParams, strings.Join(queries, " or "))
-	clusters, err := ocmutils.ApplyFilters(ocmClient, filterParams)
+	if len(o.filterParams) > 0 {
+		log.Debugf("applied filters: %v", o.filterParams)
+	}
 
+	clusters, err := ocmutils.ApplyFilters(ocmClient, o.filterParams)
 	if err != nil {
-		log.Fatalf("Cannot retrieve clusters: %q", err)
+		return fmt.Errorf("failed to search for clusters with provided filters (%v): %v", o.filterParams, err)
 	} else if len(clusters) < 1 {
-		log.Fatalf("No clusters match the given parameters.")
+		return fmt.Errorf("no clusters match the given filters (%v)", o.filterParams)
 	}
 
 	log.Infoln("The following clusters match the given parameters:")
 	if err := o.printClusters(clusters); err != nil {
-		log.Fatalf("Could not print matching clusters: %q", err)
+		return fmt.Errorf("could not print matching clusters: %v", err)
+	}
+
+	// If sending a service log to one cluster, print recent service logs so that we can verify we aren't sending
+	// duplicate messages in quick succession
+	if len(clusters) == 1 {
+		if term.IsTerminal(int(os.Stdout.Fd())) && CheckServiceLogsLastHour(clusters[0].ID()) {
+			if !ocmutils.ConfirmPrompt() {
+				return nil
+			}
+		}
 	}
 
 	log.Infoln("The following template will be sent:")
 	if err := o.printTemplate(); err != nil {
-		log.Errorf("Cannot read generated template: %q", err)
+		return fmt.Errorf("cannot read generated template: %w", err)
 	}
 
 	// If this is a dry-run, don't proceed further.

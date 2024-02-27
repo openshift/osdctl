@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/openshift/osdctl/pkg/k8s"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -98,11 +99,9 @@ func TestCleanupAccessOptions_dropPrivateLinkAccess(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed '%s': to add corev1 to scheme: %v", test.Name, err)
 		}
-		client := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...).Build()
-
+		client := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...))
 		streams := genericclioptions.IOStreams{In: strings.NewReader("y\n"), Out: os.Stdout, ErrOut: os.Stderr}
-		flags := genericclioptions.ConfigFlags{}
-		cleanupAccess := newCleanupAccessOptions(client, streams, &flags)
+		cleanupAccess := newCleanupAccessOptions(client, streams)
 
 		cluster := generateClusterObjectForTesting("fake-cluster", clusterid, true, false)
 
@@ -116,7 +115,7 @@ func TestCleanupAccessOptions_dropPrivateLinkAccess(t *testing.T) {
 
 		// Verify only expected pods remain
 		podsAfter := corev1.PodList{}
-		err = cleanupAccess.Client.List(context.TODO(), &podsAfter)
+		err = cleanupAccess.kubeCli.List(context.TODO(), &podsAfter)
 		if err != nil {
 			t.Fatalf("Failed '%s': error while listing pods after testing: %v", test.Name, err)
 		}

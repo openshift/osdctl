@@ -16,7 +16,6 @@ func TestResetCmdComplete(t *testing.T) {
 	g := NewGomegaWithT(t)
 	mockCtrl := gomock.NewController(t)
 	streams := genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr}
-	kubeFlags := genericclioptions.NewConfigFlags(false)
 	testCases := []struct {
 		title       string
 		option      *resetOptions
@@ -37,10 +36,8 @@ func TestResetCmdComplete(t *testing.T) {
 			errContent:  "The name of Account CR is required for reset command",
 		},
 		{
-			title: "succeed",
-			option: &resetOptions{
-				flags: kubeFlags,
-			},
+			title:       "succeed",
+			option:      &resetOptions{},
 			args:        []string{"foo"},
 			errExpected: false,
 		},
@@ -48,7 +45,7 @@ func TestResetCmdComplete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
-			cmd := newCmdReset(streams, kubeFlags, mockk8s.NewMockClient(mockCtrl))
+			cmd := newCmdReset(streams, mockk8s.NewMockClient(mockCtrl))
 			err := tc.option.complete(cmd, tc.args)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
+	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,6 +20,7 @@ import (
 
 type etcdOptions struct {
 	nodeId string
+	reason string
 }
 
 // Secrets List
@@ -48,12 +50,14 @@ func newCmdEtcdMemberReplacement() *cobra.Command {
 		},
 	}
 	replaceCmd.Flags().StringVar(&opts.nodeId, "node", "", "Node ID (required)")
+	replaceCmd.Flags().StringVar(&opts.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
 	replaceCmd.MarkFlagRequired("node")
+	replaceCmd.MarkFlagRequired("reason")
 	return replaceCmd
 }
 
 func (opts *etcdOptions) EtcdReplaceMember(clusterId string) error {
-	kubeCli, kconfig, clientset, err := getKubeConfigAndClient(clusterId, "backplane-cluster-admin", "Replacing unhealthy etcd member using osdctl")
+	kubeCli, kconfig, clientset, err := common.GetKubeConfigAndClient(clusterId, opts.reason, fmt.Sprintf("Replacing unhealthy etcd node %s using osdctl", opts.nodeId))
 	if err != nil {
 		return err
 	}
@@ -66,7 +70,6 @@ func (opts *etcdOptions) EtcdReplaceMember(clusterId string) error {
 		return fmt.Errorf("node name cannot be blank. Please provide node using --node flag")
 	}
 
-	fmt.Println("[INFO] This operation will run with the \"backplane-cluster-admin\" role")
 	// Get the etcd pods
 	pods, err := clientset.CoreV1().Pods(EtcdNamespaceName).List(context.TODO(), listOptions)
 	if err != nil {

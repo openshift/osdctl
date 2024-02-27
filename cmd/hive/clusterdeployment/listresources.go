@@ -19,8 +19,8 @@ import (
 )
 
 // newCmdList implements the list command to list
-func newCmdListResources(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
-	l := newListResources(streams, flags, client)
+func newCmdListResources(streams genericclioptions.IOStreams, client client.Client) *cobra.Command {
+	l := newListResources(streams, client)
 	lrCmd := &cobra.Command{
 		Use:               "listresources",
 		Short:             "List all resources on a hive cluster related to a given cluster",
@@ -38,7 +38,6 @@ func newCmdListResources(streams genericclioptions.IOStreams, flags *genericclio
 
 // listOptions defines the struct for running list command
 type ListResources struct {
-	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
 
 	ClusterDeployment     hivev1.ClusterDeployment
@@ -56,9 +55,8 @@ type Printer interface {
 	Flush() error
 }
 
-func newListResources(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *ListResources {
+func newListResources(streams genericclioptions.IOStreams, client client.Client) *ListResources {
 	return &ListResources{
-		flags:     flags,
 		IOStreams: streams,
 		P:         printer.NewTablePrinter(streams.Out, 20, 1, 3, ' '),
 		KubeCli:   client,

@@ -8,7 +8,7 @@ import (
 )
 
 // NewCmdClusterDeployment implements the base cluster deployment command
-func NewCmdClusterDeployment(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
+func NewCmdClusterDeployment(streams genericclioptions.IOStreams, client client.Client) *cobra.Command {
 	cdCmd := &cobra.Command{
 		Use:               "clusterdeployment",
 		Short:             "cluster deployment related utilities",
@@ -17,8 +17,8 @@ func NewCmdClusterDeployment(streams genericclioptions.IOStreams, flags *generic
 		DisableAutoGenTag: true,
 	}
 
-	cdCmd.AddCommand(newCmdList(streams, flags, client))
-	cdCmd.AddCommand(newCmdListResources(streams, flags, client))
+	cdCmd.AddCommand(newCmdList(streams, client))
+	cdCmd.AddCommand(newCmdListResources(streams, client))
 	return cdCmd
 }
 

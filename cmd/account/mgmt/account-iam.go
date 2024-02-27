@@ -25,7 +25,7 @@ type iamOptions struct {
 var arnPolicy = "arn:aws:iam::aws:policy/AdministratorAccess"
 
 // accountIamCmd implements the accountIam command which creates an IAM user for a given account
-func newCmdAccountIAM(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+func newCmdAccountIAM(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	ops := &iamOptions{}
 	iamCmd := &cobra.Command{
 		Use:               "iam",

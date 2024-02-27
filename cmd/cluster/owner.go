@@ -27,8 +27,8 @@ type ownerOptions struct {
 }
 
 // newCmdOwner return a new command
-func newCmdOwner(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newOwnerOptions(streams, flags, globalOpts)
+func newCmdOwner(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newOwnerOptions(streams, globalOpts)
 	ownerCmd := &cobra.Command{
 		Use:               "owner",
 		Short:             "List the clusters owned by the user (can be specified to any user, not only yourself)",
@@ -44,7 +44,7 @@ func newCmdOwner(streams genericclioptions.IOStreams, flags *genericclioptions.C
 	return ownerCmd
 }
 
-func newOwnerOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *ownerOptions {
+func newOwnerOptions(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *ownerOptions {
 	return &ownerOptions{
 		IOStreams:     streams,
 		GlobalOptions: globalOpts,

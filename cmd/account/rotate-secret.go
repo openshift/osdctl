@@ -27,8 +27,8 @@ import (
 )
 
 // newCmdRotateSecret implements the rotate-secret command which rotate IAM User credentials
-func newCmdRotateSecret(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
-	ops := newRotateSecretOptions(streams, flags, client)
+func newCmdRotateSecret(streams genericclioptions.IOStreams, client *k8s.LazyClient) *cobra.Command {
+	ops := newRotateSecretOptions(streams, client)
 	rotateSecretCmd := &cobra.Command{
 		Use:               "rotate-secret <aws-account-cr-name>",
 		Short:             "Rotate IAM credentials secret",
@@ -42,6 +42,8 @@ func newCmdRotateSecret(streams genericclioptions.IOStreams, flags *genericcliop
 
 	rotateSecretCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile")
 	rotateSecretCmd.Flags().BoolVar(&ops.updateCcsCreds, "ccs", false, "Also rotates osdCcsAdmin credential. Use caution.")
+	rotateSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	_ = rotateSecretCmd.MarkFlagRequired("reason")
 
 	return rotateSecretCmd
 }
@@ -52,15 +54,14 @@ type rotateSecretOptions struct {
 	profile           string
 	updateCcsCreds    bool
 	awsAccountTimeout *int32
+	reason            string
 
-	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
-	kubeCli client.Client
+	kubeCli *k8s.LazyClient
 }
 
-func newRotateSecretOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *rotateSecretOptions {
+func newRotateSecretOptions(streams genericclioptions.IOStreams, client *k8s.LazyClient) *rotateSecretOptions {
 	return &rotateSecretOptions{
-		flags:     flags,
 		IOStreams: streams,
 		kubeCli:   client,
 	}
@@ -89,6 +90,9 @@ func (o *rotateSecretOptions) run() error {
 
 	ctx := context.TODO()
 	var err error
+
+	// This action requires elevation
+	o.kubeCli.Impersonate("backplane-cluster-admin", o.reason, fmt.Sprintf("Elevation required to rotate secrets %s aws-account-cr-name", o.accountCRName))
 
 	// Get the associated Account CR from the provided name
 	var accountID string

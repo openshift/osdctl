@@ -17,8 +17,8 @@ import (
 
 // newCmdGetAccountClaim implements the get account-claim command which get
 // the Account Claim CR related to the specified AWS Account ID
-func newCmdGetAccountClaim(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newGetAccountClaimOptions(streams, flags, client, globalOpts)
+func newCmdGetAccountClaim(streams genericclioptions.IOStreams, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newGetAccountClaimOptions(streams, client, globalOpts)
 	getAccountClaimCmd := &cobra.Command{
 		Use:               "account-claim",
 		Short:             "Get AWS Account Claim CR",
@@ -47,16 +47,14 @@ type getAccountClaimOptions struct {
 
 	output string
 
-	flags      *genericclioptions.ConfigFlags
 	printFlags *printer.PrintFlags
 	genericclioptions.IOStreams
 	kubeCli       client.Client
 	GlobalOptions *globalflags.GlobalOptions
 }
 
-func newGetAccountClaimOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *getAccountClaimOptions {
+func newGetAccountClaimOptions(streams genericclioptions.IOStreams, client client.Client, globalOpts *globalflags.GlobalOptions) *getAccountClaimOptions {
 	return &getAccountClaimOptions{
-		flags:         flags,
 		printFlags:    printer.NewPrintFlags(),
 		IOStreams:     streams,
 		kubeCli:       client,

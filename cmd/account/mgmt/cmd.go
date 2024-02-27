@@ -9,7 +9,7 @@ import (
 )
 
 // NewCmdMgmt implements the mgmt command to get AWS Account resources
-func NewCmdMgmt(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+func NewCmdMgmt(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	mgmtCmd := &cobra.Command{
 		Use:               "mgmt",
 		Short:             "AWS Account Management",
@@ -17,10 +17,10 @@ func NewCmdMgmt(streams genericclioptions.IOStreams, flags *genericclioptions.Co
 		DisableAutoGenTag: true,
 	}
 
-	mgmtCmd.AddCommand(newCmdAccountList(streams, flags, globalOpts))
-	mgmtCmd.AddCommand(newCmdAccountAssign(streams, flags, globalOpts))
-	mgmtCmd.AddCommand(newCmdAccountUnassign(streams, flags))
-	mgmtCmd.AddCommand(newCmdAccountIAM(streams, flags, globalOpts))
+	mgmtCmd.AddCommand(newCmdAccountList(streams, globalOpts))
+	mgmtCmd.AddCommand(newCmdAccountAssign(streams, globalOpts))
+	mgmtCmd.AddCommand(newCmdAccountUnassign(streams))
+	mgmtCmd.AddCommand(newCmdAccountIAM(streams, globalOpts))
 
 	return mgmtCmd
 }

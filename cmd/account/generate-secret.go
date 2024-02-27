@@ -23,8 +23,8 @@ import (
 )
 
 // newCmdGenerateSecret implements the generate-secret command which generates an new set of IAM User credentials
-func newCmdGenerateSecret(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
-	ops := newGenerateSecretOptions(streams, flags, client)
+func newCmdGenerateSecret(streams genericclioptions.IOStreams, client client.Client) *cobra.Command {
+	ops := newGenerateSecretOptions(streams, client)
 	generateSecretCmd := &cobra.Command{
 		Use:               "generate-secret <IAM User name>",
 		Short:             "Generates IAM credentials secret",
@@ -69,14 +69,12 @@ type generateSecretOptions struct {
 	cfgFile           string
 	awsAccountTimeout *int32
 
-	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
 	kubeCli client.Client
 }
 
-func newGenerateSecretOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *generateSecretOptions {
+func newGenerateSecretOptions(streams genericclioptions.IOStreams, client client.Client) *generateSecretOptions {
 	return &generateSecretOptions{
-		flags:     flags,
 		IOStreams: streams,
 		kubeCli:   client,
 	}
@@ -325,9 +323,6 @@ func (o *generateSecretOptions) generateCcsSecret() error {
 	if err != nil {
 		return err
 	}
-
-	// Escalte to backplane cluster admin
-	o.flags.Impersonate = awsSdk.String("backplane-cluster-admin")
 
 	secret := k8s.NewAWSSecret(
 		o.secretName,

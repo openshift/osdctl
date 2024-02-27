@@ -7,15 +7,16 @@ import (
 
 // Message is the base template structure
 type Message struct {
-	Severity       string `json:"severity"`
-	ServiceName    string `json:"service_name"`
-	ClusterUUID    string `json:"cluster_uuid,omitempty"`
-	ClusterID      string `json:"cluster_id,omitempty"`
-	Summary        string `json:"summary"`
-	Description    string `json:"description"`
-	InternalOnly   bool   `json:"internal_only"`
-	EventStreamID  string `json:"event_stream_id"`
-	SubscriptionID string `json:"subscription_id,omitempty"`
+	Severity       string   `json:"severity"`
+	ServiceName    string   `json:"service_name"`
+	ClusterUUID    string   `json:"cluster_uuid,omitempty"`
+	ClusterID      string   `json:"cluster_id,omitempty"`
+	Summary        string   `json:"summary"`
+	Description    string   `json:"description"`
+	InternalOnly   bool     `json:"internal_only"`
+	EventStreamID  string   `json:"event_stream_id"`
+	SubscriptionID string   `json:"subscription_id,omitempty"`
+	DocReferences  []string `json:"doc_references"`
 }
 
 func (m *Message) GetSeverity() string {
@@ -52,6 +53,10 @@ func (m *Message) GetEventStreamID() string {
 
 func (m *Message) GetSubscriptionID() string {
 	return m.SubscriptionID
+}
+
+func (m *Message) GetDocReferences() []string {
+	return m.DocReferences
 }
 
 func (m *Message) ReplaceWithFlag(variable, value string) {

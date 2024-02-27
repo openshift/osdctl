@@ -79,7 +79,7 @@ func (o *cpdOptions) run() error {
 	// Check if DNS is ready, exit out if not
 	if !cluster.Status().DNSReady() {
 		fmt.Println("DNS not ready. Investigate reasons using the dnszones CR in the cluster namespace:")
-		fmt.Printf("oc get dnszones -n uhc-production-%s -o yaml --as backplane-cluster-admin\n", o.clusterID)
+		fmt.Printf("ocm-backplane elevate \"$(read -p 'Enter reason for elevation:' REASON && echo $REASON)\" -- get dnszones -n uhc-production-%s -o yaml\n", o.clusterID)
 		return nil
 	}
 

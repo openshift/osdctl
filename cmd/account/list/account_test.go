@@ -17,7 +17,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 	g := NewGomegaWithT(t)
 	mockCtrl := gomock.NewController(t)
 	streams := genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr}
-	kubeFlags := genericclioptions.NewConfigFlags(false)
 	globalFlags := globalflags.GlobalOptions{Output: ""}
 	testCases := []struct {
 		title       string
@@ -29,7 +28,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "incorrect state",
 			option: &listAccountOptions{
 				state:         "foo",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: true,
@@ -39,7 +37,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "empty state",
 			option: &listAccountOptions{
 				state:         "",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
@@ -48,7 +45,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "all state",
 			option: &listAccountOptions{
 				state:         "all",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
@@ -57,7 +53,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "Ready state",
 			option: &listAccountOptions{
 				state:         "Ready",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
@@ -66,7 +61,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "bad reuse",
 			option: &listAccountOptions{
 				reused:        "foo",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: true,
@@ -76,7 +70,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "bad reused status",
 			option: &listAccountOptions{
 				reused:        "foo",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: true,
@@ -86,7 +79,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "bad claimed status",
 			option: &listAccountOptions{
 				claimed:       "foo",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: true,
@@ -96,7 +88,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "good reused true",
 			option: &listAccountOptions{
 				reused:        "true",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
@@ -105,7 +96,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 			title: "good claim",
 			option: &listAccountOptions{
 				claimed:       "false",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
@@ -116,7 +106,6 @@ func TestGetAccountCmdComplete(t *testing.T) {
 				state:         "Ready",
 				reused:        "true",
 				claimed:       "false",
-				flags:         kubeFlags,
 				GlobalOptions: &globalFlags,
 			},
 			errExpected: false,
@@ -125,7 +114,7 @@ func TestGetAccountCmdComplete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.title, func(t *testing.T) {
-			cmd := newCmdListAccount(streams, tc.option.flags, mockk8s.NewMockClient(mockCtrl), &globalFlags)
+			cmd := newCmdListAccount(streams, mockk8s.NewMockClient(mockCtrl), &globalFlags)
 			err := tc.option.complete(cmd, nil)
 			if tc.errExpected {
 				g.Expect(err).Should(HaveOccurred())
