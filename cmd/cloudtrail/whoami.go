@@ -87,6 +87,7 @@ func (o *whoamiOptions) complete(cmd *cobra.Command, _ []string) error {
 }
 
 func (o *whoamiOptions) run(cmd *cobra.Command, _ []string) error {
+
 	fmt.Println("[+] Trying to get credentials")
 	ocmClient, err := utils.CreateConnection()
 	if err != nil {

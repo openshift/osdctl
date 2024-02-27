@@ -70,8 +70,9 @@ func TestFilterUsers(t *testing.T) {
 	//{".*-Installer-Role", ".*kube-system-kube-controller.*", ".*operator.*", ".*openshift-cluster-csi-drivers.*",".*kube-system-capa-controller.*"}
 
 	Ignore := []string{".*-ControlPlane-Role"}
+	shouldFilter := true
 
-	filtered, err := FilterUsers(TestLookupOutputs, Ignore)
+	filtered, err := FilterUsers(TestLookupOutputs, Ignore, shouldFilter)
 	assert.NoError(t, err, "Error filtering events")
 
 	assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")

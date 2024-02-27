@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os/exec"
 	"regexp"
 	"slices"
 	"strings"
@@ -35,6 +36,8 @@ type LookupEventsoptions struct {
 	pages     int
 	cluster   *cmv1.Cluster
 	url       bool
+	raw       bool
+	all       bool
 }
 
 type RawEventDetails struct {
@@ -70,7 +73,9 @@ func newwrite_eventsCmd() *cobra.Command {
 	}
 	listEventsCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Cluster ID")
 	listEventsCmd.Flags().StringVarP(&ops.since, "since", "", "", "Duration of lookup")
-	listEventsCmd.Flags().BoolVarP(&ops.url, "url", "u", false, "Print cloud console URL to event")
+	listEventsCmd.Flags().BoolVarP(&ops.url, "url", "u", false, "Prints link link url to specific cloudtrail event")
+	listEventsCmd.Flags().BoolVarP(&ops.raw, "raw", "r", false, "Prints Raw cloudtrail event to console")
+	listEventsCmd.Flags().BoolVarP(&ops.all, "all", "A", false, "Prints all cloudtrail events")
 	listEventsCmd.Flags().IntVar(&ops.pages, "pages", 50, "Command will display X pages of Cloud Trail logs for the cluster. Pages is set to 40 by default")
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
@@ -231,9 +236,10 @@ func mergeRegex(regexlist []string) string {
 // regular expression patterns. It takes a slice of cloudtrail.LookupEventsOutput,
 // which represents the output of AWS CloudTrail lookup events operation, and a list
 // of regular expression patterns to ignore.
-func FilterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string) (*[]types.Event, error) {
+func FilterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string, shouldFilter bool) (*[]types.Event, error) {
 	filteredEvents := []types.Event{}
 	mergedRegex := mergeRegex(Ignore)
+	filterSwitch := shouldFilter
 
 	for _, lookupOutput := range lookupOutputs {
 		for _, event := range lookupOutput.Events {
@@ -245,15 +251,17 @@ func FilterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 			regexOdj := regexp.MustCompile(mergedRegex)
 			matchesUsrname := false
 
-			if event.Username != nil {
-				matchesUsrname = regexOdj.MatchString(*event.Username)
-			}
+			if filterSwitch {
+				if event.Username != nil {
+					matchesUsrname = regexOdj.MatchString(*event.Username)
+				}
 
-			matchesArn := regexOdj.MatchString(userArn)
+				matchesArn := regexOdj.MatchString(userArn)
 
-			if matchesUsrname || matchesArn {
-				continue
-				// skips entry
+				if matchesUsrname || matchesArn {
+					continue
+					// skips entry
+				}
 			}
 
 			filteredEvents = append(filteredEvents, event)
@@ -296,6 +304,16 @@ func printEvent(filteredEvent []types.Event, printUrl bool) {
 	}
 
 }
+
+func PrintRaw(events []types.Event) {
+	cmd := exec.Command("jq")
+	for _, event := range events {
+		if event.CloudTrailEvent != nil {
+			fmt.Printf("\n%s| %s	\n", *event.CloudTrailEvent, cmd)
+		}
+	}
+}
+
 func (o *LookupEventsoptions) run() error {
 	ocmClient, err := utils.CreateConnection()
 	if err != nil {
@@ -337,15 +355,22 @@ func (o *LookupEventsoptions) run() error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("\n[+] Fetching %s Event History..\n\n", cfg.Region)
 
-	fmt.Printf("Checking write event history since %s for AWS Account %s as %s \n\n", starttime, accountId, arn)
-	filtered, err := FilterUsers(lookupOutput, Ignore)
+	fmt.Printf("Checking write event history since %s for AWS Account %s as %s \n", starttime, accountId, arn)
+
+	fmt.Printf("\n[+] Fetching %s Event History..\n", cfg.Region)
+
+	filtered, err := FilterUsers(lookupOutput, Ignore, o.all)
 	if err != nil {
 		return err
 	}
 
-	printEvent(*filtered, o.url)
+	if !o.raw {
+		printEvent(*filtered, o.url)
+	} else {
+		PrintRaw(*filtered)
+	}
+
 	fmt.Println("")
 	return err
 }
