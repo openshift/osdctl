@@ -63,8 +63,10 @@ func newCmdResizeInfra() *cobra.Command {
 
 	infraResizeCmd.Flags().StringVarP(&r.clusterId, "cluster-id", "C", "", "OCM internal/external cluster id or cluster name to resize infra nodes for.")
 	infraResizeCmd.Flags().StringVar(&r.instanceType, "instance-type", "", "(optional) Override for an AWS or GCP instance type to resize the infra nodes to, by default supported instance types are automatically selected.")
+	infraResizeCmd.Flags().StringVar(&r.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
 
 	infraResizeCmd.MarkFlagRequired("cluster-id")
+	infraResizeCmd.MarkFlagRequired("reason")
 
 	return infraResizeCmd
 }
@@ -78,6 +80,10 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 	originalMp, err := r.getInfraMachinePool(ctx)
 	if err != nil {
 		return err
+	}
+	originalInstanceType, err := getInstanceType(originalMp)
+	if err != nil {
+		return fmt.Errorf("failed to parse instance type from machinepool: %v", err)
 	}
 
 	newMp, err := r.embiggenMachinePool(originalMp)
@@ -95,7 +101,7 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 	}
 
 	// Create the temporary machinepool
-	log.Printf("planning to resize to instance type %s", instanceType)
+	log.Printf("planning to resize to instance type from %s to %s", originalInstanceType, instanceType)
 	if !utils.ConfirmPrompt() {
 		log.Printf("exiting")
 		return nil
@@ -174,7 +180,7 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 	}
 
 	// Delete original machinepool
-	log.Printf("deleting original machinepool %s, with instance type %s", originalMp.Name, instanceType)
+	log.Printf("deleting original machinepool %s, with instance type %s", originalMp.Name, originalInstanceType)
 	if err := r.hiveAdmin.Delete(ctx, originalMp); err != nil {
 		return err
 	}

@@ -84,6 +84,8 @@ func NewCmdValidateEgress() *cobra.Command {
   verify whether a ROSA cluster's VPC allows for all required external URLs are reachable. The exact cause can vary and
   typically requires a customer to remediate the issue themselves.
 
+  The osd-network-verifier launches a probe, an instance in a given subnet, and checks egress to external required URL's. Since October 2022, the probe is an instance without a public IP address. For this reason, the probe's requests will fail for subnets that don't have a NAT gateway. The osdctl network verify-egress command will always fail and give a false negative for public subnets (in non-privatelink clusters), since they have an internet gateway and no NAT gateway.
+
   Docs: https://docs.openshift.com/rosa/rosa_install_access_delete_clusters/rosa_getting_started_iam/rosa-aws-prereqs.html#osd-aws-privatelink-firewall-prerequisites_prerequisites`,
 		Example: `
   # Run against a cluster registered in OCM

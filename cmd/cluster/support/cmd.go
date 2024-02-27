@@ -12,7 +12,7 @@ import (
 // osdctl cluster support status
 // osdctl cluster support create --summary="" --reason=""
 // osdctl cluster support delete --reason=""
-func NewCmdSupport(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+func NewCmdSupport(streams genericclioptions.IOStreams, client client.Client, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	supportCmd := &cobra.Command{
 		Use:               "support",
 		Short:             "Cluster Support",

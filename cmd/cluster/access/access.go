@@ -49,7 +49,8 @@ var (
 )
 
 // NewCmdCluster implements the 'cluster access' subcommand
-func NewCmdAccess(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) *cobra.Command {
+func NewCmdAccess(streams genericclioptions.IOStreams, client *k8s.LazyClient) *cobra.Command {
+	ops := newClusterAccessOptions(client, streams)
 	accessCmd := &cobra.Command{
 		Use:               "break-glass <cluster identifier>",
 		Short:             "Emergency access to a cluster",
@@ -58,14 +59,12 @@ func NewCmdAccess(streams genericclioptions.IOStreams, flags *genericclioptions.
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(accessCmdComplete(cmd, args))
-			// Prior to creating k8s client, verify the user has elevated permissions
-			cmdutil.CheckErr(verifyPermissions(streams, flags))
-			client := k8s.NewClient(flags)
-			clusterAccess := newClusterAccessOptions(client, streams, flags)
-			cmdutil.CheckErr(clusterAccess.Run(cmd, args))
+			cmdutil.CheckErr(ops.Run(cmd, args))
 		},
 	}
-	accessCmd.AddCommand(newCmdCleanup(streams, flags))
+	accessCmd.AddCommand(newCmdCleanup(client, streams))
+	accessCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	_ = accessCmd.MarkFlagRequired("reason")
 
 	return accessCmd
 }
@@ -78,47 +77,19 @@ func accessCmdComplete(cmd *cobra.Command, args []string) error {
 	return osdctlutil.IsValidClusterKey(args[0])
 }
 
-// verifyPermissions determines if the user has supplied the correct permissions in order to retrieve a KubeConfig secret from hive.
-// If the user attempts to impersonate an unexpected account, an error is returned.
-// If the user hasn't attempted to impersonate anyone, it prompts whether they would like to do so automatically.
-func verifyPermissions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) error {
-	if flags.Impersonate != nil && *flags.Impersonate != "" {
-		if *flags.Impersonate != impersonateUser {
-			osdctlutil.StreamPrintln(streams, "")
-			return fmt.Errorf("Unauthorized impersonation as user '%s'. Only requests to impersonate '%s' are allowed.", *flags.Impersonate, impersonateUser)
-		}
-	} else {
-		osdctlutil.StreamPrintln(streams, "")
-		osdctlutil.StreamPrintln(streams, fmt.Sprintf("No impersonation request detected. By design, SREs do not have sufficient permission to retrieve a cluster Kubeconfig from hive, and should impersonate '%s' to do so.", impersonateUser))
-		osdctlutil.StreamPrint(streams, fmt.Sprintf("Would you like to continue as '%s'? (You can disable this prompt in the future by rerunning this command with '--as %s') [y/N] ", impersonateUser, impersonateUser))
-
-		input, err := osdctlutil.StreamRead(streams, '\n')
-		if err != nil {
-			return err
-		}
-		if !isAffirmative(strings.TrimSpace(input)) {
-			return fmt.Errorf("Did not impersonate '%s'", impersonateUser)
-		}
-		*flags.Impersonate = impersonateUser
-		osdctlutil.StreamPrintln(streams, fmt.Sprintf("Continuing as '%s'", impersonateUser))
-		osdctlutil.StreamPrintln(streams, "")
-	}
-	return nil
-}
-
 // clusterAccessOptions contains the objects and information required to access a cluster
 type clusterAccessOptions struct {
-	*genericclioptions.ConfigFlags
+	reason string
+
 	genericclioptions.IOStreams
-	kclient.Client
+	kubeCli *k8s.LazyClient
 }
 
 // newAccessOptions creates a clusterAccessOptions object
-func newClusterAccessOptions(client kclient.Client, streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags) clusterAccessOptions {
+func newClusterAccessOptions(client *k8s.LazyClient, streams genericclioptions.IOStreams) clusterAccessOptions {
 	a := clusterAccessOptions{
-		IOStreams:   streams,
-		ConfigFlags: flags,
-		Client:      client,
+		IOStreams: streams,
+		kubeCli:   client,
 	}
 	return a
 }
@@ -147,7 +118,10 @@ func (c *clusterAccessOptions) Readln() (string, error) {
 
 // Run executes the 'cluster' access subcommand
 func (c *clusterAccessOptions) Run(cmd *cobra.Command, args []string) error {
-	clusterIdentifier := args[0]
+	clusterIdentifier := args[0] // This action requires elevation
+
+	c.kubeCli.Impersonate("backplane-cluster-admin", c.reason, fmt.Sprintf("Elevation required to break-glass on %s cluster", clusterIdentifier))
+
 	c.Println(fmt.Sprintf("Retrieving Kubeconfig for cluster '%s'", clusterIdentifier))
 
 	// Connect to ocm
@@ -166,7 +140,7 @@ func (c *clusterAccessOptions) Run(cmd *cobra.Command, args []string) error {
 	c.Println(fmt.Sprintf("Internal Cluster ID: %s", cluster.ID()))
 
 	// Retrieve the kubeconfig secret from the cluster's namespace on hive
-	ns, err := getClusterNamespace(c.Client, cluster.ID())
+	ns, err := getClusterNamespace(c.kubeCli, cluster.ID())
 	if err != nil {
 		return err
 	}
@@ -372,7 +346,7 @@ func (c *clusterAccessOptions) getKubeConfigSecret(ns corev1.Namespace) (corev1.
 	if err != nil {
 		return corev1.Secret{}, err
 	}
-	err = c.Client.List(context.TODO(), &secretList, &kclient.ListOptions{Namespace: ns.Name, LabelSelector: selector})
+	err = c.kubeCli.List(context.TODO(), &secretList, &kclient.ListOptions{Namespace: ns.Name, LabelSelector: selector})
 	if err != nil {
 		return corev1.Secret{}, err
 	}
@@ -437,7 +411,7 @@ func (c *clusterAccessOptions) createJumpPod(kubeconfigSecret corev1.Secret, clu
 			},
 		},
 	}
-	err := c.Client.Create(context.TODO(), &deploy)
+	err := c.kubeCli.Create(context.TODO(), &deploy)
 	return deploy, err
 }
 
@@ -448,7 +422,7 @@ func (c *clusterAccessOptions) waitForJumpPod(pod corev1.Pod, interval time.Dura
 		Namespace: pod.Namespace,
 	}
 	return wait.PollImmediate(interval, timeout, func() (done bool, err error) {
-		err = c.Client.Get(context.TODO(), key, &pod)
+		err = c.kubeCli.Get(context.TODO(), key, &pod)
 		if kerr.IsNotFound(err) {
 			return false, nil
 		} else if err != nil {

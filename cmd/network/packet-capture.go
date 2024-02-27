@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/spf13/cobra"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -38,8 +39,8 @@ const (
 )
 
 // newCmdPacketCapture implements the packet-capture command to run a packet capture
-func newCmdPacketCapture(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *cobra.Command {
-	ops := newPacketCaptureOptions(streams, flags, client)
+func newCmdPacketCapture(streams genericclioptions.IOStreams, client *k8s.LazyClient) *cobra.Command {
+	ops := newPacketCaptureOptions(streams, client)
 	packetCaptureCmd := &cobra.Command{
 		Use:               "packet-capture",
 		Aliases:           []string{"pcap"},
@@ -58,6 +59,7 @@ func newCmdPacketCapture(streams genericclioptions.IOStreams, flags *genericclio
 	packetCaptureCmd.Flags().StringVarP(&ops.nodeLabelKey, "node-label-key", "", nodeLabelKey, "Node label key")
 	packetCaptureCmd.Flags().StringVarP(&ops.nodeLabelValue, "node-label-value", "", nodeLabelValue, "Node label value")
 	packetCaptureCmd.Flags().BoolVarP(&ops.singlePod, "single-pod", "", singlePod, "toggle deployment as single pod (default: deploy a daemonset)")
+	packetCaptureCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
 
 	ops.startTime = time.Now()
 	return packetCaptureCmd
@@ -72,22 +74,25 @@ type packetCaptureOptions struct {
 	duration         int
 	singlePod        bool
 	captureInterface string
+	reason           string
 
-	flags *genericclioptions.ConfigFlags
 	genericclioptions.IOStreams
-	kubeCli   client.Client
+	kubeCli   *k8s.LazyClient
 	startTime time.Time
 }
 
-func newPacketCaptureOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, client client.Client) *packetCaptureOptions {
+func newPacketCaptureOptions(streams genericclioptions.IOStreams, client *k8s.LazyClient) *packetCaptureOptions {
 	return &packetCaptureOptions{
-		flags:     flags,
 		IOStreams: streams,
 		kubeCli:   client,
 	}
 }
 
 func (o *packetCaptureOptions) complete(cmd *cobra.Command, _ []string) error {
+	if len(o.reason) > 0 {
+		// This action requires elevation
+		o.kubeCli.Impersonate("backplane-cluster-admin", o.reason, fmt.Sprintf("Elevation required to capture network"))
+	}
 	return nil
 }
 

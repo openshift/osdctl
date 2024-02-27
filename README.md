@@ -309,7 +309,7 @@ osdctl federatedrole apply -f <yaml file>
 #### Access cluster
 ```bash
 # Login to the cluster's hive shard
-osdctl cluster break-glass <cluster identifier> --as backplane-cluster-admin
+osdctl cluster break-glass <cluster identifier> --reason <ticket ref>
 ```
 
 #### Drop cluster access

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/openshift/osdctl/pkg/k8s"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -12,6 +13,12 @@ import (
 const (
 	hiveNSLabelKey = "api.openshift.com/id"
 )
+
+// accessOptions defines the struct for running accessOwner command
+type access struct {
+	reason  string
+	kubeCli *k8s.LazyClient
+}
 
 // isAffirmative returns true if the provided input indicates user agreement ("y" or "Y")
 func isAffirmative(input string) bool {

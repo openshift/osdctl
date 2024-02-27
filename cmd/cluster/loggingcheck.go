@@ -27,8 +27,8 @@ type loggingCheckOptions struct {
 }
 
 // newCmdLoggingCheck implements the loggingCheck command to show the logging support status of a cluster
-func newCmdLoggingCheck(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newloggingCheckOptions(streams, flags, globalOpts)
+func newCmdLoggingCheck(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
+	ops := newloggingCheckOptions(streams, globalOpts)
 	loggingCheckCmd := &cobra.Command{
 		Use:               "logging-check",
 		Short:             "Shows the logging support status of a specified cluster",
@@ -44,7 +44,7 @@ func newCmdLoggingCheck(streams genericclioptions.IOStreams, flags *genericcliop
 	return loggingCheckCmd
 }
 
-func newloggingCheckOptions(streams genericclioptions.IOStreams, flags *genericclioptions.ConfigFlags, globalOpts *globalflags.GlobalOptions) *loggingCheckOptions {
+func newloggingCheckOptions(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *loggingCheckOptions {
 	return &loggingCheckOptions{
 		IOStreams:     streams,
 		GlobalOptions: globalOpts,
