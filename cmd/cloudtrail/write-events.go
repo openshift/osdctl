@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/aws/aws-sdk-go/aws/arn"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
@@ -23,12 +24,14 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
+// Configuration struct for parsing configuration options
 type Configuration struct {
 	Ignore struct {
 		Users []string `mapstructure:"users_with"`
 	} `mapstructure:"ignore"`
 }
 
+// LookupEventsoptions struct for holding options for event lookup
 type LookupEventsoptions struct {
 	clusterID string
 	since     string
@@ -39,6 +42,7 @@ type LookupEventsoptions struct {
 	all       bool
 }
 
+// RawEventDetails struct for holding raw event details
 type RawEventDetails struct {
 	EventVersion string `json:"eventVersion"`
 
@@ -85,6 +89,7 @@ func newWrite_eventsOptions() *LookupEventsoptions {
 
 }
 
+// complete fills in necessary data for the options struct
 func (o *LookupEventsoptions) complete(cmd *cobra.Command, _ []string) error {
 	err := utils.IsValidClusterKey(o.clusterID)
 	if err != nil {
@@ -113,6 +118,7 @@ func (o *LookupEventsoptions) complete(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
+// ParseDurationToUTC parses a duration string and returns a UTC time
 func ParseDurationToUTC(input string) (time.Time, error) {
 
 	duration, err := time.ParseDuration(input)
@@ -121,6 +127,22 @@ func ParseDurationToUTC(input string) (time.Time, error) {
 	}
 
 	return time.Now().UTC().Add(-duration), nil
+}
+
+// Whoami retrieves caller identity information
+func Whoami(stsClient sts.Client) (Arn string, AccountId string, err error) {
+
+	ctx := context.TODO()
+	callerIdentityOutput, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	if err != nil {
+		return "", "", err
+	}
+	userArn, err := arn.Parse(*callerIdentityOutput.Arn)
+	if err != nil {
+		return "", "", err
+	}
+
+	return userArn.String(), userArn.AccountID, nil
 }
 
 // GetEvents retrieves cloudtrail events since the specified time
