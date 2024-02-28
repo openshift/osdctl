@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"slices"
 	"strings"
@@ -105,7 +104,6 @@ func (o *LookupEventsoptions) complete(cmd *cobra.Command, _ []string) error {
 	}
 
 	o.cluster = cluster
-
 	o.clusterID = cluster.ID()
 
 	if strings.ToUpper(cluster.CloudProvider().ID()) != "AWS" {
@@ -139,7 +137,7 @@ func GetEvents(since time.Time, client *cloudtrail.Client, pages int) ([]*cloudt
 		EndTime:   aws.Time(time.Now()),
 		LookupAttributes: []types.LookupAttribute{
 			{AttributeKey: "ReadOnly",
-				AttributeValue: aws.String("true")},
+				AttributeValue: aws.String("false")},
 		},
 	}
 
@@ -273,45 +271,45 @@ func FilterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 
 // PrintEvents prints the details of each event in the provided slice of events.
 // It takes a slice of types.Event
-func printEvent(filteredEvent []types.Event, printUrl bool) {
+func printEvent(filteredEvent []types.Event, printUrl bool, raw bool) {
 	for _, event := range filteredEvent {
-		if event.EventName != nil {
-			fmt.Printf("%s |", *event.EventName)
-		} else {
-			fmt.Println("<not available> |")
-		}
 
-		if event.EventTime != nil {
-			fmt.Printf("%s |", event.EventTime.String())
-		} else {
-			fmt.Println("<not available> |")
-		}
-
-		if event.Username != nil {
-			fmt.Printf("User: %s |\n", *event.Username)
-		} else {
-			fmt.Println("User: <not available> |")
-		}
-
-		if printUrl && event.CloudTrailEvent != nil {
-			details, err := ExtractUserDetails(event.CloudTrailEvent)
-			if err == nil {
-				fmt.Printf("EventLink: %s\n\n", GenerateLink(*details))
-			} else {
-				fmt.Println("EventLink: <not available>")
+		if raw {
+			if event.CloudTrailEvent != nil {
+				fmt.Printf("\n%s	\n", *event.CloudTrailEvent)
 			}
+		} else {
+			if event.EventName != nil {
+				fmt.Printf("%s |", *event.EventName)
+			} else {
+				fmt.Println("<not available> |")
+			}
+
+			if event.EventTime != nil {
+				fmt.Printf("%s |", event.EventTime.String())
+			} else {
+				fmt.Println("<not available> |")
+			}
+
+			if event.Username != nil {
+				fmt.Printf("User: %s |\n", *event.Username)
+			} else {
+				fmt.Println("User: <not available> |")
+			}
+
+			if printUrl && event.CloudTrailEvent != nil {
+				details, err := ExtractUserDetails(event.CloudTrailEvent)
+				if err == nil {
+					fmt.Printf("EventLink: %s\n\n", GenerateLink(*details))
+				} else {
+					fmt.Println("EventLink: <not available>")
+				}
+			}
+
 		}
+
 	}
 
-}
-
-func PrintRaw(events []types.Event) {
-	cmd := exec.Command("jq")
-	for _, event := range events {
-		if event.CloudTrailEvent != nil {
-			fmt.Printf("\n%s| %s	\n", *event.CloudTrailEvent, cmd)
-		}
-	}
 }
 
 func (o *LookupEventsoptions) run() error {
@@ -358,18 +356,14 @@ func (o *LookupEventsoptions) run() error {
 
 	fmt.Printf("Checking write event history since %s for AWS Account %s as %s \n", starttime, accountId, arn)
 
-	fmt.Printf("\n[+] Fetching %s Event History..\n", cfg.Region)
+	fmt.Printf("\n[+] Fetching %s Event History...\n", cfg.Region)
 
-	filtered, err := FilterUsers(lookupOutput, Ignore, o.all)
+	filteredEvents, err := FilterUsers(lookupOutput, Ignore, o.all)
 	if err != nil {
 		return err
 	}
 
-	if !o.raw {
-		printEvent(*filtered, o.url)
-	} else {
-		PrintRaw(*filtered)
-	}
+	printEvent(*filteredEvents, o.url, o.raw)
 
 	fmt.Println("")
 	return err
