@@ -145,11 +145,6 @@ func versionCheck() {
 	}
 
 	if utils.Version != strings.TrimPrefix(latestVersion, "v") {
-		fmt.Printf("The current version (%s) is different than the latest released version (%s).", utils.Version, latestVersion)
-		fmt.Println("It is recommended that you update to the latest released version to ensure that no known bugs or issues are hit.")
-
-		if !utils.ConfirmPrompt() {
-			os.Exit(0)
-		}
+		fmt.Printf("Warning: The current version (%s) is different than the latest released version (%s). It is recommended that you update to the latest released version to ensure that no known bugs or issues are hit.\n\n", utils.Version, latestVersion)
 	}
 }
