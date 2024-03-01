@@ -3,33 +3,47 @@ package alerts
 import (
 	"fmt"
 	"log"
-
 	"github.com/spf13/cobra"
 )
 
-func NewCmdAddSilence() *cobra.Command {
-	return &cobra.Command{
-		Use:   "add-silence <cluster-id> <alertname1> <alertname2>... <comment>",
-		Short: "add a new silence",
-		Long:  `add new silence`,
-		Args:  cobra.MinimumNArgs(3),
-		Run: func(cmd *cobra.Command, args []string) {
-			clusterID := args[0]
-			comment := args[len(args)-1]
-			alertNames := args[1 : len(args)-1]
-			AddSilence(clusterID, alertNames, comment)
-		},
-	}
+type addSilenceCmd struct {
+	clusterID string
+	alertID []string
+	comment string
 }
 
-// osdctl alerts add-silence ${CLUSTERID} ${alertname1} ${alertname2}... ${comment}
-func AddSilence(clusterID string, alertNames []string, comment string) {
+// add ocm whomai, call the user and print who created this alert 
+func NewCmdAddSilence() *cobra.Command {
+	addSilenceCmd := &addSilenceCmd{}
+	cmd := &cobra.Command{
+		Use:   "add-silence <cluster-id> --alertname --comment",
+		Short: "Add a new silence for alert present in the cluster",
+		Long:  `add new silence for existing alert along with comment and duration of alert`,
+		Args:  cobra.ExactArgs(1),
+		DisableAutoGenTag: true,
+		Run: func(cmd *cobra.Command, args []string) {
+			addSilenceCmd.clusterID = args[0]
+			AddSilence(addSilenceCmd)
+		},
+	}
+	
+	cmd.Flags().StringSliceVar(&addSilenceCmd.alertID, "alertname", []string{}, "alertname (comma-separated)")
+	cmd.Flags().StringVarP(&addSilenceCmd.comment, "comment","c","","add comment about alertname")
+		
+	return cmd
+}
+
+func AddSilence(cmd *addSilenceCmd) {
+	clusterID := cmd.clusterID
+	alertID := cmd.alertID
+	comment := cmd.comment
+
 	kubeconfig, clientset, err := GetKubeConfigClient(clusterID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	for _, alertname := range alertNames {
+	for _, alertname := range alertID {
 		addCmd := []string{
 			"amtool",
 			"silence",
@@ -39,11 +53,11 @@ func AddSilence(clusterID string, alertNames []string, comment string) {
 			"--comment=" + comment,
 		}
 
-		output, err := ExecInPod(kubeconfig, clientset, LocalHostUrl, addCmd, PodName)
+		output, err := ExecInPod(kubeconfig, clientset, addCmd)
 		if err != nil {
 			fmt.Println(err)
 		}
 
-		fmt.Printf("%v", output)
+		fmt.Printf("Alert %s has been silenced with id:%v\n", alertname, output)
 	}
 }

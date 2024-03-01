@@ -24,7 +24,7 @@ type Silence struct {
 func NewCmdListSilence() *cobra.Command {
 	return &cobra.Command{
 		Use:               "list-silence <cluster-id>",
-		Short:             "list all silence",
+		Short:             "List all silences for given alert",
 		Long:              `list all  silence`,
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
@@ -35,9 +35,8 @@ func NewCmdListSilence() *cobra.Command {
 }
 
 // osdctl alerts list-silence ${CLUSTERID}
-func ListSilence(clusterID string) string{
+func ListSilence(clusterID string){
 	var silence []Silence
-	var id string
 
 	silenceCmd := []string{"amtool", "silence", "--alertmanager.url", LocalHostUrl, "-o", "json"}
 
@@ -46,16 +45,13 @@ func ListSilence(clusterID string) string{
 		log.Fatal(err)
 	}
 
-	op, err := ExecInPod(kubeconfig, clientset, LocalHostUrl, silenceCmd, PodName)
+	op, err := ExecInPod(kubeconfig, clientset, silenceCmd)
 	if err != nil {
 		fmt.Println(err)
 	}
 
 	opSlice := []byte(op)
-	//fmt.Println("Output from pod:", string(opSlice))
-
 	err = json.Unmarshal(opSlice, &silence)
-	//fmt.Println("Raw JSON data:", string(opSlice))
 	if err != nil {
 		fmt.Println("Error in unmarshaling the data", err)
 	}
@@ -63,8 +59,8 @@ func ListSilence(clusterID string) string{
 	for _, s := range silence {
 		id, matchers := s.ID, s.Matchers
 		for _, matcher := range matchers{
-			fmt.Printf("Found %v %v with silence id %s\n",matcher.Name, matcher.Value, id) 
+			fmt.Printf("Found %v %v with silence id %s\n", matcher.Name, matcher.Value, id) 
 		}
 	}
-	return id
+	fmt.Println("No silences found, all silence has been cleared.")
 }

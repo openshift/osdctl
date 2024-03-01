@@ -14,11 +14,11 @@ import (
 	"k8s.io/kubectl/pkg/scheme"
 )
 
-var (
-	AccountNamespace string = "openshift-monitoring"
-	ContainerName    string = "alertmanager"
-	LocalHostUrl     string = "http://localhost:9093"
-	PodName          string = "alertmanager-main-0"
+const (
+	AccountNamespace  = "openshift-monitoring"
+	ContainerName     = "alertmanager"
+	LocalHostUrl      = "http://localhost:9093"
+	PodName           = "alertmanager-main-0"
 )
 
 type logCapture struct {
@@ -31,8 +31,8 @@ func (capture *logCapture) GetStdOut() string {
 
 func (capture *logCapture) Write(p []byte) (n int, err error) {
 	a := string(p)
-	capture.buffer.WriteString(a)
-	return len(p), nil
+	_, err = capture.buffer.WriteString(a)
+	return len(p), err
 }
 
 func GetKubeConfigClient(clusterID string) (*rest.Config, *kubernetes.Clientset, error) {
@@ -55,7 +55,7 @@ func GetKubeConfigClient(clusterID string) (*rest.Config, *kubernetes.Clientset,
 	return kubeconfig, clientset, err
 }
 
-func ExecInPod(kubeconfig *rest.Config, clientset *kubernetes.Clientset, localHostUrl string, cmd []string, podName string) (string, error) {
+func ExecInPod(kubeconfig *rest.Config, clientset *kubernetes.Clientset, cmd []string) (string, error) {
 
 	req := clientset.CoreV1().RESTClient().Post().Resource("pods").Name(PodName).
 		Namespace(AccountNamespace).SubResource("exec")
