@@ -15,10 +15,11 @@ import (
 )
 
 const (
-	AccountNamespace  = "openshift-monitoring"
-	ContainerName     = "alertmanager"
-	LocalHostUrl      = "http://localhost:9093"
-	PodName           = "alertmanager-main-0"
+	AccountNamespace = "openshift-monitoring"
+	ContainerName    = "alertmanager"
+	LocalHostUrl     = "http://localhost:9093"
+	PodName          = "alertmanager-main-0"
+	ClusterName      = "mitu04"
 )
 
 type logCapture struct {

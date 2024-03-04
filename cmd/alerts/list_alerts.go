@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +35,7 @@ type Alert struct {
 func NewCmdListAlerts() *cobra.Command {
 	alertCmd := &alertCmd{}
 	newCmd := &cobra.Command{
-		Use:               "list <cluster-id>",
+		Use:               "list <cluster-id> --level [warning, critical, firing, pending, all]",
 		Short:             "List the alerts based on severity",
 		Long:              `Checks the alerts for the cluster and print the list based on severity`,
 		Args:              cobra.ExactArgs(1),
@@ -44,12 +45,12 @@ func NewCmdListAlerts() *cobra.Command {
 			ListAlerts(alertCmd)
 		},
 	}
-	
+
 	newCmd.Flags().StringVarP(&alertCmd.alertLevel, "level", "l", "", "Alert level [warning, critical, firing, pending, all]")
 	return newCmd
 }
 
-// osdctl alerts list ${CLUSTERID} --level [warning, critical, firing, pending, all]
+// osdctl alerts list ${CLUSTERID} --level [warning, critical...]
 func ListAlerts(cmd *alertCmd) {
 	var alerts []Alert
 	var levelCmd string
@@ -63,12 +64,14 @@ func ListAlerts(cmd *alertCmd) {
 	clusterID := cmd.clusterID
 	levelcmd := cmd.alertLevel
 
-	if levelcmd == "warning" || levelcmd == "critical" || levelcmd == "firing" || levelcmd == "pending" || levelcmd == "all" {
+	if levelcmd == "warning" || levelcmd == "critical" || levelcmd == "firing" || levelcmd == "pending" {
 		levelCmd = levelcmd
+	} else if levelcmd == "all" {
+		levelCmd = "all"
 	} else {
 		log.Fatalf("Invalid alert level: %s\n", levelcmd)
-	}	
-		
+	}
+
 	ListAlertCmd := []string{"amtool", "--alertmanager.url", LocalHostUrl, "alert", "-o", "json"}
 
 	kubeconfig, clientset, err := GetKubeConfigClient(clusterID)
@@ -93,12 +96,7 @@ func ListAlerts(cmd *alertCmd) {
 	for _, alert := range alerts {
 		if levelCmd == "" || levelCmd == alert.Labels.Severity || levelCmd == "all" {
 			labels, status, annotations := alert.Labels, alert.Status, alert.Annotations
-			/*fmt.Printf("AlertName:%s\t Severity:%s\t State:%s\t Message:%s\n",
-				labels.Alertname,
-				labels.Severity,
-				status.State,
-				annotations.Summary)*/
-			printAlert(labels, annotations, status)
+			PrintAlert(labels, annotations, status)
 			foundAlert = true
 		}
 	}
@@ -108,10 +106,10 @@ func ListAlerts(cmd *alertCmd) {
 	}
 }
 
-func printAlert(labels Labels, annotations Annotations, status Status) {
-    fmt.Printf("Alert Information:\n")
-    fmt.Printf("  AlertName:  %s\n", labels.Alertname)
-    fmt.Printf("  Severity:   %s\n", labels.Severity)
-    fmt.Printf("  State:      %s\n", status.State)
-    fmt.Printf("  Message:    %s\n", annotations.Summary)
+func PrintAlert(labels Labels, annotations Annotations, status Status) {
+	fmt.Printf("Alert Information:\n")
+	fmt.Printf("  AlertName:  %s\n", labels.Alertname)
+	fmt.Printf("  Severity:   %s\n", labels.Severity)
+	fmt.Printf("  State:      %s\n", status.State)
+	fmt.Printf("  Message:    %s\n", annotations.Summary)
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+
 	"github.com/spf13/cobra"
 )
 
@@ -17,8 +18,14 @@ type Matchers struct {
 }
 
 type Silence struct {
-	ID      string     `json:"id"`
+	ID       string     `json:"id"`
 	Matchers []Matchers `json:"matchers"`
+
+	Status    Status `json:"status"`
+	Comment   string `json:"comment"`
+	CreatedBy string `json:"createdBy"`
+	EndsAt    string `json:"endsAt"`
+	StartsAt  string `json:"startsAt"`
 }
 
 func NewCmdListSilence() *cobra.Command {
@@ -35,8 +42,8 @@ func NewCmdListSilence() *cobra.Command {
 }
 
 // osdctl alerts list-silence ${CLUSTERID}
-func ListSilence(clusterID string){
-	var silence []Silence
+func ListSilence(clusterID string) {
+	var silences []Silence
 
 	silenceCmd := []string{"amtool", "silence", "--alertmanager.url", LocalHostUrl, "-o", "json"}
 
@@ -51,16 +58,47 @@ func ListSilence(clusterID string){
 	}
 
 	opSlice := []byte(op)
-	err = json.Unmarshal(opSlice, &silence)
+	err = json.Unmarshal(opSlice, &silences)
 	if err != nil {
 		fmt.Println("Error in unmarshaling the data", err)
 	}
 
-	for _, s := range silence {
-		id, matchers := s.ID, s.Matchers
-		for _, matcher := range matchers{
-			fmt.Printf("Found %v %v with silence id %s\n", matcher.Name, matcher.Value, id) 
+	fmt.Printf("Silence Information:\n")
+	for _, silence := range silences {
+		id, matchers, status, created, starts, end, comment := silence.ID, silence.Matchers, silence.Status.State, silence.CreatedBy, silence.StartsAt, silence.EndsAt, silence.Comment
+		fmt.Println("--------------------------")
+
+		for _, matcher := range matchers {
+			fmt.Printf("	SilenceID:	%s\n", id)
+			fmt.Printf("	Status:		%s\n", status)
+			fmt.Printf("	Created By:	%s\n", created)
+			fmt.Printf("	Starts At:	%s\n", starts)
+			fmt.Printf("	Ends At:	%s\n", end)
+			fmt.Printf("	Reason:		%s\n", comment)
+			fmt.Printf("	AlertName:	%s\n", matcher.Value)
 		}
+		fmt.Println("--------------------------")
+		//printSilence(silence)
 	}
-	fmt.Println("No silences found, all silence has been cleared.")
+
+	// If no silences found
+	if len(silences) == 0 {
+		fmt.Println("No silences found, all silence has been cleared.")
+	}
 }
+
+/*
+func printSilence(silence Silence) {
+	fmt.Println("--------------------------")
+		for _, matcher := range matchers {
+			fmt.Printf("	SilenceID:	%s\n", id)
+			fmt.Printf("	Status:	%s\n", status)
+			fmt.Printf("	Created By:	%s\n", created)
+			fmt.Printf("	Starts At:	%s\n", starts)
+			fmt.Printf("	Ends At:	%s\n", end)
+			fmt.Printf("	Comment:	%s\n", comment)
+			fmt.Printf("	AlertName:	%s\n", matcher.Value)
+		}
+	fmt.Println("--------------------------")
+}
+*/
