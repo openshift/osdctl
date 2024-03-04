@@ -103,13 +103,36 @@ func (p *Post) setup() error {
 	return nil
 }
 
+func (p *Post) check() error {
+	if p.Template != "" {
+		if p.Problem != "" || p.Resolution != "" || p.Evidence != "" || p.Misconfiguration != "" {
+			return fmt.Errorf("\nIf Template flag is present, all three --problem, --resolution and --misconfiguration flags cannot be used")
+		}
+		p.parseUserParameters() // parse all the '-p' user flags
+		p.readTemplate()        // parse the given JSON template provided via '-t' flag
+
+		// For every '-p' flag, replace its related placeholder in the template
+		for k := range userParameterNames {
+			p.replaceFlags(userParameterNames[k], userParameterValues[k])
+		}
+	} else {
+		if p.Problem == "" || p.Resolution == "" || p.Misconfiguration == "" {
+			return fmt.Errorf("\nIn the absence of Template -t flag, all three --problem, --resolution and --misconfiguration flags are mandatory")
+		}
+		if err := p.setup(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (p *Post) Run(clusterID string) error {
 
 	if err := p.Init(); err != nil {
 		return err
 	}
 
-	if err := p.setup(); err != nil {
+	if err := p.check(); err != nil {
 		return err
 	}
 
@@ -133,14 +156,6 @@ func (p *Post) Run(clusterID string) error {
 	p.cluster, err = ctlutil.GetCluster(connection, clusterID)
 	if err != nil {
 		return fmt.Errorf("can't retrieve cluster: %w", err)
-	}
-
-	p.parseUserParameters() // parse all the '-p' user flags
-	p.readTemplate()        // parse the given JSON template provided via '-t' flag
-
-	// For every '-p' flag, replace its related placeholder in the template
-	for k := range userParameterNames {
-		p.replaceFlags(userParameterNames[k], userParameterValues[k])
 	}
 
 	limitedSupport, err := p.buildLimitedSupport()
@@ -189,9 +204,6 @@ func (p *Post) Run(clusterID string) error {
 }
 
 func (p *Post) buildLimitedSupport() (*cmv1.LimitedSupportReason, error) {
-	if p.Template != "" && (p.Problem != "" || p.Resolution != "" || p.Evidence != "" || p.Misconfiguration != "") {
-		fmt.Printf("If Template flag is present, no other flags can be used")
-	}
 
 	limitedSupportBuilder := cmv1.NewLimitedSupportReason().
 		Details(fmt.Sprintf("%s %s", p.Problem, p.Resolution)).
