@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	slices "golang.org/x/exp/slices"
@@ -22,8 +23,6 @@ import (
 const Namespace = "openshift-monitoring"
 
 var detachStuckVolumeInput struct {
-	// commenting all the function for region. REASON: It seems region isn't a mandatory field in aws sdk detachStuckVolume function
-	// Region []string
 	VolumeId []string
 }
 
@@ -85,20 +84,9 @@ func (o *detachStuckVolumeOptions) detachVolume(clusterID string) error {
 		return fmt.Errorf("there's no pv utilized by non running state pod in cluster: %s\nNo action required", o.clusterID)
 	}
 
-	/*
-		if len(detachStuckVolumeInput.Region) != 1 {
-			return fmt.Errorf("got more than one region value: %v", len(detachStuckVolumeInput.Region))
-		}
-	*/
+	log.Printf("The volume id are %v\n", detachStuckVolumeInput.VolumeId)
 
-	//fmt.Println(detachStuckVolumeInput.Region[0])
-
-	fmt.Printf("The volume id are %v\n", detachStuckVolumeInput.VolumeId)
-
-	// aws ec2 detach-volume --volume-id $VOLUME_ID --region $REGION --force
-	// WiP - Need to convert above cmd to function once volIdRegion gets completed
-	// Tested till line 107 - Couldn't test below aws function getting priv issue. gig acc doesn't have nessary priv
-
+	// Aws fuction to detach volume of no running state pod's using it's volume id
 	cfg, err := osdCloud.CreateAWSV2Config(connection, o.cluster)
 	if err != nil {
 		return err
@@ -111,6 +99,7 @@ func (o *detachStuckVolumeOptions) detachVolume(clusterID string) error {
 		if err != nil {
 			return fmt.Errorf("failed to detach %s: %s\n", *&Volid, err)
 		}
+		log.Printf("%s has been detached", Volid)
 	}
 
 	return nil
@@ -124,7 +113,7 @@ func getVolumeID(clientset *kubernetes.Clientset, namespace, selector string) er
 	var pVolume []string
 
 	// Getting pod objects for non-running state pod
-	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), v1.ListOptions{FieldSelector: "status.phase!=Running"}) // For testing function, we can change `!=` to `=`` to remove pv of running state pod
+	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), v1.ListOptions{FieldSelector: "status.phase!=Running"})
 
 	if err != nil {
 		return fmt.Errorf("failed to list pods in namespace '%s'", Namespace)
@@ -169,16 +158,12 @@ func getVolumeID(clientset *kubernetes.Clientset, namespace, selector string) er
 				// If required logic can be added below in future
 
 			} else if pVol.Spec.CSI != nil {
-				//for _, volumeNodeAffinity := range pVol.Spec.NodeAffinity.Required.NodeSelectorTerms {
-				// _, reg := range volumeNodeAffinity.MatchExpressions {
 
 				volIdCheckBool := slices.Contains(detachStuckVolumeInput.VolumeId, pVol.Spec.CSI.VolumeHandle)
 				if !volIdCheckBool {
 					detachStuckVolumeInput.VolumeId = append(detachStuckVolumeInput.VolumeId, pVol.Spec.CSI.VolumeHandle)
 				}
 
-				//}
-				//}
 			}
 		}
 	}
