@@ -4,12 +4,17 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log"
+	"net/url"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	slv1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
+	"github.com/openshift/osdctl/internal/utils"
 	ctlutil "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 )
@@ -29,6 +34,8 @@ const (
 )
 
 type Post struct {
+	Template         string
+	TemplateParams   []string
 	Misconfiguration MisconfigurationReason
 	Problem          string
 	Resolution       string
@@ -64,27 +71,45 @@ The cluster has a second failing ingress controller, which is not supported and 
 	}
 
 	// Define required flags
+	postCmd.Flags().StringVarP(&p.Template, "template", "t", "", "Message template file or URL")
+	postCmd.Flags().StringArrayVarP(&p.TemplateParams, "param", "p", p.TemplateParams, "Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.")
 	postCmd.Flags().Var(&p.Misconfiguration, MisconfigurationFlag, "The type of misconfiguration responsible for the cluster being placed into limited support. Valid values are `cloud` or `cluster`.")
 	postCmd.Flags().StringVar(&p.Problem, ProblemFlag, "", "Complete sentence(s) describing the problem responsible for the cluster being placed into limited support. Will form the limited support message with the contents of --resolution appended")
 	postCmd.Flags().StringVar(&p.Resolution, ResolutionFlag, "", "Complete sentence(s) describing the steps for the customer to take to resolve the issue and move out of limited support. Will form the limited support message with the contents of --problem prepended")
 	postCmd.Flags().StringVar(&p.Evidence, EvidenceFlag, "", "(optional) The reasoning that led to the decision to place the cluster in limited support. Can also be a link to a Jira case. Used for internal service log only.")
 
-	postCmd.MarkFlagRequired(MisconfigurationFlag)
+	/*postCmd.MarkFlagRequired(MisconfigurationFlag)
 	postCmd.MarkFlagRequired(ProblemFlag)
-	postCmd.MarkFlagRequired(ResolutionFlag)
+	postCmd.MarkFlagRequired(ResolutionFlag)*/
 
 	return postCmd
 }
 
-func validateResolutionString(res string) error {
-	if res[len(res)-1:] == "." {
-		return errors.New("resolution string should not end with a `.` as it is already added in the email template")
+func (p *Post) Init() error {
+	userParameterNames = []string{}
+	userParameterValues = []string{}
+	return nil
+}
+
+func (p *Post) setup() error {
+	switch p.Problem[len(p.Problem)-1:] {
+	case ".", "?", "!":
+		return errors.New("--problem should not end in punctuation")
+	}
+	switch p.Resolution[len(p.Resolution)-1:] {
+	case ".", "?", "!":
+		return errors.New("--resolution should not end in punctuation")
 	}
 	return nil
 }
 
 func (p *Post) Run(clusterID string) error {
-	if err := validateResolutionString(p.Resolution); err != nil {
+
+	if err := p.Init(); err != nil {
+		return err
+	}
+
+	if err := p.setup(); err != nil {
 		return err
 	}
 
@@ -108,6 +133,14 @@ func (p *Post) Run(clusterID string) error {
 	p.cluster, err = ctlutil.GetCluster(connection, clusterID)
 	if err != nil {
 		return fmt.Errorf("can't retrieve cluster: %w", err)
+	}
+
+	p.parseUserParameters() // parse all the '-p' user flags
+	p.readTemplate()        // parse the given JSON template provided via '-t' flag
+
+	// For every '-p' flag, replace its related placeholder in the template
+	for k := range userParameterNames {
+		p.replaceFlags(userParameterNames[k], userParameterValues[k])
 	}
 
 	limitedSupport, err := p.buildLimitedSupport()
@@ -156,6 +189,10 @@ func (p *Post) Run(clusterID string) error {
 }
 
 func (p *Post) buildLimitedSupport() (*cmv1.LimitedSupportReason, error) {
+	if p.Template != "" && (p.Problem != "" || p.Resolution != "" || p.Evidence != "" || p.Misconfiguration != "") {
+		fmt.Printf("If Template flag is present, no other flags can be used")
+	}
+
 	limitedSupportBuilder := cmv1.NewLimitedSupportReason().
 		Details(fmt.Sprintf("%s %s", p.Problem, p.Resolution)).
 		DetectionType(cmv1.DetectionTypeManual)
@@ -171,6 +208,73 @@ func (p *Post) buildLimitedSupport() (*cmv1.LimitedSupportReason, error) {
 		return nil, fmt.Errorf("failed to build new limited support reason: %w", err)
 	}
 	return limitedSupport, nil
+}
+
+// parseUserParameters parse all the '-p FOO=BAR' parameters and checks for syntax errors
+func (p *Post) parseUserParameters() {
+	for _, v := range p.TemplateParams {
+		if !strings.Contains(v, "=") {
+			log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
+		}
+
+		param := strings.SplitN(v, "=", 2)
+		if param[0] == "" || param[1] == "" {
+			log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
+		}
+
+		userParameterNames = append(userParameterNames, fmt.Sprintf("${%v}", param[0]))
+		userParameterValues = append(userParameterValues, param[1])
+	}
+}
+
+func (p *Post) readTemplate() {
+	if p.Template == "" {
+		log.Fatalf("Template file is not provided. Use '-t' to fix this.")
+	}
+
+	file, err := p.accessFile(p.Template)
+	if err != nil { //check the presence of this URL or file and also if this can be accessed
+		log.Fatal(err)
+	}
+	fmt.Printf("file = ", file)
+}
+
+// accessFile returns the contents of a local file or url, and any errors encountered
+func (p *Post) accessFile(filePath string) ([]byte, error) {
+
+	if utils.IsValidUrl(filePath) {
+		urlPage, _ := url.Parse(filePath)
+		if err := utils.IsOnline(*urlPage); err != nil {
+			return nil, fmt.Errorf("host %q is not accessible", filePath)
+		}
+		return utils.CurlThis(urlPage.String())
+	}
+
+	filePath = filepath.Clean(filePath)
+	if utils.FileExists(filePath) {
+		// template is file on the disk
+		file, err := os.ReadFile(filePath) //#nosec G304 -- Potential file inclusion via variable
+		if err != nil {
+			return file, fmt.Errorf("cannot read the file.\nError: %q", err)
+		}
+		return file, nil
+	}
+	if utils.FolderExists(filePath) {
+		return nil, fmt.Errorf("the provided path %q is a directory, not a file", filePath)
+	}
+	return nil, fmt.Errorf("cannot read the file %q", filePath)
+}
+
+func (p *Post) replaceFlags(flagName string, flagValue string) {
+	if flagValue == "" {
+		log.Fatalf("The selected template is using '%[1]s' parameter, but '%[1]s' flag was not set. Use '-p %[1]s=\"FOOBAR\"' to fix this.", flagName)
+	}
+
+	found := false
+
+	if !found {
+		log.Fatalf("The selected template is not using '%s' parameter, but '--param' flag was set. Do not use '-p %s=%s' to fix this.", flagName, flagName, flagValue)
+	}
 }
 
 func printLimitedSupportReason(limitedSupport *cmv1.LimitedSupportReason) error {
