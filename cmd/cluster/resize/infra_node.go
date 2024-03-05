@@ -29,7 +29,8 @@ import (
 const (
 	twentyMinuteTimeout                = 20 * time.Minute
 	twentySecondIncrement              = 20 * time.Second
-	resizedInfraNodeServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_resized_auto.json"
+	AWSresizedInfraNodeServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_resized_auto.json"
+	GCPresizedInfraNodeServiceLogTemplate = "<LINK>"
 	infraNodeLabel                     = "node-role.kubernetes.io/infra"
 	temporaryInfraNodeLabel            = "osdctl.openshift.io/infra-resize-temporary-machinepool"
 )
@@ -456,13 +457,27 @@ func getInstanceType(mp *hivev1.MachinePool) (string, error) {
 	return "", errors.New("unsupported platform, only AWS and GCP are supported")
 }
 
+//Adding change in serviceLog as per the cloud provider.
+
 func generateServiceLog(instanceType, clusterId string) servicelog.PostCmdOptions {
-	return servicelog.PostCmdOptions{
-		Template:       resizedInfraNodeServiceLogTemplate,
-		ClusterId:      clusterId,
-		TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
-	}
+ if mp.Spec.Platform.AWS != nil {
+
+        return servicelog.PostCmdOptions{
+                Template:       AWSresizedInfraNodeServiceLogTemplate,
+                ClusterId:      clusterId,
+                TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
+        }
 }
+ else if mp.Spec.Platform.GCP != nil {
+
+        return servicelog.PostCmdOptions{
+                Template:       GCPresizedInfraNodeServiceLogTemplate,
+                ClusterId:      clusterId,
+                TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
+        }
+}
+}
+
 
 func (r *Resize) terminateCloudInstances(ctx context.Context, nodeList *corev1.NodeList) error {
 	if len(nodeList.Items) == 0 {
