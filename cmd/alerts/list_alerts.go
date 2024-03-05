@@ -64,12 +64,14 @@ func ListAlerts(cmd *alertCmd) {
 	clusterID := cmd.clusterID
 	levelcmd := cmd.alertLevel
 
-	if levelcmd == "warning" || levelcmd == "critical" || levelcmd == "firing" || levelcmd == "pending" {
+	if levelcmd == "" {
+		fmt.Println("No alert level specified. Defaulting to 'all'.")
+		levelcmd = "all"
+	} else if levelcmd == "warning" || levelcmd == "critical" || levelcmd == "firing" || levelcmd == "pending" || levelcmd == "info" || levelcmd == "none" || levelcmd == "all" {
 		levelCmd = levelcmd
-	} else if levelcmd == "all" {
-		levelCmd = "all"
 	} else {
-		log.Fatalf("Invalid alert level: %s\n", levelcmd)
+		fmt.Printf("Invalid alert level \"%s\" \n", levelcmd)
+		return
 	}
 
 	ListAlertCmd := []string{"amtool", "--alertmanager.url", LocalHostUrl, "alert", "-o", "json"}
@@ -102,7 +104,7 @@ func ListAlerts(cmd *alertCmd) {
 	}
 
 	if !foundAlert {
-		fmt.Printf("No such Alert found with requested %s severity.\n", levelCmd)
+		fmt.Printf("No such Alert found with requested \"%s\" severity.\n", levelCmd)
 	}
 }
 

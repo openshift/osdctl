@@ -64,41 +64,26 @@ func ListSilence(clusterID string) {
 	}
 
 	fmt.Printf("Silence Information:\n")
-	for _, silence := range silences {
-		id, matchers, status, created, starts, end, comment := silence.ID, silence.Matchers, silence.Status.State, silence.CreatedBy, silence.StartsAt, silence.EndsAt, silence.Comment
-		fmt.Println("--------------------------")
-
-		for _, matcher := range matchers {
-			fmt.Printf("	SilenceID:	%s\n", id)
-			fmt.Printf("	Status:		%s\n", status)
-			fmt.Printf("	Created By:	%s\n", created)
-			fmt.Printf("	Starts At:	%s\n", starts)
-			fmt.Printf("	Ends At:	%s\n", end)
-			fmt.Printf("	Reason:		%s\n", comment)
-			fmt.Printf("	AlertName:	%s\n", matcher.Value)
+	if len(silences) > 0 {
+		for _, silence := range silences {
+			printSilence(silence)
 		}
-		fmt.Println("--------------------------")
-		//printSilence(silence)
-	}
-
-	// If no silences found
-	if len(silences) == 0 {
+	} else {
 		fmt.Println("No silences found, all silence has been cleared.")
 	}
 }
 
-/*
 func printSilence(silence Silence) {
-	fmt.Println("--------------------------")
-		for _, matcher := range matchers {
-			fmt.Printf("	SilenceID:	%s\n", id)
-			fmt.Printf("	Status:	%s\n", status)
-			fmt.Printf("	Created By:	%s\n", created)
-			fmt.Printf("	Starts At:	%s\n", starts)
-			fmt.Printf("	Ends At:	%s\n", end)
-			fmt.Printf("	Comment:	%s\n", comment)
-			fmt.Printf("	AlertName:	%s\n", matcher.Value)
-		}
-	fmt.Println("--------------------------")
+	id, matchers, status, created, starts, end, comment := silence.ID, silence.Matchers, silence.Status.State, silence.CreatedBy, silence.StartsAt, silence.EndsAt, silence.Comment
+	fmt.Println("-------------------------------------------")
+	for _, matcher := range matchers {
+		fmt.Printf("  SilenceID:		%s\n", id)
+		fmt.Printf("  Status:		%s\n", status)
+		fmt.Printf("  Created By:		%s\n", created)
+		fmt.Printf("  Starts At:		%s\n", starts)
+		fmt.Printf("  Ends At:		%s\n", end)
+		fmt.Printf("  Comment:		%s\n", comment)
+		fmt.Printf("  AlertName:		%s\n", matcher.Value)
+	}
+	fmt.Println("---------------------------------------------")
 }
-*/

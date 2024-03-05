@@ -48,10 +48,13 @@ func ClearSilence(cmd *silenceCmd) {
 
 	if all {
 		ClearAllSilence(kubeconfig, clientset)
-	} else if len(silenceID) > 0 {
-		ClearSilenceByID(silenceID, kubeconfig, clientset)
 	} else {
-		fmt.Println("No valid option specified. Use --all or --silenceID.")
+		if len(silenceID) > 0 {
+			ClearSilenceByID(silenceID, kubeconfig, clientset)
+		} else {
+			fmt.Println("No valid option specified. Using a default option")
+			ClearAllSilence(kubeconfig, clientset)
+		}
 	}
 }
 
@@ -78,6 +81,7 @@ func ClearAllSilence(kubeconfig *rest.Config, clientset *kubernetes.Clientset) {
 	}
 
 	finalOutput := strings.Fields(formattedOutput)
+	countsilence := len(finalOutput)
 	for _, silence := range finalOutput {
 		clearCmd := []string{
 			"amtool",
@@ -87,18 +91,22 @@ func ClearAllSilence(kubeconfig *rest.Config, clientset *kubernetes.Clientset) {
 			"--alertmanager.url=" + LocalHostUrl,
 		}
 
+		countsilence = countsilence - 1
+
 		_, err := ExecInPod(kubeconfig, clientset, clearCmd)
 
 		if err != nil {
-			log.Printf("Error expiring silence ID %s: %v\n", silence, err)
+			log.Printf("Error expiring silence ID \"%s\" %v\n", silence, err)
 			return
 		}
 
-		fmt.Printf("SilenceID %s expired successfully.\n", silence)
-	}
+		fmt.Printf("SilenceID \"%s\" expired successfully.\n", silence)
 
-		if len(finalOutput) == 0 {
-			fmt.Printf("All SilenceIDs expired successfully.\n")
+		if countsilence == 0 {
+			fmt.Println()
+			fmt.Printf("All SilenceID expired successfully.\n")
+			return
+		}
 	}
 }
 
@@ -114,10 +122,10 @@ func ClearSilenceByID(silenceID []string, kubeconfig *rest.Config, clientset *ku
 		_, err := ExecInPod(kubeconfig, clientset, clearCmd)
 
 		if err != nil {
-			log.Printf("Error expiring silence ID: %s: %v\n", silenceId, err)
+			log.Printf("Error expiring silence ID \"%s\" %v\n", silenceId, err)
 			continue
 		}
 
-		fmt.Printf("Requested SilenceID %s expired successfully.\n", silenceId)
+		fmt.Printf("Requested SilenceID \"%s\" expired successfully.\n", silenceId)
 	}
 }

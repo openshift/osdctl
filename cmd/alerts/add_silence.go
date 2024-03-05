@@ -84,7 +84,7 @@ func AddAllSilence(clusterID, duration, comment, username string, kubeconfig *re
 
 	formattedOutput := strings.Replace(output, "\n", " ", -1)
 
-	fmt.Printf("All alerts for cluster %s has been silenced with id %sfor a duration of %s by user %s.\n", ClusterName, formattedOutput, duration, username)
+	fmt.Printf("All alerts for cluster %s has been silenced with id \"%s\"for a duration of %s by user %s.\n", ClusterName, formattedOutput, duration, username)
 }
 
 func AddAlertNameSilence(alertID []string, duration, comment, username string, kubeconfig *rest.Config, clientset *kubernetes.Clientset) {
@@ -106,7 +106,7 @@ func AddAlertNameSilence(alertID []string, duration, comment, username string, k
 
 		formattedOutput := strings.Replace(output, "\n", " ", -1)
 
-		fmt.Printf("Alert %s has been silenced with id %sfor duration of %s by user %s.\n", alertname, formattedOutput, duration, username)
+		fmt.Printf("Alert \"%s\" has been silenced with id \"%s\"for duration of %s by user %s.\n", alertname, formattedOutput, duration, username)
 	}
 }
 
