@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/openshift/osdctl/cmd/alerts/silence"
 	"github.com/spf13/cobra"
 )
 
@@ -36,7 +37,7 @@ func NewCmdListAlerts() *cobra.Command {
 	alertCmd := &alertCmd{}
 	newCmd := &cobra.Command{
 		Use:               "list <cluster-id> --level [warning, critical, firing, pending, all]",
-		Short:             "List the alerts based on severity",
+		Short:             "List all alerts or based on severity",
 		Long:              `Checks the alerts for the cluster and print the list based on severity`,
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
@@ -50,7 +51,6 @@ func NewCmdListAlerts() *cobra.Command {
 	return newCmd
 }
 
-// osdctl alerts list ${CLUSTERID} --level [warning, critical...]
 func ListAlerts(cmd *alertCmd) {
 	var alerts []Alert
 	var levelCmd string
@@ -65,7 +65,7 @@ func ListAlerts(cmd *alertCmd) {
 	levelcmd := cmd.alertLevel
 
 	if levelcmd == "" {
-		fmt.Println("No alert level specified. Defaulting to 'all'.")
+		fmt.Println("No alert level specified. Defaulting to 'all'")
 		levelcmd = "all"
 	} else if levelcmd == "warning" || levelcmd == "critical" || levelcmd == "firing" || levelcmd == "pending" || levelcmd == "info" || levelcmd == "none" || levelcmd == "all" {
 		levelCmd = levelcmd
@@ -74,14 +74,14 @@ func ListAlerts(cmd *alertCmd) {
 		return
 	}
 
-	ListAlertCmd := []string{"amtool", "--alertmanager.url", LocalHostUrl, "alert", "-o", "json"}
+	ListAlertCmd := []string{"amtool", "--alertmanager.url", silence.LocalHostUrl, "alert", "-o", "json"}
 
-	kubeconfig, clientset, err := GetKubeConfigClient(clusterID)
+	kubeconfig, clientset, err := silence.GetKubeConfigClient(clusterID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	output, err := ExecInPod(kubeconfig, clientset, ListAlertCmd)
+	output, err := silence.ExecInPod(kubeconfig, clientset, ListAlertCmd)
 	if err != nil {
 		fmt.Println(err)
 	}

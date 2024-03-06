@@ -19,11 +19,3 @@ func NewCmdSilence() *cobra.Command {
 	return silenceCmd
 }
 
-/*
-func help(cmd *cobra.Command, _ []string) {
-	err := cmd.Help()
-	if err != nil {
-		fmt.Println("Error while calling cmd.Help()", err.Error())
-	}
-}*/
-
