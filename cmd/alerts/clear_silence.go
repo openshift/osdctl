@@ -19,7 +19,7 @@ type silenceCmd struct {
 func NewCmdClearSilence() *cobra.Command {
 	silenceCmd := &silenceCmd{}
 	cmd := &cobra.Command{
-		Use:               "clear-silence <cluster-id> [--all | --silenceID <silence-id>]",
+		Use:               "clear-silence <cluster-id> [--all | --silence-id <silence-id>]",
 		Short:             "Clear Silence for alert",
 		Long:              `clear all silence based on silenceid`,
 		Args:              cobra.ExactArgs(1),
@@ -29,7 +29,7 @@ func NewCmdClearSilence() *cobra.Command {
 			ClearSilence(silenceCmd)
 		},
 	}
-	cmd.Flags().StringSliceVar(&silenceCmd.silenceID, "silenceID", []string{}, "silence id (comma-separated)")
+	cmd.Flags().StringSliceVar(&silenceCmd.silenceID, "silence-id", []string{}, "silence id (comma-separated)")
 	cmd.Flags().BoolVarP(&silenceCmd.all, "all", "a", false, "clear all silences")
 	//--all Flag to clear all silences
 	return cmd
