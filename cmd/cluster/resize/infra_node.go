@@ -122,7 +122,8 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 		nodes := &corev1.NodeList{}
 
 		if err := r.client.List(ctx, nodes, &client.ListOptions{LabelSelector: selector}); err != nil {
-			return false, err
+			log.Printf("error retrieving nodes list, continuing to wait: %s", err)
+			return false, nil
 		}
 
 		readyNodes := 0
@@ -193,7 +194,8 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 			if apierrors.IsNotFound(err) {
 				return true, nil
 			}
-			return false, err
+			log.Printf("error retrieving machines list, continuing to wait: %s", err)
+			return false, nil
 		}
 
 		log.Printf("original machinepool %s/%s still exists, continuing to wait", originalMp.Namespace, originalMp.Name)
@@ -205,7 +207,7 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 	// Wait for original nodes to delete
 	if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
 		// Re-check for originalNodes to see if they have been deleted
-		return r.nodesMatchExpectedCount(ctx, originalNodeSelector, 0)
+		return skipError(wrapResult(r.nodesMatchExpectedCount(ctx, originalNodeSelector, 0)), "error matching expected count")
 	}); err != nil {
 		switch {
 		case errors.Is(err, wait.ErrWaitTimeout):
@@ -219,7 +221,7 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 
 			if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
 				log.Printf("waiting for nodes to terminate")
-				return r.nodesMatchExpectedCount(ctx, originalNodeSelector, 0)
+				return skipError(wrapResult(r.nodesMatchExpectedCount(ctx, originalNodeSelector, 0)), "error matching expected count")
 			}); err != nil {
 				if errors.Is(err, wait.ErrWaitTimeout) {
 					log.Printf("timed out waiting for nodes to terminate: %v.", err.Error())
@@ -242,11 +244,13 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 		nodes := &corev1.NodeList{}
 		selector, err := labels.Parse("node-role.kubernetes.io/infra=")
 		if err != nil {
+			// This should never happen, so we do not have to skip this error
 			return false, err
 		}
 
 		if err := r.client.List(ctx, nodes, &client.ListOptions{LabelSelector: selector}); err != nil {
-			return false, err
+			log.Printf("error retrieving nodes list, continuing to wait: %s", err)
+			return false, nil
 		}
 
 		readyNodes := 0
@@ -292,7 +296,8 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 			if apierrors.IsNotFound(err) {
 				return true, nil
 			}
-			return false, err
+			log.Printf("error retrieving old machine details, continuing to wait: %s", err)
+			return false, nil
 		}
 
 		log.Printf("temporary machinepool %s/%s still exists, continuing to wait", tempMp.Namespace, tempMp.Name)
@@ -307,11 +312,13 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 		nodes := &corev1.NodeList{}
 		selector, err := labels.Parse("node-role.kubernetes.io/infra=")
 		if err != nil {
+			// This should never happen, so we do not have to skip this errorreturn false, err
 			return false, err
 		}
 
 		if err := r.client.List(ctx, nodes, &client.ListOptions{LabelSelector: selector}); err != nil {
-			return false, err
+			log.Printf("error retrieving nodes list, continuing to wait: %s", err)
+			return false, nil
 		}
 
 		switch len(nodes.Items) {
@@ -334,7 +341,7 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 
 			if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
 				log.Printf("waiting for nodes to terminate")
-				return r.nodesMatchExpectedCount(ctx, tempNodeSelector, 0)
+				return skipError(wrapResult(r.nodesMatchExpectedCount(ctx, tempNodeSelector, 0)), "error matching expected count")
 			}); err != nil {
 				if errors.Is(err, wait.ErrWaitTimeout) {
 					log.Printf("timed out waiting for nodes to terminate: %v.", err.Error())
@@ -535,4 +542,31 @@ func (r *Resize) nodesMatchExpectedCount(ctx context.Context, labelSelector labe
 	}
 
 	return false, nil
+}
+
+// having an error when being in a rety loop, should not be handled as an error, and we should just display it and continue
+// in case we have a function that return a bool status and an error, we can use following helper
+// f being a function returning (bool, error), replace
+//
+//	return f(...)
+//
+// by
+//
+//	return skipError(wrapResult(f(...)), "message to context the error")
+//
+// and then the return will always have error set to nil, but a continuing message will be displayed in case of error
+type result struct {
+	condition bool
+	err       error
+}
+
+func wrapResult(condition bool, err error) result {
+	return result{condition, err}
+}
+
+func skipError(res result, msg string) (bool, error) {
+	if res.err != nil {
+		log.Printf("%s, continuing to wait: %s", msg, res.err)
+	}
+	return res.condition, nil
 }
