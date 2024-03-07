@@ -17,11 +17,15 @@ type Matchers struct {
 	Value string `json:"value"`
 }
 
+type Status struct{
+	State string `json:"state"`
+}
+
 type Silence struct {
 	ID       string		`json:"id"`
 	Matchers []Matchers `json:"matchers"`
 
-	//Status    Status `json:"status"`	//some issue in using Status
+	Status    Status `json:"status"`
 	Comment   string `json:"comment"`
 	CreatedBy string `json:"createdBy"`
 	EndsAt    string `json:"endsAt"`
@@ -73,11 +77,11 @@ func ListSilence(clusterID string) {
 }
 
 func printSilence(silence Silence) {
-	id, matchers, created, starts, end, comment := silence.ID, silence.Matchers, silence.CreatedBy, silence.StartsAt, silence.EndsAt, silence.Comment
+	id, matchers, status, created, starts, end, comment := silence.ID, silence.Matchers, silence.Status, silence.CreatedBy, silence.StartsAt, silence.EndsAt, silence.Comment
 	fmt.Println("-------------------------------------------")
 	for _, matcher := range matchers {
 		fmt.Printf("  SilenceID:		%s\n", id)
-		//fmt.Printf("  Status:		%s\n", status)
+		fmt.Printf("  Status:		%s\n", status.State)
 		fmt.Printf("  Created By:		%s\n", created)
 		fmt.Printf("  Starts At:		%s\n", starts)
 		fmt.Printf("  Ends At:		%s\n", end)

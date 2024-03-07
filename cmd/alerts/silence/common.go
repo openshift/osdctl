@@ -19,7 +19,6 @@ const (
 	ContainerName    = "alertmanager"
 	LocalHostUrl     = "http://localhost:9093"
 	PodName          = "alertmanager-main-0"
-	ClusterName      = "mitu04"	//using harcoded value on temporary basis
 )
 
 type logCapture struct {

@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
 )
 
 type addSilenceCmd struct {
@@ -43,12 +44,13 @@ func NewCmdAddSilence() *cobra.Command {
 }
 
 func AddSilence(cmd *addSilenceCmd) {
-	username := GetUserInfo()
 	clusterID := cmd.clusterID
 	alertID := cmd.alertID
 	comment := cmd.comment
 	duration := cmd.duration
 	all := cmd.all
+	
+	username, clustername := GetUserAndClusterInfo(clusterID)
 
 	kubeconfig, clientset, err := GetKubeConfigClient(clusterID)
 	if err != nil {
@@ -56,7 +58,7 @@ func AddSilence(cmd *addSilenceCmd) {
 	}
 
 	if all {
-		AddAllSilence(clusterID, duration, comment, username, kubeconfig, clientset)
+		AddAllSilence(clusterID, duration, comment, username, clustername, kubeconfig, clientset)
 	} else if len(alertID) > 0 {
 		AddAlertNameSilence(alertID, duration, comment, username, kubeconfig, clientset)
 	} else {
@@ -65,7 +67,7 @@ func AddSilence(cmd *addSilenceCmd) {
 
 }
 
-func AddAllSilence(clusterID, duration, comment, username string, kubeconfig *rest.Config, clientset *kubernetes.Clientset) {
+func AddAllSilence(clusterID, duration, comment, username, clustername string, kubeconfig *rest.Config, clientset *kubernetes.Clientset) {
 	addCmd := []string{
 		"amtool",
 		"silence",
@@ -83,7 +85,7 @@ func AddAllSilence(clusterID, duration, comment, username string, kubeconfig *re
 
 	formattedOutput := strings.Replace(output, "\n", " ", -1)
 
-	fmt.Printf("All alerts for cluster %s has been silenced with id \"%s\"for a duration of %s by user %s.\n", ClusterName, formattedOutput, duration, username)
+	fmt.Printf("All alerts for cluster %s has been silenced with id \"%s\" for a duration of %s by user \"%s\" \n", clustername, formattedOutput, duration, username)
 }
 
 func AddAlertNameSilence(alertID []string, duration, comment, username string, kubeconfig *rest.Config, clientset *kubernetes.Clientset) {
@@ -105,17 +107,24 @@ func AddAlertNameSilence(alertID []string, duration, comment, username string, k
 
 		formattedOutput := strings.Replace(output, "\n", " ", -1)
 
-		fmt.Printf("Alert \"%s\" has been silenced with id \"%s\"for duration of %s by user %s.\n", alertname, formattedOutput, duration, username)
+		fmt.Printf("Alert %s has been silenced with id \"%s\" for duration of %s by user \"%s\" \n", alertname, formattedOutput, duration, username)
 	}
 }
 
 // User name of who added the silence
-func GetUserInfo() string {
+func GetUserAndClusterInfo(clusterid string) (string, string) {
 	connection, err := ocmutils.CreateConnection()
 	if err != nil {
 		fmt.Printf("Error %s in create connection.", err)
 	}
 	defer connection.Close()
+
+	cluster, err := ocmutils.GetCluster(connection, clusterid)
+	if err != nil {
+		fmt.Printf("Error %s in getting cluster.", err)
+	}
+
+	clustername := cluster.Name()
 
 	account, err := connection.AccountsMgmt().V1().CurrentAccount().Get().Send()
 	if err != nil {
@@ -123,5 +132,5 @@ func GetUserInfo() string {
 	}
 
 	name, _ := account.Body().GetUsername()
-	return name
+	return name, clustername
 }
