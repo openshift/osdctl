@@ -74,14 +74,14 @@ func ListAlerts(cmd *alertCmd) {
 		return
 	}
 
-	ListAlertCmd := []string{"amtool", "--alertmanager.url", silence.LocalHostUrl, "alert", "-o", "json"}
+	listAlertCmd := []string{"amtool", "--alertmanager.url", silence.LocalHostUrl, "alert", "-o", "json"}
 
 	kubeconfig, clientset, err := silence.GetKubeConfigClient(clusterID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	output, err := silence.ExecInPod(kubeconfig, clientset, ListAlertCmd)
+	output, err := silence.ExecInPod(kubeconfig, clientset, listAlertCmd)
 	if err != nil {
 		fmt.Println(err)
 	}

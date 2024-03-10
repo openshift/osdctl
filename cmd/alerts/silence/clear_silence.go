@@ -12,7 +12,7 @@ import (
 
 type silenceCmd struct {
 	clusterID string
-	silenceID []string
+	silenceIDs []string
 	all       bool
 }
 
@@ -29,14 +29,14 @@ func NewCmdClearSilence() *cobra.Command {
 			ClearSilence(silenceCmd)
 		},
 	}
-	cmd.Flags().StringSliceVar(&silenceCmd.silenceID, "silence-id", []string{}, "silence id (comma-separated)")
+	cmd.Flags().StringSliceVar(&silenceCmd.silenceIDs, "silence-id", []string{}, "silence id (comma-separated)")
 	cmd.Flags().BoolVarP(&silenceCmd.all, "all", "a", false, "clear all silences")
 	return cmd
 }
 
 func ClearSilence(cmd *silenceCmd) {
 	clusterID := cmd.clusterID
-	silenceID := cmd.silenceID
+	silenceIDs := cmd.silenceIDs
 	all := cmd.all
 
 	kubeconfig, clientset, err := GetKubeConfigClient(clusterID)
@@ -47,8 +47,8 @@ func ClearSilence(cmd *silenceCmd) {
 	if all {
 		ClearAllSilence(kubeconfig, clientset)
 	} else {
-		if len(silenceID) > 0 {
-			ClearSilenceByID(silenceID, kubeconfig, clientset)
+		if len(silenceIDs) > 0 {
+			ClearSilenceByID(silenceIDs, kubeconfig, clientset)
 		} else {
 			fmt.Println("No valid option specified. Using a default option")
 			ClearAllSilence(kubeconfig, clientset)
@@ -108,8 +108,8 @@ func ClearAllSilence(kubeconfig *rest.Config, clientset *kubernetes.Clientset) {
 	}
 }
 
-func ClearSilenceByID(silenceID []string, kubeconfig *rest.Config, clientset *kubernetes.Clientset) {
-	for _, silenceId := range silenceID {
+func ClearSilenceByID(silenceIDs []string, kubeconfig *rest.Config, clientset *kubernetes.Clientset) {
+	for _, silenceId := range silenceIDs {
 		clearCmd := []string{
 			"amtool",
 			"silence",
