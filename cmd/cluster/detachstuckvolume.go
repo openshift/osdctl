@@ -4,9 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
-
-	slices "golang.org/x/exp/slices"
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
