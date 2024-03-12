@@ -22,7 +22,7 @@ const (
 )
 
 type logCapture struct {
-	buffer bytes.Buffer
+	buffer	bytes.Buffer
 }
 
 func (capture *logCapture) GetStdOut() string {

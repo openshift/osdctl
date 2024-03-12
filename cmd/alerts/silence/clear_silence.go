@@ -11,26 +11,28 @@ import (
 )
 
 type silenceCmd struct {
-	clusterID string
-	silenceIDs []string
-	all       bool
+	clusterID	string
+	silenceIDs	[]string
+	all	bool
 }
 
 func NewCmdClearSilence() *cobra.Command {
 	silenceCmd := &silenceCmd{}
 	cmd := &cobra.Command{
-		Use:               "expire <cluster-id> [--all | --silence-id <silence-id>]",
-		Short:             "Expire Silence for alert",
-		Long:              `expire all silence or based on silenceid`,
-		Args:              cobra.ExactArgs(1),
-		DisableAutoGenTag: true,
+		Use:	"expire <cluster-id> [--all | --silence-id <silence-id>]",
+		Short:	"Expire Silence for alert",
+		Long:	`expire all silence or based on silenceid`,
+		Args:	cobra.ExactArgs(1),
+		DisableAutoGenTag:	true,
 		Run: func(cmd *cobra.Command, args []string) {
 			silenceCmd.clusterID = args[0]
 			ClearSilence(silenceCmd)
 		},
 	}
+
 	cmd.Flags().StringSliceVar(&silenceCmd.silenceIDs, "silence-id", []string{}, "silence id (comma-separated)")
 	cmd.Flags().BoolVarP(&silenceCmd.all, "all", "a", false, "clear all silences")
+	
 	return cmd
 }
 

@@ -4,12 +4,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// NewCmdSilence implements base silence command.
 func NewCmdSilence() *cobra.Command {
 	silenceCmd := &cobra.Command{
-		Use:               "silence",
-		Short:             "add,clear and list silence",
-		Args:              cobra.NoArgs,
-		DisableAutoGenTag: true,
+		Use:	"silence",
+		Short:	"add, expire and list silence associated with alerts",
+		Args:	cobra.NoArgs,
+		DisableAutoGenTag:	true,
 	}
 
 	silenceCmd.AddCommand(NewCmdAddSilence())

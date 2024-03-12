@@ -13,21 +13,21 @@ import (
 )
 
 type addSilenceCmd struct {
-	clusterID string
-	alertID   []string
-	duration  string
-	comment   string
-	all       bool
+	clusterID	string
+	alertID	[]string
+	duration	string
+	comment	string
+	all	bool
 }
 
 func NewCmdAddSilence() *cobra.Command {
 	addSilenceCmd := &addSilenceCmd{}
 	cmd := &cobra.Command{
-		Use:               "add <cluster-id> [--all --duration --comment | --alertname --duration --comment]",
-		Short:             "Add new silence for alert",
-		Long:              `add new silence for specfic or all alert with comment and duration of alert`,
-		Args:              cobra.ExactArgs(1),
-		DisableAutoGenTag: true,
+		Use:	"add <cluster-id> [--all --duration --comment | --alertname --duration --comment]",
+		Short:	"Add new silence for alert",
+		Long:	`add new silence for specfic or all alert with comment and duration of alert`,
+		Args:	cobra.ExactArgs(1),
+		DisableAutoGenTag:	true,
 		Run: func(cmd *cobra.Command, args []string) {
 			addSilenceCmd.clusterID = args[0]
 			AddSilence(addSilenceCmd)
@@ -36,10 +36,9 @@ func NewCmdAddSilence() *cobra.Command {
 
 	cmd.Flags().StringSliceVar(&addSilenceCmd.alertID, "alertname", []string{}, "alertname (comma-separated)")
 	cmd.Flags().StringVarP(&addSilenceCmd.comment, "comment", "c", "", "add comment about silence")
-	cmd.Flags().StringVarP(&addSilenceCmd.duration, "duration", "d", "15d", "add duration for silence")
-	//default duration set to 15 days
+	cmd.Flags().StringVarP(&addSilenceCmd.duration, "duration", "d", "15d", "add duration for silence") //default duration set to 15 days
 	cmd.Flags().BoolVarP(&addSilenceCmd.all, "all", "a", false, "add silences for all alert")
-
+	
 	return cmd
 }
 
@@ -111,7 +110,7 @@ func AddAlertNameSilence(alertID []string, duration, comment, username string, k
 	}
 }
 
-// User name of who added the silence
+// Get User name and clustername
 func GetUserAndClusterInfo(clusterid string) (string, string) {
 	connection, err := ocmutils.CreateConnection()
 	if err != nil {
