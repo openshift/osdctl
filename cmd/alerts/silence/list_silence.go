@@ -9,36 +9,36 @@ import (
 )
 
 type ID struct {
-	ID	string	`json:"id"`
+	ID string `json:"id"`
 }
 
 type Matchers struct {
-	Name	string	`json:"name"`
-	Value	string	`json:"value"`
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
-type Status struct{
-	State	string	`json:"state"`
+type Status struct {
+	State string `json:"state"`
 }
 
 type Silence struct {
-	ID	string	`json:"id"`
-	Matchers	[]Matchers	`json:"matchers"`
+	ID       string     `json:"id"`
+	Matchers []Matchers `json:"matchers"`
 
-	Status	Status	`json:"status"`
-	Comment	string	`json:"comment"`
-	CreatedBy	string	`json:"createdBy"`
-	EndsAt	string	`json:"endsAt"`
-	StartsAt	string	`json:"startsAt"`
+	Status    Status `json:"status"`
+	Comment   string `json:"comment"`
+	CreatedBy string `json:"createdBy"`
+	EndsAt    string `json:"endsAt"`
+	StartsAt  string `json:"startsAt"`
 }
 
 func NewCmdListSilence() *cobra.Command {
 	return &cobra.Command{
-		Use:	"list <cluster-id>",
-		Short:	"List all silences",
-		Long:	`print the list of silences`,
-		Args:	cobra.ExactArgs(1),
-		DisableAutoGenTag:	true,
+		Use:               "list <cluster-id>",
+		Short:             "List all silences",
+		Long:              `print the list of silences`,
+		Args:              cobra.ExactArgs(1),
+		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			ListSilence(args[0])
 		},

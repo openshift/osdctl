@@ -2,31 +2,30 @@ package silence
 
 import (
 	"fmt"
-	"log"
-	"strings"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-
+	"log"
+	"strings"
 )
 
 type addSilenceCmd struct {
-	clusterID	string
-	alertID	[]string
-	duration	string
-	comment	string
-	all	bool
+	clusterID string
+	alertID   []string
+	duration  string
+	comment   string
+	all       bool
 }
 
 func NewCmdAddSilence() *cobra.Command {
 	addSilenceCmd := &addSilenceCmd{}
 	cmd := &cobra.Command{
-		Use:	"add <cluster-id> [--all --duration --comment | --alertname --duration --comment]",
-		Short:	"Add new silence for alert",
-		Long:	`add new silence for specfic or all alert with comment and duration of alert`,
-		Args:	cobra.ExactArgs(1),
-		DisableAutoGenTag:	true,
+		Use:               "add <cluster-id> [--all --duration --comment | --alertname --duration --comment]",
+		Short:             "Add new silence for alert",
+		Long:              `add new silence for specfic or all alert with comment and duration of alert`,
+		Args:              cobra.ExactArgs(1),
+		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			addSilenceCmd.clusterID = args[0]
 			AddSilence(addSilenceCmd)
@@ -37,7 +36,7 @@ func NewCmdAddSilence() *cobra.Command {
 	cmd.Flags().StringVarP(&addSilenceCmd.comment, "comment", "c", "", "add comment about silence")
 	cmd.Flags().StringVarP(&addSilenceCmd.duration, "duration", "d", "15d", "add duration for silence") //default duration set to 15 days
 	cmd.Flags().BoolVarP(&addSilenceCmd.all, "all", "a", false, "add silences for all alert")
-	
+
 	return cmd
 }
 
@@ -47,7 +46,7 @@ func AddSilence(cmd *addSilenceCmd) {
 	comment := cmd.comment
 	duration := cmd.duration
 	all := cmd.all
-	
+
 	username, clustername := GetUserAndClusterInfo(clusterID)
 
 	kubeconfig, clientset, err := GetKubeConfigClient(clusterID)

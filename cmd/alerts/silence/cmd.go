@@ -7,10 +7,10 @@ import (
 // NewCmdSilence implements base silence command.
 func NewCmdSilence() *cobra.Command {
 	silenceCmd := &cobra.Command{
-		Use:	"silence",
-		Short:	"add, expire and list silence associated with alerts",
-		Args:	cobra.NoArgs,
-		DisableAutoGenTag:	true,
+		Use:               "silence",
+		Short:             "add, expire and list silence associated with alerts",
+		Args:              cobra.NoArgs,
+		DisableAutoGenTag: true,
 	}
 
 	silenceCmd.AddCommand(NewCmdAddSilence())
@@ -19,4 +19,3 @@ func NewCmdSilence() *cobra.Command {
 
 	return silenceCmd
 }
-

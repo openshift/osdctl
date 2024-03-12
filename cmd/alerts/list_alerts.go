@@ -11,41 +11,41 @@ import (
 
 // alertCmd represnts information associated with cluster and level.
 type alertCmd struct {
-	clusterID	string
-	alertLevel	string
+	clusterID  string
+	alertLevel string
 }
 
 // Labels represents a set of labels associated with an alert.
 type Labels struct {
-	Alertname	string	`json:"alertname"`
-	Severity	string	`json:"severity"`
+	Alertname string `json:"alertname"`
+	Severity  string `json:"severity"`
 }
 
 // Status represents a set of state associated with an alert.
 type Status struct {
-	State	string	`json:"state"`
+	State string `json:"state"`
 }
 
 // Annotations represents a set of summary/description associated with an alert.
 type Annotations struct {
-	Summary	string	`json:"summary"`
+	Summary string `json:"summary"`
 }
 
 // Alert represents a set of above declared struct Labels,Status and annoataions
 type Alert struct {
-	Labels	Labels	`json:"labels"`
-	Status	Status	`json:"status"`
-	Annotations	Annotations	`json:"annotations"`
+	Labels      Labels      `json:"labels"`
+	Status      Status      `json:"status"`
+	Annotations Annotations `json:"annotations"`
 }
 
 // NewCmdListAlerts implements the list alert functionality.
 func NewCmdListAlerts() *cobra.Command {
 	alertCmd := &alertCmd{}
 	newCmd := &cobra.Command{
-		Use:	"list <cluster-id> --level [warning, critical, firing, pending, all]",
-		Short:	"List all alerts or based on severity",
-		Long:	`Checks the alerts for the cluster and print the list based on severity`,
-		Args:	cobra.ExactArgs(1),
+		Use:               "list <cluster-id> --level [warning, critical, firing, pending, all]",
+		Short:             "List all alerts or based on severity",
+		Long:              `Checks the alerts for the cluster and print the list based on severity`,
+		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			alertCmd.clusterID = args[0]
@@ -54,7 +54,7 @@ func NewCmdListAlerts() *cobra.Command {
 	}
 
 	newCmd.Flags().StringVarP(&alertCmd.alertLevel, "level", "l", "all", "Alert level [warning, critical, firing, pending, all]")
-	
+
 	return newCmd
 }
 
@@ -80,7 +80,7 @@ func ListAlerts(cmd *alertCmd) {
 	}
 }
 
-func getAlertLevel(clusterID, alertLevel string){
+func getAlertLevel(clusterID, alertLevel string) {
 	var alerts []Alert
 
 	listAlertCmd := []string{"amtool", "--alertmanager.url", silence.LocalHostUrl, "alert", "-o", "json"}
@@ -89,7 +89,7 @@ func getAlertLevel(clusterID, alertLevel string){
 	if err != nil {
 		log.Fatal(err)
 	}
-	
+
 	output, err := silence.ExecInPod(kubeconfig, clientset, listAlertCmd)
 	if err != nil {
 		fmt.Println(err)

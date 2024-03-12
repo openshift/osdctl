@@ -21,7 +21,7 @@ const (
 )
 
 type logCapture struct {
-	buffer	bytes.Buffer
+	buffer bytes.Buffer
 }
 
 func (capture *logCapture) GetStdOut() string {
@@ -72,7 +72,7 @@ func ExecInPod(kubeconfig *rest.Config, clientset *kubernetes.Clientset, cmd []s
 
 	exec, err := remotecommand.NewSPDYExecutor(kubeconfig, "POST", req.URL())
 	if err != nil {
-		return "", fmt.Errorf("failed to create SPDY executor: %w", err) 
+		return "", fmt.Errorf("failed to create SPDY executor: %w", err)
 	}
 
 	capture := &logCapture{}

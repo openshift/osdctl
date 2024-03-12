@@ -8,14 +8,14 @@ import (
 // NewCmdAlerts implements base alert command.
 func NewCmdAlerts() *cobra.Command {
 	alrtCmd := &cobra.Command{
-		Use:	"alert",
-		Short:	"List alerts",
-		Args:	cobra.NoArgs,
-		DisableAutoGenTag:	true,
+		Use:               "alert",
+		Short:             "List alerts",
+		Args:              cobra.NoArgs,
+		DisableAutoGenTag: true,
 	}
 
 	alrtCmd.AddCommand(NewCmdListAlerts())
 	alrtCmd.AddCommand(silence.NewCmdSilence())
-	
+
 	return alrtCmd
 }
