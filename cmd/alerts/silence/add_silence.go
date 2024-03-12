@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
@@ -116,7 +115,12 @@ func GetUserAndClusterInfo(clusterid string) (string, string) {
 	if err != nil {
 		fmt.Printf("Error %s in create connection.", err)
 	}
-	defer connection.Close()
+	//defer connection.Close()
+	defer func() {
+		if cerr := connection.Close(); cerr != nil {
+			fmt.Println("Error closing connection:", cerr)
+		}
+	}()
 
 	cluster, err := ocmutils.GetCluster(connection, clusterid)
 	if err != nil {

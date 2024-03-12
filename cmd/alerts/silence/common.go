@@ -3,8 +3,7 @@ package silence
 import (
 	"bytes"
 	"context"
-	"log"
-
+	"fmt"
 	"github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
 	"github.com/openshift/backplane-cli/pkg/cli/config"
 	corev1 "k8s.io/api/core/v1"
@@ -39,20 +38,20 @@ func GetKubeConfigClient(clusterID string) (*rest.Config, *kubernetes.Clientset,
 
 	bp, err := config.GetBackplaneConfiguration()
 	if err != nil {
-		log.Fatalf("failed to load backplane-cli config: %v", err)
+		return nil, nil, fmt.Errorf("failed to load backplane-cli config: %w", err)
 	}
 
 	kubeconfig, err := login.GetRestConfig(bp, clusterID)
 	if err != nil {
-		log.Fatalf("failed to load backplane admin: %v", err)
+		return nil, nil, fmt.Errorf("failed to load backplane admin: %w", err)
 	}
 
 	clientset, err := kubernetes.NewForConfig(kubeconfig)
 	if err != nil {
-		log.Fatalf("failed to create clientset : %v", err)
+		return nil, nil, fmt.Errorf("failed to create clientset : %w", err)
 	}
 
-	return kubeconfig, clientset, err
+	return kubeconfig, clientset, nil
 }
 
 func ExecInPod(kubeconfig *rest.Config, clientset *kubernetes.Clientset, cmd []string) (string, error) {
@@ -73,7 +72,7 @@ func ExecInPod(kubeconfig *rest.Config, clientset *kubernetes.Clientset, cmd []s
 
 	exec, err := remotecommand.NewSPDYExecutor(kubeconfig, "POST", req.URL())
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create SPDY executor: %w", err) 
 	}
 
 	capture := &logCapture{}
@@ -87,7 +86,7 @@ func ExecInPod(kubeconfig *rest.Config, clientset *kubernetes.Clientset, cmd []s
 	})
 
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to stream with context: %w", err)
 	}
 
 	cmdOutput := capture.GetStdOut()
