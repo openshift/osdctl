@@ -1,7 +1,7 @@
 package resize
 
 // cspell:ignore embiggen
-
+/
 import (
 	"context"
 	"errors"
@@ -29,7 +29,7 @@ import (
 const (
 	twentyMinuteTimeout                = 20 * time.Minute
 	twentySecondIncrement              = 20 * time.Second
-	AWSresizedInfraNodeServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_resized_auto.json"
+	resizedInfraNodeServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_resized_auto.json"
 	GCPresizedInfraNodeServiceLogTemplate = "<LINK>"
 	infraNodeLabel                     = "node-role.kubernetes.io/infra"
 	temporaryInfraNodeLabel            = "osdctl.openshift.io/infra-resize-temporary-machinepool"
@@ -459,16 +459,16 @@ func getInstanceType(mp *hivev1.MachinePool) (string, error) {
 
 //Adding change in serviceLog as per the cloud provider.
 
-func generateServiceLog(instanceType, clusterId string) servicelog.PostCmdOptions {
- if mp.Spec.Platform.AWS != nil {
+func generateServiceLog(mp *hivev1.MachinePool,instanceType, clusterId string) servicelog.PostCmdOptions {
+
+if mp.Spec.Platform.AWS != nil {
 
         return servicelog.PostCmdOptions{
-                Template:       AWSresizedInfraNodeServiceLogTemplate,
+                Template:       resizedInfraNodeServiceLogTemplate,
                 ClusterId:      clusterId,
                 TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
         }
-}
- else if mp.Spec.Platform.GCP != nil {
+} else if mp.Spec.Platform.GCP != nil {
 
         return servicelog.PostCmdOptions{
                 Template:       GCPresizedInfraNodeServiceLogTemplate,
@@ -476,6 +476,7 @@ func generateServiceLog(instanceType, clusterId string) servicelog.PostCmdOption
                 TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
         }
 }
+return servicelog.PostCmdOptions{}
 }
 
 
