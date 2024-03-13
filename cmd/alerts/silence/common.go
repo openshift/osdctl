@@ -3,12 +3,12 @@ package silence
 import (
 	"context"
 	"fmt"
+	"github.com/openshift/osdctl/cmd/cluster"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/scheme"
-	"github.com/openshift/osdctl/cmd/cluster"
 )
 
 const (
