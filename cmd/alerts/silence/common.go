@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
-	"github.com/openshift/backplane-cli/pkg/cli/config"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -32,26 +30,6 @@ func (capture *logCapture) Write(p []byte) (n int, err error) {
 	a := string(p)
 	_, err = capture.buffer.WriteString(a)
 	return len(p), err
-}
-
-func GetKubeConfigClient(clusterID string) (*rest.Config, *kubernetes.Clientset, error) {
-
-	bp, err := config.GetBackplaneConfiguration()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load backplane-cli config: %w", err)
-	}
-
-	kubeconfig, err := login.GetRestConfig(bp, clusterID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load backplane admin: %w", err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(kubeconfig)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create clientset : %w", err)
-	}
-
-	return kubeconfig, clientset, nil
 }
 
 func ExecInPod(kubeconfig *rest.Config, clientset *kubernetes.Clientset, cmd []string) (string, error) {

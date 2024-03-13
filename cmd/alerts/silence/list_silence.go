@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/openshift/osdctl/cmd/common"
 	"github.com/spf13/cobra"
 )
 
@@ -50,7 +51,7 @@ func ListSilence(clusterID string) {
 
 	silenceCmd := []string{"amtool", "silence", "--alertmanager.url", LocalHostUrl, "-o", "json"}
 
-	kubeconfig, clientset, err := GetKubeConfigClient(clusterID)
+	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID)
 	if err != nil {
 		log.Fatal(err)
 	}

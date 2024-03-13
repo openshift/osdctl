@@ -2,12 +2,14 @@ package silence
 
 import (
 	"fmt"
+	"log"
+	"strings"
+
+	"github.com/openshift/osdctl/cmd/common"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"log"
-	"strings"
 )
 
 type addSilenceCmd struct {
@@ -49,7 +51,7 @@ func AddSilence(cmd *addSilenceCmd) {
 
 	username, clustername := GetUserAndClusterInfo(clusterID)
 
-	kubeconfig, clientset, err := GetKubeConfigClient(clusterID)
+	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID)
 	if err != nil {
 		log.Fatal(err)
 	}

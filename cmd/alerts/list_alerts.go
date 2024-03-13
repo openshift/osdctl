@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/openshift/osdctl/cmd/alerts/silence"
+	"github.com/openshift/osdctl/cmd/common"
 	"github.com/spf13/cobra"
 )
 
@@ -70,7 +71,7 @@ func ListAlerts(cmd *alertCmd) {
 	alertLevel := cmd.alertLevel
 
 	if alertLevel == "" {
-		log.Default().Printf("No alert level specified. Defaulting to 'all'")
+		log.Printf("No alert level specified. Defaulting to 'all'")
 		getAlertLevel(clusterID, "all")
 	} else if alertLevel == "warning" || alertLevel == "critical" || alertLevel == "firing" || alertLevel == "pending" || alertLevel == "info" || alertLevel == "none" || alertLevel == "all" {
 		getAlertLevel(clusterID, alertLevel)
@@ -85,7 +86,7 @@ func getAlertLevel(clusterID, alertLevel string) {
 
 	listAlertCmd := []string{"amtool", "--alertmanager.url", silence.LocalHostUrl, "alert", "-o", "json"}
 
-	kubeconfig, clientset, err := silence.GetKubeConfigClient(clusterID)
+	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/openshift/osdctl/cmd/common"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -41,20 +42,18 @@ func ClearSilence(cmd *silenceCmd) {
 	silenceIDs := cmd.silenceIDs
 	all := cmd.all
 
-	kubeconfig, clientset, err := GetKubeConfigClient(clusterID)
+	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	if all {
 		ClearAllSilence(kubeconfig, clientset)
+	} else if len(silenceIDs) > 0 {
+		ClearSilenceByID(silenceIDs, kubeconfig, clientset)
 	} else {
-		if len(silenceIDs) > 0 {
-			ClearSilenceByID(silenceIDs, kubeconfig, clientset)
-		} else {
-			fmt.Println("No valid option specified. Using a default option")
-			ClearAllSilence(kubeconfig, clientset)
-		}
+		fmt.Println("No valid option specified. Using a default option to clear all silences")
+		ClearAllSilence(kubeconfig, clientset)
 	}
 }
 
