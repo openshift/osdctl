@@ -1,7 +1,6 @@
 package silence
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	corev1 "k8s.io/api/core/v1"
@@ -9,6 +8,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/scheme"
+	"github.com/openshift/osdctl/cmd/cluster"
 )
 
 const (
@@ -17,20 +17,6 @@ const (
 	LocalHostUrl     = "http://localhost:9093"
 	PodName          = "alertmanager-main-0"
 )
-
-type logCapture struct {
-	buffer bytes.Buffer
-}
-
-func (capture *logCapture) GetStdOut() string {
-	return capture.buffer.String()
-}
-
-func (capture *logCapture) Write(p []byte) (n int, err error) {
-	a := string(p)
-	_, err = capture.buffer.WriteString(a)
-	return len(p), err
-}
 
 func ExecInPod(kubeconfig *rest.Config, clientset *kubernetes.Clientset, cmd []string) (string, error) {
 
@@ -53,8 +39,8 @@ func ExecInPod(kubeconfig *rest.Config, clientset *kubernetes.Clientset, cmd []s
 		return "", fmt.Errorf("failed to create SPDY executor: %w", err)
 	}
 
-	capture := &logCapture{}
-	errorCapture := &logCapture{}
+	capture := &cluster.LogCapture{}
+	errorCapture := &cluster.LogCapture{}
 
 	err = exec.StreamWithContext(context.TODO(), remotecommand.StreamOptions{
 		Stdin:  nil,
