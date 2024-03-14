@@ -36,15 +36,15 @@ var etcdctlCmd = []string{
 	"etcdctl member list -w table",
 }
 
-type logCapture struct {
+type LogCapture struct {
 	buffer bytes.Buffer
 }
 
-func (capture *logCapture) GetStdOut() string {
+func (capture *LogCapture) GetStdOut() string {
 	return capture.buffer.String()
 }
 
-func (capture *logCapture) Write(p []byte) (n int, err error) {
+func (capture *LogCapture) Write(p []byte) (n int, err error) {
 	a := string(p)
 	capture.buffer.WriteString(a)
 	return len(p), nil
@@ -209,8 +209,8 @@ func Etcdctlhealth(kconfig *rest.Config, clientset *kubernetes.Clientset, etcdct
 		return "", err
 	}
 
-	capture := &logCapture{}
-	errorCapture := &logCapture{}
+	capture := &LogCapture{}
+	errorCapture := &LogCapture{}
 
 	err = exec.StreamWithContext(context.TODO(), remotecommand.StreamOptions{
 		Stdin:  bytes.NewReader([]byte{}),
