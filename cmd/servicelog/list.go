@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"time"
 
 	slv1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
@@ -60,6 +61,7 @@ func ListServiceLogs(clusterID string, allMessages bool, internalOnly bool) erro
 
 func printServiceLogResponse(response *slv1.ClustersClusterLogsListResponse) error {
 	entryViews := logEntryToView(response.Items().Slice())
+	slices.Reverse(entryViews)
 	view := LogEntryResponseView{
 		Items: entryViews,
 		Kind:  "ClusterLogList",
