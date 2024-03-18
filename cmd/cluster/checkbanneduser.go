@@ -2,7 +2,6 @@ package cluster
 
 import (
 	"fmt"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -66,15 +65,6 @@ func CheckBannedUser(clusterID string) error {
 		if userBanCode == BanCodeExportControlCompliance {
 			fmt.Println("User banned due to export control compliance.\nPlease follow the steps detailed here: https://github.com/openshift/ops-sop/blob/master/v4/alerts/UpgradeConfigSyncFailureOver4HrSRE.md#user-banneddisabled-due-to-export-control-compliance .")
 			return nil
-		}
-
-		fmt.Println("Sending service log.")
-		postCmd := servicelog.PostCmdOptions{
-			Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/ocm/cluster_owner_disabled.json",
-			ClusterId: clusterID,
-		}
-		if err = postCmd.Run(); err != nil {
-			return err
 		}
 
 		return nil
