@@ -3,6 +3,7 @@ package saas
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -34,6 +35,15 @@ func listServiceNames(appInterface git.AppInterface) error {
 	}
 
 	return nil
+}
+
+func GitLogNoMerges(startHash, endHash string) (string, error) {
+	cmd := exec.Command("git", "log", "--no-merges", fmt.Sprintf("%s..%s", startHash, endHash))
+	commitLog, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(commitLog), nil
 }
 
 func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string, osd, hcp bool) error {
@@ -79,11 +89,14 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 		fmt.Printf("FAILURE: %v\n", err)
 	}
 
-	commitMessage := fmt.Sprintf("Promote %s to %s\n\nSee %s/compare/%s...%s for contents of the promotion.", serviceName, promotionGitHash, serviceRepo, currentGitHash, promotionGitHash)
+	commitLog, _ := GitLogNoMerges(currentGitHash, promotionGitHash)
+
+	commitMessage := fmt.Sprintf("Promote %s to %s\n\nSee %s/compare/%s...%s for contents of the promotion.\n %s", serviceName, promotionGitHash, serviceRepo, currentGitHash, promotionGitHash, commitLog)
 	err = appInterface.CommitSaasFile(saasDir, commitMessage)
 	if err != nil {
 		return fmt.Errorf("failed to commit changes to app-interface: %w", err)
 	}
+	fmt.Println("commitMessage ", commitMessage)
 
 	fmt.Printf("The branch %s is ready to be pushed\n", branchName)
 	fmt.Println("")
