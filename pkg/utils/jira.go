@@ -2,6 +2,8 @@ package utils
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/andygrunwald/go-jira"
 	"github.com/spf13/viper"
 )
@@ -15,11 +17,19 @@ const (
 // https://issues.redhat.com. To work, the jiraToken needs to be set in the
 // config
 func GetJiraClient() (*jira.Client, error) {
+	var jiratoken string
+
 	if !viper.IsSet(JiraTokenConfigKey) {
-		return nil, fmt.Errorf("key %s is not set in config file", JiraTokenConfigKey)
+		jiratoken = viper.GetString(JiraTokenConfigKey)
 	}
 
-	jiratoken := viper.GetString(JiraTokenConfigKey)
+	if os.Getenv("JIRA_API_TOKEN") != "" {
+		jiratoken = os.Getenv("JIRA_API_TOKEN")
+	}
+
+	if jiratoken == "" {
+		return nil, fmt.Errorf("JIRA token is not defined.")
+	}
 
 	tp := jira.PATAuthTransport{
 		Token: jiratoken,

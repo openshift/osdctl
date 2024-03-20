@@ -112,7 +112,8 @@ func FetchServiceLogs(clusterID string, allMessages bool, internalOnly bool) (*v
 func sendClusterLogsListRequest(ocmClient *sdk.Connection, cluster *cmv1.Cluster, allMessages bool, internalMessages bool) (*v1.ClustersClusterLogsListResponse, error) {
 	request := ocmClient.ServiceLogs().V1().Clusters().ClusterLogs().List().
 		Parameter("cluster_id", cluster.ID()).
-		Parameter("cluster_uuid", cluster.ExternalID())
+		Parameter("cluster_uuid", cluster.ExternalID()).
+		Parameter("orderBy", "timestamp desc")
 
 	var searchQuery string
 	if !allMessages {
