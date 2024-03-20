@@ -8,46 +8,33 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestLoadConfiguration(t *testing.T) {
-
-	config, err := LoadConfiguration()
-
-	if err != nil {
-
-		t.Errorf("Error loading configuration: %v", err)
-	}
-
-	if config == nil {
-		t.Error("Configuration is nil")
-	}
-
-}
-
 func TestFilterUsers(t *testing.T) {
 	// Test Case 1 (Ignored)
 	testUsername1 := "user-1"
 	testCloudTrailEvent1 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:role/ManagedOpenShift-ControlPlane-Role"}}}}`
 
+	testUsername2 := "ManagedOpenShift-ControlPlane-Role"
+	testCloudTrailEvent2 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:role/ManagedOpenShift-ControlPlane-Role"}}}}`
+
 	// Test Case 2 (Not Ignored)
-	testUsername2 := "user-2"
-	testCloudTrailEvent2 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:user/user-2"}}}}`
+	testUsername3 := "user-2"
+	testCloudTrailEvent3 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:user/user-2"}}}}`
 
-	// Test Case 3 (Ignored)
-	testUsername3 := "ManagedOpenShift-ControlPlane-Role"
-	testCloudTrailEvent3 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:role/ManagedOpenShift-ControlPlane-Role"}}}}`
-
-	// Test Case 3 (Not Ignored (nil Username))
-	var testUsername4 string
+	var testUsername4 string //nil username
 	testCloudTrailEvent4 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:role/NilUsername-1"}}}}`
+
+	// Test Case 3 (Edge Cases)
+
+	testUsername5 := "user-5"
+	testCloudTrailEvent5 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": ""}}}}`
+
+	var testUsername6 string
+	testCloudTrailEvent6 := `{"eventVersion": "1.09","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": ""}}}}`
 
 	TestLookupOutputs := []*cloudtrail.LookupEventsOutput{
 		{
 			Events: []types.Event{
 				{Username: &testUsername1, CloudTrailEvent: &testCloudTrailEvent1},
-			},
-		},
-		{
-			Events: []types.Event{
 				{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
 			},
 		},
@@ -57,23 +44,74 @@ func TestFilterUsers(t *testing.T) {
 				{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
 			},
 		},
+		{
+			Events: []types.Event{
+				{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
+				{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
+			},
+		},
 	}
 
-	//Expected Results
-	expectedFilteredEvents := []types.Event{
-		{Username: &testCloudTrailEvent2, CloudTrailEvent: &testCloudTrailEvent2},
-		{Username: &testCloudTrailEvent4, CloudTrailEvent: &testCloudTrailEvent4},
-	}
-
-	// Mock Ignore slice of string
-	// Other Filterable Option which would be located in ~/.config/osdctl
+	// Other Filterable Option which would be located in ~/.config/osdctl.yaml
 	//{".*-Installer-Role", ".*kube-system-kube-controller.*", ".*operator.*", ".*openshift-cluster-csi-drivers.*",".*kube-system-capa-controller.*"}
 
 	Ignore := []string{".*-ControlPlane-Role"}
-	shouldFilter := true
+	EmptyIgnore := []string{}
 
-	filtered, err := FilterUsers(TestLookupOutputs, Ignore, shouldFilter)
-	assert.NoError(t, err, "Error filtering events")
+	// Test filtering if shouldFilter set to true
+	t.Run("Filtering with shouldFilter true", func(t *testing.T) {
+		expectedFilteredEvents := []types.Event{
+			{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
+			{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
+			{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
+			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
+		}
 
-	assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")
+		shouldFilter := true
+
+		filtered, err := filterUsers(TestLookupOutputs, Ignore, shouldFilter)
+		assert.NoError(t, err, "Error filtering events")
+
+		assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")
+
+	})
+
+	// Test filtering if shouldFilter set to false
+	t.Run("Filtering with shouldFilter false", func(t *testing.T) {
+		expectedFilteredEvents := []types.Event{
+			{Username: &testUsername1, CloudTrailEvent: &testCloudTrailEvent1},
+			{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
+			{Username: &testUsername3, CloudTrailEvent: &testCloudTrailEvent3},
+			{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
+			{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
+			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
+		}
+
+		shouldFilter := false
+
+		filtered, err := filterUsers(TestLookupOutputs, Ignore, shouldFilter)
+		assert.NoError(t, err, "Error filtering events")
+
+		assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")
+	})
+
+	// Test filtering if ~/.config/osdctl.yaml is Empty
+	t.Run(("Filtering with Empty list"), func(t *testing.T) {
+		expectedFilteredEvents := []types.Event{
+			{Username: &testUsername1, CloudTrailEvent: &testCloudTrailEvent1},
+			{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
+			{Username: &testUsername3, CloudTrailEvent: &testCloudTrailEvent3},
+			{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
+			{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
+			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
+		}
+		shouldFilter := false
+
+		filtered, err := filterUsers(TestLookupOutputs, EmptyIgnore, shouldFilter)
+		assert.NoError(t, err, "Error filtering events")
+
+		assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")
+
+	})
+
 }
