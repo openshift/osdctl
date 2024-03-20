@@ -64,7 +64,6 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
-require github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 
 require (
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
@@ -211,4 +210,5 @@ require (
 	sigs.k8s.io/kustomize/api v0.15.0 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.15.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 )
