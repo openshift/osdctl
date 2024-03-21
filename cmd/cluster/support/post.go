@@ -45,11 +45,11 @@ type Post struct {
 }
 
 type Templatetest struct {
-	Severity       string `json:"severity"`
-	Summary        string `json:"summary"`
-	Log_type       string `json:"log_type"`
-	Details        string `json:"details"`
-	Detection_type string `json:"detection_type"`
+	Severity       string             `json:"severity"`
+	Summary        string             `json:"summary"`
+	Log_type       string             `json:"log_type"`
+	Details        string             `json:"details"`
+	Detection_type cmv1.DetectionType `json:"detection_type"`
 }
 
 func newCmdpost() *cobra.Command {
@@ -230,13 +230,13 @@ func (p *Post) buildLimitedSupport() (*cmv1.LimitedSupportReason, error) {
 }
 
 func (p *Post) buildLimitedSupportTemplate() (*cmv1.LimitedSupportReason, error) {
-	t1 := p.readTemplate() // parse the given JSON template provided via '-t' flag
+	t := p.readTemplate() // parse the given JSON template provided via '-t' flag
 
-	limitedSupportBuilder := cmv1.NewLimitedSupportReason().Summary(t1.Summary).Details(t1.Details).DetectionType(cmv1.DetectionType(t1.Detection_type))
+	limitedSupportBuilder := cmv1.NewLimitedSupportReason().Summary(t.Summary).Details(t.Details).DetectionType(t.Detection_type)
 	limitedSupport, err := limitedSupportBuilder.Build()
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to build new limite0b481805-e72e-11ee-b101-0a580a83149dd support reason: %w", err)
+		return nil, fmt.Errorf("failed to build new limited support reason: %w", err)
 	}
 	return limitedSupport, nil
 }
