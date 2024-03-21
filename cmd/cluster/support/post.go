@@ -2,6 +2,7 @@ package support
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -43,6 +44,14 @@ type Post struct {
 	cluster          *cmv1.Cluster
 }
 
+type Templatetest struct {
+	Severity       string `json:"severity"`
+	Summary        string `json:"summary"`
+	Log_type       string `json:"log_type"`
+	Details        string `json:"details"`
+	Detection_type string `json:"detection_type"`
+}
+
 func newCmdpost() *cobra.Command {
 	p := &Post{}
 
@@ -65,7 +74,6 @@ The cluster has a second failing ingress controller, which is not supported and 
 			if err := p.Run(args[0]); err != nil {
 				return fmt.Errorf("error posting limited support reason: %w", err)
 			}
-
 			return nil
 		},
 	}
@@ -77,11 +85,6 @@ The cluster has a second failing ingress controller, which is not supported and 
 	postCmd.Flags().StringVar(&p.Problem, ProblemFlag, "", "Complete sentence(s) describing the problem responsible for the cluster being placed into limited support. Will form the limited support message with the contents of --resolution appended")
 	postCmd.Flags().StringVar(&p.Resolution, ResolutionFlag, "", "Complete sentence(s) describing the steps for the customer to take to resolve the issue and move out of limited support. Will form the limited support message with the contents of --problem prepended")
 	postCmd.Flags().StringVar(&p.Evidence, EvidenceFlag, "", "(optional) The reasoning that led to the decision to place the cluster in limited support. Can also be a link to a Jira case. Used for internal service log only.")
-
-	/*postCmd.MarkFlagRequired(MisconfigurationFlag)
-	postCmd.MarkFlagRequired(ProblemFlag)
-	postCmd.MarkFlagRequired(ResolutionFlag)*/
-
 	return postCmd
 }
 
@@ -105,11 +108,10 @@ func (p *Post) setup() error {
 
 func (p *Post) check() error {
 	if p.Template != "" {
-		if p.Problem != "" || p.Resolution != "" || p.Evidence != "" || p.Misconfiguration != "" {
+		if p.Problem != "" || p.Resolution != "" || p.Misconfiguration != "" {
 			return fmt.Errorf("\nIf Template flag is present, all three --problem, --resolution and --misconfiguration flags cannot be used")
 		}
 		p.parseUserParameters() // parse all the '-p' user flags
-		p.readTemplate()        // parse the given JSON template provided via '-t' flag
 
 		// For every '-p' flag, replace its related placeholder in the template
 		for k := range userParameterNames {
@@ -127,7 +129,6 @@ func (p *Post) check() error {
 }
 
 func (p *Post) Run(clusterID string) error {
-
 	if err := p.Init(); err != nil {
 		return err
 	}
@@ -157,10 +158,17 @@ func (p *Post) Run(clusterID string) error {
 	if err != nil {
 		return fmt.Errorf("can't retrieve cluster: %w", err)
 	}
-
-	limitedSupport, err := p.buildLimitedSupport()
-	if err != nil {
-		return err
+	var limitedSupport *cmv1.LimitedSupportReason
+	if p.Template != "" {
+		limitedSupport, err = p.buildLimitedSupportTemplate()
+		if err != nil {
+			return err
+		}
+	} else {
+		limitedSupport, err = p.buildLimitedSupport()
+		if err != nil {
+			return err
+		}
 	}
 
 	fmt.Printf("The following limited support reason will be sent to %s:\n", clusterID)
@@ -204,7 +212,6 @@ func (p *Post) Run(clusterID string) error {
 }
 
 func (p *Post) buildLimitedSupport() (*cmv1.LimitedSupportReason, error) {
-
 	limitedSupportBuilder := cmv1.NewLimitedSupportReason().
 		Details(fmt.Sprintf("%s %s", p.Problem, p.Resolution)).
 		DetectionType(cmv1.DetectionTypeManual)
@@ -218,6 +225,18 @@ func (p *Post) buildLimitedSupport() (*cmv1.LimitedSupportReason, error) {
 	limitedSupport, err := limitedSupportBuilder.Build()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build new limited support reason: %w", err)
+	}
+	return limitedSupport, nil
+}
+
+func (p *Post) buildLimitedSupportTemplate() (*cmv1.LimitedSupportReason, error) {
+	t1 := p.readTemplate() // parse the given JSON template provided via '-t' flag
+
+	limitedSupportBuilder := cmv1.NewLimitedSupportReason().Summary(t1.Summary).Details(t1.Details).DetectionType(cmv1.DetectionType(t1.Detection_type))
+	limitedSupport, err := limitedSupportBuilder.Build()
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to build new limite0b481805-e72e-11ee-b101-0a580a83149dd support reason: %w", err)
 	}
 	return limitedSupport, nil
 }
@@ -239,16 +258,21 @@ func (p *Post) parseUserParameters() {
 	}
 }
 
-func (p *Post) readTemplate() {
+func (p *Post) readTemplate() *Templatetest {
 	if p.Template == "" {
 		log.Fatalf("Template file is not provided. Use '-t' to fix this.")
-	}
+	} else {
+		templateObj, err := p.accessFile(p.Template)
+		if err != nil { //check the presence of this URL or file and also if this can be accessed
+			log.Fatal(err)
+		}
+		fmt.Printf("file = ", string(templateObj))
 
-	file, err := p.accessFile(p.Template)
-	if err != nil { //check the presence of this URL or file and also if this can be accessed
-		log.Fatal(err)
+		var t1 Templatetest
+		json.Unmarshal(templateObj, &t1)
+		return &t1
 	}
-	fmt.Printf("file = ", file)
+	return nil
 }
 
 // accessFile returns the contents of a local file or url, and any errors encountered
