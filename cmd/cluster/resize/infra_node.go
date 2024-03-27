@@ -1,7 +1,7 @@
 package resize
 
 // cspell:ignore embiggen
-
+/
 import (
 	"context"
 	"errors"
@@ -30,6 +30,7 @@ const (
 	twentyMinuteTimeout                = 20 * time.Minute
 	twentySecondIncrement              = 20 * time.Second
 	resizedInfraNodeServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_resized_auto.json"
+	GCPresizedInfraNodeServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/gcp/GCP_infranode_resized_auto.json"
 	infraNodeLabel                     = "node-role.kubernetes.io/infra"
 	temporaryInfraNodeLabel            = "osdctl.openshift.io/infra-resize-temporary-machinepool"
 )
@@ -456,13 +457,28 @@ func getInstanceType(mp *hivev1.MachinePool) (string, error) {
 	return "", errors.New("unsupported platform, only AWS and GCP are supported")
 }
 
-func generateServiceLog(instanceType, clusterId string) servicelog.PostCmdOptions {
-	return servicelog.PostCmdOptions{
-		Template:       resizedInfraNodeServiceLogTemplate,
-		ClusterId:      clusterId,
-		TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
-	}
+//Adding change in serviceLog as per the cloud provider.
+
+func generateServiceLog(mp *hivev1.MachinePool,instanceType, clusterId string) servicelog.PostCmdOptions {
+
+if mp.Spec.Platform.AWS != nil {
+
+        return servicelog.PostCmdOptions{
+                Template:       resizedInfraNodeServiceLogTemplate,
+                ClusterId:      clusterId,
+                TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
+        }
+} else if mp.Spec.Platform.GCP != nil {
+
+        return servicelog.PostCmdOptions{
+                Template:       GCPresizedInfraNodeServiceLogTemplate,
+                ClusterId:      clusterId,
+                TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
+        }
 }
+return servicelog.PostCmdOptions{}
+}
+
 
 func (r *Resize) terminateCloudInstances(ctx context.Context, nodeList *corev1.NodeList) error {
 	if len(nodeList.Items) == 0 {
