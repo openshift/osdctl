@@ -30,7 +30,7 @@ const (
 	twentyMinuteTimeout                = 20 * time.Minute
 	twentySecondIncrement              = 20 * time.Second
 	resizedInfraNodeServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_resized_auto.json"
-	GCPresizedInfraNodeServiceLogTemplate = "<LINK>"
+	GCPresizedInfraNodeServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/gcp/GCP_infranode_resized_auto.json"
 	infraNodeLabel                     = "node-role.kubernetes.io/infra"
 	temporaryInfraNodeLabel            = "osdctl.openshift.io/infra-resize-temporary-machinepool"
 )
