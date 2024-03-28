@@ -44,7 +44,7 @@ type Post struct {
 	cluster          *cmv1.Cluster
 }
 
-type Templatetest struct {
+type TemplateFile struct {
 	Severity       string             `json:"severity"`
 	Summary        string             `json:"summary"`
 	Log_type       string             `json:"log_type"`
@@ -106,6 +106,13 @@ func (p *Post) setup() error {
 	return nil
 }
 
+func validateResolutionString(res string) error {
+	if res[len(res)-1:] == "." {
+		return errors.New("resolution string should not end with a `.` as it is already added in the email template")
+	}
+	return nil
+}
+
 func (p *Post) check() error {
 	if p.Template != "" {
 		if p.Problem != "" || p.Resolution != "" || p.Misconfiguration != "" {
@@ -118,6 +125,9 @@ func (p *Post) check() error {
 			p.replaceFlags(userParameterNames[k], userParameterValues[k])
 		}
 	} else {
+		if err := validateResolutionString(p.Resolution); err != nil {
+			return err
+		}
 		if p.Problem == "" || p.Resolution == "" || p.Misconfiguration == "" {
 			return fmt.Errorf("\nIn the absence of Template -t flag, all three --problem, --resolution and --misconfiguration flags are mandatory")
 		}
@@ -258,7 +268,7 @@ func (p *Post) parseUserParameters() {
 	}
 }
 
-func (p *Post) readTemplate() *Templatetest {
+func (p *Post) readTemplate() *TemplateFile {
 	if p.Template == "" {
 		log.Fatalf("Template file is not provided. Use '-t' to fix this.")
 	} else {
@@ -266,9 +276,8 @@ func (p *Post) readTemplate() *Templatetest {
 		if err != nil { //check the presence of this URL or file and also if this can be accessed
 			log.Fatal(err)
 		}
-		fmt.Printf("file = ", string(templateObj))
 
-		var t1 Templatetest
+		var t1 TemplateFile
 		json.Unmarshal(templateObj, &t1)
 		return &t1
 	}
