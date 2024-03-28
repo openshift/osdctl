@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/openshift/osdctl/cmd/cluster/access"
+	"github.com/openshift/osdctl/cmd/cluster/logs"
 	"github.com/openshift/osdctl/cmd/cluster/resize"
 	"github.com/openshift/osdctl/cmd/cluster/support"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
@@ -42,6 +43,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, client *k8s.LazyClient, 
 	clusterCmd.AddCommand(newCmdDynatraceURL())
 	clusterCmd.AddCommand(newCmdCleanupLeakedEC2())
 	clusterCmd.AddCommand(newCmdDetachStuckVolume())
+	clusterCmd.AddCommand(logs.NewCmdLogs())
 	return clusterCmd
 }
 
