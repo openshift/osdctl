@@ -3,7 +3,6 @@ package saas
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -37,28 +36,8 @@ func listServiceNames(appInterface git.AppInterface) error {
 	return nil
 }
 
-func GitLogNoMerges(gitURL, startHash, endHash, sourcedir string) (string, error) {
-	err := os.Chdir(sourcedir)
-	if err != nil {
-		return "", fmt.Errorf("failed to change directory to source-dir: %v", err)
-	}
-	fmt.Println(sourcedir)
-
-	cmd := exec.Command("git", "log", "--no-merges", fmt.Sprintf("%s..%s", startHash, endHash))
-	commitLog, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return string(commitLog), nil
-}
-
 func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string, osd, hcp bool) error {
-	currentDir, err := os.Getwd()
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
-
-	_, err = GetServiceNames(appInterface, OSDSaasDir, BPSaasDir, CADSaasDir)
+	_, err := GetServiceNames(appInterface, OSDSaasDir, BPSaasDir, CADSaasDir)
 	if err != nil {
 		return err
 	}
@@ -85,7 +64,7 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	}
 	fmt.Printf("Current Git Hash: %v\nGit Repo: %v\n\n", currentGitHash, serviceRepo)
 
-	promotionGitHash, err := git.CheckoutAndCompareGitHash(serviceRepo, gitHash, currentGitHash)
+	promotionGitHash, commitLog, err := git.CheckoutAndCompareGitHash(serviceRepo, gitHash, currentGitHash)
 	if err != nil {
 		return fmt.Errorf("failed to checkout and compare git hash: %v", err)
 	} else if promotionGitHash == "" {
@@ -94,12 +73,9 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	}
 	fmt.Printf("Service: %s will be promoted to %s\n", serviceName, promotionGitHash)
 
-	commitLog, err := GitLogNoMerges(serviceRepo, currentGitHash, promotionGitHash, currentDir)
 	if err != nil {
 		return fmt.Errorf("error in executing git log: %v", err)
 	}
-	fmt.Println("commitLog:", commitLog)
-
 	branchName := fmt.Sprintf("promote-%s-%s", serviceName, promotionGitHash)
 	err = appInterface.UpdateAppInterface(serviceName, saasDir, currentGitHash, promotionGitHash, branchName)
 	if err != nil {
@@ -111,7 +87,7 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	if err != nil {
 		return fmt.Errorf("failed to commit changes to app-interface: %w", err)
 	}
-	fmt.Printf("commitMessage message is %s\n", commitMessage)
+	fmt.Printf("commitMessage: %s\n", commitMessage)
 
 	fmt.Printf("The branch %s is ready to be pushed\n", branchName)
 	fmt.Println("")
