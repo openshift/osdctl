@@ -353,7 +353,7 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 		}
 	}
 
-	postCmd := generateServiceLog(tempMp,r.instanceType, r.clusterId)
+	postCmd := generateServiceLog(tempMp, r.instanceType, r.clusterId)
 	if err := postCmd.Run(); err != nil {
 		fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
 		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
