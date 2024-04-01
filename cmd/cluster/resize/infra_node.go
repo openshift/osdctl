@@ -283,8 +283,8 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 	}
 
 	// Delete temp machinepool
-	log.Printf("deleting temporary machinepool %s, with instance type %s", tempMp.Name, instanceType)
-	if err := r.hiveAdmin.Delete(ctx, tempMp); err != nil {
+	log.Printf("deleting temporary machinepool %s, with instance type %s", .Name, instanceType)
+	if err := r.hiveAdmin.Delete(ctx, ); err != nil {
 		return err
 	}
 
@@ -353,7 +353,7 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 		}
 	}
 
-	postCmd := generateServiceLog(r.instanceType, r.clusterId)
+	postCmd := generateServiceLog(tempMp,r.instanceType, r.clusterId)
 	if err := postCmd.Run(); err != nil {
 		fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
 		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
