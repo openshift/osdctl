@@ -1,7 +1,6 @@
 package resize
 
 // cspell:ignore embiggen
-/
 import (
 	"context"
 	"errors"
