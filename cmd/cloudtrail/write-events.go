@@ -31,11 +31,11 @@ type Configuration struct {
 
 // LookupEventsoptions struct for holding options for event lookup
 type LookupEventsOptions struct {
-	clusterID     string
-	startTime     string
-	printEventUrl bool
-	printRawEvent bool
-	printAllEvent bool
+	clusterID      string
+	startTime      string
+	printEventUrl  bool
+	printRawEvents bool
+	printAllEvents bool
 }
 
 // RawEventDetails struct for holding raw event details
@@ -68,8 +68,8 @@ func newCmdWriteEvents() *cobra.Command {
 	listEventsCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Cluster ID")
 	listEventsCmd.Flags().StringVarP(&ops.startTime, "since", "", "", "Start time of the lookup i.e (\"2h\" for starttime 2 hours ago")
 	listEventsCmd.Flags().BoolVarP(&ops.printEventUrl, "url", "u", false, "Generates Url link to cloud console cloudtrail event")
-	listEventsCmd.Flags().BoolVarP(&ops.printRawEvent, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
-	listEventsCmd.Flags().BoolVarP(&ops.printAllEvent, "all", "A", false, "Prints all cloudtrail write events without filtering")
+	listEventsCmd.Flags().BoolVarP(&ops.printRawEvents, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
+	listEventsCmd.Flags().BoolVarP(&ops.printAllEvents, "all", "A", false, "Prints all cloudtrail write events without filtering")
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
 }
@@ -85,7 +85,7 @@ func parseDurationToUTC(input string) (time.Time, error) {
 	return time.Now().UTC().Add(-duration), nil
 }
 
-// Whoami retrieves caller identity information
+// whoami retrieves caller identity information
 func whoami(stsClient sts.Client) (Arn string, AccountId string, err error) {
 	ctx := context.TODO()
 	callerIdentityOutput, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
@@ -101,7 +101,7 @@ func whoami(stsClient sts.Client) (Arn string, AccountId string, err error) {
 	return userArn.String(), userArn.AccountID, nil
 }
 
-// GetEvents retrieves cloudtrail events since the specified time
+// getWriteEvents retrieves cloudtrail events since the specified time
 // using the provided cloudtrail client and starttime from since flag.
 func getWriteEvents(since time.Time, cloudtailClient *cloudtrail.Client) ([]*cloudtrail.LookupEventsOutput, error) {
 	ctx := context.TODO()
@@ -121,7 +121,7 @@ func getWriteEvents(since time.Time, cloudtailClient *cloudtrail.Client) ([]*clo
 	paginator := cloudtrail.LookupEventsPaginator{}
 	hasPages := paginator.HasMorePages()
 
-	for pageIter := 10; hasPages; pageIter++ {
+	for pageIter := 1; hasPages; pageIter++ {
 		pages += pageIter
 	}
 
@@ -338,12 +338,12 @@ func (o *LookupEventsOptions) run() error {
 
 	fmt.Printf("\n[+] Fetching %s Event History...\n", cfg.Region)
 
-	filteredEvents, err := filterUsers(lookupOutput, Ignore, o.printAllEvent)
+	filteredEvents, err := filterUsers(lookupOutput, Ignore, o.printAllEvents)
 	if err != nil {
 		return err
 	}
 
-	printEvents(*filteredEvents, o.printEventUrl, o.printRawEvent)
+	printEvents(*filteredEvents, o.printEventUrl, o.printRawEvents)
 
 	fmt.Println("")
 	return err

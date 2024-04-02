@@ -55,8 +55,8 @@ func TestFilterUsers(t *testing.T) {
 	// Other Filterable Option which would be located in ~/.config/osdctl.yaml
 	//{".*-Installer-Role", ".*kube-system-kube-controller.*", ".*operator.*", ".*openshift-cluster-csi-drivers.*",".*kube-system-capa-controller.*"}
 
-	Ignore := []string{".*-ControlPlane-Role"}
-	EmptyIgnore := []string{}
+	ignoreList := []string{".*-ControlPlane-Role"}
+	emptyIgnoreList := []string{}
 
 	// Test filtering if shouldFilter set to true
 	t.Run("Filtering with shouldFilter true", func(t *testing.T) {
@@ -69,7 +69,7 @@ func TestFilterUsers(t *testing.T) {
 
 		shouldFilter := true
 
-		filtered, err := filterUsers(TestLookupOutputs, Ignore, shouldFilter)
+		filtered, err := filterUsers(TestLookupOutputs, ignoreList, shouldFilter)
 		assert.NoError(t, err, "Error filtering events")
 
 		assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")
@@ -89,7 +89,7 @@ func TestFilterUsers(t *testing.T) {
 
 		shouldFilter := false
 
-		filtered, err := filterUsers(TestLookupOutputs, Ignore, shouldFilter)
+		filtered, err := filterUsers(TestLookupOutputs, ignoreList, shouldFilter)
 		assert.NoError(t, err, "Error filtering events")
 
 		assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")
@@ -107,7 +107,7 @@ func TestFilterUsers(t *testing.T) {
 		}
 		shouldFilter := false
 
-		filtered, err := filterUsers(TestLookupOutputs, EmptyIgnore, shouldFilter)
+		filtered, err := filterUsers(TestLookupOutputs, emptyIgnoreList, shouldFilter)
 		assert.NoError(t, err, "Error filtering events")
 
 		assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")
