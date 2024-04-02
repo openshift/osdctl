@@ -283,7 +283,7 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 	}
 
 	// Delete temp machinepool
-	log.Printf("deleting temporary machinepool %s, with instance type %s", .Name, instanceType)
+	log.Printf("deleting temporary machinepool %s, with instance type %s", tempMp.Name, instanceType)
 	if err := r.hiveAdmin.Delete(ctx, ); err != nil {
 		return err
 	}
