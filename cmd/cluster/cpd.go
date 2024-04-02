@@ -3,6 +3,10 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	sdk "github.com/openshift-online/ocm-sdk-go"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	"github.com/openshift/backplane-cli/pkg/ocm"
 
 	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -34,6 +38,7 @@ Helps investigate OSD/ROSA cluster provisioning delays (CPD) or failures
   # Investigate a CPD for a cluster using an AWS profile named "rhcontrol"
   osdctl cluster cpd --cluster-id 1kfmyclusteristhebesteverp8m --profile rhcontrol
 `
+	OldFlowSupportRole = "role/RH-Technical-Support-Access"
 )
 
 func newCmdCpd() *cobra.Command {
@@ -89,32 +94,38 @@ func (o *cpdOptions) run() error {
 		return fmt.Errorf("this command doesn't support GCP yet. Needs manual investigation:\nocm backplane cloud console -b %s", o.clusterID)
 	}
 
-	fmt.Println("Generating AWS credentials for cluster")
-	// Get AWS credentials for the cluster
-	awsClient, err := osdCloud.GenerateAWSClientForCluster(o.awsProfile, o.clusterID)
-	if err != nil {
-		fmt.Println("PLEASE CONFIRM YOUR CREDENTIALS ARE CORRECT. If you're absolutely sure they are, send this Service Log https://github.com/openshift/managed-notifications/blob/master/osd/aws/ROSA_AWS_invalid_permissions.json")
-		fmt.Println(err)
-		return err
-	}
-
-	// If the cluster is BYOVPC, check the route tables
-	// This check is copied from ocm-cli
-	if cluster.AWS().SubnetIDs() != nil && len(cluster.AWS().SubnetIDs()) > 0 {
-		fmt.Println("Checking BYOVPC to ensure subnets have valid routing")
-		for _, subnet := range cluster.AWS().SubnetIDs() {
-			isValid, err := isSubnetRouteValid(awsClient, subnet)
-			if err != nil {
-				return err
-			}
-			if !isValid {
-				return fmt.Errorf("subnet %s does not have a default route to 0.0.0.0/0\n Run the following to send a SerivceLog:\n osdctl servicelog post %s -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/aws/InstallFailed_NoRouteToInternet.json", subnet, o.clusterID)
-			}
+	if isolated, err := isIsolatedBackplaneAccess(cluster, ocmClient); err != nil {
+		return fmt.Errorf("unable to determine which backplane flow this cluster is using: %w.\nNeeds manual investigation:\nocm backplane cloud console -b %s", err, o.clusterID)
+	} else if isolated {
+		return fmt.Errorf("this command doesn't support the isolated backplane flow yet. Needs manual investigation:\nocm backplane cloud console -b %s", o.clusterID)
+	} else {
+		fmt.Println("Generating AWS credentials for cluster")
+		// Get AWS credentials for the cluster
+		awsClient, err := osdCloud.GenerateAWSClientForCluster(o.awsProfile, o.clusterID)
+		if err != nil {
+			fmt.Println("PLEASE CONFIRM YOUR CREDENTIALS ARE CORRECT. If you're absolutely sure they are, send this Service Log https://github.com/openshift/managed-notifications/blob/master/osd/aws/ROSA_AWS_invalid_permissions.json")
+			fmt.Println(err)
+			return err
 		}
-		fmt.Printf("Attempting to run: osdctl network verify-egress --cluster-id %s\n", o.clusterID)
-		ev := &network.EgressVerification{ClusterId: o.clusterID}
-		ev.Run(context.TODO())
-		return nil
+
+		// If the cluster is BYOVPC, check the route tables
+		// This check is copied from ocm-cli
+		if cluster.AWS().SubnetIDs() != nil && len(cluster.AWS().SubnetIDs()) > 0 {
+			fmt.Println("Checking BYOVPC to ensure subnets have valid routing")
+			for _, subnet := range cluster.AWS().SubnetIDs() {
+				isValid, err := isSubnetRouteValid(awsClient, subnet)
+				if err != nil {
+					return err
+				}
+				if !isValid {
+					return fmt.Errorf("subnet %s does not have a default route to 0.0.0.0/0\n Run the following to send a SerivceLog:\n osdctl servicelog post %s -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/aws/InstallFailed_NoRouteToInternet.json", subnet, o.clusterID)
+				}
+			}
+			fmt.Printf("Attempting to run: osdctl network verify-egress --cluster-id %s\n", o.clusterID)
+			ev := &network.EgressVerification{ClusterId: o.clusterID}
+			ev.Run(context.TODO())
+			return nil
+		}
 	}
 
 	fmt.Println("Next step: check the AWS resources manually, run ocm backplane cloud console")
@@ -210,4 +221,26 @@ func findDefaultRouteTableForVPC(awsClient aws.Client, vpcID string) (string, er
 	}
 
 	return "", fmt.Errorf("no default route table found for vpc: %s", vpcID)
+}
+
+func isIsolatedBackplaneAccess(cluster *cmv1.Cluster, ocmConnection *sdk.Connection) (bool, error) {
+	if cluster.Hypershift().Enabled() {
+		return true, nil
+	}
+
+	if cluster.AWS().STS().Enabled() {
+		stsSupportJumpRole, err := ocm.DefaultOCMInterface.GetStsSupportJumpRoleARN(ocmConnection, cluster.ID())
+		if err != nil {
+			return false, fmt.Errorf("failed to get sts support jump role ARN for cluster %v: %w", cluster.ID(), err)
+		}
+		supportRoleArn, err := arn.Parse(stsSupportJumpRole)
+		if err != nil {
+			return false, fmt.Errorf("failed to parse ARN for jump role %v: %w", stsSupportJumpRole, err)
+		}
+		if supportRoleArn.Resource != OldFlowSupportRole {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
