@@ -30,8 +30,8 @@ const (
 	twentySecondIncrement              = 20 * time.Second
 	resizedInfraNodeServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_resized_auto.json"
 	GCPresizedInfraNodeServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/gcp/GCP_infranode_resized_auto.json"
-	infraNodeLabel                     = "node-role.kubernetes.io/infra"
-	temporaryInfraNodeLabel            = "osdctl.openshift.io/infra-resize-temporary-machinepool"
+	infraNodeLabel                        = "node-role.kubernetes.io/infra"
+	temporaryInfraNodeLabel               = "osdctl.openshift.io/infra-resize-temporary-machinepool"
 )
 
 func newCmdResizeInfra() *cobra.Command {
@@ -462,18 +462,18 @@ func generateServiceLog(mp *hivev1.MachinePool, instanceType, clusterId string) 
 
 	if mp.Spec.Platform.AWS != nil {
 
-			return servicelog.PostCmdOptions{
-					Template:       resizedInfraNodeServiceLogTemplate,
-					ClusterId:      clusterId,
-					TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
-			}
+		return servicelog.PostCmdOptions{
+			Template:       resizedInfraNodeServiceLogTemplate,
+			ClusterId:      clusterId,
+			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
+		}
 	} else if mp.Spec.Platform.GCP != nil {
 
-			return servicelog.PostCmdOptions{
-					Template:       GCPresizedInfraNodeServiceLogTemplate,
-					ClusterId:      clusterId,
-					TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
-			}
+		return servicelog.PostCmdOptions{
+			Template:       GCPresizedInfraNodeServiceLogTemplate,
+			ClusterId:      clusterId,
+			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
+		}
 	}
 	return servicelog.PostCmdOptions{}
 }
