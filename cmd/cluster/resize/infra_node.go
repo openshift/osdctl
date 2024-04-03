@@ -458,24 +458,24 @@ func getInstanceType(mp *hivev1.MachinePool) (string, error) {
 
 //Adding change in serviceLog as per the cloud provider.
 
-func generateServiceLog(mp *hivev1.MachinePool,instanceType, clusterId string) servicelog.PostCmdOptions {
+func generateServiceLog(mp *hivev1.MachinePool, instanceType, clusterId string) servicelog.PostCmdOptions {
 
-if mp.Spec.Platform.AWS != nil {
+	if mp.Spec.Platform.AWS != nil {
 
-        return servicelog.PostCmdOptions{
-                Template:       resizedInfraNodeServiceLogTemplate,
-                ClusterId:      clusterId,
-                TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
-        }
-} else if mp.Spec.Platform.GCP != nil {
+			return servicelog.PostCmdOptions{
+					Template:       resizedInfraNodeServiceLogTemplate,
+					ClusterId:      clusterId,
+					TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
+			}
+	} else if mp.Spec.Platform.GCP != nil {
 
-        return servicelog.PostCmdOptions{
-                Template:       GCPresizedInfraNodeServiceLogTemplate,
-                ClusterId:      clusterId,
-                TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
-        }
-}
-return servicelog.PostCmdOptions{}
+			return servicelog.PostCmdOptions{
+					Template:       GCPresizedInfraNodeServiceLogTemplate,
+					ClusterId:      clusterId,
+					TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
+			}
+	}
+	return servicelog.PostCmdOptions{}
 }
 
 
