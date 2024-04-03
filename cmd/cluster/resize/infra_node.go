@@ -478,7 +478,6 @@ func generateServiceLog(mp *hivev1.MachinePool, instanceType, clusterId string) 
 	return servicelog.PostCmdOptions{}
 }
 
-
 func (r *Resize) terminateCloudInstances(ctx context.Context, nodeList *corev1.NodeList) error {
 	if len(nodeList.Items) == 0 {
 		return nil
