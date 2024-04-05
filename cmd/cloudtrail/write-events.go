@@ -14,20 +14,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	config "github.com/openshift/osdctl/pkg/envConfig"
 	"github.com/openshift/osdctl/pkg/osdCloud"
-	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
-
-// Configuration struct for parsing configuration options
-type Configuration struct {
-	Cloudtrail_list struct {
-		FilterPatternList []string `mapstructure:"cloudtrail_cmd_lists"`
-	} `mapstructure:"filter_regex_patterns"`
-}
 
 // LookupEventsoptions struct for holding options for event lookup
 type LookupEventsOptions struct {
@@ -184,22 +176,6 @@ func generateLink(raw RawEventDetails) (url_link string) {
 	return url_link
 }
 
-// Unmarshals and Loads ~/.config/osdctl
-func loadConfiguration() ([]string, error) {
-
-	var configuration *Configuration
-
-	osdctlConfig.EnsureConfigFile()
-	err := viper.Unmarshal(&configuration)
-	if err != nil {
-		fmt.Printf("Error Unmashaling:")
-		return nil, err
-	}
-	osdctlConfig.EnsureConfigFile()
-
-	return configuration.Cloudtrail_list.FilterPatternList, err
-}
-
 // Join all individual patterns into a single string separated by the "|" operator
 func mergeRegex(regexlist []string) string {
 	return strings.Join(regexlist, "|")
@@ -328,8 +304,7 @@ func (o *LookupEventsOptions) run() error {
 	if err != nil {
 		return err
 	}
-
-	Ignore, err := loadConfiguration()
+	Ignore, err := config.LoadCTConfig()
 	if err != nil {
 		return err
 	}
