@@ -35,7 +35,7 @@ func NewCmdAddSilence() *cobra.Command {
 	}
 
 	cmd.Flags().StringSliceVar(&addSilenceCmd.alertID, "alertname", []string{}, "alertname (comma-separated)")
-	cmd.Flags().StringVarP(&addSilenceCmd.comment, "comment", "c", "", "add comment about silence")
+	cmd.Flags().StringVarP(&addSilenceCmd.comment, "comment", "c", "silence alert", "add comment about silence")
 	cmd.Flags().StringVarP(&addSilenceCmd.duration, "duration", "d", "15d", "add duration for silence") //default duration set to 15 days
 	cmd.Flags().BoolVarP(&addSilenceCmd.all, "all", "a", false, "add silences for all alert")
 
@@ -102,6 +102,7 @@ func AddAlertNameSilence(alertID []string, duration, comment, username string, k
 		output, err := ExecInPod(kubeconfig, clientset, addCmd)
 		if err != nil {
 			fmt.Println(err)
+			continue
 		}
 
 		formattedOutput := strings.Replace(output, "\n", " ", -1)
