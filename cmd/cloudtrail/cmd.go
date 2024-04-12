@@ -4,7 +4,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// cloudtrailCmd represents the cloudtrail command
+// NewCloudtrailCmd represents the newCmdWriteEvents command
 func NewCloudtrailCmd() *cobra.Command {
 	cloudtrailCmd := &cobra.Command{
 		Use:   "cloudtrail",

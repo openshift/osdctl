@@ -79,9 +79,7 @@ func LoadPDConfig(paramFilePath string) PDConfig {
 
 // Loads ~/.config/osdctl
 func LoadCloudTrailConfig() ([]string, error) {
-
 	var configuration *CloudTrailConfig
-
 	osdctlConfig.EnsureConfigFile()
 	err := viper.Unmarshal(&configuration)
 	if err != nil {
