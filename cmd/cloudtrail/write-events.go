@@ -18,10 +18,9 @@ import (
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-// LookupEventsoptions struct for holding options for event lookup
+// LookupEventsOptions struct for holding options for event lookup
 type LookupEventsOptions struct {
 	clusterID      string
 	startTime      string
@@ -30,7 +29,7 @@ type LookupEventsOptions struct {
 	printAllEvents bool
 }
 
-// RawEventDetails struct for holding raw event details
+// RawEventDetails struct represents the structure of an AWS raw event
 type RawEventDetails struct {
 	EventVersion string `json:"eventVersion"`
 	UserIdentity struct {
@@ -52,9 +51,13 @@ func newCmdWriteEvents() *cobra.Command {
 	ops := &LookupEventsOptions{}
 	listEventsCmd := &cobra.Command{
 		Use:   "write-events",
-		Short: "Prints out all cloudtrail write events to console",
-		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(ops.run())
+		Short: "Prints cloudtrail write events to console with optional filtering",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			err := ops.run()
+			if err != nil {
+				return fmt.Errorf("write-events cmd Error: \n %s", err)
+			}
+			return nil
 		},
 	}
 	listEventsCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Cluster ID")
@@ -161,7 +164,7 @@ func extractUserDetails(cloudTrailEvent *string) (*RawEventDetails, error) {
 	return &res, nil
 }
 
-// GenerateLink generates a hyperlink for the given URL and display text based of value pairs in cloudTrail Event.
+// generateLink generates a hyperlink for the given URL and display text based of value pairs in cloudTrail Event.
 func generateLink(raw RawEventDetails) (url_link string) {
 	str1 := "https://"
 	str2 := ".console.aws.amazon.com/cloudtrailv2/home?region="
@@ -197,19 +200,19 @@ func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 			}
 			userArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
 			regexOdj := regexp.MustCompile(mergedRegex)
-			matchesUsrname := false
+			matchesUsername := false
 			matchesArn := false
 
 			if shouldFilter {
 				if event.Username != nil {
-					matchesUsrname = regexOdj.MatchString(*event.Username)
+					matchesUsername = regexOdj.MatchString(*event.Username)
 				}
 				if userArn != "" {
 					matchesArn = regexOdj.MatchString(userArn)
 
 				}
 
-				if matchesUsrname || matchesArn {
+				if matchesUsername || matchesArn {
 					continue
 					// skips entry
 				}
@@ -304,7 +307,7 @@ func (o *LookupEventsOptions) run() error {
 	if err != nil {
 		return err
 	}
-	Ignore, err := config.LoadCTConfig()
+	Ignore, err := config.LoadCloudTrailConfig()
 	if err != nil {
 		return err
 	}
