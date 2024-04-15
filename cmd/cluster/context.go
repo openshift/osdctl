@@ -20,6 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	"github.com/openshift/osdctl/cmd/cluster/dynatrace"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/openshift/osdctl/pkg/printer"
@@ -175,7 +176,6 @@ func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
 }
 
 func (o *contextOptions) run() error {
-
 	var printFunc func(*contextData)
 	switch o.output {
 	case shortOutputConfigValue:
@@ -207,7 +207,6 @@ func (o *contextOptions) run() error {
 }
 
 func (o *contextOptions) printLongOutput(data *contextData) {
-
 	clusterHeader := fmt.Sprintf("%s -- %s", data.ClusterName, data.ClusterID)
 	fmt.Println(clusterHeader)
 	fmt.Println(strings.Repeat("=", len(clusterHeader)))
@@ -241,7 +240,6 @@ func (o *contextOptions) printLongOutput(data *contextData) {
 }
 
 func (o *contextOptions) printShortOutput(data *contextData) {
-
 	fmt.Println("============================================================")
 	fmt.Printf("%s -- %s\n", data.ClusterName, data.ClusterID)
 	fmt.Println("============================================================")
@@ -409,17 +407,17 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			fmt.Fprintln(os.Stderr, "Getting Dynatrace URL...")
 		}
 
-		clusterID, err := getManagementClusterID(ocmClient, cluster)
+		clusterID, _, err := dynatrace.GetManagementCluster(ocmClient, cluster)
 		if err != nil {
 			errors = append(errors, err)
 			data.DyntraceEnvURL = err.Error()
 			return
 		}
-		data.DyntraceEnvURL, err = getDynatraceURLFromLabel(ocmClient, clusterID)
+		data.DyntraceEnvURL, err = dynatrace.GetDynatraceURLFromLabel(ocmClient, clusterID)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("Error The Dynatrace Environemnt URL could not be determined from Label. Using fallback method%s", err))
 			// FallBack method to determine via Cluster Login
-			data.DyntraceEnvURL, err = getDynatraceURLFromManagementCluster(clusterID)
+			data.DyntraceEnvURL, err = dynatrace.GetDynatraceURLFromManagementCluster(clusterID)
 			if err != nil {
 				errors = append(errors, fmt.Errorf("Error The Dynatrace Environemnt URL could not be determined %s", err))
 				data.DyntraceEnvURL = "the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there"
@@ -514,7 +512,7 @@ func GetCloudTrailLogsForCluster(awsProfile string, clusterID string, maxPages i
 
 	var foundEvents []types.Event
 
-	var eventSearchInput = cloudtrail.LookupEventsInput{}
+	eventSearchInput := cloudtrail.LookupEventsInput{}
 
 	for counter := 0; counter <= maxPages; counter++ {
 		print(".")
@@ -633,7 +631,6 @@ func (o *contextOptions) printOtherLinks(data *contextData) {
 }
 
 func (o *contextOptions) buildSplunkURL(data *contextData) string {
-
 	// Determine the relevant Splunk URL
 	if o.cluster.Hypershift().Enabled() {
 		switch data.OCMEnv {
