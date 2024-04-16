@@ -1,7 +1,0 @@
-{
-    "severity": "Info",
-    "summary": "Cluster is in Limited Support due to scheduled chaos testing",
-    "log_type": "customer-support",
-    "details": "Your cluster is in Limited Support due to a scheduled chaos test. Chaos testing includes AZ outage testing, network testing, disaster recovery testing, etc. Once your testing is complete, please reach out to Red Hat Support to resume full-support of your cluster",
-    "detection_type": "manual"
-}
