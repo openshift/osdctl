@@ -25,26 +25,22 @@ var (
 
 func NewCmdLogs() *cobra.Command {
 	logsCmd := &cobra.Command{
-		Use:               "logs",
+		Use:               "logs <cluster-id>",
 		Short:             "Fetch logs from Dynatrace",
-		Args:              cobra.NoArgs,
+		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			err := main()
+			err := main(args[0])
 			if err != nil {
 				cmdutil.CheckErr(err)
 			}
 		},
 	}
 
-	// set cluster flag as required
-	logsCmd.MarkFlagRequired("cluster")
-
 	logsCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Only builds the query without fetching any logs from the tenant")
 	logsCmd.Flags().IntVar(&tail, "tail", 100, "Last 'n' logs to fetch (defaults to 100)")
 	logsCmd.Flags().IntVar(&since, "since", 1, "Number of hours (integer) since which to search (defaults to 1 hour)")
 	logsCmd.Flags().StringVar(&contains, "contains", "", "Include logs which contain a phrase")
-	logsCmd.Flags().StringVar(&cluster, "cluster", "", "Cluster identifier (name / internal ID / external ID) to search")
 	logsCmd.Flags().StringVar(&sortOrder, "sort", "desc", "Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'")
 	logsCmd.Flags().BoolVar(&hcp, "hcp", false, "Set true to Include the HCP Namespace")
 	logsCmd.Flags().StringSliceVar(&namespaceList, "namespace", []string{}, "Namespace(s) (comma-separated)")
@@ -60,12 +56,12 @@ func getLinkToWebConsole(dtURL string, since int, base64Url string) string {
 	return fmt.Sprintf("\nLink to Web Console - \n%sui/apps/dynatrace.classic.logs.events/ui/logs-events?gtf=-%dh&gf=all&sortDirection=desc&advancedQueryMode=true&isDefaultQuery=false&visualizationType=table#%s\n\n", dtURL, since, base64Url)
 }
 
-func main() error {
+func main(clusterID string) error {
 	if since <= 0 {
 		return fmt.Errorf("invalid time duration")
 	}
 
-	clusterInternalID, mgmtClusterName, DTURL, err := fetchClusterDetails(cluster)
+	clusterInternalID, mgmtClusterName, DTURL, err := fetchClusterDetails(clusterID)
 	if err != nil {
 		return fmt.Errorf("failed to acquire cluster details %v", err)
 	}
