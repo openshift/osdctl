@@ -14,7 +14,8 @@ import (
 
 const (
 	authURL     string = "https://sso.dynatrace.com/sso/oauth2/token"
-	clientIDKey string = "dt_client_id_key"
+	DTVaultPath string = "dt_vault_path"
+	VaultAddr   string = "vault_address"
 )
 
 type Requester struct {
@@ -65,22 +66,27 @@ func (rh *Requester) send() (string, error) {
 	return string(body), nil
 }
 
-func getClientID() (id string, error error) {
-	if !viper.IsSet(clientIDKey) {
-		return "", fmt.Errorf("key %s is not set in config file", clientIDKey)
+func getVaultPath() (addr, path string, error error) {
+	if !viper.IsSet(VaultAddr) {
+		return "", "", fmt.Errorf("key %s is not set in config file", VaultAddr)
 	}
-	clientID := viper.GetString(clientIDKey)
+	vaultAddr := viper.GetString(VaultAddr)
 
-	return clientID, nil
+	if !viper.IsSet(DTVaultPath) {
+		return "", "", fmt.Errorf("key %s is not set in config file", DTVaultPath)
+	}
+	vaultPath := viper.GetString(DTVaultPath)
+
+	return vaultAddr, vaultPath, nil
 }
 
 func getAccessToken() (string, error) {
-	clientID, err := getClientID()
+	vaultAddr, vaultPath, err := getVaultPath()
 	if err != nil {
 		return "", err
 	}
 
-	clientSecret, err := getSecretFromVault(clientID)
+	clientID, clientSecret, err := getSecretFromVault(vaultAddr, vaultPath)
 	if err != nil {
 		return "", err
 	}
