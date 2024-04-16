@@ -8,8 +8,8 @@ require (
 	github.com/PagerDuty/go-pagerduty v1.8.0
 	github.com/andygrunwald/go-jira v1.16.0
 	github.com/aws/aws-sdk-go-v2 v1.26.1
-	github.com/aws/aws-sdk-go-v2/config v1.27.10
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.10
+	github.com/aws/aws-sdk-go-v2/config v1.27.11
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.11
 	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.33.0
 	github.com/aws/aws-sdk-go-v2/service/costexplorer v1.32.2
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.134.0
@@ -32,10 +32,10 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.32.0
 	github.com/openshift-online/ocm-cli v0.1.66
-	github.com/openshift-online/ocm-sdk-go v0.1.413
+	github.com/openshift-online/ocm-sdk-go v0.1.414
 	github.com/openshift/api v0.0.0-20240124164020-e2ce40831f2e
 	github.com/openshift/aws-account-operator/api v0.0.0-20230322125717-5b5a00a3e99f
-	github.com/openshift/backplane-cli v0.1.27
+	github.com/openshift/backplane-cli v0.1.28
 	github.com/openshift/gcp-project-operator v0.0.0-20220920194256-df38e31387a7
 	github.com/openshift/hive/apis v0.0.0-20240216200617-8c54fc9cac45
 	github.com/openshift/osd-network-verifier v0.4.8
@@ -47,7 +47,7 @@ require (
 	github.com/spf13/viper v1.18.2
 	go.uber.org/mock v0.4.0
 	golang.org/x/sync v0.5.0
-	golang.org/x/term v0.18.0
+	golang.org/x/term v0.19.0
 	google.golang.org/api v0.153.0
 	google.golang.org/genproto v0.0.0-20231106174013-bbf56f31fb17
 	gopkg.in/yaml.v2 v2.4.0
@@ -80,7 +80,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.2.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.7 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.16.3 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.20.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.20.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.23.4 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -188,7 +188,7 @@ require (
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/net v0.21.0 // indirect
 	golang.org/x/oauth2 v0.15.0 // indirect
-	golang.org/x/sys v0.18.0 // indirect
+	golang.org/x/sys v0.19.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
@@ -198,7 +198,7 @@ require (
 	google.golang.org/grpc v1.59.0 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/AlecAivazis/survey.v1 v1.8.8 // indirect
-	gopkg.in/evanphx/json-patch.v5 v5.6.0 // indirect
+	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
@@ -208,7 +208,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20231113174909-778a5567bc1e // indirect
 	sigs.k8s.io/cluster-api v1.5.3 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
-	sigs.k8s.io/kustomize/api v0.16.0 // indirect
-	sigs.k8s.io/kustomize/kyaml v0.16.0 // indirect
+	sigs.k8s.io/kustomize/api v0.17.1 // indirect
+	sigs.k8s.io/kustomize/kyaml v0.17.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
