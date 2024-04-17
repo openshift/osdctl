@@ -291,6 +291,16 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 	}
 
 	if e.cluster != nil {
+		// If a KMS key is defined for the cluster, use it as the default aws/ebs key may not exist
+		aws := e.cluster.AWS()
+
+		if aws != nil {
+			if kmsKeyArn, isOk := aws.GetKMSKeyArn(); isOk {
+				e.log.Info(ctx, "using KMS key defined for the cluster: %s", kmsKeyArn)
+				input.AWS.KmsKeyID = kmsKeyArn
+			}
+		}
+
 		// If the cluster has a cluster-wide proxy, configure it
 		if e.cluster.Proxy() != nil && !e.cluster.Proxy().Empty() {
 			input.Proxy.HttpProxy = e.cluster.Proxy().HTTPProxy()

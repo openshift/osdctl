@@ -162,6 +162,42 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 			},
 			expectErr: false,
 		},
+		{
+			name: "cluster specific KMS key forward",
+			e: &EgressVerification{
+				awsClient: mockEgressVerificationAWSClient{
+					describeSecurityGroupsResp: &ec2.DescribeSecurityGroupsOutput{
+						SecurityGroups: []types.SecurityGroup{
+							{
+								GroupId: aws.String("sg-abcd"),
+							},
+						},
+					},
+					describeSubnetsResp: &ec2.DescribeSubnetsOutput{
+						Subnets: []types.Subnet{
+							{
+								SubnetId: aws.String("subnet-abcd"),
+							},
+						},
+					},
+				},
+				cluster: newTestCluster(t, cmv1.NewCluster().
+					CloudProvider(cmv1.NewCloudProvider().ID("aws")).
+					Product(cmv1.NewProduct().ID("rosa")).
+					AWS(cmv1.NewAWS().KMSKeyArn("some-KMS-key-ARN")),
+				),
+				log: newTestLogger(t),
+			},
+			region: "us-east-2",
+			expected: &onv.ValidateEgressInput{
+				SubnetID: "subnet-abcd",
+				AWS: onv.AwsEgressConfig{
+					SecurityGroupId: "sg-abcd",
+					KmsKeyID:        "some-KMS-key-ARN",
+				},
+			},
+			expectErr: false,
+		},
 	}
 
 	for _, test := range tests {
@@ -481,6 +517,10 @@ func compareValidateEgressInput(expected, actual *onv.ValidateEgressInput) bool 
 
 	if expected.SubnetID != actual.SubnetID ||
 		expected.AWS.SecurityGroupId != actual.AWS.SecurityGroupId {
+		return false
+	}
+
+	if expected.AWS.KmsKeyID != actual.AWS.KmsKeyID {
 		return false
 	}
 
