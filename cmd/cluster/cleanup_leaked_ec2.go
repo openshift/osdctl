@@ -133,7 +133,9 @@ func (c *cleanup) RemediateOCPBUGS23174(ctx context.Context) error {
 
 	expectedInstances := map[string]bool{}
 	for _, awsmachine := range awsmachines.Items {
-		expectedInstances[*awsmachine.Spec.InstanceID] = true
+		if awsmachine.Spec.InstanceID != nil {
+			expectedInstances[*awsmachine.Spec.InstanceID] = true
+		}
 	}
 	log.Printf("expected instances: %v", expectedInstances)
 
