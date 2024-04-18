@@ -173,7 +173,14 @@ func (c *cleanup) RemediateOCPBUGS23174(ctx context.Context) error {
 				return fmt.Errorf("failed to automatically cleanup EC2 instances: %v", err)
 			}
 
-			log.Printf("success - the cluster should be uninstalled soon")
+			switch c.cluster.State() {
+			case cmv1.ClusterStateError:
+				fallthrough
+			case cmv1.ClusterStateUninstalling:
+				log.Printf("success - cluster was in state: %s and should be uninstalled soon", c.cluster.State())
+			default:
+				log.Printf("success - cluster is in state: %s", c.cluster.State())
+			}
 			return nil
 		}
 	}
