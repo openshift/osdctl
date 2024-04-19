@@ -124,21 +124,6 @@ func (c *cleanup) Run(ctx context.Context) error {
 }
 
 func (c *cleanup) RemediateOCPBUGS23174(ctx context.Context) error {
-	awsmachines := &capav1beta2.AWSMachineList{}
-	if err := c.client.List(ctx, awsmachines, client.MatchingLabels{
-		"cluster.x-k8s.io/cluster-name": c.cluster.ID(),
-	}); err != nil {
-		return err
-	}
-
-	expectedInstances := map[string]bool{}
-	for _, awsmachine := range awsmachines.Items {
-		if awsmachine.Spec.InstanceID != nil {
-			expectedInstances[*awsmachine.Spec.InstanceID] = true
-		}
-	}
-	log.Printf("expected instances: %v", expectedInstances)
-
 	resp, err := c.awsClient.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
 		Filters: []types.Filter{
 			{
@@ -160,6 +145,21 @@ func (c *cleanup) RemediateOCPBUGS23174(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to find EC2 instances associated with %s: %v", c.cluster.ID(), err)
 	}
+
+	awsmachines := &capav1beta2.AWSMachineList{}
+	if err := c.client.List(ctx, awsmachines, client.MatchingLabels{
+		"cluster.x-k8s.io/cluster-name": c.cluster.ID(),
+	}); err != nil {
+		return err
+	}
+
+	expectedInstances := map[string]bool{}
+	for _, awsmachine := range awsmachines.Items {
+		if awsmachine.Spec.InstanceID != nil {
+			expectedInstances[*awsmachine.Spec.InstanceID] = true
+		}
+	}
+	log.Printf("expected instances: %v", expectedInstances)
 
 	leakedInstances := []string{}
 	for _, reservation := range resp.Reservations {
