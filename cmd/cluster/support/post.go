@@ -52,6 +52,10 @@ type TemplateFile struct {
 	Detection_type cmv1.DetectionType `json:"detection_type"`
 }
 
+var (
+	userParameterNames, userParameterValues []string
+)
+
 func newCmdpost() *cobra.Command {
 	p := &Post{}
 

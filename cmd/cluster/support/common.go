@@ -9,10 +9,6 @@ import (
 	ctlutil "github.com/openshift/osdctl/pkg/utils"
 )
 
-var (
-	userParameterNames, userParameterValues []string
-)
-
 func getLimitedSupportReasons(clusterId string) ([]*cmv1.LimitedSupportReason, error) {
 	// Check that the cluster key (name, identifier or external identifier) given by the user
 	// is reasonably safe so that there is no risk of SQL injection
