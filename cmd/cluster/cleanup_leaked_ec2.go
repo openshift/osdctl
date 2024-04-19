@@ -142,6 +142,10 @@ func (c *cleanup) RemediateOCPBUGS23174(ctx context.Context) error {
 	resp, err := c.awsClient.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
 		Filters: []types.Filter{
 			{
+				Name:   aws.String("instance-state-name"),
+				Values: []string{"running","stopped"},
+			},
+			{
 				Name:   aws.String("tag:red-hat-managed"),
 				Values: []string{"true"},
 			},
