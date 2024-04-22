@@ -130,7 +130,7 @@ func (c *cleanup) RemediateOCPBUGS23174(ctx context.Context) error {
 				// We don't want to terminate pending because they would just be started and might not have been picked up by the MC yet.
 				// Importantly we also don't want to count terminated instances as leaked, as it causes confusion.
 				Name:   aws.String("instance-state-name"),
-				Values: []string{"running", "stopped"},
+				Values: []string{string(types.InstanceStateNameRunning), string(types.InstanceStateNameStopped)},
 			},
 			{
 				Name:   aws.String("tag:red-hat-managed"),
