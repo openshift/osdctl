@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/openshift-online/ocm-cli/pkg/dump"
@@ -121,12 +122,6 @@ func (p *Post) check() error {
 	if p.Template != "" {
 		if p.Problem != "" || p.Resolution != "" || p.Misconfiguration != "" {
 			return fmt.Errorf("\nIf Template flag is present, all three --problem, --resolution and --misconfiguration flags cannot be used")
-		}
-		p.parseUserParameters() // parse all the '-p' user flags
-
-		// For every '-p' flag, replace its related placeholder in the template
-		for k := range userParameterNames {
-			p.replaceFlags(userParameterNames[k], userParameterValues[k])
 		}
 	} else {
 		if err := validateResolutionString(p.Resolution); err != nil {
@@ -246,6 +241,13 @@ func (p *Post) buildLimitedSupport() (*cmv1.LimitedSupportReason, error) {
 func (p *Post) buildLimitedSupportTemplate() (*cmv1.LimitedSupportReason, error) {
 	t := p.readTemplate() // parse the given JSON template provided via '-t' flag
 
+	p.parseUserParameters() // parse all the '-p' user flags
+	// For every '-p' flag, replace its related placeholder in the template
+	for k := range userParameterNames {
+		p.replaceFlags(t, userParameterNames[k], userParameterValues[k])
+	}
+	p.checkLeftovers(t)
+
 	limitedSupportBuilder := cmv1.NewLimitedSupportReason().Summary(t.Summary).Details(t.Details).DetectionType(t.Detection_type)
 	limitedSupport, err := limitedSupportBuilder.Build()
 
@@ -314,15 +316,44 @@ func (p *Post) accessFile(filePath string) ([]byte, error) {
 	return nil, fmt.Errorf("cannot read the file %q", filePath)
 }
 
-func (p *Post) replaceFlags(flagName string, flagValue string) {
+func (p *Post) replaceFlags(template *TemplateFile, flagName string, flagValue string) {
 	if flagValue == "" {
 		log.Fatalf("The selected template is using '%[1]s' parameter, but '%[1]s' flag was not set. Use '-p %[1]s=\"FOOBAR\"' to fix this.", flagName)
 	}
 
 	found := false
 
+	if strings.Contains(template.Details, flagName) {
+		found = true
+		template.Details = strings.ReplaceAll(template.Details, flagName, flagValue)
+	}
+
 	if !found {
 		log.Fatalf("The selected template is not using '%s' parameter, but '--param' flag was set. Do not use '-p %s=%s' to fix this.", flagName, flagName, flagValue)
+	}
+}
+
+func (p *Post) findLeftovers(s string) (matches []string) {
+	r := regexp.MustCompile(`\${[^{}]*}`)
+	matches = r.FindAllString(s, -1)
+	return matches
+}
+
+func (p *Post) checkLeftovers(template *TemplateFile) {
+	unusedParameters := p.findLeftovers(template.Details)
+	var numberOfMissingParameters int
+	for _, v := range unusedParameters {
+		// Ignore parameters in the exclude list, ie ${CLUSTER_UUID}, which will be replaced later for each cluster a servicelog is sent to
+		if strings.Contains(template.Details, v) {
+			numberOfMissingParameters++
+			regex := strings.NewReplacer("${", "", "}", "")
+			log.Printf("The one of the template files is using '%s' parameter, but '--param' flag is not set for this one. Use '-p %v=\"FOOBAR\"' to fix this.", v, regex.Replace(v))
+		}
+	}
+	if numberOfMissingParameters == 1 {
+		log.Fatal("Please define this missing parameter properly.")
+	} else if numberOfMissingParameters > 1 {
+		log.Fatalf("Please define all %v missing parameters properly.", numberOfMissingParameters)
 	}
 }
 
