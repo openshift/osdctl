@@ -3,7 +3,6 @@ package cloudtrail
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -11,10 +10,11 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
-	config "github.com/openshift/osdctl/pkg/envConfig"
+	envConfig "github.com/openshift/osdctl/pkg/envConfig"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -34,7 +34,6 @@ type RawEventDetails struct {
 	EventVersion string `json:"eventVersion"`
 	UserIdentity struct {
 		AccountId      string `json:"accountId"`
-		Type           string `json:"type"`
 		SessionContext struct {
 			SessionIssuer struct {
 				Type     string `json:"type"`
@@ -57,7 +56,7 @@ func newCmdWriteEvents() *cobra.Command {
 		},
 	}
 	listEventsCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Cluster ID")
-	listEventsCmd.Flags().StringVarP(&ops.startTime, "since", "", "", "Specifies that only events that occur within the specified time are returned.Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\".")
+	listEventsCmd.Flags().StringVarP(&ops.startTime, "since", "", "1h", "Specifies that only events that occur within the specified time are returned.Defaults to 1h.Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\".")
 	listEventsCmd.Flags().BoolVarP(&ops.printEventUrl, "url", "u", false, "Generates Url link to cloud console cloudtrail event")
 	listEventsCmd.Flags().BoolVarP(&ops.printRawEvents, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
 	listEventsCmd.Flags().BoolVarP(&ops.printAllEvents, "all", "A", false, "Prints all cloudtrail write events without filtering")
@@ -70,7 +69,7 @@ func newCmdWriteEvents() *cobra.Command {
 func parseDurationToUTC(input string) (time.Time, error) {
 	duration, err := time.ParseDuration(input)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("unable to parse time duration: %w", err)
+		return time.Time{}, fmt.Errorf("[ERROR] unable to parse time duration: %w", err)
 	}
 
 	return time.Now().UTC().Add(-duration), nil
@@ -111,7 +110,7 @@ func getWriteEvents(since time.Time, cloudtailClient *cloudtrail.Client) ([]*clo
 
 		lookupOutput, err := paginator.NextPage(context.TODO())
 		if err != nil {
-			return nil, fmt.Errorf("paginator error: \n%w", err)
+			return nil, fmt.Errorf("[WARNING] paginator error: \n%w", err)
 		}
 
 		allookupOutputs = append(allookupOutputs, lookupOutput)
@@ -129,12 +128,12 @@ func getWriteEvents(since time.Time, cloudtailClient *cloudtrail.Client) ([]*clo
 // Extracts Raw cloudtrailEvent Details
 func extractUserDetails(cloudTrailEvent *string) (*RawEventDetails, error) {
 	if cloudTrailEvent == nil || *cloudTrailEvent == "" {
-		return &RawEventDetails{}, fmt.Errorf("cannot parse a nil input")
+		return &RawEventDetails{}, fmt.Errorf("[ERROR] cannot parse a nil input")
 	}
 	var res RawEventDetails
 	err := json.Unmarshal([]byte(*cloudTrailEvent), &res)
 	if err != nil {
-		return &RawEventDetails{}, fmt.Errorf("could not marshal event.CloudTrailEvent: %w", err)
+		return &RawEventDetails{}, fmt.Errorf("[ERROR] could not marshal event.CloudTrailEvent: %w", err)
 	}
 
 	const supportedEventVersionMajor = 1
@@ -142,10 +141,10 @@ func extractUserDetails(cloudTrailEvent *string) (*RawEventDetails, error) {
 
 	var responseMajor, responseMinor int
 	if _, err := fmt.Sscanf(res.EventVersion, "%d.%d", &responseMajor, &responseMinor); err != nil {
-		return &RawEventDetails{}, fmt.Errorf("failed to parse CloudTrail event version: %w", err)
+		return &RawEventDetails{}, fmt.Errorf("[ERROR]failed to parse CloudTrail event version: %w", err)
 	}
 	if responseMajor != supportedEventVersionMajor || responseMinor < minSupportedEventVersionMinor {
-		return &RawEventDetails{}, fmt.Errorf("unexpected event version (got %s, expected compatibility with %d.%d)", res.EventVersion, supportedEventVersionMajor, minSupportedEventVersionMinor)
+		return &RawEventDetails{}, fmt.Errorf("[ERROR] unexpected event version (got %s, expected compatibility with %d.%d)", res.EventVersion, supportedEventVersionMajor, minSupportedEventVersionMinor)
 	}
 	return &res, nil
 }
@@ -182,7 +181,7 @@ func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 		for _, event := range lookupOutput.Events {
 			raw, err := extractUserDetails(event.CloudTrailEvent)
 			if err != nil {
-				return nil, fmt.Errorf("failed to to extract raw cloudtralEvent details: %w", err)
+				return nil, fmt.Errorf("[ERROR] failed to to extract raw cloudtrailEvent details: %w", err)
 			}
 			userArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
 			regexOdj := regexp.MustCompile(mergedRegex)
@@ -215,34 +214,43 @@ func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 // It takes a slice of types.Event
 func printEvents(filteredEvent []types.Event, printUrl bool, raw bool) {
 	for _, event := range filteredEvent {
-
 		if raw {
 			if event.CloudTrailEvent != nil {
-				fmt.Printf("\n%v	\n", *event.CloudTrailEvent)
+				fmt.Printf("%v \n\n", *event.CloudTrailEvent)
 			}
 		} else {
+			rawEventDetails, err := extractUserDetails(event.CloudTrailEvent)
+			if err != nil {
+				fmt.Println(err)
+			}
+
 			if event.EventName != nil {
 				fmt.Printf("%v |", *event.EventName)
 			} else {
-				fmt.Println("<not available> |")
+				fmt.Println(" <not available> |")
 			}
 
 			if event.EventTime != nil {
-				fmt.Printf("%v |", event.EventTime.String())
+				fmt.Printf(" %v |", event.EventTime.String())
 			} else {
-				fmt.Println("<not available> |")
+				fmt.Println(" <not available> |")
+			}
+			if event.Username != nil {
+				fmt.Printf(" User: %v |", *event.Username)
+			} else {
+				fmt.Printf(" User: <not available> |")
 			}
 
-			if event.Username != nil {
-				fmt.Printf("User: %v |\n", *event.Username)
+			if rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName != "" {
+				fmt.Printf(" ARN: %v\n ", rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName)
+
 			} else {
-				fmt.Println("User: <not available> |")
+				fmt.Println(" ARN: <not available>")
 			}
 
 			if printUrl && event.CloudTrailEvent != nil {
-				details, err := extractUserDetails(event.CloudTrailEvent)
 				if err == nil {
-					fmt.Printf("EventLink: %v\n\n", generateLink(*details))
+					fmt.Printf("EventLink: %v\n\n", generateLink(*rawEventDetails))
 				} else {
 					fmt.Println("EventLink: <not available>")
 				}
@@ -255,6 +263,7 @@ func printEvents(filteredEvent []types.Event, printUrl bool, raw bool) {
 }
 
 func (o *LookupEventsOptions) run() error {
+
 	err := utils.IsValidClusterKey(o.clusterID)
 	if err != nil {
 		return err
@@ -270,42 +279,71 @@ func (o *LookupEventsOptions) run() error {
 		return err
 	}
 	if strings.ToUpper(cluster.CloudProvider().ID()) != "AWS" {
-		return errors.New("this command is only available for AWS clusters")
+		return fmt.Errorf("[ERROR] this command is only available for AWS clusters")
+	}
+
+	Ignore, err := envConfig.LoadCloudTrailConfig()
+	if err != nil {
+		return fmt.Errorf("[ERROR] error Loading cloudtrail configuration file: %w", err)
+	}
+	if len(Ignore) == 0 {
+		fmt.Println("\n[WARNING] No filter list DETECTED!!")
 	}
 
 	cfg, err := osdCloud.CreateAWSV2Config(connection, cluster)
 	if err != nil {
 		return err
 	}
+	defaultcfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		return err
+	}
 
-	cloudtrailClient := cloudtrail.NewFromConfig(cfg)
+	startTime, err := parseDurationToUTC(o.startTime)
+	if err != nil {
+		return err
+	}
+
+	fetchFilterPrintEvents := func(cfg aws.Config, startTime time.Time, o *LookupEventsOptions) error {
+		cloudtrailClient := cloudtrail.NewFromConfig(cfg)
+
+		if err != nil {
+			return err
+		}
+
+		lookupOutput, err := getWriteEvents(startTime, cloudtrailClient)
+		if err != nil {
+			return err
+		}
+		filteredEvents, err := filterUsers(lookupOutput, Ignore, o.printAllEvents)
+		if err != nil {
+			return err
+		}
+
+		printEvents(*filteredEvents, o.printEventUrl, o.printRawEvents)
+		fmt.Println("")
+		return err
+	}
+
 	arn, accountId, err := whoami(*sts.NewFromConfig(cfg))
-	if err != nil {
-		return err
+	fmt.Printf("[INFO] Checking write event history since %v for AWS Account %v as %v \n", startTime, accountId, arn)
+
+	if defaultcfg.Region != cfg.Region {
+		fmt.Printf("\n[INFO] Fetching %v Event History...\n", defaultcfg.Region)
+		if err := fetchFilterPrintEvents(cfg, startTime, o); err != nil {
+			return err
+		}
+
+		fmt.Printf("\n\n\n[INFO] Fetching Cloudtrail Global Event History from %v Region...\n", defaultcfg.Region)
+		if err := fetchFilterPrintEvents(defaultcfg, startTime, o); err != nil {
+			return err
+		}
+	} else {
+		fmt.Printf("\n[INFO] Fetching %v Event History...\n", defaultcfg.Region)
+		if err := fetchFilterPrintEvents(cfg, startTime, o); err != nil {
+			return err
+		}
 	}
 
-	starttime, err := parseDurationToUTC(o.startTime)
-	if err != nil {
-		return err
-	}
-
-	lookupOutput, err := getWriteEvents(starttime, cloudtrailClient)
-	if err != nil {
-		return err
-	}
-	Ignore, err := config.LoadCloudTrailConfig()
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Checking write event history since %v for AWS Account %v as %v \n", starttime, accountId, arn)
-	fmt.Printf("\n[+] Fetching %v Event History...\n", cfg.Region)
-	filteredEvents, err := filterUsers(lookupOutput, Ignore, o.printAllEvents)
-	if err != nil {
-		return err
-	}
-
-	printEvents(*filteredEvents, o.printEventUrl, o.printRawEvents)
-	fmt.Println("")
 	return err
 }

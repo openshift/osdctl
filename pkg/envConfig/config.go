@@ -25,9 +25,9 @@ type PDConfig struct {
 
 // cloudtrailCmd configuration struct for parsing configuration options
 type CloudTrailConfig struct {
-	Cloudtrail_list struct {
-		FilterPatternList []string `mapstructure:"cloudtrail_cmd_lists"`
-	} `mapstructure:"filter_regex_patterns"`
+	CloudTrailList struct {
+		FilterPatternList []string `mapstructure:"filter_regex_patterns"`
+	} `mapstructure:"cloudtrail_cmd_lists"`
 }
 
 func LoadYaml(paramFilePath string) Config {
@@ -83,10 +83,10 @@ func LoadCloudTrailConfig() ([]string, error) {
 	osdctlConfig.EnsureConfigFile()
 	err := viper.Unmarshal(&configuration)
 	if err != nil {
-		log.Printf("Failed to unmarshal Cloudtrail config yaml %s %v", viper.ConfigFileUsed(), err)
+		log.Printf("[ERROR] Failed to unmarshal Cloudtrail config yaml %s %v", viper.ConfigFileUsed(), err)
 		return nil, err
 	}
 	osdctlConfig.EnsureConfigFile()
 
-	return configuration.Cloudtrail_list.FilterPatternList, err
+	return configuration.CloudTrailList.FilterPatternList, err
 }

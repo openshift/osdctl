@@ -11,10 +11,10 @@ import (
 func TestFilterUsers(t *testing.T) {
 	// Test Case 1 (Ignored)
 	testUsername1 := "user-1"
-	testCloudTrailEvent1 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:role/ManagedOpenShift-ControlPlane-Role"}}}}`
+	testCloudTrailEvent1 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:user/test-12345-6-a7b8-kube-system-capa-controller-manager/123456789012"}}}}`
 
 	testUsername2 := "ManagedOpenShift-ControlPlane-Role"
-	testCloudTrailEvent2 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:role/ManagedOpenShift-ControlPlane-Role"}}}}`
+	testCloudTrailEvent2 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:user/test-12345-6-a7b8-kube-system-capa-controller-manager/123456789012"}}}}`
 
 	// Test Case 2 (Not Ignored)
 	testUsername3 := "user-2"
@@ -55,13 +55,13 @@ func TestFilterUsers(t *testing.T) {
 	// Other Filterable Option which would be located in ~/.config/osdctl.yaml
 	//{".*-Installer-Role", ".*kube-system-kube-controller.*", ".*operator.*", ".*openshift-cluster-csi-drivers.*",".*kube-system-capa-controller.*"}
 
-	ignoreList := []string{".*-ControlPlane-Role"}
+	ignoreList := []string{".*kube-system-capa-controller.*"}
 	emptyIgnoreList := []string{}
 
 	// Test filtering if shouldFilter set to true
 	t.Run("Filtering with shouldFilter true", func(t *testing.T) {
 		expectedFilteredEvents := []types.Event{
-			{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
+			{Username: &testUsername3, CloudTrailEvent: &testCloudTrailEvent3},
 			{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
 			{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
 			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
