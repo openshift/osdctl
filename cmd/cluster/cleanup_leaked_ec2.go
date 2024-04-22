@@ -124,6 +124,28 @@ func (c *cleanup) Run(ctx context.Context) error {
 }
 
 func (c *cleanup) RemediateOCPBUGS23174(ctx context.Context) error {
+	resp, err := c.awsClient.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
+		Filters: []types.Filter{
+			{
+				// We don't want to terminate pending because they would just be started and might not have been picked up by the MC yet.
+				// Importantly we also don't want to count terminated instances as leaked, as it causes confusion.
+				Name:   aws.String("instance-state-name"),
+				Values: []string{string(types.InstanceStateNameRunning), string(types.InstanceStateNameStopped)},
+			},
+			{
+				Name:   aws.String("tag:red-hat-managed"),
+				Values: []string{"true"},
+			},
+			{
+				Name:   aws.String(fmt.Sprintf("tag:sigs.k8s.io/cluster-api-provider-aws/cluster/%s", c.cluster.ID())),
+				Values: []string{"owned"},
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to find EC2 instances associated with %s: %v", c.cluster.ID(), err)
+	}
+
 	awsmachines := &capav1beta2.AWSMachineList{}
 	if err := c.client.List(ctx, awsmachines, client.MatchingLabels{
 		"cluster.x-k8s.io/cluster-name": c.cluster.ID(),
@@ -138,22 +160,6 @@ func (c *cleanup) RemediateOCPBUGS23174(ctx context.Context) error {
 		}
 	}
 	log.Printf("expected instances: %v", expectedInstances)
-
-	resp, err := c.awsClient.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
-		Filters: []types.Filter{
-			{
-				Name:   aws.String("tag:red-hat-managed"),
-				Values: []string{"true"},
-			},
-			{
-				Name:   aws.String(fmt.Sprintf("tag:sigs.k8s.io/cluster-api-provider-aws/cluster/%s", c.cluster.ID())),
-				Values: []string{"owned"},
-			},
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to find EC2 instances associated with %s: %v", c.cluster.ID(), err)
-	}
 
 	leakedInstances := []string{}
 	for _, reservation := range resp.Reservations {
