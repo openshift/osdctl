@@ -64,7 +64,7 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	}
 	fmt.Printf("Current Git Hash: %v\nGit Repo: %v\n\n", currentGitHash, serviceRepo)
 
-	promotionGitHash, err := git.CheckoutAndCompareGitHash(serviceRepo, gitHash, currentGitHash)
+	promotionGitHash, commitLog, err := git.CheckoutAndCompareGitHash(serviceRepo, gitHash, currentGitHash)
 	if err != nil {
 		return fmt.Errorf("failed to checkout and compare git hash: %v", err)
 	} else if promotionGitHash == "" {
@@ -73,17 +73,21 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	}
 	fmt.Printf("Service: %s will be promoted to %s\n", serviceName, promotionGitHash)
 
+	if err != nil {
+		return fmt.Errorf("error in executing git log: %v", err)
+	}
 	branchName := fmt.Sprintf("promote-%s-%s", serviceName, promotionGitHash)
 	err = appInterface.UpdateAppInterface(serviceName, saasDir, currentGitHash, promotionGitHash, branchName)
 	if err != nil {
 		fmt.Printf("FAILURE: %v\n", err)
 	}
 
-	commitMessage := fmt.Sprintf("Promote %s to %s\n\nSee %s/compare/%s...%s for contents of the promotion.", serviceName, promotionGitHash, serviceRepo, currentGitHash, promotionGitHash)
+	commitMessage := fmt.Sprintf("Promote %s to %s\n\nSee %s/compare/%s...%s for contents of the promotion.\n clog:%s", serviceName, promotionGitHash, serviceRepo, currentGitHash, promotionGitHash, commitLog)
 	err = appInterface.CommitSaasFile(saasDir, commitMessage)
 	if err != nil {
 		return fmt.Errorf("failed to commit changes to app-interface: %w", err)
 	}
+	fmt.Printf("commitMessage: %s\n", commitMessage)
 
 	fmt.Printf("The branch %s is ready to be pushed\n", branchName)
 	fmt.Println("")

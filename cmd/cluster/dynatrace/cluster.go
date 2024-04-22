@@ -1,10 +1,9 @@
-package cluster
+package dynatrace
 
 import (
 	"context"
 	"fmt"
 	"net/url"
-	"os"
 
 	"github.com/Dynatrace/dynatrace-operator/src/api/v1beta1"
 	"github.com/Dynatrace/dynatrace-operator/src/api/v1beta1/dynakube"
@@ -12,105 +11,88 @@ import (
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/k8s"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
-	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	HypershiftClusterTypeLabel string = "ext-hypershift.openshift.io/cluster-type"
-	DynatraceTenantKeyLabel    string = "sre-capabilities.dtp.tenant"
-)
-
-func newCmdDynatraceURL() *cobra.Command {
-	orgIdCmd := &cobra.Command{
-		Use:   "dynatrace CLUSTER_ID",
-		Short: "Get the Dyntrace Tenant URL for a given MC or HCP cluster",
-		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(fetchDetails(args[0]))
-		},
-	}
-	return orgIdCmd
-}
-
-func fetchDetails(clusterKey string) error {
+func fetchClusterDetails(clusterKey string) (clusterID string, mcName string, dynatraceURL string, error error) {
 	if err := ocmutils.IsValidClusterKey(clusterKey); err != nil {
-		return err
+		return "", "", "", err
 	}
 	connection, err := ocmutils.CreateConnection()
 	if err != nil {
-		return err
+		return "", "", "", err
 	}
 	defer connection.Close()
 
 	cluster, err := ocmutils.GetCluster(connection, clusterKey)
 	if err != nil {
-		return err
+		return "", "", "", err
 	}
 
-	clusterID, err := getManagementClusterID(connection, cluster)
+	mgmtClusterID, mgmtClusterName, err := GetManagementCluster(connection, cluster)
 	if err != nil {
-		return err
+		return "", "", "", err
 	}
-	url, err := getDynatraceURLFromLabel(connection, clusterID)
+
+	url, err := GetDynatraceURLFromLabel(connection, mgmtClusterID)
 	if err != nil {
-		// FallBack method to determine via Cluster Login
-		url, err = getDynatraceURLFromManagementCluster(clusterID)
-		if err != nil {
-			return fmt.Errorf("the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there \n\nError Details - %s", err)
-		}
+		return "", "", "", fmt.Errorf("the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there \n\nError Details - %s", err)
 	}
-	fmt.Println("Dynatrace Environment URL - ", url)
-	return nil
+	return cluster.ID(), mgmtClusterName, url, nil
 }
 
-func getManagementClusterID(connection *sdk.Connection, cluster *v1.Cluster) (string, error) {
-	var clusterID = cluster.ID()
+func GetManagementCluster(connection *sdk.Connection, cluster *v1.Cluster) (id string, name string, error error) {
+	clusterID := cluster.ID()
+	clusterName := cluster.Name()
 	if cluster.Hypershift().Enabled() {
 		ManagementCluster, err := ocmutils.GetManagementCluster(clusterID)
 		if err != nil {
-			return "", fmt.Errorf("error retreiving Management Cluster for given HCP")
+			return "", "", fmt.Errorf("error retreiving Management Cluster for given HCP")
 		}
 		clusterID = ManagementCluster.ID()
+		clusterName = ManagementCluster.Name()
 	}
 
-	if !isManagementCluster(connection, clusterID) && !cluster.Hypershift().Enabled() {
-		return "", fmt.Errorf("cluster is not a HCP/Management Cluster")
+	isMC, err := isManagementCluster(connection, clusterID)
+	if err != nil {
+		return "", "", fmt.Errorf("could not verify if the cluster is HCP/Management Cluster %v", err)
 	}
-	return clusterID, nil
+
+	if !isMC && !cluster.Hypershift().Enabled() {
+		return "", "", fmt.Errorf("cluster is not a HCP/Management Cluster")
+	}
+	return clusterID, clusterName, nil
 }
 
 // Sanity Check for MC Cluster
-func isManagementCluster(connection *sdk.Connection, clusterID string) bool {
+func isManagementCluster(connection *sdk.Connection, clusterID string) (isMC bool, err error) {
 	collection := connection.ClustersMgmt().V1().Clusters()
 	// Get the labels externally available for the cluster
 	resource := collection.Cluster(clusterID).ExternalConfiguration().Labels()
 	// Send the request to retrieve the list of external cluster labels:
 	response, err := resource.List().Send()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't retrieve cluster labels: %v\n", err)
-		os.Exit(1)
+		return false, fmt.Errorf("can't retrieve cluster labels: %v", err)
 	}
 
 	labels, ok := response.GetItems()
 	if !ok {
-		return false
+		return false, nil
 	}
 
 	for _, label := range labels.Slice() {
 		if l, ok := label.GetKey(); ok {
 			// If the label is found as the key, we know its an Managemnt Cluster
 			if l == HypershiftClusterTypeLabel {
-				return true
+				return true, nil
 			}
 		}
 	}
-	return false
+	return false, nil
 }
 
-func getDynatraceURLFromLabel(connection *sdk.Connection, clusterID string) (string, error) {
+func GetDynatraceURLFromLabel(connection *sdk.Connection, clusterID string) (url string, err error) {
 	subscription, err := ocmutils.GetSubscription(connection, clusterID)
 	if err != nil {
 		return "", err
@@ -126,16 +108,16 @@ func getDynatraceURLFromLabel(connection *sdk.Connection, clusterID string) (str
 		if key, ok := label.GetKey(); ok {
 			if key == DynatraceTenantKeyLabel {
 				if value, ok := label.GetValue(); ok {
-					url := fmt.Sprintf("https://%s.live.dynatrace.com/", value)
+					url := fmt.Sprintf("https://%s.apps.dynatrace.com/", value)
 					return url, nil
 				}
 			}
 		}
 	}
-	return "", fmt.Errorf("Could not determine URL")
+	return "", fmt.Errorf("DT Tenant Not Found")
 }
 
-func getDynatraceURLFromManagementCluster(clusterID string) (string, error) {
+func GetDynatraceURLFromManagementCluster(clusterID string) (string, error) {
 	// Register v1beta1 for DynaKube
 	scheme := runtime.NewScheme()
 	if err := v1beta1.AddToScheme(scheme); err != nil {

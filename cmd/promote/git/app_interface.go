@@ -119,6 +119,15 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string) 
 				}
 			}
 		}
+	} else if strings.Contains(service.Name, "saas-backplane-api") {
+		for _, resourceTemplate := range service.ResourceTemplates {
+			for _, target := range resourceTemplate.Targets {
+				if strings.Contains(target.Namespace["$ref"], "backplanep") {
+					currentGitHash = target.Ref
+					break
+				}
+			}
+		}
 	} else {
 		for _, resourceTemplate := range service.ResourceTemplates {
 			if !strings.Contains(resourceTemplate.Name, "package") {
