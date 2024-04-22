@@ -1,8 +1,0 @@
-{
-    "severity": "Warning",
-    "log_type": "cluster-configuration",
-    "summary": "Cluster is in Limited Support due to unsupported cluster configuration",
-    "details": "${CONFIGURATION} ${REGION} ${SEVERITY}",
-    "doc_references": ["https://access.redhat.com/documentation/en-us/red_hat_openshift_service_on_aws/4/html/introduction_to_rosa/policies-and-service-definition#rosa-limited-support_rosa-life-cycle"],
-    "detection_type": "manual"
-}
