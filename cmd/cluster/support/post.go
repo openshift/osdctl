@@ -120,15 +120,15 @@ func validateResolutionString(res string) error {
 
 func (p *Post) check() error {
 	if p.Template != "" {
-		if p.Problem != "" || p.Resolution != "" || p.Misconfiguration != "" {
-			return fmt.Errorf("\nIf Template flag is present, all three --problem, --resolution and --misconfiguration flags cannot be used")
+		if p.Problem != "" || p.Resolution != "" || p.Misconfiguration != "" || p.Evidence != "" {
+			return fmt.Errorf("\nIf Template flag is present, --problem, --resolution, --misconfiguration and --evidence flags cannot be used")
 		}
 	} else {
 		if err := validateResolutionString(p.Resolution); err != nil {
 			return err
 		}
 		if p.Problem == "" || p.Resolution == "" || p.Misconfiguration == "" {
-			return fmt.Errorf("\nIn the absence of Template -t flag, all three --problem, --resolution and --misconfiguration flags are mandatory")
+			return fmt.Errorf("\nIn the absence of Template -t flag, --problem, --resolution and --misconfiguration flags are mandatory")
 		}
 		if err := p.setup(); err != nil {
 			return err
