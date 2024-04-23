@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -163,7 +164,7 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 			expectErr: false,
 		},
 		{
-			name: "cluster specific KMS key forward",
+			name: "Cluster specific KMS key forward",
 			e: &EgressVerification{
 				awsClient: mockEgressVerificationAWSClient{
 					describeSecurityGroupsResp: &ec2.DescribeSecurityGroupsOutput{
@@ -186,7 +187,8 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 					Product(cmv1.NewProduct().ID("rosa")).
 					AWS(cmv1.NewAWS().KMSKeyArn("some-KMS-key-ARN")),
 				),
-				log: newTestLogger(t),
+				log:           newTestLogger(t),
+				EgressTimeout: 42 * time.Second,
 			},
 			region: "us-east-2",
 			expected: &onv.ValidateEgressInput{
@@ -195,6 +197,7 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 					SecurityGroupId: "sg-abcd",
 					KmsKeyID:        "some-KMS-key-ARN",
 				},
+				Timeout: 42 * time.Second,
 			},
 			expectErr: false,
 		},
@@ -526,6 +529,10 @@ func compareValidateEgressInput(expected, actual *onv.ValidateEgressInput) bool 
 
 	if expected.Proxy.HttpProxy != actual.Proxy.HttpProxy ||
 		expected.Proxy.HttpsProxy != actual.Proxy.HttpsProxy {
+		return false
+	}
+
+	if expected.Timeout != actual.Timeout {
 		return false
 	}
 
