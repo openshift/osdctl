@@ -124,21 +124,14 @@ func (c *cleanup) Run(ctx context.Context) error {
 }
 
 func (c *cleanup) RemediateOCPBUGS23174(ctx context.Context) error {
-	awsmachines := &capav1beta2.AWSMachineList{}
-	if err := c.client.List(ctx, awsmachines, client.MatchingLabels{
-		"cluster.x-k8s.io/cluster-name": c.cluster.ID(),
-	}); err != nil {
-		return err
-	}
-
-	expectedInstances := map[string]bool{}
-	for _, awsmachine := range awsmachines.Items {
-		expectedInstances[*awsmachine.Spec.InstanceID] = true
-	}
-	log.Printf("expected instances: %v", expectedInstances)
-
 	resp, err := c.awsClient.DescribeInstances(ctx, &ec2.DescribeInstancesInput{
 		Filters: []types.Filter{
+			{
+				// We don't want to terminate pending because they would just be started and might not have been picked up by the MC yet.
+				// Importantly we also don't want to count terminated instances as leaked, as it causes confusion.
+				Name:   aws.String("instance-state-name"),
+				Values: []string{string(types.InstanceStateNameRunning), string(types.InstanceStateNameStopped)},
+			},
 			{
 				Name:   aws.String("tag:red-hat-managed"),
 				Values: []string{"true"},
@@ -152,6 +145,21 @@ func (c *cleanup) RemediateOCPBUGS23174(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to find EC2 instances associated with %s: %v", c.cluster.ID(), err)
 	}
+
+	awsmachines := &capav1beta2.AWSMachineList{}
+	if err := c.client.List(ctx, awsmachines, client.MatchingLabels{
+		"cluster.x-k8s.io/cluster-name": c.cluster.ID(),
+	}); err != nil {
+		return err
+	}
+
+	expectedInstances := map[string]bool{}
+	for _, awsmachine := range awsmachines.Items {
+		if awsmachine.Spec.InstanceID != nil {
+			expectedInstances[*awsmachine.Spec.InstanceID] = true
+		}
+	}
+	log.Printf("expected instances: %v", expectedInstances)
 
 	leakedInstances := []string{}
 	for _, reservation := range resp.Reservations {
@@ -171,7 +179,14 @@ func (c *cleanup) RemediateOCPBUGS23174(ctx context.Context) error {
 				return fmt.Errorf("failed to automatically cleanup EC2 instances: %v", err)
 			}
 
-			log.Printf("success - the cluster should be uninstalled soon")
+			switch c.cluster.State() {
+			case cmv1.ClusterStateError:
+				fallthrough
+			case cmv1.ClusterStateUninstalling:
+				log.Printf("success - cluster was in state: %s and should be uninstalled soon", c.cluster.State())
+			default:
+				log.Printf("success - cluster is in state: %s", c.cluster.State())
+			}
 			return nil
 		}
 	}
