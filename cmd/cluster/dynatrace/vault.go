@@ -22,7 +22,7 @@ func setupVaultToken(vaultAddr, vaultPath string) error {
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	if err = cmd.Run(); err != nil {
-		return fmt.Errorf("Error running 'vault login':", err)
+		return fmt.Errorf("Error running 'vault login': %v", err)
 	}
 
 	return nil
