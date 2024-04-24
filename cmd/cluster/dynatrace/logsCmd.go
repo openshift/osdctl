@@ -66,6 +66,11 @@ func main(clusterID string) error {
 		return fmt.Errorf("failed to acquire cluster details %v", err)
 	}
 
+	accessToken, err := getAccessToken()
+	if err != nil {
+		return fmt.Errorf("failed to acquire access token %v", err)
+	}
+
 	query, err := getQuery(clusterInternalID, mgmtClusterName)
 	if err != nil {
 		return fmt.Errorf("failed to build query for Dynatrace %v", err)
@@ -78,17 +83,12 @@ func main(clusterID string) error {
 		return nil
 	}
 
-	accessToken, err := getAccessToken()
-	if err != nil {
-		return fmt.Errorf("failed to acquire access token %v", err)
-	}
-
 	requestToken, err := getRequestToken(query.finalQuery, DTURL, accessToken)
 	if err != nil {
 		return fmt.Errorf("failed to acquire request token %v", err)
 	}
 
-	err = getLogs(DTURL, accessToken, requestToken)
+	err = getLogs(DTURL, accessToken, requestToken, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get logs %v", err)
 	}
@@ -101,7 +101,27 @@ func getQuery(clusterID string, mgmtClusterName string) (query DTQuery, error er
 	q.Init(since).Cluster(mgmtClusterName)
 
 	if len(namespaceList) > 0 || hcp {
-		q.Namespaces(namespaceList, clusterID, hcp)
+		if hcp {
+			managementClusterInternalID, _, _, err := fetchClusterDetails(mgmtClusterName)
+			if err != nil {
+				return q, err
+			}
+			connection, err := getConnection()
+			if err != nil {
+				return q, err
+			}
+			clientset, err := getClientsetFromClusterID(connection, managementClusterInternalID)
+			if err != nil {
+				return q, err
+			}
+
+			hcpNS, err := GetHCPNamespaceFromInternalID(clientset, clusterID)
+			if err != nil {
+				return q, err
+			}
+			namespaceList = append(namespaceList, hcpNS)
+		}
+		q.Namespaces(namespaceList)
 	}
 
 	if len(nodeList) > 0 {

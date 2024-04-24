@@ -86,6 +86,11 @@ func getAccessToken() (string, error) {
 		return "", err
 	}
 
+	err = setupVaultToken(vaultAddr, vaultPath)
+	if err != nil {
+		return "", err
+	}
+
 	clientID, clientSecret, err := getSecretFromVault(vaultAddr, vaultPath)
 	if err != nil {
 		return "", err
@@ -186,7 +191,7 @@ func getRequestToken(query string, dtURL string, accessToken string) (requestTok
 	return execResp.RequestToken, nil
 }
 
-func getLogs(dtURL string, accessToken string, requestToken string) error {
+func getLogs(dtURL string, accessToken string, requestToken string, dumpWriter io.Writer) error {
 	reqData := url.Values{
 		"request-token": {requestToken},
 	}.Encode()
@@ -214,7 +219,11 @@ func getLogs(dtURL string, accessToken string, requestToken string) error {
 
 	for _, result := range dtPollRes.Result.Records {
 		content := result.Content
-		fmt.Println(content)
+		if dumpWriter != nil {
+			dumpWriter.Write([]byte(fmt.Sprintf("%s\n", content)))
+		} else {
+			fmt.Println(content)
+		}
 	}
 
 	return nil

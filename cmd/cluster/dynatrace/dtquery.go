@@ -24,18 +24,10 @@ func (q *DTQuery) Cluster(mgmtClusterName string) *DTQuery {
 	return q
 }
 
-func (q *DTQuery) Namespaces(namespaceList []string, clusterID string, hcp bool) *DTQuery {
+func (q *DTQuery) Namespaces(namespaceList []string) *DTQuery {
 	var nsQuery string
 	finalQuery := ""
-
-	if !hcp {
-		nsQuery = " and ("
-	}
-
-	if hcp && len(namespaceList) > 0 {
-		finalQuery += fmt.Sprintf(" and ( matchesPhrase(k8s.namespace.name, \"ocm-production-%s\")", clusterID)
-		nsQuery = " or "
-	}
+	nsQuery = " and ("
 
 	for i, ns := range namespaceList {
 		nsQuery += fmt.Sprintf("matchesValue(k8s.namespace.name, \"%s\")", ns)
