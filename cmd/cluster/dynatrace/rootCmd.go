@@ -20,7 +20,7 @@ func NewCmdDynatrace() *cobra.Command {
 
 	dtCmd.AddCommand(NewCmdLogs())
 	dtCmd.AddCommand(newCmdURL())
-	dtCmd.AddCommand(NewCmdHCPLogs())
+	dtCmd.AddCommand(NewCmdHCPMustGather())
 
 	return dtCmd
 }

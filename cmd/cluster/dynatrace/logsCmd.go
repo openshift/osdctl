@@ -98,7 +98,7 @@ func main(clusterID string) error {
 
 func getQuery(clusterID string, mgmtClusterName string) (query DTQuery, error error) {
 	q := DTQuery{}
-	q.Init(since).Cluster(mgmtClusterName)
+	q.InitLogs(since).Cluster(mgmtClusterName)
 
 	if len(namespaceList) > 0 || hcp {
 		if hcp {

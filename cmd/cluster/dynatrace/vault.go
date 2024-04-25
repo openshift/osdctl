@@ -18,11 +18,22 @@ func setupVaultToken(vaultAddr, vaultPath string) error {
 	if err != nil {
 		return fmt.Errorf("Error setting environment variable: %v", err)
 	}
-	cmd := exec.Command("vault", "login", "-method=oidc", "-no-print")
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	if err = cmd.Run(); err != nil {
-		return fmt.Errorf("Error running 'vault login': %v", err)
+
+	tokenCheckCmd := exec.Command("vault", "token", "lookup")
+	tokenCheckCmd.Stdout = nil
+	tokenCheckCmd.Stderr = nil
+	// get new token since old token has expired
+	if err = tokenCheckCmd.Run(); err != nil {
+		fmt.Println("Vault token no longer valid, requesting new token")
+
+		loginCmd := exec.Command("vault", "login", "-method=oidc", "-no-print")
+		loginCmd.Stdout = nil
+		loginCmd.Stderr = nil
+		if err = loginCmd.Run(); err != nil {
+			return fmt.Errorf("Error running 'vault login': %v", err)
+		}
+
+		fmt.Println("Acquired vault token")
 	}
 
 	return nil
