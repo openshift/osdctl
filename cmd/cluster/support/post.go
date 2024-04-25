@@ -2,14 +2,21 @@ package support
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"net/url"
 	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	slv1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
+	"github.com/openshift/osdctl/internal/utils"
 	ctlutil "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 )
@@ -29,12 +36,26 @@ const (
 )
 
 type Post struct {
+	Template         string
+	TemplateParams   []string
 	Misconfiguration MisconfigurationReason
 	Problem          string
 	Resolution       string
 	Evidence         string
 	cluster          *cmv1.Cluster
 }
+
+type TemplateFile struct {
+	Severity       string             `json:"severity"`
+	Summary        string             `json:"summary"`
+	Log_type       string             `json:"log_type"`
+	Details        string             `json:"details"`
+	Detection_type cmv1.DetectionType `json:"detection_type"`
+}
+
+var (
+	userParameterNames, userParameterValues []string
+)
 
 func newCmdpost() *cobra.Command {
 	p := &Post{}
@@ -58,22 +79,36 @@ The cluster has a second failing ingress controller, which is not supported and 
 			if err := p.Run(args[0]); err != nil {
 				return fmt.Errorf("error posting limited support reason: %w", err)
 			}
-
 			return nil
 		},
 	}
 
 	// Define required flags
+	postCmd.Flags().StringVarP(&p.Template, "template", "t", "", "Message template file or URL")
+	postCmd.Flags().StringArrayVarP(&p.TemplateParams, "param", "p", p.TemplateParams, "Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.")
 	postCmd.Flags().Var(&p.Misconfiguration, MisconfigurationFlag, "The type of misconfiguration responsible for the cluster being placed into limited support. Valid values are `cloud` or `cluster`.")
 	postCmd.Flags().StringVar(&p.Problem, ProblemFlag, "", "Complete sentence(s) describing the problem responsible for the cluster being placed into limited support. Will form the limited support message with the contents of --resolution appended")
 	postCmd.Flags().StringVar(&p.Resolution, ResolutionFlag, "", "Complete sentence(s) describing the steps for the customer to take to resolve the issue and move out of limited support. Will form the limited support message with the contents of --problem prepended")
 	postCmd.Flags().StringVar(&p.Evidence, EvidenceFlag, "", "(optional) The reasoning that led to the decision to place the cluster in limited support. Can also be a link to a Jira case. Used for internal service log only.")
-
-	postCmd.MarkFlagRequired(MisconfigurationFlag)
-	postCmd.MarkFlagRequired(ProblemFlag)
-	postCmd.MarkFlagRequired(ResolutionFlag)
-
 	return postCmd
+}
+
+func (p *Post) Init() error {
+	userParameterNames = []string{}
+	userParameterValues = []string{}
+	return nil
+}
+
+func (p *Post) setup() error {
+	switch p.Problem[len(p.Problem)-1:] {
+	case ".", "?", "!":
+		return errors.New("--problem should not end in punctuation")
+	}
+	switch p.Resolution[len(p.Resolution)-1:] {
+	case ".", "?", "!":
+		return errors.New("--resolution should not end in punctuation")
+	}
+	return nil
 }
 
 func validateResolutionString(res string) error {
@@ -83,8 +118,31 @@ func validateResolutionString(res string) error {
 	return nil
 }
 
+func (p *Post) check() error {
+	if p.Template != "" {
+		if p.Problem != "" || p.Resolution != "" || p.Misconfiguration != "" || p.Evidence != "" {
+			return fmt.Errorf("\nIf Template flag is present, --problem, --resolution, --misconfiguration and --evidence flags cannot be used")
+		}
+	} else {
+		if err := validateResolutionString(p.Resolution); err != nil {
+			return err
+		}
+		if p.Problem == "" || p.Resolution == "" || p.Misconfiguration == "" {
+			return fmt.Errorf("\nIn the absence of Template -t flag, --problem, --resolution and --misconfiguration flags are mandatory")
+		}
+		if err := p.setup(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (p *Post) Run(clusterID string) error {
-	if err := validateResolutionString(p.Resolution); err != nil {
+	if err := p.Init(); err != nil {
+		return err
+	}
+
+	if err := p.check(); err != nil {
 		return err
 	}
 
@@ -109,10 +167,17 @@ func (p *Post) Run(clusterID string) error {
 	if err != nil {
 		return fmt.Errorf("can't retrieve cluster: %w", err)
 	}
-
-	limitedSupport, err := p.buildLimitedSupport()
-	if err != nil {
-		return err
+	var limitedSupport *cmv1.LimitedSupportReason
+	if p.Template != "" {
+		limitedSupport, err = p.buildLimitedSupportTemplate()
+		if err != nil {
+			return err
+		}
+	} else {
+		limitedSupport, err = p.buildLimitedSupport()
+		if err != nil {
+			return err
+		}
 	}
 
 	fmt.Printf("The following limited support reason will be sent to %s:\n", clusterID)
@@ -171,6 +236,125 @@ func (p *Post) buildLimitedSupport() (*cmv1.LimitedSupportReason, error) {
 		return nil, fmt.Errorf("failed to build new limited support reason: %w", err)
 	}
 	return limitedSupport, nil
+}
+
+func (p *Post) buildLimitedSupportTemplate() (*cmv1.LimitedSupportReason, error) {
+	t := p.readTemplate() // parse the given JSON template provided via '-t' flag
+
+	p.parseUserParameters() // parse all the '-p' user flags
+	// For every '-p' flag, replace its related placeholder in the template
+	for k := range userParameterNames {
+		p.replaceFlags(t, userParameterNames[k], userParameterValues[k])
+	}
+	p.checkLeftovers(t)
+
+	limitedSupportBuilder := cmv1.NewLimitedSupportReason().Summary(t.Summary).Details(t.Details).DetectionType(t.Detection_type)
+	limitedSupport, err := limitedSupportBuilder.Build()
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to build new limited support reason: %w", err)
+	}
+	return limitedSupport, nil
+}
+
+// parseUserParameters parse all the '-p FOO=BAR' parameters and checks for syntax errors
+func (p *Post) parseUserParameters() {
+	for _, v := range p.TemplateParams {
+		if !strings.Contains(v, "=") {
+			log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
+		}
+
+		param := strings.SplitN(v, "=", 2)
+		if param[0] == "" || param[1] == "" {
+			log.Fatalf("Wrong syntax of '-p' flag. Please use it like this: '-p FOO=BAR'")
+		}
+
+		userParameterNames = append(userParameterNames, fmt.Sprintf("${%v}", param[0]))
+		userParameterValues = append(userParameterValues, param[1])
+	}
+}
+
+func (p *Post) readTemplate() *TemplateFile {
+	if p.Template == "" {
+		log.Fatalf("Template file is not provided. Use '-t' to fix this.")
+	} else {
+		templateObj, err := p.accessFile(p.Template)
+		if err != nil { //check the presence of this URL or file and also if this can be accessed
+			log.Fatal(err)
+		}
+
+		var t1 TemplateFile
+		json.Unmarshal(templateObj, &t1)
+		return &t1
+	}
+	return nil
+}
+
+// accessFile returns the contents of a local file or url, and any errors encountered
+func (p *Post) accessFile(filePath string) ([]byte, error) {
+
+	if utils.IsValidUrl(filePath) {
+		urlPage, _ := url.Parse(filePath)
+		if err := utils.IsOnline(*urlPage); err != nil {
+			return nil, fmt.Errorf("host %q is not accessible", filePath)
+		}
+		return utils.CurlThis(urlPage.String())
+	}
+
+	filePath = filepath.Clean(filePath)
+	if utils.FileExists(filePath) {
+		// template is file on the disk
+		file, err := os.ReadFile(filePath) //#nosec G304 -- Potential file inclusion via variable
+		if err != nil {
+			return file, fmt.Errorf("cannot read the file.\nError: %q", err)
+		}
+		return file, nil
+	}
+	if utils.FolderExists(filePath) {
+		return nil, fmt.Errorf("the provided path %q is a directory, not a file", filePath)
+	}
+	return nil, fmt.Errorf("cannot read the file %q", filePath)
+}
+
+func (p *Post) replaceFlags(template *TemplateFile, flagName string, flagValue string) {
+	if flagValue == "" {
+		log.Fatalf("The selected template is using '%[1]s' parameter, but '%[1]s' flag was not set. Use '-p %[1]s=\"FOOBAR\"' to fix this.", flagName)
+	}
+
+	found := false
+
+	if strings.Contains(template.Details, flagName) {
+		found = true
+		template.Details = strings.ReplaceAll(template.Details, flagName, flagValue)
+	}
+
+	if !found {
+		log.Fatalf("The selected template is not using '%s' parameter, but '--param' flag was set. Do not use '-p %s=%s' to fix this.", flagName, flagName, flagValue)
+	}
+}
+
+func (p *Post) findLeftovers(s string) (matches []string) {
+	r := regexp.MustCompile(`\${[^{}]*}`)
+	matches = r.FindAllString(s, -1)
+	return matches
+}
+
+func (p *Post) checkLeftovers(template *TemplateFile) {
+	unusedParameters := p.findLeftovers(template.Details)
+	var numberOfMissingParameters int
+	for _, v := range unusedParameters {
+		// Ignore parameters in the exclude list, ie ${CLUSTER_UUID}, which will be replaced later for each cluster a servicelog is sent to
+		if strings.Contains(template.Details, v) {
+			numberOfMissingParameters++
+			regex := strings.NewReplacer("${", "", "}", "")
+			log.Printf("The one of the template files is using '%s' parameter, but '--param' flag is not set for this one. Use '-p %v=\"FOOBAR\"' to fix this.", v, regex.Replace(v))
+		}
+	}
+	if numberOfMissingParameters == 1 {
+		log.Fatal("Please define this missing parameter properly.")
+	} else if numberOfMissingParameters > 1 {
+		log.Fatalf("Please define all %v missing parameters properly.", numberOfMissingParameters)
+	}
 }
 
 func printLimitedSupportReason(limitedSupport *cmv1.LimitedSupportReason) error {
