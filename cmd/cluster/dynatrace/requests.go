@@ -211,7 +211,7 @@ func getDTPollResults(dtURL string, requestToken string, accessToken string) (re
 		"request-token": {requestToken},
 	}.Encode()
 
-	requester = Requester{
+	requester := Requester{
 		method: http.MethodGet,
 		url:    dtURL + "platform/storage/query/v1/query:poll?" + reqData,
 		headers: map[string]string{
