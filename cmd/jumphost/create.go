@@ -363,10 +363,6 @@ func (j *jumphostConfig) findLatestJumphostAMI(ctx context.Context) (string, err
 				Values: []string{string(types.VolumeTypeGp3)},
 			},
 			{
-				Name:   aws.String("creation-date"),
-				Values: []string{"2024-*"},
-			},
-			{
 				Name:   aws.String("description"),
 				Values: []string{"Amazon Linux 2023 AMI*"},
 			},
