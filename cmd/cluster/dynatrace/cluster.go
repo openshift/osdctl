@@ -164,7 +164,7 @@ func getConnection() (conn *sdk.Connection, error error) {
 	return connection, nil
 }
 
-func getClientsetFromClusterID(connection *sdk.Connection, clusterID string) (cset *kubernetes.Clientset, error error) {
+func getClientsetFromClusterID(clusterID string) (cset *kubernetes.Clientset, error error) {
 	_, _, clientset, err := common.GetKubeConfigAndClient(clusterID, "", "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", clusterID, err)

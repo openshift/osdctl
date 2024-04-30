@@ -106,15 +106,10 @@ func getQuery(clusterID string, mgmtClusterName string) (query DTQuery, error er
 			if err != nil {
 				return q, err
 			}
-			connection, err := getConnection()
+			clientset, err := getClientsetFromClusterID(managementClusterInternalID)
 			if err != nil {
 				return q, err
 			}
-			clientset, err := getClientsetFromClusterID(connection, managementClusterInternalID)
-			if err != nil {
-				return q, err
-			}
-
 			hcpNS, err := GetHCPNamespaceFromInternalID(clientset, clusterID)
 			if err != nil {
 				return q, err

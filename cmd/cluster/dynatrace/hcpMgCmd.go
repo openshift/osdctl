@@ -52,11 +52,7 @@ func mustGather(clusterID string) (error error) {
 		return err
 	}
 
-	connection, err := getConnection()
-	if err != nil {
-		return err
-	}
-	clientset, err := getClientsetFromClusterID(connection, managementClusterInternalID)
+	clientset, err := getClientsetFromClusterID(managementClusterInternalID)
 	if err != nil {
 		return err
 	}
