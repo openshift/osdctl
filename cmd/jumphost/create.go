@@ -364,7 +364,7 @@ func (j *jumphostConfig) findLatestJumphostAMI(ctx context.Context) (string, err
 			},
 			{
 				Name:   aws.String("creation-date"),
-				Values: []string{"2023-*"},
+				Values: []string{"2024-*"},
 			},
 			{
 				Name:   aws.String("description"),
