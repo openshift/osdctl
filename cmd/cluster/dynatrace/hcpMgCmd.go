@@ -134,7 +134,7 @@ func dumpEvents(deploys *appsv1.DeploymentList, gatherDir string, hcpNS string, 
 		}
 
 		err = getEvents(DTURL, accessToken, eventsRequestToken, f)
-		defer f.Close()
+		f.Close()
 		if err != nil {
 			return fmt.Errorf("failed to get logs %v", err)
 		}
@@ -180,7 +180,7 @@ func dumpPodLogs(pods *corev1.PodList, gatherDir string, hcpNS string, managemen
 		}
 
 		err = getLogs(DTURL, accessToken, podLogsRequestToken, f)
-		defer f.Close()
+		f.Close()
 		if err != nil {
 			return fmt.Errorf("failed to get logs %v", err)
 		}

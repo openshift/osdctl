@@ -206,26 +206,22 @@ func getRequestToken(query string, dtURL string, accessToken string) (requestTok
 }
 
 func getDTPollResults(dtURL string, requestToken string, accessToken string) (respBody string, error error) {
-	var requester Requester
 	var dtPollRes DTLogsPollResult
+	reqData := url.Values{
+		"request-token": {requestToken},
+	}.Encode()
+
+	requester = Requester{
+		method: http.MethodGet,
+		url:    dtURL + "platform/storage/query/v1/query:poll?" + reqData,
+		headers: map[string]string{
+			"Content-Type":  "application/json",
+			"Authorization": "Bearer " + accessToken,
+		},
+		successCode: http.StatusOK,
+	}
 
 	for {
-		reqData := url.Values{
-			"request-token": {requestToken},
-		}.Encode()
-
-		// avoid creating multiple instances
-		if requester.url == "" {
-			requester = Requester{
-				method: http.MethodGet,
-				url:    dtURL + "platform/storage/query/v1/query:poll?" + reqData,
-				headers: map[string]string{
-					"Content-Type":  "application/json",
-					"Authorization": "Bearer " + accessToken,
-				},
-				successCode: http.StatusOK,
-			}
-		}
 		resp, err := requester.send()
 		if err != nil {
 			return "", err
@@ -244,7 +240,7 @@ func getDTPollResults(dtURL string, requestToken string, accessToken string) (re
 			return resp, nil
 		}
 
-		if dtPollRes.State != "RUNNING" && dtPollRes.State == "SUCCEEDED" {
+		if dtPollRes.State != "RUNNING" && dtPollRes.State != "SUCCEEDED" {
 			return "", fmt.Errorf("query failed")
 		}
 	}
