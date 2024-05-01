@@ -64,40 +64,51 @@ func mustGather(clusterID string) (error error) {
 
 	fmt.Println(fmt.Sprintf("Using HCP Namespace %v", hcpNS))
 
+	gatherNamespaces := []string{hcpNS, "hypershift", "cert-manager", "redhat-cert-manager-operator"}
 	gatherDir, err := setupGatherDir(hcpNS)
 	if err != nil {
 		return err
 	}
 
-	pods, err := getPodsForNamespace(clientset, hcpNS)
-	if err != nil {
-		return err
-	}
+	for _, gatherNS := range gatherNamespaces {
+		fmt.Println("Gathering for %s", gatherNS)
 
-	err = dumpPodLogs(pods, gatherDir, hcpNS, managementClusterName, DTURL, accessToken, since, tail, sortOrder)
-	if err != nil {
-		return err
-	}
+		pods, err := getPodsForNamespace(clientset, gatherNS)
+		if err != nil {
+			return err
+		}
 
-	deployments, err := getDeploymentsForNamespace(clientset, hcpNS)
-	if err != nil {
-		return err
-	}
+		nsDir, err := addDir([]string{gatherDir, gatherNS}, []string{})
+		if err != nil {
+			return err
+		}
 
-	err = dumpEvents(deployments, gatherDir, hcpNS, managementClusterName, DTURL, accessToken, since, tail, sortOrder)
-	if err != nil {
-		return err
+		err = dumpPodLogs(pods, nsDir, gatherNS, managementClusterName, DTURL, accessToken, since, tail, sortOrder)
+		if err != nil {
+			return err
+		}
+
+		deployments, err := getDeploymentsForNamespace(clientset, gatherNS)
+		if err != nil {
+			return err
+		}
+
+		err = dumpEvents(deployments, nsDir, gatherNS, managementClusterName, DTURL, accessToken, since, tail, sortOrder)
+		if err != nil {
+			return err
+		}
+
 	}
 
 	return nil
 }
 
-func dumpEvents(deploys *appsv1.DeploymentList, gatherDir string, hcpNS string, managementClusterName string, DTURL string, accessToken string, since int, tail int, sortOrder string) error {
+func dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS string, managementClusterName string, DTURL string, accessToken string, since int, tail int, sortOrder string) error {
 	totalDeployments := len(deploys.Items)
 	for k, d := range deploys.Items {
 		fmt.Println(fmt.Sprintf("[%d/%d] Deployment events for %s", k+1, totalDeployments, d.Name))
 
-		eventQuery, err := getEventQuery(d.Name, hcpNS, since, tail, sortOrder, managementClusterName)
+		eventQuery, err := getEventQuery(d.Name, targetNS, since, tail, sortOrder, managementClusterName)
 		if err != nil {
 			return err
 		}
@@ -109,12 +120,14 @@ func dumpEvents(deploys *appsv1.DeploymentList, gatherDir string, hcpNS string, 
 			continue
 		}
 
-		eventsDirPath, err := addEventsDir(gatherDir, d.Name)
+		deploymentYamlFileName := "deployment.yaml"
+		eventsFileName := "events.log"
+		eventsDirPath, err := addDir([]string{parentDir, "events", d.Name}, []string{deploymentYamlFileName, eventsFileName})
 		if err != nil {
 			return err
 		}
 
-		deploymentYamlPath := filepath.Join(eventsDirPath, "deployment.yaml")
+		deploymentYamlPath := filepath.Join(eventsDirPath, deploymentYamlFileName)
 		deploymentYaml, err := yaml.Marshal(d)
 		f, err := os.OpenFile(deploymentYamlPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0655)
 		if err != nil {
@@ -123,7 +136,7 @@ func dumpEvents(deploys *appsv1.DeploymentList, gatherDir string, hcpNS string, 
 		f.Write(deploymentYaml)
 		f.Close()
 
-		eventsFilePath := filepath.Join(eventsDirPath, "events.log")
+		eventsFilePath := filepath.Join(eventsDirPath, eventsFileName)
 		f, err = os.OpenFile(eventsFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0655)
 		if err != nil {
 			return err
@@ -139,12 +152,12 @@ func dumpEvents(deploys *appsv1.DeploymentList, gatherDir string, hcpNS string, 
 	return nil
 }
 
-func dumpPodLogs(pods *corev1.PodList, gatherDir string, hcpNS string, managementClusterName string, DTURL string, accessToken string, since int, tail int, sortOrder string) error {
+func dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, managementClusterName string, DTURL string, accessToken string, since int, tail int, sortOrder string) error {
 	totalPods := len(pods.Items)
 	for k, p := range pods.Items {
 		fmt.Println(fmt.Sprintf("[%d/%d] Pod logs for %s", k+1, totalPods, p.Name))
 
-		podLogsQuery, err := getPodQuery(p.Name, hcpNS, since, tail, sortOrder, managementClusterName)
+		podLogsQuery, err := getPodQuery(p.Name, targetNS, since, tail, sortOrder, managementClusterName)
 		if err != nil {
 			return err
 		}
@@ -155,12 +168,14 @@ func dumpPodLogs(pods *corev1.PodList, gatherDir string, hcpNS string, managemen
 			return fmt.Errorf("failed to acquire request token %v", err)
 		}
 
-		podDirPath, err := addPodDir(gatherDir, p.Name)
+		podYamlFileName := "pod.yaml"
+		podLogFileName := "pod.log"
+		podDirPath, err := addDir([]string{parentDir, "pods", p.Name}, []string{podLogFileName, podYamlFileName})
 		if err != nil {
 			return err
 		}
 
-		podYamlFilePath := filepath.Join(podDirPath, "pod.yaml")
+		podYamlFilePath := filepath.Join(podDirPath, podYamlFileName)
 		podYaml, err := yaml.Marshal(p)
 		f, err := os.OpenFile(podYamlFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0655)
 		if err != nil {
@@ -169,7 +184,7 @@ func dumpPodLogs(pods *corev1.PodList, gatherDir string, hcpNS string, managemen
 		f.Write(podYaml)
 		f.Close()
 
-		podLogsFilePath := filepath.Join(podDirPath, "pod.log")
+		podLogsFilePath := filepath.Join(podDirPath, podLogFileName)
 		f, err = os.OpenFile(podLogsFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0655)
 		if err != nil {
 			return err
@@ -195,34 +210,21 @@ func setupGatherDir(dirName string) (logsDir string, error error) {
 	return dirPath, nil
 }
 
-func addPodDir(logsDir string, podName string) (path string, error error) {
-	podPath := filepath.Join(logsDir, "pods", podName)
-	err := os.MkdirAll(podPath, os.ModePerm)
+func addDir(dirs []string, filePaths []string) (path string, error error) {
+	dirPath := filepath.Join(dirs...)
+	err := os.MkdirAll(dirPath, os.ModePerm)
 	if err != nil {
-		return "", fmt.Errorf("failed to setup pod directory %v", err)
+		return "", fmt.Errorf("failed to setup directory %v", err)
 	}
-	podLogPath := filepath.Join(podPath, "pod.log")
-	_, err = os.Create(podLogPath)
-
-	podYamlPath := filepath.Join(podPath, "pod.yaml")
-	_, err = os.Create(podYamlPath)
-
-	return podPath, nil
-}
-
-func addEventsDir(logsDir string, deploymentName string) (path string, error error) {
-	deploymentPath := filepath.Join(logsDir, "events", deploymentName)
-	err := os.MkdirAll(deploymentPath, os.ModePerm)
-	if err != nil {
-		return "", fmt.Errorf("failed to setup app directory %v", err)
+	for _, fp := range filePaths {
+		createdFile := filepath.Join(dirPath, fp)
+		_, err = os.Create(createdFile)
+		if err != nil {
+			return "", fmt.Errorf("file to create file %v in %v", fp, err)
+		}
 	}
-	eventsPath := filepath.Join(deploymentPath, "events.log")
-	_, err = os.Create(eventsPath)
 
-	deploymentYamlPath := filepath.Join(deploymentPath, "deployment.yaml")
-	_, err = os.Create(deploymentYamlPath)
-
-	return deploymentPath, nil
+	return dirPath, nil
 }
 
 func getPodQuery(pod string, namespace string, since int, tail int, sortOrder string, srcCluster string) (query DTQuery, error error) {
