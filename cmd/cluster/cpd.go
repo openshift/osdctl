@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
@@ -165,7 +166,7 @@ func isSubnetRouteValid(awsClient aws.Client, subnetID string) (bool, error) {
 		vpcID := *describeSubnetOutput.Subnets[0].VpcId
 
 		// Set the route table to the default for the VPC
-		routeTable, err = findDefaultRouteTableForVPC(awsClient, vpcID)
+		routeTable, err = utils.FindRouteTableForSubnet(awsClient, vpcID)
 		if err != nil {
 			return false, err
 		}
@@ -196,31 +197,6 @@ func isSubnetRouteValid(awsClient aws.Client, subnetID string) (bool, error) {
 
 	// We haven't found a default route to the internet, so this subnet has an invalid route table
 	return false, nil
-}
-
-// findDefaultRouteTableForVPC returns the AWS Route Table ID of the VPC's default Route Table
-func findDefaultRouteTableForVPC(awsClient aws.Client, vpcID string) (string, error) {
-	describeRouteTablesOutput, err := awsClient.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
-		Filters: []types.Filter{
-			{
-				Name:   awsSdk.String("vpc-id"),
-				Values: []string{vpcID},
-			},
-		},
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to describe route tables associated with vpc %s: %w", vpcID, err)
-	}
-
-	for _, rt := range describeRouteTablesOutput.RouteTables {
-		for _, assoc := range rt.Associations {
-			if *assoc.Main {
-				return *rt.RouteTableId, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("no default route table found for vpc: %s", vpcID)
 }
 
 func isIsolatedBackplaneAccess(cluster *cmv1.Cluster, ocmConnection *sdk.Connection) (bool, error) {
