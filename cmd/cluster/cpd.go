@@ -170,9 +170,6 @@ func isSubnetRouteValid(awsClient aws.Client, subnetID string) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-	} else {
-		// Set the route table to the one associated with the subnet
-		routeTable = *describeRouteTablesOutput.RouteTables[0].RouteTableId
 	}
 
 	// Check that the RouteTable for the subnet has a default route to 0.0.0.0/0
