@@ -35,9 +35,9 @@ func NewCmdAddSilence() *cobra.Command {
 	}
 
 	cmd.Flags().StringSliceVar(&addSilenceCmd.alertID, "alertname", []string{}, "alertname (comma-separated)")
-	cmd.Flags().StringVarP(&addSilenceCmd.comment, "comment", "c", "silence alert", "add comment about silence")
-	cmd.Flags().StringVarP(&addSilenceCmd.duration, "duration", "d", "15d", "add duration for silence") //default duration set to 15 days
-	cmd.Flags().BoolVarP(&addSilenceCmd.all, "all", "a", false, "add silences for all alert")
+	cmd.Flags().StringVarP(&addSilenceCmd.comment, "comment", "c", "Adding silence using the osdctl alert command", "add comment about silence")
+	cmd.Flags().StringVarP(&addSilenceCmd.duration, "duration", "d", "15d", "Adding duration for silence as 15 days") //default duration set to 15 days
+	cmd.Flags().BoolVarP(&addSilenceCmd.all, "all", "a", false, "Adding silences for all alert")
 
 	return cmd
 }
@@ -79,7 +79,8 @@ func AddAllSilence(clusterID, duration, comment, username, clustername string, k
 
 	output, err := ExecInPod(kubeconfig, clientset, addCmd)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal("Exiting the program")
+		return
 	}
 
 	formattedOutput := strings.Replace(output, "\n", " ", -1)
@@ -101,8 +102,8 @@ func AddAlertNameSilence(alertID []string, duration, comment, username string, k
 
 		output, err := ExecInPod(kubeconfig, clientset, addCmd)
 		if err != nil {
-			fmt.Println(err)
-			continue
+			log.Fatal("Exiting the program")
+			return
 		}
 
 		formattedOutput := strings.Replace(output, "\n", " ", -1)
