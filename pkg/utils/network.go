@@ -11,7 +11,7 @@ import (
 
 // Try and find a Route Table associated with the given subnet
 
-func findRouteTableForSubnet(subnetID string, awsClient aws.Client) (string, error) {
+func FindRouteTableForSubnet(awsClient aws.Client, subnetID string) (string, error) {
 
 	var routeTable string
 	describeRouteTablesOutput, err := awsClient.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
