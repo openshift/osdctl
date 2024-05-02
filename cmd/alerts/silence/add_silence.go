@@ -87,7 +87,8 @@ func AddAllSilence(clusterID, duration, comment, username, clustername string, k
 
 	output, err := ExecInPod(kubeconfig, clientset, addCmd)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal("Exiting the program")
+		return
 	}
 
 	formattedOutput := strings.Replace(output, "\n", " ", -1)
@@ -109,8 +110,8 @@ func AddAlertNameSilence(alertID []string, duration, comment, username string, k
 
 		output, err := ExecInPod(kubeconfig, clientset, addCmd)
 		if err != nil {
-			fmt.Println(err)
-			continue
+			log.Fatal("Exiting the program")
+			return
 		}
 
 		formattedOutput := strings.Replace(output, "\n", " ", -1)
