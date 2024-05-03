@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/openshift/osdctl/pkg/osdctlConfig"
+	"github.com/spf13/viper"
 	"gopkg.in/yaml.v2"
 )
 
@@ -19,6 +21,13 @@ type Subdomain struct {
 
 type PDConfig struct {
 	MySubdomain []Subdomain `json:"subdomains"`
+}
+
+// cloudtrailCmd configuration struct for parsing configuration options
+type CloudTrailConfig struct {
+	CloudTrailList struct {
+		FilterPatternList []string `mapstructure:"filter_regex_patterns"`
+	} `mapstructure:"cloudtrail_cmd_lists"`
 }
 
 func LoadYaml(paramFilePath string) Config {
@@ -66,4 +75,18 @@ func LoadPDConfig(paramFilePath string) PDConfig {
 		log.Fatalf("Failed to unmarshal PagerDuty config json %s: %v", configFilePath, err)
 	}
 	return config
+}
+
+// Loads ~/.config/osdctl
+func LoadCloudTrailConfig() ([]string, error) {
+	var configuration *CloudTrailConfig
+	osdctlConfig.EnsureConfigFile()
+	err := viper.Unmarshal(&configuration)
+	if err != nil {
+		log.Printf("[ERROR] Failed to unmarshal Cloudtrail config yaml %s %v", viper.ConfigFileUsed(), err)
+		return nil, err
+	}
+	osdctlConfig.EnsureConfigFile()
+
+	return configuration.CloudTrailList.FilterPatternList, err
 }

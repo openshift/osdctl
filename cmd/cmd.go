@@ -21,6 +21,7 @@ import (
 	"github.com/openshift/osdctl/cmd/account"
 	"github.com/openshift/osdctl/cmd/alerts"
 	"github.com/openshift/osdctl/cmd/capability"
+	"github.com/openshift/osdctl/cmd/cloudtrail"
 	"github.com/openshift/osdctl/cmd/cluster"
 	"github.com/openshift/osdctl/cmd/cost"
 	"github.com/openshift/osdctl/cmd/env"
@@ -98,6 +99,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(sts.NewCmdSts())
 	rootCmd.AddCommand(promote.NewCmdPromote())
 	rootCmd.AddCommand(jira.Cmd)
+	rootCmd.AddCommand(cloudtrail.NewCloudtrailCmd())
 
 	// Add cost command to use AWS Cost Manager
 	rootCmd.AddCommand(cost.NewCmdCost(streams, globalOpts))
