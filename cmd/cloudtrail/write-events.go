@@ -233,19 +233,12 @@ func printEvents(filteredEvent []types.Event, printUrl bool, raw bool) {
 			if event.EventTime != nil {
 				fmt.Printf("|%v ", event.EventTime.String())
 				if event.Username != nil {
-					fmt.Printf("|User: %v ", *event.Username)
+					fmt.Printf("| User: %v ", *event.Username)
 				}
 				if sessionIssuer != "" {
-					fmt.Printf("|ARN: %v\n", sessionIssuer)
+					fmt.Printf("| ARN: %v\n", sessionIssuer)
 				} else {
 					fmt.Print("\n")
-				}
-
-				if rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName != "" {
-					fmt.Printf(" ARN: %v\n ", rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName)
-
-				} else {
-					fmt.Println(" ARN: <not available>")
 				}
 
 				if printUrl && event.CloudTrailEvent != nil {
