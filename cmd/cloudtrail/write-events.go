@@ -203,7 +203,6 @@ func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 
 	for _, lookupOutput := range lookupOutputs {
 		for _, event := range lookupOutput.Events {
-
 			raw, err := extractUserDetails(event.CloudTrailEvent)
 			if err != nil {
 				return nil, fmt.Errorf("[ERROR] failed to to extract raw cloudtrailEvent details: %w", err)
