@@ -3,9 +3,10 @@ package support
 import (
 	"errors"
 	"fmt"
+	"os"
+
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	ctlutil "github.com/openshift/osdctl/pkg/utils"
-	"os"
 )
 
 func getLimitedSupportReasons(clusterId string) ([]*cmv1.LimitedSupportReason, error) {
