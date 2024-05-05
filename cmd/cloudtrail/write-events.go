@@ -179,6 +179,7 @@ func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 
 	for _, lookupOutput := range lookupOutputs {
 		for _, event := range lookupOutput.Events {
+
 			raw, err := extractUserDetails(event.CloudTrailEvent)
 			if err != nil {
 				return nil, fmt.Errorf("[ERROR] failed to to extract raw cloudtrailEvent details: %w", err)
@@ -188,7 +189,7 @@ func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 			matchesUsername := false
 			matchesArn := false
 
-			if !allEvents {
+			if !allEvents && len(Ignore) != 0 {
 				if event.Username != nil {
 					matchesUsername = regexOdj.MatchString(*event.Username)
 				}
@@ -201,9 +202,10 @@ func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 					continue
 					// skips entry
 				}
-			}
 
+			}
 			filteredEvents = append(filteredEvents, event)
+
 		}
 	}
 

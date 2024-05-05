@@ -58,8 +58,8 @@ func TestFilterUsers(t *testing.T) {
 	ignoreList := []string{".*kube-system-capa-controller.*"}
 	emptyIgnoreList := []string{}
 
-	// Test filtering if shouldFilter set to true
-	t.Run("Filtering with shouldFilter true", func(t *testing.T) {
+	// Test filtering if shouldFilter set to false
+	t.Run("Filtering with shouldFilter false", func(t *testing.T) {
 		expectedFilteredEvents := []types.Event{
 			{Username: &testUsername3, CloudTrailEvent: &testCloudTrailEvent3},
 			{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
@@ -67,17 +67,15 @@ func TestFilterUsers(t *testing.T) {
 			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 		}
 
-		shouldFilter := true
-
-		filtered, err := filterUsers(TestLookupOutputs, ignoreList, shouldFilter)
+		filtered, err := filterUsers(TestLookupOutputs, ignoreList, false)
 		assert.NoError(t, err, "Error filtering events")
 
 		assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")
 
 	})
 
-	// Test filtering if shouldFilter set to false
-	t.Run("Filtering with shouldFilter false", func(t *testing.T) {
+	// Test filtering if shouldFilter set to true
+	t.Run("Filtering with shouldFilter true", func(t *testing.T) {
 		expectedFilteredEvents := []types.Event{
 			{Username: &testUsername1, CloudTrailEvent: &testCloudTrailEvent1},
 			{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
@@ -87,17 +85,16 @@ func TestFilterUsers(t *testing.T) {
 			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 		}
 
-		shouldFilter := false
-
-		filtered, err := filterUsers(TestLookupOutputs, ignoreList, shouldFilter)
+		filtered, err := filterUsers(TestLookupOutputs, ignoreList, true)
 		assert.NoError(t, err, "Error filtering events")
 
 		assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")
 	})
 
 	// Test filtering if ~/.config/osdctl.yaml is Empty
+
 	t.Run(("Filtering with Empty list"), func(t *testing.T) {
-		expectedFilteredEvents := []types.Event{
+		expectedFilteredEvents2 := []types.Event{
 			{Username: &testUsername1, CloudTrailEvent: &testCloudTrailEvent1},
 			{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
 			{Username: &testUsername3, CloudTrailEvent: &testCloudTrailEvent3},
@@ -105,12 +102,10 @@ func TestFilterUsers(t *testing.T) {
 			{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
 			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 		}
-		shouldFilter := false
 
-		filtered, err := filterUsers(TestLookupOutputs, emptyIgnoreList, shouldFilter)
+		filtered2, err := filterUsers(TestLookupOutputs, emptyIgnoreList, false)
 		assert.NoError(t, err, "Error filtering events")
-
-		assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")
+		assert.Equal(t, len(expectedFilteredEvents2), len(*filtered2), "Number of filtered events mismatch")
 
 	})
 
