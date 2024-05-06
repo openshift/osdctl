@@ -20,6 +20,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var DefaultRegion = "us-east-1"
+
 // LookupEventsOptions struct for holding options for event lookup
 type LookupEventsOptions struct {
 	clusterID      string
@@ -215,50 +217,46 @@ func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 // PrintEvents prints the details of each event in the provided slice of events.
 // It takes a slice of types.Event
 func printEvents(filteredEvent []types.Event, printUrl bool, raw bool) {
+	var eventStringBuilder = strings.Builder{}
+
 	for _, event := range filteredEvent {
 		if raw {
 			if event.CloudTrailEvent != nil {
 				fmt.Printf("%v \n\n", *event.CloudTrailEvent)
-			}
-		} else {
-			rawEventDetails, err := extractUserDetails(event.CloudTrailEvent)
-			if err != nil {
-				fmt.Printf("[Error] Error extracting event details: %v", err)
-			}
-			sessionIssuer := rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName
-			if event.EventName != nil {
-				fmt.Printf("%v ", *event.EventName)
-			} else {
-				continue
-			}
-
-			if event.EventTime != nil {
-				fmt.Printf("|%v ", event.EventTime.String())
-				if event.Username != nil {
-					fmt.Printf("| User: %v ", *event.Username)
-				}
-				if sessionIssuer != "" {
-					fmt.Printf("| ARN: %v\n", sessionIssuer)
-				} else {
-					fmt.Print("\n")
-				}
-
-				if printUrl && event.CloudTrailEvent != nil {
-					if err == nil {
-						fmt.Printf("EventLink: %v\n\n", generateLink(*rawEventDetails))
-					} else {
-						fmt.Println("EventLink: <not available>")
-					}
-				}
-
+				return
 			}
 		}
-	}
+		rawEventDetails, err := extractUserDetails(event.CloudTrailEvent)
+		if err != nil {
+			fmt.Printf("[Error] Error extracting event details: %v", err)
+		}
+		sessionIssuer := rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName
+		if event.EventName != nil {
+			eventStringBuilder.WriteString(fmt.Sprintf("\n%v", *event.EventName))
+		}
+		if event.EventTime != nil {
+			eventStringBuilder.WriteString(fmt.Sprintf(" | %v", event.EventTime.String()))
+		}
+		if event.Username != nil {
+			eventStringBuilder.WriteString(fmt.Sprintf(" | Username: %v", *event.Username))
+		}
+		if sessionIssuer != "" {
+			eventStringBuilder.WriteString(fmt.Sprintf(" | ARN: %v", sessionIssuer))
+		}
 
+		if printUrl && event.CloudTrailEvent != nil {
+			if err == nil {
+				eventStringBuilder.WriteString(fmt.Sprintf("\n%v |", generateLink(*rawEventDetails)))
+			} else {
+				fmt.Println("EventLink: <not available>")
+			}
+		}
+
+	}
+	fmt.Println(eventStringBuilder.String())
 }
 
 func (o *LookupEventsOptions) run() error {
-
 	err := utils.IsValidClusterKey(o.clusterID)
 	if err != nil {
 		return err
@@ -289,12 +287,6 @@ func (o *LookupEventsOptions) run() error {
 	if err != nil {
 		return err
 	}
-	DefaultRegion := "us-east-1"
-	configOptions := config.WithRegion(DefaultRegion)
-	defaultConfig, err := config.LoadDefaultConfig(context.Background(), configOptions)
-	if err != nil {
-		return err
-	}
 
 	startTime, err := parseDurationToUTC(o.startTime)
 	if err != nil {
@@ -302,7 +294,6 @@ func (o *LookupEventsOptions) run() error {
 	}
 
 	fetchFilterPrintEvents := func(client cloudtrail.Client, startTime time.Time, o *LookupEventsOptions) error {
-
 		lookupOutput, err := getWriteEvents(startTime, &client)
 		if err != nil {
 			return err
@@ -320,18 +311,25 @@ func (o *LookupEventsOptions) run() error {
 	arn, accountId, err := whoami(*sts.NewFromConfig(cfg))
 	fmt.Printf("[INFO] Checking write event history since %v for AWS Account %v as %v \n", startTime, accountId, arn)
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
-	defaultCloudtrailClient := cloudtrail.New(cloudtrail.Options{
-		Region:      DefaultRegion,
-		Credentials: cfg.Credentials,
-		HTTPClient:  cfg.HTTPClient,
-	})
 	fmt.Printf("\n[INFO] Fetching %v Event History...\n", cfg.Region)
 	if err := fetchFilterPrintEvents(*cloudTrailclient, startTime, o); err != nil {
 		return err
 	}
 
-	if defaultConfig.Region != cfg.Region {
-		fmt.Printf("\n\n\n[INFO] Fetching Cloudtrail Global Event History from %v Region...\n", defaultConfig.Region)
+	if DefaultRegion != cfg.Region {
+		defaultConfig, err := config.LoadDefaultConfig(
+			context.Background(),
+			config.WithRegion(DefaultRegion))
+		if err != nil {
+			return err
+		}
+
+		defaultCloudtrailClient := cloudtrail.New(cloudtrail.Options{
+			Region:      DefaultRegion,
+			Credentials: cfg.Credentials,
+			HTTPClient:  cfg.HTTPClient,
+		})
+		fmt.Printf("\n[INFO] Fetching Cloudtrail Global Event History from %v Region...\n", defaultConfig.Region)
 		if err := fetchFilterPrintEvents(*defaultCloudtrailClient, startTime, o); err != nil {
 			return err
 		}
