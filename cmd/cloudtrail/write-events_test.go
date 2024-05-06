@@ -68,7 +68,8 @@ func TestFilterUsers(t *testing.T) {
 			{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
 			{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
 		}
-		filtered, err := filterUsers(TestLookupOutputs, ignoreList, false)
+
+		filtered, err := pkg.FilterUsers(TestLookupOutputs, ignoreList, false)
 		assert.NoError(t, err, "Error filtering events")
 
 		assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")
@@ -86,7 +87,7 @@ func TestFilterUsers(t *testing.T) {
 			{Username: testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 		}
 
-		filtered, err := s(TestLookupOutputs, ignoreList, true)
+		filtered, err := pkg.FilterUsers(TestLookupOutputs, ignoreList, true)
 		assert.NoError(t, err, "Error filtering events")
 
 		assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")

@@ -3,6 +3,7 @@ package cloudtrail
 import (
 	"context"
 <<<<<<< HEAD
+<<<<<<< HEAD
 	"fmt"
 	"strings"
 	"time"
@@ -14,18 +15,21 @@ import (
 	ctAws "github.com/openshift/osdctl/cmd/cloudtrail/pkg/aws"
 =======
 	"encoding/json"
+=======
+>>>>>>> 43ca445 (adds permission-debied cmd)
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
-	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+<<<<<<< HEAD
 >>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
+=======
+	ctUtil "github.com/openshift/osdctl/cmd/cloudtrail/pkg"
+	ctAws "github.com/openshift/osdctl/cmd/cloudtrail/pkg/aws"
+>>>>>>> 43ca445 (adds permission-debied cmd)
 	envConfig "github.com/openshift/osdctl/pkg/envConfig"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -47,6 +51,7 @@ type LookupEventsOptions struct {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 // RawEventDetails struct represents the structure of an AWS raw event
 type RawEventDetails struct {
@@ -66,6 +71,8 @@ type RawEventDetails struct {
 }
 
 >>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
+=======
+>>>>>>> 43ca445 (adds permission-debied cmd)
 func newCmdWriteEvents() *cobra.Command {
 	ops := &LookupEventsOptions{}
 	listEventsCmd := &cobra.Command{
@@ -222,8 +229,7 @@ func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 
 				}
 
-				if matchesArn || matchesUsername || (event.Username == nil && userArn == "") {
-
+				if matchesUsername || matchesArn {
 					continue
 					// skips entry
 				}
@@ -240,43 +246,46 @@ func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 // PrintEvents prints the details of each event in the provided slice of events.
 // It takes a slice of types.Event
 func printEvents(filteredEvent []types.Event, printUrl bool, raw bool) {
-	var eventStringBuilder = strings.Builder{}
-
-	for i := len(filteredEvent) - 1; i >= 0; i-- {
+	for _, event := range filteredEvent {
 		if raw {
-			if filteredEvent[i].CloudTrailEvent != nil {
-				fmt.Printf("%v \n", *filteredEvent[i].CloudTrailEvent)
-				return
+			if event.CloudTrailEvent != nil {
+				fmt.Printf("%v \n\n", *event.CloudTrailEvent)
 			}
-		}
-		rawEventDetails, err := extractUserDetails(filteredEvent[i].CloudTrailEvent)
-		if err != nil {
-			fmt.Printf("[Error] Error extracting event details: %v", err)
-		}
-		sessionIssuer := rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName
-		if filteredEvent[i].EventName != nil {
-			eventStringBuilder.WriteString(fmt.Sprintf("\n%v", *filteredEvent[i].EventName))
-		}
-		if filteredEvent[i].EventTime != nil {
-			eventStringBuilder.WriteString(fmt.Sprintf(" | %v", filteredEvent[i].EventTime.String()))
-		}
-		if filteredEvent[i].Username != nil {
-			eventStringBuilder.WriteString(fmt.Sprintf(" | Username: %v", *filteredEvent[i].Username))
-		}
-		if sessionIssuer != "" {
-			eventStringBuilder.WriteString(fmt.Sprintf(" | ARN: %v", sessionIssuer))
-		}
-
-		if printUrl && filteredEvent[i].CloudTrailEvent != nil {
-			if err == nil {
-				eventStringBuilder.WriteString(fmt.Sprintf("\n%v |", generateLink(*rawEventDetails)))
+		} else {
+			rawEventDetails, err := extractUserDetails(event.CloudTrailEvent)
+			if err != nil {
+				fmt.Printf("[Error] Error extracting event details: %v", err)
+			}
+			sessionIssuer := rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName
+			if event.EventName != nil {
+				fmt.Printf("%v ", *event.EventName)
 			} else {
-				fmt.Println("EventLink: <not available>")
+				continue
+			}
+
+			if event.EventTime != nil {
+				fmt.Printf("|%v ", event.EventTime.String())
+				if event.Username != nil {
+					fmt.Printf("| User: %v ", *event.Username)
+				}
+				if sessionIssuer != "" {
+					fmt.Printf("| ARN: %v\n", sessionIssuer)
+				} else {
+					fmt.Print("\n")
+				}
+
+				if printUrl && event.CloudTrailEvent != nil {
+					if err == nil {
+						fmt.Printf("EventLink: %v\n\n", generateLink(*rawEventDetails))
+					} else {
+						fmt.Println("EventLink: <not available>")
+					}
+				}
+
 			}
 		}
-
 	}
-	fmt.Println(eventStringBuilder.String())
+
 }
 
 func (o *LookupEventsOptions) run() error {
@@ -326,13 +335,18 @@ func (o *LookupEventsOptions) run() error {
 	startTime, err := ctUtil.ParseDurationToUTC(o.startTime)
 =======
 
+<<<<<<< HEAD
 	startTime, err := parseDurationToUTC(o.startTime)
 >>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
+=======
+	startTime, err := ctUtil.ParseDurationToUTC(o.startTime)
+>>>>>>> 43ca445 (adds permission-debied cmd)
 	if err != nil {
 		return err
 	}
 
 	fetchFilterPrintEvents := func(client cloudtrail.Client, startTime time.Time, o *LookupEventsOptions) error {
+<<<<<<< HEAD
 <<<<<<< HEAD
 
 		lookupOutput, err := ctAws.GetEvents(startTime, &client)
@@ -341,25 +355,37 @@ func (o *LookupEventsOptions) run() error {
 		}
 		filteredEvents, err := ctUtil.FilterUsers(lookupOutput, Ignore, o.printAllEvents)
 =======
+=======
+
+>>>>>>> 43ca445 (adds permission-debied cmd)
 		lookupOutput, err := getWriteEvents(startTime, &client)
 		if err != nil {
 			return err
 		}
+<<<<<<< HEAD
 		filteredEvents, err := filterUsers(lookupOutput, Ignore, o.printAllEvents)
 >>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
+=======
+		filteredEvents, err := ctUtil.FilterUsers(lookupOutput, Ignore, o.printAllEvents)
+>>>>>>> 43ca445 (adds permission-debied cmd)
 		if err != nil {
 			return err
 		}
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 		ctUtil.PrintEvents(*filteredEvents, o.printEventUrl, o.printRawEvents)
 =======
 		printEvents(*filteredEvents, o.printEventUrl, o.printRawEvents)
 >>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
+=======
+		ctUtil.PrintEvents(*filteredEvents, o.printEventUrl, o.printRawEvents)
+>>>>>>> 43ca445 (adds permission-debied cmd)
 		fmt.Println("")
 		return err
 	}
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 	arn, accountId, err := ctAws.Whoami(*sts.NewFromConfig(cfg))
 	fmt.Printf("[INFO] Checking write event history since %v for AWS Account %v as %v \n", startTime, accountId, arn)
@@ -372,6 +398,9 @@ func (o *LookupEventsOptions) run() error {
 	fmt.Printf("\n[INFO] Fetching %v Event History...\n", cfg.Region)
 =======
 	arn, accountId, err := whoami(*sts.NewFromConfig(cfg))
+=======
+	arn, accountId, err := ctAws.Whoami(*sts.NewFromConfig(cfg))
+>>>>>>> 43ca445 (adds permission-debied cmd)
 	fmt.Printf("[INFO] Checking write event history since %v for AWS Account %v as %v \n", startTime, accountId, arn)
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
