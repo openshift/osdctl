@@ -431,8 +431,8 @@ github.com/openshift/aws-account-operator/api v0.0.0-20230322125717-5b5a00a3e99f
 github.com/openshift/aws-account-operator/api v0.0.0-20230322125717-5b5a00a3e99f/go.mod h1:1PdbQqTDrejSl9zsScM1x59f0oHNTsAgoJqTZqTkH/U=
 github.com/openshift/backplane-api v0.0.0-20230919035427-a52e4ae498fb h1:hs/QQB+1gHpFozwc0lXIy+V7iMkzkkJSKdCaCumjw8Q=
 github.com/openshift/backplane-api v0.0.0-20230919035427-a52e4ae498fb/go.mod h1:RuJZpJy45AJnkp7A0ZPTZhLOVkCGDLI6cGknKvp65LE=
-github.com/openshift/backplane-cli v0.1.29 h1:21TLNRKA48skBfZsUX+x/AYQgVv2EPKQ1f9Mcy+MosU=
-github.com/openshift/backplane-cli v0.1.29/go.mod h1:ksutDU5MtFcqtjj/uQgaR9cta6JwrJgBg7b+GSl8gmE=
+github.com/openshift/backplane-cli v0.1.30 h1:dX30koeJ7M0QA1FtGQWN1nef/zaaKde1UmkKc5jqohs=
+github.com/openshift/backplane-cli v0.1.30/go.mod h1:ksutDU5MtFcqtjj/uQgaR9cta6JwrJgBg7b+GSl8gmE=
 github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 h1:cHyxR+Y8rAMT6m1jQCaYGRwikqahI0OjjUDhFNf3ySQ=
 github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87/go.mod h1:DB/Mf2oTeiAmVVX1gN+NEqweonAPY0TKUwADizj8+ZA=
 github.com/openshift/gcp-project-operator v0.0.0-20220920194256-df38e31387a7 h1:GB0l0cpQb9obHhziCvaKXUlUXlDLENSJh9YJL7eh+18=
