@@ -71,7 +71,7 @@ func mustGather(clusterID string) (error error) {
 	}
 
 	for _, gatherNS := range gatherNamespaces {
-		fmt.Println("Gathering for %s", gatherNS)
+		fmt.Println(fmt.Sprintf("Gathering for %s", gatherNS))
 
 		pods, err := getPodsForNamespace(clientset, gatherNS)
 		if err != nil {
