@@ -5,6 +5,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
+	"github.com/openshift/osdctl/cmd/cloudtrail/pkg"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -67,7 +68,7 @@ func TestFilterUsers(t *testing.T) {
 			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 		}
 
-		filtered, err := filterUsers(TestLookupOutputs, ignoreList, false)
+		filtered, err := pkg.FilterUsers(TestLookupOutputs, ignoreList, false)
 		assert.NoError(t, err, "Error filtering events")
 
 		assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")
@@ -85,7 +86,7 @@ func TestFilterUsers(t *testing.T) {
 			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 		}
 
-		filtered, err := filterUsers(TestLookupOutputs, ignoreList, true)
+		filtered, err := pkg.FilterUsers(TestLookupOutputs, ignoreList, true)
 		assert.NoError(t, err, "Error filtering events")
 
 		assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")
@@ -103,7 +104,7 @@ func TestFilterUsers(t *testing.T) {
 			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 		}
 
-		filtered2, err := filterUsers(TestLookupOutputs, emptyIgnoreList, false)
+		filtered2, err := pkg.FilterUsers(TestLookupOutputs, emptyIgnoreList, false)
 		assert.NoError(t, err, "Error filtering events")
 		assert.Equal(t, len(expectedFilteredEvents2), len(*filtered2), "Number of filtered events mismatch")
 
