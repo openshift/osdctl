@@ -200,7 +200,7 @@ func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 
 				}
 
-				if matchesUsername || matchesArn {
+				if matchesUsername || matchesArn || userArn == "" && event.Username == nil {
 					continue
 					// skips entry
 				}
@@ -219,32 +219,32 @@ func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 func printEvents(filteredEvent []types.Event, printUrl bool, raw bool) {
 	var eventStringBuilder = strings.Builder{}
 
-	for _, event := range filteredEvent {
+	for i := len(filteredEvent) - 1; i >= 0; i-- {
 		if raw {
-			if event.CloudTrailEvent != nil {
-				fmt.Printf("%v \n\n", *event.CloudTrailEvent)
+			if filteredEvent[i].CloudTrailEvent != nil {
+				fmt.Printf("%v \n", *filteredEvent[i].CloudTrailEvent)
 				return
 			}
 		}
-		rawEventDetails, err := extractUserDetails(event.CloudTrailEvent)
+		rawEventDetails, err := extractUserDetails(filteredEvent[i].CloudTrailEvent)
 		if err != nil {
 			fmt.Printf("[Error] Error extracting event details: %v", err)
 		}
 		sessionIssuer := rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName
-		if event.EventName != nil {
-			eventStringBuilder.WriteString(fmt.Sprintf("\n%v", *event.EventName))
+		if filteredEvent[i].EventName != nil {
+			eventStringBuilder.WriteString(fmt.Sprintf("\n%v", *filteredEvent[i].EventName))
 		}
-		if event.EventTime != nil {
-			eventStringBuilder.WriteString(fmt.Sprintf(" | %v", event.EventTime.String()))
+		if filteredEvent[i].EventTime != nil {
+			eventStringBuilder.WriteString(fmt.Sprintf(" | %v", filteredEvent[i].EventTime.String()))
 		}
-		if event.Username != nil {
-			eventStringBuilder.WriteString(fmt.Sprintf(" | Username: %v", *event.Username))
+		if filteredEvent[i].Username != nil {
+			eventStringBuilder.WriteString(fmt.Sprintf(" | Username: %v", *filteredEvent[i].Username))
 		}
 		if sessionIssuer != "" {
 			eventStringBuilder.WriteString(fmt.Sprintf(" | ARN: %v", sessionIssuer))
 		}
 
-		if printUrl && event.CloudTrailEvent != nil {
+		if printUrl && filteredEvent[i].CloudTrailEvent != nil {
 			if err == nil {
 				eventStringBuilder.WriteString(fmt.Sprintf("\n%v |", generateLink(*rawEventDetails)))
 			} else {
@@ -311,7 +311,7 @@ func (o *LookupEventsOptions) run() error {
 	arn, accountId, err := whoami(*sts.NewFromConfig(cfg))
 	fmt.Printf("[INFO] Checking write event history since %v for AWS Account %v as %v \n", startTime, accountId, arn)
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
-	fmt.Printf("\n[INFO] Fetching %v Event History...\n", cfg.Region)
+	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
 	if err := fetchFilterPrintEvents(*cloudTrailclient, startTime, o); err != nil {
 		return err
 	}
@@ -329,7 +329,7 @@ func (o *LookupEventsOptions) run() error {
 			Credentials: cfg.Credentials,
 			HTTPClient:  cfg.HTTPClient,
 		})
-		fmt.Printf("\n[INFO] Fetching Cloudtrail Global Event History from %v Region...\n", defaultConfig.Region)
+		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
 		if err := fetchFilterPrintEvents(*defaultCloudtrailClient, startTime, o); err != nil {
 			return err
 		}

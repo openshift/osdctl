@@ -64,7 +64,6 @@ func TestFilterUsers(t *testing.T) {
 			{Username: &testUsername3, CloudTrailEvent: &testCloudTrailEvent3},
 			{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
 			{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
-			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 		}
 
 		filtered, err := filterUsers(TestLookupOutputs, ignoreList, false)
