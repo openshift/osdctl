@@ -24,7 +24,7 @@ func NewCmdHCPMustGather() *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			err := mustGather(args[0])
+			err := gatherLogs(args[0])
 			if err != nil {
 				cmdutil.CheckErr(err)
 			}
@@ -38,7 +38,7 @@ func NewCmdHCPMustGather() *cobra.Command {
 	return hcpMgCmd
 }
 
-func mustGather(clusterID string) (error error) {
+func gatherLogs(clusterID string) (error error) {
 	accessToken, err := getAccessToken()
 	if err != nil {
 		return fmt.Errorf("failed to acquire access token %v", err)
