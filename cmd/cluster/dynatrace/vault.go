@@ -13,21 +13,34 @@ type response struct {
 	} `json:"data"`
 }
 
-func getSecretFromVault(vaultAddr, vaultPath string) (id string, secret string, error error) {
+func setupVaultToken(vaultAddr, vaultPath string) error {
 	err := os.Setenv("VAULT_ADDR", vaultAddr)
 	if err != nil {
-		fmt.Printf("Error setting environment variable: %v\n", err)
-		return "", "", err
-	}
-	cmd := exec.Command("vault", "login", "-method=oidc", "-no-print")
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	if err = cmd.Run(); err != nil {
-		fmt.Println("Error running 'vault login':", err)
-		return "", "", nil
+		return fmt.Errorf("Error setting environment variable: %v", err)
 	}
 
-	err = os.Setenv("VAULT_ADDR", vaultAddr)
+	tokenCheckCmd := exec.Command("vault", "token", "lookup")
+	tokenCheckCmd.Stdout = nil
+	tokenCheckCmd.Stderr = nil
+	// get new token since old token has expired
+	if err = tokenCheckCmd.Run(); err != nil {
+		fmt.Println("Vault token no longer valid, requesting new token")
+
+		loginCmd := exec.Command("vault", "login", "-method=oidc", "-no-print")
+		loginCmd.Stdout = nil
+		loginCmd.Stderr = nil
+		if err = loginCmd.Run(); err != nil {
+			return fmt.Errorf("Error running 'vault login': %v", err)
+		}
+
+		fmt.Println("Acquired vault token")
+	}
+
+	return nil
+}
+
+func getSecretFromVault(vaultAddr, vaultPath string) (id string, secret string, error error) {
+	err := os.Setenv("VAULT_ADDR", vaultAddr)
 	if err != nil {
 		return "", "", fmt.Errorf("error setting environment variable: %v", err)
 	}
