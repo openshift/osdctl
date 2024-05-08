@@ -281,7 +281,7 @@ func (o *LookupEventsOptions) run() error {
 		return fmt.Errorf("[ERROR] error Loading cloudtrail configuration file: %w", err)
 	}
 	if len(Ignore) == 0 {
-		fmt.Println("\n[WARNING] No filter list DETECTED!!")
+		fmt.Println("\n[WARNING] No filter list detected! If you want intend to apply user filtering for the cloudtrail events, please add cloudtrail_cmd_lists to your osdctl configuration file.")
 	}
 
 	cfg, err := osdCloud.CreateAWSV2Config(connection, cluster)
