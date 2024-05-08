@@ -111,7 +111,7 @@ func getQuery(clusterID string, mgmtClusterName string) (query DTQuery, error er
 			if err != nil {
 				return q, fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", managementClusterInternalID, err)
 			}
-			_, _, hcpNS, err := GetHCPNamespaceFromInternalID(clientset, clusterID)
+			_, _, hcpNS, err := GetHCPNamespacesFromInternalID(clientset, clusterID)
 			if err != nil {
 				return q, err
 			}

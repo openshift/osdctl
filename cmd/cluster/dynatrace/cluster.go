@@ -152,7 +152,7 @@ func GetDynatraceURLFromManagementCluster(clusterID string) (string, error) {
 	return DTURL, nil
 }
 
-func GetHCPNamespaceFromInternalID(clientset *kubernetes.Clientset, clusterID string) (klusterletNS string, shortNS string, hcpNS string, error error) {
+func GetHCPNamespacesFromInternalID(clientset *kubernetes.Clientset, clusterID string) (klusterletNS string, shortNS string, hcpNS string, error error) {
 	labelSelector := metav1.LabelSelector{MatchLabels: map[string]string{"api.openshift.com/id": clusterID}}
 	nsList, err := clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{LabelSelector: labels.Set(labelSelector.MatchLabels).String()})
 	if err != nil {

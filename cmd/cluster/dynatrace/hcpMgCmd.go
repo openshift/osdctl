@@ -18,7 +18,7 @@ import (
 
 func NewCmdHCPMustGather() *cobra.Command {
 	hcpMgCmd := &cobra.Command{
-		Use:               "must-gather <cluster-id>",
+		Use:               "gather-logs <cluster-id>",
 		Aliases:           []string{"mg"},
 		Short:             "Gather all Pod logs and Application event from HCP",
 		Args:              cobra.ExactArgs(1),
@@ -58,7 +58,7 @@ func mustGather(clusterID string) (error error) {
 		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", managementClusterInternalID, err)
 	}
 
-	klusterletNS, shortNS, hcpNS, err := GetHCPNamespaceFromInternalID(clientset, clusterInternalID)
+	klusterletNS, shortNS, hcpNS, err := GetHCPNamespacesFromInternalID(clientset, clusterInternalID)
 	if err != nil {
 		return err
 	}
