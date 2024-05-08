@@ -19,7 +19,7 @@ import (
 func NewCmdHCPMustGather() *cobra.Command {
 	hcpMgCmd := &cobra.Command{
 		Use:               "gather-logs <cluster-id>",
-		Aliases:           []string{"mg"},
+		Aliases:           []string{"gl"},
 		Short:             "Gather all Pod logs and Application event from HCP",
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
