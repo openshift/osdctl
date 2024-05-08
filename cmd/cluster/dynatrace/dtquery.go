@@ -10,32 +10,32 @@ type DTQuery struct {
 	finalQuery string
 }
 
-func (q *DTQuery) Init(hours int) *DTQuery {
+func (q *DTQuery) InitLogs(hours int) *DTQuery {
 	q.fragments = []string{}
 
-	q.fragments = append(q.fragments, fmt.Sprintf("fetch logs, from:now()-%dh \n| filter matchesValue(event.type, \"LOG\")", hours))
+	q.fragments = append(q.fragments, fmt.Sprintf("fetch logs, from:now()-%dh \n| filter matchesValue(event.type, \"LOG\") and ", hours))
+
+	return q
+}
+
+func (q *DTQuery) InitEvents(hours int) *DTQuery {
+	q.fragments = []string{}
+
+	q.fragments = append(q.fragments, fmt.Sprintf("fetch events, from:now()-%dh \n| filter ", hours))
 
 	return q
 }
 
 func (q *DTQuery) Cluster(mgmtClusterName string) *DTQuery {
-	q.fragments = append(q.fragments, fmt.Sprintf(" and matchesPhrase(dt.kubernetes.cluster.name, \"%s\")", mgmtClusterName))
+	q.fragments = append(q.fragments, fmt.Sprintf("matchesPhrase(dt.kubernetes.cluster.name, \"%s\")", mgmtClusterName))
 
 	return q
 }
 
-func (q *DTQuery) Namespaces(namespaceList []string, clusterID string, hcp bool) *DTQuery {
+func (q *DTQuery) Namespaces(namespaceList []string) *DTQuery {
 	var nsQuery string
 	finalQuery := ""
-
-	if !hcp {
-		nsQuery = " and ("
-	}
-
-	if hcp && len(namespaceList) > 0 {
-		finalQuery += fmt.Sprintf(" and ( matchesPhrase(k8s.namespace.name, \"ocm-production-%s\")", clusterID)
-		nsQuery = " or "
-	}
+	nsQuery = " and ("
 
 	for i, ns := range namespaceList {
 		nsQuery += fmt.Sprintf("matchesValue(k8s.namespace.name, \"%s\")", ns)
@@ -135,6 +135,22 @@ func (q *DTQuery) Sort(order string) (query *DTQuery, error error) {
 	}
 
 	return q, fmt.Errorf("no valid sorting order specified. valid order are %s. given %v", strings.Join(validOrders, ", "), order)
+}
+
+func (q *DTQuery) Deployments(workloads []string) *DTQuery {
+	var deploymentQuery string
+
+	deploymentQuery = " and ("
+	for i, deploy := range workloads {
+		deploymentQuery += fmt.Sprintf("matchesValue(dt.kubernetes.workload.name, \"%s\")", deploy)
+		if i < len(workloads)-1 {
+			deploymentQuery += " or "
+		}
+	}
+	deploymentQuery += ")"
+	q.fragments = append(q.fragments, deploymentQuery)
+
+	return q
 }
 
 func (q *DTQuery) Limit(limit int) *DTQuery {

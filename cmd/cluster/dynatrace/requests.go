@@ -86,6 +86,11 @@ func getAccessToken() (string, error) {
 		return "", err
 	}
 
+	err = setupVaultToken(vaultAddr, vaultPath)
+	if err != nil {
+		return "", err
+	}
+
 	clientID, clientSecret, err := getSecretFromVault(vaultAddr, vaultPath)
 	if err != nil {
 		return "", err
@@ -93,7 +98,7 @@ func getAccessToken() (string, error) {
 
 	reqData := url.Values{
 		"grant_type":    {"client_credentials"},
-		"scope":         {"storage:logs:read storage:buckets:read"},
+		"scope":         {"storage:logs:read storage:events:read storage:buckets:read"},
 		"client_id":     {clientID},
 		"client_secret": {clientSecret},
 	}.Encode()
@@ -134,17 +139,31 @@ type DTQueryPayload struct {
 }
 
 type DTPollResult struct {
-	State    string `json:"state"`
-	Progress int    `json:"progress"`
-	Result   Result `json:"result"`
+	State string `json:"state"`
 }
 
-type Result struct {
+type DTLogsPollResult struct {
+	State    string    `json:"state"`
+	Progress int       `json:"progress"`
+	Result   LogResult `json:"result"`
+}
+
+type LogResult struct {
 	Records []LogContent `json:"records"`
 }
 
 type LogContent struct {
 	Content string `json:"content"`
+}
+
+type DTEventsPollResult struct {
+	State    string        `json:"state"`
+	Progress int           `json:"progress"`
+	Result   DTEventResult `json:"result"`
+}
+
+type DTEventResult struct {
+	Records []json.RawMessage `json:"records"`
 }
 
 type ExecuteResponse struct {
@@ -186,7 +205,8 @@ func getRequestToken(query string, dtURL string, accessToken string) (requestTok
 	return execResp.RequestToken, nil
 }
 
-func getLogs(dtURL string, accessToken string, requestToken string) error {
+func getDTPollResults(dtURL string, requestToken string, accessToken string) (respBody string, error error) {
+	var dtPollRes DTLogsPollResult
 	reqData := url.Values{
 		"request-token": {requestToken},
 	}.Encode()
@@ -201,12 +221,38 @@ func getLogs(dtURL string, accessToken string, requestToken string) error {
 		successCode: http.StatusOK,
 	}
 
-	resp, err := requester.send()
+	for {
+		resp, err := requester.send()
+		if err != nil {
+			return "", err
+		}
+
+		err = json.Unmarshal([]byte(resp), &dtPollRes)
+		if err != nil {
+			return "", err
+		}
+
+		if dtPollRes.State == "RUNNING" {
+			continue
+		}
+
+		if dtPollRes.State == "SUCCEEDED" {
+			return resp, nil
+		}
+
+		if dtPollRes.State != "RUNNING" && dtPollRes.State != "SUCCEEDED" {
+			return "", fmt.Errorf("query failed")
+		}
+	}
+}
+
+func getLogs(dtURL string, accessToken string, requestToken string, dumpWriter io.Writer) error {
+	resp, err := getDTPollResults(dtURL, requestToken, accessToken)
 	if err != nil {
 		return err
 	}
 
-	var dtPollRes DTPollResult
+	var dtPollRes DTLogsPollResult
 	err = json.Unmarshal([]byte(resp), &dtPollRes)
 	if err != nil {
 		return err
@@ -214,7 +260,34 @@ func getLogs(dtURL string, accessToken string, requestToken string) error {
 
 	for _, result := range dtPollRes.Result.Records {
 		content := result.Content
-		fmt.Println(content)
+		if dumpWriter != nil {
+			dumpWriter.Write([]byte(fmt.Sprintf("%s\n", content)))
+		} else {
+			fmt.Println(content)
+		}
+	}
+
+	return nil
+}
+
+func getEvents(dtURL string, accessToken string, requestToken string, dumpWriter io.Writer) error {
+	resp, err := getDTPollResults(dtURL, requestToken, accessToken)
+	if err != nil {
+		return err
+	}
+
+	var dtPollRes DTEventsPollResult
+	err = json.Unmarshal([]byte(resp), &dtPollRes)
+	if err != nil {
+		return err
+	}
+
+	for _, result := range dtPollRes.Result.Records {
+		if dumpWriter != nil {
+			dumpWriter.Write([]byte(fmt.Sprintf("%s\n", result)))
+		} else {
+			fmt.Println(result)
+		}
 	}
 
 	return nil

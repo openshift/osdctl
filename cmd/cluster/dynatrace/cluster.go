@@ -11,7 +11,10 @@ import (
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/k8s"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -147,4 +150,18 @@ func GetDynatraceURLFromManagementCluster(clusterID string) (string, error) {
 	}
 	DTURL := fmt.Sprintf("%s://%s", DTApiURL.Scheme, DTApiURL.Host)
 	return DTURL, nil
+}
+
+func GetHCPNamespacesFromInternalID(clientset *kubernetes.Clientset, clusterID string) (klusterletNS string, shortNS string, hcpNS string, error error) {
+	labelSelector := metav1.LabelSelector{MatchLabels: map[string]string{"api.openshift.com/id": clusterID}}
+	nsList, err := clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{LabelSelector: labels.Set(labelSelector.MatchLabels).String()})
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to determine HCP namespace %v", err)
+	}
+	if len(nsList.Items) != 1 {
+		return "", "", "", fmt.Errorf("failed to determine HCP namespace, matchiing namespaces %v", len(nsList.Items))
+	}
+
+	ns := nsList.Items[0]
+	return fmt.Sprintf("klusterlet-%s", clusterID), ns.Name, fmt.Sprintf("%s-%s", ns.Name, ns.Labels["api.openshift.com/name"]), nil
 }
