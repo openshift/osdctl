@@ -200,7 +200,7 @@ func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string
 
 				}
 
-				if matchesArn || matchesUsername || (*event.Username == "" && userArn == "") {
+				if matchesArn || matchesUsername || (event.Username == nil && userArn == "") {
 
 					continue
 					// skips entry

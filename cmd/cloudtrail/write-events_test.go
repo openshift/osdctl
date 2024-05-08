@@ -1,7 +1,6 @@
 package cloudtrail
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
@@ -31,7 +30,7 @@ func TestFilterUsers(t *testing.T) {
 	testCloudTrailEvent5 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": ""}}}}`
 
 	// Test Case 5 (Edge Cases (Ignored))
-	var testUsername6 string
+	var testUsername6 *string
 	testCloudTrailEvent6 := `{"eventVersion": "1.09","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": ""}}}}`
 
 	TestLookupOutputs := []*cloudtrail.LookupEventsOutput{
@@ -50,7 +49,7 @@ func TestFilterUsers(t *testing.T) {
 		{
 			Events: []types.Event{
 				{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
-				{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
+				{Username: testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 			},
 		},
 	}
@@ -68,7 +67,6 @@ func TestFilterUsers(t *testing.T) {
 			{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
 			{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
 		}
-		fmt.Print(testUsername6)
 		filtered, err := filterUsers(TestLookupOutputs, ignoreList, false)
 		assert.NoError(t, err, "Error filtering events")
 
@@ -84,7 +82,7 @@ func TestFilterUsers(t *testing.T) {
 			{Username: &testUsername3, CloudTrailEvent: &testCloudTrailEvent3},
 			{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
 			{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
-			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
+			{Username: testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 		}
 
 		filtered, err := filterUsers(TestLookupOutputs, ignoreList, true)
@@ -102,7 +100,7 @@ func TestFilterUsers(t *testing.T) {
 			{Username: &testUsername3, CloudTrailEvent: &testCloudTrailEvent3},
 			{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
 			{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
-			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
+			{Username: testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 		}
 
 		filtered2, err := filterUsers(TestLookupOutputs, emptyIgnoreList, false)
