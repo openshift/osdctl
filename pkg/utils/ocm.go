@@ -274,6 +274,8 @@ func CreateConnection() (*sdk.Connection, error) {
 	}
 	connectionBuilder.URL(gatewayURL)
 
+	connectionBuilder.Client(config.ClientID, config.ClientSecret)
+
 	connection, err := connectionBuilder.Build()
 
 	if err != nil {
