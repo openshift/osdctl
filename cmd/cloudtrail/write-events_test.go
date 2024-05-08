@@ -14,22 +14,24 @@ func TestFilterUsers(t *testing.T) {
 	testUsername1 := "user-1"
 	testCloudTrailEvent1 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:user/test-12345-6-a7b8-kube-system-capa-controller-manager/123456789012"}}}}`
 
+	// Test Case 2 (Ignored)
 	testUsername2 := "ManagedOpenShift-ControlPlane-Role"
 	testCloudTrailEvent2 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:user/test-12345-6-a7b8-kube-system-capa-controller-manager/123456789012"}}}}`
 
-	// Test Case 2 (Not Ignored)
+	// Test Case 3 (Not Ignored)
 	testUsername3 := "user-2"
 	testCloudTrailEvent3 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:user/user-2"}}}}`
 
+	// Test Case 4 (Not Ignored)
 	var testUsername4 string //nil username
 	testCloudTrailEvent4 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:role/NilUsername-1"}}}}`
 
-	// Test Case 3 (Edge Cases)
-
+	// Test Case 5 (Edge Cases (Not Ignored))
 	testUsername5 := "user-5"
 	testCloudTrailEvent5 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": ""}}}}`
 
-	var testUsername6 string
+	// Test Case 5 (Edge Cases (Ignored))
+	var testUsername6 *string
 	testCloudTrailEvent6 := `{"eventVersion": "1.09","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": ""}}}}`
 
 	TestLookupOutputs := []*cloudtrail.LookupEventsOutput{
@@ -48,7 +50,7 @@ func TestFilterUsers(t *testing.T) {
 		{
 			Events: []types.Event{
 				{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
-				{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
+				{Username: testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 			},
 		},
 	}
@@ -65,10 +67,8 @@ func TestFilterUsers(t *testing.T) {
 			{Username: &testUsername3, CloudTrailEvent: &testCloudTrailEvent3},
 			{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
 			{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
-			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 		}
-
-		filtered, err := pkg.FilterUsers(TestLookupOutputs, ignoreList, false)
+		filtered, err := filterUsers(TestLookupOutputs, ignoreList, false)
 		assert.NoError(t, err, "Error filtering events")
 
 		assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")
@@ -83,10 +83,10 @@ func TestFilterUsers(t *testing.T) {
 			{Username: &testUsername3, CloudTrailEvent: &testCloudTrailEvent3},
 			{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
 			{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
-			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
+			{Username: testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 		}
 
-		filtered, err := pkg.FilterUsers(TestLookupOutputs, ignoreList, true)
+		filtered, err := s(TestLookupOutputs, ignoreList, true)
 		assert.NoError(t, err, "Error filtering events")
 
 		assert.Equal(t, len(expectedFilteredEvents), len(*filtered), "Number of filtered events mismatch")
@@ -101,7 +101,7 @@ func TestFilterUsers(t *testing.T) {
 			{Username: &testUsername3, CloudTrailEvent: &testCloudTrailEvent3},
 			{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
 			{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
-			{Username: &testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
+			{Username: testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 		}
 
 		filtered2, err := pkg.FilterUsers(TestLookupOutputs, emptyIgnoreList, false)
