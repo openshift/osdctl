@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 
+	"github.com/openshift/osdctl/cmd/common"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
@@ -106,11 +107,11 @@ func getQuery(clusterID string, mgmtClusterName string) (query DTQuery, error er
 			if err != nil {
 				return q, err
 			}
-			clientset, err := getClientsetFromClusterID(managementClusterInternalID)
+			_, _, clientset, err := common.GetKubeConfigAndClient(managementClusterInternalID, "", "")
 			if err != nil {
-				return q, err
+				return q, fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", managementClusterInternalID, err)
 			}
-			hcpNS, err := GetHCPNamespaceFromInternalID(clientset, clusterID)
+			_, _, hcpNS, err := GetHCPNamespaceFromInternalID(clientset, clusterID)
 			if err != nil {
 				return q, err
 			}

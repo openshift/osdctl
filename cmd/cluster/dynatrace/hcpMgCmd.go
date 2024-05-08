@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/openshift/osdctl/cmd/common"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
@@ -31,7 +32,7 @@ func NewCmdHCPMustGather() *cobra.Command {
 	}
 
 	hcpMgCmd.Flags().IntVar(&since, "since", 10, "Number of hours (integer) since which to pull logs and events")
-	hcpMgCmd.Flags().IntVar(&tail, "tail", 100, "Last 'n' logs and events to fetch ")
+	hcpMgCmd.Flags().IntVar(&tail, "tail", 0, "Last 'n' logs and events to fetch. By default it will pull everything")
 	hcpMgCmd.Flags().StringVar(&sortOrder, "sort", "desc", "Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'")
 
 	return hcpMgCmd
@@ -52,19 +53,19 @@ func mustGather(clusterID string) (error error) {
 		return err
 	}
 
-	clientset, err := getClientsetFromClusterID(managementClusterInternalID)
+	_, _, clientset, err := common.GetKubeConfigAndClient(managementClusterInternalID, "", "")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", managementClusterInternalID, err)
 	}
 
-	hcpNS, err := GetHCPNamespaceFromInternalID(clientset, clusterInternalID)
+	klusterletNS, shortNS, hcpNS, err := GetHCPNamespaceFromInternalID(clientset, clusterInternalID)
 	if err != nil {
 		return err
 	}
 
 	fmt.Println(fmt.Sprintf("Using HCP Namespace %v", hcpNS))
 
-	gatherNamespaces := []string{hcpNS, "hypershift", "cert-manager", "redhat-cert-manager-operator"}
+	gatherNamespaces := []string{hcpNS, klusterletNS, shortNS, "hypershift", "cert-manager", "redhat-cert-manager-operator"}
 	gatherDir, err := setupGatherDir(hcpNS)
 	if err != nil {
 		return err
