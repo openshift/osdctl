@@ -68,6 +68,8 @@ type EgressVerification struct {
 	NoTls bool
 	// AllSubnets is an option for multi-AZ clusters that will run the network verification against all subnets listed by ocm
 	AllSubnets bool
+	// The timeout to wait when testing egresses
+	EgressTimeout time.Duration
 }
 
 func NewCmdValidateEgress() *cobra.Command {
@@ -118,6 +120,7 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().BoolVar(&e.Debug, "debug", false, "(optional) if provided, enable additional debug-level logging")
 	validateEgressCmd.Flags().BoolVarP(&e.AllSubnets, "all-subnets", "A", false, "(optional) an option for Privatelink clusters to run osd-network-verifier against all subnets listed by ocm.")
 	validateEgressCmd.Flags().StringVar(&e.PlatformType, "platform", "", "(optional) override for which endpoints to test. Either 'aws' or 'hostedcluster'")
+	validateEgressCmd.Flags().DurationVar(&e.EgressTimeout, "egress-timeout", 2*time.Second, "(optional) timeout for individual egress verification requests")
 
 	// If a cluster-id is specified, don't allow the foot-gun of overriding region
 	validateEgressCmd.MarkFlagsMutuallyExclusive("cluster-id", "region")
@@ -331,6 +334,9 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 		return nil, err
 	}
 	input.AWS.SecurityGroupId = sgId
+
+	// Forward the timeout
+	input.Timeout = e.EgressTimeout
 
 	// Creating a slice of input values for the network-verifier to loop over.
 	// All inputs are essentially equivalent except their subnet ids
@@ -655,7 +661,6 @@ func defaultValidateEgressInput(ctx context.Context, cluster *cmv1.Cluster, regi
 	}
 
 	return &onv.ValidateEgressInput{
-		Timeout:      2 * time.Second,
 		Ctx:          ctx,
 		SubnetID:     "",
 		CloudImageID: onvAwsClient.GetAMIForRegion(region),
