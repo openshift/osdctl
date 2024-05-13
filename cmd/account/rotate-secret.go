@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
@@ -43,6 +44,7 @@ func newCmdRotateSecret(streams genericclioptions.IOStreams, client *k8s.LazyCli
 	rotateSecretCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile")
 	rotateSecretCmd.Flags().BoolVar(&ops.updateCcsCreds, "ccs", false, "Also rotates osdCcsAdmin credential. Use caution.")
 	rotateSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	rotateSecretCmd.Flags().StringVar(&ops.osdManagedAdminUsername, "admin-username", "", "The admin username to use for generating access keys. Must be in the format of `osdManagedAdmin*`. If not specified, this is inferred from the account CR.")
 	_ = rotateSecretCmd.MarkFlagRequired("reason")
 
 	return rotateSecretCmd
@@ -50,11 +52,12 @@ func newCmdRotateSecret(streams genericclioptions.IOStreams, client *k8s.LazyCli
 
 // rotateSecretOptions defines the struct for running rotate-iam command
 type rotateSecretOptions struct {
-	accountCRName     string
-	profile           string
-	updateCcsCreds    bool
-	awsAccountTimeout *int32
-	reason            string
+	accountCRName           string
+	profile                 string
+	updateCcsCreds          bool
+	awsAccountTimeout       *int32
+	reason                  string
+	osdManagedAdminUsername string
 
 	genericclioptions.IOStreams
 	kubeCli *k8s.LazyClient
@@ -82,6 +85,10 @@ func (o *rotateSecretOptions) complete(cmd *cobra.Command, args []string) error 
 	// The aws account timeout. The min the API supports is 15mins.
 	// 900 sec is 15min
 	o.awsAccountTimeout = awsSdk.Int32(900)
+
+	if o.osdManagedAdminUsername != "" && !strings.HasPrefix(o.osdManagedAdminUsername, common.OSDManagedAdminIAM) {
+		return cmdutil.UsageErrorf(cmd, fmt.Sprintf("admin-username must start with %v", common.OSDManagedAdminIAM))
+	}
 
 	return nil
 }
@@ -208,8 +215,10 @@ func (o *rotateSecretOptions) run() error {
 	}
 
 	// Update osdManagedAdmin secrets
-	// Username is osdManagedAdmin-aaabbb
-	osdManagedAdminUsername := common.OSDManagedAdminIAM + "-" + accountIDSuffixLabel
+	osdManagedAdminUsername := o.osdManagedAdminUsername
+	if osdManagedAdminUsername == "" {
+		osdManagedAdminUsername = common.OSDManagedAdminIAM + "-" + accountIDSuffixLabel
+	}
 
 	// Create new access key
 	createAccessKeyOutput, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{UserName: awsSdk.String(osdManagedAdminUsername)})
