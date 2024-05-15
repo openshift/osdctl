@@ -463,45 +463,11 @@ func (e *EgressVerification) isSubnetPublic(ctx context.Context, subnetID string
 	var routeTable string
 
 	// Try and find a Route Table associated with the given subnet
-	describeRouteTablesOutput, err := e.awsClient.DescribeRouteTables(ctx, &ec2.DescribeRouteTablesInput{
-		Filters: []types.Filter{
-			{
-				Name:   aws.String("association.subnet-id"),
-				Values: []string{subnetID},
-			},
-		},
-	})
-	if err != nil {
-		return false, fmt.Errorf("failed to describe route tables associated to subnet %s: %w", subnetID, err)
-	}
 
-	// If there are no associated RouteTables, then the subnet uses the default RoutTable for the VPC
-	if len(describeRouteTablesOutput.RouteTables) == 0 {
-		// Get the VPC ID for the subnet
-		describeSubnetOutput, err := e.awsClient.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{
-			SubnetIds: []string{subnetID},
-		})
-		if err != nil {
-			return false, err
-		}
-		if len(describeSubnetOutput.Subnets) == 0 {
-			return false, fmt.Errorf("no subnets returned for subnet id %v", subnetID)
-		}
-
-		vpcID := *describeSubnetOutput.Subnets[0].VpcId
-
-		// Set the route table to the default for the VPC
-		routeTable, err = e.findDefaultRouteTableForVPC(ctx, vpcID)
-		if err != nil {
-			return false, err
-		}
-	} else {
-		// Set the route table to the one associated with the subnet
-		routeTable = *describeRouteTablesOutput.RouteTables[0].RouteTableId
-	}
+	routeTable, err := utils.FindRouteTableForSubnetForVerification(e.awsClient, subnetID)
 
 	// Check that the RouteTable for the subnet has a default route to 0.0.0.0/0
-	describeRouteTablesOutput, err = e.awsClient.DescribeRouteTables(ctx, &ec2.DescribeRouteTablesInput{
+	describeRouteTablesOutput, err := e.awsClient.DescribeRouteTables(ctx, &ec2.DescribeRouteTablesInput{
 		RouteTableIds: []string{routeTable},
 	})
 	if err != nil {
