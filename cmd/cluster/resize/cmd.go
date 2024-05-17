@@ -7,12 +7,13 @@ import (
 func NewCmdResize() *cobra.Command {
 	resize := &cobra.Command{
 		Use:   "resize",
-		Short: "resize infra nodes",
+		Short: "resize control-plane/infra nodes",
 		Args:  cobra.NoArgs,
 	}
 
 	resize.AddCommand(
 		newCmdResizeInfra(),
+		newCmdResizeControlPlane(),
 	)
 
 	return resize
