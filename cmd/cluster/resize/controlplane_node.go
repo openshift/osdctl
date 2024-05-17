@@ -1,12 +1,10 @@
-package cluster
+package resize
 
 import (
 	"bufio"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/openshift/osdctl/cmd/servicelog"
-	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"os"
 	"os/exec"
 	"strings"
@@ -16,36 +14,36 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
-	"github.com/openshift/osdctl/internal/utils/globalflags"
+	bpelevate "github.com/openshift/backplane-cli/pkg/elevate"
+	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-
-	bpelevate "github.com/openshift/backplane-cli/pkg/elevate"
 )
 
-// resizeControlPlaneNodeOptions defines the struct for running resizeControlPlaneNode command
-type resizeControlPlaneNodeOptions struct {
+// controlPlane defines the struct for running resizeControlPlaneNode command
+type controlPlane struct {
 	clusterID      string
 	node           string
 	newMachineType string
-	reason         string
 	cluster        *cmv1.Cluster
 
-	genericiooptions.IOStreams
-	GlobalOptions *globalflags.GlobalOptions
+	// reason to provide for elevation (eg: OHSS/PG ticket)
+	reason string
 }
 
 // This command requires to previously be logged in via `ocm login`
-func newCmdResizeControlPlaneNode(streams genericiooptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
-	ops := newResizeControlPlaneNodeOptions(streams, globalOpts)
+func newCmdResizeControlPlane() *cobra.Command {
+	ops := &controlPlane{}
 	resizeControlPlaneNodeCmd := &cobra.Command{
-		Use:   "resize-control-plane-node",
-		Short: "Resize a control plane node.",
-		Long: `Resize a control plane node. Requires previous login to the api server via "ocm backplane login".
-The user will be prompted to send a service log after the resize is complete.`,
+		Use:   "control-plane",
+		Short: "Resize an OSD/ROSA cluster's control plane nodes",
+		Long: `Resize an OSD/ROSA cluster's' control plane nodes
+
+  Requires previous login to the api server via "ocm backplane login".
+  The user will be prompted to send a service log after the resize is complete.`,
 		Example: `# Resize a node to m5.4xlarge
 osdctl cluster resize-control-plane-node -c ab8d922ccd2d2mknfmi12vnb778h1xyz --machine-type m5.4xlarge --node ip-12-3-456-789.us-east-1.compute.internal --reason "OHSS-12345"`,
 		Args:              cobra.NoArgs,
@@ -67,14 +65,7 @@ osdctl cluster resize-control-plane-node -c ab8d922ccd2d2mknfmi12vnb778h1xyz --m
 	return resizeControlPlaneNodeCmd
 }
 
-func newResizeControlPlaneNodeOptions(streams genericiooptions.IOStreams, globalOpts *globalflags.GlobalOptions) *resizeControlPlaneNodeOptions {
-	return &resizeControlPlaneNodeOptions{
-		IOStreams:     streams,
-		GlobalOptions: globalOpts,
-	}
-}
-
-func (o *resizeControlPlaneNodeOptions) complete() error {
+func (o *controlPlane) complete() error {
 	err := utils.IsValidClusterKey(o.clusterID)
 	if err != nil {
 		return err
@@ -142,7 +133,6 @@ func retryCancelDialog(procedure string) (optionsDialogResponse, error) {
 		fmt.Println("Invalid response, expected 'retry' or 'cancel' (case-insensitive).")
 		return retryCancelDialog(procedure)
 	}
-
 }
 
 func withRetryCancelOption(fn func() error, procedure string) (err error) {
@@ -244,7 +234,7 @@ func retrySkipForceCancelDialog(procedure string) (optionsDialogResponse, error)
 	}
 }
 
-func (o *resizeControlPlaneNodeOptions) forceDrainNode(nodeID string, reason string) error {
+func (o *controlPlane) forceDrainNode(nodeID string, reason string) error {
 	printer.PrintlnGreen("Force draining node... This might take a minute or two...")
 	err := bpelevate.RunElevate([]string{
 		fmt.Sprintf("%s - Elevate required to force drain node for resizecontroleplanenode", reason),
@@ -256,7 +246,7 @@ func (o *resizeControlPlaneNodeOptions) forceDrainNode(nodeID string, reason str
 	return nil
 }
 
-func (o *resizeControlPlaneNodeOptions) drainNode(nodeID string, reason string) error {
+func (o *controlPlane) drainNode(nodeID string, reason string) error {
 	printer.PrintlnGreen("Draining node", nodeID)
 
 	// TODO: replace subprocess call with API call
@@ -394,7 +384,7 @@ func getNodeAwsInstanceData(ctx context.Context, node string, awsClient resizeCo
 	return machineName, awsInstanceID, nil
 }
 
-func (o *resizeControlPlaneNodeOptions) patchMachineType(machine string, machineType string, reason string) error {
+func (o *controlPlane) patchMachineType(machine string, machineType string, reason string) error {
 	printer.PrintlnGreen("Patching machine type of machine", machine, "to", machineType)
 	err := bpelevate.RunElevate([]string{
 		fmt.Sprintf("%s - Elevate required to patch machine type of machine %s to %s", reason, machine, machineType),
@@ -413,7 +403,7 @@ type resizeControlPlaneNodeAWSClient interface {
 	ModifyInstanceAttribute(ctx context.Context, params *ec2.ModifyInstanceAttributeInput, optFns ...func(*ec2.Options)) (*ec2.ModifyInstanceAttributeOutput, error)
 }
 
-func (o *resizeControlPlaneNodeOptions) run() error {
+func (o *controlPlane) run() error {
 	ocmClient, err := utils.CreateConnection()
 	if err != nil {
 		return err

@@ -31,7 +31,6 @@ func NewCmdCluster(streams genericclioptions.IOStreams, client *k8s.LazyClient, 
 	clusterCmd.AddCommand(newCmdContext())
 	clusterCmd.AddCommand(newCmdTransferOwner(streams, globalOpts))
 	clusterCmd.AddCommand(access.NewCmdAccess(streams, client))
-	clusterCmd.AddCommand(newCmdResizeControlPlaneNode(streams, globalOpts))
 	clusterCmd.AddCommand(newCmdCpd())
 	clusterCmd.AddCommand(newCmdCheckBannedUser())
 	clusterCmd.AddCommand(newCmdValidatePullSecret(client))
