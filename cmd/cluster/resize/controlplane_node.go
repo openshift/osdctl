@@ -582,6 +582,11 @@ func (o *controlPlane) runWithCPMS(ctx context.Context) error {
 	if err := o.client.Get(ctx, client.ObjectKey{Namespace: cpmsNamespace, Name: cpmsName}, cpms); err != nil {
 		return fmt.Errorf("error retrieving control plane machine set: %v", err)
 	}
+
+	if cpms.Spec.State != machinev1.ControlPlaneMachineSetStateActive {
+		return fmt.Errorf("control plane machine set is unexpectedly in %s state, must be %s - check for service logs, support exceptions, or ask for a second opinion", cpms.Spec.State, machinev1.ControlPlaneMachineSetStateActive)
+	}
+
 	patch := client.MergeFrom(cpms.DeepCopy())
 
 	var (
