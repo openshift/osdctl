@@ -11,8 +11,11 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/smithy-go"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"github.com/openshift/osdctl/cmd/servicelog"
+	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -20,6 +23,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,8 +38,23 @@ const (
 	temporaryInfraNodeLabel               = "osdctl.openshift.io/infra-resize-temporary-machinepool"
 )
 
+type Infra struct {
+	client    client.Client
+	hive      client.Client
+	hiveAdmin client.Client
+
+	cluster   *cmv1.Cluster
+	clusterId string
+
+	// instanceType is the type of instance being resized to
+	instanceType string
+
+	// reason to provide for elevation (eg: OHSS/PG ticket)
+	reason string
+}
+
 func newCmdResizeInfra() *cobra.Command {
-	r := &Resize{}
+	r := &Infra{}
 
 	infraResizeCmd := &cobra.Command{
 		Use:   "infra",
@@ -71,7 +90,67 @@ func newCmdResizeInfra() *cobra.Command {
 	return infraResizeCmd
 }
 
-func (r *Resize) RunInfra(ctx context.Context) error {
+func (r *Infra) New() error {
+	scheme := runtime.NewScheme()
+
+	// Register machinev1beta1 for Machines
+	if err := machinev1beta1.Install(scheme); err != nil {
+		return err
+	}
+
+	// Register hivev1 for MachinePools
+	if err := hivev1.AddToScheme(scheme); err != nil {
+		return err
+	}
+
+	if err := corev1.AddToScheme(scheme); err != nil {
+		return err
+	}
+
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
+	defer ocmClient.Close()
+	cluster, err := utils.GetClusterAnyStatus(ocmClient, r.clusterId)
+	if err != nil {
+		return fmt.Errorf("failed to get OCM cluster info for %s: %s", r.clusterId, err)
+	}
+	r.cluster = cluster
+	r.clusterId = cluster.ID()
+
+	hive, err := utils.GetHiveCluster(cluster.ID())
+	if err != nil {
+		return err
+	}
+
+	c, err := k8s.New(cluster.ID(), client.Options{Scheme: scheme})
+	if err != nil {
+		return err
+	}
+
+	hc, err := k8s.New(hive.ID(), client.Options{Scheme: scheme})
+	if err != nil {
+		return err
+	}
+
+	hac, err := k8s.NewAsBackplaneClusterAdmin(hive.ID(), client.Options{Scheme: scheme}, []string{
+		r.reason,
+		fmt.Sprintf("Need elevation for %s cluster in order to resize it to instance type %s", r.clusterId, r.instanceType),
+	}...)
+	if err != nil {
+		return err
+	}
+
+	r.clusterId = cluster.ID()
+	r.client = c
+	r.hive = hc
+	r.hiveAdmin = hac
+
+	return nil
+}
+
+func (r *Infra) RunInfra(ctx context.Context) error {
 	if err := r.New(); err != nil {
 		return fmt.Errorf("failed to initialize command: %v", err)
 	}
@@ -363,7 +442,7 @@ func (r *Resize) RunInfra(ctx context.Context) error {
 	return nil
 }
 
-func (r *Resize) getInfraMachinePool(ctx context.Context) (*hivev1.MachinePool, error) {
+func (r *Infra) getInfraMachinePool(ctx context.Context) (*hivev1.MachinePool, error) {
 	ns := &corev1.NamespaceList{}
 	selector, err := labels.Parse(fmt.Sprintf("api.openshift.com/id=%s", r.clusterId))
 	if err != nil {
@@ -395,7 +474,7 @@ func (r *Resize) getInfraMachinePool(ctx context.Context) (*hivev1.MachinePool, 
 	return nil, fmt.Errorf("did not find the infra machinepool in namespace: %s", ns.Items[0].Name)
 }
 
-func (r *Resize) embiggenMachinePool(mp *hivev1.MachinePool) (*hivev1.MachinePool, error) {
+func (r *Infra) embiggenMachinePool(mp *hivev1.MachinePool) (*hivev1.MachinePool, error) {
 	embiggen := map[string]string{
 		"m5.xlarge":  "r5.xlarge",
 		"m5.2xlarge": "r5.2xlarge",
@@ -456,19 +535,15 @@ func getInstanceType(mp *hivev1.MachinePool) (string, error) {
 	return "", errors.New("unsupported platform, only AWS and GCP are supported")
 }
 
-//Adding change in serviceLog as per the cloud provider.
-
+// Adding change in serviceLog as per the cloud provider.
 func generateServiceLog(mp *hivev1.MachinePool, instanceType, clusterId string) servicelog.PostCmdOptions {
-
 	if mp.Spec.Platform.AWS != nil {
-
 		return servicelog.PostCmdOptions{
 			Template:       resizedInfraNodeServiceLogTemplate,
 			ClusterId:      clusterId,
 			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
 		}
 	} else if mp.Spec.Platform.GCP != nil {
-
 		return servicelog.PostCmdOptions{
 			Template:       GCPresizedInfraNodeServiceLogTemplate,
 			ClusterId:      clusterId,
@@ -478,7 +553,7 @@ func generateServiceLog(mp *hivev1.MachinePool, instanceType, clusterId string) 
 	return servicelog.PostCmdOptions{}
 }
 
-func (r *Resize) terminateCloudInstances(ctx context.Context, nodeList *corev1.NodeList) error {
+func (r *Infra) terminateCloudInstances(ctx context.Context, nodeList *corev1.NodeList) error {
 	if len(nodeList.Items) == 0 {
 		return nil
 	}
@@ -544,7 +619,7 @@ func convertProviderIDtoInstanceID(providerID string) string {
 
 // nodesMatchExpectedCount accepts a context, labelselector and count of expected nodes, and ]
 // returns true if the nodelist matching the labelselector is equal to the expected count
-func (r *Resize) nodesMatchExpectedCount(ctx context.Context, labelSelector labels.Selector, count int) (bool, error) {
+func (r *Infra) nodesMatchExpectedCount(ctx context.Context, labelSelector labels.Selector, count int) (bool, error) {
 	nodeList := &corev1.NodeList{}
 
 	if err := r.client.List(ctx, nodeList, &client.ListOptions{LabelSelector: labelSelector}); err != nil {
@@ -558,7 +633,7 @@ func (r *Resize) nodesMatchExpectedCount(ctx context.Context, labelSelector labe
 	return false, nil
 }
 
-// having an error when being in a rety loop, should not be handled as an error, and we should just display it and continue
+// having an error when being in a retry loop, should not be handled as an error, and we should just display it and continue
 // in case we have a function that return a bool status and an error, we can use following helper
 // f being a function returning (bool, error), replace
 //
