@@ -20,7 +20,7 @@ const (
 	productionURL    = "https://api.openshift.com"
 	stagingURL       = "https://api.stage.openshift.com"
 	integrationURL   = "https://api.integration.openshift.com"
-	productionGovURL = "https://api.openshiftusgov.com"
+	productionGovURL = "https://api-admin.openshiftusgov.com"
 )
 
 var urlAliases = map[string]string{
