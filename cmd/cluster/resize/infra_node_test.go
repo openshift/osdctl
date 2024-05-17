@@ -78,7 +78,7 @@ func TestResize_embiggenMachinePool(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			r := &Resize{
+			r := &Infra{
 				cluster:      test.cluster,
 				instanceType: test.override,
 			}
