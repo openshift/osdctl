@@ -198,7 +198,20 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 							},
 						},
 					},
+					describeRouteTablesResp: &ec2.DescribeRouteTablesOutput{
+						RouteTables: []types.RouteTable{
+							{
+								RouteTableId: aws.String("rt-id"),
+								Routes: []types.Route{
+									{
+										GatewayId: aws.String("gateway"),
+									},
+								},
+							},
+						},
+					},
 				},
+
 				cluster: newTestCluster(t, cmv1.NewCluster().
 					CloudProvider(cmv1.NewCloudProvider().ID("aws")).
 					Product(cmv1.NewProduct().ID("rosa")).
