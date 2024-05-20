@@ -43,7 +43,7 @@ func newCmdRotateSecret(streams genericclioptions.IOStreams, client *k8s.LazyCli
 
 	rotateSecretCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile")
 	rotateSecretCmd.Flags().BoolVar(&ops.updateCcsCreds, "ccs", false, "Also rotates osdCcsAdmin credential. Use caution.")
-	rotateSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	rotateSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
 	rotateSecretCmd.Flags().StringVar(&ops.osdManagedAdminUsername, "admin-username", "", "The admin username to use for generating access keys. Must be in the format of `osdManagedAdmin*`. If not specified, this is inferred from the account CR.")
 	_ = rotateSecretCmd.MarkFlagRequired("reason")
 
@@ -121,8 +121,7 @@ func (o *rotateSecretOptions) run() error {
 		return fmt.Errorf("no label on Account CR for IAM User")
 	}
 
-	// Use provided profile
-	awsSetupClient, err := awsprovider.NewAwsClient(o.profile, "", "")
+	awsSetupClient, err := awsprovider.NewAwsClient(o.profile, "us-east-1", "")
 	if err != nil {
 		return err
 	}
