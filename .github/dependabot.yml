@@ -2,6 +2,8 @@ version: 2
 updates:
   - package-ecosystem: 'gomod'
     directory: '/'
+    labels:
+      - "ok-to-test"
     allow:
       - dependency-name: "github.com/openshift/osd-network-verifier"
       - dependency-name: "github.com/openshift/backplane-cli"
