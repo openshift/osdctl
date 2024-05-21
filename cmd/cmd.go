@@ -89,7 +89,6 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(alerts.NewCmdAlerts())
 	rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeClient, globalOpts))
 	rootCmd.AddCommand(hive.NewCmdHive(streams, kubeClient))
-	rootCmd.AddCommand(newCmdCompletion())
 	rootCmd.AddCommand(env.NewCmdEnv())
 	rootCmd.AddCommand(jumphost.NewCmdJumphost())
 	rootCmd.AddCommand(mc.NewCmdMC())
