@@ -1,9 +1,10 @@
-package silence
+package utils
 
 import (
 	"context"
 	"fmt"
 	"github.com/openshift/osdctl/cmd/cluster"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"

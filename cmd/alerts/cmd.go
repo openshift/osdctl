@@ -14,7 +14,7 @@ func NewCmdAlerts() *cobra.Command {
 		DisableAutoGenTag: true,
 	}
 
-	alrtCmd.AddCommand(NewCmdListAlerts())
+	alrtCmd.AddCommand(utils.NewCmdListAlerts())
 	alrtCmd.AddCommand(silence.NewCmdSilence())
 
 	return alrtCmd
