@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/openshift/osdctl/cmd/common"
+	kubeutils "github.com/openshift/osdctl/cmd/common"
+	common "github.com/openshift/osdctl/cmd/alerts"
 	"github.com/spf13/cobra"
 )
 
@@ -73,7 +74,7 @@ func ListSilence(cmd *listSilenceCmd) {
 		log.Fatal(err)
 	}
 
-	op, err := ExecInPod(kubeconfig, clientset, silenceCmd)
+	op, err := common.ExecInPod(kubeconfig, clientset, silenceCmd)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -98,13 +99,13 @@ func printSilence(silence Silence) {
 	id, matchers, status, created, starts, end, comment := silence.ID, silence.Matchers, silence.Status, silence.CreatedBy, silence.StartsAt, silence.EndsAt, silence.Comment
 	fmt.Println("-------------------------------------------")
 	for _, matcher := range matchers {
-		fmt.Printf("  SilenceID:		%s\n", id)
-		fmt.Printf("  Status:		%s\n", status.State)
-		fmt.Printf("  Created By:		%s\n", created)
-		fmt.Printf("  Starts At:		%s\n", starts)
-		fmt.Printf("  Ends At:		%s\n", end)
-		fmt.Printf("  Comment:		%s\n", comment)
-		fmt.Printf("  AlertName:		%s\n", matcher.Value)
+		fmt.Printf("SilenceID:	%s\n", id)
+		fmt.Printf("Status:	%s\n", status.State)
+		fmt.Printf("Created By:	%s\n", created)
+		fmt.Printf("Starts At:	%s\n", starts)
+		fmt.Printf("Ends At:	%s\n", end)
+		fmt.Printf("Comment:	%s\n", comment)
+		fmt.Printf("AlertName:	%s\n", matcher.Value)
 	}
 	fmt.Println("---------------------------------------------")
 }

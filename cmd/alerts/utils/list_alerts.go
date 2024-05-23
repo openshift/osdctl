@@ -14,7 +14,6 @@ import (
 type alertCmd struct {
 	clusterID  string
 	alertLevel string
-	reason     string
 }
 
 // Labels represents a set of labels associated with an alert.
@@ -56,8 +55,6 @@ func NewCmdListAlerts() *cobra.Command {
 	}
 
 	newCmd.Flags().StringVarP(&alertCmd.alertLevel, "level", "l", "all", "Alert level [warning, critical, firing, pending, all]")
-	newCmd.Flags().StringVar(&alertCmd.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
-	_ = newCmd.MarkFlagRequired("reason")
 
 	return newCmd
 }
@@ -75,25 +72,21 @@ func ListAlerts(cmd *alertCmd) {
 
 	if alertLevel == "" {
 		log.Printf("No alert level specified. Defaulting to 'all'")
-		getAlertLevel(clusterID, "all", cmd.reason)
+		getAlertLevel(clusterID, "all")
 	} else if alertLevel == "warning" || alertLevel == "critical" || alertLevel == "firing" || alertLevel == "pending" || alertLevel == "info" || alertLevel == "none" || alertLevel == "all" {
-		getAlertLevel(clusterID, alertLevel, cmd.reason)
+		getAlertLevel(clusterID, alertLevel)
 	} else {
 		fmt.Printf("Invalid alert level \"%s\" \n", alertLevel)
 		return
 	}
 }
 
-func getAlertLevel(clusterID, alertLevel, elevationReason string) {
+func getAlertLevel(clusterID, alertLevel string) {
 	var alerts []Alert
 
 	listAlertCmd := []string{"amtool", "--alertmanager.url", silence.LocalHostUrl, "alert", "-o", "json"}
 
-	elevationReasons := []string{
-		elevationReason,
-		"Listing active cluster alerts",
-	}
-	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID, elevationReasons...)
+	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID)
 	if err != nil {
 		log.Fatal(err)
 	}
