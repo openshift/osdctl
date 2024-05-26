@@ -18,7 +18,6 @@ type RawEventDetails struct {
 	EventVersion string `json:"eventVersion"`
 	UserIdentity struct {
 		AccountId      string `json:"accountId"`
-		Type           string `json:"type"`
 		SessionContext struct {
 			SessionIssuer struct {
 				Type     string `json:"type"`
@@ -29,6 +28,7 @@ type RawEventDetails struct {
 	} `json:"userIdentity"`
 	EventRegion string `json:"awsRegion"`
 	EventId     string `json:"eventID"`
+	ErrorCode   string `json:"errorCode"`
 }
 
 // Extracts Raw cloudtrailEvent Details

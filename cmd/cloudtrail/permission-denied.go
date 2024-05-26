@@ -3,9 +3,18 @@ package cloudtrail
 import (
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
+	ctUtil "github.com/openshift/osdctl/cmd/cloudtrail/pkg"
+	ctAws "github.com/openshift/osdctl/cmd/cloudtrail/pkg/aws"
+	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
+)
+
+var (
+	search = ".*Client.UnauthorizedOperation.*"
 )
 
 type permissonOptions struct {
@@ -46,6 +55,20 @@ func (p *permissonOptions) run() error {
 	if strings.ToUpper(cluster.CloudProvider().ID()) != "AWS" {
 		return fmt.Errorf("[ERROR] this command is only available for AWS clusters")
 	}
-	return fmt.Errorf("")
+
+	cfg, err := osdCloud.CreateAWSV2Config(connection, cluster)
+	if err != nil {
+		return err
+	}
+
+	cloudtrailClient := cloudtrail.NewFromConfig(cfg)
+	lookupEvents, err := ctAws.GetEvents(time.Now(), cloudtrailClient)
+	if err != nil {
+		return err
+	}
+	permissionDeniedEvent := ctUtil.Filters[2](lookupEvents, search)
+	ctUtil.PrintEvents(permissionDeniedEvent, false, false)
+
+	return err
 
 }

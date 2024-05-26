@@ -320,6 +320,7 @@ func (o *LookupEventsOptions) run() error {
 >>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
 	}
 
+	mergedRegex := ctUtil.MergeRegex(Ignore)
 	cfg, err := osdCloud.CreateAWSV2Config(connection, cluster)
 	if err != nil {
 		return err
@@ -353,6 +354,7 @@ func (o *LookupEventsOptions) run() error {
 		if err != nil {
 			return err
 		}
+<<<<<<< HEAD
 		filteredEvents, err := ctUtil.FilterUsers(lookupOutput, Ignore, o.printAllEvents)
 =======
 =======
@@ -381,6 +383,13 @@ func (o *LookupEventsOptions) run() error {
 =======
 		ctUtil.PrintEvents(*filteredEvents, o.printEventUrl, o.printRawEvents)
 >>>>>>> 43ca445 (adds permission-debied cmd)
+=======
+		if o.printAllEvents {
+			mergedRegex = ""
+		}
+		filteredEvents := ctUtil.Filters[3](lookupOutput, mergedRegex)
+		ctUtil.PrintEvents(filteredEvents, o.printEventUrl, o.printRawEvents)
+>>>>>>> eeb7410 (Adds new filtering)
 		fmt.Println("")
 		return err
 	}
