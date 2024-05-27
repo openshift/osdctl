@@ -2,7 +2,6 @@ package cloudtrail
 
 import (
 	"context"
-
 	"fmt"
 	"strings"
 	"time"
