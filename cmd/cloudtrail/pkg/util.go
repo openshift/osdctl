@@ -191,7 +191,7 @@ func FilterByIgnorelist(lookupOutput *cloudtrail.LookupEventsOutput, mergedRegex
 	return true, nil
 }
 
-// Find function
+// Find events with client Unauthorized errorCode
 
 func ForbiddenEvents(lookupOutput *cloudtrail.LookupEventsOutput, value string) (bool, error) {
 	if value == "" {
@@ -215,35 +215,46 @@ func ForbiddenEvents(lookupOutput *cloudtrail.LookupEventsOutput, value string) 
 	}
 	return false, nil
 }
-
 func FilterByArnAndUsername(lookupOutput *cloudtrail.LookupEventsOutput, value string) (bool, error) {
+
 	if value == "" {
 		return true, nil
 	}
-
 	regexPattern := fmt.Sprintf(".*%v.*", regexp.QuoteMeta(value))
 	search, err := regexp.Compile(regexPattern)
 	if err != nil {
 		return false, fmt.Errorf("failed to compile regex: %w", err)
 	}
 
+	// Iterate through each CloudTrail event.
 	for _, event := range lookupOutput.Events {
-		raw, err := pkg.ExtractUserDetails(event.CloudTrailEvent)
-		if err != nil {
-			return false, fmt.Errorf("[ERROR] failed to extract raw CloudTrail event details: %w", err)
-		}
-		sessionIssuerArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
-		if sessionIssuerArn != "" {
-			if search.MatchString(sessionIssuerArn) {
-				return true, nil
-			}
-		}
+
+		var matchesUsername bool
 		if event.Username != nil {
-			if search.MatchString(*event.Username) {
-				return true, nil
+			matchesUsername, err = regexp.MatchString(value, *event.Username)
+			if err != nil {
+				return false, fmt.Errorf("error in pattern matching: %w", err)
 			}
+		}
+		checkArn := func() bool {
+			// Extract raw CloudTrail event details.
+			raw, err := pkg.ExtractUserDetails(event.CloudTrailEvent)
+			if err != nil {
+				return false
+
+			}
+			sessionIssuerArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
+			if search.MatchString(sessionIssuerArn) {
+				return search.MatchString(sessionIssuerArn)
+			}
+			return false
+		}
+
+		if matchesUsername {
+			return true, nil
+		} else {
+			checkArn()
 		}
 	}
-
 	return false, nil
 }

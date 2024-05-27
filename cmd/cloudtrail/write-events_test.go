@@ -171,7 +171,7 @@ func TestSearchFilter(t *testing.T) {
 
 	// Test case 5 (Nil Session Issuer)(Found)
 	testUsername5 := "RH-SRE.George.openshift"
-	testCloudTrailEvent5 := `{"eventVersion": "1.08"}`
+	testCloudTrailEvent5 := ``
 
 	TestLookupOutputs := []*cloudtrail.LookupEventsOutput{
 		{
@@ -198,7 +198,7 @@ func TestSearchFilter(t *testing.T) {
 				},
 			},
 		}
-		searchValue := "RH-SRE"
+		searchValue := "SRE"
 
 		filtered := pkg.Filters[2](TestLookupOutputs, searchValue)
 		assert.Equal(t, len(expected), len(filtered), "Filtered events do not match expected results")
@@ -256,7 +256,7 @@ func TestSearchFilter(t *testing.T) {
 				},
 			},
 		}
-		searchValue := ".George."
+		searchValue := "George"
 
 		filtered := pkg.Filters[2](TestLookupOutputs, searchValue)
 		assert.Equal(t, len(expected), len(filtered), "Filtered events do not match expected results")
