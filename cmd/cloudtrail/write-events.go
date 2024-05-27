@@ -2,8 +2,7 @@ package cloudtrail
 
 import (
 	"context"
-<<<<<<< HEAD
-<<<<<<< HEAD
+
 	"fmt"
 	"strings"
 	"time"
@@ -13,34 +12,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	ctUtil "github.com/openshift/osdctl/cmd/cloudtrail/pkg"
 	ctAws "github.com/openshift/osdctl/cmd/cloudtrail/pkg/aws"
-=======
-	"encoding/json"
-=======
->>>>>>> 43ca445 (adds permission-debied cmd)
-	"fmt"
-	"strings"
-	"time"
-
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
-<<<<<<< HEAD
->>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
-=======
-	ctUtil "github.com/openshift/osdctl/cmd/cloudtrail/pkg"
-	ctAws "github.com/openshift/osdctl/cmd/cloudtrail/pkg/aws"
->>>>>>> 43ca445 (adds permission-debied cmd)
 	envConfig "github.com/openshift/osdctl/pkg/envConfig"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
-<<<<<<< HEAD
-=======
 var DefaultRegion = "us-east-1"
 
->>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
 // LookupEventsOptions struct for holding options for event lookup
 type LookupEventsOptions struct {
 	clusterID      string
@@ -50,29 +29,6 @@ type LookupEventsOptions struct {
 	printAllEvents bool
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-// RawEventDetails struct represents the structure of an AWS raw event
-type RawEventDetails struct {
-	EventVersion string `json:"eventVersion"`
-	UserIdentity struct {
-		AccountId      string `json:"accountId"`
-		SessionContext struct {
-			SessionIssuer struct {
-				Type     string `json:"type"`
-				UserName string `json:"userName"`
-				Arn      string `json:"arn"`
-			} `json:"sessionIssuer"`
-		} `json:"sessionContext"`
-	} `json:"userIdentity"`
-	EventRegion string `json:"awsRegion"`
-	EventId     string `json:"eventID"`
-}
-
->>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
-=======
->>>>>>> 43ca445 (adds permission-debied cmd)
 func newCmdWriteEvents() *cobra.Command {
 	ops := &LookupEventsOptions{}
 	listEventsCmd := &cobra.Command{
@@ -91,208 +47,8 @@ func newCmdWriteEvents() *cobra.Command {
 	return listEventsCmd
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 func (o *LookupEventsOptions) run() error {
 
-=======
-// parseDurationToUTC parses the given startTime string as a duration and subtracts it from the current UTC time.
-// It returns the resulting time and any parsing error encountered.
-func parseDurationToUTC(input string) (time.Time, error) {
-	duration, err := time.ParseDuration(input)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("[ERROR] unable to parse time duration: %w", err)
-	}
-
-	return time.Now().UTC().Add(-duration), nil
-}
-
-// whoami retrieves caller identity information
-func whoami(stsClient sts.Client) (accountArn string, accountId string, err error) {
-	ctx := context.TODO()
-	callerIdentityOutput, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
-	if err != nil {
-		return "", "", err
-	}
-
-	userArn, err := arn.Parse(*callerIdentityOutput.Arn)
-	if err != nil {
-		return "", "", err
-	}
-
-	return userArn.String(), userArn.AccountID, nil
-}
-
-// getWriteEvents retrieves cloudtrail events since the specified time
-// using the provided cloudtrail client and starttime from since flag.
-func getWriteEvents(since time.Time, cloudtailClient *cloudtrail.Client) ([]*cloudtrail.LookupEventsOutput, error) {
-	starttime := since
-	allookupOutputs := []*cloudtrail.LookupEventsOutput{}
-	input := cloudtrail.LookupEventsInput{
-		StartTime: &starttime,
-		EndTime:   aws.Time(time.Now()),
-		LookupAttributes: []types.LookupAttribute{
-			{AttributeKey: "ReadOnly",
-				AttributeValue: aws.String("false")},
-		},
-	}
-
-	paginator := cloudtrail.NewLookupEventsPaginator(cloudtailClient, &input, func(c *cloudtrail.LookupEventsPaginatorOptions) {})
-	for paginator.HasMorePages() {
-
-		lookupOutput, err := paginator.NextPage(context.TODO())
-		if err != nil {
-			return nil, fmt.Errorf("[WARNING] paginator error: \n%w", err)
-		}
-
-		allookupOutputs = append(allookupOutputs, lookupOutput)
-
-		input.NextToken = lookupOutput.NextToken
-		if lookupOutput.NextToken == nil {
-			break
-		}
-
-	}
-
-	return allookupOutputs, nil
-}
-
-// Extracts Raw cloudtrailEvent Details
-func extractUserDetails(cloudTrailEvent *string) (*RawEventDetails, error) {
-	if cloudTrailEvent == nil || *cloudTrailEvent == "" {
-		return &RawEventDetails{}, fmt.Errorf("[ERROR] cannot parse a nil input")
-	}
-	var res RawEventDetails
-	err := json.Unmarshal([]byte(*cloudTrailEvent), &res)
-	if err != nil {
-		return &RawEventDetails{}, fmt.Errorf("[ERROR] could not marshal event.CloudTrailEvent: %w", err)
-	}
-
-	const supportedEventVersionMajor = 1
-	const minSupportedEventVersionMinor = 8
-
-	var responseMajor, responseMinor int
-	if _, err := fmt.Sscanf(res.EventVersion, "%d.%d", &responseMajor, &responseMinor); err != nil {
-		return &RawEventDetails{}, fmt.Errorf("[ERROR]failed to parse CloudTrail event version: %w", err)
-	}
-	if responseMajor != supportedEventVersionMajor || responseMinor < minSupportedEventVersionMinor {
-		return &RawEventDetails{}, fmt.Errorf("[ERROR] unexpected event version (got %s, expected compatibility with %d.%d)", res.EventVersion, supportedEventVersionMajor, minSupportedEventVersionMinor)
-	}
-	return &res, nil
-}
-
-// generateLink generates a hyperlink to aws cloudTrail event.
-func generateLink(raw RawEventDetails) (url_link string) {
-	str1 := "https://"
-	str2 := ".console.aws.amazon.com/cloudtrailv2/home?region="
-	str3 := "#/events/"
-
-	eventRegion := raw.EventRegion
-	eventId := raw.EventId
-
-	var url = str1 + eventRegion + str2 + eventRegion + str3 + eventId
-	url_link = url
-
-	return url_link
-}
-
-// Join all individual patterns into a single string separated by the "|" operator
-func mergeRegex(regexlist []string) string {
-	return strings.Join(regexlist, "|")
-}
-
-// FilterUsers filters out events based on the specified Ignore list, which contains
-// regular expression patterns. It takes a slice of cloudtrail.LookupEventsOutput,
-// which represents the output of AWS CloudTrail lookup events operation, and a list
-// of regular expression patterns to ignore.
-func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string, allEvents bool) (*[]types.Event, error) {
-	filteredEvents := []types.Event{}
-	mergedRegex := mergeRegex(Ignore)
-
-	for _, lookupOutput := range lookupOutputs {
-		for _, event := range lookupOutput.Events {
-
-			raw, err := extractUserDetails(event.CloudTrailEvent)
-			if err != nil {
-				return nil, fmt.Errorf("[ERROR] failed to to extract raw cloudtrailEvent details: %w", err)
-			}
-			userArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
-			regexOdj := regexp.MustCompile(mergedRegex)
-			matchesUsername := false
-			matchesArn := false
-
-			if !allEvents && len(Ignore) != 0 {
-				if event.Username != nil {
-					matchesUsername = regexOdj.MatchString(*event.Username)
-				}
-				if userArn != "" {
-					matchesArn = regexOdj.MatchString(userArn)
-
-				}
-
-				if matchesUsername || matchesArn {
-					continue
-					// skips entry
-				}
-
-			}
-			filteredEvents = append(filteredEvents, event)
-
-		}
-	}
-
-	return &filteredEvents, nil
-}
-
-// PrintEvents prints the details of each event in the provided slice of events.
-// It takes a slice of types.Event
-func printEvents(filteredEvent []types.Event, printUrl bool, raw bool) {
-	for _, event := range filteredEvent {
-		if raw {
-			if event.CloudTrailEvent != nil {
-				fmt.Printf("%v \n\n", *event.CloudTrailEvent)
-			}
-		} else {
-			rawEventDetails, err := extractUserDetails(event.CloudTrailEvent)
-			if err != nil {
-				fmt.Printf("[Error] Error extracting event details: %v", err)
-			}
-			sessionIssuer := rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName
-			if event.EventName != nil {
-				fmt.Printf("%v ", *event.EventName)
-			} else {
-				continue
-			}
-
-			if event.EventTime != nil {
-				fmt.Printf("|%v ", event.EventTime.String())
-				if event.Username != nil {
-					fmt.Printf("| User: %v ", *event.Username)
-				}
-				if sessionIssuer != "" {
-					fmt.Printf("| ARN: %v\n", sessionIssuer)
-				} else {
-					fmt.Print("\n")
-				}
-
-				if printUrl && event.CloudTrailEvent != nil {
-					if err == nil {
-						fmt.Printf("EventLink: %v\n\n", generateLink(*rawEventDetails))
-					} else {
-						fmt.Println("EventLink: <not available>")
-					}
-				}
-
-			}
-		}
-	}
-
-}
-
-=======
->>>>>>> cd3e299 (Implements permission denied events filtering logic)
-func (o *LookupEventsOptions) run() error {
->>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
 	err := utils.IsValidClusterKey(o.clusterID)
 	if err != nil {
 		return err
@@ -316,11 +72,8 @@ func (o *LookupEventsOptions) run() error {
 		return fmt.Errorf("[ERROR] error Loading cloudtrail configuration file: %w", err)
 	}
 	if len(Ignore) == 0 {
-<<<<<<< HEAD
-		fmt.Println("\n[WARNING] No filter list DETECTED!!")
-=======
 		fmt.Println("\n[WARNING] No filter list detected! If you want intend to apply user filtering for the cloudtrail events, please add cloudtrail_cmd_lists to your osdctl configuration file.")
->>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
+
 	}
 
 	mergedRegex := ctUtil.MergeRegex(Ignore)
@@ -328,106 +81,35 @@ func (o *LookupEventsOptions) run() error {
 	if err != nil {
 		return err
 	}
-<<<<<<< HEAD
 	DefaultRegion := "us-east-1"
-	configOptions := config.WithRegion(DefaultRegion)
-	defaultConfig, err := config.LoadDefaultConfig(context.Background(), configOptions)
-	if err != nil {
-		return err
-	}
-
 	startTime, err := ctUtil.ParseDurationToUTC(o.startTime)
-=======
 
-<<<<<<< HEAD
-	startTime, err := parseDurationToUTC(o.startTime)
->>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
-=======
-	startTime, err := ctUtil.ParseDurationToUTC(o.startTime)
->>>>>>> 43ca445 (adds permission-debied cmd)
 	if err != nil {
 		return err
 	}
 
 	fetchFilterPrintEvents := func(client cloudtrail.Client, startTime time.Time, o *LookupEventsOptions) error {
-<<<<<<< HEAD
-<<<<<<< HEAD
-
 		lookupOutput, err := ctAws.GetEvents(startTime, &client)
-<<<<<<< HEAD
 		if err != nil {
 			return err
 		}
-<<<<<<< HEAD
-		filteredEvents, err := ctUtil.FilterUsers(lookupOutput, Ignore, o.printAllEvents)
-=======
-=======
-
->>>>>>> 43ca445 (adds permission-debied cmd)
-		lookupOutput, err := getWriteEvents(startTime, &client)
-=======
->>>>>>> cd3e299 (Implements permission denied events filtering logic)
-		if err != nil {
-			return err
-		}
-<<<<<<< HEAD
-		filteredEvents, err := filterUsers(lookupOutput, Ignore, o.printAllEvents)
->>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
-=======
-		filteredEvents, err := ctUtil.FilterUsers(lookupOutput, Ignore, o.printAllEvents)
->>>>>>> 43ca445 (adds permission-debied cmd)
-		if err != nil {
-			return err
-		}
-
-<<<<<<< HEAD
-<<<<<<< HEAD
-		ctUtil.PrintEvents(*filteredEvents, o.printEventUrl, o.printRawEvents)
-=======
-		printEvents(*filteredEvents, o.printEventUrl, o.printRawEvents)
->>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
-=======
-		ctUtil.PrintEvents(*filteredEvents, o.printEventUrl, o.printRawEvents)
->>>>>>> 43ca445 (adds permission-debied cmd)
-=======
 		if o.printAllEvents {
 			mergedRegex = ""
 		}
 		filteredEvents := ctUtil.Filters[2](lookupOutput, mergedRegex)
-		ctUtil.PrintEvents(filteredEvents, o.printEventUrl, o.printRawEvents)
->>>>>>> eeb7410 (Adds new filtering)
+		ctUtil.PrintEvents(*filteredEvents, o.printEventUrl, o.printRawEvents)
 		fmt.Println("")
 		return err
 	}
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 	arn, accountId, err := ctAws.Whoami(*sts.NewFromConfig(cfg))
-	fmt.Printf("[INFO] Checking write event history since %v for AWS Account %v as %v \n", startTime, accountId, arn)
-	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
-	defaultCloudtrailClient := cloudtrail.New(cloudtrail.Options{
-		Region:      DefaultRegion,
-		Credentials: cfg.Credentials,
-		HTTPClient:  cfg.HTTPClient,
-	})
-	fmt.Printf("\n[INFO] Fetching %v Event History...\n", cfg.Region)
-=======
-	arn, accountId, err := whoami(*sts.NewFromConfig(cfg))
-=======
-	arn, accountId, err := ctAws.Whoami(*sts.NewFromConfig(cfg))
->>>>>>> 43ca445 (adds permission-debied cmd)
 	fmt.Printf("[INFO] Checking write event history since %v for AWS Account %v as %v \n", startTime, accountId, arn)
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
->>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
 	if err := fetchFilterPrintEvents(*cloudTrailclient, startTime, o); err != nil {
 		return err
 	}
 
-<<<<<<< HEAD
-	if defaultConfig.Region != cfg.Region {
-		fmt.Printf("\n\n\n[INFO] Fetching Cloudtrail Global Event History from %v Region...\n", defaultConfig.Region)
-=======
 	if DefaultRegion != cfg.Region {
 		defaultConfig, err := config.LoadDefaultConfig(
 			context.Background(),
@@ -442,7 +124,6 @@ func (o *LookupEventsOptions) run() error {
 			HTTPClient:  cfg.HTTPClient,
 		})
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
->>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
 		if err := fetchFilterPrintEvents(*defaultCloudtrailClient, startTime, o); err != nil {
 			return err
 		}

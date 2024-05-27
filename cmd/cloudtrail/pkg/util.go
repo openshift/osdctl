@@ -15,6 +15,7 @@ type Filter func(types.Event) (bool, error)
 type FilterBulk func([]types.Event) []types.Event
 
 func ApplyFilters(records []types.Event, filters ...Filter) ([]types.Event, error) {
+
 	if len(filters) == 0 {
 		return records, nil
 	}
@@ -22,7 +23,6 @@ func ApplyFilters(records []types.Event, filters ...Filter) ([]types.Event, erro
 	filteredRecords := make([]types.Event, 0, len(records))
 	for _, r := range records {
 		keep := true
-
 		for _, f := range filters {
 			filtered, err := f(r)
 			if err != nil {
@@ -42,23 +42,16 @@ func ApplyFilters(records []types.Event, filters ...Filter) ([]types.Event, erro
 	return filteredRecords, nil
 }
 
-func ApplyBulkFilters(records []types.Event, filters ...FilterBulk) []types.Event {
-	for _, f := range filters {
-		records = f(records)
-	}
-	return records
-}
-
-type FilterSet func([]*cloudtrail.LookupEventsOutput, string) []types.Event
+type FilterSet func([]*cloudtrail.LookupEventsOutput, string) *[]types.Event
 
 var Filters = map[int]FilterSet{
 	1: FilterForUnauthoraizedUsers,
 	2: FilterForIgnoreList,
 }
 
-func FilterForUnauthoraizedUsers(cloudtrailOutput []*cloudtrail.LookupEventsOutput, value string) []types.Event {
+func FilterForUnauthoraizedUsers(cloudtrailOutput []*cloudtrail.LookupEventsOutput, value string) *[]types.Event {
 
-	var filteredEvents []types.Event
+	filteredEvents := []types.Event{}
 	for _, output := range cloudtrailOutput {
 		events, _ := ApplyFilters(output.Events,
 			func(event types.Event) (bool, error) {
@@ -68,13 +61,12 @@ func FilterForUnauthoraizedUsers(cloudtrailOutput []*cloudtrail.LookupEventsOutp
 		filteredEvents = append(filteredEvents, events...)
 
 	}
-
-	return ApplyBulkFilters(filteredEvents)
+	return &filteredEvents
 
 }
 
-func FilterForIgnoreList(cloudtrailOutput []*cloudtrail.LookupEventsOutput, value string) []types.Event {
-	var filteredEvents []types.Event
+func FilterForIgnoreList(cloudtrailOutput []*cloudtrail.LookupEventsOutput, value string) *[]types.Event {
+	filteredEvents := []types.Event{}
 	for _, output := range cloudtrailOutput {
 		events, _ := ApplyFilters(output.Events,
 			func(event types.Event) (bool, error) {
@@ -82,10 +74,13 @@ func FilterForIgnoreList(cloudtrailOutput []*cloudtrail.LookupEventsOutput, valu
 			},
 		)
 		filteredEvents = append(filteredEvents, events...)
+
 	}
-	return filteredEvents
+	return &filteredEvents
 }
 
+// PrintEvents prints the details of each event in the provided slice of events.
+// It takes a slice of types.Event
 // PrintEvents prints the details of each event in the provided slice of events.
 // It takes a slice of types.Event
 func PrintEvents(filteredEvent []types.Event, printUrl bool, raw bool) {
@@ -162,27 +157,37 @@ func MergeRegex(regexlist []string) string {
 // FilterByIgnorelist filters out events based on the specified ignore list, which contains
 // regular expression patterns. It returns true if the event should be kept, and false if it should be filtered out.
 func FilterByIgnorelist(event types.Event, mergedRegex string) (bool, error) {
-	raw, err := pkg.ExtractUserDetails(event.CloudTrailEvent)
-	if err != nil {
-		return false, fmt.Errorf("[ERROR] failed to extract raw CloudTrail event details: %w", err)
-	}
-	userArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
-	regexObj := regexp.MustCompile(mergedRegex)
 	if mergedRegex == "" {
 		return true, nil
 	}
-	if event.Username != nil && regexObj.MatchString(*event.Username) {
-		return false, nil
+	raw, err := pkg.ExtractUserDetails(event.CloudTrailEvent)
+	if err != nil {
+		return true, fmt.Errorf("[ERROR] failed to extract raw CloudTrail event details: %w", err)
 	}
-	if userArn != "" && regexObj.MatchString(userArn) {
+	userArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
+	regexObj := regexp.MustCompile(mergedRegex)
+
+	if event.Username != nil {
+		if regexObj.MatchString(*event.Username) {
+			return false, nil
+		}
+	}
+	if userArn != "" {
+
+		if regexObj.MatchString(userArn) {
+
+			return false, nil
+		}
+	}
+	if userArn == "" && event.Username == nil {
 		return false, nil
 	}
 
 	return true, nil
 }
 
-// Find events with client Unauthorized errorCode
 func ForbiddenEvents(event types.Event, value string) (bool, error) {
+
 	if value == "" {
 		return false, nil
 	}
@@ -191,7 +196,6 @@ func ForbiddenEvents(event types.Event, value string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to compile regex: %w", err)
 	}
-
 	raw, err := pkg.ExtractUserDetails(event.CloudTrailEvent)
 	if err != nil {
 		return false, fmt.Errorf("[ERROR] failed to extract raw CloudTrail event details: %w", err)

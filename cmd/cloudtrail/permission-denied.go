@@ -1,10 +1,14 @@
 package cloudtrail
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	ctUtil "github.com/openshift/osdctl/cmd/cloudtrail/pkg"
 	ctAws "github.com/openshift/osdctl/cmd/cloudtrail/pkg/aws"
 	"github.com/openshift/osdctl/pkg/osdCloud"
@@ -69,14 +73,44 @@ func (p *permissonOptions) run() error {
 		return err
 	}
 
-	cloudtrailClient := cloudtrail.NewFromConfig(cfg)
-	lookupEvents, err := ctAws.GetEvents(startTime, cloudtrailClient)
-	if err != nil {
+	fetchFilterPrint := func(client cloudtrail.Client, startTime time.Time, p *permissonOptions) error {
+		lookupOutput, err := ctAws.GetEvents(startTime, &client)
+		if err != nil {
+			return err
+		}
+
+		permissionDeniedEvent := ctUtil.Filters[1](lookupOutput, errorCode)
+		ctUtil.PrintEvents(*permissionDeniedEvent, p.printEventUrl, p.printRawEvents)
+		fmt.Println("")
 		return err
 	}
-	permissionDeniedEvent := ctUtil.Filters[1](lookupEvents, errorCode)
-	fmt.Printf("[INFO] Fetching %v Permission Denied Events...", cfg.Region)
-	ctUtil.PrintEvents(permissionDeniedEvent, p.printEventUrl, p.printRawEvents)
+
+	arn, accountId, err := ctAws.Whoami(*sts.NewFromConfig(cfg))
+	fmt.Printf("[INFO] Checking Permission Denied History since %v for AWS Account %v as %v \n", startTime, accountId, arn)
+	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
+	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
+	if err := fetchFilterPrint(*cloudTrailclient, startTime, p); err != nil {
+		return err
+	}
+
+	if DefaultRegion != cfg.Region {
+		defaultConfig, err := config.LoadDefaultConfig(
+			context.Background(),
+			config.WithRegion(DefaultRegion))
+		if err != nil {
+			return err
+		}
+
+		defaultCloudtrailClient := cloudtrail.New(cloudtrail.Options{
+			Region:      DefaultRegion,
+			Credentials: cfg.Credentials,
+			HTTPClient:  cfg.HTTPClient,
+		})
+		fmt.Printf("[INFO] Fetching Cloudtrail Global Permission Denied Event History from %v Region...", defaultConfig.Region)
+		if err := fetchFilterPrint(*defaultCloudtrailClient, startTime, p); err != nil {
+			return err
+		}
+	}
 
 	return err
 
