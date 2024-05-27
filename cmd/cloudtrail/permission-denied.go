@@ -3,7 +3,6 @@ package cloudtrail
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	ctUtil "github.com/openshift/osdctl/cmd/cloudtrail/pkg"
@@ -14,12 +13,14 @@ import (
 )
 
 var (
-	search = ".*Client.UnauthorizedOperation.*"
+	errorCode = ".*Client.UnauthorizedOperation.*"
 )
 
 type permissonOptions struct {
-	clusterID string
-	startTime string
+	clusterID      string
+	startTime      string
+	printEventUrl  bool
+	printRawEvents bool
 }
 
 func newCmdPermissionDenied() *cobra.Command {
@@ -33,6 +34,8 @@ func newCmdPermissionDenied() *cobra.Command {
 	}
 	permissionDeniedCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Cluster ID")
 	permissionDeniedCmd.Flags().StringVarP(&ops.startTime, "since", "", "1h", "Specifies that only events that occur within the specified time are returned.Defaults to 1h.Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\".")
+	permissionDeniedCmd.Flags().BoolVarP(&ops.printEventUrl, "url", "u", false, "Generates Url link to cloud console cloudtrail event")
+	permissionDeniedCmd.Flags().BoolVarP(&ops.printRawEvents, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
 	permissionDeniedCmd.MarkFlagRequired("cluster-id")
 	return permissionDeniedCmd
 }
@@ -61,13 +64,19 @@ func (p *permissonOptions) run() error {
 		return err
 	}
 
-	cloudtrailClient := cloudtrail.NewFromConfig(cfg)
-	lookupEvents, err := ctAws.GetEvents(time.Now(), cloudtrailClient)
+	startTime, err := ctUtil.ParseDurationToUTC(p.startTime)
 	if err != nil {
 		return err
 	}
-	permissionDeniedEvent := ctUtil.Filters[2](lookupEvents, search)
-	ctUtil.PrintEvents(permissionDeniedEvent, false, false)
+
+	cloudtrailClient := cloudtrail.NewFromConfig(cfg)
+	lookupEvents, err := ctAws.GetEvents(startTime, cloudtrailClient)
+	if err != nil {
+		return err
+	}
+	permissionDeniedEvent := ctUtil.Filters[1](lookupEvents, errorCode)
+	fmt.Printf("[INFO] Fetching %v Permission Denied Events...", cfg.Region)
+	ctUtil.PrintEvents(permissionDeniedEvent, p.printEventUrl, p.printRawEvents)
 
 	return err
 

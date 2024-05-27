@@ -7,18 +7,19 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
+	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	pkg "github.com/openshift/osdctl/cmd/cloudtrail/pkg/aws"
 )
 
-type Filter func(*cloudtrail.LookupEventsOutput) (bool, error)
-type FilterBulk func([]*cloudtrail.LookupEventsOutput) []*cloudtrail.LookupEventsOutput
+type Filter func(types.Event) (bool, error)
+type FilterBulk func([]types.Event) []types.Event
 
-func ApplyFilters(records []*cloudtrail.LookupEventsOutput, filters ...Filter) ([]*cloudtrail.LookupEventsOutput, error) {
+func ApplyFilters(records []types.Event, filters ...Filter) ([]types.Event, error) {
 	if len(filters) == 0 {
 		return records, nil
 	}
 
-	filteredRecords := make([]*cloudtrail.LookupEventsOutput, 0, len(records))
+	filteredRecords := make([]types.Event, 0, len(records))
 	for _, r := range records {
 		keep := true
 
@@ -41,95 +42,90 @@ func ApplyFilters(records []*cloudtrail.LookupEventsOutput, filters ...Filter) (
 	return filteredRecords, nil
 }
 
-func ApplyBulkFilters(records []*cloudtrail.LookupEventsOutput, filters ...FilterBulk) []*cloudtrail.LookupEventsOutput {
+func ApplyBulkFilters(records []types.Event, filters ...FilterBulk) []types.Event {
 	for _, f := range filters {
 		records = f(records)
 	}
 	return records
 }
 
-type FilterSet func([]*cloudtrail.LookupEventsOutput, string) []*cloudtrail.LookupEventsOutput
+type FilterSet func([]*cloudtrail.LookupEventsOutput, string) []types.Event
 
 var Filters = map[int]FilterSet{
 	1: FilterForUnauthoraizedUsers,
-	2: FilterForSearch,
-	3: FilterForIgnoreList,
+	2: FilterForIgnoreList,
 }
 
-func FilterForUnauthoraizedUsers(events []*cloudtrail.LookupEventsOutput, value string) []*cloudtrail.LookupEventsOutput {
-	filteredEvents, _ := ApplyFilters(events,
-		func(event *cloudtrail.LookupEventsOutput) (bool, error) {
-			return ForbiddenEvents(event, value)
-		},
-	)
+func FilterForUnauthoraizedUsers(cloudtrailOutput []*cloudtrail.LookupEventsOutput, value string) []types.Event {
+
+	var filteredEvents []types.Event
+	for _, output := range cloudtrailOutput {
+		events, _ := ApplyFilters(output.Events,
+			func(event types.Event) (bool, error) {
+				return ForbiddenEvents(event, value)
+			},
+		)
+		filteredEvents = append(filteredEvents, events...)
+
+	}
 
 	return ApplyBulkFilters(filteredEvents)
 
 }
 
-func FilterForSearch(events []*cloudtrail.LookupEventsOutput, value string) []*cloudtrail.LookupEventsOutput {
-	filteredEvents, _ := ApplyFilters(events,
-		func(event *cloudtrail.LookupEventsOutput) (bool, error) {
-			return FilterByArnAndUsername(event, value)
-		},
-	)
-	return ApplyBulkFilters(filteredEvents)
-}
-
-func FilterForIgnoreList(events []*cloudtrail.LookupEventsOutput, value string) []*cloudtrail.LookupEventsOutput {
-	filteredEvents, _ := ApplyFilters(events,
-		func(event *cloudtrail.LookupEventsOutput) (bool, error) {
-			return FilterByIgnorelist(event, value)
-		},
-	)
-	return ApplyBulkFilters(filteredEvents)
+func FilterForIgnoreList(cloudtrailOutput []*cloudtrail.LookupEventsOutput, value string) []types.Event {
+	var filteredEvents []types.Event
+	for _, output := range cloudtrailOutput {
+		events, _ := ApplyFilters(output.Events,
+			func(event types.Event) (bool, error) {
+				return FilterByIgnorelist(event, value)
+			},
+		)
+		filteredEvents = append(filteredEvents, events...)
+	}
+	return filteredEvents
 }
 
 // PrintEvents prints the details of each event in the provided slice of events.
 // It takes a slice of types.Event
-func PrintEvents(filteredEvent []*cloudtrail.LookupEventsOutput, printUrl bool, raw bool) {
+func PrintEvents(filteredEvent []types.Event, printUrl bool, raw bool) {
 	var eventStringBuilder = strings.Builder{}
-	for _, cloudtrailOutput := range filteredEvent {
-		for i := len(cloudtrailOutput.Events) - 1; i >= 0; i-- {
-			event := cloudtrailOutput.Events[i]
 
-			if raw {
-				if event.CloudTrailEvent != nil {
-					fmt.Printf("%v \n", *event.CloudTrailEvent)
-					return
-				}
+	for i := len(filteredEvent) - 1; i >= 0; i-- {
+		if raw {
+			if filteredEvent[i].CloudTrailEvent != nil {
+				fmt.Printf("%v \n", *filteredEvent[i].CloudTrailEvent)
+				return
 			}
-			rawEventDetails, err := pkg.ExtractUserDetails(event.CloudTrailEvent)
-			if err != nil {
-				fmt.Printf("[Error] Error extracting event details: %v", err)
-			}
-			sessionIssuer := rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName
-			if event.EventName != nil {
-				eventStringBuilder.WriteString(fmt.Sprintf("\n%v", *event.EventName))
-			}
-			if event.EventTime != nil {
-				eventStringBuilder.WriteString(fmt.Sprintf(" | %v", event.EventTime.String()))
-			}
-			if event.Username != nil {
-				eventStringBuilder.WriteString(fmt.Sprintf(" | Username: %v", *event.Username))
-			}
-			if sessionIssuer != "" {
-				eventStringBuilder.WriteString(fmt.Sprintf(" | ARN: %v", sessionIssuer))
-			}
-
-			if printUrl && event.CloudTrailEvent != nil {
-				if err == nil {
-					eventStringBuilder.WriteString(fmt.Sprintf("\n%v |", generateLink(*rawEventDetails)))
-				} else {
-					fmt.Println("EventLink: <not available>")
-				}
-			}
-
 		}
-		fmt.Println(eventStringBuilder.String())
+		rawEventDetails, err := pkg.ExtractUserDetails(filteredEvent[i].CloudTrailEvent)
+		if err != nil {
+			fmt.Printf("[Error] Error extracting event details: %v", err)
+		}
+		sessionIssuer := rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName
+		if filteredEvent[i].EventName != nil {
+			eventStringBuilder.WriteString(fmt.Sprintf("\n%v", *filteredEvent[i].EventName))
+		}
+		if filteredEvent[i].EventTime != nil {
+			eventStringBuilder.WriteString(fmt.Sprintf(" | %v", filteredEvent[i].EventTime.String()))
+		}
+		if filteredEvent[i].Username != nil {
+			eventStringBuilder.WriteString(fmt.Sprintf(" | Username: %v", *filteredEvent[i].Username))
+		}
+		if sessionIssuer != "" {
+			eventStringBuilder.WriteString(fmt.Sprintf(" | ARN: %v", sessionIssuer))
+		}
+
+		if printUrl && filteredEvent[i].CloudTrailEvent != nil {
+			if err == nil {
+				eventStringBuilder.WriteString(fmt.Sprintf("\n%v |", generateLink(*rawEventDetails)))
+			} else {
+				fmt.Println("EventLink: <not available>")
+			}
+		}
 
 	}
-
+	fmt.Println(eventStringBuilder.String())
 }
 
 // generateLink generates a hyperlink to aws cloudTrail event.
@@ -163,37 +159,30 @@ func MergeRegex(regexlist []string) string {
 	return strings.Join(regexlist, "|")
 }
 
-// FilterUsers filters out events based on the specified Ignore list, which contains
-// regular expression patterns. It takes a slice of cloudtrail.LookupEventsOutput,
-// which represents the output of AWS CloudTrail lookup events operation, and a list
-// of regular expression patterns to ignore.
-func FilterByIgnorelist(lookupOutput *cloudtrail.LookupEventsOutput, mergedRegex string) (bool, error) {
-	for _, event := range lookupOutput.Events {
-		raw, err := pkg.ExtractUserDetails(event.CloudTrailEvent)
-		if err != nil {
-			return false, fmt.Errorf("[ERROR] failed to extract raw cloudtrailEvent details: %w", err)
-		}
-		userArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
-		regexObj := regexp.MustCompile(mergedRegex)
-		if mergedRegex == "" {
-			return true, nil
-		}
-
-		if event.Username != nil && regexObj.MatchString(*event.Username) {
-			return false, nil
-		}
-
-		if userArn != "" && regexObj.MatchString(userArn) {
-			return false, nil
-		}
+// FilterByIgnorelist filters out events based on the specified ignore list, which contains
+// regular expression patterns. It returns true if the event should be kept, and false if it should be filtered out.
+func FilterByIgnorelist(event types.Event, mergedRegex string) (bool, error) {
+	raw, err := pkg.ExtractUserDetails(event.CloudTrailEvent)
+	if err != nil {
+		return false, fmt.Errorf("[ERROR] failed to extract raw CloudTrail event details: %w", err)
+	}
+	userArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
+	regexObj := regexp.MustCompile(mergedRegex)
+	if mergedRegex == "" {
+		return true, nil
+	}
+	if event.Username != nil && regexObj.MatchString(*event.Username) {
+		return false, nil
+	}
+	if userArn != "" && regexObj.MatchString(userArn) {
+		return false, nil
 	}
 
 	return true, nil
 }
 
 // Find events with client Unauthorized errorCode
-
-func ForbiddenEvents(lookupOutput *cloudtrail.LookupEventsOutput, value string) (bool, error) {
+func ForbiddenEvents(event types.Event, value string) (bool, error) {
 	if value == "" {
 		return false, nil
 	}
@@ -203,58 +192,14 @@ func ForbiddenEvents(lookupOutput *cloudtrail.LookupEventsOutput, value string) 
 		return false, fmt.Errorf("failed to compile regex: %w", err)
 	}
 
-	for _, event := range lookupOutput.Events {
-		raw, err := pkg.ExtractUserDetails(event.CloudTrailEvent)
-		if err != nil {
-			return false, fmt.Errorf("[ERROR] failed to extract raw CloudTrail event details: %w", err)
-		}
-		errorCode := raw.ErrorCode
-		if errorCode != "" && check.MatchString(errorCode) {
-			return true, nil
-		}
+	raw, err := pkg.ExtractUserDetails(event.CloudTrailEvent)
+	if err != nil {
+		return false, fmt.Errorf("[ERROR] failed to extract raw CloudTrail event details: %w", err)
 	}
-	return false, nil
-}
-func FilterByArnAndUsername(lookupOutput *cloudtrail.LookupEventsOutput, value string) (bool, error) {
-
-	if value == "" {
+	errorCode := raw.ErrorCode
+	if errorCode != "" && check.MatchString(errorCode) {
 		return true, nil
 	}
-	regexPattern := fmt.Sprintf(".*%v.*", regexp.QuoteMeta(value))
-	search, err := regexp.Compile(regexPattern)
-	if err != nil {
-		return false, fmt.Errorf("failed to compile regex: %w", err)
-	}
 
-	// Iterate through each CloudTrail event.
-	for _, event := range lookupOutput.Events {
-
-		var matchesUsername bool
-		if event.Username != nil {
-			matchesUsername, err = regexp.MatchString(value, *event.Username)
-			if err != nil {
-				return false, fmt.Errorf("error in pattern matching: %w", err)
-			}
-		}
-		checkArn := func() bool {
-			// Extract raw CloudTrail event details.
-			raw, err := pkg.ExtractUserDetails(event.CloudTrailEvent)
-			if err != nil {
-				return false
-
-			}
-			sessionIssuerArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
-			if search.MatchString(sessionIssuerArn) {
-				return search.MatchString(sessionIssuerArn)
-			}
-			return false
-		}
-
-		if matchesUsername {
-			return true, nil
-		} else {
-			checkArn()
-		}
-	}
 	return false, nil
 }

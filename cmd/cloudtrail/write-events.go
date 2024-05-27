@@ -92,6 +92,7 @@ func newCmdWriteEvents() *cobra.Command {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 func (o *LookupEventsOptions) run() error {
 
 =======
@@ -288,6 +289,8 @@ func printEvents(filteredEvent []types.Event, printUrl bool, raw bool) {
 
 }
 
+=======
+>>>>>>> cd3e299 (Implements permission denied events filtering logic)
 func (o *LookupEventsOptions) run() error {
 >>>>>>> 778e2c5 ([SDE-3246] Cloudtail write-events feature (#560))
 	err := utils.IsValidClusterKey(o.clusterID)
@@ -351,6 +354,7 @@ func (o *LookupEventsOptions) run() error {
 <<<<<<< HEAD
 
 		lookupOutput, err := ctAws.GetEvents(startTime, &client)
+<<<<<<< HEAD
 		if err != nil {
 			return err
 		}
@@ -361,6 +365,8 @@ func (o *LookupEventsOptions) run() error {
 
 >>>>>>> 43ca445 (adds permission-debied cmd)
 		lookupOutput, err := getWriteEvents(startTime, &client)
+=======
+>>>>>>> cd3e299 (Implements permission denied events filtering logic)
 		if err != nil {
 			return err
 		}
@@ -387,7 +393,7 @@ func (o *LookupEventsOptions) run() error {
 		if o.printAllEvents {
 			mergedRegex = ""
 		}
-		filteredEvents := ctUtil.Filters[3](lookupOutput, mergedRegex)
+		filteredEvents := ctUtil.Filters[2](lookupOutput, mergedRegex)
 		ctUtil.PrintEvents(filteredEvents, o.printEventUrl, o.printRawEvents)
 >>>>>>> eeb7410 (Adds new filtering)
 		fmt.Println("")
