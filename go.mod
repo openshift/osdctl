@@ -38,7 +38,7 @@ require (
 	github.com/openshift/backplane-cli v0.1.30
 	github.com/openshift/gcp-project-operator v0.0.0-20220920194256-df38e31387a7
 	github.com/openshift/hive/apis v0.0.0-20240216200617-8c54fc9cac45
-	github.com/openshift/osd-network-verifier v0.4.10
+	github.com/openshift/osd-network-verifier v0.4.11
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/shopspring/decimal v1.3.1
 	github.com/sirupsen/logrus v1.9.3
