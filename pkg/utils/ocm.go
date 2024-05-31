@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	"github.com/google/uuid"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 )
@@ -147,7 +148,7 @@ func GenerateQuery(clusterIdentifier string) string {
 	// Based on the format of the clusterIdentifier, we can know what it is, so we can simplify ocm query and make it quicker
 	if regexp.MustCompile(`^[0-9a-z]{32}$`).MatchString(clusterIdentifier) {
 		return strings.TrimSpace(fmt.Sprintf("(id = '%[1]s')", clusterIdentifier))
-	} else if regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`).MatchString(clusterIdentifier) {
+	} else if _, err := uuid.Parse(clusterIdentifier); err == nil {
 		return strings.TrimSpace(fmt.Sprintf("(external_id = '%[1]s')", clusterIdentifier))
 	} else {
 		return strings.TrimSpace(fmt.Sprintf("(display_name like '%[1]s')", clusterIdentifier))
