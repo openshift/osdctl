@@ -2,6 +2,7 @@ package utils
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -132,4 +133,29 @@ func TestGetOCMConfigurationTokenAndUrlAndRefreshTokenEnvVarsSet(t *testing.T) {
 	})
 
 	assertConfigValues(t, config, err, expectedUrl, expectedToken, expectedRefreshToken)
+}
+
+func testGenerateQuery(t *testing.T, clusterIdentifier string, expectedType string) {
+	detectedType := strings.Fields(GenerateQuery(clusterIdentifier))[0][1:]
+	if expectedType != detectedType {
+		t.Errorf("identifier %s of type %s is detected as %s", clusterIdentifier, expectedType, detectedType)
+	}
+}
+
+func TestGenerateQueryInternalId(t *testing.T) {
+	testGenerateQuery(t, "261kalm3uob0vegg1c7h9o7r5k9t64ji", "id")
+	testGenerateQuery(t, "261kalm3uob0vegg1c7h9o7r5k9t64j", "display_name")
+	testGenerateQuery(t, "261kalm3uob0vegg1c7h9o7r5k9t64jix", "display_name")
+	testGenerateQuery(t, "261kalm3uob0vegg1c7h9o7r5k9t64jI", "display_name")
+}
+
+func TestGenerateQueryExternalId(t *testing.T) {
+	testGenerateQuery(t, "c1f562af-fb22-42c5-aa07-6848e1eeee9c", "external_id")
+	testGenerateQuery(t, "c1f562af-fb22-42c5-aa07-6848e1eeee9cc", "display_name")
+	testGenerateQuery(t, "c1f562af-fb22-42c5-aa07-6848e1eeee9", "display_name")
+	testGenerateQuery(t, "C1f562af-fb22-42c5-aa07-6848e1eeee9c", "display_name")
+}
+
+func TestGenerateQueryDisplayName(t *testing.T) {
+	testGenerateQuery(t, "hs-mc-773jpgko0", "display_name")
 }
