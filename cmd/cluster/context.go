@@ -91,6 +91,9 @@ type contextData struct {
 
 	// CloudTrail Logs
 	CloudtrailEvents []*types.Event
+
+	// OCM Cluster description
+	Description string
 }
 
 // newCmdContext implements the context command to show the current context of a cluster
@@ -135,6 +138,7 @@ func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create OCM client to talk to cluster API
+	defer utils.StartDelayTracker(o.verbose, "OCM Clusters").End()
 	ocmClient, err := utils.CreateConnection()
 	if err != nil {
 		return err
@@ -150,11 +154,11 @@ func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unexpected number of clusters matched input. Expected 1 got %d", len(clusters))
 	}
 
-	cluster := clusters[0]
-	o.clusterID = cluster.ID()
-	o.externalClusterID = cluster.ExternalID()
-	o.baseDomain = cluster.DNS().BaseDomain()
-	o.infraID = cluster.InfraID()
+	o.cluster = clusters[0]
+	o.clusterID = o.cluster.ID()
+	o.externalClusterID = o.cluster.ExternalID()
+	o.baseDomain = o.cluster.DNS().BaseDomain()
+	o.infraID = o.cluster.InfraID()
 
 	if o.usertoken == "" {
 		o.usertoken = viper.GetString(pagerduty.PagerDutyUserTokenConfigKey)
@@ -164,7 +168,7 @@ func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
 		o.oauthtoken = viper.GetString(pagerduty.PagerDutyOauthTokenConfigKey)
 	}
 
-	orgID, err := utils.GetOrgfromClusterID(ocmClient, *cluster)
+	orgID, err := utils.GetOrgfromClusterID(ocmClient, *o.cluster)
 	if err != nil {
 		fmt.Printf("Failed to get Org ID for cluster ID %s - err: %q", o.clusterID, err)
 		o.organizationID = ""
@@ -185,7 +189,7 @@ func (o *contextOptions) run() error {
 	case jsonOutputConfigValue:
 		printFunc = o.printJsonOutput
 	default:
-		return fmt.Errorf("Unknown Output Format: %s", o.output)
+		return fmt.Errorf("unknown Output Format: %s", o.output)
 	}
 
 	currentData, dataErrors := o.generateContextData()
@@ -207,12 +211,10 @@ func (o *contextOptions) run() error {
 }
 
 func (o *contextOptions) printLongOutput(data *contextData) {
-	clusterHeader := fmt.Sprintf("%s -- %s", data.ClusterName, data.ClusterID)
-	fmt.Println(clusterHeader)
-	fmt.Println(strings.Repeat("=", len(clusterHeader)))
+	data.printClusterHeader()
 
-	printClusterInfo(o.clusterID)
-
+	fmt.Println(strings.TrimSpace(data.Description))
+	fmt.Println()
 	utils.PrintLimitedSupportReasons(data.LimitedSupportReasons)
 	fmt.Println()
 	printJIRASupportExceptions(data.SupportExceptions)
@@ -234,15 +236,14 @@ func (o *contextOptions) printLongOutput(data *contextData) {
 
 	// Print other helpful links
 	o.printOtherLinks(data)
+	fmt.Println()
 
 	// Print Dynatrace URL
 	printDynatraceEnvURL(data)
 }
 
 func (o *contextOptions) printShortOutput(data *contextData) {
-	fmt.Println("============================================================")
-	fmt.Printf("%s -- %s\n", data.ClusterName, data.ClusterID)
-	fmt.Println("============================================================")
+	data.printClusterHeader()
 
 	highAlertCount := 0
 	lowAlertCount := 0
@@ -295,8 +296,6 @@ func (o *contextOptions) printShortOutput(data *contextData) {
 	if err := table.Flush(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error printing Short Output: %v\n", err)
 	}
-
-	return
 }
 
 func (o *contextOptions) printJsonOutput(data *contextData) {
@@ -333,7 +332,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		Init()
 	if err != nil {
 		skipPagerDutyCollection = true
-		errors = append(errors, fmt.Errorf("Skipping PagerDuty context collection: %v", err))
+		errors = append(errors, fmt.Errorf("skipping PagerDuty context collection: %v", err))
 	}
 
 	ocmClient, err := utils.CreateConnection()
@@ -341,26 +340,28 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		return nil, []error{err}
 	}
 	defer ocmClient.Close()
-	cluster, err := utils.GetCluster(ocmClient, o.clusterID)
-	if err != nil {
-		errors = append(errors, err)
-		return nil, errors
+	// Normally the o.cluster would be set by complete function, but in case we want to call this function
+	// in an other context, we can make sure o.cluster is set properly from o.clusterID
+	if o.cluster == nil {
+		cluster, err := utils.GetCluster(ocmClient, o.clusterID)
+		if err != nil {
+			errors = append(errors, err)
+			return nil, errors
+		}
+		o.cluster = cluster
 	}
-	o.cluster = cluster
 
-	data.ClusterName = cluster.Name()
-	data.ClusterID = cluster.ID()
-	data.ClusterVersion = cluster.Version().RawID()
+	data.ClusterName = o.cluster.Name()
+	data.ClusterID = o.clusterID
+	data.ClusterVersion = o.cluster.Version().RawID()
 	data.OCMEnv = utils.GetCurrentOCMEnv(ocmClient)
 
 	GetLimitedSupport := func() {
 		defer wg.Done()
-		if o.verbose {
-			fmt.Fprintln(os.Stderr, "Getting Limited Support reasons...")
-		}
-		limitedSupportReasons, err := utils.GetClusterLimitedSupportReasons(ocmClient, cluster.ID())
+		defer utils.StartDelayTracker(o.verbose, "Limited Support reasons").End()
+		limitedSupportReasons, err := utils.GetClusterLimitedSupportReasons(ocmClient, o.clusterID)
 		if err != nil {
-			errors = append(errors, fmt.Errorf("Error while getting Limited Support status reasons: %v", err))
+			errors = append(errors, fmt.Errorf("error while getting Limited Support status reasons: %v", err))
 		} else {
 			data.LimitedSupportReasons = append(data.LimitedSupportReasons, limitedSupportReasons...)
 		}
@@ -368,46 +369,38 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 
 	GetServiceLogs := func() {
 		defer wg.Done()
-		if o.verbose {
-			fmt.Fprintln(os.Stderr, "Getting Service Logs...")
-		}
+		defer utils.StartDelayTracker(o.verbose, "Service Logs").End()
 		timeToCheckSvcLogs := time.Now().AddDate(0, 0, -o.days)
-		data.ServiceLogs, err = servicelog.GetServiceLogsSince(cluster.ID(), timeToCheckSvcLogs, false, false)
+		data.ServiceLogs, err = servicelog.GetServiceLogsSince(o.clusterID, timeToCheckSvcLogs, false, false)
 		if err != nil {
-			errors = append(errors, fmt.Errorf("Error while getting the service logs: %v", err))
+			errors = append(errors, fmt.Errorf("error while getting the service logs: %v", err))
 		}
 	}
 
 	GetJiraIssues := func() {
 		defer wg.Done()
-		if o.verbose {
-			fmt.Fprintln(os.Stderr, "Getting Jira Issues...")
-		}
+		defer utils.StartDelayTracker(o.verbose, "Jira Issues").End()
 		data.JiraIssues, err = utils.GetJiraIssuesForCluster(o.clusterID, o.externalClusterID)
 		if err != nil {
-			errors = append(errors, fmt.Errorf("Error while getting the open jira tickets: %v", err))
+			errors = append(errors, fmt.Errorf("error while getting the open jira tickets: %v", err))
 		}
 	}
 
 	GetSupportExceptions := func() {
 		defer wg.Done()
-		if o.verbose {
-			fmt.Fprintln(os.Stderr, "Getting Support Exceptions...")
-		}
+		defer utils.StartDelayTracker(o.verbose, "Support Exceptions").End()
 		data.SupportExceptions, err = utils.GetJiraSupportExceptionsForOrg(o.organizationID)
 		if err != nil {
-			errors = append(errors, fmt.Errorf("Error while getting support exceptions: %v", err))
+			errors = append(errors, fmt.Errorf("error while getting support exceptions: %v", err))
 		}
 	}
 
 	GetDynatraceURL := func() {
 		var clusterID string = o.clusterID
 		defer wg.Done()
-		if o.verbose {
-			fmt.Fprintln(os.Stderr, "Getting Dynatrace URL...")
-		}
+		defer utils.StartDelayTracker(o.verbose, "Dynatrace URL").End()
 
-		clusterID, _, err := dynatrace.GetManagementCluster(ocmClient, cluster)
+		clusterID, _, err := dynatrace.GetManagementCluster(ocmClient, o.cluster)
 		if err != nil {
 			errors = append(errors, err)
 			data.DyntraceEnvURL = err.Error()
@@ -415,11 +408,11 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		}
 		data.DyntraceEnvURL, err = dynatrace.GetDynatraceURLFromLabel(ocmClient, clusterID)
 		if err != nil {
-			errors = append(errors, fmt.Errorf("Error The Dynatrace Environemnt URL could not be determined from Label. Using fallback method%s", err))
+			errors = append(errors, fmt.Errorf("error The Dynatrace Environemnt URL could not be determined from Label. Using fallback method%s", err))
 			// FallBack method to determine via Cluster Login
 			data.DyntraceEnvURL, err = dynatrace.GetDynatraceURLFromManagementCluster(clusterID)
 			if err != nil {
-				errors = append(errors, fmt.Errorf("Error The Dynatrace Environemnt URL could not be determined %s", err))
+				errors = append(errors, fmt.Errorf("error The Dynatrace Environemnt URL could not be determined %s", err))
 				data.DyntraceEnvURL = "the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there"
 			}
 		}
@@ -434,20 +427,17 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			return
 		}
 
-		if o.verbose {
-			fmt.Fprintln(os.Stderr, "Getting PagerDuty Service...")
-		}
+		delayTracker := utils.StartDelayTracker(o.verbose, "PagerDuty Service")
 		data.pdServiceID, err = pdProvider.GetPDServiceIDs()
 		if err != nil {
-			errors = append(errors, fmt.Errorf("Error getting PD Service ID: %v", err))
+			errors = append(errors, fmt.Errorf("error getting PD Service ID: %v", err))
 		}
+		delayTracker.End()
 
-		if o.verbose {
-			fmt.Fprintln(os.Stderr, "Getting current PagerDuty Alerts...")
-		}
+		defer utils.StartDelayTracker(o.verbose, "current PagerDuty Alerts").End()
 		data.PdAlerts, err = pdProvider.GetFiringAlertsForCluster(data.pdServiceID)
 		if err != nil {
-			errors = append(errors, fmt.Errorf("Error while getting current PD Alerts: %v", err))
+			errors = append(errors, fmt.Errorf("error while getting current PD Alerts: %v", err))
 		}
 	}
 
@@ -463,27 +453,44 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		GetDynatraceURL,
 	)
 
+	if o.output == longOutputConfigValue {
+
+		GetDescription := func() {
+			defer wg.Done()
+			defer utils.StartDelayTracker(o.verbose, "Cluster Description").End()
+
+			cmd := "ocm describe cluster " + o.clusterID
+			output, err := exec.Command("bash", "-c", cmd).Output()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, string(output))
+				fmt.Fprintln(os.Stderr, err)
+			}
+			data.Description = string(output)
+		}
+
+		retrievers = append(
+			retrievers,
+			GetDescription,
+		)
+	}
+
 	if o.full {
 		GetHistoricalPagerDutyAlerts := func() {
 			pdwg.Wait()
 			defer wg.Done()
-			if o.verbose {
-				fmt.Fprintln(os.Stderr, "Getting historical PagerDuty Alerts...")
-			}
+			defer utils.StartDelayTracker(o.verbose, "historical PagerDuty Alerts").End()
 			data.HistoricalAlerts, err = pdProvider.GetHistoricalAlertsForCluster(data.pdServiceID)
 			if err != nil {
-				errors = append(errors, fmt.Errorf("Error while getting historical PD Alert Data: %v", err))
+				errors = append(errors, fmt.Errorf("error while getting historical PD Alert Data: %v", err))
 			}
 		}
 
 		GetCloudTrailLogs := func() {
 			defer wg.Done()
-			if o.verbose {
-				fmt.Fprintln(os.Stderr, "Pulling and filtering the past", o.pages, "pages of Cloudtrail data")
-			}
+			defer utils.StartDelayTracker(o.verbose, fmt.Sprintf("past %d pages of Cloudtrail data", o.pages)).End()
 			data.CloudtrailEvents, err = GetCloudTrailLogsForCluster(o.awsProfile, o.clusterID, o.pages)
 			if err != nil {
-				errors = append(errors, fmt.Errorf("Error getting cloudtrail logs for cluster: %v", err))
+				errors = append(errors, fmt.Errorf("error getting cloudtrail logs for cluster: %v", err))
 			}
 		}
 
@@ -541,16 +548,6 @@ func GetCloudTrailLogsForCluster(awsProfile string, clusterID string, maxPages i
 	}
 
 	return filteredEvents, nil
-}
-
-func printClusterInfo(clusterID string) {
-	cmd := "ocm describe cluster " + clusterID
-	output, err := exec.Command("bash", "-c", cmd).Output()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, string(output))
-		fmt.Fprintln(os.Stderr, err)
-	}
-	fmt.Println(string(output))
 }
 
 func printHistoricalPDAlertSummary(incidentCounters map[string][]*pagerduty.IncidentOccurrenceTracker, serviceIDs []string, sinceDays int) {
@@ -622,7 +619,7 @@ func (o *contextOptions) printOtherLinks(data *contextData) {
 
 	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
 	for _, link := range keys {
-		table.AddRow([]string{link, links[link]})
+		table.AddRow([]string{link, strings.TrimSpace(links[link])})
 	}
 
 	if err := table.Flush(); err != nil {
@@ -703,4 +700,11 @@ func printDynatraceEnvURL(data *contextData) {
 	var name string = "Dynatrace Environment URL"
 	fmt.Println(delimiter + name)
 	fmt.Println(data.DyntraceEnvURL)
+}
+
+func (data *contextData) printClusterHeader() {
+	clusterHeader := fmt.Sprintf("%s -- %s", data.ClusterName, data.ClusterID)
+	fmt.Println(strings.Repeat("=", len(clusterHeader)))
+	fmt.Println(clusterHeader)
+	fmt.Println(strings.Repeat("=", len(clusterHeader)))
 }
