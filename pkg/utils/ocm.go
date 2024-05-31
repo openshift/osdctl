@@ -147,7 +147,7 @@ func GenerateQuery(clusterIdentifier string) string {
 	// Based on the format of the clusterIdentifier, we can know what it is, so we can simplify ocm query and make it quicker
 	if regexp.MustCompile(`^[0-9a-z]{32}$`).MatchString(clusterIdentifier) {
 		return strings.TrimSpace(fmt.Sprintf("(id = '%[1]s')", clusterIdentifier))
-	} else if regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89aAbB][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(clusterIdentifier) {
+	} else if regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`).MatchString(clusterIdentifier) {
 		return strings.TrimSpace(fmt.Sprintf("(external_id = '%[1]s')", clusterIdentifier))
 	} else {
 		return strings.TrimSpace(fmt.Sprintf("(display_name like '%[1]s')", clusterIdentifier))
