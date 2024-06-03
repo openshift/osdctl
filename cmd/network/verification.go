@@ -219,6 +219,8 @@ func (e *EgressVerification) setup(ctx context.Context) (*aws.Config, error) {
 		e.log.Debug(ctx, "cluster %s found from OCM: %s", e.ClusterId, cluster.ID())
 		e.cluster = cluster
 
+		// We currently have insufficient permissions to run network verifier on ROSA HCP
+		// We can update or, if applicable, remove this warning after https://issues.redhat.com/browse/XCMSTRAT-245
 		if e.cluster.Hypershift().Enabled() {
 			e.log.Warn(ctx, "Generally, SRE has insufficient AWS permissions"+
 				" to run network verifier on hosted control plane clusters. Run anyway?")
