@@ -220,9 +220,11 @@ func (e *EgressVerification) setup(ctx context.Context) (*aws.Config, error) {
 		e.cluster = cluster
 
 		if e.cluster.Hypershift().Enabled() {
-			return nil, errors.New("failed to run network verifier." +
-				" Hosted control plane clusters are not supported." +
-				" Instead, please use the network verifier script in ops-sop/hypershift/utils/verify-egress.sh")
+			e.log.Warn(ctx, "Generally, SRE has insufficient AWS permissions"+
+				" to run network verifier on hosted control plane clusters. Run anyway?")
+			if !utils.ConfirmPrompt() {
+				return nil, errors.New("You can try the network verifier script in ops-sop/hypershift/utils/verify-egress.sh")
+			}
 		}
 
 		e.log.Info(ctx, "getting AWS credentials from backplane-api")
