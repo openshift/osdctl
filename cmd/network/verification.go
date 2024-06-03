@@ -3,6 +3,7 @@ package network
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -217,6 +218,12 @@ func (e *EgressVerification) setup(ctx context.Context) (*aws.Config, error) {
 		}
 		e.log.Debug(ctx, "cluster %s found from OCM: %s", e.ClusterId, cluster.ID())
 		e.cluster = cluster
+
+		if e.cluster.Hypershift().Enabled() {
+			return nil, errors.New("failed to run network verifier." +
+				" Hosted control plane clusters are not supported." +
+				" Instead, please use the network verifier script in ops-sop/hypershift/utils/verify-egress.sh")
+		}
 
 		e.log.Info(ctx, "getting AWS credentials from backplane-api")
 		cfg, err := osdCloud.CreateAWSV2Config(ocmClient, cluster)
