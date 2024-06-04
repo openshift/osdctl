@@ -88,9 +88,8 @@ func PrintJiraIssues(issues []jira.Issue) {
 	fmt.Println(delimiter + name)
 
 	for _, i := range issues {
-		fmt.Printf("[%s](%s/%s): %+v\n", i.Key, i.Fields.Type.Name, i.Fields.Priority.Name, i.Fields.Summary)
+		fmt.Printf("[%s|%s/browse/%s](%s/%s): %+v\n", i.Key, JiraBaseURL, i.Key, i.Fields.Type.Name, i.Fields.Priority.Name, i.Fields.Summary)
 		fmt.Printf("- Created: %s\tStatus: %s\n", time.Time(i.Fields.Created).Format("2006-01-02 15:04"), i.Fields.Status.Name)
-		fmt.Printf("- Link: %s/browse/%s\n\n", JiraBaseURL, i.Key)
 	}
 
 	if len(issues) == 0 {
