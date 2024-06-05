@@ -5,39 +5,10 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/openshift/osdctl/cmd/alerts/utils"
 	kubeutils "github.com/openshift/osdctl/cmd/common"
-	common "github.com/openshift/osdctl/cmd/alerts"
 	"github.com/spf13/cobra"
 )
-
-type ID struct {
-	ID string `json:"id"`
-}
-
-type Matchers struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
-
-type Status struct {
-	State string `json:"state"`
-}
-
-type Silence struct {
-	ID       string     `json:"id"`
-	Matchers []Matchers `json:"matchers"`
-
-	Status    Status `json:"status"`
-	Comment   string `json:"comment"`
-	CreatedBy string `json:"createdBy"`
-	EndsAt    string `json:"endsAt"`
-	StartsAt  string `json:"startsAt"`
-}
-
-type listSilenceCmd struct {
-	clusterID string
-	reason    string
-}
 
 func NewCmdListSilence() *cobra.Command {
 	listSilenceCmd := &listSilenceCmd{}
@@ -59,22 +30,17 @@ func NewCmdListSilence() *cobra.Command {
 	return cmd
 }
 
-func ListSilence(cmd *listSilenceCmd) {
-	var silences []Silence
+func ListSilence(clusterID string) {
+	var silences []utils.Silence
 
-	silenceCmd := []string{"amtool", "silence", "--alertmanager.url", LocalHostUrl, "-o", "json"}
-
-	elevationReasons := []string{
-		cmd.reason,
-		"List active alertmanager silences via osdctl",
-	}
+	silenceCmd := []string{"amtool", "silence", "--alertmanager.url", utils.LocalHostUrl, "-o", "json"}
 
 	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(cmd.clusterID, elevationReasons...)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	op, err := common.ExecInPod(kubeconfig, clientset, silenceCmd)
+	op, err := utils.ExecInPod(kubeconfig, clientset, silenceCmd)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -95,7 +61,7 @@ func ListSilence(cmd *listSilenceCmd) {
 	}
 }
 
-func printSilence(silence Silence) {
+func printSilence(silence utils.Silence) {
 	id, matchers, status, created, starts, end, comment := silence.ID, silence.Matchers, silence.Status, silence.CreatedBy, silence.StartsAt, silence.EndsAt, silence.Comment
 	fmt.Println("-------------------------------------------")
 	for _, matcher := range matchers {

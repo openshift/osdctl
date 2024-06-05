@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 
-	common "github.com/openshift/osdctl/cmd/alerts"
+	"github.com/openshift/osdctl/cmd/alerts/utils"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
 	kubeutils "github.com/openshift/osdctl/cmd/common"
 	"github.com/spf13/cobra"
@@ -81,12 +81,12 @@ func AddAllSilence(clusterID, duration, comment, username, clustername string, k
 			"silence",
 			"add",
 			"alertname=" + alert.Labels.Alertname,
-			"--alertmanager.url=" + common.LocalHostUrl,
+			"--alertmanager.url=" + utils.LocalHostUrl,
 			"--duration=" + duration,
 			"--comment=" + comment,
 		}
 
-		output, err := common.ExecInPod(kubeconfig, clientset, addCmd)
+		output, err := utils.ExecInPod(kubeconfig, clientset, addCmd)
 		if err != nil {
 			log.Fatal("Exiting the program")
 			return
@@ -98,11 +98,11 @@ func AddAllSilence(clusterID, duration, comment, username, clustername string, k
 	}
 }
 
-func fetchAllAlerts(clusterID string, kubeconfig *rest.Config, clientset *kubernetes.Clientset) []common.Alert {
-	var fetchedAlerts []common.Alert
+func fetchAllAlerts(clusterID string, kubeconfig *rest.Config, clientset *kubernetes.Clientset) []utils.Alert {
+	var fetchedAlerts []utils.Alert
 
-	listAlertCmd := []string{"amtool", "--alertmanager.url", common.LocalHostUrl, "alert", "-o", "json"}
-	output, err := common.ExecInPod(kubeconfig, clientset, listAlertCmd)
+	listAlertCmd := []string{"amtool", "--alertmanager.url", utils.LocalHostUrl, "alert", "-o", "json"}
+	output, err := utils.ExecInPod(kubeconfig, clientset, listAlertCmd)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -146,12 +146,12 @@ func AddAlertNameSilence(alertID []string, duration, comment, username string, k
 			"silence",
 			"add",
 			"alertname=" + alertname,
-			"--alertmanager.url=" + common.LocalHostUrl,
+			"--alertmanager.url=" + utils.LocalHostUrl,
 			"--duration=" + duration,
 			"--comment=" + comment,
 		}
 
-		output, err := common.ExecInPod(kubeconfig, clientset, addCmd)
+		output, err := utils.ExecInPod(kubeconfig, clientset, addCmd)
 		if err != nil {
 			log.Fatal("Exiting the program")
 			return

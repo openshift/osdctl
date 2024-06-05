@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/openshift/osdctl/cmd/alerts/silence"
+	"github.com/openshift/osdctl/cmd/alerts/utils"
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/spf13/cobra"
 )
@@ -14,29 +14,6 @@ import (
 type alertCmd struct {
 	clusterID  string
 	alertLevel string
-}
-
-// Labels represents a set of labels associated with an alert.
-type Labels struct {
-	Alertname string `json:"alertname"`
-	Severity  string `json:"severity"`
-}
-
-// Status represents a set of state associated with an alert.
-type Status struct {
-	State string `json:"state"`
-}
-
-// Annotations represents a set of summary/description associated with an alert.
-type Annotations struct {
-	Summary string `json:"summary"`
-}
-
-// Alert represents a set of above declared struct Labels,Status and annoataions
-type Alert struct {
-	Labels      Labels      `json:"labels"`
-	Status      Status      `json:"status"`
-	Annotations Annotations `json:"annotations"`
 }
 
 // NewCmdListAlerts implements the list alert functionality.
@@ -81,17 +58,17 @@ func ListAlerts(cmd *alertCmd) {
 	}
 }
 
-func getAlertLevel(clusterID, alertLevel string) {
-	var alerts []Alert
+func getAlertLevel(clusterID, alertLevel string){
+	var alerts []utils.Alert
 
-	listAlertCmd := []string{"amtool", "--alertmanager.url", silence.LocalHostUrl, "alert", "-o", "json"}
+	listAlertCmd := []string{"amtool", "--alertmanager.url", utils.LocalHostUrl, "alert", "-o", "json"}
 
 	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	output, err := silence.ExecInPod(kubeconfig, clientset, listAlertCmd)
+	output, err := utils.ExecInPod(kubeconfig, clientset, listAlertCmd)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -125,7 +102,7 @@ func getAlertLevel(clusterID, alertLevel string) {
 	}
 }
 
-func printAlert(labels Labels, annotations Annotations, status Status) {
+func printAlert(labels utils.AlertLabels, annotations utils.AlertAnnotations, status utils.AlertStatus){
 	fmt.Printf("  AlertName:  %s\n", labels.Alertname)
 	fmt.Printf("  Severity:   %s\n", labels.Severity)
 	fmt.Printf("  State:      %s\n", status.State)
