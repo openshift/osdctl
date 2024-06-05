@@ -1,4 +1,4 @@
-package utils 
+package utils
 
 // Labels represents a set of labels associated with an alert.
 type AlertLabels struct {

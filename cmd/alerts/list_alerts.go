@@ -58,7 +58,7 @@ func ListAlerts(cmd *alertCmd) {
 	}
 }
 
-func getAlertLevel(clusterID, alertLevel string){
+func getAlertLevel(clusterID, alertLevel string) {
 	var alerts []utils.Alert
 
 	listAlertCmd := []string{"amtool", "--alertmanager.url", utils.LocalHostUrl, "alert", "-o", "json"}
@@ -102,7 +102,7 @@ func getAlertLevel(clusterID, alertLevel string){
 	}
 }
 
-func printAlert(labels utils.AlertLabels, annotations utils.AlertAnnotations, status utils.AlertStatus){
+func printAlert(labels utils.AlertLabels, annotations utils.AlertAnnotations, status utils.AlertStatus) {
 	fmt.Printf("  AlertName:  %s\n", labels.Alertname)
 	fmt.Printf("  Severity:   %s\n", labels.Severity)
 	fmt.Printf("  State:      %s\n", status.State)

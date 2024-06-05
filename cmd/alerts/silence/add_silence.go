@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/openshift/osdctl/cmd/alerts/utils"
-	ocmutils "github.com/openshift/osdctl/pkg/utils"
 	kubeutils "github.com/openshift/osdctl/cmd/common"
+	ocmutils "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
