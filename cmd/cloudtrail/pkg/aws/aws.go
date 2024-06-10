@@ -31,6 +31,10 @@ type RawEventDetails struct {
 	ErrorCode   string `json:"errorCode"`
 }
 
+type QueryOptions struct {
+	StartTime time.Time
+}
+
 // Extracts Raw cloudtrailEvent Details
 func ExtractUserDetails(cloudTrailEvent *string) (*RawEventDetails, error) {
 	if cloudTrailEvent == nil || *cloudTrailEvent == "" {
@@ -73,11 +77,11 @@ func Whoami(stsClient sts.Client) (accountArn string, accountId string, err erro
 
 // getWriteEvents retrieves cloudtrail events since the specified time
 // using the provided cloudtrail client and starttime from since flag.
-func GetEvents(since time.Time, cloudtailClient *cloudtrail.Client) ([]*cloudtrail.LookupEventsOutput, error) {
-	starttime := since
+func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time) ([]*cloudtrail.LookupEventsOutput, error) {
+
 	allookupOutputs := []*cloudtrail.LookupEventsOutput{}
 	input := cloudtrail.LookupEventsInput{
-		StartTime: &starttime,
+		StartTime: &startTime,
 		EndTime:   aws.Time(time.Now()),
 		LookupAttributes: []types.LookupAttribute{
 			{AttributeKey: "ReadOnly",

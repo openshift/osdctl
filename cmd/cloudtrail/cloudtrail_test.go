@@ -1,11 +1,11 @@
-package pkg
+package cloudtrail
 
 import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
-
+	ctUtil "github.com/openshift/osdctl/cmd/cloudtrail/pkg"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -68,7 +68,7 @@ func TestIgnoreListFilter(t *testing.T) {
 		}
 		ignoreList := []string{".*kube-system-capa-controller.*"}
 
-		filtered := Filters[2](TestLookupOutputs, MergeRegex(ignoreList))
+		filtered := filterForIgnoreList(TestLookupOutputs, ctUtil.MergeRegex(ignoreList))
 		assert.Equal(t, len(expected), len(*filtered), "Filtered events do not match expected results")
 	})
 
@@ -84,7 +84,7 @@ func TestIgnoreListFilter(t *testing.T) {
 		}
 		ignoreList := []string{}
 
-		filtered := Filters[2](TestLookupOutputs, MergeRegex(ignoreList))
+		filtered := filterForIgnoreList(TestLookupOutputs, ctUtil.MergeRegex(ignoreList))
 		assert.Equal(t, len(expected), len(*filtered), "Filtered events do not match expected results")
 	})
 
@@ -93,7 +93,7 @@ func TestIgnoreListFilter(t *testing.T) {
 func TestPermissonDeniedFilter(t *testing.T) {
 
 	var (
-		errorCode = ".*Client.UnauthorizedOperation.*"
+		permissionDeniedErrorStr = ".*Client.UnauthorizedOperation.*"
 	)
 	// Test Case 1 (Ignored)
 	testUsername1 := "RH-SRE-xxx.openshift"
@@ -126,7 +126,7 @@ func TestPermissonDeniedFilter(t *testing.T) {
 			{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
 		}
 
-		filtered := Filters[1](TestLookupOutputs, errorCode)
+		filtered := filterForUnauthoraizedUsers(TestLookupOutputs, permissionDeniedErrorStr)
 		assert.Equal(t, len(expected), len(*filtered), "Filtered events do not match expected results")
 	})
 
@@ -143,7 +143,7 @@ func TestPermissonDeniedFilter(t *testing.T) {
 		}
 		expected := []types.Event{}
 
-		filtered := Filters[1](edgeCaseLookup, errorCode)
+		filtered := filterForUnauthoraizedUsers(edgeCaseLookup, permissionDeniedErrorStr)
 		assert.Equal(t, len(expected), len(*filtered), "Filtered events do not match expected results")
 	})
 
@@ -160,7 +160,7 @@ func TestPermissonDeniedFilter(t *testing.T) {
 		}
 		expected := []types.Event{}
 
-		filtered := Filters[1](edgeCaseLookup, errorCode)
+		filtered := filterForUnauthoraizedUsers(edgeCaseLookup, permissionDeniedErrorStr)
 		assert.Equal(t, len(expected), len(*filtered), "Filtered events do not match expected results")
 	})
 
@@ -176,7 +176,7 @@ func TestPermissonDeniedFilter(t *testing.T) {
 			},
 		}
 		expected := []types.Event{}
-		filtered := Filters[1](edgeCaseLookup, errorCode)
+		filtered := filterForUnauthoraizedUsers(edgeCaseLookup, permissionDeniedErrorStr)
 		assert.Equal(t, len(expected), len(*filtered), "Filtered events do not match expected results")
 	})
 

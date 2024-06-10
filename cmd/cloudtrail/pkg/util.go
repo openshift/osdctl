@@ -2,20 +2,16 @@ package pkg
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	pkg "github.com/openshift/osdctl/cmd/cloudtrail/pkg/aws"
 )
 
 type Filter func(types.Event) (bool, error)
-type FilterBulk func([]types.Event) []types.Event
 
 func ApplyFilters(records []types.Event, filters ...Filter) ([]types.Event, error) {
-
 	if len(filters) == 0 {
 		return records, nil
 	}
@@ -42,76 +38,37 @@ func ApplyFilters(records []types.Event, filters ...Filter) ([]types.Event, erro
 	return filteredRecords, nil
 }
 
-type FilterSet func([]*cloudtrail.LookupEventsOutput, string) *[]types.Event
-
-var Filters = map[int]FilterSet{
-	1: FilterForUnauthoraizedUsers,
-	2: FilterForIgnoreList,
-}
-
-func FilterForUnauthoraizedUsers(cloudtrailOutput []*cloudtrail.LookupEventsOutput, value string) *[]types.Event {
-
-	filteredEvents := []types.Event{}
-	for _, output := range cloudtrailOutput {
-		events, _ := ApplyFilters(output.Events,
-			func(event types.Event) (bool, error) {
-				return ForbiddenEvents(event, value)
-			},
-		)
-		filteredEvents = append(filteredEvents, events...)
-
-	}
-	return &filteredEvents
-
-}
-
-func FilterForIgnoreList(cloudtrailOutput []*cloudtrail.LookupEventsOutput, value string) *[]types.Event {
-	filteredEvents := []types.Event{}
-	for _, output := range cloudtrailOutput {
-		events, _ := ApplyFilters(output.Events,
-			func(event types.Event) (bool, error) {
-				return FilterByIgnorelist(event, value)
-			},
-		)
-		filteredEvents = append(filteredEvents, events...)
-
-	}
-	return &filteredEvents
-}
-
 // PrintEvents prints the details of each event in the provided slice of events.
 // It takes a slice of types.Event
-// PrintEvents prints the details of each event in the provided slice of events.
-// It takes a slice of types.Event
-func PrintEvents(filteredEvent []types.Event, printUrl bool, raw bool) {
+func PrintEvents(filterEvents []types.Event, printUrl bool, printRaw bool) {
 	var eventStringBuilder = strings.Builder{}
 
-	for i := len(filteredEvent) - 1; i >= 0; i-- {
-		if raw {
-			if filteredEvent[i].CloudTrailEvent != nil {
-				fmt.Printf("%v \n", *filteredEvent[i].CloudTrailEvent)
+	for i := len(filterEvents) - 1; i >= 0; i-- {
+		if printRaw {
+			if filterEvents[i].CloudTrailEvent != nil {
+				fmt.Printf("%v \n", *filterEvents[i].CloudTrailEvent)
 				return
 			}
 		}
-		rawEventDetails, err := pkg.ExtractUserDetails(filteredEvent[i].CloudTrailEvent)
+		rawEventDetails, err := pkg.ExtractUserDetails(filterEvents[i].CloudTrailEvent)
 		if err != nil {
 			fmt.Printf("[Error] Error extracting event details: %v", err)
 		}
 		sessionIssuer := rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName
-		if filteredEvent[i].EventName != nil {
-			eventStringBuilder.WriteString(fmt.Sprintf("\n%v", *filteredEvent[i].EventName))
+		if filterEvents[i].EventName != nil {
+			eventStringBuilder.WriteString(fmt.Sprintf("\n%v", *filterEvents[i].EventName))
 		}
-		if filteredEvent[i].EventTime != nil {
-			eventStringBuilder.WriteString(fmt.Sprintf(" | %v", filteredEvent[i].EventTime.String()))
+		if filterEvents[i].EventTime != nil {
+			eventStringBuilder.WriteString(fmt.Sprintf(" | %v", filterEvents[i].EventTime.String()))
 		}
-		if filteredEvent[i].Username != nil {
-			eventStringBuilder.WriteString(fmt.Sprintf(" | Username: %v", *filteredEvent[i].Username))
+		if filterEvents[i].Username != nil {
+			eventStringBuilder.WriteString(fmt.Sprintf(" | Username: %v", *filterEvents[i].Username))
 		}
 		if sessionIssuer != "" {
 			eventStringBuilder.WriteString(fmt.Sprintf(" | ARN: %v", sessionIssuer))
 		}
 
-		if printUrl && filteredEvent[i].CloudTrailEvent != nil {
+		if printUrl && filterEvents[i].CloudTrailEvent != nil {
 			if err == nil {
 				eventStringBuilder.WriteString(fmt.Sprintf("\n%v |", generateLink(*rawEventDetails)))
 			} else {
@@ -152,58 +109,4 @@ func ParseDurationToUTC(input string) (time.Time, error) {
 // Join all individual patterns into a single string separated by the "|" operator
 func MergeRegex(regexlist []string) string {
 	return strings.Join(regexlist, "|")
-}
-
-// FilterByIgnorelist filters out events based on the specified ignore list, which contains
-// regular expression patterns. It returns true if the event should be kept, and false if it should be filtered out.
-func FilterByIgnorelist(event types.Event, mergedRegex string) (bool, error) {
-	if mergedRegex == "" {
-		return true, nil
-	}
-	raw, err := pkg.ExtractUserDetails(event.CloudTrailEvent)
-	if err != nil {
-		return true, fmt.Errorf("[ERROR] failed to extract raw CloudTrail event details: %w", err)
-	}
-	userArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
-	regexObj := regexp.MustCompile(mergedRegex)
-
-	if event.Username != nil {
-		if regexObj.MatchString(*event.Username) {
-			return false, nil
-		}
-	}
-	if userArn != "" {
-
-		if regexObj.MatchString(userArn) {
-
-			return false, nil
-		}
-	}
-	if userArn == "" && event.Username == nil {
-		return false, nil
-	}
-
-	return true, nil
-}
-
-func ForbiddenEvents(event types.Event, value string) (bool, error) {
-
-	if value == "" {
-		return false, nil
-	}
-
-	check, err := regexp.Compile(value)
-	if err != nil {
-		return false, fmt.Errorf("failed to compile regex: %w", err)
-	}
-	raw, err := pkg.ExtractUserDetails(event.CloudTrailEvent)
-	if err != nil {
-		return false, fmt.Errorf("[ERROR] failed to extract raw CloudTrail event details: %w", err)
-	}
-	errorCode := raw.ErrorCode
-	if errorCode != "" && check.MatchString(errorCode) {
-		return true, nil
-	}
-
-	return false, nil
 }
