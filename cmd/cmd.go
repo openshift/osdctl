@@ -34,6 +34,8 @@ import (
 	"github.com/openshift/osdctl/cmd/org"
 	"github.com/openshift/osdctl/cmd/promote"
 	"github.com/openshift/osdctl/cmd/servicelog"
+	"github.com/openshift/osdctl/cmd/setup"
+	"github.com/openshift/osdctl/cmd/sts"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/provider/aws"
@@ -98,7 +100,8 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(promote.NewCmdPromote())
 	rootCmd.AddCommand(jira.Cmd)
 	rootCmd.AddCommand(cloudtrail.NewCloudtrailCmd())
-	rootCmd.AddCommand(iampermissions.NewCmdIamPermissions())
+	rootCmd.AddCommand(setup.NewCmdSetup())
+
 	// Add cost command to use AWS Cost Manager
 	rootCmd.AddCommand(cost.NewCmdCost(streams, globalOpts))
 
