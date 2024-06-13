@@ -39,6 +39,7 @@ const (
 	nonByovpcPrivateSubnetTagKey = "kubernetes.io/role/internal-elb"
 	blockedEgressTemplateUrl     = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json"
 	caBundleConfigMapKey         = "ca-bundle.crt"
+	networkVerifierDepPath       = "github.com/openshift/osd-network-verifier"
 )
 
 type EgressVerification struct {
@@ -71,6 +72,8 @@ type EgressVerification struct {
 	AllSubnets bool
 	// The timeout to wait when testing egresses
 	EgressTimeout time.Duration
+	// Whether to print out the version of osd-network-verifier being used
+	Version bool
 }
 
 func NewCmdValidateEgress() *cobra.Command {
@@ -108,6 +111,9 @@ func NewCmdValidateEgress() *cobra.Command {
   <export environment variables like AWS_ACCESS_KEY_ID or use aws configure>
   osdctl network verify-egress --subnet-id subnet-abcdefg123 --security-group sg-abcdefgh123 --region us-east-1`,
 		Run: func(cmd *cobra.Command, args []string) {
+			if e.Version {
+				printVersion()
+			}
 			e.Run(context.TODO())
 		},
 	}
@@ -122,6 +128,7 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().BoolVarP(&e.AllSubnets, "all-subnets", "A", false, "(optional) an option for Privatelink clusters to run osd-network-verifier against all subnets listed by ocm.")
 	validateEgressCmd.Flags().StringVar(&e.PlatformType, "platform", "", "(optional) override for which endpoints to test. Either 'aws' or 'hostedcluster'")
 	validateEgressCmd.Flags().DurationVar(&e.EgressTimeout, "egress-timeout", 2*time.Second, "(optional) timeout for individual egress verification requests")
+	validateEgressCmd.Flags().BoolVar(&e.Version, "version", false, "When present, prints out the version of osd-network-verifier being used")
 
 	// If a cluster-id is specified, don't allow the foot-gun of overriding region
 	validateEgressCmd.MarkFlagsMutuallyExclusive("cluster-id", "region")
@@ -754,4 +761,13 @@ func defaultValidateEgressInput(ctx context.Context, cluster *cmv1.Cluster, regi
 			SecurityGroupId: "",
 		},
 	}, nil
+}
+
+func printVersion() {
+	version, err := utils.GetDependencyVersion(networkVerifierDepPath)
+	if err != nil {
+		// This line should never be hit
+		log.Fatal("Unable to find version for network verifier: %w", err)
+	}
+	log.Println(fmt.Sprintf("Using osd-network-verifier version %v", version))
 }
