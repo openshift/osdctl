@@ -20,6 +20,7 @@ const (
 	Vault_Address          = "vault_address"
 )
 
+// NewCmdSetup implements the setup command
 func NewCmdSetup() *cobra.Command {
 	setupCmd := &cobra.Command{
 		Use:   "setup",
