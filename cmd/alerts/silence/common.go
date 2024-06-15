@@ -25,20 +25,22 @@ func ExecInPod(kubeconfig *rest.Config, clientset *kubernetes.Clientset, cmd []s
 	var cmdOutput string
 	var err error
 
-	// Attempt to execute with the primary pod
 	cmdOutput, err = ExecWithPod(kubeconfig, clientset, PrimaryPod, cmd)
 	if err == nil {
-		return cmdOutput, nil // Successfully executed
+		return cmdOutput, nil
 	}
 
-	// If execution with primary pod fails, try with the secondary pod
+	fmt.Printf("Execution with alertmanager-main-0 failed: %v\n", err)
+
+	fmt.Println("Attempting with alertmanger-main-1")
 	cmdOutput, err = ExecWithPod(kubeconfig, clientset, SecondaryPod, cmd)
 	if err == nil {
-		return cmdOutput, nil // Successfully executed
+		return cmdOutput, nil
 	}
 
-	// If execution with both pods fails, print error message
-	fmt.Println("Exec Failed. Please put silence manually")
+	fmt.Printf("Execution with alertmanager-main-1 failed: %v\n", err)
+
+	fmt.Println("Execution Failed with alertmanager-main-0 and alertmanager-main-1. Please put silence manually")
 	return "", err
 }
 
