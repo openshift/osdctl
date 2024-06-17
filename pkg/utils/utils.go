@@ -2,8 +2,10 @@ package utils
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"regexp"
+	"runtime/debug"
 	"strings"
 
 	sdk "github.com/openshift-online/ocm-sdk-go"
@@ -282,4 +284,20 @@ func StreamErrorln(stream genericclioptions.IOStreams, msg string) {
 func StreamRead(stream genericclioptions.IOStreams, delim byte) (string, error) {
 	reader := bufio.NewReader(stream.In)
 	return reader.ReadString(delim)
+}
+
+var ReadBuildInfo = debug.ReadBuildInfo
+
+func GetDependencyVersion(dependencyPath string) (string, error) {
+	buildInfo, ok := ReadBuildInfo()
+	if !ok {
+		return "", errors.New("failed to parse build info")
+	}
+	for _, dep := range buildInfo.Deps {
+		if dep.Path == dependencyPath {
+			return dep.Version, nil
+		}
+	}
+
+	return "", fmt.Errorf("unable to find version for %v", dependencyPath)
 }
