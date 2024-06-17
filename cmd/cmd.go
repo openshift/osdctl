@@ -28,12 +28,12 @@ import (
 	"github.com/openshift/osdctl/cmd/hive"
 	"github.com/openshift/osdctl/cmd/jira"
 	"github.com/openshift/osdctl/cmd/jumphost"
+	"github.com/openshift/osdctl/cmd/managedpolicies"
 	"github.com/openshift/osdctl/cmd/mc"
 	"github.com/openshift/osdctl/cmd/network"
 	"github.com/openshift/osdctl/cmd/org"
 	"github.com/openshift/osdctl/cmd/promote"
 	"github.com/openshift/osdctl/cmd/servicelog"
-	"github.com/openshift/osdctl/cmd/sts"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/provider/aws"
@@ -95,11 +95,10 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeClient))
 	rootCmd.AddCommand(servicelog.NewCmdServiceLog())
 	rootCmd.AddCommand(org.NewCmdOrg())
-	rootCmd.AddCommand(sts.NewCmdSts())
 	rootCmd.AddCommand(promote.NewCmdPromote())
 	rootCmd.AddCommand(jira.Cmd)
 	rootCmd.AddCommand(cloudtrail.NewCloudtrailCmd())
-
+  rootCmd.AddCommand(managedpolicies.NewCmdManagedPolicies())
 	// Add cost command to use AWS Cost Manager
 	rootCmd.AddCommand(cost.NewCmdCost(streams, globalOpts))
 
@@ -124,7 +123,7 @@ func help(cmd *cobra.Command, _ []string) {
 
 // Checks if the version check should be run
 func shouldRunVersionCheck(skipVersionCheckFlag bool, commandName string) bool {
-
+  
 	// If either are true, then the version check should NOT run, hence negation
 	return !(skipVersionCheckFlag || canCommandSkipVersionCheck(commandName))
 }
