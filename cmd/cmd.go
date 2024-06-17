@@ -98,7 +98,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(promote.NewCmdPromote())
 	rootCmd.AddCommand(jira.Cmd)
 	rootCmd.AddCommand(cloudtrail.NewCloudtrailCmd())
-  rootCmd.AddCommand(managedpolicies.NewCmdManagedPolicies())
+	rootCmd.AddCommand(managedpolicies.NewCmdManagedPolicies())
 	// Add cost command to use AWS Cost Manager
 	rootCmd.AddCommand(cost.NewCmdCost(streams, globalOpts))
 
@@ -123,7 +123,7 @@ func help(cmd *cobra.Command, _ []string) {
 
 // Checks if the version check should be run
 func shouldRunVersionCheck(skipVersionCheckFlag bool, commandName string) bool {
-  
+
 	// If either are true, then the version check should NOT run, hence negation
 	return !(skipVersionCheckFlag || canCommandSkipVersionCheck(commandName))
 }

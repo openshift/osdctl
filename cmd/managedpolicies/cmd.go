@@ -30,7 +30,7 @@ func NewCmdManagedPolicies() *cobra.Command {
 
 	managedPoliciesCommand.AddCommand(newCmdGet())
 	managedPoliciesCommand.AddCommand(newCmdDiff())
-  managedPoliciesCommand.AddCommand(newCmdSave())
+	managedPoliciesCommand.AddCommand(newCmdSave())
 
 	return managedPoliciesCommand
 }

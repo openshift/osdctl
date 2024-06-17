@@ -10,16 +10,15 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-
 type diffOptions struct {
-	BaseVersion string
+	BaseVersion   string
 	TargetVersion string
-	Cloud          policies.CloudSpec
+	Cloud         policies.CloudSpec
 }
 
 const (
-  baseVersionFlagName = "base-version"
-  targetVersionFlagName = "target-version"
+	baseVersionFlagName   = "base-version"
+	targetVersionFlagName = "target-version"
 )
 
 func newCmdDiff() *cobra.Command {
@@ -30,7 +29,7 @@ func newCmdDiff() *cobra.Command {
 		Args:              cobra.ExactArgs(0),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-      ops.Cloud = *cmd.Flag(cloudFlagName).Value.(*policies.CloudSpec)
+			ops.Cloud = *cmd.Flag(cloudFlagName).Value.(*policies.CloudSpec)
 			cmdutil.CheckErr(ops.run())
 		},
 	}
@@ -44,13 +43,13 @@ func newCmdDiff() *cobra.Command {
 }
 
 func (o *diffOptions) run() error {
-  fmt.Fprintf(os.Stderr ,"Downloading Credential Requests for %s\n", o.BaseVersion)
+	fmt.Fprintf(os.Stderr, "Downloading Credential Requests for %s\n", o.BaseVersion)
 	baseDir, err := policies.DownloadCredentialRequests(o.BaseVersion, o.Cloud)
 	if err != nil {
 		return err
 	}
 
-  fmt.Fprintf(os.Stderr ,"Downloading Credential Requests for %s\n", o.TargetVersion)
+	fmt.Fprintf(os.Stderr, "Downloading Credential Requests for %s\n", o.TargetVersion)
 	targetDir, err := policies.DownloadCredentialRequests(o.TargetVersion, o.Cloud)
 	if err != nil {
 		return err
@@ -61,4 +60,3 @@ func (o *diffOptions) run() error {
 
 	return nil
 }
-

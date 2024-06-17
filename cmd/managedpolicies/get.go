@@ -7,7 +7,6 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-
 type getOptions struct {
 	ReleaseVersion string
 	Cloud          policies.CloudSpec
@@ -21,7 +20,7 @@ func newCmdGet() *cobra.Command {
 		Args:              cobra.ExactArgs(0),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-      ops.Cloud = *cmd.Flag(cloudFlagName).Value.(*policies.CloudSpec)
+			ops.Cloud = *cmd.Flag(cloudFlagName).Value.(*policies.CloudSpec)
 			cmdutil.CheckErr(ops.run())
 		},
 	}
@@ -43,4 +42,3 @@ func (o *getOptions) run() error {
 
 	return nil
 }
-

@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	"github.com/coreos/go-semver/semver"
 	cco "github.com/openshift/cloud-credential-operator/pkg/apis/cloudcredential/v1"
+	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 )
 
 // DownloadCredentialRequests creates a temp directory and extracts credential request
@@ -29,9 +29,9 @@ func DownloadCredentialRequests(version string, cloud CloudSpec) (string, error)
 
 	crs := fmt.Sprintf("oc adm release extract %s --credentials-requests --cloud=%s --to=%s", version, cloud.String(), directory)
 
-  output, err := exec.Command("bash", "-c", crs).CombinedOutput() //#nosec G204 -- Subprocess launched with variable
+	output, err := exec.Command("bash", "-c", crs).CombinedOutput() //#nosec G204 -- Subprocess launched with variable
 	if err != nil {
-    return "", fmt.Errorf("failed to run command '%s': %w - Output: %s",crs, err, output)
+		return "", fmt.Errorf("failed to run command '%s': %w - Output: %s", crs, err, output)
 	}
 
 	return directory, nil

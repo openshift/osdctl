@@ -30,7 +30,7 @@ func (e *CloudSpec) Set(v string) error {
 	case "aws", "sts":
 		*e = AWS
 		return nil
-  case "gcp", "wif":
+	case "gcp", "wif":
 		*e = GCP
 		return nil
 	default:
