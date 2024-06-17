@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
@@ -25,19 +24,9 @@ var DefaultRegion = "us-east-1"
 type writeEventsOptions struct {
 	ClusterID string
 	StartTime string
-	writeEventsPrintOptions
-	writeEventsQueryOptions
-}
-
-type writeEventsPrintOptions struct {
-	PrintUrl bool
-	PrintRaw bool
-	PrintAll bool
-}
-
-type writeEventsQueryOptions struct {
-	StartTime time.Time
-	ReadOnly  bool
+	PrintUrl  bool
+	PrintRaw  bool
+	PrintAll  bool
 }
 
 // RawEventDetails struct represents the structure of an AWS raw event
@@ -107,22 +96,6 @@ func ignoreEvents(event types.Event, mergedRegex string) (bool, error) {
 	return true, nil
 }
 
-func filterForIgnoreList(cloudtrailOutput []*cloudtrail.LookupEventsOutput, value string) *[]types.Event {
-
-	filteredEvents := []types.Event{}
-	for _, output := range cloudtrailOutput {
-		events, _ := ctUtil.ApplyFilters(output.Events,
-			func(event types.Event) (bool, error) {
-				return ignoreEvents(event, value)
-			},
-		)
-		filteredEvents = append(filteredEvents, events...)
-
-	}
-	return &filteredEvents
-
-}
-
 func (o *writeEventsOptions) run() error {
 
 	err := utils.IsValidClusterKey(o.ClusterID)
@@ -153,6 +126,9 @@ func (o *writeEventsOptions) run() error {
 	}
 
 	mergedRegex := ctUtil.MergeRegex(Ignore)
+	if o.PrintAll {
+		mergedRegex = ""
+	}
 	cfg, err := osdCloud.CreateAWSV2Config(connection, cluster)
 	if err != nil {
 		return err
@@ -174,8 +150,20 @@ func (o *writeEventsOptions) run() error {
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
 	lookupOutput, err := ctAws.GetEvents(cloudTrailclient, startTime)
-	filteredEvents := filterForIgnoreList(lookupOutput, mergedRegex)
-	ctUtil.PrintEvents(*filteredEvents, o.PrintUrl, o.PrintRaw)
+	if err != nil {
+		return err
+	}
+
+	filteredEvents, err := ctUtil.ApplyFilters(lookupOutput,
+		func(event types.Event) (bool, error) {
+			return ignoreEvents(event, mergedRegex)
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	ctUtil.PrintEvents(filteredEvents, o.PrintUrl, o.PrintRaw)
 	fmt.Println("")
 
 	if DefaultRegion != cfg.Region {
@@ -196,8 +184,15 @@ func (o *writeEventsOptions) run() error {
 		if err != nil {
 			return err
 		}
-		filteredEvents := filterForIgnoreList(lookupOutput, mergedRegex)
-		ctUtil.PrintEvents(*filteredEvents, o.PrintUrl, o.PrintRaw)
+		filteredEvents, err := ctUtil.ApplyFilters(lookupOutput,
+			func(event types.Event) (bool, error) {
+				return ignoreEvents(event, mergedRegex)
+			},
+		)
+		if err != nil {
+			return err
+		}
+		ctUtil.PrintEvents(filteredEvents, o.PrintUrl, o.PrintRaw)
 	}
 
 	return err

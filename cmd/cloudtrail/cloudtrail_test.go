@@ -3,7 +3,6 @@ package cloudtrail
 import (
 	"testing"
 
-	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	ctUtil "github.com/openshift/osdctl/cmd/cloudtrail/pkg"
 	"github.com/stretchr/testify/assert"
@@ -34,25 +33,16 @@ func TestIgnoreListFilter(t *testing.T) {
 	var testUsername6 *string
 	testCloudTrailEvent6 := `{"eventVersion": "1.09","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": ""}}}}`
 
-	TestLookupOutputs := []*cloudtrail.LookupEventsOutput{
-		{
-			Events: []types.Event{
-				{Username: &testUsername1, CloudTrailEvent: &testCloudTrailEvent1},
-				{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
-			},
-		},
-		{
-			Events: []types.Event{
-				{Username: &testUsername3, CloudTrailEvent: &testCloudTrailEvent3},
-				{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
-			},
-		},
-		{
-			Events: []types.Event{
-				{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
-				{Username: testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
-			},
-		},
+	TestLookupOutputs := []types.Event{
+
+		{Username: &testUsername1, CloudTrailEvent: &testCloudTrailEvent1},
+		{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
+
+		{Username: &testUsername3, CloudTrailEvent: &testCloudTrailEvent3},
+		{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
+
+		{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
+		{Username: testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 	}
 
 	// Other Filterable Option which would be located in ~/.config/osdctl.yaml
@@ -66,10 +56,16 @@ func TestIgnoreListFilter(t *testing.T) {
 			{Username: &testUsername4, CloudTrailEvent: &testCloudTrailEvent4},
 			{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
 		}
-		ignoreList := []string{".*kube-system-capa-controller.*"}
 
-		filtered := filterForIgnoreList(TestLookupOutputs, ctUtil.MergeRegex(ignoreList))
-		assert.Equal(t, len(expected), len(*filtered), "Filtered events do not match expected results")
+		ignoreList := []string{".*kube-system-capa-controller.*"}
+		filtered, err := ctUtil.ApplyFilters(TestLookupOutputs,
+			func(event types.Event) (bool, error) {
+				return ignoreEvents(event, ctUtil.MergeRegex(ignoreList))
+			},
+		)
+
+		assert.Nil(t, err)
+		assert.Equal(t, len(expected), len(filtered), "Filtered events do not match expected results")
 	})
 
 	t.Run("Test Filtering by Empty IgnoreList", func(t *testing.T) {
@@ -82,10 +78,16 @@ func TestIgnoreListFilter(t *testing.T) {
 			{Username: &testUsername5, CloudTrailEvent: &testCloudTrailEvent5},
 			{Username: testUsername6, CloudTrailEvent: &testCloudTrailEvent6},
 		}
-		ignoreList := []string{}
 
-		filtered := filterForIgnoreList(TestLookupOutputs, ctUtil.MergeRegex(ignoreList))
-		assert.Equal(t, len(expected), len(*filtered), "Filtered events do not match expected results")
+		ignoreList := []string{}
+		filtered, err := ctUtil.ApplyFilters(TestLookupOutputs,
+			func(event types.Event) (bool, error) {
+				return ignoreEvents(event, ctUtil.MergeRegex(ignoreList))
+			},
+		)
+		assert.Nil(t, err)
+
+		assert.Equal(t, len(expected), len(filtered), "Filtered events do not match expected results")
 	})
 
 }
@@ -105,18 +107,11 @@ func TestPermissonDeniedFilter(t *testing.T) {
 	var testUsername3 string //nil username
 	testCloudTrailEvent3 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:role/NilUsername-1"}}}}`
 
-	TestLookupOutputs := []*cloudtrail.LookupEventsOutput{
-		{
-			Events: []types.Event{
-				{Username: &testUsername1, CloudTrailEvent: &testCloudTrailEvent1},
-				{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
-			},
-		},
-		{
-			Events: []types.Event{
-				{Username: &testUsername3, CloudTrailEvent: &testCloudTrailEvent3},
-			},
-		},
+	TestLookupOutputs := []types.Event{
+
+		{Username: &testUsername1, CloudTrailEvent: &testCloudTrailEvent1},
+		{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
+		{Username: &testUsername3, CloudTrailEvent: &testCloudTrailEvent3},
 	}
 
 	t.Run("Test Search by PermissionDenied", func(t *testing.T) {
@@ -126,58 +121,72 @@ func TestPermissonDeniedFilter(t *testing.T) {
 			{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
 		}
 
-		filtered := filterForUnauthoraizedUsers(TestLookupOutputs, permissionDeniedErrorStr)
-		assert.Equal(t, len(expected), len(*filtered), "Filtered events do not match expected results")
+		filtered, err := ctUtil.ApplyFilters(TestLookupOutputs,
+			func(event types.Event) (bool, error) {
+				return isforbiddenEvent(event, permissionDeniedErrorStr)
+			},
+		)
+		assert.Nil(t, err)
+
+		assert.Equal(t, len(expected), len(filtered), "Filtered events do not match expected results")
 	})
 
 	t.Run("Test for Different ErrorCode", func(t *testing.T) {
 		edgeCaseUsername := "RH-SRE-xxx.openshift"
 		edgeCaseCloudtrailEvent := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:user/test-12345-6-a7b8-kube-system-capa-controller-manager/123456789012"}}}, "errorCode": "TrailNotFoundException"}`
 
-		edgeCaseLookup := []*cloudtrail.LookupEventsOutput{
-			{
-				Events: []types.Event{
-					{Username: &edgeCaseUsername, CloudTrailEvent: &edgeCaseCloudtrailEvent},
-				},
-			},
+		edgeCaseLookup := []types.Event{
+
+			{Username: &edgeCaseUsername, CloudTrailEvent: &edgeCaseCloudtrailEvent},
 		}
 		expected := []types.Event{}
 
-		filtered := filterForUnauthoraizedUsers(edgeCaseLookup, permissionDeniedErrorStr)
-		assert.Equal(t, len(expected), len(*filtered), "Filtered events do not match expected results")
+		filtered, err := ctUtil.ApplyFilters(edgeCaseLookup,
+			func(event types.Event) (bool, error) {
+				return isforbiddenEvent(event, permissionDeniedErrorStr)
+			},
+		)
+		assert.Nil(t, err)
+
+		assert.Equal(t, len(expected), len(filtered), "Filtered events do not match expected results")
 	})
 
 	t.Run("Test No ErrorCode", func(t *testing.T) {
 		edgeCaseUsername := "RH-SRE-xxx.openshift"
 		edgeCaseCloudtrailEvent := `{"eventVersion": "1.08"}`
 
-		edgeCaseLookup := []*cloudtrail.LookupEventsOutput{
-			{
-				Events: []types.Event{
-					{Username: &edgeCaseUsername, CloudTrailEvent: &edgeCaseCloudtrailEvent},
-				},
-			},
+		edgeCaseLookup := []types.Event{
+			{Username: &edgeCaseUsername, CloudTrailEvent: &edgeCaseCloudtrailEvent},
 		}
 		expected := []types.Event{}
 
-		filtered := filterForUnauthoraizedUsers(edgeCaseLookup, permissionDeniedErrorStr)
-		assert.Equal(t, len(expected), len(*filtered), "Filtered events do not match expected results")
+		filtered, err := ctUtil.ApplyFilters(edgeCaseLookup,
+			func(event types.Event) (bool, error) {
+				return isforbiddenEvent(event, permissionDeniedErrorStr)
+			},
+		)
+		assert.Nil(t, err)
+
+		assert.Equal(t, len(expected), len(filtered), "Filtered events do not match expected results")
 	})
 
 	t.Run("Test Nil Cloudtrail Event", func(t *testing.T) {
 		edgeCaseUsername := "RH-SRE-xxx.openshift"
 		var edgeCaseCloudtrailEvent string
 
-		edgeCaseLookup := []*cloudtrail.LookupEventsOutput{
-			{
-				Events: []types.Event{
-					{Username: &edgeCaseUsername, CloudTrailEvent: &edgeCaseCloudtrailEvent},
-				},
-			},
+		edgeCaseLookup := []types.Event{
+
+			{Username: &edgeCaseUsername, CloudTrailEvent: &edgeCaseCloudtrailEvent},
 		}
 		expected := []types.Event{}
-		filtered := filterForUnauthoraizedUsers(edgeCaseLookup, permissionDeniedErrorStr)
-		assert.Equal(t, len(expected), len(*filtered), "Filtered events do not match expected results")
+		filtered, err := ctUtil.ApplyFilters(edgeCaseLookup,
+			func(event types.Event) (bool, error) {
+				return isforbiddenEvent(event, permissionDeniedErrorStr)
+			},
+		)
+		assert.EqualErrorf(t, err, "[ERROR] failed to extract raw CloudTrail event details: cannot parse a nil input", "")
+
+		assert.Equal(t, len(expected), len(filtered), "Filtered events do not match expected results")
 	})
 
 }
