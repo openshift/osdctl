@@ -111,7 +111,7 @@ func (o *saveOptions) run() error {
     }
 
     fmt.Printf("Writing %s\n", path)
-    if err = os.WriteFile(path, content, 0644); err != nil {
+    if err = os.WriteFile(path, content, 0600); err != nil {
       return err
     }
     
