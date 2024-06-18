@@ -18,6 +18,7 @@ type addSilenceCmd struct {
 	duration  string
 	comment   string
 	all       bool
+	reason    string
 }
 
 func NewCmdAddSilence() *cobra.Command {
@@ -38,6 +39,8 @@ func NewCmdAddSilence() *cobra.Command {
 	cmd.Flags().StringVarP(&addSilenceCmd.comment, "comment", "c", "", "add comment about silence")
 	cmd.Flags().StringVarP(&addSilenceCmd.duration, "duration", "d", "15d", "add duration for silence") //default duration set to 15 days
 	cmd.Flags().BoolVarP(&addSilenceCmd.all, "all", "a", false, "add silences for all alert")
+	cmd.Flags().StringVar(&addSilenceCmd.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	_ = cmd.MarkFlagRequired("reason")
 
 	return cmd
 }
@@ -51,7 +54,12 @@ func AddSilence(cmd *addSilenceCmd) {
 
 	username, clustername := GetUserAndClusterInfo(clusterID)
 
-	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID)
+	elevationReasons := []string{
+		cmd.reason,
+		"Add alert silence via osdctl",
+	}
+
+	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID, elevationReasons...)
 	if err != nil {
 		log.Fatal(err)
 	}
