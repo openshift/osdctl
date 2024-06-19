@@ -1,4 +1,4 @@
-package managedpolicies
+package iampermissions
 
 import (
 	"fmt"
@@ -13,10 +13,10 @@ const (
 	cloudFlagName = "cloud"
 )
 
-func NewCmdManagedPolicies() *cobra.Command {
+func NewCmdIamPermissions() *cobra.Command {
 	var cloudValue policies.CloudSpec
-	var managedPoliciesCommand = &cobra.Command{
-		Use:   "managedpolicies",
+	var iamPermissionsCommand = &cobra.Command{
+		Use:   "iampermissions",
 		Short: "STS/WIF utilities",
 		Run: func(cmd *cobra.Command, args []string) {
 			err := cmd.Help()
@@ -26,11 +26,11 @@ func NewCmdManagedPolicies() *cobra.Command {
 			}
 		},
 	}
-	managedPoliciesCommand.PersistentFlags().VarP(&cloudValue, "cloud", "c", "cloud for which the policies should be retrieved. supported values: [aws, sts, gcp, wif]")
+	iamPermissionsCommand.PersistentFlags().VarP(&cloudValue, "cloud", "c", "cloud for which the policies should be retrieved. supported values: [aws, sts, gcp, wif]")
 
-	managedPoliciesCommand.AddCommand(newCmdGet())
-	managedPoliciesCommand.AddCommand(newCmdDiff())
-	managedPoliciesCommand.AddCommand(newCmdSave())
+	iamPermissionsCommand.AddCommand(newCmdGet())
+	iamPermissionsCommand.AddCommand(newCmdDiff())
+	iamPermissionsCommand.AddCommand(newCmdSave())
 
-	return managedPoliciesCommand
+	return iamPermissionsCommand
 }

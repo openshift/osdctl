@@ -1,4 +1,4 @@
-package managedpolicies
+package iampermissions
 
 import (
 	"encoding/json"
@@ -25,7 +25,7 @@ func newCmdSave() *cobra.Command {
 
 	saveCmd := &cobra.Command{
 		Use:               "save",
-		Short:             "Save managed policies for use in mcc",
+		Short:             "Save iam permissions for use in mcc",
 		Args:              cobra.ExactArgs(0),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, _ []string) {

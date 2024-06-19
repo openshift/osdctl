@@ -1,4 +1,4 @@
-package managedpolicies
+package iampermissions
 
 import (
 	"fmt"
@@ -25,7 +25,7 @@ func newCmdDiff() *cobra.Command {
 	ops := &diffOptions{}
 	policyCmd := &cobra.Command{
 		Use:               "diff",
-		Short:             "Diff managed policies between two versions",
+		Short:             "Diff iam permissions for cluster operators between two versions",
 		Args:              cobra.ExactArgs(0),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {

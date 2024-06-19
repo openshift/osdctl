@@ -1,4 +1,4 @@
-package managedpolicies
+package iampermissions
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ func newCmdGet() *cobra.Command {
 	ops := &getOptions{}
 	policyCmd := &cobra.Command{
 		Use:               "get",
-		Short:             "Get OCP managed policies",
+		Short:             "Get OCP CredentialsRequests",
 		Args:              cobra.ExactArgs(0),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -37,7 +37,7 @@ func (o *getOptions) run() error {
 		return err
 	}
 
-	output := "OCP managed policy files for " + o.Cloud.String() + " have been saved in " + directory + " directory"
+	output := "OCP CredentialsRequests for " + o.Cloud.String() + " have been saved in " + directory + " directory"
 	fmt.Println(output)
 
 	return nil
