@@ -33,25 +33,42 @@ type Silence struct {
 	StartsAt  string `json:"startsAt"`
 }
 
+type listSilenceCmd struct {
+	clusterID string
+	reason    string
+}
+
 func NewCmdListSilence() *cobra.Command {
-	return &cobra.Command{
+	listSilenceCmd := &listSilenceCmd{}
+	cmd := &cobra.Command{
 		Use:               "list <cluster-id>",
 		Short:             "List all silences",
 		Long:              `print the list of silences`,
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			ListSilence(args[0])
+			listSilenceCmd.clusterID = args[0]
+			ListSilence(listSilenceCmd)
 		},
 	}
+
+	cmd.Flags().StringVar(&listSilenceCmd.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	_ = cmd.MarkFlagRequired("reason")
+
+	return cmd
 }
 
-func ListSilence(clusterID string) {
+func ListSilence(cmd *listSilenceCmd) {
 	var silences []Silence
 
 	silenceCmd := []string{"amtool", "silence", "--alertmanager.url", LocalHostUrl, "-o", "json"}
 
-	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID)
+	elevationReasons := []string{
+		cmd.reason,
+		"List active alertmanager silences via osdctl",
+	}
+
+	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(cmd.clusterID, elevationReasons...)
 	if err != nil {
 		log.Fatal(err)
 	}

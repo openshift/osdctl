@@ -28,6 +28,7 @@ var detachStuckVolumeInput struct {
 type detachStuckVolumeOptions struct {
 	clusterID string
 	cluster   *cmv1.Cluster
+	reason    string
 }
 
 func newCmdDetachStuckVolume() *cobra.Command {
@@ -41,6 +42,10 @@ func newCmdDetachStuckVolume() *cobra.Command {
 			cmdutil.CheckErr(ops.detachVolume(args[0]))
 		},
 	}
+
+	detachstuckvolumeCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	_ = detachstuckvolumeCmd.MarkFlagRequired("reason")
+
 	return detachstuckvolumeCmd
 
 }
@@ -66,13 +71,17 @@ func (o *detachStuckVolumeOptions) detachVolume(clusterID string) error {
 		return fmt.Errorf("this command is only available for AWS clusters")
 	}
 
-	_, _, clientset, err := common.GetKubeConfigAndClient(o.clusterID, "", "")
+	elevationReasons := []string{
+		o.reason,
+		"Detach stuck volume in openshift-monitoring",
+	}
+	_, _, clientset, err := common.GetKubeConfigAndClient(o.clusterID, elevationReasons...)
 
 	if err != nil {
 		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", o.clusterID, err)
 	}
 
-	err = getVolumeID(clientset, Namespace, "")
+	err = getVolumeID(clientset, Namespace)
 	if err != nil {
 		return err
 	}
@@ -96,7 +105,7 @@ func (o *detachStuckVolumeOptions) detachVolume(clusterID string) error {
 		_, err := awsClient.DetachVolume(context.TODO(), &ec2.DetachVolumeInput{VolumeId: &Volid})
 
 		if err != nil {
-			return fmt.Errorf("failed to detach %s: %s\n", *&Volid, err)
+			return fmt.Errorf("failed to detach %s: %s", *&Volid, err)
 		}
 		log.Printf("%s has been detached", Volid)
 	}
@@ -106,7 +115,7 @@ func (o *detachStuckVolumeOptions) detachVolume(clusterID string) error {
 }
 
 // Following function gets the volumeID & region of pv for non running state pod & value into global variable
-func getVolumeID(clientset *kubernetes.Clientset, namespace, selector string) error {
+func getVolumeID(clientset *kubernetes.Clientset, namespace string) error {
 
 	var pvClaim []string
 	var pVolume []string

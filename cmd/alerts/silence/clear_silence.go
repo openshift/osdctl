@@ -15,6 +15,7 @@ type silenceCmd struct {
 	clusterID  string
 	silenceIDs []string
 	all        bool
+	reason     string
 }
 
 func NewCmdClearSilence() *cobra.Command {
@@ -33,6 +34,8 @@ func NewCmdClearSilence() *cobra.Command {
 
 	cmd.Flags().StringSliceVar(&silenceCmd.silenceIDs, "silence-id", []string{}, "silence id (comma-separated)")
 	cmd.Flags().BoolVarP(&silenceCmd.all, "all", "a", false, "clear all silences")
+	cmd.Flags().StringVar(&silenceCmd.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	_ = cmd.MarkFlagRequired("reason")
 
 	return cmd
 }
@@ -42,7 +45,12 @@ func ClearSilence(cmd *silenceCmd) {
 	silenceIDs := cmd.silenceIDs
 	all := cmd.all
 
-	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID)
+	elevationReasons := []string{
+		cmd.reason,
+		"Clear alertmanager silence for a cluster via osdctl",
+	}
+
+	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID, elevationReasons...)
 	if err != nil {
 		log.Fatal(err)
 	}
