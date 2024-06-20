@@ -33,7 +33,7 @@ func TestIgnoreListFilter(t *testing.T) {
 	var testUsername6 *string
 	testCloudTrailEvent6 := `{"eventVersion": "1.09","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": ""}}}}`
 
-	TestLookupOutputs := []types.Event{
+	testEvents := []types.Event{
 
 		{Username: &testUsername1, CloudTrailEvent: &testCloudTrailEvent1},
 		{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
@@ -58,9 +58,9 @@ func TestIgnoreListFilter(t *testing.T) {
 		}
 
 		ignoreList := []string{".*kube-system-capa-controller.*"}
-		filtered, err := ctUtil.ApplyFilters(TestLookupOutputs,
+		filtered, err := ctUtil.ApplyFilters(testEvents,
 			func(event types.Event) (bool, error) {
-				return ignoreEvents(event, ctUtil.MergeRegex(ignoreList))
+				return isIgnoredEvent(event, ctUtil.MergeRegex(ignoreList))
 			},
 		)
 
@@ -80,9 +80,9 @@ func TestIgnoreListFilter(t *testing.T) {
 		}
 
 		ignoreList := []string{}
-		filtered, err := ctUtil.ApplyFilters(TestLookupOutputs,
+		filtered, err := ctUtil.ApplyFilters(testEvents,
 			func(event types.Event) (bool, error) {
-				return ignoreEvents(event, ctUtil.MergeRegex(ignoreList))
+				return isIgnoredEvent(event, ctUtil.MergeRegex(ignoreList))
 			},
 		)
 		assert.Nil(t, err)
@@ -107,7 +107,7 @@ func TestPermissonDeniedFilter(t *testing.T) {
 	var testUsername3 string //nil username
 	testCloudTrailEvent3 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:role/NilUsername-1"}}}}`
 
-	TestLookupOutputs := []types.Event{
+	TestEvents := []types.Event{
 
 		{Username: &testUsername1, CloudTrailEvent: &testCloudTrailEvent1},
 		{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
@@ -121,7 +121,7 @@ func TestPermissonDeniedFilter(t *testing.T) {
 			{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
 		}
 
-		filtered, err := ctUtil.ApplyFilters(TestLookupOutputs,
+		filtered, err := ctUtil.ApplyFilters(TestEvents,
 			func(event types.Event) (bool, error) {
 				return isforbiddenEvent(event, permissionDeniedErrorStr)
 			},
@@ -135,13 +135,13 @@ func TestPermissonDeniedFilter(t *testing.T) {
 		edgeCaseUsername := "RH-SRE-xxx.openshift"
 		edgeCaseCloudtrailEvent := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:user/test-12345-6-a7b8-kube-system-capa-controller-manager/123456789012"}}}, "errorCode": "TrailNotFoundException"}`
 
-		edgeCaseLookup := []types.Event{
+		edgeCaseEvents := []types.Event{
 
 			{Username: &edgeCaseUsername, CloudTrailEvent: &edgeCaseCloudtrailEvent},
 		}
 		expected := []types.Event{}
 
-		filtered, err := ctUtil.ApplyFilters(edgeCaseLookup,
+		filtered, err := ctUtil.ApplyFilters(edgeCaseEvents,
 			func(event types.Event) (bool, error) {
 				return isforbiddenEvent(event, permissionDeniedErrorStr)
 			},
@@ -155,12 +155,12 @@ func TestPermissonDeniedFilter(t *testing.T) {
 		edgeCaseUsername := "RH-SRE-xxx.openshift"
 		edgeCaseCloudtrailEvent := `{"eventVersion": "1.08"}`
 
-		edgeCaseLookup := []types.Event{
+		edgeCaseEvents := []types.Event{
 			{Username: &edgeCaseUsername, CloudTrailEvent: &edgeCaseCloudtrailEvent},
 		}
 		expected := []types.Event{}
 
-		filtered, err := ctUtil.ApplyFilters(edgeCaseLookup,
+		filtered, err := ctUtil.ApplyFilters(edgeCaseEvents,
 			func(event types.Event) (bool, error) {
 				return isforbiddenEvent(event, permissionDeniedErrorStr)
 			},
@@ -174,12 +174,12 @@ func TestPermissonDeniedFilter(t *testing.T) {
 		edgeCaseUsername := "RH-SRE-xxx.openshift"
 		var edgeCaseCloudtrailEvent string
 
-		edgeCaseLookup := []types.Event{
+		edgeCaseEvents := []types.Event{
 
 			{Username: &edgeCaseUsername, CloudTrailEvent: &edgeCaseCloudtrailEvent},
 		}
 		expected := []types.Event{}
-		filtered, err := ctUtil.ApplyFilters(edgeCaseLookup,
+		filtered, err := ctUtil.ApplyFilters(edgeCaseEvents,
 			func(event types.Event) (bool, error) {
 				return isforbiddenEvent(event, permissionDeniedErrorStr)
 			},

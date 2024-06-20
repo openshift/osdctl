@@ -66,7 +66,7 @@ func newCmdWriteEvents() *cobra.Command {
 
 // FilterByIgnorelist filters out events based on the specified ignore list, which contains
 // regular expression patterns. It returns true if the event should be kept, and false if it should be filtered out.
-func ignoreEvents(event types.Event, mergedRegex string) (bool, error) {
+func isIgnoredEvent(event types.Event, mergedRegex string) (bool, error) {
 	if mergedRegex == "" {
 		return true, nil
 	}
@@ -149,14 +149,14 @@ func (o *writeEventsOptions) run() error {
 	fmt.Printf("[INFO] Checking write event history since %v for AWS Account %v as %v \n", startTime, accountId, arn)
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
-	lookupOutput, err := ctAws.GetEvents(cloudTrailclient, startTime)
+	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime)
 	if err != nil {
 		return err
 	}
 
-	filteredEvents, err := ctUtil.ApplyFilters(lookupOutput,
+	filteredEvents, err := ctUtil.ApplyFilters(queriedEvents,
 		func(event types.Event) (bool, error) {
-			return ignoreEvents(event, mergedRegex)
+			return isIgnoredEvent(event, mergedRegex)
 		},
 	)
 	if err != nil {
@@ -186,7 +186,7 @@ func (o *writeEventsOptions) run() error {
 		}
 		filteredEvents, err := ctUtil.ApplyFilters(lookupOutput,
 			func(event types.Event) (bool, error) {
-				return ignoreEvents(event, mergedRegex)
+				return isIgnoredEvent(event, mergedRegex)
 			},
 		)
 		if err != nil {

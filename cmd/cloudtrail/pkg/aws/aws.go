@@ -79,7 +79,7 @@ func Whoami(stsClient sts.Client) (accountArn string, accountId string, err erro
 // using the provided cloudtrail client and starttime from since flag.
 func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time) ([]types.Event, error) {
 
-	allookupEvents := []types.Event{}
+	alllookupEvents := []types.Event{}
 	input := cloudtrail.LookupEventsInput{
 		StartTime: &startTime,
 		EndTime:   aws.Time(time.Now()),
@@ -96,7 +96,7 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time) ([]types
 		if err != nil {
 			return nil, fmt.Errorf("[WARNING] paginator error: \n%w", err)
 		}
-		allookupEvents = append(allookupEvents, lookupOutput.Events...)
+		alllookupEvents = append(alllookupEvents, lookupOutput.Events...)
 
 		input.NextToken = lookupOutput.NextToken
 		if lookupOutput.NextToken == nil {
@@ -105,5 +105,5 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time) ([]types
 
 	}
 
-	return allookupEvents, nil
+	return alllookupEvents, nil
 }
