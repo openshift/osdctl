@@ -2,6 +2,7 @@ package setup
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -15,13 +16,16 @@ const (
 	ProdJumproleConfigKey  = "prod_jumprole_account_id"
 	AwsProxy               = "aws_proxy"
 	StageJumproleConfigKey = "stage_jumprole_account_id"
-	Pd_User_Token          = "pd_user_token"
-	Jira_Token             = "jira_token"
-	Dt_Vault_Path          = "dt_vault_path"
-	Vault_Address          = "vault_address"
+	PdUserToken            = "pd_user_token"
+	JiraToken              = "jira_token"
+	DtVaultPath            = "dt_vault_path"
+	VaultAddress           = "vault_address"
 	JiraTokenRegex         = "^[A-Z0-9]{7}$"
 	PdTokenRegex           = "^[a-zA-Z0-9+_-]{20}$"
 	AwsAccountRegex        = "^[0-9]{12}$"
+	AWSProxyRegex          = `^http:\/\/[a-zA-Z0-9.-]+(:\d+)?$`
+	VaultURLRegex          = `^https:\/\/[a-zA-Z0-9.-]+\/?$`
+	DtVaultPathRegex       = `^[a-zA-Z0-9\-/]+$`
 )
 
 // NewCmdSetup implements the setup command
@@ -35,31 +39,66 @@ func NewCmdSetup() *cobra.Command {
 				ProdJumproleConfigKey,
 				AwsProxy,
 				StageJumproleConfigKey,
-				Pd_User_Token,
-				Jira_Token,
 			}
 
 			optionalKeys := []string{
-				Dt_Vault_Path,
-				Vault_Address,
+				DtVaultPath,
+				VaultAddress,
+				PdUserToken,
+				JiraToken,
 			}
 
 			values := make(map[string]string)
 			reader := bufio.NewReader(os.Stdin)
 
+			defaults := make(map[string]string)
 			for _, key := range keys {
-				fmt.Printf("Enter %s: ", key)
+				defaultValue := viper.GetString(key)
+				defaults[key] = defaultValue
+			}
+
+			for _, key := range optionalKeys {
+				defaultValue := viper.GetString(key)
+				defaults[key] = defaultValue
+			}
+
+			for _, key := range keys {
+				defaultValue := defaults[key]
+				//fmt.Printf("Enter %s [%s]: ", key, defaultValue)
+				fmt.Printf("\033[1mEnter %s\033[0m [\033[94m%s\033[0m]: ", key, defaultValue)
 				value, _ := reader.ReadString('\n')
 				value = strings.TrimSpace(value)
 
+				if value == "" {
+					value = defaultValue
+				}
+
 				var err error
 				switch key {
-				case Jira_Token:
-					_, err = ValidateJiraToken(value)
-				case Pd_User_Token:
-					_, err = ValidatePDToken(value)
-				case ProdJumproleConfigKey, AwsProxy, StageJumproleConfigKey:
-					_, err = ValidateAWSAccount(value)
+				case JiraToken:
+					if value != "" && value != defaultValue {
+						_, err = ValidateJiraToken(value)
+					}
+				case PdUserToken:
+					if value != "" && value != defaultValue {
+						_, err = ValidatePDToken(value)
+					}
+				case ProdJumproleConfigKey, StageJumproleConfigKey:
+					if value != "" && value != defaultValue {
+						_, err = ValidateAWSAccount(value)
+					}
+				case AwsProxy:
+					if value != "" && value != defaultValue {
+						_, err = ValidateAWSProxy(value)
+					}
+				case VaultAddress:
+					if value != "" && value != defaultValue {
+						_, err = ValidateVaultAddress(value)
+					}
+				case DtVaultPath:
+					if value != "" && value != defaultValue {
+						_, err = ValidateDtVaultPath(value)
+					}
 				}
 
 				if err != nil {
@@ -70,9 +109,19 @@ func NewCmdSetup() *cobra.Command {
 			}
 
 			for _, key := range optionalKeys {
-				fmt.Printf("Enter %s (optional): ", key)
+				defaultValue := defaults[key]
+				fmt.Printf("\033[91mEnter %s (optional)\033[0m [\033[94m%s\033[0m]: ", key, defaultValue)
+				//fmt.Printf("Enter %s (optional) [%s]: ", key, defaultValue)
 				value, _ := reader.ReadString('\n')
-				values[key] = strings.TrimSpace(value)
+				value = strings.TrimSpace(value)
+
+				if value == "" {
+					value = defaultValue
+				}
+
+				if value != "" && value != defaultValue {
+					values[key] = value
+				}
 			}
 
 			// Store the value in the config file
@@ -98,7 +147,7 @@ func ValidateJiraToken(token string) (string, error) {
 		return "", err
 	}
 	if !match {
-		return "", fmt.Errorf("invalid jira token")
+		return "", errors.New("invalid jira token")
 	}
 	return token, nil
 }
@@ -110,7 +159,7 @@ func ValidatePDToken(token string) (string, error) {
 		return "", err
 	}
 	if !match {
-		return "", fmt.Errorf("invalid pd token")
+		return "", errors.New("invalid pd token")
 	}
 	return token, nil
 }
@@ -122,7 +171,43 @@ func ValidateAWSAccount(account string) (string, error) {
 		return "", err
 	}
 	if !match {
-		return "", fmt.Errorf("invalid AWS account number")
+		return "", errors.New("invalid AWS account number")
 	}
 	return account, nil
+}
+
+func ValidateAWSProxy(proxyURL string) (string, error) {
+	proxyURL = strings.TrimSpace(proxyURL)
+	match, err := regexp.MatchString(AWSProxyRegex, proxyURL)
+	if err != nil {
+		return "", err
+	}
+	if !match {
+		return "", errors.New("invalid AWS proxy URL")
+	}
+	return proxyURL, nil
+}
+
+func ValidateVaultAddress(vaultURL string) (string, error) {
+	vaultURL = strings.TrimSpace(vaultURL)
+	match, err := regexp.MatchString(VaultURLRegex, vaultURL)
+	if err != nil {
+		return "", err
+	}
+	if !match {
+		return "", errors.New("invalid Vault URL")
+	}
+	return vaultURL, nil
+}
+
+func ValidateDtVaultPath(dtVaultPath string) (string, error) {
+	dtVaultPath = strings.TrimSpace(dtVaultPath)
+	match, err := regexp.MatchString(DtVaultPathRegex, dtVaultPath)
+	if err != nil {
+		return "", err
+	}
+	if !match {
+		return "", errors.New("invalid DtVault Path")
+	}
+	return dtVaultPath, nil
 }

@@ -1,9 +1,10 @@
 package setup
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"testing"
 )
 
 func TestSetup(t *testing.T) {
@@ -20,7 +21,7 @@ var _ = Describe("Validation Functions", func() {
 		})
 
 		It("should fail invalid Jira token", func() {
-			_, err := ValidateJiraToken("abc") // this should fail since "INVALID" does not match ^[A-Z0-9]{7}$
+			_, err := ValidateJiraToken("INVALID") // this should fail since "INVALID" does not match ^[A-Z0-9]{7}$
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -47,6 +48,45 @@ var _ = Describe("Validation Functions", func() {
 
 		It("should fail invalid AWS account", func() {
 			_, err := ValidateAWSAccount("invalid123") // this should fail since "invalid123" does not match ^[0-9]{12}$
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Context("AWS Proxy", func() {
+		It("should validate the correct aws proxy", func() {
+			proxyURL, err := ValidateAWSProxy("http://www.example.com:1234")
+			Expect(err).To(BeNil())
+			Expect(proxyURL).To(Equal("http://www.example.com:1234"))
+		})
+
+		It("should fail invalid proxy url", func() {
+			_, err := ValidateAWSProxy("https://www.example.com:1234")
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Context("Vault Address", func() {
+		It("should validate the correct vault address", func() {
+			vaultURL, err := ValidateVaultAddress("https://vault.dev.net/")
+			Expect(err).To(BeNil())
+			Expect(vaultURL).To(Equal("https://vault.dev.net"))
+		})
+
+		It("should fail invalid vault address", func() {
+			_, err := ValidateVaultAddress("http://dev.net/")
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Context("Vault Path", func() {
+		It("should validate the correct vault path", func() {
+			proxyURL, err := ValidateDtVaultPath("abc/xyz/qwe")
+			Expect(err).To(BeNil())
+			Expect(proxyURL).To(Equal("abc/xyz/qwe"))
+		})
+
+		It("should fail invalid proxy url", func() {
+			_, err := ValidateDtVaultPath("abc/xyz/123")
 			Expect(err).To(HaveOccurred())
 		})
 	})
