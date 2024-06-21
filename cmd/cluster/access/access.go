@@ -11,11 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/andygrunwald/go-jira"
 	clustersmgmtv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/k8s"
+	"github.com/openshift/osdctl/pkg/utils"
 	osdctlutil "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 
+	"github.com/trivago/tgo/tcontainer"
 	corev1 "k8s.io/api/core/v1"
 	kerr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -120,10 +123,6 @@ func (c *clusterAccessOptions) Readln() (string, error) {
 func (c *clusterAccessOptions) Run(cmd *cobra.Command, args []string) error {
 	clusterIdentifier := args[0] // This action requires elevation
 
-	c.kubeCli.Impersonate("backplane-cluster-admin", c.reason, fmt.Sprintf("Elevation required to break-glass on %s cluster", clusterIdentifier))
-
-	c.Println(fmt.Sprintf("Retrieving Kubeconfig for cluster '%s'", clusterIdentifier))
-
 	// Connect to ocm
 	conn, err := osdctlutil.CreateConnection()
 	if err != nil {
@@ -137,7 +136,62 @@ func (c *clusterAccessOptions) Run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	// Fetch lockbox status (api should be available now)
+	response, err := conn.AccessTransparency().V1().AccessProtection().Get().ClusterId(cluster.ID()).Send()
+	if err != nil {
+		return err
+	}
+	enabled, ok := response.Body().GetEnabled()
+	if !ok {
+		return err
+	}
+	if enabled {
+		// Find peer review OHSS with matching cluster id
+		// Open questions:
+		// what about cpds that do not have an external id yet?
+		jiras, err := utils.GetJiraIssuesForCluster(cluster.ID(), cluster.ExternalID())
+		if err != nil {
+			return err
+		}
+
+		requestExists := false
+		for _, issue := range jiras {
+			// Find peer review request
+			if strings.Contains(issue.Fields.Summary, "[Breakglass-PeerReview]") {
+				c.Println(fmt.Sprintf("Found peer review request: %s", issue.ID))
+				requestExists = true
+				// Check approval
+				if (issue.Fields.Status == &jira.Status{Name: "Pending Change"}) {
+					c.Println("Request is accepted. Continuing break glass")
+					break
+				} else {
+					c.Println(fmt.Sprintf("Request %s is waiting for approval", issue.ID))
+					return nil
+				}
+			}
+		}
+
+		if !requestExists {
+			c.Println("No peer review request found. Creating...")
+			issue, err := createPeerReviewJira(cluster.ExternalID(), c.reason)
+			if err != nil {
+				return fmt.Errorf("Failed to create jira ticket: %w", err)
+			}
+			c.Println("Peer review ticket has been created. Please seek approval and rerun this command")
+			c.Println(issue.Fields.Summary)
+			c.Println(issue.ID)
+			return nil
+		}
+	} else {
+		c.Println("Cluster is not access protected")
+	}
+
 	c.Println(fmt.Sprintf("Internal Cluster ID: %s", cluster.ID()))
+
+	c.kubeCli.Impersonate("backplane-cluster-admin", c.reason, fmt.Sprintf("Elevation required to break-glass on %s cluster", clusterIdentifier))
+
+	c.Println(fmt.Sprintf("Retrieving Kubeconfig for cluster '%s'", clusterIdentifier))
 
 	// Retrieve the kubeconfig secret from the cluster's namespace on hive
 	ns, err := getClusterNamespace(c.kubeCli, cluster.ID())
@@ -163,6 +217,46 @@ func (c *clusterAccessOptions) Run(cmd *cobra.Command, args []string) error {
 	c.Println("")
 	c.Println("Cluster is accessible via a local Kubeconfig file")
 	return c.createLocalKubeconfigAccess(cluster, kubeconfigSecret)
+}
+
+// createPeerReviewJira creates a peer review jira ticket in the OHSS board
+func createPeerReviewJira(externalClusterID string, reason string) (*jira.Issue, error) {
+	jiraClient, err := utils.GetJiraClient()
+	if err != nil {
+		return &jira.Issue{}, fmt.Errorf("error connecting to jira: %v", err)
+	}
+
+	creator, response, err := jiraClient.User.GetSelf()
+	if err != nil {
+		fmt.Println(response)
+		return &jira.Issue{}, err
+	}
+
+	customFields := tcontainer.NewMarshalMap()
+	customFields["Cluster ID"] = externalClusterID
+
+	desc := "SRE '%s' wants to break-glass on cluster '%s' with reason '%s'./nPlease review and if applicable approve this break-glass requests for an access protected cluster by moving this request to 'Pending Change'."
+	desc = fmt.Sprintf(desc, creator.Name, externalClusterID, reason)
+
+	issue := &jira.Issue{
+		Fields: &jira.IssueFields{
+			Summary:     "[Breakglass-PeerReview]",
+			Description: desc,
+			Type:        jira.IssueType{Name: "Task"},
+			Project:     jira.Project{Key: "Openshift Hosted SRE Support"},
+			Reporter:    creator,
+			Assignee:    nil,
+			Labels:      nil,
+			Status:      &jira.Status{Name: "Pending Approval"},
+			Priority:    &jira.Priority{Name: "Medium"}, // serverity is to be discussed, but should be high for breaking glass
+			Unknowns:    customFields,
+		},
+	}
+	createdIssue, _, err := jiraClient.Issue.Create(issue)
+	if err != nil {
+		return &jira.Issue{}, fmt.Errorf("failed to create issue: %w", err)
+	}
+	return createdIssue, nil
 }
 
 // createJumpPodAccess grants access to a cluster by creating a pod for users to exec into
