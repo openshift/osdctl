@@ -100,10 +100,6 @@ func (p *Post) Init() error {
 }
 
 func (p *Post) setup() error {
-	switch p.Problem[len(p.Problem)-1:] {
-	case ".", "?", "!":
-		return errors.New("--problem should not end in punctuation")
-	}
 	switch p.Resolution[len(p.Resolution)-1:] {
 	case ".", "?", "!":
 		return errors.New("--resolution should not end in punctuation")
