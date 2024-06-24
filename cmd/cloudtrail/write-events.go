@@ -2,18 +2,16 @@ package cloudtrail
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	ctUtil "github.com/openshift/osdctl/cmd/cloudtrail/pkg"
+	ctAws "github.com/openshift/osdctl/cmd/cloudtrail/pkg/aws"
 	envConfig "github.com/openshift/osdctl/pkg/envConfig"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -23,12 +21,12 @@ import (
 var DefaultRegion = "us-east-1"
 
 // LookupEventsOptions struct for holding options for event lookup
-type LookupEventsOptions struct {
-	clusterID      string
-	startTime      string
-	printEventUrl  bool
-	printRawEvents bool
-	printAllEvents bool
+type writeEventsOptions struct {
+	ClusterID string
+	StartTime string
+	PrintUrl  bool
+	PrintRaw  bool
+	PrintAll  bool
 }
 
 // RawEventDetails struct represents the structure of an AWS raw event
@@ -49,7 +47,7 @@ type RawEventDetails struct {
 }
 
 func newCmdWriteEvents() *cobra.Command {
-	ops := &LookupEventsOptions{}
+	ops := &writeEventsOptions{}
 	listEventsCmd := &cobra.Command{
 		Use:   "write-events",
 		Short: "Prints cloudtrail write events to console with optional filtering",
@@ -57,208 +55,50 @@ func newCmdWriteEvents() *cobra.Command {
 			return ops.run()
 		},
 	}
-	listEventsCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Cluster ID")
-	listEventsCmd.Flags().StringVarP(&ops.startTime, "since", "", "1h", "Specifies that only events that occur within the specified time are returned.Defaults to 1h.Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\".")
-	listEventsCmd.Flags().BoolVarP(&ops.printEventUrl, "url", "u", false, "Generates Url link to cloud console cloudtrail event")
-	listEventsCmd.Flags().BoolVarP(&ops.printRawEvents, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
-	listEventsCmd.Flags().BoolVarP(&ops.printAllEvents, "all", "A", false, "Prints all cloudtrail write events without filtering")
+	listEventsCmd.Flags().StringVarP(&ops.ClusterID, "cluster-id", "C", "", "Cluster ID")
+	listEventsCmd.Flags().StringVarP(&ops.StartTime, "since", "", "1h", "Specifies that only events that occur within the specified time are returned.Defaults to 1h.Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\".")
+	listEventsCmd.Flags().BoolVarP(&ops.PrintUrl, "url", "u", false, "Generates Url link to cloud console cloudtrail event")
+	listEventsCmd.Flags().BoolVarP(&ops.PrintRaw, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
+	listEventsCmd.Flags().BoolVarP(&ops.PrintAll, "all", "A", false, "Prints all cloudtrail write events without filtering")
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
 }
 
-// parseDurationToUTC parses the given startTime string as a duration and subtracts it from the current UTC time.
-// It returns the resulting time and any parsing error encountered.
-func parseDurationToUTC(input string) (time.Time, error) {
-	duration, err := time.ParseDuration(input)
+// FilterByIgnorelist filters out events based on the specified ignore list, which contains
+// regular expression patterns. It returns true if the event should be kept, and false if it should be filtered out.
+func isIgnoredEvent(event types.Event, mergedRegex string) (bool, error) {
+	if mergedRegex == "" {
+		return true, nil
+	}
+	raw, err := ctAws.ExtractUserDetails(event.CloudTrailEvent)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("[ERROR] unable to parse time duration: %w", err)
+		return true, fmt.Errorf("[ERROR] failed to extract raw CloudTrail event details: %w", err)
+	}
+	userArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
+	regexObj := regexp.MustCompile(mergedRegex)
+
+	if event.Username != nil {
+		if regexObj.MatchString(*event.Username) {
+			return false, nil
+		}
+	}
+	if userArn != "" {
+
+		if regexObj.MatchString(userArn) {
+
+			return false, nil
+		}
+	}
+	if userArn == "" && event.Username == nil {
+		return false, nil
 	}
 
-	return time.Now().UTC().Add(-duration), nil
+	return true, nil
 }
 
-// whoami retrieves caller identity information
-func whoami(stsClient sts.Client) (accountArn string, accountId string, err error) {
-	ctx := context.TODO()
-	callerIdentityOutput, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
-	if err != nil {
-		return "", "", err
-	}
+func (o *writeEventsOptions) run() error {
 
-	userArn, err := arn.Parse(*callerIdentityOutput.Arn)
-	if err != nil {
-		return "", "", err
-	}
-
-	return userArn.String(), userArn.AccountID, nil
-}
-
-// getWriteEvents retrieves cloudtrail events since the specified time
-// using the provided cloudtrail client and starttime from since flag.
-func getWriteEvents(since time.Time, cloudtailClient *cloudtrail.Client) ([]*cloudtrail.LookupEventsOutput, error) {
-	starttime := since
-	allookupOutputs := []*cloudtrail.LookupEventsOutput{}
-	input := cloudtrail.LookupEventsInput{
-		StartTime: &starttime,
-		EndTime:   aws.Time(time.Now()),
-		LookupAttributes: []types.LookupAttribute{
-			{AttributeKey: "ReadOnly",
-				AttributeValue: aws.String("false")},
-		},
-	}
-
-	paginator := cloudtrail.NewLookupEventsPaginator(cloudtailClient, &input, func(c *cloudtrail.LookupEventsPaginatorOptions) {})
-	for paginator.HasMorePages() {
-
-		lookupOutput, err := paginator.NextPage(context.TODO())
-		if err != nil {
-			return nil, fmt.Errorf("[WARNING] paginator error: \n%w", err)
-		}
-
-		allookupOutputs = append(allookupOutputs, lookupOutput)
-
-		input.NextToken = lookupOutput.NextToken
-		if lookupOutput.NextToken == nil {
-			break
-		}
-
-	}
-
-	return allookupOutputs, nil
-}
-
-// Extracts Raw cloudtrailEvent Details
-func extractUserDetails(cloudTrailEvent *string) (*RawEventDetails, error) {
-	if cloudTrailEvent == nil || *cloudTrailEvent == "" {
-		return &RawEventDetails{}, fmt.Errorf("[ERROR] cannot parse a nil input")
-	}
-	var res RawEventDetails
-	err := json.Unmarshal([]byte(*cloudTrailEvent), &res)
-	if err != nil {
-		return &RawEventDetails{}, fmt.Errorf("[ERROR] could not marshal event.CloudTrailEvent: %w", err)
-	}
-
-	const supportedEventVersionMajor = 1
-	const minSupportedEventVersionMinor = 8
-
-	var responseMajor, responseMinor int
-	if _, err := fmt.Sscanf(res.EventVersion, "%d.%d", &responseMajor, &responseMinor); err != nil {
-		return &RawEventDetails{}, fmt.Errorf("[ERROR]failed to parse CloudTrail event version: %w", err)
-	}
-	if responseMajor != supportedEventVersionMajor || responseMinor < minSupportedEventVersionMinor {
-		return &RawEventDetails{}, fmt.Errorf("[ERROR] unexpected event version (got %s, expected compatibility with %d.%d)", res.EventVersion, supportedEventVersionMajor, minSupportedEventVersionMinor)
-	}
-	return &res, nil
-}
-
-// generateLink generates a hyperlink to aws cloudTrail event.
-func generateLink(raw RawEventDetails) (url_link string) {
-	str1 := "https://"
-	str2 := ".console.aws.amazon.com/cloudtrailv2/home?region="
-	str3 := "#/events/"
-
-	eventRegion := raw.EventRegion
-	eventId := raw.EventId
-
-	var url = str1 + eventRegion + str2 + eventRegion + str3 + eventId
-	url_link = url
-
-	return url_link
-}
-
-// Join all individual patterns into a single string separated by the "|" operator
-func mergeRegex(regexlist []string) string {
-	return strings.Join(regexlist, "|")
-}
-
-// FilterUsers filters out events based on the specified Ignore list, which contains
-// regular expression patterns. It takes a slice of cloudtrail.LookupEventsOutput,
-// which represents the output of AWS CloudTrail lookup events operation, and a list
-// of regular expression patterns to ignore.
-func filterUsers(lookupOutputs []*cloudtrail.LookupEventsOutput, Ignore []string, allEvents bool) (*[]types.Event, error) {
-	filteredEvents := []types.Event{}
-	mergedRegex := mergeRegex(Ignore)
-
-	for _, lookupOutput := range lookupOutputs {
-		for _, event := range lookupOutput.Events {
-
-			raw, err := extractUserDetails(event.CloudTrailEvent)
-			if err != nil {
-				return nil, fmt.Errorf("[ERROR] failed to to extract raw cloudtrailEvent details: %w", err)
-			}
-			userArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
-			regexOdj := regexp.MustCompile(mergedRegex)
-			matchesUsername := false
-			matchesArn := false
-
-			if !allEvents && len(Ignore) != 0 {
-				if event.Username != nil {
-					matchesUsername = regexOdj.MatchString(*event.Username)
-				}
-				if userArn != "" {
-					matchesArn = regexOdj.MatchString(userArn)
-
-				}
-
-				if matchesArn || matchesUsername || (event.Username == nil && userArn == "") {
-
-					continue
-					// skips entry
-				}
-
-			}
-			filteredEvents = append(filteredEvents, event)
-
-		}
-	}
-
-	return &filteredEvents, nil
-}
-
-// PrintEvents prints the details of each event in the provided slice of events.
-// It takes a slice of types.Event
-func printEvents(filteredEvent []types.Event, printUrl bool, raw bool) {
-	var eventStringBuilder = strings.Builder{}
-
-	for i := len(filteredEvent) - 1; i >= 0; i-- {
-		if raw {
-			if filteredEvent[i].CloudTrailEvent != nil {
-				fmt.Printf("%v \n", *filteredEvent[i].CloudTrailEvent)
-				return
-			}
-		}
-		rawEventDetails, err := extractUserDetails(filteredEvent[i].CloudTrailEvent)
-		if err != nil {
-			fmt.Printf("[Error] Error extracting event details: %v", err)
-		}
-		sessionIssuer := rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName
-		if filteredEvent[i].EventName != nil {
-			eventStringBuilder.WriteString(fmt.Sprintf("\n%v", *filteredEvent[i].EventName))
-		}
-		if filteredEvent[i].EventTime != nil {
-			eventStringBuilder.WriteString(fmt.Sprintf(" | %v", filteredEvent[i].EventTime.String()))
-		}
-		if filteredEvent[i].Username != nil {
-			eventStringBuilder.WriteString(fmt.Sprintf(" | Username: %v", *filteredEvent[i].Username))
-		}
-		if sessionIssuer != "" {
-			eventStringBuilder.WriteString(fmt.Sprintf(" | ARN: %v", sessionIssuer))
-		}
-
-		if printUrl && filteredEvent[i].CloudTrailEvent != nil {
-			if err == nil {
-				eventStringBuilder.WriteString(fmt.Sprintf("\n%v |", generateLink(*rawEventDetails)))
-			} else {
-				fmt.Println("EventLink: <not available>")
-			}
-		}
-
-	}
-	fmt.Println(eventStringBuilder.String())
-}
-
-func (o *LookupEventsOptions) run() error {
-	err := utils.IsValidClusterKey(o.clusterID)
+	err := utils.IsValidClusterKey(o.ClusterID)
 	if err != nil {
 		return err
 	}
@@ -268,7 +108,7 @@ func (o *LookupEventsOptions) run() error {
 	}
 	defer connection.Close()
 
-	cluster, err := utils.GetClusterAnyStatus(connection, o.clusterID)
+	cluster, err := utils.GetClusterAnyStatus(connection, o.ClusterID)
 	if err != nil {
 		return err
 	}
@@ -282,40 +122,49 @@ func (o *LookupEventsOptions) run() error {
 	}
 	if len(Ignore) == 0 {
 		fmt.Println("\n[WARNING] No filter list detected! If you want intend to apply user filtering for the cloudtrail events, please add cloudtrail_cmd_lists to your osdctl configuration file.")
+
 	}
 
+	mergedRegex := ctUtil.MergeRegex(Ignore)
+	if o.PrintAll {
+		mergedRegex = ""
+	}
 	cfg, err := osdCloud.CreateAWSV2Config(connection, cluster)
 	if err != nil {
 		return err
 	}
-
-	startTime, err := parseDurationToUTC(o.startTime)
+	DefaultRegion := "us-east-1"
+	startTime, err := ctUtil.ParseDurationToUTC(o.StartTime)
 	if err != nil {
 		return err
 	}
 
-	fetchFilterPrintEvents := func(client cloudtrail.Client, startTime time.Time, o *LookupEventsOptions) error {
-		lookupOutput, err := getWriteEvents(startTime, &client)
-		if err != nil {
-			return err
-		}
-		filteredEvents, err := filterUsers(lookupOutput, Ignore, o.printAllEvents)
-		if err != nil {
-			return err
-		}
+	// FilterAndPrintEvents fetches events and filters them based on a regex string.
+	// It then prints the filtered events.
 
-		printEvents(*filteredEvents, o.printEventUrl, o.printRawEvents)
-		fmt.Println("")
+	arn, accountId, err := ctAws.Whoami(*sts.NewFromConfig(cfg))
+	if err != nil {
 		return err
 	}
-
-	arn, accountId, err := whoami(*sts.NewFromConfig(cfg))
 	fmt.Printf("[INFO] Checking write event history since %v for AWS Account %v as %v \n", startTime, accountId, arn)
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
-	if err := fetchFilterPrintEvents(*cloudTrailclient, startTime, o); err != nil {
+	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime)
+	if err != nil {
 		return err
 	}
+
+	filteredEvents, err := ctUtil.ApplyFilters(queriedEvents,
+		func(event types.Event) (bool, error) {
+			return isIgnoredEvent(event, mergedRegex)
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	ctUtil.PrintEvents(filteredEvents, o.PrintUrl, o.PrintRaw)
+	fmt.Println("")
 
 	if DefaultRegion != cfg.Region {
 		defaultConfig, err := config.LoadDefaultConfig(
@@ -331,9 +180,19 @@ func (o *LookupEventsOptions) run() error {
 			HTTPClient:  cfg.HTTPClient,
 		})
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
-		if err := fetchFilterPrintEvents(*defaultCloudtrailClient, startTime, o); err != nil {
+		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime)
+		if err != nil {
 			return err
 		}
+		filteredEvents, err := ctUtil.ApplyFilters(lookupOutput,
+			func(event types.Event) (bool, error) {
+				return isIgnoredEvent(event, mergedRegex)
+			},
+		)
+		if err != nil {
+			return err
+		}
+		ctUtil.PrintEvents(filteredEvents, o.PrintUrl, o.PrintRaw)
 	}
 
 	return err
