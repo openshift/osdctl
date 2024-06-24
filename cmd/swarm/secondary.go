@@ -2,60 +2,61 @@ package swarm
 
 import (
 	"fmt"
-	"os"
 	"strings"
-	"github.com/andygrunwald/go-jira"
+
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+)
+
+const (
+	DefaultProject = "OHSS"
 )
 
 var (
-	project  string
-	products []string
+	products = [...]string{"Openshift Dedicated", "Openshift Online Pro", "OpenShift Online Starter", "Red Hat OpenShift Service on AWS", "HyperShift Preview"}
 )
 
-var secondary = &cobra.Command{
-		Use:   "secondary",
-		Short: "List unassigned JIRA issues based on criteria",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// Validate required flag
-			if project == "" {
-				return fmt.Errorf("project flag (-p) is required")
-			}
+var secondaryCmd = &cobra.Command{
+	Use:   "secondary",
+	Short: "List unassigned JIRA issues based on criteria",
+	Long: `Lists unassigned Jira issues from the 'OHSS' project
+		for the following Products
+		- OpenShift Dedicated
+		- Openshift Online Pro
+		- OpenShift Online Starter
+		- Red Hat OpenShift Service on AWS
+		- HyperShift Preview
+		- Empty 'Products' field in Jira
+		with the 'Summary' field  of the new ticket not matching the following
+		- Compliance Alert
+		and the 'Work Type' is not one of the RFE or Change Request `,
+	Example: `#Collect tickets for secondary swarm
+		osdctl jira swarm`,
+	RunE: func(cmd *cobra.Command, args []string) error {
 
-			client, err := jira.NewClient(jira.Options{BaseURL: "https://issues.redhat.com"})
-			if err != nil {
-				return fmt.Errorf("Error creating JIRA client: %w", err)
-			}
+		jiraClient, err := utils.GetJiraClient()
+		if err != nil {
+			return fmt.Errorf("failed to get Jira client: %w", err)
+		}
+		// Build JQL query
+		jql := buildJQL()
+		// Search jira issues
+		issues, _, err := jiraClient.Issue.Search(jql, nil)
 
-			jql := buildJQL()
-			issues, err := client.SearchIssues(jql, nil)
-			if err != nil {
-				return fmt.Errorf("Error fetching JIRA issues: %w", err)
-			}
+		if err != nil {
+			return fmt.Errorf("Error fetching JIRA issues: %w", err)
+		}
 
-			for _, issue := range issues {
-				fmt.Printf("- [%s](https://issues.redhat.com/browse/%s) - [%s] - %s\n", issue.Fields.Key, issue.Fields.Key, issue.Fields.Priority.Name, issue.Fields.Summary)
-			}
+		for _, issue := range issues {
+			fmt.Printf("- [%s](https://issues.redhat.com/browse/%s) - [%s] - %s\n", issue.Fields.Key, issue.Fields.Key, issue.Fields.Priority.Name, issue.Fields.Summary)
+		}
 
-			return nil
-		},
-	}
-
-	rootCmd.Flags().StringVarP(&project, "project", "p", "", "Project key to filter issues (required)")
-	rootCmd.MarkFlagRequired("project")
-
-	rootCmd.Flags().StringSliceVarP(&products, "products", "P", []string{"OD", "OPro", "OOS", "RHOSAWS", "HSPreview"}, "Comma-separated list of products to filter issues")
-
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
+		return nil
+	},
+}
 
 func buildJQL() string {
-	jql := fmt.Sprintf("project = %s AND Products in (%s)", project, strings.Join(products, ","))
+	jql := fmt.Sprintf("project = %s AND Products in (%s)", DefaultProject, strings.Join(products, ","))
 
 	jql += ` AND (
 		(summary !~ "Compliance Alert: %" OR summary ~ "Compliance Alert: %" AND status = NEW)
@@ -69,4 +70,3 @@ func buildJQL() string {
 
 	return jql
 }
-

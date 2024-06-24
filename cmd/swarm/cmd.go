@@ -9,5 +9,5 @@ var Cmd = &cobra.Command{
 }
 
 func init() {
-	Cmd.AddCommand(secondary)
+	Cmd.AddCommand(secondaryCmd)
 }
