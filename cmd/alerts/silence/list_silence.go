@@ -6,9 +6,14 @@ import (
 	"log"
 
 	"github.com/openshift/osdctl/cmd/alerts/utils"
-	kubeutils "github.com/openshift/osdctl/cmd/common"
+	"github.com/openshift/osdctl/cmd/common"
 	"github.com/spf13/cobra"
 )
+
+type listSilenceCmd struct {
+	clusterID string
+	reason    string
+}
 
 func NewCmdListSilence() *cobra.Command {
 	listSilenceCmd := &listSilenceCmd{}
@@ -30,19 +35,26 @@ func NewCmdListSilence() *cobra.Command {
 	return cmd
 }
 
-func ListSilence(clusterID string) {
+func ListSilence(cmd *listSilenceCmd) {
+
 	var silences []utils.Silence
 
 	silenceCmd := []string{"amtool", "silence", "--alertmanager.url", utils.LocalHostUrl, "-o", "json"}
+
+	elevationReasons := []string{
+		cmd.reason,
+		"Clear alertmanager silence for a cluster via osdctl",
+	}
 
 	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(cmd.clusterID, elevationReasons...)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	op, err := utils.ExecInPod(kubeconfig, clientset, silenceCmd)
+	op, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, silenceCmd)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Error encountered while listing the silences:", err)
+		return
 	}
 
 	opSlice := []byte(op)
@@ -66,7 +78,7 @@ func printSilence(silence utils.Silence) {
 	fmt.Println("-------------------------------------------")
 	for _, matcher := range matchers {
 		fmt.Printf("SilenceID:	%s\n", id)
-		fmt.Printf("Status:	%s\n", status.State)
+		fmt.Printf("Status:		%s\n", status.State)
 		fmt.Printf("Created By:	%s\n", created)
 		fmt.Printf("Starts At:	%s\n", starts)
 		fmt.Printf("Ends At:	%s\n", end)

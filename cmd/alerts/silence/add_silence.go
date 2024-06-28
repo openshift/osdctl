@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/openshift/osdctl/cmd/alerts/utils"
-	kubeutils "github.com/openshift/osdctl/cmd/common"
+	"github.com/openshift/osdctl/cmd/common"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
@@ -41,6 +41,8 @@ func NewCmdAddSilence() *cobra.Command {
 	cmd.Flags().StringVarP(&addSilenceCmd.comment, "comment", "c", "Adding silence using the osdctl alert command", "add comment about silence")
 	cmd.Flags().StringVarP(&addSilenceCmd.duration, "duration", "d", "15d", "Adding duration for silence as 15 days") //default duration set to 15 days
 	cmd.Flags().BoolVarP(&addSilenceCmd.all, "all", "a", false, "Adding silences for all alert")
+	cmd.Flags().StringVar(&addSilenceCmd.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	_ = cmd.MarkFlagRequired("reason")
 
 	return cmd
 }
@@ -86,13 +88,13 @@ func AddAllSilence(clusterID, duration, comment, username, clustername string, k
 			"--comment=" + comment,
 		}
 
-		output, err := utils.ExecInPod(kubeconfig, clientset, addCmd)
+		output, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, addCmd)
 		if err != nil {
 			log.Fatal("Exiting the program")
 			return
 		}
 
-		formattedOutput := strings.Replace(output, "\n", " ", -1)
+		formattedOutput := strings.Replace(output, "\n", "", -1)
 
 		fmt.Printf("Alert %s has been silenced with id \"%s\" for a duration of %s by user \"%s\" \n", alert.Labels.Alertname, formattedOutput, duration, username)
 	}
@@ -102,7 +104,7 @@ func fetchAllAlerts(kubeconfig *rest.Config, clientset *kubernetes.Clientset) []
 	var fetchedAlerts []utils.Alert
 
 	listAlertCmd := []string{"amtool", "--alertmanager.url", utils.LocalHostUrl, "alert", "-o", "json"}
-	output, err := utils.ExecInPod(kubeconfig, clientset, listAlertCmd)
+	output, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, listAlertCmd)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -127,13 +129,13 @@ func AddAlertNameSilence(alertID []string, duration, comment, username string, k
 			"--comment=" + comment,
 		}
 
-		output, err := utils.ExecInPod(kubeconfig, clientset, addCmd)
+		output, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, addCmd)
 		if err != nil {
 			log.Fatal("Exiting the program")
 			return
 		}
 
-		formattedOutput := strings.Replace(output, "\n", " ", -1)
+		formattedOutput := strings.Replace(output, "\n", "", -1)
 
 		fmt.Printf("Alert %s has been silenced with id \"%s\" for duration of %s by user \"%s\" \n", alertname, formattedOutput, duration, username)
 	}
@@ -145,7 +147,7 @@ func GetUserAndClusterInfo(clusterid string) (string, string) {
 	if err != nil {
 		fmt.Printf("Error %s in create connection.", err)
 	}
-	//defer connection.Close()
+
 	defer func() {
 		if cerr := connection.Close(); cerr != nil {
 			fmt.Println("Error closing connection:", cerr)
