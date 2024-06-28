@@ -18,6 +18,7 @@ type addSilenceCmd struct {
 	duration  string
 	comment   string
 	all       bool
+	reason    string
 }
 
 func NewCmdAddSilence() *cobra.Command {
@@ -35,9 +36,9 @@ func NewCmdAddSilence() *cobra.Command {
 	}
 
 	cmd.Flags().StringSliceVar(&addSilenceCmd.alertID, "alertname", []string{}, "alertname (comma-separated)")
-	cmd.Flags().StringVarP(&addSilenceCmd.comment, "comment", "c", "", "add comment about silence")
-	cmd.Flags().StringVarP(&addSilenceCmd.duration, "duration", "d", "15d", "add duration for silence") //default duration set to 15 days
-	cmd.Flags().BoolVarP(&addSilenceCmd.all, "all", "a", false, "add silences for all alert")
+	cmd.Flags().StringVarP(&addSilenceCmd.comment, "comment", "c", "Adding silence using the osdctl alert command", "add comment about silence")
+	cmd.Flags().StringVarP(&addSilenceCmd.duration, "duration", "d", "15d", "adding duration for silence") //default duration set to 15 days
+	cmd.Flags().BoolVarP(&addSilenceCmd.all, "all", "a", false, "adding silences for all alert")
 
 	return cmd
 }
@@ -51,7 +52,12 @@ func AddSilence(cmd *addSilenceCmd) {
 
 	username, clustername := GetUserAndClusterInfo(clusterID)
 
-	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID)
+	elevationReasons := []string{
+		cmd.reason,
+		"Add alert silence via osdctl",
+	}
+
+	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID, elevationReasons...)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -79,7 +85,8 @@ func AddAllSilence(clusterID, duration, comment, username, clustername string, k
 
 	output, err := ExecInPod(kubeconfig, clientset, addCmd)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal("Exiting the program")
+		return
 	}
 
 	formattedOutput := strings.Replace(output, "\n", " ", -1)
@@ -101,7 +108,8 @@ func AddAlertNameSilence(alertID []string, duration, comment, username string, k
 
 		output, err := ExecInPod(kubeconfig, clientset, addCmd)
 		if err != nil {
-			fmt.Println(err)
+			log.Fatal("Exiting the program")
+			return
 		}
 
 		formattedOutput := strings.Replace(output, "\n", " ", -1)
