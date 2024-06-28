@@ -77,12 +77,12 @@ func getAlertLevel(clusterID, alertLevel string, elevationReason string) {
 	}
 
 	output, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, listAlertCmd)
-	
-	if err != nil {	
+
+	if err != nil {
 		fmt.Println("Execution with alertmanager-main-0 failed.", err)
 	}
 
-	if err != nil{
+	if err != nil {
 		fmt.Println("Execution with alertmanager-main-1 failed.", err)
 		return
 	}
