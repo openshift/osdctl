@@ -1,10 +1,11 @@
-package silence
+package utils
 
 import (
 	"context"
 	"fmt"
 
 	"github.com/openshift/osdctl/cmd/cluster"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -20,31 +21,26 @@ const (
 	SecondaryPod     = "alertmanager-main-1"
 )
 
-// ExecInPod is designed to execute a command inside a Kubernetes pod and capture its output.
-func ExecInPod(kubeconfig *rest.Config, clientset *kubernetes.Clientset, cmd []string) (string, error) {
+// ExecInAlertManagerPod attempts to execute the given command in the primary Alertmanager pod,
+// and if that fails, it retries with the secondary Alertmanager pod.
+func ExecInAlertManagerPod(kubeconfig *rest.Config, clientset *kubernetes.Clientset, cmd []string) (string, error) {
 	var cmdOutput string
 	var err error
 
-	cmdOutput, err = ExecWithPod(kubeconfig, clientset, PrimaryPod, cmd)
+	cmdOutput, err = ExecWithPod(kubeconfig, clientset, PrimaryPod, AccountNamespace, cmd)
 	if err == nil {
-		return cmdOutput, nil
+		return cmdOutput, err
 	}
 
-	fmt.Printf("Execution with alertmanager-main-0 failed: %v\n", err)
-
-	fmt.Println("Attempting with alertmanger-main-1")
-	cmdOutput, err = ExecWithPod(kubeconfig, clientset, SecondaryPod, cmd)
+	cmdOutput, err = ExecWithPod(kubeconfig, clientset, SecondaryPod, AccountNamespace, cmd)
 	if err == nil {
-		return cmdOutput, nil
+		return cmdOutput, err
 	}
 
-	fmt.Printf("Execution with alertmanager-main-1 failed: %v\n", err)
-
-	fmt.Println("Execution Failed with alertmanager-main-0 and alertmanager-main-1. Please put silence manually")
-	return "", err
+	return "", fmt.Errorf("exec failed, please put silence manually: %w", err)
 }
 
-func ExecWithPod(kubeconfig *rest.Config, clientset *kubernetes.Clientset, podName string, cmd []string) (string, error) {
+func ExecWithPod(kubeconfig *rest.Config, clientset *kubernetes.Clientset, podName string, AccountNamespace string, cmd []string) (string, error) {
 	req := clientset.CoreV1().RESTClient().Post().Resource("pods").Name(podName).
 		Namespace(AccountNamespace).SubResource("exec")
 	option := &corev1.PodExecOptions{
