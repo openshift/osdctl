@@ -84,11 +84,7 @@ func main(clusterID string) error {
 		return nil
 	}
 
-	requestToken, err := getRequestToken(query.finalQuery, DTURL, accessToken)
-	if err != nil {
-		return fmt.Errorf("failed to acquire request token %v", err)
-	}
-
+	requestToken, err := getDTQueryExecution(DTURL, accessToken, query.finalQuery)
 	err = getLogs(DTURL, accessToken, requestToken, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get logs %v", err)

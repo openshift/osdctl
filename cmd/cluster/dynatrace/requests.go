@@ -18,6 +18,10 @@ const (
 	VaultAddr   string = "vault_address"
 )
 
+type DTRequestError struct {
+	Records json.RawMessage `json:"error"`
+}
+
 type Requester struct {
 	method      string
 	url         string
@@ -28,7 +32,7 @@ type Requester struct {
 
 func (rh *Requester) send() (string, error) {
 	client := http.Client{
-		Timeout: time.Second * 10,
+		Timeout: time.Second * 600,
 	}
 
 	var req *http.Request
@@ -54,13 +58,19 @@ func (rh *Requester) send() (string, error) {
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != rh.successCode {
-		return "", fmt.Errorf("request failed: %v", resp.Status)
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
+	}
+
+	if resp.StatusCode != rh.successCode {
+		var dtError DTRequestError
+		err = json.Unmarshal([]byte(body), &dtError)
+		if err != nil {
+			return "", err
+		}
+
+		return "", fmt.Errorf("request failed: %v %s", resp.Status, dtError)
 	}
 
 	return string(body), nil
@@ -135,7 +145,8 @@ func getAccessToken() (string, error) {
 }
 
 type DTQueryPayload struct {
-	Query string `json:"query"`
+	Query            string `json:"query"`
+	MaxResultRecords int    `json:"maxResultRecords"`
 }
 
 type DTPollResult struct {
@@ -203,6 +214,82 @@ func getRequestToken(query string, dtURL string, accessToken string) (requestTok
 	}
 
 	return execResp.RequestToken, nil
+}
+
+type DTExecuteState struct {
+	State      string `json:"state"`
+	TTLSeconds int    `json:"ttlSeconds"`
+}
+
+type DTExecuteToken struct {
+	RequestToken string `json:"requestToken"`
+}
+
+type DTExecuteResults struct {
+	Result []json.RawMessage `json:"records"`
+}
+
+func getDTQueryExecution(dtURL string, accessToken string, query string) (reqToken string, error error) {
+	// Note: Currently we are setting a limit of 20,000 lines to pull from Dynatrace
+	// due to a limitation in dynatrace to pull all logs.
+	payload := DTQueryPayload{
+		Query:            query,
+		MaxResultRecords: 20000,
+	}
+
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+
+	requester := Requester{
+		method: http.MethodPost,
+		url:    dtURL + "platform/storage/query/v1/query:execute",
+		data:   string(payloadJSON),
+		headers: map[string]string{
+			"Content-Type":  "application/json",
+			"Authorization": "Bearer " + accessToken,
+		},
+		successCode: http.StatusAccepted,
+	}
+
+	var resp string
+	for {
+		resp, err = requester.send()
+		if err != nil {
+			return "", err
+		}
+		var execState DTExecuteState
+		err = json.Unmarshal([]byte(resp), &execState)
+		if err != nil {
+			return "", err
+		}
+
+		if execState.State != "RUNNING" && execState.State != "SUCCEEDED" {
+			return "", fmt.Errorf("query failed")
+		}
+
+		break
+	}
+
+	var state DTExecuteState
+	err = json.Unmarshal([]byte(resp), &state)
+	if err != nil {
+		return "", err
+	}
+
+	if state.State != "RUNNING" && state.State != "SUCCEEDED" {
+		return "", fmt.Errorf("query failed")
+	}
+
+	// acquire the request token for the execution
+	var token DTExecuteToken
+	err = json.Unmarshal([]byte(resp), &token)
+	if err != nil {
+		return "", err
+	}
+
+	return token.RequestToken, err
 }
 
 func getDTPollResults(dtURL string, requestToken string, accessToken string) (respBody string, error error) {
