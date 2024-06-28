@@ -13,19 +13,21 @@ import (
 )
 
 const (
-	ProdJumproleConfigKey  = "prod_jumprole_account_id"
-	AwsProxy               = "aws_proxy"
-	StageJumproleConfigKey = "stage_jumprole_account_id"
-	PdUserToken            = "pd_user_token"
-	JiraToken              = "jira_token"
-	DtVaultPath            = "dt_vault_path"
-	VaultAddress           = "vault_address"
-	JiraTokenRegex         = "^[A-Z0-9]{7}$"
-	PdTokenRegex           = "^[a-zA-Z0-9+_-]{20}$"
-	AwsAccountRegex        = "^[0-9]{12}$"
-	AWSProxyRegex          = `^http:\/\/[a-zA-Z0-9.-]+(:\d+)?$`
-	VaultURLRegex          = `^https:\/\/[a-zA-Z0-9.-]+\/?$`
-	DtVaultPathRegex       = `^[a-zA-Z0-9\-/]+$`
+	ProdJumproleConfigKey   = "prod_jumprole_account_id"
+	AwsProxy                = "aws_proxy"
+	StageJumproleConfigKey  = "stage_jumprole_account_id"
+	PdUserToken             = "pd_user_token"
+	JiraToken               = "jira_token"
+	DtVaultPath             = "dt_vault_path"
+	VaultAddress            = "vault_address"
+	CloudTrailCmdLists      = "cloudtrail_cmd_lists"
+	JiraTokenRegex          = "^[A-Z0-9]{7}$"
+	PdTokenRegex            = "^[a-zA-Z0-9+_-]{20}$"
+	AwsAccountRegex         = "^[0-9]{12}$"
+	AWSProxyRegex           = `^http:\/\/[a-zA-Z0-9.-]+(:\d+)?$`
+	VaultURLRegex           = `^https:\/\/[a-zA-Z0-9.-]+\/?$`
+	DtVaultPathRegex        = `^[a-zA-Z0-9\-/]+$`
+	CloudTrailCmdListsRegex = `^\s*-\s+.*$`
 )
 
 // NewCmdSetup implements the setup command
@@ -46,6 +48,7 @@ func NewCmdSetup() *cobra.Command {
 				VaultAddress,
 				PdUserToken,
 				JiraToken,
+				CloudTrailCmdLists,
 			}
 
 			values := make(map[string]string)
@@ -64,8 +67,7 @@ func NewCmdSetup() *cobra.Command {
 
 			for _, key := range keys {
 				defaultValue := defaults[key]
-				//fmt.Printf("Enter %s [%s]: ", key, defaultValue)
-				fmt.Printf("\033[1mEnter %s\033[0m [\033[94m%s\033[0m]: ", key, defaultValue)
+				fmt.Printf("\033[91mEnter %s \033[0m [\033[94mdefault %s\033[0m]:", key, defaultValue)
 				value, _ := reader.ReadString('\n')
 				value = strings.TrimSpace(value)
 
@@ -99,6 +101,10 @@ func NewCmdSetup() *cobra.Command {
 					if value != "" && value != defaultValue {
 						_, err = ValidateDtVaultPath(value)
 					}
+				case CloudTrailCmdLists:
+					if value != "" && value != defaultValue {
+						_, err = ValidateCloudTrailCmdLists(value)
+					}
 				}
 
 				if err != nil {
@@ -110,8 +116,7 @@ func NewCmdSetup() *cobra.Command {
 
 			for _, key := range optionalKeys {
 				defaultValue := defaults[key]
-				fmt.Printf("\033[91mEnter %s (optional)\033[0m [\033[94m%s\033[0m]: ", key, defaultValue)
-				//fmt.Printf("Enter %s (optional) [%s]: ", key, defaultValue)
+				fmt.Printf("\033[91mEnter %s (optional)\033[0m [\033[94mdefault %s\033[0m]:", key, defaultValue)
 				value, _ := reader.ReadString('\n')
 				value = strings.TrimSpace(value)
 
@@ -210,4 +215,16 @@ func ValidateDtVaultPath(dtVaultPath string) (string, error) {
 		return "", errors.New("invalid DtVault Path")
 	}
 	return dtVaultPath, nil
+}
+
+func ValidateCloudTrailCmdLists(cloudTrailCmd string) (string, error) {
+	cloudTrailCmd = strings.TrimSpace(cloudTrailCmd)
+	match, err := regexp.MatchString(CloudTrailCmdListsRegex, cloudTrailCmd)
+	if err != nil {
+		return "", err
+	}
+	if !match {
+		return "", errors.New("invalid CloudTrail command")
+	}
+	return cloudTrailCmd, nil
 }
