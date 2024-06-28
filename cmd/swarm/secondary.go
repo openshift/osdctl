@@ -31,7 +31,7 @@ var secondaryCmd = &cobra.Command{
 		- Compliance Alert
 		and the 'Work Type' is not one of the RFE or Change Request `,
 	Example: `#Collect tickets for secondary swarm
-		osdctl jira swarm`,
+		osdctl swarm secondary`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 
 		jiraClient, err := utils.GetJiraClient()
