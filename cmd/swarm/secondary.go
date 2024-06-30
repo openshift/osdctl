@@ -13,7 +13,7 @@ const (
 )
 
 var (
-	products = [...]string{"Openshift Dedicated", "Openshift Online Pro", "OpenShift Online Starter", "Red Hat OpenShift Service on AWS", "HyperShift Preview"}
+	products = []string{"Openshift Dedicated", "Openshift Online Pro", "OpenShift Online Starter", "Red Hat OpenShift Service on AWS", "HyperShift Preview"}
 )
 
 var secondaryCmd = &cobra.Command{
@@ -44,13 +44,10 @@ var secondaryCmd = &cobra.Command{
 		issues, _, err := jiraClient.Issue.Search(jql, nil)
 
 		if err != nil {
-			return fmt.Errorf("Error fetching JIRA issues: %w", err)
+			return fmt.Errorf("error fetching JIRA issues: %w", err)
 		}
 
-		for _, issue := range issues {
-			fmt.Printf("- [%s](https://issues.redhat.com/browse/%s) - [%s] - %s\n", issue.Fields.Key, issue.Fields.Key, issue.Fields.Priority.Name, issue.Fields.Summary)
-		}
-
+		utils.PrintJiraIssues(issues)
 		return nil
 	},
 }
