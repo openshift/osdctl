@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/openshift/osdctl/cmd/alerts/silence"
+	"github.com/openshift/osdctl/cmd/alerts/utils"
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/spf13/cobra"
 )
@@ -15,29 +15,6 @@ type alertCmd struct {
 	clusterID  string
 	alertLevel string
 	reason     string
-}
-
-// Labels represents a set of labels associated with an alert.
-type Labels struct {
-	Alertname string `json:"alertname"`
-	Severity  string `json:"severity"`
-}
-
-// Status represents a set of state associated with an alert.
-type Status struct {
-	State string `json:"state"`
-}
-
-// Annotations represents a set of summary/description associated with an alert.
-type Annotations struct {
-	Summary string `json:"summary"`
-}
-
-// Alert represents a set of above declared struct Labels,Status and annoataions
-type Alert struct {
-	Labels      Labels      `json:"labels"`
-	Status      Status      `json:"status"`
-	Annotations Annotations `json:"annotations"`
 }
 
 // NewCmdListAlerts implements the list alert functionality.
@@ -84,32 +61,33 @@ func ListAlerts(cmd *alertCmd) {
 	}
 }
 
-func getAlertLevel(clusterID, alertLevel, elevationReason string) {
-	var alerts []Alert
+func getAlertLevel(clusterID, alertLevel string, elevationReason string) {
+	var alerts []utils.Alert
 
-	listAlertCmd := []string{"amtool", "--alertmanager.url", silence.LocalHostUrl, "alert", "-o", "json"}
+	listAlertCmd := []string{"amtool", "--alertmanager.url", utils.LocalHostUrl, "alert", "-o", "json"}
 
 	elevationReasons := []string{
 		elevationReason,
 		"Listing active cluster alerts",
 	}
+
 	_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID, elevationReasons...)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	output, err := silence.ExecInPod(kubeconfig, clientset, listAlertCmd)
+	output, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, listAlertCmd)
+
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Execution with alertmanager-main-0 failed.", err)
+	}
+
+	if err != nil {
+		fmt.Println("Execution with alertmanager-main-1 failed.", err)
+		return
 	}
 
 	outputSlice := []byte(output)
-
-	err = json.Unmarshal(outputSlice, &alerts)
-	if err != nil {
-		fmt.Println("Error in unmarshaling the labels", err)
-		return
-	}
 
 	err = json.Unmarshal(outputSlice, &alerts)
 	if err != nil {
@@ -130,11 +108,13 @@ func getAlertLevel(clusterID, alertLevel, elevationReason string) {
 	if !foundAlert {
 		fmt.Printf("No such Alert found with requested \"%s\" severity.\n", alertLevel)
 	}
+
 }
 
-func printAlert(labels Labels, annotations Annotations, status Status) {
+func printAlert(labels utils.AlertLabels, annotations utils.AlertAnnotations, status utils.AlertStatus) {
 	fmt.Printf("  AlertName:  %s\n", labels.Alertname)
 	fmt.Printf("  Severity:   %s\n", labels.Severity)
 	fmt.Printf("  State:      %s\n", status.State)
 	fmt.Printf("  Message:    %s\n", annotations.Summary)
+	fmt.Println()
 }

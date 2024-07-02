@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/openshift/osdctl/cmd/alerts/utils"
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
@@ -71,13 +72,14 @@ func ClearAllSilence(kubeconfig *rest.Config, clientset *kubernetes.Clientset) {
 		"silence",
 		"query",
 		"-q",
-		"--alertmanager.url=" + LocalHostUrl,
+		"--alertmanager.url=" + utils.LocalHostUrl,
 	}
 
-	queryOutput, err := ExecInPod(kubeconfig, clientset, queryCmd)
+	queryOutput, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, queryCmd)
 
 	if err != nil {
-		fmt.Print("some issue in query command")
+		fmt.Println("Error encountered while expiring all silence:", err)
+		return
 	}
 
 	formattedOutput := strings.Join(strings.Fields(queryOutput), " ")
@@ -95,12 +97,12 @@ func ClearAllSilence(kubeconfig *rest.Config, clientset *kubernetes.Clientset) {
 			"silence",
 			"expire",
 			silence,
-			"--alertmanager.url=" + LocalHostUrl,
+			"--alertmanager.url=" + utils.LocalHostUrl,
 		}
 
 		countsilence = countsilence - 1
 
-		_, err := ExecInPod(kubeconfig, clientset, clearCmd)
+		_, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, clearCmd)
 
 		if err != nil {
 			log.Printf("Error expiring silence ID \"%s\" : %v\n", silence, err)
@@ -124,9 +126,9 @@ func ClearSilenceByID(silenceIDs []string, kubeconfig *rest.Config, clientset *k
 			"silence",
 			"expire",
 			silenceId,
-			"--alertmanager.url=" + LocalHostUrl,
+			"--alertmanager.url=" + utils.LocalHostUrl,
 		}
-		_, err := ExecInPod(kubeconfig, clientset, clearCmd)
+		_, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, clearCmd)
 
 		if err != nil {
 			log.Printf("Error expiring silence ID \"%s\" %v\n", silenceId, err)
