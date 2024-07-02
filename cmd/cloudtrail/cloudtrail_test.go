@@ -94,9 +94,6 @@ func TestIgnoreListFilter(t *testing.T) {
 
 func TestPermissonDeniedFilter(t *testing.T) {
 
-	var (
-		permissionDeniedErrorStr = ".*Client.UnauthorizedOperation.*"
-	)
 	// Test Case 1 (Ignored)
 	testUsername1 := "RH-SRE-xxx.openshift"
 	testCloudTrailEvent1 := `{"eventVersion": "1.08","userIdentity": {"sessionContext": {"sessionIssuer": {"arn": "arn:aws:iam::123456789012:user/test-12345-6-a7b8-kube-system-capa-controller-manager/RH-SRE-xxx.openshift"}}}, "errorCode": "Client.UnauthorizedOperation"}`
@@ -123,7 +120,7 @@ func TestPermissonDeniedFilter(t *testing.T) {
 
 		filtered, err := ctUtil.ApplyFilters(TestEvents,
 			func(event types.Event) (bool, error) {
-				return isforbiddenEvent(event, permissionDeniedErrorStr)
+				return isforbiddenEvent(event)
 			},
 		)
 		assert.Nil(t, err)
@@ -143,7 +140,7 @@ func TestPermissonDeniedFilter(t *testing.T) {
 
 		filtered, err := ctUtil.ApplyFilters(edgeCaseEvents,
 			func(event types.Event) (bool, error) {
-				return isforbiddenEvent(event, permissionDeniedErrorStr)
+				return isforbiddenEvent(event)
 			},
 		)
 		assert.Nil(t, err)
@@ -162,7 +159,7 @@ func TestPermissonDeniedFilter(t *testing.T) {
 
 		filtered, err := ctUtil.ApplyFilters(edgeCaseEvents,
 			func(event types.Event) (bool, error) {
-				return isforbiddenEvent(event, permissionDeniedErrorStr)
+				return isforbiddenEvent(event)
 			},
 		)
 		assert.Nil(t, err)
@@ -181,7 +178,7 @@ func TestPermissonDeniedFilter(t *testing.T) {
 		expected := []types.Event{}
 		filtered, err := ctUtil.ApplyFilters(edgeCaseEvents,
 			func(event types.Event) (bool, error) {
-				return isforbiddenEvent(event, permissionDeniedErrorStr)
+				return isforbiddenEvent(event)
 			},
 		)
 		assert.EqualErrorf(t, err, "[ERROR] failed to extract raw CloudTrail event details: cannot parse a nil input", "")

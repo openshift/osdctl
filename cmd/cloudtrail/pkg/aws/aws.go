@@ -77,16 +77,19 @@ func Whoami(stsClient sts.Client) (accountArn string, accountId string, err erro
 
 // getWriteEvents retrieves cloudtrail events since the specified time
 // using the provided cloudtrail client and starttime from since flag.
-func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time) ([]types.Event, error) {
+func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool) ([]types.Event, error) {
 
 	alllookupEvents := []types.Event{}
 	input := cloudtrail.LookupEventsInput{
 		StartTime: &startTime,
 		EndTime:   aws.Time(time.Now()),
-		LookupAttributes: []types.LookupAttribute{
+	}
+
+	if writeOnly {
+		input.LookupAttributes = []types.LookupAttribute{
 			{AttributeKey: "ReadOnly",
 				AttributeValue: aws.String("false")},
-		},
+		}
 	}
 
 	paginator := cloudtrail.NewLookupEventsPaginator(cloudtailClient, &input, func(c *cloudtrail.LookupEventsPaginatorOptions) {})
