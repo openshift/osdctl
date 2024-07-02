@@ -146,7 +146,7 @@ func dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS strin
 		err = getEvents(DTURL, accessToken, eventsRequestToken, f)
 		f.Close()
 		if err != nil {
-			return fmt.Errorf("failed to get logs %v", err)
+			fmt.Println(fmt.Errorf("failed to get logs %v. Query: %v", err, eventQuery.finalQuery))
 		}
 
 	}
@@ -163,11 +163,6 @@ func dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, manage
 			return err
 		}
 		podLogsQuery.Build()
-
-		podLogsRequestToken, err := getRequestToken(podLogsQuery.finalQuery, DTURL, accessToken)
-		if err != nil {
-			return fmt.Errorf("failed to acquire request token %v", err)
-		}
 
 		podYamlFileName := "pod.yaml"
 		podLogFileName := "pod.log"
@@ -191,10 +186,11 @@ func dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, manage
 			return err
 		}
 
+		podLogsRequestToken, err := getDTQueryExecution(DTURL, accessToken, podLogsQuery.finalQuery)
 		err = getLogs(DTURL, accessToken, podLogsRequestToken, f)
 		f.Close()
 		if err != nil {
-			return fmt.Errorf("failed to get logs %v", err)
+			fmt.Println(fmt.Errorf("failed to get logs %v. Query: %v", err, podLogsQuery.finalQuery))
 		}
 	}
 
