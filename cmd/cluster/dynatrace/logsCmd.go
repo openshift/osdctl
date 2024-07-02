@@ -67,11 +67,6 @@ func main(clusterID string) error {
 		return fmt.Errorf("failed to acquire cluster details %v", err)
 	}
 
-	accessToken, err := getAccessToken()
-	if err != nil {
-		return fmt.Errorf("failed to acquire access token %v", err)
-	}
-
 	query, err := getQuery(clusterInternalID, mgmtClusterName)
 	if err != nil {
 		return fmt.Errorf("failed to build query for Dynatrace %v", err)
@@ -82,6 +77,11 @@ func main(clusterID string) error {
 
 	if dryRun {
 		return nil
+	}
+
+	accessToken, err := getAccessToken()
+	if err != nil {
+		return fmt.Errorf("failed to acquire access token %v", err)
 	}
 
 	requestToken, err := getDTQueryExecution(DTURL, accessToken, query.finalQuery)
