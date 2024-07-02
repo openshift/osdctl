@@ -231,7 +231,9 @@ type DTExecuteResults struct {
 
 func getDTQueryExecution(dtURL string, accessToken string, query string) (reqToken string, error error) {
 	// Note: Currently we are setting a limit of 20,000 lines to pull from Dynatrace
-	// due to a limitation in dynatrace to pull all logs.
+	// due to a limitation in dynatrace to pull all logs. This limitation can be revoked
+	// once https://community.dynatrace.com/t5/Product-ideas/Pagination-in-DQL-results/idi-p/248282#M45818
+	// is addressed. Then we can implement https://issues.redhat.com/browse/OSD-24349 to get rid of this limitation.
 	payload := DTQueryPayload{
 		Query:            query,
 		MaxResultRecords: 20000,
