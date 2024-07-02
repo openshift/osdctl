@@ -149,7 +149,7 @@ func (o *writeEventsOptions) run() error {
 	fmt.Printf("[INFO] Checking write event history since %v for AWS Account %v as %v \n", startTime, accountId, arn)
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
-	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime)
+	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true)
 	if err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func (o *writeEventsOptions) run() error {
 			HTTPClient:  cfg.HTTPClient,
 		})
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
-		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime)
+		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true)
 		if err != nil {
 			return err
 		}
