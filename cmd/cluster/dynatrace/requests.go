@@ -177,10 +177,6 @@ type DTEventResult struct {
 	Records []json.RawMessage `json:"records"`
 }
 
-type ExecuteResponse struct {
-	RequestToken string `json:"requestToken"`
-}
-
 type DTExecuteState struct {
 	State      string `json:"state"`
 	TTLSeconds int    `json:"ttlSeconds"`
