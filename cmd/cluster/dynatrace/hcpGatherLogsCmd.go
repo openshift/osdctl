@@ -3,6 +3,7 @@ package dynatrace
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -115,12 +116,6 @@ func dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS strin
 		}
 		eventQuery.Build()
 
-		eventsRequestToken, err := getRequestToken(eventQuery.finalQuery, DTURL, accessToken)
-		if err != nil {
-			fmt.Println(fmt.Errorf("failed to acquire request token %v", err))
-			continue
-		}
-
 		deploymentYamlFileName := "deployment.yaml"
 		eventsFileName := "events.log"
 		eventsDirPath, err := addDir([]string{parentDir, "events", d.Name}, []string{deploymentYamlFileName, eventsFileName})
@@ -143,10 +138,12 @@ func dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS strin
 			return err
 		}
 
+		eventsRequestToken, err := getDTQueryExecution(DTURL, accessToken, eventQuery.finalQuery)
 		err = getEvents(DTURL, accessToken, eventsRequestToken, f)
 		f.Close()
 		if err != nil {
-			return fmt.Errorf("failed to get logs %v", err)
+			log.Printf("failed to get logs, continuing: %v. Query: %v", err, eventQuery.finalQuery)
+			continue
 		}
 
 	}
@@ -163,11 +160,6 @@ func dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, manage
 			return err
 		}
 		podLogsQuery.Build()
-
-		podLogsRequestToken, err := getRequestToken(podLogsQuery.finalQuery, DTURL, accessToken)
-		if err != nil {
-			return fmt.Errorf("failed to acquire request token %v", err)
-		}
 
 		podYamlFileName := "pod.yaml"
 		podLogFileName := "pod.log"
@@ -191,10 +183,12 @@ func dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, manage
 			return err
 		}
 
+		podLogsRequestToken, err := getDTQueryExecution(DTURL, accessToken, podLogsQuery.finalQuery)
 		err = getLogs(DTURL, accessToken, podLogsRequestToken, f)
 		f.Close()
 		if err != nil {
-			return fmt.Errorf("failed to get logs %v", err)
+			log.Printf("failed to get logs, continuing: %v. Query: %v", err, podLogsQuery.finalQuery)
+			continue
 		}
 	}
 
