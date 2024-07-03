@@ -3,6 +3,7 @@ package dynatrace
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -115,12 +116,6 @@ func dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS strin
 		}
 		eventQuery.Build()
 
-		eventsRequestToken, err := getRequestToken(eventQuery.finalQuery, DTURL, accessToken)
-		if err != nil {
-			fmt.Println(fmt.Errorf("failed to acquire request token %v", err))
-			continue
-		}
-
 		deploymentYamlFileName := "deployment.yaml"
 		eventsFileName := "events.log"
 		eventsDirPath, err := addDir([]string{parentDir, "events", d.Name}, []string{deploymentYamlFileName, eventsFileName})
@@ -143,6 +138,7 @@ func dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS strin
 			return err
 		}
 
+		eventsRequestToken, err := getDTQueryExecution(DTURL, accessToken, eventQuery.finalQuery)
 		err = getEvents(DTURL, accessToken, eventsRequestToken, f)
 		f.Close()
 		if err != nil {

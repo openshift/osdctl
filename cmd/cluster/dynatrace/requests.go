@@ -181,41 +181,6 @@ type ExecuteResponse struct {
 	RequestToken string `json:"requestToken"`
 }
 
-func getRequestToken(query string, dtURL string, accessToken string) (requestToken string, error error) {
-	payload := DTQueryPayload{
-		Query: query,
-	}
-
-	payloadJSON, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-
-	requester := Requester{
-		method: http.MethodPost,
-		url:    dtURL + "platform/storage/query/v1/query:execute",
-		data:   string(payloadJSON),
-		headers: map[string]string{
-			"Content-Type":  "application/json",
-			"Authorization": "Bearer " + accessToken,
-		},
-		successCode: http.StatusAccepted,
-	}
-
-	resp, err := requester.send()
-	if err != nil {
-		return "", err
-	}
-
-	var execResp ExecuteResponse
-	err = json.Unmarshal([]byte(resp), &execResp)
-	if err != nil {
-		return "", err
-	}
-
-	return execResp.RequestToken, nil
-}
-
 type DTExecuteState struct {
 	State      string `json:"state"`
 	TTLSeconds int    `json:"ttlSeconds"`
