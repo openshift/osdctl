@@ -191,7 +191,8 @@ func dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, manage
 		err = getLogs(DTURL, accessToken, podLogsRequestToken, f)
 		f.Close()
 		if err != nil {
-			fmt.Println(fmt.Errorf("failed to get logs %v. Query: %v", err, podLogsQuery.finalQuery))
+			log.Printf("failed to get logs, continuing: %v. Query: %v", err, podLogsQuery.finalQuery)
+			continue
 		}
 	}
 
