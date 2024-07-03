@@ -146,7 +146,8 @@ func dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS strin
 		err = getEvents(DTURL, accessToken, eventsRequestToken, f)
 		f.Close()
 		if err != nil {
-			fmt.Println(fmt.Errorf("failed to get logs %v. Query: %v", err, eventQuery.finalQuery))
+			log.Printf("failed to get logs, continuing: %v. Query: %v", err, eventQuery.finalQuery)
+			continue
 		}
 
 	}
