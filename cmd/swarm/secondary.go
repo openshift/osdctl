@@ -53,7 +53,7 @@ var secondaryCmd = &cobra.Command{
 }
 
 func buildJQL() string {
-	jql := fmt.Sprintf("project = \"%s\" AND Products in (\"%s\")", DefaultProject, strings.Join(
+	jql := fmt.Sprintf("project = %s AND Products in (\"%s\")", DefaultProject, strings.Join(
 		products,
 		",",
 	))
