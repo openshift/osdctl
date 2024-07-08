@@ -53,7 +53,10 @@ var secondaryCmd = &cobra.Command{
 }
 
 func buildJQL() string {
-	jql := fmt.Sprintf("project = %s AND Products in (%s)", DefaultProject, strings.Join(products, ","))
+	jql := fmt.Sprintf("project = \"%s\" AND Products in (\"%s\")", DefaultProject, strings.Join(
+		products,
+		",",
+	))
 
 	jql += ` AND (
 		(summary !~ "Compliance Alert: %" OR summary ~ "Compliance Alert: %" AND status = NEW)
