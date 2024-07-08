@@ -17,10 +17,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	permissionDeniedErrorStr = ".*Client.UnauthorizedOperation.*"
-)
-
 type permissionDeniedEventsOptions struct {
 	ClusterID string
 	StartTime string
@@ -39,20 +35,17 @@ func newCmdPermissionDenied() *cobra.Command {
 		},
 	}
 	permissionDeniedCmd.Flags().StringVarP(&opts.ClusterID, "cluster-id", "C", "", "Cluster ID")
-	permissionDeniedCmd.Flags().StringVarP(&opts.StartTime, "since", "", "1h", "Specifies that only events that occur within the specified time are returned.Defaults to 1h. Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\".")
+	permissionDeniedCmd.Flags().StringVarP(&opts.StartTime, "since", "", "5m", "Specifies that only events that occur within the specified time are returned.Defaults to 5m. Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\".")
 	permissionDeniedCmd.Flags().BoolVarP(&opts.PrintUrl, "url", "u", false, "Generates Url link to cloud console cloudtrail event")
 	permissionDeniedCmd.Flags().BoolVarP(&opts.PrintRaw, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
 	permissionDeniedCmd.MarkFlagRequired("cluster-id")
 	return permissionDeniedCmd
 }
 
-func isforbiddenEvent(event types.Event, value string) (bool, error) {
+func isforbiddenEvent(event types.Event) (bool, error) {
+	permissionDeniedErrorRegexp := ".*Client.UnauthorizedOperation.*"
 
-	if value == "" {
-		return false, nil
-	}
-
-	check, err := regexp.Compile(value)
+	check, err := regexp.Compile(permissionDeniedErrorRegexp)
 	if err != nil {
 		return false, fmt.Errorf("failed to compile regex: %w", err)
 	}
@@ -106,14 +99,14 @@ func (p *permissionDeniedEventsOptions) run() error {
 	fmt.Printf("[INFO] Checking Permission Denied History since %v for AWS Account %v as %v \n", startTime, accountId, arn)
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
-	lookupOutput, err := ctAws.GetEvents(cloudTrailclient, startTime)
+	lookupOutput, err := ctAws.GetEvents(cloudTrailclient, startTime, false)
 	if err != nil {
 		return err
 	}
 
 	filteredEvents, err := ctUtil.ApplyFilters(lookupOutput,
 		func(event types.Event) (bool, error) {
-			return isforbiddenEvent(event, permissionDeniedErrorStr)
+			return isforbiddenEvent(event)
 		},
 	)
 	if err != nil {
@@ -136,13 +129,13 @@ func (p *permissionDeniedEventsOptions) run() error {
 			HTTPClient:  cfg.HTTPClient,
 		})
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Permission Denied Event History from %v Region...", defaultConfig.Region)
-		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime)
+		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, false)
 		if err != nil {
 			return err
 		}
 		filteredEvents, err := ctUtil.ApplyFilters(lookupOutput,
 			func(event types.Event) (bool, error) {
-				return isforbiddenEvent(event, permissionDeniedErrorStr)
+				return isforbiddenEvent(event)
 			},
 		)
 		if err != nil {
