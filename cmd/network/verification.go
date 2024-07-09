@@ -163,7 +163,7 @@ func (e *EgressVerification) Run(ctx context.Context) {
 	e.log.Info(ctx, "Preparing to check %+v subnet(s) with network verifier.", len(inputs))
 
 	for i := range inputs {
-		e.log.Info(ctx, "running network verifier for subnet  %+v, security group %+v", inputs[i].SubnetID, inputs[i].AWS.SecurityGroupId)
+		e.log.Info(ctx, "running network verifier for subnet  %+v, security group %+v", inputs[i].SubnetID, inputs[i].AWS.SecurityGroupIDs)
 		out := onv.ValidateEgress(c, *inputs[i])
 		out.Summary(e.Debug)
 
@@ -314,10 +314,10 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 
 	if e.cluster != nil {
 		// If a KMS key is defined for the cluster, use it as the default aws/ebs key may not exist
-		aws := e.cluster.AWS()
+		clusterAWS := e.cluster.AWS()
 
-		if aws != nil {
-			if kmsKeyArn, isOk := aws.GetKMSKeyArn(); isOk {
+		if clusterAWS != nil {
+			if kmsKeyArn, isOk := clusterAWS.GetKMSKeyArn(); isOk {
 				e.log.Info(ctx, "using KMS key defined for the cluster: %s", kmsKeyArn)
 				input.AWS.KmsKeyID = kmsKeyArn
 			}
@@ -361,7 +361,7 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	input.AWS.SecurityGroupId = sgId
+	input.AWS.SecurityGroupIDs = []string{sgId}
 
 	// Forward the timeout
 	input.Timeout = e.EgressTimeout
@@ -758,7 +758,7 @@ func defaultValidateEgressInput(ctx context.Context, cluster *cmv1.Cluster, regi
 		PlatformType: helpers.PlatformAWS,
 		Tags:         networkVerifierDefaultTags,
 		AWS: onv.AwsEgressConfig{
-			SecurityGroupId: "",
+			SecurityGroupIDs: []string{},
 		},
 	}, nil
 }
