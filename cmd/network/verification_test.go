@@ -548,7 +548,7 @@ func compareValidateEgressInput(expected, actual *onv.ValidateEgressInput) bool 
 	}
 
 	if expected.SubnetID != actual.SubnetID ||
-		expected.AWS.SecurityGroupId != actual.AWS.SecurityGroupId {
+		!reflect.DeepEqual(expected.AWS.SecurityGroupIDs, actual.AWS.SecurityGroupIDs) {
 		return false
 	}
 
