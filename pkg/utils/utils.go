@@ -251,7 +251,7 @@ func GetRegistryCredentials(connection *sdk.Connection, accountId string) ([]*am
 func ConfirmPrompt() bool {
 	fmt.Print("Continue? (y/N): ")
 
-	var response string = "n"
+	var response = "n"
 	_, _ = fmt.Scanln(&response) // Erroneous input will be handled by the default case below
 
 	switch strings.ToLower(response) {
