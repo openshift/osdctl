@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -33,6 +34,7 @@ const (
 	InternalServiceLogSeverity                           = "Warning"
 	InternalServiceLogServiceName                        = "SREManualAction"
 	InternalServiceLogSummary                            = "LimitedSupportEvidence"
+	managedCriticalCustomerLabel                         = "capability.organization.managed_critical_customer"
 )
 
 type Post struct {
@@ -163,6 +165,39 @@ func (p *Post) Run(clusterID string) error {
 	if err != nil {
 		return fmt.Errorf("can't retrieve cluster: %w", err)
 	}
+
+	subscriptionResponse, err := connection.
+		AccountsMgmt().
+		V1().
+		Subscriptions().
+		Subscription(p.cluster.Subscription().ID()).
+		Get().Send()
+	if err != nil {
+		return fmt.Errorf("failed to retrieve cluster subscription: %w", err)
+	}
+
+	labelResponse, err := connection.
+		AccountsMgmt().
+		V1().
+		Organizations().
+		Organization(subscriptionResponse.Body().OrganizationID()).
+		Labels().
+		Label(managedCriticalCustomerLabel).
+		Get().Send()
+	if err != nil {
+		// if the label is missing, there's no need to show an error to the user
+		if labelResponse.Error().Status() != http.StatusNotFound {
+			return fmt.Errorf("failed to retrieve cluster labels: %w", err)
+		}
+	} else if labelResponse.Body().Value() == "true" {
+		fmt.Println(`WARNING: This cluster is owned by a critical customer. Make sure that an SL has been sent and proactive case opened with the customer. Only continue if there has been no customer response for 24 hours.
+
+See: https://source.redhat.com/groups/public/sre/wiki/defining_limited_support_process_for_osdrosa_for_critical_customers`)
+		if !ctlutil.ConfirmPrompt() {
+			return nil
+		}
+	}
+
 	var limitedSupport *cmv1.LimitedSupportReason
 	if p.Template != "" {
 		limitedSupport, err = p.buildLimitedSupportTemplate()

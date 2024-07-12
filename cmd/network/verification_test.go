@@ -128,7 +128,6 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 			region:    "us-east-2",
 			expectErr: true,
 		},
-
 		{
 			name: "Transparent cluster-wide proxy",
 			e: &EgressVerification{
@@ -175,7 +174,7 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 					HttpsProxy: "https://my.proxy:443",
 				},
 				AWS: onv.AwsEgressConfig{
-					SecurityGroupId: "sg-abcd",
+					SecurityGroupIDs: []string{"sg-abcd"},
 				},
 			},
 			expectErr: false,
@@ -224,8 +223,8 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 			expected: &onv.ValidateEgressInput{
 				SubnetID: "subnet-abcd",
 				AWS: onv.AwsEgressConfig{
-					SecurityGroupId: "sg-abcd",
-					KmsKeyID:        "some-KMS-key-ARN",
+					SecurityGroupIDs: []string{"sg-abcd"},
+					KmsKeyID:         "some-KMS-key-ARN",
 				},
 				Timeout: 42 * time.Second,
 			},
@@ -549,7 +548,7 @@ func compareValidateEgressInput(expected, actual *onv.ValidateEgressInput) bool 
 	}
 
 	if expected.SubnetID != actual.SubnetID ||
-		expected.AWS.SecurityGroupId != actual.AWS.SecurityGroupId {
+		!reflect.DeepEqual(expected.AWS.SecurityGroupIDs, actual.AWS.SecurityGroupIDs) {
 		return false
 	}
 
