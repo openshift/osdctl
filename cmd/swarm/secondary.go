@@ -41,7 +41,6 @@ var secondaryCmd = &cobra.Command{
 		}
 		// Build JQL query
 		jql := buildJQL()
-
 		// Search jira issues
 		issues, _, err := jiraClient.Issue.Search(jql, nil)
 
@@ -60,13 +59,13 @@ var secondaryCmd = &cobra.Command{
 
 func buildJQL() string {
 	productsJQL := fmt.Sprintf("Products in (%s)", strings.Join(products, ","))
-
 	// Build Summary and Work Type conditions
 	summaryCondition := `(summary !~ "Compliance Alert" AND status in (NEW) OR (summary ~ "Compliance Alert" AND status in (NEW)))`
 	workTypeCondition := `(("Work Type" != "Request for Change (RFE)" OR "Work Type" is EMPTY) AND status not in (Done, Resolved)) OR (status in (Done, Resolved) AND ("Work Type" != "Request for Change (RFE)" OR "Work Type" is EMPTY) AND resolutiondate > startOfDay(-2d))`
 
 	// Combine all conditions into final JQL
-	jql := fmt.Sprintf(`project = '%s' AND %s AND (%s) AND (status in (New, "In Progress")) AND assignee is EMPTY`, DefaultProject, productsJQL, summaryCondition+" AND "+workTypeCondition)
+	jql := fmt.Sprintf(`(project = %s AND %s AND (%s) AND (status in (New, "In Progress")) AND assignee is EMPTY)`, DefaultProject, productsJQL, summaryCondition+" AND "+workTypeCondition)
 
+	fmt.Printf("The query is ->  %s <- ", jql)
 	return jql
 }
