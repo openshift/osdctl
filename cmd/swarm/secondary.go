@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	DefaultProject = "OHSS"
+	DefaultProject = "\"OHSS\""
 )
 
 var (
@@ -41,6 +41,7 @@ var secondaryCmd = &cobra.Command{
 		}
 		// Build JQL query
 		jql := buildJQL()
+
 		// Search jira issues
 		issues, _, err := jiraClient.Issue.Search(jql, nil)
 
@@ -50,7 +51,7 @@ var secondaryCmd = &cobra.Command{
 
 		// Print Jira IDs
 		dt := time.Now()
-		fmt.Println("Swarm Secondary", dt.String())
+		fmt.Println("Title: Swarm Secondary", dt.String())
 
 		utils.PrintJiraIssues(issues)
 		return nil
