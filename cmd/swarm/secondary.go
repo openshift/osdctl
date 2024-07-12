@@ -3,6 +3,7 @@ package swarm
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -46,6 +47,10 @@ var secondaryCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("error fetching JIRA issues: %w", err)
 		}
+
+		// Print Jira IDs
+		dt := time.Now()
+		fmt.Println("Swarm Secondary", dt.String())
 
 		utils.PrintJiraIssues(issues)
 		return nil
