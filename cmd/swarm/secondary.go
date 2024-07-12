@@ -13,7 +13,7 @@ const (
 )
 
 var (
-	products = []string{"Openshift Dedicated", "Openshift Online Pro", "OpenShift Online Starter", "Red Hat OpenShift Service on AWS", "HyperShift Preview"}
+	products = []string{"\"Openshift Dedicated\"", "\"Openshift Online Pro\"", "\"OpenShift Online Starter\"", "\"Red Hat OpenShift Service on AWS\"", "\"HyperShift Preview\""}
 )
 
 var secondaryCmd = &cobra.Command{
