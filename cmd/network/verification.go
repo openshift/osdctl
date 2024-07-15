@@ -415,12 +415,12 @@ func (e *EgressVerification) getSubnetIds(ctx context.Context) ([]string, error)
 
 	// If this is a non-BYOVPC cluster, we can find the private subnets based on the cluster and internal-elb tag
 	if len(e.cluster.AWS().SubnetIDs()) == 0 {
-		e.log.Info(ctx, "searching for subnets by tags: kubernetes.io/cluster/%s=owned and %s=", e.cluster.InfraID(), nonByovpcPrivateSubnetTagKey)
+		e.log.Info(ctx, "searching for subnets by tags: kubernetes.io/cluster/%s and %s=", e.cluster.InfraID(), nonByovpcPrivateSubnetTagKey)
 		resp, err := e.awsClient.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{
 			Filters: []types.Filter{
 				{
-					Name:   aws.String(fmt.Sprintf("tag:kubernetes.io/cluster/%s", e.cluster.InfraID())),
-					Values: []string{"owned"},
+					Name:   aws.String("tag-key"),
+					Values: []string{fmt.Sprintf("kubernetes.io/cluster/%s", e.cluster.InfraID())},
 				},
 				{
 					Name:   aws.String("tag-key"),
@@ -433,7 +433,7 @@ func (e *EgressVerification) getSubnetIds(ctx context.Context) ([]string, error)
 		}
 
 		if len(resp.Subnets) == 0 {
-			return nil, fmt.Errorf("found 0 subnets with kubernetes.io/cluster/%s=owned and %s, consider the --subnet-id flag", e.cluster.InfraID(), e.cluster.InfraID())
+			return nil, fmt.Errorf("found 0 subnets with tags: kubernetes.io/cluster/%s and %s, consider the --subnet-id flag", e.cluster.InfraID(), nonByovpcPrivateSubnetTagKey)
 		}
 		if e.AllSubnets {
 			subnets := make([]string, len(resp.Subnets))
@@ -553,20 +553,14 @@ func (e *EgressVerification) getSecurityGroupId(ctx context.Context) (string, er
 				Name:   aws.String("tag:Name"),
 				Values: []string{fmt.Sprintf("%s-default-sg", e.cluster.ID())},
 			},
-			{
-				Name:   aws.String(fmt.Sprintf("tag:kubernetes.io/cluster/%s", e.cluster.ID())),
-				Values: []string{"owned"},
-			},
 		}
 	default:
 		filters = []types.Filter{
 			{
+				// Prior to 4.16: <infra_id>-master-sg
+				// 4.16+: <infra_id>-controlplane
 				Name:   aws.String("tag:Name"),
-				Values: []string{fmt.Sprintf("%s-master-sg", e.cluster.InfraID())},
-			},
-			{
-				Name:   aws.String(fmt.Sprintf("tag:kubernetes.io/cluster/%s", e.cluster.InfraID())),
-				Values: []string{"owned"},
+				Values: []string{fmt.Sprintf("%s-master-sg", e.cluster.InfraID()), fmt.Sprintf("%s-controlplane", e.cluster.InfraID())},
 			},
 		}
 	}
