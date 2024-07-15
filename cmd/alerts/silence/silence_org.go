@@ -72,10 +72,10 @@ func AddOrgSilence(cmd *AddOrgSilenceCmd) {
 	for _, subscription := range subscriptions {
 		clusterID := subscription.ClusterID()
 		if len(clusterID) == 0 {
-			log.Print("Cluster ID invalid, skipping: %s", clusterID)
+			log.Printf("Cluster ID invalid, skipping: %s", clusterID)
 			continue //Skip invalid clusters
 		} else {
-			log.Print("Silencing alert(s) on cluster: %s", clusterID)
+			log.Printf("Silencing alert(s) on cluster: %s", clusterID)
 		}
 
 		username, clustername := GetUserAndClusterInfo(clusterID)
