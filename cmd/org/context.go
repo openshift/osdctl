@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"os"
 	"strconv"
 	"sync"
@@ -15,6 +14,7 @@ import (
 	"github.com/andygrunwald/go-jira"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/printer"
 	pdProvider "github.com/openshift/osdctl/pkg/provider/pagerduty"
@@ -179,7 +179,7 @@ func getPlanDisplayText(plan string) string {
 }
 
 func Context(orgId string) ([]ClusterInfo, error) {
-	clusterSubscriptions, err := SearchAllSubscriptionsByOrg(orgId, statusActive, true)
+	clusterSubscriptions, err := SearchAllSubscriptionsByOrg(orgId, StatusActive, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch cluster subscriptions for org with ID %s: %w", orgId, err)
 	}

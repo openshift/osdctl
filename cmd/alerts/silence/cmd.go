@@ -16,6 +16,7 @@ func NewCmdSilence() *cobra.Command {
 	silenceCmd.AddCommand(NewCmdAddSilence())
 	silenceCmd.AddCommand(NewCmdClearSilence())
 	silenceCmd.AddCommand(NewCmdListSilence())
+	silenceCmd.AddCommand(NewCmdAddOrgSilence())
 
 	return silenceCmd
 }

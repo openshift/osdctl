@@ -3,9 +3,10 @@ package org
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+
 	accountsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	"github.com/openshift/osdctl/pkg/utils"
-	"os"
 
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
@@ -20,7 +21,7 @@ const (
 	accountsAPIPath       = "/api/accounts_mgmt/v1/accounts"
 	currentAccountApiPath = "/api/accounts_mgmt/v1/current_account"
 
-	statusActive = "Active"
+	StatusActive = "Active"
 )
 
 var (
