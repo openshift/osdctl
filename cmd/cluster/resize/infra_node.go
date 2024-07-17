@@ -147,7 +147,6 @@ func (r *Infra) New() error {
 		return err
 	}
 
-
 	r.clusterId = cluster.ID()
 	r.client = c
 	r.hive = hc
