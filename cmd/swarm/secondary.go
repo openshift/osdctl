@@ -58,14 +58,24 @@ var secondaryCmd = &cobra.Command{
 }
 
 func buildJQL() string {
-	productsJQL := fmt.Sprintf("Products in (%s)", strings.Join(products, ","))
-	// Build Summary and Work Type conditions
-	summaryCondition := `(summary !~ "Compliance Alert" AND status in (NEW) OR (summary ~ "Compliance Alert" AND status in (NEW)))`
-	workTypeCondition := `(("Work Type" != "Request for Change (RFE)" OR "Work Type" is EMPTY) AND status not in (Done, Resolved)) OR (status in (Done, Resolved) AND ("Work Type" != "Request for Change (RFE)" OR "Work Type" is EMPTY) AND resolutiondate > startOfDay(-2d))`
+	jql := fmt.Sprintf("project = \"%s\" AND Products in (\"%s\")", DefaultProject, strings.Join(
+		products,
+		",",
+	))
 
-	// Combine all conditions into final JQL
-	jql := fmt.Sprintf(`(project = %s AND %s AND (%s) AND (status in (New, "In Progress")) AND assignee is EMPTY)`, DefaultProject, productsJQL, summaryCondition+" AND "+workTypeCondition)
+	jql += ` AND (
+		(summary !~ "Compliance Alert: %" OR summary ~ "Compliance Alert: %" AND status = NEW)
+		AND (status not in (Done, Resolved) AND ("Work Type" != "Request for Change (RFE)" OR "Work Type" is EMPTY) OR status in (Done, Resolved) AND ("Work Type" != "Request for Change (RFE)" OR "Work Type" is EMPTY ) AND resolutiondate > startOfDay(-2d))
+		OR
+		(summary !~ "Compliance Alert: %" OR summary ~ "Compliance Alert: %" AND status = NEW)
+		AND (status not in (Done, Resolved) AND type != "Change Request" OR status in (Done, Resolved) AND type != "Change Request" AND resolutiondate > startOfDay(-2d))
+	)`
+
+	jql += " AND (status in (New, \"In Progress\")) AND assignee is EMPTY"
 
 	fmt.Printf("The query is ->  %s <- ", jql)
-	return jql
+
+	/* Insert a working jql */
+	samplejql := `project = OHSS AND Products in ("Openshift Dedicated","Openshift Online Pro","OpenShift Online Starter","Red Hat OpenShift Service on AWS","HyperShift Preview") AND ((summary !~ "Compliance Alert: %" OR summary ~ "Compliance Alert: %" AND status = NEW) AND (status not in (Done, Resolved) AND ("Work Type" != "Request for Change (RFE)" OR "Work Type" is EMPTY) OR status in (Done, Resolved) AND ("Work Type" != "Request for Change (RFE)" OR "Work Type" is EMPTY ) AND resolutiondate > startOfDay(-2d)) OR (summary !~ "Compliance Alert: %" OR summary ~ "Compliance Alert: %" AND status = NEW) AND (status not in (Done, Resolved) AND type != "Change Request" OR status in (Done, Resolved) AND type != "Change Request" AND resolutiondate > startOfDay(-2d))) AND (status in (New, "In Progress")) AND assignee is EMPTY`
+	return samplejql
 }
