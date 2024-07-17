@@ -122,11 +122,11 @@ func (p *Post) check() error {
 			return fmt.Errorf("\nIf Template flag is present, --problem, --resolution, --misconfiguration and --evidence flags cannot be used")
 		}
 	} else {
-		if err := validateResolutionString(p.Resolution); err != nil {
-			return err
-		}
 		if p.Problem == "" || p.Resolution == "" || p.Misconfiguration == "" {
 			return fmt.Errorf("\nIn the absence of Template -t flag, --problem, --resolution and --misconfiguration flags are mandatory")
+		}
+		if err := validateResolutionString(p.Resolution); err != nil {
+			return err
 		}
 		if err := p.setup(); err != nil {
 			return err
