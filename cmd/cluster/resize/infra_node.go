@@ -547,13 +547,13 @@ func generateServiceLog(mp *hivev1.MachinePool, instanceType, justification, clu
 		return servicelog.PostCmdOptions{
 			Template:       resizedInfraNodeServiceLogTemplate,
 			ClusterId:      clusterId,
-			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType),fmt.Sprintf("JUSTIFICATION=%s", justification)},
+			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType), fmt.Sprintf("JUSTIFICATION=%s", justification)},
 		}
 	} else if mp.Spec.Platform.GCP != nil {
 		return servicelog.PostCmdOptions{
 			Template:       GCPresizedInfraNodeServiceLogTemplate,
 			ClusterId:      clusterId,
-			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType),fmt.Sprintf("JUSTIFICATION=%s", justification)},
+			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType), fmt.Sprintf("JUSTIFICATION=%s", justification)},
 		}
 	}
 	return servicelog.PostCmdOptions{}
