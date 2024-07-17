@@ -2,7 +2,6 @@ package swarm
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/openshift/osdctl/pkg/utils"
@@ -41,6 +40,9 @@ var secondaryCmd = &cobra.Command{
 		}
 		// Build JQL query
 		jql := buildJQL()
+
+		fmt.Println(jql)
+
 		// Search jira issues
 		issues, _, err := jiraClient.Issue.Search(jql, nil)
 
@@ -58,22 +60,23 @@ var secondaryCmd = &cobra.Command{
 }
 
 func buildJQL() string {
-	jql := fmt.Sprintf("project = \"%s\" AND Products in (\"%s\")", DefaultProject, strings.Join(
-		products,
-		",",
-	))
+	/*	jql := fmt.Sprintf("project = \"%s\" AND Products in (\"%s\")", DefaultProject, strings.Join(
+			products,
+			",",
+		))
 
-	jql += ` AND (
-		(summary !~ "Compliance Alert: %" OR summary ~ "Compliance Alert: %" AND status = NEW)
-		AND (status not in (Done, Resolved) AND ("Work Type" != "Request for Change (RFE)" OR "Work Type" is EMPTY) OR status in (Done, Resolved) AND ("Work Type" != "Request for Change (RFE)" OR "Work Type" is EMPTY ) AND resolutiondate > startOfDay(-2d))
-		OR
-		(summary !~ "Compliance Alert: %" OR summary ~ "Compliance Alert: %" AND status = NEW)
-		AND (status not in (Done, Resolved) AND type != "Change Request" OR status in (Done, Resolved) AND type != "Change Request" AND resolutiondate > startOfDay(-2d))
-	)`
+		jql += ` AND (
+			(summary !~ "Compliance Alert: %" OR summary ~ "Compliance Alert: %" AND status = NEW)
+			AND (status not in (Done, Resolved) AND ("Work Type" != "Request for Change (RFE)" OR "Work Type" is EMPTY) OR status in (Done, Resolved) AND ("Work Type" != "Request for Change (RFE)" OR "Work Type" is EMPTY ) AND resolutiondate > startOfDay(-2d))
+			OR
+			(summary !~ "Compliance Alert: %" OR summary ~ "Compliance Alert: %" AND status = NEW)
+			AND (status not in (Done, Resolved) AND type != "Change Request" OR status in (Done, Resolved) AND type != "Change Request" AND resolutiondate > startOfDay(-2d))
+		)`
 
-	jql += " AND (status in (New, \"In Progress\")) AND assignee is EMPTY"
+		jql += " AND (status in (New, \"In Progress\")) AND assignee is EMPTY"
 
-	fmt.Printf("The query is ->  %s <- ", jql)
+		fmt.Printf("The query is ->  %s <- ", jql)
+	*/
 
 	/* Insert a working jql */
 	samplejql := `project = OHSS AND Products in ("Openshift Dedicated","Openshift Online Pro","OpenShift Online Starter","Red Hat OpenShift Service on AWS","HyperShift Preview") AND ((summary !~ "Compliance Alert: %" OR summary ~ "Compliance Alert: %" AND status = NEW) AND (status not in (Done, Resolved) AND ("Work Type" != "Request for Change (RFE)" OR "Work Type" is EMPTY) OR status in (Done, Resolved) AND ("Work Type" != "Request for Change (RFE)" OR "Work Type" is EMPTY ) AND resolutiondate > startOfDay(-2d)) OR (summary !~ "Compliance Alert: %" OR summary ~ "Compliance Alert: %" AND status = NEW) AND (status not in (Done, Resolved) AND type != "Change Request" OR status in (Done, Resolved) AND type != "Change Request" AND resolutiondate > startOfDay(-2d))) AND (status in (New, "In Progress")) AND assignee is EMPTY`
