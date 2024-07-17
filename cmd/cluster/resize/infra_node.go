@@ -147,6 +147,7 @@ func (r *Infra) New() error {
 		return err
 	}
 
+
 	r.clusterId = cluster.ID()
 	r.client = c
 	r.hive = hc
@@ -437,7 +438,7 @@ func (r *Infra) RunInfra(ctx context.Context) error {
 		}
 	}
 
-	postCmd := generateServiceLog(tempMp, r.instanceType, r.clusterId)
+	postCmd := generateServiceLog(tempMp, r.instanceType, r.justification, r.clusterId)
 	if err := postCmd.Run(); err != nil {
 		fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
 		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
@@ -541,18 +542,18 @@ func getInstanceType(mp *hivev1.MachinePool) (string, error) {
 }
 
 // Adding change in serviceLog as per the cloud provider.
-func generateServiceLog(mp *hivev1.MachinePool, instanceType, clusterId string) servicelog.PostCmdOptions {
+func generateServiceLog(mp *hivev1.MachinePool, instanceType, justification, clusterId string) servicelog.PostCmdOptions {
 	if mp.Spec.Platform.AWS != nil {
 		return servicelog.PostCmdOptions{
 			Template:       resizedInfraNodeServiceLogTemplate,
 			ClusterId:      clusterId,
-			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
+			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType),fmt.Sprintf("JUSTIFICATION=%s", justification)},
 		}
 	} else if mp.Spec.Platform.GCP != nil {
 		return servicelog.PostCmdOptions{
 			Template:       GCPresizedInfraNodeServiceLogTemplate,
 			ClusterId:      clusterId,
-			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType)},
+			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType),fmt.Sprintf("JUSTIFICATION=%s", justification)},
 		}
 	}
 	return servicelog.PostCmdOptions{}
