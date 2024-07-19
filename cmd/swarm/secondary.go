@@ -43,7 +43,8 @@ var secondaryCmd = &cobra.Command{
 		// Print Jira IDs
 		dt := time.Now()
 		fmt.Print("\n")
-		fmt.Println("Timestamp: ", dt.String(), "Title: Swarm Secondary. ")
+		fmt.Println("Timestamp: ", dt.String())
+		fmt.Println("Title 🠒 :Swarm: Secondary. ")
 		fmt.Print("\n")
 		// Build JQL query
 		jql := buildJQL()
