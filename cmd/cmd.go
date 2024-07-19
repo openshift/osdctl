@@ -26,7 +26,6 @@ import (
 	"github.com/openshift/osdctl/cmd/cost"
 	"github.com/openshift/osdctl/cmd/env"
 	"github.com/openshift/osdctl/cmd/hive"
-	"github.com/openshift/osdctl/cmd/iampermissions"
 	"github.com/openshift/osdctl/cmd/jira"
 	"github.com/openshift/osdctl/cmd/jumphost"
 	"github.com/openshift/osdctl/cmd/mc"
@@ -89,19 +88,18 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(aao.NewCmdAao(kubeClient))
 	rootCmd.AddCommand(account.NewCmdAccount(streams, kubeClient, globalOpts))
 	rootCmd.AddCommand(alerts.NewCmdAlerts())
+	rootCmd.AddCommand(cloudtrail.NewCloudtrailCmd())
 	rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeClient, globalOpts))
-	rootCmd.AddCommand(hive.NewCmdHive(streams, kubeClient))
 	rootCmd.AddCommand(env.NewCmdEnv())
+	rootCmd.AddCommand(hive.NewCmdHive(streams, kubeClient))
+	rootCmd.AddCommand(jira.Cmd)
 	rootCmd.AddCommand(jumphost.NewCmdJumphost())
 	rootCmd.AddCommand(mc.NewCmdMC())
 	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeClient))
-	rootCmd.AddCommand(servicelog.NewCmdServiceLog())
 	rootCmd.AddCommand(org.NewCmdOrg())
 	rootCmd.AddCommand(promote.NewCmdPromote())
-	rootCmd.AddCommand(jira.Cmd)
-	rootCmd.AddCommand(cloudtrail.NewCloudtrailCmd())
+	rootCmd.AddCommand(servicelog.NewCmdServiceLog())
 	rootCmd.AddCommand(setup.NewCmdSetup())
-	rootCmd.AddCommand(iampermissions.NewCmdIamPermissions())
 	rootCmd.AddCommand(swarm.Cmd)
 
 	// Add cost command to use AWS Cost Manager
