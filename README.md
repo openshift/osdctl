@@ -566,3 +566,9 @@ osdctl cluster etcd-health-check <internal-cluster-id>
 osdctl cluster etcd-member-replace <internal-cluster-id> --node <node-id>
 ```
 Note : Here node-id refers to the node that has the unhealthy etcd member. This can be found out from `etcd-health-check`
+
+#### SRE Oncall retrieves unassigned tickets from Jira
+##### Prerequisite: Env variable: JIRA_API_TOKEN contains valid authentication tokens
+```
+osdctl swarm secondary
+```
