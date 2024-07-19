@@ -52,6 +52,8 @@ func AddOrgSilence(cmd *AddOrgSilenceCmd) {
 	subscriptions, err := orgutils.SearchSubscriptions(organizationID, orgutils.StatusActive)
 	if err != nil {
 		log.Fatal(err)
+	} else if len(subscriptions) == 0 {
+		log.Fatal("No subscriptions found with that organization ID")
 	}
 
 	//Start ocm connection
@@ -82,13 +84,20 @@ func AddOrgSilence(cmd *AddOrgSilenceCmd) {
 
 		_, kubeconfig, clientset, err := common.GetKubeConfigAndClient(clusterID)
 		if err != nil {
-			log.Fatal(err)
+			log.Print(err)
+			continue //Skip if cluster is not in supported state
 		}
 
 		if all {
-			AddAllSilence(clusterID, duration, comment, username, clustername, kubeconfig, clientset)
+			err := AddAllSilence(clusterID, duration, comment, username, clustername, kubeconfig, clientset)
+			if err != nil {
+				log.Print(err)
+			}
 		} else if len(alertID) > 0 {
-			AddAlertNameSilence(alertID, duration, comment, username, kubeconfig, clientset)
+			err := AddAlertNameSilence(alertID, duration, comment, username, kubeconfig, clientset)
+			if err != nil {
+				log.Print(err)
+			}
 		} else {
 			fmt.Println("No valid option specified. Use --all or --alertname.")
 		}
