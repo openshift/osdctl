@@ -39,6 +39,12 @@ var secondaryCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to get Jira client: %w", err)
 		}
+
+		// Print Jira IDs
+		dt := time.Now()
+		fmt.Print("\n")
+		fmt.Println("Timestamp: ", dt.String(), "Title: Swarm Secondary. ")
+		fmt.Print("\n")
 		// Build JQL query
 		jql := buildJQL()
 
@@ -48,11 +54,6 @@ var secondaryCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("error fetching JIRA issues: %w", err)
 		}
-
-		// Print Jira IDs
-		dt := time.Now()
-		fmt.Println("Title: Swarm Secondary", dt.String())
-
 		utils.PrintJiraIssues(issues)
 		return nil
 	},
@@ -73,6 +74,7 @@ func buildJQL() string {
 		)`
 
 	builtjql += " AND (status in (New, \"In Progress\")) AND assignee is EMPTY"
+	builtjql += ` ORDER BY priority DESC`
 
 	return builtjql
 }
