@@ -6,6 +6,7 @@ import (
 
 	bplogin "github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
 	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
+	bputils "github.com/openshift/backplane-cli/pkg/utils"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -160,4 +161,12 @@ func NewAsBackplaneClusterAdmin(clusterID string, options client.Options, elevat
 	}
 
 	return client.New(cfg, options)
+}
+
+func GetCurrentCluster() (string, error) {
+	cluster, err := bputils.DefaultClusterUtils.GetBackplaneClusterFromConfig()
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve backplane status: %v", err)
+	}
+	return cluster.ClusterID, nil
 }
