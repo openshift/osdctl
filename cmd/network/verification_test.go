@@ -47,14 +47,14 @@ type mockEgressVerificationAWSClient struct {
 	describeRouteTablesResp    *ec2.DescribeRouteTablesOutput
 }
 
-func (m mockEgressVerificationAWSClient) DescribeSubnets(ctx context.Context, params *ec2.DescribeSubnetsInput, optFns ...func(options *ec2.Options)) (*ec2.DescribeSubnetsOutput, error) {
+func (m mockEgressVerificationAWSClient) DescribeSubnets(context.Context, *ec2.DescribeSubnetsInput, ...func(options *ec2.Options)) (*ec2.DescribeSubnetsOutput, error) {
 	return m.describeSubnetsResp, nil
 }
 
-func (m mockEgressVerificationAWSClient) DescribeSecurityGroups(ctx context.Context, params *ec2.DescribeSecurityGroupsInput, optFns ...func(options *ec2.Options)) (*ec2.DescribeSecurityGroupsOutput, error) {
+func (m mockEgressVerificationAWSClient) DescribeSecurityGroups(context.Context, *ec2.DescribeSecurityGroupsInput, ...func(options *ec2.Options)) (*ec2.DescribeSecurityGroupsOutput, error) {
 	return m.describeSecurityGroupsResp, nil
 }
-func (m mockEgressVerificationAWSClient) DescribeRouteTables(ctx context.Context, params *ec2.DescribeRouteTablesInput, optFns ...func(options *ec2.Options)) (*ec2.DescribeRouteTablesOutput, error) {
+func (m mockEgressVerificationAWSClient) DescribeRouteTables(context.Context, *ec2.DescribeRouteTablesInput, ...func(options *ec2.Options)) (*ec2.DescribeRouteTablesOutput, error) {
 	return m.describeRouteTablesResp, nil
 }
 func Test_egressVerificationSetup(t *testing.T) {
@@ -64,18 +64,55 @@ func Test_egressVerificationSetup(t *testing.T) {
 		expectErr bool
 	}{
 		{
-			name: "no ClusterId requires subnet/sg",
+			name:      "no ClusterId requires subnet/sg",
+			e:         &EgressVerification{},
+			expectErr: true,
+		},
+		{
+			name:      "no ClusterId with subnet",
+			e:         &EgressVerification{SubnetIds: []string{"subnet-a"}},
+			expectErr: true,
+		},
+		{
+			name:      "no ClusterId with security group",
+			e:         &EgressVerification{SecurityGroupId: "sg-a"},
+			expectErr: true,
+		},
+		{
+			name:      "no ClusterId with platform type",
+			e:         &EgressVerification{PlatformType: "aws"},
+			expectErr: true,
+		},
+		{
+			name: "no ClusterId with subnet and security group",
 			e: &EgressVerification{
-				ClusterId: "",
+				SubnetIds:       []string{"subnet-a", "subnet-b", "subnet-c"},
+				SecurityGroupId: "sg-b",
+			},
+			expectErr: true,
+		},
+		{
+			name: "no ClusterId with subnet and platform type",
+			e: &EgressVerification{
+				SubnetIds:    []string{"subnet-a", "subnet-b", "subnet-c"},
+				PlatformType: "aws",
+			},
+			expectErr: true,
+		},
+		{
+			name: "no ClusterId with security group and platform type",
+			e: &EgressVerification{
+				SecurityGroupId: "sg-b",
+				PlatformType:    "aws",
 			},
 			expectErr: true,
 		},
 		{
 			name: "ClusterId optional",
 			e: &EgressVerification{
-				ClusterId:       "",
 				SubnetIds:       []string{"subnet-a", "subnet-b", "subnet-c"},
 				SecurityGroupId: "sg-b",
+				PlatformType:    "aws",
 			},
 			expectErr: false,
 		},
