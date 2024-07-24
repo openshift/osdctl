@@ -19,6 +19,8 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"github.com/openshift/osd-network-verifier/pkg/helpers"
 	"github.com/openshift/osd-network-verifier/pkg/output"
+	"github.com/openshift/osd-network-verifier/pkg/probes/curl"
+	"github.com/openshift/osd-network-verifier/pkg/probes/legacy"
 	"github.com/openshift/osd-network-verifier/pkg/proxy"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
 	onvAwsClient "github.com/openshift/osd-network-verifier/pkg/verifier/aws"
@@ -27,7 +29,6 @@ import (
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -70,10 +71,12 @@ type EgressVerification struct {
 	NoTls bool
 	// AllSubnets is an option for multi-AZ clusters that will run the network verification against all subnets listed by ocm
 	AllSubnets bool
-	// The timeout to wait when testing egresses
+	// EgressTimeout The timeout to wait when testing egresses
 	EgressTimeout time.Duration
-	// Whether to print out the version of osd-network-verifier being used
+	// Version Whether to print out the version of osd-network-verifier being used
 	Version bool
+	// Probe The type of probe to use for the verifier
+	Probe string
 }
 
 func NewCmdValidateEgress() *cobra.Command {
@@ -129,6 +132,7 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().StringVar(&e.PlatformType, "platform", "", "(optional) override for which endpoints to test. Either 'aws' or 'hostedcluster'")
 	validateEgressCmd.Flags().DurationVar(&e.EgressTimeout, "egress-timeout", 2*time.Second, "(optional) timeout for individual egress verification requests")
 	validateEgressCmd.Flags().BoolVar(&e.Version, "version", false, "When present, prints out the version of osd-network-verifier being used")
+	validateEgressCmd.Flags().StringVar(&e.Probe, "probe", "curl", "(optional) select the probe to be used for egress testing. Either 'curl' (default) or 'legacy'")
 
 	// If a cluster-id is specified, don't allow the foot-gun of overriding region
 	validateEgressCmd.MarkFlagsMutuallyExclusive("cluster-id", "region")
@@ -249,9 +253,8 @@ func (e *EgressVerification) setup(ctx context.Context) (*aws.Config, error) {
 		return &cfg, nil
 	}
 
-	// If no ClusterId is supplied, then --subnet-id and --security-group are required
-	if e.SubnetIds == nil || e.SecurityGroupId == "" {
-		return nil, fmt.Errorf("--subnet-id and --security-group are required when --cluster-id is not specified")
+	if e.SubnetIds == nil || e.SecurityGroupId == "" || e.PlatformType == "" {
+		return nil, fmt.Errorf("--subnet-id, --security-group, and --platform are required when --cluster-id is not specified")
 	}
 
 	e.log.Info(ctx, "[WARNING] no cluster-id specified, there is reduced validation around the security group, subnet, and proxy, causing inaccurate results")
@@ -267,6 +270,8 @@ func (e *EgressVerification) setup(ctx context.Context) (*aws.Config, error) {
 		e.log.Info(ctx, "overriding region with %s", e.Region)
 		cfg.Region = e.Region
 	}
+
+	e.awsClient = ec2.NewFromConfig(cfg)
 
 	return &cfg, nil
 }
@@ -365,6 +370,16 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 
 	// Forward the timeout
 	input.Timeout = e.EgressTimeout
+
+	switch strings.ToLower(e.Probe) {
+	case "curl":
+		input.Probe = curl.Probe{}
+	case "legacy":
+		input.Probe = legacy.Probe{}
+	default:
+		e.log.Info(ctx, "unrecognized probe %s - defaulting to curl probe.", e.Probe)
+		input.Probe = curl.Probe{}
+	}
 
 	// Creating a slice of input values for the network-verifier to loop over.
 	// All inputs are essentially equivalent except their subnet ids

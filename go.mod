@@ -40,7 +40,7 @@ require (
 	github.com/openshift/cloud-credential-operator v0.0.0-20240522005141-2f29d9103ce2
 	github.com/openshift/gcp-project-operator v0.0.0-20220920194256-df38e31387a7
 	github.com/openshift/hive/apis v0.0.0-20240216200617-8c54fc9cac45
-	github.com/openshift/osd-network-verifier v0.4.11
+	github.com/openshift/osd-network-verifier v1.0.0-rc.1
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/shopspring/decimal v1.3.1
 	github.com/sirupsen/logrus v1.9.3
@@ -128,6 +128,7 @@ require (
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/go-containerregistry v0.16.1 // indirect
+	github.com/google/go-github/v63 v63.0.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/s2a-go v0.1.7 // indirect
