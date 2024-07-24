@@ -2,8 +2,9 @@ package org
 
 import (
 	"fmt"
-	accountsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	"os"
+
+	accountsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 
 	"github.com/aws/aws-sdk-go-v2/service/organizations"
 	"github.com/openshift/osdctl/pkg/printer"
@@ -41,7 +42,7 @@ osdctl org clusters --aws-profile my-aws-profile --aws-account-id 123456789
 
 			status := ""
 			if !allClustersFlag {
-				status = statusActive
+				status = StatusActive
 			}
 
 			clusters, err := SearchSubscriptions(orgId, status)

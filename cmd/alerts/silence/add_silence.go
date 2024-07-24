@@ -67,15 +67,21 @@ func AddSilence(cmd *addSilenceCmd) {
 	}
 
 	if all {
-		AddAllSilence(clusterID, duration, comment, username, clustername, kubeconfig, clientset)
+		err := AddAllSilence(clusterID, duration, comment, username, clustername, kubeconfig, clientset)
+		if err != nil {
+			fmt.Printf("Failed to add silence: %s", err)
+		}
 	} else if len(alertID) > 0 {
-		AddAlertNameSilence(alertID, duration, comment, username, kubeconfig, clientset)
+		err := AddAlertNameSilence(alertID, duration, comment, username, kubeconfig, clientset)
+		if err != nil {
+			fmt.Printf("Failed to add silence: %s", err)
+		}
 	} else {
 		fmt.Println("No valid option specified. Use --all or --alertname.")
 	}
 
 }
-func AddAllSilence(clusterID, duration, comment, username, clustername string, kubeconfig *rest.Config, clientset *kubernetes.Clientset) {
+func AddAllSilence(clusterID, duration, comment, username, clustername string, kubeconfig *rest.Config, clientset *kubernetes.Clientset) error {
 	alerts := fetchAllAlerts(kubeconfig, clientset)
 	for _, alert := range alerts {
 		addCmd := []string{
@@ -91,13 +97,15 @@ func AddAllSilence(clusterID, duration, comment, username, clustername string, k
 		output, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, addCmd)
 		if err != nil {
 			log.Fatal("Exiting the program")
-			return
+			return fmt.Errorf("Failed to exec in AlertManager pod: %w", err)
 		}
 
 		formattedOutput := strings.Replace(output, "\n", "", -1)
 
 		fmt.Printf("Alert %s has been silenced with id \"%s\" for a duration of %s by user \"%s\" \n", alert.Labels.Alertname, formattedOutput, duration, username)
 	}
+
+	return nil
 }
 
 func fetchAllAlerts(kubeconfig *rest.Config, clientset *kubernetes.Clientset) []utils.Alert {
@@ -117,7 +125,7 @@ func fetchAllAlerts(kubeconfig *rest.Config, clientset *kubernetes.Clientset) []
 	return fetchedAlerts
 }
 
-func AddAlertNameSilence(alertID []string, duration, comment, username string, kubeconfig *rest.Config, clientset *kubernetes.Clientset) {
+func AddAlertNameSilence(alertID []string, duration, comment, username string, kubeconfig *rest.Config, clientset *kubernetes.Clientset) error {
 	for _, alertname := range alertID {
 		addCmd := []string{
 			"amtool",
@@ -131,14 +139,15 @@ func AddAlertNameSilence(alertID []string, duration, comment, username string, k
 
 		output, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, addCmd)
 		if err != nil {
-			log.Fatal("Exiting the program")
-			return
+			return fmt.Errorf("Failed to exec in AlertManager pod: %w", err)
 		}
 
 		formattedOutput := strings.Replace(output, "\n", "", -1)
 
 		fmt.Printf("Alert %s has been silenced with id \"%s\" for duration of %s by user \"%s\" \n", alertname, formattedOutput, duration, username)
 	}
+
+	return nil
 }
 
 // Get User name and clustername
