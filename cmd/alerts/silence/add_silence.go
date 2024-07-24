@@ -69,12 +69,12 @@ func AddSilence(cmd *addSilenceCmd) {
 	if all {
 		err := AddAllSilence(clusterID, duration, comment, username, clustername, kubeconfig, clientset)
 		if err != nil {
-			fmt.Printf("Failed to add silence: %w", err)
+			fmt.Printf("Failed to add silence: %s", err)
 		}
 	} else if len(alertID) > 0 {
 		err := AddAlertNameSilence(alertID, duration, comment, username, kubeconfig, clientset)
 		if err != nil {
-			fmt.Printf("Failed to add silence: %w", err)
+			fmt.Printf("Failed to add silence: %s", err)
 		}
 	} else {
 		fmt.Println("No valid option specified. Use --all or --alertname.")
