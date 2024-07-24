@@ -23,7 +23,7 @@ func NewCmdAddOrgSilence() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "org <org-id> [--all --duration --comment | --alertname --duration --comment]",
 		Short:             "Add new silence for alert for org",
-		Long:              `add new silence for specfic or all alerts with comment and duration of alert for an organization`,
+		Long:              `add new silence for specfic or all alerts with comment and duration of alert for an organization. OHSS required for org-wide silence`,
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -33,14 +33,15 @@ func NewCmdAddOrgSilence() *cobra.Command {
 	}
 
 	cmd.Flags().StringSliceVar(&AddOrgSilenceCmd.alertID, "alertname", []string{}, "alertname (comma-separated)")
-	cmd.Flags().StringVarP(&AddOrgSilenceCmd.comment, "comment", "c", "", "add comment about silence")
+	cmd.Flags().StringVarP(&AddOrgSilenceCmd.comment, "comment", "c", "", "add comment about silence. OHSS required for org-wide silence")
 	cmd.Flags().StringVarP(&AddOrgSilenceCmd.duration, "duration", "d", "15d", "add duration for silence") //default duration set to 15 days
 	cmd.Flags().BoolVarP(&AddOrgSilenceCmd.all, "all", "a", false, "add silences for all alert")
+	cmd.MarkFlagRequired("comment")
 
 	return cmd
 }
 
-// Add alert silences to organization's clusters
+// AddOrgSilence adds alert silences to organization's clusters
 func AddOrgSilence(cmd *AddOrgSilenceCmd) {
 	alertID := cmd.alertID
 	comment := cmd.comment
@@ -48,7 +49,6 @@ func AddOrgSilence(cmd *AddOrgSilenceCmd) {
 	all := cmd.all
 	organizationID := cmd.organization
 
-	//Retrieve v1.Subscriptions list
 	subscriptions, err := orgutils.SearchSubscriptions(organizationID, orgutils.StatusActive)
 	if err != nil {
 		log.Fatal(err)
@@ -56,13 +56,11 @@ func AddOrgSilence(cmd *AddOrgSilenceCmd) {
 		log.Fatal("No subscriptions found with that organization ID")
 	}
 
-	//Start ocm connection
 	connection, err := ocmutils.CreateConnection()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	//Retrieve organization
 	organization, err := ocmutils.GetOrganization(connection, subscriptions[0].ClusterID())
 	if err != nil {
 		log.Fatal(err)
