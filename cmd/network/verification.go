@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/openshift/osd-network-verifier/pkg/data/cpu"
 	"log"
 	"os"
 	"strings"
@@ -77,6 +78,9 @@ type EgressVerification struct {
 	Version bool
 	// Probe The type of probe to use for the verifier
 	Probe string
+	// CpuArchName the architecture to use for the compute instance
+	CpuArchName string
+	cpuArch     cpu.Architecture
 }
 
 func NewCmdValidateEgress() *cobra.Command {
@@ -130,9 +134,10 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().BoolVar(&e.Debug, "debug", false, "(optional) if provided, enable additional debug-level logging")
 	validateEgressCmd.Flags().BoolVarP(&e.AllSubnets, "all-subnets", "A", false, "(optional) an option for Privatelink clusters to run osd-network-verifier against all subnets listed by ocm.")
 	validateEgressCmd.Flags().StringVar(&e.PlatformType, "platform", "", "(optional) override for which endpoints to test. Either 'aws' or 'hostedcluster'")
-	validateEgressCmd.Flags().DurationVar(&e.EgressTimeout, "egress-timeout", 2*time.Second, "(optional) timeout for individual egress verification requests")
+	validateEgressCmd.Flags().DurationVar(&e.EgressTimeout, "egress-timeout", 5*time.Second, "(optional) timeout for individual egress verification requests")
 	validateEgressCmd.Flags().BoolVar(&e.Version, "version", false, "When present, prints out the version of osd-network-verifier being used")
 	validateEgressCmd.Flags().StringVar(&e.Probe, "probe", "curl", "(optional) select the probe to be used for egress testing. Either 'curl' (default) or 'legacy'")
+	validateEgressCmd.Flags().StringVar(&e.CpuArchName, "cpu-arch", "x86", "(optional) compute instance CPU architecture. E.g., 'x86' or 'arm'")
 
 	// If a cluster-id is specified, don't allow the foot-gun of overriding region
 	validateEgressCmd.MarkFlagsMutuallyExclusive("cluster-id", "region")
@@ -213,6 +218,11 @@ func (e *EgressVerification) setup(ctx context.Context) (*aws.Config, error) {
 		return nil, fmt.Errorf("network verification failed to build logger: %s", err)
 	}
 	e.log = logger
+
+	e.cpuArch = cpu.ArchitectureByName(e.CpuArchName)
+	if e.CpuArchName != "" && !e.cpuArch.IsValid() {
+		return nil, fmt.Errorf("%s is not a valid architecture", e.CpuArchName)
+	}
 
 	// If ClusterId is supplied, leverage ocm and ocm-backplane to get an AWS client
 	if e.ClusterId != "" {
@@ -306,6 +316,8 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 	}
 	e.log.Info(ctx, "using platform: %s", platform)
 	input.PlatformType = platform
+
+	input.CPUArchitecture = e.cpuArch
 
 	// Setup proxy configuration that is not automatically determined
 	input.Proxy.NoTls = e.NoTls
@@ -761,8 +773,6 @@ func defaultValidateEgressInput(ctx context.Context, cluster *cmv1.Cluster, regi
 	return &onv.ValidateEgressInput{
 		Ctx:          ctx,
 		SubnetID:     "",
-		CloudImageID: onvAwsClient.GetAMIForRegion(region),
-		InstanceType: "t3.micro",
 		Proxy:        proxy.ProxyConfig{},
 		PlatformType: helpers.PlatformAWS,
 		Tags:         networkVerifierDefaultTags,
