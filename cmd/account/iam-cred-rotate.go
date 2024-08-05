@@ -30,20 +30,20 @@ import (
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8json "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const cmdName string = "iam-secret-mgmt"
-const saveFileCcs = "OsdCcsAdmin.txt"
-const saveFileManaged = "OsdManagedAdmin.txt"
 
 func newCmdRotateAWSCreds(streams genericclioptions.IOStreams) *cobra.Command {
 	cmdPrefix := fmt.Sprintf(`%s $CLUSTER_ID --reason "$JIRA_TICKET" --aws-profile rhcontrol `, cmdName)
@@ -52,6 +52,7 @@ Basic usage involves selecting a set actions to run:
 Choose 1 or more IAM users to rotate: --rotate-managed-admin, --rotate-ccs-admin
 -or- 
 Choose 1 or more describe actions: --describe-keys, --describe-secrets
+----------------------------------------------------------------------
 
 # Rotate credentials for IAM user "OsdManagedAdmin" (or user provided by --admin-username)
 %s --rotate-managed-admin
@@ -69,7 +70,8 @@ Choose 1 or more describe actions: --describe-keys, --describe-secrets
 %s --describe-keys 
 
 Describe credential-request secrets and AWS Access keys in use by users "OsdManagedAdmin" and "OsdCcsAdmin"
-%s --describe-secrets --describe-keys `, cmdPrefix, cmdPrefix, cmdPrefix, cmdPrefix, cmdPrefix, cmdPrefix)
+%s --describe-secrets --describe-keys --output json -v 4 | jq`,
+		cmdPrefix, cmdPrefix, cmdPrefix, cmdPrefix, cmdPrefix, cmdPrefix)
 
 	ops := newRotateAWSOptions(streams)
 	rotateAWSCredsCmd := &cobra.Command{
@@ -97,36 +99,33 @@ These operations require the following:
 		},
 	}
 
-	ops.perArgs = rotateAWSCredsCmd.PersistentFlags()
-	ops.parentCmd = rotateAWSCredsCmd.Parent()
 	rotateAWSCredsCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile from local config to use(default='default')")
 	rotateAWSCredsCmd.Flags().StringVarP(&ops.reason, "reason", "r", "", "(Required) The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket).")
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.updateMgmtCredsCli, "rotate-managed-admin", false, "Rotate osdManagedAdmin user credentials. Interactive. Use caution.")
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.updateCcsCredsCli, "rotate-ccs-admin", false, "Rotate osdCcsAdmin user credentials. Interactive. Use caution!")
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.describeKeysCli, "describe-keys", false, "Print AWS AccessKey info for osdManagedAdmin and osdCcsAdmin relevant cred rotation, and exit")
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.describeSecretsCli, "describe-secrets", false, "Print AWS CredentialRequests ref'd secrets info relecant to cred rotation, and exit")
-	rotateAWSCredsCmd.Flags().BoolVar(&ops.saveSecretKeyToFile, "save-keys", false, "Save 'newly created' secret access key contents stdout output during execution")
+	rotateAWSCredsCmd.Flags().BoolVar(&ops.noSaveOnError, "no-save", false, "Disables saving new secret's yaml to tmp file upon failure to update existing secret.")
 	rotateAWSCredsCmd.Flags().StringVar(&ops.osdManagedAdminUsername, "admin-username", "", "The admin username to use for generating access keys. Must be in the format of `osdManagedAdmin*`. If not specified, this is inferred from the account CR.")
+	rotateAWSCredsCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Describe CMD valid formats are ['', 'json', 'yaml']")
 	rotateAWSCredsCmd.Flags().IntVarP(&ops.verboseLevel, "verbose", "v", 3, "debug=4, (default)info=3, warn=2, error=1")
 	// Reason is required for elevated bacplane-admin impersonated requests
 	_ = rotateAWSCredsCmd.MarkFlagRequired("reason")
-
 	return rotateAWSCredsCmd
 }
 
 // rotateSecretOptions defines the struct for running rotate-iam command
 type rotateCredOptions struct {
 	// CLI provided params
-	perArgs                 *pflag.FlagSet // Parent/global args
-	parentCmd               *cobra.Command
 	profile                 string // Local AWS profile used to run this script
 	reason                  string // Reason used to justify elevate/impersonate ops
 	updateCcsCredsCli       bool   // Bool flag to inidcate whether or not to update special AWS user 'osdCcsAdmin' creds.
 	updateMgmtCredsCli      bool   // Bool flag to indicate whether or not to update AWS user 'osdManagedAdmin' creds.
 	osdManagedAdminUsername string // Name of AWS Managed Admin user. Legacy default values are used if not provided.
-	saveSecretKeyToFile     bool   // Allow printing access key secret to debug output
+	noSaveOnError           bool   // Allow saving secret yaml to a tmp file in the case of an error
 	describeSecretsCli      bool   // Print Cred requests ref'd AWS secrets info and exit
 	describeKeysCli         bool   // Print Access Key info and exit
+	output                  string // Format used to printing describe cmd output (json, yaml, or "")
 	clusterID               string // Cluster id, user cluster used by account/creds
 	awsAccountTimeout       *int32 // Default timeout
 
@@ -153,6 +152,12 @@ type rotateCredOptions struct {
 	hiveKubeClient    client.Client         // Hive kube client conneciton
 
 }
+
+const (
+	jsonFormat     = "json"
+	yamlFormat     = "yaml"
+	standardFormat = ""
+)
 
 // func newRotateAWSOptions(streams genericclioptions.IOStreams, client *k8s.LazyClient) *rotateCredOptions {
 func newRotateAWSOptions(streams genericclioptions.IOStreams) *rotateCredOptions {
@@ -199,15 +204,19 @@ func (o *rotateCredOptions) preRunCliChecks(cmd *cobra.Command, args []string) e
 	if (o.updateCcsCredsCli || o.updateMgmtCredsCli) && (o.describeKeysCli || o.describeSecretsCli) {
 		return cmdutil.UsageErrorf(cmd, "can not combine 'describe*' with 'rotate*' commands")
 	}
-
-	if o.saveSecretKeyToFile {
-		if o.updateCcsCredsCli && fileExists(saveFileCcs) {
-			return fmt.Errorf("--save-keys: file '%s' already present, please move/remove before running", saveFileCcs)
-		}
-		if o.updateMgmtCredsCli && fileExists(saveFileManaged) {
-			return fmt.Errorf("--save-keys: file '%s' already present, please move/remove before running", saveFileManaged)
-		}
+	// At this time json/yaml output is only relevant to describe commands
+	if !(o.describeKeysCli || o.describeSecretsCli) {
+		o.output = standardFormat
 	}
+
+	o.output = strings.ToLower(o.output)
+	switch o.output {
+	case jsonFormat, yamlFormat, standardFormat:
+		break
+	default:
+		return fmt.Errorf("unsupported output type provided:'%s", o.output)
+	}
+
 	// Fail early if aws config is not correct
 	_, err = config.LoadDefaultConfig(o.ctx, config.WithSharedConfigProfile(o.profile))
 	if err != nil {
@@ -252,6 +261,7 @@ func (o *rotateCredOptions) run() error {
 	if err != nil {
 		return err
 	}
+
 	err = o.fetchAWSAccountInfo()
 	if err != nil {
 		return err
@@ -323,6 +333,28 @@ func fileExists(fpath string) bool {
 	return true
 }
 
+func (o *rotateCredOptions) printJsonYaml(obj any) error {
+	if o.output == jsonFormat {
+		pbuf, err := json.MarshalIndent(obj, "", "    ")
+		if err != nil {
+			o.log.Error(o.ctx, "Failed to marshal json. Err:'%v'\n", err)
+			return err
+		}
+		fmt.Printf("%s\n", string(pbuf))
+		return nil
+	}
+	if o.output == yamlFormat {
+		pbuf, err := yaml.Marshal(obj)
+		if err != nil {
+			o.log.Error(o.ctx, "Failed to marshal yaml. Err:'%v'\n", err)
+			return err
+		}
+		fmt.Printf("%s\n", string(pbuf))
+		return nil
+	}
+	return fmt.Errorf("printJsonYaml function called while format set to:'%s'", o.output)
+}
+
 // Some very basic 'early' validation on the key input if provided.
 // AWS docs, access key constraints: Minimum length of 16. Maximum length of 128.
 func (o *rotateCredOptions) isValidAccessKeyId(keyId string) bool {
@@ -340,7 +372,11 @@ func (o *rotateCredOptions) printClusterInfo() error {
 		return err
 	}
 	o.log.Debug(o.ctx, "Is Cluster CCS?:%t\n", isCCS)
-	w := tabwriter.NewWriter(os.Stdout, 1, 1, 1, ' ', 0)
+	output := os.Stdout
+	if o.output != standardFormat {
+		output = os.Stderr
+	}
+	w := tabwriter.NewWriter(output, 1, 1, 1, ' ', 0)
 	fmt.Fprintf(w, "\n----------------------------------------------------------------------\n")
 	fmt.Fprintf(w, "Cluster ID:\t%s\n", o.clusterID)
 	fmt.Fprintf(w, "Cluster External ID:\t%s\n", o.cluster.ExternalID())
@@ -422,6 +458,13 @@ func getProviderSpecKind(cr credreqv1.CredentialsRequest) (string, error) {
 	}
 }
 
+type credReqSecrets struct {
+	Name              string `json:"Name"`
+	Namespace         string `json:"Namespace"`
+	Created           string `json:"Created"`
+	CredentialRequest string `json:"CredentialRequest`
+}
+
 // Print metadata for secrets referenced by AWS provider CredentialRequests resource(s)...
 func (o *rotateCredOptions) printAWSCredRequestSecrets(awsCredReqs *[]credreqv1.CredentialsRequest) error {
 	if awsCredReqs == nil {
@@ -433,23 +476,36 @@ func (o *rotateCredOptions) printAWSCredRequestSecrets(awsCredReqs *[]credreqv1.
 		awsCredReqs = &reqs
 	}
 	if awsCredReqs == nil {
-		fmt.Println("No AWS provider Credential Requests to show")
+		o.log.Info(o.ctx, "No AWS provider Credential Requests to show")
 		return nil
 	}
-	w := tabwriter.NewWriter(os.Stdout, 1, 1, 1, ' ', 0)
-	fmt.Fprintf(w, "--------------------------------------------------------------------------\n")
-	fmt.Fprintf(w, "AWS CredentialsRequest referenced secrets:\n")
-	fmt.Fprintf(w, "--------------------------------------------------------------------------\n")
+	var w *tabwriter.Writer
+	var secrets []*credReqSecrets
+	if o.output == standardFormat {
+		w = tabwriter.NewWriter(os.Stdout, 1, 1, 1, ' ', 0)
+		fmt.Fprintf(w, "--------------------------------------------------------------------------\n")
+		fmt.Fprintf(w, "AWS CredentialsRequest referenced secrets:\n")
+		fmt.Fprintf(w, "--------------------------------------------------------------------------\n")
+	}
 	for ind, cr := range *awsCredReqs {
 		secret, err := o.clusterClientset.CoreV1().Secrets(cr.Spec.SecretRef.Namespace).Get(context.TODO(), cr.Spec.SecretRef.Name, metav1.GetOptions{})
 		if err != nil {
 			o.log.Warn(o.ctx, "Failed to get secret:'%s', err:'%s'", cr.Spec.SecretRef.Name, err)
 			continue
 		}
-		fmt.Fprintf(w, "(%d)\tCredReq:'%s'\tNS:'%s'\tSecret:'%s'\tCreated:'%v'\n", ind, cr.Name, secret.Namespace, secret.Name, secret.CreationTimestamp)
+		if o.output == standardFormat {
+			fmt.Fprintf(w, "(%d)\tNamespace:'%s'\tSecret:'%s'\tCreated:'%v'\n", ind, secret.Namespace, secret.Name, secret.CreationTimestamp)
+		} else {
+			secrets = append(secrets, &credReqSecrets{Name: secret.Name, Namespace: secret.Namespace, Created: secret.CreationTimestamp.String(), CredentialRequest: cr.Name})
+
+		}
 	}
-	fmt.Fprintf(w, "--------------------------------------------------------------------------\n")
-	w.Flush()
+	if o.output == standardFormat {
+		fmt.Fprintf(w, "--------------------------------------------------------------------------\n")
+		w.Flush()
+	} else {
+		o.printJsonYaml(secrets)
+	}
 	return nil
 }
 
@@ -458,6 +514,7 @@ func (o *rotateCredOptions) printAWSCredRequestSecrets(awsCredReqs *[]credreqv1.
 // #3 Prompt User per secret before deleting.
 func (o *rotateCredOptions) deleteAWSCredRequestSecrets() error {
 	awsCredReqs, err := o.getAWSCredentialsRequests("")
+	rotateAllWithoutPrompts := false
 	if err != nil {
 		o.log.Warn(o.ctx, "Error fetching AWS related credentialRequests to delete secrets, err:'%s'\n", err)
 		return err
@@ -470,7 +527,6 @@ func (o *rotateCredOptions) deleteAWSCredRequestSecrets() error {
 	o.printAWSCredRequestSecrets(&awsCredReqs)
 	fmt.Println("Please review above credentialRequest Secrets to be deleted.")
 	fmt.Println("(DO NOT CONTINUE IF ANYTHING LOOKS AMISS)")
-	fmt.Println("Are you sure you want to continue?")
 	var userInput string = ""
 	w := tabwriter.NewWriter(os.Stdout, 1, 1, 1, ' ', 0)
 inputLoop:
@@ -491,42 +547,43 @@ inputLoop:
 			o.log.Info(o.ctx, "User chose to not delete secrets...\n")
 			return nil
 		case "all":
+			rotateAllWithoutPrompts = true
 			break inputLoop
 		default:
 			fmt.Println("Invalid input. Expecting (y)es or (N)o or 'all'")
 		}
 	}
-	if userInput == "y" || userInput == "all" {
-		var idx = 0
-		for sidx, cr := range awsCredReqs {
-			idx = sidx + 1
-			secret, err := o.clusterClientset.CoreV1().Secrets(cr.Spec.SecretRef.Namespace).Get(context.TODO(), cr.Spec.SecretRef.Name, metav1.GetOptions{})
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error getting secret:'%s', skipping\n", secret.Name)
-				continue
-			}
-			fmt.Fprintf(w, "\nSecret (%d/%d):\n", idx, len(awsCredReqs))
-			fmt.Fprintf(w, "\tCredentialRequest:\t'%s'\n", cr.Name)
-			fmt.Fprintf(w, "\tSecret:\t'%s'\n", secret.Name)
-			fmt.Fprintf(w, "\tSecret Namespace:\t'%s'\n", secret.Namespace)
-			fmt.Fprintf(w, "\tCreate:\t'%v'\n", secret.CreationTimestamp)
-			w.Flush()
-			fmt.Printf("Delete Secret ('%s'), ", secret.Name)
-			if userInput == "all" || utils.ConfirmPrompt() {
-				o.log.Debug(o.ctx, "Deleting secret(%d/%d):'%s'\n", cr.Spec.SecretRef.Name, idx, len(awsCredReqs))
-				// Delete the referenced secret
-				err := o.clusterClientset.CoreV1().Secrets(secret.Namespace).Delete(context.TODO(), secret.Name, metav1.DeleteOptions{})
-				if err != nil {
-					return fmt.Errorf("failed to delete secret '%v' in namespace:'%v', err '%w'", secret.Name, secret.Namespace, err)
-				}
-				o.log.Debug(o.ctx, "Deleted Secret: '%s'\n", secret.Name)
-			} else {
-				o.log.Debug(o.ctx, "Skipping secret:'%s'...\n", secret.Name)
-				continue
-			}
+	var idx = 0
+	// Print out each secret before prompting and/or deleting...
+	for sidx, cr := range awsCredReqs {
+		idx = sidx + 1
+		secret, err := o.clusterClientset.CoreV1().Secrets(cr.Spec.SecretRef.Namespace).Get(context.TODO(), cr.Spec.SecretRef.Name, metav1.GetOptions{})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting secret:'%s', skipping\n", secret.Name)
+			continue
 		}
-	} else {
-		o.log.Info(o.ctx, "User chose to not delete secrets...\n")
+		fmt.Fprintf(w, "\nSecret (%d/%d):\n", idx, len(awsCredReqs))
+		fmt.Fprintf(w, "\tCredentialRequest:\t'%s'\n", cr.Name)
+		fmt.Fprintf(w, "\tSecret:\t'%s'\n", secret.Name)
+		fmt.Fprintf(w, "\tSecret Namespace:\t'%s'\n", secret.Namespace)
+		fmt.Fprintf(w, "\tCreate:\t'%v'\n", secret.CreationTimestamp)
+		w.Flush()
+		// Prompt user to delete, unless they choose to skip prompts...
+		if rotateAllWithoutPrompts || func() bool {
+			fmt.Printf("Delete Secret ('%s')? ", secret.Name)
+			return utils.ConfirmPrompt()
+		}() {
+			o.log.Debug(o.ctx, "Deleting secret(%d/%d):'%s'\n", cr.Spec.SecretRef.Name, idx, len(awsCredReqs))
+			// Delete the referenced secret
+			err := o.clusterClientset.CoreV1().Secrets(secret.Namespace).Delete(context.TODO(), secret.Name, metav1.DeleteOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to delete secret '%v' in namespace:'%v', err '%w'", secret.Name, secret.Namespace, err)
+			}
+			o.log.Debug(o.ctx, "Deleted Secret: '%s'\n", secret.Name)
+		} else {
+			o.log.Debug(o.ctx, "Skipping secret:'%s'...\n", secret.Name)
+			continue
+		}
 	}
 	return nil
 }
@@ -583,6 +640,7 @@ func (o *rotateCredOptions) fetchAwsClaimNameInfo() error {
 	var err error = nil
 	var claimName string = ""
 	accountClaim, err := k8s.GetAccountClaimFromClusterID(o.ctx, o.hiveKubeClient, o.clusterID)
+
 	if err != nil {
 		o.log.Warn(o.ctx, "k8s.GetAccountClaimFromClusterID err:'%s', trying resources instead...\n", err)
 	} else {
@@ -605,7 +663,7 @@ func (o *rotateCredOptions) fetchAwsClaimNameInfo() error {
 }
 
 /* fetch aws account claim CR name from resources output
- * used as a backup to 'k8s.GetAccountClaimFromClusterID()'
+ * used as a backup to newer 'k8s.GetAccountClaimFromClusterID()'
  */
 func (o *rotateCredOptions) getResourcesClaimName() (string, error) {
 	o.claimName = ""
@@ -615,32 +673,25 @@ func (o *rotateCredOptions) getResourcesClaimName() (string, error) {
 			return "", err
 		}
 	}
-	o.ocmConn.ClustersMgmt().V1().AWSInquiries().STSCredentialRequests().List().Send()
+	//o.ocmConn.ClustersMgmt().V1().AWSInquiries().STSCredentialRequests().List().Send()
 	liveResponse, err := o.ocmConn.ClustersMgmt().V1().Clusters().Cluster(o.clusterID).Resources().Live().Get().Send()
 	if err != nil {
 		return "", fmt.Errorf("error fetching cluster resources: %w", err)
 	}
 	respBody := liveResponse.Body().Resources()
 	if awsAccountClaim, ok := respBody["aws_account_claim"]; ok {
-		var claimJson map[string]interface{}
-		err := json.Unmarshal([]byte(awsAccountClaim), &claimJson)
+		//Unpack into account claim struct...
+		var claimObj awsv1alpha1.AccountClaim
+		err = json.Unmarshal([]byte(awsAccountClaim), &claimObj)
 		if err != nil {
-			return "", fmt.Errorf("err parsing account claim: %w", err)
+			o.log.Warn(o.ctx, "Error getting account claim:'%s'", err)
+			return "", err
+		} else {
+			o.log.Debug(o.ctx, "Got awsAccountClaim accountLink:'%s'", claimObj.Spec.AccountLink)
 		}
-		if metaData, ok := claimJson["spec"]; ok {
-			if rawClaimName, ok := metaData.(map[string]interface{})["accountLink"]; ok {
-				claimName, ok := rawClaimName.(string)
-				if !ok {
-					return "", fmt.Errorf("parsed account claim metadata name is not a string")
-				}
-				o.claimName = claimName
-				o.log.Info(o.ctx, "Got Cluster AWS Claim:%s\n", o.claimName)
-				return claimName, nil
-			}
-		}
-		return "", fmt.Errorf("unable to get account claim name from JSON")
+		return claimObj.Spec.AccountLink, nil
 	}
-	return "", fmt.Errorf("cluster does not have AccountClaim")
+	return "", fmt.Errorf("failed to parse aws_account_claim from api 'clusterMgmt/v1/clusters/%s/resources/live/'", o.clusterID)
 }
 
 func (o *rotateCredOptions) connectClusterClient() error {
@@ -766,11 +817,7 @@ func (o *rotateCredOptions) fetchAWSAccountInfo() error {
 	return nil
 }
 
-/* Do the actual aws and hive operations needed to rotate the aws credentials...
- * - Fetch creds needed for AWS access, create AWS client
- * - Validate AWS user and number of existing keys
- * - Create new keys, rotate hive secret contents.
- */
+/* - Fetch creds needed for this script/client's AWS access, create AWS client */
 func (o *rotateCredOptions) setupAwsClient() error {
 	var err error
 
@@ -911,19 +958,45 @@ func (o *rotateCredOptions) getKeyInfo(iamUser string, nameSpace string, secretN
 	return currKeys, clientInput, nil
 }
 
+type accessKeyUserInfo struct {
+	IAMUser        string     `json:"IAMUser"`
+	KeyCount       int        `json:"KeyCount"`
+	AccountCRKeyID string     `json:"AccountCRKeyID"`
+	AccessKeys     []*keyInfo `json:"Keys"`
+}
+
+type keyInfo struct {
+	ID         string `json:"ID"`
+	InUse      bool   `json:"InUse"`
+	CreateDate string `json:"CreateDate"`
+	Status     string `json:"Status"`
+	IAMUser    string `json:"IAMUser"`
+}
+
+/* Display AWS key info to user running this util. Intended to help the user identify if
+ * a key rotation is needed before/after running this script, etc..
+ * Displays the following info:
+ * - AccessKey ID,
+ * - (CR-IN-USE) Bool, whether this key is referenced by the IAM Credentials created with AWS Account CR ,
+ * - Date Created
+ * - Status
+ * - IAM user/ower
+ */
 func (o *rotateCredOptions) printKeyInfo(currKeys *iam.ListAccessKeysOutput, clientInput *awsprovider.ClientInput, iamUser string) error {
 	if currKeys == nil || clientInput == nil {
 		return fmt.Errorf("nil input passed to printKeyInfo()")
 	}
 	var inUseStr string = "unknown?"
+	userKeyInfo := accessKeyUserInfo{IAMUser: iamUser, KeyCount: len(currKeys.AccessKeyMetadata), AccountCRKeyID: clientInput.AccessKeyID}
 	p := printer.NewTablePrinter(o.IOStreams.Out, 3, 1, 3, ' ')
 	headers := []string{"#", "ACCESS-KEY-ID", "CR-IN-USE", "CREATED", "STATUS", "IAM-USER"}
 	p.AddRow(headers)
-
-	fmt.Printf("\n---------------------------------------------------------------------------------------------------------------\n")
-	fmt.Printf("Access Key Info, IAM user:'%s', num of keys:'%d' of max 2\n", iamUser, len(currKeys.AccessKeyMetadata))
-	fmt.Printf("Account CR in-use accessKeyID:'%s'\n", clientInput.AccessKeyID)
-	fmt.Printf("---------------------------------------------------------------------------------------------------------------\n")
+	if o.output == standardFormat {
+		fmt.Printf("\n---------------------------------------------------------------------------------------------------------------\n")
+		fmt.Printf("Access Key Info, IAM user:'%s', num of keys:'%d' of max 2\n", iamUser, len(currKeys.AccessKeyMetadata))
+		fmt.Printf("Account CR in-use accessKeyID:'%s'\n", clientInput.AccessKeyID)
+		fmt.Printf("---------------------------------------------------------------------------------------------------------------\n")
+	}
 	for Ind, Akey := range currKeys.AccessKeyMetadata {
 		if Akey.AccessKeyId == nil {
 			return fmt.Errorf("accessKey *id nil in List AccessKeysOutput provided to printKeyInfo()")
@@ -933,12 +1006,23 @@ func (o *rotateCredOptions) printKeyInfo(currKeys *iam.ListAccessKeysOutput, cli
 		} else {
 			inUseStr = "unknown?"
 		}
-		row := []string{fmt.Sprintf("%d", Ind), *Akey.AccessKeyId, inUseStr, Akey.CreateDate.String(), string(Akey.Status), *Akey.UserName}
-		p.AddRow(row)
+		if o.output == standardFormat {
+			row := []string{fmt.Sprintf("%d", Ind), *Akey.AccessKeyId, inUseStr, Akey.CreateDate.String(), string(Akey.Status), *Akey.UserName}
+			p.AddRow(row)
+		} else {
+			userKeyInfo.AccessKeys = append(userKeyInfo.AccessKeys, &keyInfo{ID: *Akey.AccessKeyId,
+				InUse: clientInput.AccessKeyID == *Akey.AccessKeyId, CreateDate: Akey.CreateDate.String(),
+				Status: string(Akey.Status), IAMUser: *Akey.UserName})
+		}
 	}
-	err := p.Flush()
-	fmt.Printf("---------------------------------------------------------------------------------------------------------------\n")
-	return err
+	if o.output == standardFormat {
+		err := p.Flush()
+		fmt.Printf("---------------------------------------------------------------------------------------------------------------\n")
+		return err
+	} else {
+		err := o.printJsonYaml(userKeyInfo)
+		return err
+	}
 }
 
 func (o *rotateCredOptions) hasAccessKey(accessKey string, keys *iam.ListAccessKeysOutput) bool {
@@ -1047,7 +1131,7 @@ func (o *rotateCredOptions) checkOsdManagedUsername() (string, error) {
 	checkUser, err := o.awsClient.GetUser(&iam.GetUserInput{UserName: awsSdk.String(osdManagedAdminUsername)})
 	var nse *iamTypes.NoSuchEntityException
 	if (err != nil && errors.As(err, &nse)) || checkUser == nil {
-		o.log.Warn(o.ctx, "User Not Found: '%s', trying user:'%s' instead...\n", osdManagedAdminUsername, common.OSDManagedAdminIAM)
+		o.log.Info(o.ctx, "User Not Found: '%s', trying user:'%s' instead...\n", osdManagedAdminUsername, common.OSDManagedAdminIAM)
 		osdManagedAdminUsername = common.OSDManagedAdminIAM
 		checkUser, err := o.awsClient.GetUser(&iam.GetUserInput{UserName: awsSdk.String(osdManagedAdminUsername)})
 		if err != nil {
@@ -1080,6 +1164,54 @@ func (o *rotateCredOptions) cliPrintOsdManagedAdminCreds() error {
 	return nil
 }
 
+// Intended to save the new secret data in yaml format so a user can review and/or apply it from the CLI
+// This should only be called upon error to write/update the new secret with the new aws creds.
+func (o *rotateCredOptions) saveSecretYaml(secretNamespace string, secretName string, accessKey *iamTypes.AccessKey) (string, error) {
+	o.log.Warn(o.ctx, "Attempting to save secret yaml to file, ns:'%s', name:'%s'\n", secretNamespace, secretName)
+	if accessKey == nil {
+		err := fmt.Errorf("null AccessKey obj provided to saveSecretYaml")
+		o.log.Warn(o.ctx, "%v", err)
+		return "", err
+	}
+	secret := &corev1.Secret{}
+	err := o.hiveKubeClient.Get(context.TODO(), types.NamespacedName{Name: secretName, Namespace: secretNamespace}, secret)
+	if err != nil {
+		o.log.Warn(o.ctx, "Failed to fetch existing secret: NS:'%s', NAME:'%s'. Err:'%s'", secretNamespace, secretName, err)
+		return "", err
+	}
+	newData := map[string][]byte{
+		"aws_user_name":         []byte(*accessKey.UserName),
+		"aws_access_key_id":     []byte(*accessKey.AccessKeyId),
+		"aws_secret_access_key": []byte(*accessKey.SecretAccessKey),
+	}
+	secret.Data = newData
+	s := k8json.NewYAMLSerializer(k8json.DefaultMetaFactory, scheme.Scheme, scheme.Scheme)
+	if s == nil {
+		err := fmt.Errorf("err saving secret to yaml. Failed to create k8 serializer")
+		o.log.Warn(o.ctx, "%v", err)
+		return "", err
+	}
+	saveFile, err := os.CreateTemp(os.TempDir(), string(*accessKey.UserName))
+	if err != nil {
+		o.log.Warn(o.ctx, "Error creating tmp file to save '%s' secret", *accessKey.UserName)
+		return "", err
+	}
+	if saveFile == nil {
+		err := fmt.Errorf("got nil tmp file attempting to save '%s' secret", *accessKey.UserName)
+		o.log.Warn(o.ctx, "%v", err)
+		return "", err
+	}
+	defer saveFile.Close()
+	//Write to tmp file, return path
+	err = s.Encode(secret, saveFile)
+	if err != nil {
+		o.log.Warn(o.ctx, "Error saving '%s' secret. Err:'%v'", *accessKey.UserName, err)
+		return "", err
+	}
+	fmt.Printf("!! Saved key yaml to: '%s'. Please review, and apply manually if needed. Delete this file after use!\n", saveFile.Name())
+	return saveFile.Name(), nil
+}
+
 func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 	if o.awsClient == nil {
 		return fmt.Errorf("AWS client has not been created yet for doRotateAWSCreds()")
@@ -1108,16 +1240,6 @@ func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 	}
 
 	fmt.Printf("New creds:\nuser:'%s'\nAccessKey:'%s'\n", *createAccessKeyOutput.AccessKey.UserName, *createAccessKeyOutput.AccessKey.AccessKeyId)
-	// Todo: Make displaying the secret a cli provided arg? If this is useful for error/script failure recovery?
-	if o.saveSecretKeyToFile {
-		err := os.WriteFile(saveFileManaged, []byte(*createAccessKeyOutput.AccessKey.SecretAccessKey), 0600)
-		if err != nil {
-			o.log.Error(o.ctx, "Error! Saving key info to file:'%s', err:%s", saveFileManaged, err)
-			//return err
-		} else {
-			fmt.Printf("\nSaved key to: '%s'\n", saveFileManaged)
-		}
-	}
 	// Place new credentials into body for secret
 	newOsdManagedAdminSecretData := map[string][]byte{
 		"aws_user_name":         []byte(*createAccessKeyOutput.AccessKey.UserName),
@@ -1125,11 +1247,17 @@ func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 		"aws_secret_access_key": []byte(*createAccessKeyOutput.AccessKey.SecretAccessKey),
 	}
 
+	fmt.Printf("Got aws access key output:  UserName:'%s', keyid:'%s'\n", *createAccessKeyOutput.AccessKey.UserName, *createAccessKeyOutput.AccessKey.AccessKeyId)
+
 	// Update existing osdManagedAdmin secret
 	// UpdateSecret() includes a check for existing secret
 	o.log.Info(o.ctx, "Updating osdManagedAdmin secret:'%s.%s' with new AWS cred values...\n", common.AWSAccountNamespace, o.secretName)
 	err = common.UpdateSecret(o.hiveKubeClient, o.secretName, common.AWSAccountNamespace, newOsdManagedAdminSecretData)
 	if err != nil {
+		o.log.Warn(o.ctx, "Error updating '%s.%s' secret with new creds. Err:'%s\n", common.AWSAccountNamespace, o.secretName, err)
+		if !o.noSaveOnError {
+			o.saveSecretYaml(common.AWSAccountNamespace, o.secretName, createAccessKeyOutput.AccessKey)
+		}
 		return err
 	}
 
@@ -1137,6 +1265,10 @@ func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 	o.log.Info(o.ctx, "Updating ClusterDeployment secret:'%s.aws' with new AWS cred values...\n", o.account.Spec.ClaimLinkNamespace)
 	err = common.UpdateSecret(o.hiveKubeClient, "aws", o.account.Spec.ClaimLinkNamespace, newOsdManagedAdminSecretData)
 	if err != nil {
+		o.log.Warn(o.ctx, "Error updating '%s.%s' secret with new creds. Err:'%s\n", o.account.Spec.ClaimLinkNamespace, "aws", err)
+		if !o.noSaveOnError {
+			o.saveSecretYaml(o.account.Spec.ClaimLinkNamespace, "aws", createAccessKeyOutput.AccessKey)
+		}
 		return err
 	}
 
@@ -1290,27 +1422,20 @@ func (o *rotateCredOptions) doRotateCcsCreds() error {
 		if err != nil {
 			return err
 		}
-
+		o.log.Info(o.ctx, "Created new AccessKey for user:'%s'", userName)
 		newOsdCcsAdminSecretData := map[string][]byte{
 			"aws_user_name":         []byte(*createAccessKeyOutputCCS.AccessKey.UserName),
 			"aws_access_key_id":     []byte(*createAccessKeyOutputCCS.AccessKey.AccessKeyId),
 			"aws_secret_access_key": []byte(*createAccessKeyOutputCCS.AccessKey.SecretAccessKey),
 		}
-		fmt.Printf("Created '%s' creds: UserName:'%s', AccessKey:'%s'\n", userName, *createAccessKeyOutputCCS.AccessKey.UserName, *createAccessKeyOutputCCS.AccessKey.AccessKeyId)
-		// Make displaying the secret a cli provided arg? If this is useful for error/script failure recovery?
-		if o.saveSecretKeyToFile {
-			err := os.WriteFile(saveFileCcs, []byte(*createAccessKeyOutputCCS.AccessKey.SecretAccessKey), 0600)
-			if err != nil {
-				o.log.Error(o.ctx, "Error! Saving key info to file:'%s', err:'%s'", saveFileCcs, err)
-				//return err
-			} else {
-				fmt.Printf("\nSaved key to: '%s'\n", saveFileCcs)
-			}
-		}
+		o.log.Debug(o.ctx, "Created '%s' creds: UserName:'%s', AccessKey:'%s'\n", userName, *createAccessKeyOutputCCS.AccessKey.UserName, *createAccessKeyOutputCCS.AccessKey.AccessKeyId)
 		o.log.Debug(o.ctx, "Updating '%s.%s' secret with new creds...\n", o.account.Spec.ClaimLinkNamespace, secretName)
 		err = common.UpdateSecret(o.hiveKubeClient, secretName, o.account.Spec.ClaimLinkNamespace, newOsdCcsAdminSecretData)
 		if err != nil {
 			o.log.Warn(o.ctx, "Error updating '%s.%s' secret with new creds. Err:'%s\n", o.account.Spec.ClaimLinkNamespace, secretName, err)
+			if !o.noSaveOnError {
+				o.saveSecretYaml(o.account.Spec.ClaimLinkNamespace, secretName, createAccessKeyOutputCCS.AccessKey)
+			}
 			return err
 		}
 		o.log.Debug(o.ctx, "Successfully updated secrets for '%s'\n", userName)
