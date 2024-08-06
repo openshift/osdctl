@@ -102,7 +102,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(servicelog.NewCmdServiceLog())
 	rootCmd.AddCommand(setup.NewCmdSetup())
 	rootCmd.AddCommand(swarm.Cmd)
-  rootCmd.AddCommand(iampermissions.NewCmdIamPermissions())
+	rootCmd.AddCommand(iampermissions.NewCmdIamPermissions())
 
 	// Add cost command to use AWS Cost Manager
 	rootCmd.AddCommand(cost.NewCmdCost(streams, globalOpts))

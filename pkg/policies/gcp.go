@@ -53,8 +53,8 @@ func CredentialsRequestToWifServiceAccount(credReq *cco.CredentialsRequest) (*Se
 
 	if len(gcpSpec.Permissions) > 0 {
 		roleId := strings.ReplaceAll(credReq.Name, "-", "_")
-    roleId = roleId[:min(64, len(roleId))]
-    slices.Sort(gcpSpec.Permissions)
+		roleId = roleId[:min(64, len(roleId))]
+		slices.Sort(gcpSpec.Permissions)
 		sa.Roles = append(sa.Roles, Role{
 			Id:          roleId,
 			Kind:        "Role",
