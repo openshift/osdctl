@@ -1,6 +1,7 @@
 package policies
 
 import (
+	"slices"
 	"strings"
 
 	cco "github.com/openshift/cloud-credential-operator/pkg/apis/cloudcredential/v1"
@@ -51,8 +52,11 @@ func CredentialsRequestToWifServiceAccount(credReq *cco.CredentialsRequest) (*Se
 	}
 
 	if len(gcpSpec.Permissions) > 0 {
+		roleId := strings.ReplaceAll(credReq.Name, "-", "_")
+		roleId = roleId[:min(64, len(roleId))]
+		slices.Sort(gcpSpec.Permissions)
 		sa.Roles = append(sa.Roles, Role{
-			Id:          credReq.Name,
+			Id:          roleId,
 			Kind:        "Role",
 			Permissions: gcpSpec.Permissions,
 			Predefined:  false,

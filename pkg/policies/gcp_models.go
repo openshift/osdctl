@@ -23,13 +23,13 @@ type ServiceAccount struct {
 }
 
 type CredentialRequest struct {
-	SecretRef           SecretRef
-	ServiceAccountNames []string
+	SecretRef           SecretRef `json:"secret_ref,omitempty"`
+	ServiceAccountNames []string  `json:"service_account_names,omitempty"`
 }
 
 type SecretRef struct {
-	Name      string
-	Namespace string
+	Name      string `json:"name,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
 }
 
 func (s ServiceAccount) GetId() string {
