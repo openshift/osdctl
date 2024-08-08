@@ -2,6 +2,7 @@ package mgmt
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/service/organizations"
 	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
@@ -67,9 +68,6 @@ func newCmdAccountList(streams genericclioptions.IOStreams, globalOpts *globalfl
 }
 
 func (o *accountListOptions) complete(cmd *cobra.Command, _ []string) error {
-	if o.payerAccount == "" {
-		return cmdutil.UsageErrorf(cmd, "Payer account was not provided")
-	}
 	if o.username != "" && o.accountID != "" {
 		return cmdutil.UsageErrorf(cmd, "Cannot provide both username and account ID")
 	}
@@ -90,9 +88,9 @@ func (o *accountListOptions) run() error {
 		return err
 	}
 
-	if o.payerAccount == "osd-staging-2" {
+	if o.payerAccount == "osd-staging-2" || os.Getenv("AWS_ACCOUNT_NAME") == "osd-staging-2-prod" {
 		OuID = "ou-rs3h-ry0hn2l9"
-	} else if o.payerAccount == "osd-staging-1" {
+	} else if o.payerAccount == "osd-staging-1" || os.Getenv("AWS_ACCOUNT_NAME") == "osd-staging-1" {
 		OuID = "ou-0wd6-z6tzkjek"
 	}
 
