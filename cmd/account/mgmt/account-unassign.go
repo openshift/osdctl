@@ -53,9 +53,6 @@ func newAccountUnassignOptions(streams genericclioptions.IOStreams) *accountUnas
 	}
 }
 func (o *accountUnassignOptions) complete(cmd *cobra.Command, _ []string) error {
-	if o.payerAccount == "" {
-		return cmdutil.UsageErrorf(cmd, "Payer account was not provided")
-	}
 	if o.username == "" && o.accountID == "" {
 		return cmdutil.UsageErrorf(cmd, "Please provide either an username or account ID")
 	}
@@ -77,10 +74,10 @@ func (o *accountUnassignOptions) run() error {
 	if err != nil {
 		return err
 	}
-	if o.payerAccount == "osd-staging-1" {
+	if o.payerAccount == "osd-staging-1" || os.Getenv("AWS_ACCOUNT_NAME") == "osd-staging-1" {
 		rootID = OSDStaging1RootID
 		destinationOU = OSDStaging1OuID
-	} else if o.payerAccount == "osd-staging-2" {
+	} else if o.payerAccount == "osd-staging-2" || os.Getenv("AWS_ACCOUNT_NAME") == "osd-staging-2-prod" {
 		rootID = OSDStaging2RootID
 		destinationOU = OSDStaging2OuID
 	} else {
