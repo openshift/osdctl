@@ -53,9 +53,6 @@ func newAccountUnassignOptions(streams genericclioptions.IOStreams) *accountUnas
 	}
 }
 func (o *accountUnassignOptions) complete(cmd *cobra.Command, _ []string) error {
-	if o.payerAccount == "" {
-		return cmdutil.UsageErrorf(cmd, "Payer account was not provided")
-	}
 	if o.username == "" && o.accountID == "" {
 		return cmdutil.UsageErrorf(cmd, "Please provide either an username or account ID")
 	}
@@ -71,16 +68,22 @@ func (o *accountUnassignOptions) run() error {
 		destinationOU        string
 		rootID               string
 		assumedRoleAwsClient awsprovider.Client
+		allUsers             []string
+	)
+	const (
+		osdStaging1    = "osd-staging-1"
+		osdStaging2    = "osd-staging-2"
+		awsAccountName = "AWS_ACCOUNT_NAME"
 	)
 	// Instantiate Aws client
 	awsClient, err := awsprovider.NewAwsClient(o.payerAccount, "us-east-1", "")
 	if err != nil {
 		return err
 	}
-	if o.payerAccount == "osd-staging-1" {
+	if o.payerAccount == osdStaging1 || os.Getenv(awsAccountName) == osdStaging1 {
 		rootID = OSDStaging1RootID
 		destinationOU = OSDStaging1OuID
-	} else if o.payerAccount == "osd-staging-2" {
+	} else if o.payerAccount == osdStaging2 || os.Getenv(awsAccountName) == osdStaging2 {
 		rootID = OSDStaging2RootID
 		destinationOU = OSDStaging2OuID
 	} else {
@@ -88,7 +91,6 @@ func (o *accountUnassignOptions) run() error {
 	}
 
 	o.awsClient = awsClient
-	var allUsers []string
 
 	if o.accountID != "" {
 		// Check aws tag to see if it's a ccs acct, if it's not return name of owner

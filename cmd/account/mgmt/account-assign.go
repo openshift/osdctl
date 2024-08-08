@@ -3,6 +3,7 @@ package mgmt
 import (
 	"fmt"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/organizations"
@@ -80,9 +81,6 @@ func (o *accountAssignOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.username == "" {
 		return cmdutil.UsageErrorf(cmd, "LDAP username was not provided")
 	}
-	if o.payerAccount == "" {
-		return cmdutil.UsageErrorf(cmd, "Payer account was not provided")
-	}
 
 	o.output = o.GlobalOptions.Output
 
@@ -97,10 +95,16 @@ func (o *accountAssignOptions) run() error {
 		rootID          string
 	)
 
-	if o.payerAccount == "osd-staging-1" {
+	const (
+		osdStaging1    = "osd-staging-1"
+		osdStaging2    = "osd-staging-2"
+		awsAccountName = "AWS_ACCOUNT_NAME"
+	)
+
+	if o.payerAccount == osdStaging1 || os.Getenv(awsAccountName) == osdStaging1 {
 		rootID = OSDStaging1RootID
 		destinationOU = OSDStaging1OuID
-	} else if o.payerAccount == "osd-staging-2" {
+	} else if o.payerAccount == osdStaging2 || os.Getenv(awsAccountName) == osdStaging2 {
 		rootID = OSDStaging2RootID
 		destinationOU = OSDStaging2OuID
 	} else {
