@@ -22,6 +22,8 @@ func NewCmdHCPMustGather() *cobra.Command {
 		Use:               "gather-logs <cluster-id>",
 		Aliases:           []string{"gl"},
 		Short:             "Gather all Pod logs and Application event from HCP",
+		Long:              "This command gathers pods logs and evnets of a given HCP from Dynatrace. It will fetch the logs from the HCP namespace, the hypershift namespace and cert-manager related namespaces. Logs will be dumped to a directory with prefix hcp-must-gather.",
+		Example:           "osdctl cluster dynatrace gather-logs hcp-cluster-id-123",
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
