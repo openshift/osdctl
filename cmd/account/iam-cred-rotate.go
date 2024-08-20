@@ -323,16 +323,6 @@ func (o *rotateCredOptions) run() error {
 	return nil
 }
 
-func fileExists(fpath string) bool {
-	_, err := os.Stat(fpath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-	}
-	return true
-}
-
 func (o *rotateCredOptions) printJsonYaml(obj any) error {
 	if o.output == jsonFormat {
 		pbuf, err := json.MarshalIndent(obj, "", "    ")
@@ -462,7 +452,7 @@ type credReqSecrets struct {
 	Name              string `json:"Name"`
 	Namespace         string `json:"Namespace"`
 	Created           string `json:"Created"`
-	CredentialRequest string `json:"CredentialRequest`
+	CredentialRequest string `json:"CredentialRequest"`
 }
 
 // Print metadata for secrets referenced by AWS provider CredentialRequests resource(s)...
