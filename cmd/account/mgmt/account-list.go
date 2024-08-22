@@ -83,21 +83,15 @@ func (o *accountListOptions) run() error {
 		OuID string
 	)
 
-	const (
-		osdStaging1    = "osd-staging-1"
-		osdStaging2    = "osd-staging-2"
-		awsAccountName = "AWS_ACCOUNT_NAME"
-	)
-
 	// Instantiate Aws client
 	awsClient, err := awsprovider.NewAwsClient(o.payerAccount, "us-east-1", "")
 	if err != nil {
 		return err
 	}
 
-	if o.payerAccount == osdStaging2 || os.Getenv(awsAccountName) == osdStaging2 {
+	if o.payerAccount == osdStaging2 || os.Getenv(envKeyAWSAccountName) == osdStaging2 {
 		OuID = "ou-rs3h-ry0hn2l9"
-	} else if o.payerAccount == osdStaging1 || os.Getenv(awsAccountName) == osdStaging1 {
+	} else if o.payerAccount == osdStaging1 || os.Getenv(envKeyAWSAccountName) == osdStaging1 {
 		OuID = "ou-0wd6-z6tzkjek"
 	}
 

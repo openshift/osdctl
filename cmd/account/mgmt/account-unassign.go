@@ -70,20 +70,16 @@ func (o *accountUnassignOptions) run() error {
 		assumedRoleAwsClient awsprovider.Client
 		allUsers             []string
 	)
-	const (
-		osdStaging1    = "osd-staging-1"
-		osdStaging2    = "osd-staging-2"
-		awsAccountName = "AWS_ACCOUNT_NAME"
-	)
+
 	// Instantiate Aws client
 	awsClient, err := awsprovider.NewAwsClient(o.payerAccount, "us-east-1", "")
 	if err != nil {
 		return err
 	}
-	if o.payerAccount == osdStaging1 || os.Getenv(awsAccountName) == osdStaging1 {
+	if o.payerAccount == osdStaging1 || os.Getenv(envKeyAWSAccountName) == osdStaging1 {
 		rootID = OSDStaging1RootID
 		destinationOU = OSDStaging1OuID
-	} else if o.payerAccount == osdStaging2 || os.Getenv(awsAccountName) == osdStaging2 {
+	} else if o.payerAccount == osdStaging2 || os.Getenv(envKeyAWSAccountName) == osdStaging2 {
 		rootID = OSDStaging2RootID
 		destinationOU = OSDStaging2OuID
 	} else {

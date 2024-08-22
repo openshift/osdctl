@@ -8,6 +8,12 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
+const (
+	osdStaging1          = "osd-staging-1"
+	osdStaging2          = "osd-staging-2"
+	envKeyAWSAccountName = "AWS_ACCOUNT_NAME"
+)
+
 // NewCmdMgmt implements the mgmt command to get AWS Account resources
 func NewCmdMgmt(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	mgmtCmd := &cobra.Command{
