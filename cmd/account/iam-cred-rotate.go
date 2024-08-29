@@ -150,6 +150,7 @@ type rotateCredOptions struct {
 	ocmConn           *sdk.Connection       // ocm connection object
 	hiveCluster       *cmv1.Cluster         // Hive cluster/shard managing this user cluster
 	hiveKubeClient    client.Client         // Hive kube client conneciton
+	cdName            string                // Cluster Deployments name
 
 }
 
@@ -157,6 +158,7 @@ const (
 	jsonFormat     = "json"
 	yamlFormat     = "yaml"
 	standardFormat = ""
+	awsSyncSetName = "aws-sync"
 )
 
 // func newRotateAWSOptions(streams genericclioptions.IOStreams, client *k8s.LazyClient) *rotateCredOptions {
@@ -769,7 +771,12 @@ func (o *rotateCredOptions) fetchAWSAccountInfo() error {
 	o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
 	o.log.Debug(o.ctx, "Fetching account info per aws-account-operator\n")
 	o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
-
+	if o.hiveKubeClient == nil {
+		err := o.connectHiveClient()
+		if err != nil {
+			return err
+		}
+	}
 	// Get the associated Account CR from the provided name
 	o.log.Debug(o.ctx, "Fetching aws-account-operator account object for '%s.%s' ...", common.AWSAccountNamespace, o.claimName)
 	accountObj, err := k8s.GetAWSAccount(o.ctx, o.hiveKubeClient, common.AWSAccountNamespace, o.claimName)
@@ -1202,6 +1209,42 @@ func (o *rotateCredOptions) saveSecretYaml(secretNamespace string, secretName st
 	return saveFile.Name(), nil
 }
 
+// Intended to save a failed syncSet in yaml format so a user can review and/or apply it from the CLI
+func (o *rotateCredOptions) saveSyncSetYaml(syncSet *hiveapiv1.SyncSet) error {
+	o.log.Warn(o.ctx, "Attempting to save syncSet yaml to file, ns:'%s', name:'%s'\n", syncSet.Namespace, syncSet.Name)
+	scheme := runtime.NewScheme()
+	err := hiveapiv1.AddToScheme(scheme)
+	if err != nil {
+		o.log.Warn(o.ctx, "Error adding hiveapiv1 to schema:'%s'\n", err)
+		return err
+	}
+	s := k8json.NewYAMLSerializer(k8json.DefaultMetaFactory, scheme, scheme)
+	if s == nil {
+		err := fmt.Errorf("err saving syncSet to yaml. Failed to create k8 serializer")
+		o.log.Warn(o.ctx, "%v", err)
+		return err
+	}
+	saveFile, err := os.CreateTemp(os.TempDir(), string(awsSyncSetName))
+	if err != nil {
+		o.log.Warn(o.ctx, "Error creating tmp file to save '%s' syncSet", syncSet.Name)
+		return err
+	}
+	if saveFile == nil {
+		err := fmt.Errorf("got nil tmp file attempting to save syncset: '%s'", syncSet.Name)
+		o.log.Warn(o.ctx, "%v", err)
+		return err
+	}
+	defer saveFile.Close()
+	//Write to tmp file, return path
+	err = s.Encode(syncSet, saveFile)
+	if err != nil {
+		o.log.Warn(o.ctx, "Error saving syncSet:'%s'. Err:'%v'", syncSet.Name, err)
+		return err
+	}
+	fmt.Printf("!! Saved syncSet yaml to: '%s'. Please review, and apply manually if needed. Delete this file after use!\n", saveFile.Name())
+	return nil
+}
+
 func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 	if o.awsClient == nil {
 		return fmt.Errorf("AWS client has not been created yet for doRotateAWSCreds()")
@@ -1267,28 +1310,100 @@ func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 	o.log.Debug(o.ctx, "---------------------------------------------------------\n")
 
 	o.log.Info(o.ctx, "Begin syncset ops to sync to cluster....\n")
+	err = o.doSyncSetInteractive()
+	if err != nil {
+		return err
+	}
+	o.log.Info(o.ctx, "Successfully rotated secrets for user:'%s'\n", osdManagedAdminUsername)
+	return nil
+}
 
-	o.log.Debug(o.ctx, "Fetching cluster deployments list from hive...\n")
+func (o *rotateCredOptions) doSyncSetInteractive() error {
+	// Previous SOP mentions potential collisions with SyncSets already in progress.
+	// This retry loop is intended to allow the user to remedy an err'd situation externally
+	// and then retrying the AWS syncset operations. IF the user choses to exit, the
+	// util will attempt to save the syncset yaml obj to a tmp location and alert the
+	// user it is available to review or apply.
+	max_retries := 5
+	var syncErr error = nil
+	var syncSet *hiveapiv1.SyncSet = nil
+	for retry_cnt := 1; retry_cnt <= max_retries; retry_cnt++ {
+		syncSet, syncErr = o.doAWSSyncSetRequest()
+		if syncErr == nil {
+			break
+		} else {
+			o.log.Error(o.ctx, "Error during SyncSet '%s', err: '%s'", awsSyncSetName, syncErr)
+			doRetry := false
+			if retry_cnt < max_retries {
+				fmt.Printf("Error applying Syncset:'%s'. Hive cluserID:'%s'\n", awsSyncSetName, o.hiveCluster.ID())
+				fmt.Printf("Would you like to retry the syncset operation?\n")
+				doRetry = utils.ConfirmPrompt()
+			}
+			if !doRetry {
+				fmt.Println("Exiting without syncset retry")
+				if syncSet != nil {
+					o.log.Debug(o.ctx, "Attempting to save syncset to tmp file...")
+					o.saveSyncSetYaml(syncSet)
+				}
+				return syncErr
+			}
+			fmt.Printf("Retry '%s' syncset. Attempt '%d' of '%d'", syncSet.Name, retry_cnt+1, max_retries)
+		}
+	}
+	if syncErr != nil {
+		o.log.Error(o.ctx, "Exceeded max syncset retry attempts:%d", max_retries)
+	}
+	return syncErr
+}
+
+func (o *rotateCredOptions) getClusterDeploymentName() (string, error) {
+	if len(o.cdName) > 0 {
+		return o.cdName, nil
+	}
+	if o.hiveKubeClient == nil {
+		err := o.connectHiveClient()
+		if err != nil {
+			return "", err
+		}
+	}
+	if o.account == nil {
+		err := o.fetchAWSAccountInfo()
+		if err != nil {
+			return "", err
+		}
+	}
 	clusterDeployments := &hiveapiv1.ClusterDeploymentList{}
 	listOpts := []client.ListOption{
 		client.InNamespace(o.account.Spec.ClaimLinkNamespace),
 	}
-
-	err = o.hiveKubeClient.List(o.ctx, clusterDeployments, listOpts...)
+	err := o.hiveKubeClient.List(o.ctx, clusterDeployments, listOpts...)
 	if err != nil {
-		return err
+		o.log.Error(o.ctx, "Error fetching clusterDeployments:'%v", err)
+		return "", err
 	}
-
-	if len(clusterDeployments.Items) == 0 {
-		return fmt.Errorf("failed to retreive cluster deployments")
+	if len(clusterDeployments.Items) <= 0 {
+		o.log.Error(o.ctx, "empty clusterDeployments list in response")
+		return "", fmt.Errorf("failed to retreive cluster deployments")
 	}
 	cdName := clusterDeployments.Items[0].ObjectMeta.Name
 	o.log.Debug(o.ctx, "Got cluster deployment name:'%s'\n", cdName)
+	if len(cdName) <= 0 {
+		return "", fmt.Errorf("failed to retrieve cluster deployment name for syncset")
+	}
+	o.cdName = cdName
+	return cdName, nil
+}
 
-	const syncSetName = "aws-sync"
+func (o *rotateCredOptions) getAWSSyncSetRequestObj() (*hiveapiv1.SyncSet, error) {
+
+	o.log.Debug(o.ctx, "Fetching cluster deployments list from hive...\n")
+	cdName, err := o.getClusterDeploymentName()
+	if err != nil {
+		return nil, err
+	}
 	syncSet := &hiveapiv1.SyncSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      syncSetName,
+			Name:      awsSyncSetName,
 			Namespace: o.account.Spec.ClaimLinkNamespace,
 		},
 		Spec: hiveapiv1.SyncSetSpec{
@@ -1313,11 +1428,35 @@ func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 			},
 		},
 	}
-	o.log.Info(o.ctx, "Creating syncset:'%s.%s', to deploy the updated creds to the cluster for CCO...\n", o.account.Spec.ClaimLinkNamespace, syncSetName)
+	return syncSet, nil
+}
+
+func (o *rotateCredOptions) doAWSSyncSetRequest() (*hiveapiv1.SyncSet, error) {
+	o.log.Info(o.ctx, "Creating syncset:'%s.%s', to deploy the updated creds to the cluster for CCO...\n", o.account.Spec.ClaimLinkNamespace, awsSyncSetName)
 	o.log.Debug(o.ctx, "Syncing AWS creds down to cluster.")
+	syncSet, err := o.getAWSSyncSetRequestObj()
+	if err != nil {
+		return nil, err
+	}
+	cdName, err := o.getClusterDeploymentName()
+	if err != nil {
+		return nil, err
+	}
+	if o.hiveKubeClient == nil {
+		err := o.connectHiveClient()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if o.account == nil {
+		err := o.fetchAWSAccountInfo()
+		if err != nil {
+			return nil, err
+		}
+	}
 	err = o.hiveKubeClient.Create(o.ctx, syncSet)
 	if err != nil {
-		return err
+		return syncSet, err
 	}
 
 	fmt.Printf("Watching Cluster Sync Status for deployment...\n")
@@ -1334,24 +1473,24 @@ func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 	for i := 0; i < 6; i++ {
 		err = o.hiveKubeClient.Get(o.ctx, client.ObjectKeyFromObject(searchStatus), foundStatus)
 		if err != nil {
-			return err
+			return syncSet, err
 		}
 		elapsed := time.Since(start)
 		for _, status := range foundStatus.Status.SyncSets {
-			if status.Name == syncSetName {
+			if status.Name == awsSyncSetName {
 				if status.FirstSuccessTime != nil {
-					o.log.Debug(o.ctx, "Syncset '%s' first success time set, elapsed:'%s'\n", syncSetName, elapsed)
+					o.log.Debug(o.ctx, "Syncset '%s' first success time set, elapsed:'%s'\n", awsSyncSetName, elapsed)
 					isSSSynced = true
 					break
 				}
 				if status.FailureMessage != "" {
-					o.log.Info(o.ctx, "Found SyncSet:'%s' current status failureMessage:'%s'\n", syncSetName, status.FailureMessage)
+					o.log.Info(o.ctx, "Found SyncSet:'%s' current status failureMessage:'%s'\n", awsSyncSetName, status.FailureMessage)
 				}
 			}
 		}
 
 		if isSSSynced {
-			o.log.Info(o.ctx, "\nSync '%s' completed. Elapsed:'%s'\n", syncSetName, time.Since(start))
+			o.log.Info(o.ctx, "\nSync '%s' completed. Elapsed:'%s'\n", awsSyncSetName, time.Since(start))
 			break
 		}
 
@@ -1360,18 +1499,16 @@ func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 	}
 	if !isSSSynced {
 		elapsed := time.Since(start)
-		return fmt.Errorf("syncset failed to sync after elapsed:'%s'. Please verify manually", elapsed)
+		return syncSet, fmt.Errorf("syncset failed to sync after elapsed:'%s'. Please verify manually", elapsed)
 	}
 
 	o.log.Debug(o.ctx, "Clean up the SS on hive...\n")
 	err = o.hiveKubeClient.Delete(o.ctx, syncSet)
 	if err != nil {
 		o.log.Warn(o.ctx, "Error deleting syncset:'%s.%s' on hive: '%s'\n", syncSet.Namespace, syncSet.Name, err)
-		return err
+		return syncSet, err
 	}
-
-	o.log.Info(o.ctx, "Successfully rotated secrets for user:'%s'\n", osdManagedAdminUsername)
-	return nil
+	return syncSet, nil
 }
 
 // Cli helper to print aws access key info and return
