@@ -26,8 +26,15 @@ var (
 
 func NewCmdLogs() *cobra.Command {
 	logsCmd := &cobra.Command{
-		Use:               "logs <cluster-id>",
-		Short:             "Fetch logs from Dynatrace",
+		Use:   "logs <cluster-id>",
+		Short: "Fetch logs from Dynatrace",
+		Long: `Fetch logs from Dynatrace and display the logs like oc logs.
+
+  This command also prints the Dynatrace URL and the corresponding DQL in the output.`,
+		Example: `
+  # Get the logs of HCP cluster hcp-cluster-id-123.
+  # Specify to get the logs of the pod alertmanager-main-0 in namespace openshift-monitoring
+  osdctl cluster dynatrace logs hcp-cluster-id-123 --namespace openshift-monitoring --pod alertmanager-main-0`,
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
