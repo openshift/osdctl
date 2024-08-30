@@ -101,12 +101,12 @@ These operations require the following:
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.updateMgmtCredsCli, "rotate-managed-admin", false, "Rotate osdManagedAdmin user credentials. Interactive. Use caution.")
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.updateCcsCredsCli, "rotate-ccs-admin", false, "Rotate osdCcsAdmin user credentials. Interactive. Use caution!")
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.describeKeysCli, "describe-keys", false, "Print AWS AccessKey info for osdManagedAdmin and osdCcsAdmin relevant cred rotation, and exit")
-	rotateAWSCredsCmd.Flags().BoolVar(&ops.describeSecretsCli, "describe-secrets", false, "Print AWS CredentialRequests ref'd secrets info relecant to cred rotation, and exit")
+	rotateAWSCredsCmd.Flags().BoolVar(&ops.describeSecretsCli, "describe-secrets", false, "Print AWS CredentialRequests ref'd secrets info relevant to cred rotation, and exit")
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.saveSecretOnError, "save-secret-on-err", false, "Enables saving secret's yaml to tmp file upon failure to update existing secrets on Hive.")
 	rotateAWSCredsCmd.Flags().StringVar(&ops.osdManagedAdminUsername, "admin-username", "", "The admin username to use for generating access keys. Must be in the format of `osdManagedAdmin*`. If not specified, this is inferred from the account CR.")
 	rotateAWSCredsCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Describe CMD valid formats are ['', 'json', 'yaml']")
 	rotateAWSCredsCmd.Flags().IntVarP(&ops.verboseLevel, "verbose", "v", 3, "debug=4, (default)info=3, warn=2, error=1")
-	// Reason is required for elevated bacplane-admin impersonated requests
+	// Reason is required for elevated backplane-admin impersonated requests
 	_ = rotateAWSCredsCmd.MarkFlagRequired("reason")
 	return rotateAWSCredsCmd
 }
@@ -116,7 +116,7 @@ type rotateCredOptions struct {
 	// CLI provided params
 	profile                 string // Local AWS profile used to run this script
 	reason                  string // Reason used to justify elevate/impersonate ops
-	updateCcsCredsCli       bool   // Bool flag to inidcate whether or not to update special AWS user 'osdCcsAdmin' creds.
+	updateCcsCredsCli       bool   // Bool flag to indicate whether or not to update special AWS user 'osdCcsAdmin' creds.
 	updateMgmtCredsCli      bool   // Bool flag to indicate whether or not to update AWS user 'osdManagedAdmin' creds.
 	osdManagedAdminUsername string // Name of AWS Managed Admin user. Legacy default values are used if not provided.
 	saveSecretOnError       bool   // Allow saving secret yaml to a tmp file in the case of an error
@@ -146,7 +146,7 @@ type rotateCredOptions struct {
 	clusterClientset  *kubernetes.Clientset // Cluster BP Kube ClientSet
 	ocmConn           *sdk.Connection       // ocm connection object
 	hiveCluster       *cmv1.Cluster         // Hive cluster/shard managing this user cluster
-	hiveKubeClient    client.Client         // Hive kube client conneciton
+	hiveKubeClient    client.Client         // Hive kube client connection
 	cdName            string                // Cluster Deployments name
 
 }
