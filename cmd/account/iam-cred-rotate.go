@@ -57,21 +57,18 @@ Choose 1 or more describe actions: --describe-keys, --describe-secrets
 # Rotate credentials for IAM user "OsdManagedAdmin" (or user provided by --admin-username)
 %s --rotate-managed-admin
 
-# Rotate credentials for special IAM user "OsdCcsAdmin", print secret access key contents to stdout. 
-%s --rotate-ccs-admin --output-keys --verbose 4
+# Rotate credentials for special IAM user "OsdCcsAdmin", verbose log level 4. 
+%s --rotate-ccs-admin --verbose 4
 
 # Rotate credentials for both users "OsdManagedAdmin" and then "OsdCcsAdmin"
-%s --rotate-managed-admin --rotate-ccs-admin --output-keys --verbose 4
+%s --rotate-managed-admin --rotate-ccs-admin
 
 # Describe credential-request secrets 
-%s --describe-secrets
+%s --describe-secrets -o yaml
 
 # Describe AWS Access keys in use by users "OsdManagedAdmin" and "OsdCcsAdmin"
-%s --describe-keys 
-
-Describe credential-request secrets and AWS Access keys in use by users "OsdManagedAdmin" and "OsdCcsAdmin"
-%s --describe-secrets --describe-keys --output json -v 4 | jq`,
-		cmdPrefix, cmdPrefix, cmdPrefix, cmdPrefix, cmdPrefix, cmdPrefix)
+%s --describe-keys -o json | jq`,
+		cmdPrefix, cmdPrefix, cmdPrefix, cmdPrefix, cmdPrefix)
 
 	ops := newRotateAWSOptions(streams)
 	rotateAWSCredsCmd := &cobra.Command{
@@ -87,9 +84,9 @@ are intended to provide info and status related to the artifacts to be rotated.
 
 These operations require the following:
 	- A valid cluster-id (not an alias)
-	- An elevation reason (hint: This will usually involve a Jira ticket ID.)  
+	- An elevation reason (hint: This will usually involve a Jira ID.)  
 	- A local AWS profile for the cluster environment (ie: osd-staging, rhcontrol, etc), if not provided 'default' is used. 
-	- A valid OCM token and OCM_CONFIG.  
+	- A valid OCM config and authenticated connection.  
 `,
 		Example:           examples,
 		DisableAutoGenTag: true,
@@ -105,7 +102,7 @@ These operations require the following:
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.updateCcsCredsCli, "rotate-ccs-admin", false, "Rotate osdCcsAdmin user credentials. Interactive. Use caution!")
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.describeKeysCli, "describe-keys", false, "Print AWS AccessKey info for osdManagedAdmin and osdCcsAdmin relevant cred rotation, and exit")
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.describeSecretsCli, "describe-secrets", false, "Print AWS CredentialRequests ref'd secrets info relecant to cred rotation, and exit")
-	rotateAWSCredsCmd.Flags().BoolVar(&ops.noSaveOnError, "no-save", false, "Disables saving new secret's yaml to tmp file upon failure to update existing secret.")
+	rotateAWSCredsCmd.Flags().BoolVar(&ops.saveSecretOnError, "save-secret-on-err", false, "Enables saving secret's yaml to tmp file upon failure to update existing secrets on Hive.")
 	rotateAWSCredsCmd.Flags().StringVar(&ops.osdManagedAdminUsername, "admin-username", "", "The admin username to use for generating access keys. Must be in the format of `osdManagedAdmin*`. If not specified, this is inferred from the account CR.")
 	rotateAWSCredsCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Describe CMD valid formats are ['', 'json', 'yaml']")
 	rotateAWSCredsCmd.Flags().IntVarP(&ops.verboseLevel, "verbose", "v", 3, "debug=4, (default)info=3, warn=2, error=1")
@@ -122,7 +119,7 @@ type rotateCredOptions struct {
 	updateCcsCredsCli       bool   // Bool flag to inidcate whether or not to update special AWS user 'osdCcsAdmin' creds.
 	updateMgmtCredsCli      bool   // Bool flag to indicate whether or not to update AWS user 'osdManagedAdmin' creds.
 	osdManagedAdminUsername string // Name of AWS Managed Admin user. Legacy default values are used if not provided.
-	noSaveOnError           bool   // Allow saving secret yaml to a tmp file in the case of an error
+	saveSecretOnError       bool   // Allow saving secret yaml to a tmp file in the case of an error
 	describeSecretsCli      bool   // Print Cred requests ref'd AWS secrets info and exit
 	describeKeysCli         bool   // Print Access Key info and exit
 	output                  string // Format used to printing describe cmd output (json, yaml, or "")
@@ -451,10 +448,12 @@ func getProviderSpecKind(cr credreqv1.CredentialsRequest) (string, error) {
 }
 
 type credReqSecrets struct {
-	Name              string `json:"Name"`
-	Namespace         string `json:"Namespace"`
-	Created           string `json:"Created"`
-	CredentialRequest string `json:"CredentialRequest"`
+	SecretName                 string                       `json:"SecretName"`
+	SecretNamespace            string                       `json:"SecretNamespace"`
+	SecretCreated              string                       `json:"SecretCreated"`
+	CredentialRequestName      string                       `json:"CredentialRequestName"`
+	CredentialRequestNamespace string                       `json:"CredentialRequestNamespace"`
+	CredentialRequestObj       credreqv1.CredentialsRequest `json:"CredentialRequestObj"`
 }
 
 // Print metadata for secrets referenced by AWS provider CredentialRequests resource(s)...
@@ -488,7 +487,8 @@ func (o *rotateCredOptions) printAWSCredRequestSecrets(awsCredReqs *[]credreqv1.
 		if o.output == standardFormat {
 			fmt.Fprintf(w, "(%d)\tNamespace:'%s'\tSecret:'%s'\tCreated:'%v'\n", ind, secret.Namespace, secret.Name, secret.CreationTimestamp)
 		} else {
-			secrets = append(secrets, &credReqSecrets{Name: secret.Name, Namespace: secret.Namespace, Created: secret.CreationTimestamp.String(), CredentialRequest: cr.Name})
+			secrets = append(secrets, &credReqSecrets{SecretName: secret.Name, SecretNamespace: secret.Namespace, SecretCreated: secret.CreationTimestamp.String(),
+				CredentialRequestName: cr.Name, CredentialRequestNamespace: cr.Namespace, CredentialRequestObj: cr})
 
 		}
 	}
@@ -556,9 +556,10 @@ inputLoop:
 		}
 		fmt.Fprintf(w, "\nSecret (%d/%d):\n", idx, len(awsCredReqs))
 		fmt.Fprintf(w, "\tCredentialRequest:\t'%s'\n", cr.Name)
-		fmt.Fprintf(w, "\tSecret:\t'%s'\n", secret.Name)
+		fmt.Fprintf(w, "\tCR Namespace:\t'%s'\n", cr.Namespace)
+		fmt.Fprintf(w, "\tSecret Name:\t'%s'\n", secret.Name)
 		fmt.Fprintf(w, "\tSecret Namespace:\t'%s'\n", secret.Namespace)
-		fmt.Fprintf(w, "\tCreate:\t'%v'\n", secret.CreationTimestamp)
+		fmt.Fprintf(w, "\tSecret Created:\t'%v'\n", secret.CreationTimestamp)
 		w.Flush()
 		// Prompt user to delete, unless they choose to skip prompts...
 		if rotateAllWithoutPrompts || func() bool {
@@ -1288,7 +1289,7 @@ func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 	err = common.UpdateSecret(o.hiveKubeClient, o.secretName, common.AWSAccountNamespace, newOsdManagedAdminSecretData)
 	if err != nil {
 		o.log.Warn(o.ctx, "Error updating '%s.%s' secret with new creds. Err:'%s\n", common.AWSAccountNamespace, o.secretName, err)
-		if !o.noSaveOnError {
+		if o.saveSecretOnError {
 			o.saveSecretYaml(common.AWSAccountNamespace, o.secretName, createAccessKeyOutput.AccessKey)
 		}
 		return err
@@ -1299,7 +1300,7 @@ func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 	err = common.UpdateSecret(o.hiveKubeClient, "aws", o.account.Spec.ClaimLinkNamespace, newOsdManagedAdminSecretData)
 	if err != nil {
 		o.log.Warn(o.ctx, "Error updating '%s.%s' secret with new creds. Err:'%s\n", o.account.Spec.ClaimLinkNamespace, "aws", err)
-		if !o.noSaveOnError {
+		if o.saveSecretOnError {
 			o.saveSecretYaml(o.account.Spec.ClaimLinkNamespace, "aws", createAccessKeyOutput.AccessKey)
 		}
 		return err
@@ -1560,7 +1561,7 @@ func (o *rotateCredOptions) doRotateCcsCreds() error {
 		err = common.UpdateSecret(o.hiveKubeClient, secretName, o.account.Spec.ClaimLinkNamespace, newOsdCcsAdminSecretData)
 		if err != nil {
 			o.log.Warn(o.ctx, "Error updating '%s.%s' secret with new creds. Err:'%s\n", o.account.Spec.ClaimLinkNamespace, secretName, err)
-			if !o.noSaveOnError {
+			if !o.saveSecretOnError {
 				o.saveSecretYaml(o.account.Spec.ClaimLinkNamespace, secretName, createAccessKeyOutputCCS.AccessKey)
 			}
 			return err
