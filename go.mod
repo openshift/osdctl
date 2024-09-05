@@ -40,7 +40,7 @@ require (
 	github.com/openshift/cloud-credential-operator v0.0.0-20240522005141-2f29d9103ce2
 	github.com/openshift/gcp-project-operator v0.0.0-20220920194256-df38e31387a7
 	github.com/openshift/hive/apis v0.0.0-20240216200617-8c54fc9cac45
-	github.com/openshift/osd-network-verifier v1.0.0-rc.1
+	github.com/openshift/osd-network-verifier v1.0.1
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/shopspring/decimal v1.3.1
 	github.com/sirupsen/logrus v1.9.3
