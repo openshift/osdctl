@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -18,6 +21,11 @@ import (
 	stsTypes "github.com/aws/aws-sdk-go-v2/service/sts/types"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	"github.com/openshift/backplane-cli/pkg/backplaneapi"
+	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
+	bpocmcli "github.com/openshift/backplane-cli/pkg/ocm"
+	"github.com/spf13/viper"
+	"k8s.io/client-go/rest"
 
 	"github.com/openshift-online/ocm-sdk-go/logging"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
@@ -38,10 +46,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+//import 	klogv2 "k8s.io/klog/v2" // k8s may dump backtrace when logger is not set.
 
 const cmdName string = "iam-secret-mgmt"
 
@@ -67,8 +76,24 @@ Choose 1 or more describe actions: --describe-keys, --describe-secrets
 %s --describe-secrets -o yaml
 
 # Describe AWS Access keys in use by users "OsdManagedAdmin" and "OsdCcsAdmin"
-%s --describe-keys -o json | jq`,
-		cmdPrefix, cmdPrefix, cmdPrefix, cmdPrefix, cmdPrefix)
+%s --describe-keys -o json | jq
+
+# Non 'production' environments: 
+# May require --ocm-config-hive to separate OCM config used
+# to create backplane connections with Hive which differs from the OCM config needed to
+# for the target cluster.
+# Example, Hive resides in 'prod' and will use a config "config.prod.json",  while target 
+cluster resides in 'staging' and will use the env var OCM_CONFIG to reference "config.staging.json":
+> export OCM_CONFIG="$HOME/.config/ocm/config.staging.json
+> %s $CLUSTER_ID --reason "$JIRA_TICKET" --aws-profile osd-staging-1 --ocm-config-hive ~/.config/ocm/config.prod.json 
+# Note: when using --ocm-config-hive the target cluter will use the default environment 
+# variables, and the hive connection will only reference config + tokens in the provided
+# config file. 
+
+
+# The --aws-profile will likely change to match the non-production env:
+# example profile names typically used: rhcontrol for prod, osd-staging-* for staging, etc..`,
+		cmdPrefix, cmdPrefix, cmdPrefix, cmdPrefix, cmdPrefix, cmdName)
 
 	ops := newRotateAWSOptions(streams)
 	rotateAWSCredsCmd := &cobra.Command{
@@ -90,8 +115,12 @@ These operations require the following:
 `,
 		Example:           examples,
 		DisableAutoGenTag: true,
-		Run: func(cmd *cobra.Command, args []string) {
+		Args:              cobra.MatchAll(cobra.ExactArgs(1)),
+		PreRun: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.preRunCliChecks(cmd, args))
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			cmdutil.CheckErr(ops.preRunSetup())
 			cmdutil.CheckErr(ops.run())
 		},
 	}
@@ -102,12 +131,18 @@ These operations require the following:
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.updateCcsCredsCli, "rotate-ccs-admin", false, "Rotate osdCcsAdmin user credentials. Interactive. Use caution!")
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.describeKeysCli, "describe-keys", false, "Print AWS AccessKey info for osdManagedAdmin and osdCcsAdmin relevant cred rotation, and exit")
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.describeSecretsCli, "describe-secrets", false, "Print AWS CredentialRequests ref'd secrets info relevant to cred rotation, and exit")
-	rotateAWSCredsCmd.Flags().BoolVar(&ops.saveSecretOnError, "save-secret-on-err", false, "Enables saving secret's yaml to tmp file upon failure to update existing secrets on Hive.")
 	rotateAWSCredsCmd.Flags().StringVar(&ops.osdManagedAdminUsername, "admin-username", "", "The admin username to use for generating access keys. Must be in the format of `osdManagedAdmin*`. If not specified, this is inferred from the account CR.")
 	rotateAWSCredsCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Describe CMD valid formats are ['', 'json', 'yaml']")
+	rotateAWSCredsCmd.Flags().StringVar(&ops.ocmConfigHivePath, "ocm-config-hive", "", "OCM config file path used to access Hive")
 	rotateAWSCredsCmd.Flags().IntVarP(&ops.verboseLevel, "verbose", "v", 3, "debug=4, (default)info=3, warn=2, error=1")
 	// Reason is required for elevated backplane-admin impersonated requests
 	_ = rotateAWSCredsCmd.MarkFlagRequired("reason")
+	rotateAWSCredsCmd.MarkFlagsOneRequired("describe-keys", "describe-secrets", "rotate-managed-admin", "rotate-ccs-admin")
+	// Dont allow mixing describe and rotate options...
+	rotateAWSCredsCmd.MarkFlagsMutuallyExclusive("describe-keys", "rotate-managed-admin")
+	rotateAWSCredsCmd.MarkFlagsMutuallyExclusive("describe-keys", "rotate-ccs-admin")
+	rotateAWSCredsCmd.MarkFlagsMutuallyExclusive("describe-secrets", "rotate-managed-admin")
+	rotateAWSCredsCmd.MarkFlagsMutuallyExclusive("describe-secrets", "rotate-ccs-admin")
 	return rotateAWSCredsCmd
 }
 
@@ -119,12 +154,12 @@ type rotateCredOptions struct {
 	updateCcsCredsCli       bool   // Bool flag to indicate whether or not to update special AWS user 'osdCcsAdmin' creds.
 	updateMgmtCredsCli      bool   // Bool flag to indicate whether or not to update AWS user 'osdManagedAdmin' creds.
 	osdManagedAdminUsername string // Name of AWS Managed Admin user. Legacy default values are used if not provided.
-	saveSecretOnError       bool   // Allow saving secret yaml to a tmp file in the case of an error
 	describeSecretsCli      bool   // Print Cred requests ref'd AWS secrets info and exit
 	describeKeysCli         bool   // Print Access Key info and exit
 	output                  string // Format used to printing describe cmd output (json, yaml, or "")
 	clusterID               string // Cluster id, user cluster used by account/creds
 	awsAccountTimeout       *int32 // Default timeout
+	ocmConfigHivePath       string // Optional OCM config path to use for Hive connections
 
 	//Runtime attrs
 	verboseLevel int             //Logging level
@@ -179,6 +214,12 @@ func (o *rotateCredOptions) preRunCliChecks(cmd *cobra.Command, args []string) e
 		return cmdutil.UsageErrorf(cmd, fmt.Sprintf("admin-username must start with %v", common.OSDManagedAdminIAM))
 	}
 
+	if len(o.ocmConfigHivePath) > 0 {
+		if _, err := os.Stat(o.ocmConfigHivePath); err != nil {
+			return fmt.Errorf("config file:'%s', error: %v", o.ocmConfigHivePath, err)
+		}
+	}
+
 	if o.profile == "" {
 		o.profile = "default"
 	}
@@ -196,13 +237,14 @@ func (o *rotateCredOptions) preRunCliChecks(cmd *cobra.Command, args []string) e
 		return fmt.Errorf("failed to build logger: %s", err)
 	}
 	o.log = logger
-
+	// This is also caught by the Cobra flags, but Cobra's error message is a bit cryptic so catching here first...
 	if !o.updateCcsCredsCli && !o.updateMgmtCredsCli && !o.describeKeysCli && !o.describeSecretsCli {
 		return cmdutil.UsageErrorf(cmd, "must provide one or more actions: ('--rotate-managed-admin' and/or '--rotate-ccs-admin'), or '--describe-secrets', or '--describe-keys'")
 	}
 	if (o.updateCcsCredsCli || o.updateMgmtCredsCli) && (o.describeKeysCli || o.describeSecretsCli) {
 		return cmdutil.UsageErrorf(cmd, "can not combine 'describe*' with 'rotate*' commands")
 	}
+
 	// At this time json/yaml output is only relevant to describe commands
 	if !(o.describeKeysCli || o.describeSecretsCli) {
 		o.output = standardFormat
@@ -222,17 +264,22 @@ func (o *rotateCredOptions) preRunCliChecks(cmd *cobra.Command, args []string) e
 		o.log.Error(o.ctx, "Failed to load AWS config:'%v'\n", err)
 		return err
 	}
-
+	// This attempts to set and mute the k8s logger to avoid
+	// random kubernetes backtraces + warnings about not setting it.
+	// This should only impact klog used by vendored kubernetes, and not the goLogger
+	// which is primarily used throughout this osdctl cmd.
+	//klogv2.SetOutput(io.Discard)
+	//controllerruntime.SetLogger(klogv2.Background())
 	return nil
 }
 
 /* Main function used to run this CLI utility */
 func (o *rotateCredOptions) run() error {
 	var err error = nil
-	err = o.preRunSetup()
+	/*err = o.preRunSetup()
 	if err != nil {
 		return err
-	}
+	}*/
 	// defer the command cleanup...
 	defer o.postRunCleanup()
 
@@ -598,7 +645,8 @@ func (o *rotateCredOptions) preRunSetup() error {
 	// Fetch the cluster info, this will return an error if more than 1 cluster is matched
 	cluster, err := utils.GetClusterAnyStatus(o.ocmConn, o.clusterID)
 	if err != nil {
-		return fmt.Errorf("failed to fetch cluster:'%s' from OCM: %w", o.clusterID, err)
+		o.log.Error(o.ctx, "Failed to fetch cluster:'%s' from OCM using:'%s'", o.clusterID, o.ocmConn.URL())
+		return fmt.Errorf("failed to fetch cluster:'%s' from OCM. err: %w", o.clusterID, err)
 	}
 	// Store the cluster obj...
 	o.cluster = cluster
@@ -632,6 +680,14 @@ func (o *rotateCredOptions) postRunCleanup() error {
 func (o *rotateCredOptions) fetchAwsClaimNameInfo() error {
 	var err error = nil
 	var claimName string = ""
+	if o.hiveKubeClient == nil {
+		o.log.Error(o.ctx, "fetchAwsClaimNameInfo called with nil hive client")
+		return fmt.Errorf("fetchAwsClaimNameInfo called with nil hive client")
+	}
+	if len(o.clusterID) <= 0 {
+		o.log.Error(o.ctx, "fetchAwsClaimNameInfo called with empty clusterID")
+		return fmt.Errorf("fetchAwsClaimNameInfo called with empty clusterID")
+	}
 	accountClaim, err := k8s.GetAccountClaimFromClusterID(o.ctx, o.hiveKubeClient, o.clusterID)
 
 	if err != nil {
@@ -687,6 +743,7 @@ func (o *rotateCredOptions) getResourcesClaimName() (string, error) {
 	return "", fmt.Errorf("failed to parse aws_account_claim from api 'clusterMgmt/v1/clusters/%s/resources/live/'", o.clusterID)
 }
 
+// Connect Backplane client to target cluster...
 func (o *rotateCredOptions) connectClusterClient() error {
 	o.log.Info(o.ctx, "Connect BP client cluster:'%s'\n", o.clusterID)
 	if len(o.reason) <= 0 {
@@ -699,10 +756,13 @@ func (o *rotateCredOptions) connectClusterClient() error {
 
 	// If some elevationReasons are provided, then the config will be elevated with user backplane-cluster-admin...
 	// Fetch the backplane kubeconfig, ignore the returned kubecli for now...
-	_, kubeConfig, kubClientSet, err := common.GetKubeConfigAndClient(o.clusterID, elevationReasons...)
+	tmpClient, kubeConfig, kubClientSet, err := common.GetKubeConfigAndClient(o.clusterID, elevationReasons...)
 	if err != nil {
 		o.log.Warn(o.ctx, "Err creating cluster:'%s' client, GetKubeConfigAndClient() err:'%+v'\n", o.clusterID, err)
 		return err
+	}
+	if tmpClient != nil {
+		tmpClient = nil
 	}
 	o.clusterClientset = kubClientSet
 	// Create new kube client with the CredentialsRequest schema using the backplane config from above...
@@ -723,45 +783,424 @@ func (o *rotateCredOptions) connectClusterClient() error {
 
 /* fetch and connect to hive cluster for the provided user cluster */
 func (o *rotateCredOptions) connectHiveClient() error {
-	// This requires a valid ocm login token on 'prod'.
-	// TODO: Can this differ from the login token needed earlier if the cluster
-	// lives in another env (ie integration or staging) (?) If so this needs to allow a 2 step process with
-	// multiple ocm login tokens(?), 1 for each env.
-	// Logging into Hive Shard here (equiv of 'ocm backplane login $HIVESHARD')
-	// Is specifially creating the hive connection here a better/worse option than connecting via 'ocm backplane'
-	// externally, and using the LazyClient (ie o.kubeCli) instead?
-	// When using the lazyClient, before running this osdctl command, the following was needed:
-	//  # HIVESHARD=$(ocm get /api/clusters_mgmt/v1/clusters/$INTERNAL_ID/provision_shard | jq -r '.hive_config.server' | sed 's/.*api\.//;s/\..*//')
-	//  (ie HIVESHARD="hives02ue1")
-	//  # ocm backplane login $HIVESHARD
-	//  # osdctl account $cred_rotate_cmd $options....
-	//
-	o.log.Info(o.ctx, "Connect hive client for cluster:'%s'\n", o.clusterID)
+	// This requires a valid ocm login token on 'prod' as at the moment hive only resides in prod.
+	// Creates backplane client for hive and stores the resulting client in o.hiveKubeClient
+
+	o.log.Debug(o.ctx, "Connect hive client for cluster:'%s'\n", o.clusterID)
 	if len(o.reason) <= 0 {
+		//This client requires a reason in order to impersonate backplane-cluster-admin...
 		return fmt.Errorf("accessing AWS credentials requires a reason for elevated command")
 	}
-	hiveCluster, err := utils.GetHiveCluster(o.clusterID)
-	if err != nil {
-		o.log.Warn(o.ctx, "error fetching hive for cluster:'%s'.\n", err)
-		return err
-	}
-	o.hiveCluster = hiveCluster
-	if o.hiveCluster == nil || o.hiveCluster.ID() == "" {
-		return fmt.Errorf("failed to fetch hive cluster ID")
-	}
-	o.log.Info(o.ctx, "Using Hive Cluster: '%s'\n", hiveCluster.ID())
 	// This action requires elevation
 	elevationReasons := []string{}
 	elevationReasons = append(elevationReasons, o.reason)
 	elevationReasons = append(elevationReasons, fmt.Sprintf("Elevation required to rotate secrets '%s' aws-account-cr-name", o.claimName))
-	// If some elevationReasons are provided, then the config will be elevated with user backplane-cluster-admin...
-	hiveKubeCli, _, _, err := common.GetKubeConfigAndClient(o.hiveCluster.ID(), elevationReasons...)
-	if err != nil {
-		o.log.Warn(o.ctx, "Err fetching hive cluster client, GetKubeConfigAndClient() err:'%+v'\n", err)
-		return err
+	if len(o.ocmConfigHivePath) <= 0 {
+		// Build hive client connection config from discovered env vars...
+		hiveCluster, err := utils.GetHiveCluster(o.clusterID)
+		if err != nil {
+			o.log.Warn(o.ctx, "error fetching hive for cluster:'%s'.\n", err)
+			return err
+		}
+		o.hiveCluster = hiveCluster
+		if o.hiveCluster == nil || o.hiveCluster.ID() == "" {
+			return fmt.Errorf("failed to fetch hive cluster ID")
+		}
+		o.log.Info(o.ctx, "Using Hive Cluster: '%s'\n", hiveCluster.ID())
+		// If some elevationReasons are provided, then the config will be elevated with user backplane-cluster-admin...
+		o.log.Info(o.ctx, "Creating hive backplane client using OCM environment variables")
+		hiveKubeCli, _, _, err := common.GetKubeConfigAndClient(o.hiveCluster.ID(), elevationReasons...)
+		if err != nil {
+			o.log.Warn(o.ctx, "Err fetching hive cluster client, GetKubeConfigAndClient() err:'%+v'\n", err)
+			return err
+		}
+		o.hiveKubeClient = hiveKubeCli
+		return nil
+	} else {
+		//TODO: - Should this be simplified to just overwrite the URL?
+		//      - What else could be unique between OCM envs now or in the future?
+		//
+		// This portion builds a hive client using CLI provided OCM config path `--ocm-config-hive`
+		// This is intended to allow use with clusters running outside of the same 'production' env hive runs in.
+		// At the time of writing this, Hive can exist in 'prod' while the target cluster can reside in staging,
+		// integration, or other environments. This seems to require different sets of OCM config per environment.
+		// This differs from typical(?) usage where OCM settings, and config paths are set + shared using environment vars,
+		// expecting a single OCM environment.
+		// The following attempts to use 'only' config found within the provided --ocm-config-hive file
+		// path for the hive connection. The target cluster is expected to continue to use whatever is set in the
+		// OCM environment variables.
+		// A lot borrowed from backplane-cli here and repurposed to support an ocm config not sourced from the os's env.
+		// If/when there are upstream exported functions allowing config objects to be passed between them, much of this
+		// should go away.
+
+		o.log.Info(o.ctx, "Using ocm config for hive connection:'%s'", o.ocmConfigHivePath)
+
+		// First fetch and read in the backplane config file content for the potential proxy-url list, and
+		// then check each backplane proxy against the OCM url from the 'cli provided config' (not env) to find a working proxy.
+		//
+		// Note: backplane-cli.GetBackplaneConfiguration() fetches the OCM provided backplane URL using environment vars,
+		// and then validates the list of proxies against this OCM URL, returning a single 'working' proxy or none.
+		// This excludes the other proxy URIs from the original slice, which we may need to validate against our user provided config.
+		// It's likely the same proxy is valid for the URL the user has provided here too, and this is overkill, but the intent of
+		// the following is to allow this util to validate the provided proxy urls against the specific 'hive'
+		// config and url provided by the user instead.
+
+		bpFilePath, err := bpconfig.GetConfigFilePath()
+		if err != nil {
+			return err
+		}
+		_, err = os.Stat(bpFilePath)
+		if err != nil {
+			o.log.Error(o.ctx, "Failed to stat ocm config:'%s', err:", o.ocmConfigHivePath, err)
+			return fmt.Errorf("failed to stat ocm config:'%s', err:'%v'", o.ocmConfigHivePath, err)
+		}
+		viper.AutomaticEnv()
+		viper.SetConfigFile(bpFilePath)
+		viper.SetConfigType("json")
+		if err := viper.ReadInConfig(); err != nil {
+			o.log.Error(o.ctx, "Hive OCM config err:'%v", err)
+			return err
+		}
+		if viper.GetStringSlice("proxy-url") == nil && os.Getenv("HTTPS_PROXY") == "" {
+			return fmt.Errorf("proxy-url must be set explicitly in either config file or via the environment HTTPS_PROXY")
+		}
+		proxyURLs := viper.GetStringSlice("proxy-url")
+
+		// Now get the backplane url and access token from OCM...
+		ocmConfig, err := readOcmConfigFile(o.ocmConfigHivePath)
+		if err != nil {
+			o.log.Error(o.ctx, "OCM config error:'%v'", err)
+			return err
+		}
+		o.log.Debug(o.ctx, "Read ocm config: url:'%s', client:'%s'", ocmConfig.URL, ocmConfig.ClientID)
+		// Can use the sdk.connection builder or alternatively omc cli's connection builder wrappers here.
+		// Each returns an ocm-sdk connection builder.
+		ocmSdkConnBuilder := sdk.NewConnectionBuilder()
+		ocmSdkConnBuilder.URL(ocmConfig.URL)
+		ocmSdkConnBuilder.Tokens(ocmConfig.AccessToken, ocmConfig.RefreshToken)
+		ocmSdkConnBuilder.Client(ocmConfig.ClientID, ocmConfig.ClientSecret)
+		ocmSdkConn, err := ocmSdkConnBuilder.Build()
+
+		if err != nil {
+			o.log.Error(o.ctx, "OCM connection error. Config:'%s', err:'%v'", o.ocmConfigHivePath, err)
+			return err
+		}
+		defer ocmSdkConn.Close()
+		o.log.Debug(o.ctx, "USing ocm sdk connection, url:'%s' \n", ocmSdkConn.URL())
+		hiveShard, err := o.getHiveShardCluster(ocmSdkConn, o.clusterID)
+		if err != nil {
+			// For debug purposes see if we can get the shard API url...
+			// This might help indicate an ocm env mismatch to the end user(?).
+			hiveShard, debugErr := utils.GetHiveShard(o.clusterID)
+			if debugErr != nil {
+				o.log.Warn(o.ctx, "error fetching hive shard from utils.GetHiveShard():'%s'.\n", err)
+			} else {
+				o.log.Info(o.ctx, "Hive shard API url:'%s'\n", hiveShard)
+			}
+			// Return the original error failing to fetch the hive cluster...
+			o.log.Error(o.ctx, "Failed to get hive cluster using OCM config:'%s', err:'%v'", o.ocmConfigHivePath, err)
+			return err
+		}
+
+		if hiveShard == nil {
+			return fmt.Errorf("failed to fetch hive cluster ID")
+		}
+		o.hiveCluster = hiveShard
+		o.log.Info(o.ctx, "Using Hive Cluster: '%s'\n", o.hiveCluster.ID())
+
+		// Get the backplane URL from the OCM env request/response...
+		responseEnv, err := ocmSdkConn.ClustersMgmt().V1().Environment().Get().Send()
+		if err != nil {
+			// Check if the error indicates a forbidden status
+			var isForbidden bool
+			if responseEnv != nil {
+				isForbidden = responseEnv.Status() == http.StatusForbidden || (responseEnv.Error() != nil && responseEnv.Error().Status() == http.StatusForbidden)
+			}
+
+			// Construct error message based on whether the error is related to permissions
+			var errorMessage string
+			if isForbidden {
+				errorMessage = "user does not have enough permissions to fetch the OCM environment resource. Please ensure you have the necessary permissions or try exporting the BACKPLANE_URL environment variable."
+			} else {
+				errorMessage = "failed to fetch OCM cluster environment resource"
+			}
+			o.log.Error(o.ctx, "Failed Hive connection: %s: %w", errorMessage, err)
+			return fmt.Errorf("%s: %w", errorMessage, err)
+		}
+
+		ocmEnvResponse := responseEnv.Body()
+		bpUrl, ok := ocmEnvResponse.GetBackplaneURL()
+
+		// Now that we have the backplane URL from OCM, use it find the first working Proxy URL...
+		proxyURL := getFirstWorkingProxyURL(bpUrl, proxyURLs, o.log, o.ctx)
+		if !ok {
+			return fmt.Errorf("failed to find a working backplane proxy url for the OCM environment: %v", ocmEnvResponse.Name())
+		}
+		// Get the OCM access token...
+		accessToken, err := bpocmcli.DefaultOCMInterface.GetOCMAccessTokenWithConn(ocmSdkConn)
+		if err != nil {
+			o.log.Error(o.ctx, "error fetching OCM access token:'%v'", err)
+			return err
+		}
+
+		// Attempt to login and get the backplane API URL for this Hive Cluster...
+		bpAPIClusterURL, err := doLogin(bpUrl, o.hiveCluster.ID(), *accessToken, proxyURL)
+		if err != nil {
+			o.log.Info(o.ctx, "Using backplane URL:'%s', proxy:'%s'", bpUrl, proxyURL)
+			o.log.Error(o.ctx, "Failed BP hive login: URL:'%s', Proxy:'%s'. Check VPN, accessToken, etc...?", bpUrl, proxyURL)
+			return fmt.Errorf("failed to backplane login to hive: '%s': '%v'", o.hiveCluster.ID(), err)
+		}
+		o.log.Debug(o.ctx, "Using backplane CLUSTER API URL: '%s'", bpAPIClusterURL)
+		// Build the KubeConfig to be used to build our Kubernetes client...
+		kubeconfig := rest.Config{
+			Host:        bpAPIClusterURL,
+			BearerToken: *accessToken,
+			Impersonate: rest.ImpersonationConfig{
+				UserName: "backplane-cluster-admin",
+			},
+		}
+		// Add the provided elevation reasons for impersonating request as user 'backplane-cluster-admin'
+		kubeconfig.Impersonate.Extra = map[string][]string{"reason": elevationReasons}
+
+		// If a working proxyURL was found earlier, set the kube config proxy func...
+		if len(proxyURL) > 0 {
+			kubeconfig.Proxy = func(*http.Request) (*url.URL, error) {
+				return url.Parse(proxyURL)
+			}
+		}
+
+		// Finally create the kubeclient for the hive cluster connection...
+		kubeCli, err := client.New(&kubeconfig, client.Options{})
+		if err != nil {
+			o.log.Error(o.ctx, "Error creating Hive client:'%v'", err)
+			return err
+		}
+		if kubeCli == nil {
+			return fmt.Errorf("client.new() returned nil. Failed to setup Hive client")
+		}
+		o.log.Debug(o.ctx, "Success creating Hive kube client using ocm config:'%s'", o.ocmConfigHivePath)
+		o.hiveKubeClient = kubeCli
+		return nil
 	}
-	o.hiveKubeClient = hiveKubeCli
-	return nil
+}
+
+func (o *rotateCredOptions) getHiveShardCluster(sdkConn *sdk.Connection, clusterID string) (*cmv1.Cluster, error) {
+	connection, err := utils.CreateConnection()
+	if err != nil {
+		o.log.Error(o.ctx, "Failed to create defaults ocm sdk connection, err:'%s'", err)
+		return nil, err
+	}
+	defer connection.Close()
+
+	shardPath, err := connection.ClustersMgmt().V1().Clusters().
+		Cluster(clusterID).
+		ProvisionShard().
+		Get().
+		Send()
+	if err != nil {
+		o.log.Error(o.ctx, "Failed to get provisionShard, err:'%s'", err)
+		return nil, err
+	}
+	if shardPath == nil {
+		o.log.Error(o.ctx, "Failed to get provisionShard, returned nil")
+		return nil, fmt.Errorf("failed to get provisionShard, returned nil")
+	}
+
+	id, ok := shardPath.Body().GetID()
+	if ok {
+		o.log.Debug(o.ctx, "Got provision shard ID:'%s'", id)
+	}
+
+	shard := shardPath.Body().HiveConfig().Server()
+	o.log.Debug(o.ctx, "Got provision shard:'%s'", shard)
+
+	hiveApiUrl, ok := shardPath.Body().HiveConfig().GetServer()
+	if !ok {
+		return nil, fmt.Errorf("no provision shard url found for %s", clusterID)
+	}
+	o.log.Debug(o.ctx, "Got hiveApiUrl:'%s'", hiveApiUrl)
+
+	// Use passed sdk connection to fetch hive cluster in case this is conneciton is created with a cli provided config...
+	resp, err := sdkConn.ClustersMgmt().V1().Clusters().List().
+		Parameter("search", fmt.Sprintf("api.url='%s'", hiveApiUrl)).
+		Send()
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Items().Empty() {
+		return nil, fmt.Errorf("failed to find cluster with api.url=%s", hiveApiUrl)
+	}
+
+	return resp.Items().Get(0), nil
+}
+
+// doLogin returns the proxy url for the target cluster.
+// borrowed from backplane-cli/ocm-backplane/login and repurposed here to
+// support providing token and proxy instead of pulling these from the env vars in the chain of vendored functions.
+func doLogin(api, clusterID, accessToken string, proxyURL string) (string, error) {
+	// This ends up using 'ocm.DefaultOCMInterface.GetOCMEnvironment()' to get the backplane url from OCM
+	//client, err := backplaneapi.DefaultClientUtils.MakeRawBackplaneAPIClientWithAccessToken(api, accessToken)
+	var proxyArg *string
+	if len(proxyURL) > 0 {
+		proxyArg = &proxyURL
+	}
+	client, err := backplaneapi.DefaultClientUtils.GetBackplaneClient(api, accessToken, proxyArg)
+	if err != nil {
+		return "", fmt.Errorf("unable to create backplane api client")
+	}
+
+	resp, err := client.LoginCluster(context.TODO(), clusterID)
+	// Print the whole response if we can't parse it. Eg. 5xx error from http server.
+	if err != nil {
+		// trying to determine the error
+		errBody := err.Error()
+		if strings.Contains(errBody, "dial tcp") && strings.Contains(errBody, "i/o timeout") {
+			return "", fmt.Errorf("unable to connect to backplane api")
+		}
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		strErr, err := tryParseBackplaneAPIErrorMsg(resp)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse response error. Parse err:'%v'", err)
+		}
+		return "", fmt.Errorf("loginCluster() response error:'%s'", strErr)
+	}
+	//respProxyUri, err := bpclient.ParseLoginClusterResponse(resp)
+	respProxyUri, err := getClusterResponseProxyUri(resp)
+	if err != nil {
+		return "", fmt.Errorf("unable to parse response body from backplane: \n Status Code: %d", resp.StatusCode)
+	}
+
+	//return api + *loginResp.JSON200.ProxyUri, nil
+	return api + respProxyUri, nil
+}
+
+// Borrowed from backplaneApi Error
+// Error defines model for Error.
+type bpError struct {
+	// Message Error Message
+	Message *string `json:"message,omitempty"`
+
+	// StatusCode HTTP status code
+	StatusCode *int `json:"statusCode,omitempty"`
+}
+
+func tryParseBackplaneAPIErrorMsg(rsp *http.Response) (string, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return "", err
+	}
+	var dest bpError
+	if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+		return "", err
+	}
+	if dest.Message != nil && dest.StatusCode != nil {
+		return fmt.Sprintf("error from backplane: \n Status Code: %d\n Message: %s", *dest.StatusCode, *dest.Message), nil
+	} else {
+		return fmt.Sprintf("error from backplane: \n Status Code: %d\n Message: %s", rsp.StatusCode, rsp.Status), nil
+	}
+
+}
+
+// Borrowed from backplaneApi LoginResponse
+// LoginResponse Login status response
+type loginResponse struct {
+	// Message message
+	Message *string `json:"message,omitempty"`
+
+	// ProxyUri KubeAPI proxy URI
+	ProxyUri *string `json:"proxy_uri,omitempty"`
+
+	// StatusCode status code
+	StatusCode *int `json:"statusCode,omitempty"`
+}
+
+// Intended to parse ProxyUri from login response avoiding
+// avoids vendoring 'github.com/openshift/backplane-api/pkg/client'
+func getClusterResponseProxyUri(rsp *http.Response) (string, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return "", err
+	}
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest loginResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return "", err
+		}
+		return *dest.ProxyUri, nil
+
+	}
+	// Calling function should check status code , but log here just in case.
+	if rsp.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "Did not parse ProxyUri from cluster login response. resp code:'%d'", rsp.StatusCode)
+	}
+	return "", nil
+}
+
+// Borrowed from backplane-cli/config, repurposed here to allow the backplane url to be provided as an arg instead of
+// discovering the url from the OCM environment vars at the time executed.
+// Test proxy urls, return first proxy-url that results in a successful request to the <backplaneBaseUrl>/healthz endpoint
+func getFirstWorkingProxyURL(bpBaseURL string, proxyURLs []string, logger logging.Logger, ctx context.Context) string {
+	bpHealthzURL := bpBaseURL + "/healthz"
+
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	for _, testProxy := range proxyURLs {
+		proxyURL, err := url.ParseRequestURI(testProxy)
+		if err != nil {
+			// Warn user against proxy aliases such as 'prod', 'stage', etc. in config
+			// so they can resolve to proper URLs (ie https://...openshift.com)
+			logger.Warn(ctx, "proxy-url: '%v' could not be parsed as URI. Proxy Aliases not yet supported", testProxy)
+			continue
+		}
+
+		client.Transport = &http.Transport{Proxy: http.ProxyURL(proxyURL)}
+		req, _ := http.NewRequest("GET", bpHealthzURL, nil)
+		resp, err := client.Do(req)
+		if err != nil {
+			logger.Info(ctx, "Proxy: %s returned an error: %s", proxyURL, err)
+			continue
+		}
+		if resp.StatusCode == http.StatusOK {
+			return testProxy
+		}
+		logger.Info(ctx, "proxy: %s did not pass healthcheck, expected response code 200, got %d, discarding", testProxy, resp.StatusCode)
+	}
+	logger.Info(ctx, "Failed to find a working proxy-url for backplane request path:'%s'", bpHealthzURL)
+	if len(proxyURLs) > 0 {
+		logger.Info(ctx, "falling back to first proxy-url after all proxies failed health checks: %s", proxyURLs[0])
+		return proxyURLs[0]
+	}
+	return ""
+}
+
+// utils has a local 'copy' of the config struct
+// rather than vendor from "github.com/openshift-online/ocm-cli/pkg/config"
+func readOcmConfigFile(file string) (*utils.Config, error) {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		err = fmt.Errorf("can't read config file '%s': %v", file, err)
+		return nil, err
+	}
+
+	if len(data) == 0 {
+		return nil, fmt.Errorf("empty config file:'%s'", file)
+	}
+	cfg := &utils.Config{}
+	err = json.Unmarshal(data, cfg)
+	if err != nil {
+		err = fmt.Errorf("can't parse config file '%s': %v", file, err)
+		return nil, err
+	}
+	return cfg, nil
 }
 
 func (o *rotateCredOptions) fetchAWSAccountInfo() error {
@@ -820,7 +1259,7 @@ func (o *rotateCredOptions) setupAwsClient() error {
 	var err error
 
 	if len(o.accountIDSuffixLabel) <= 0 {
-		return fmt.Errorf("doAwsCredRoteate() empty required accountIDSuffixLabel")
+		return fmt.Errorf("doAwsCredRotate() empty required accountIDSuffixLabel")
 	}
 	o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
 	o.log.Debug(o.ctx, " AWS setup access, local config:'%s'\n", o.profile)
@@ -1162,54 +1601,6 @@ func (o *rotateCredOptions) cliPrintOsdManagedAdminCreds() error {
 	return nil
 }
 
-// Intended to save the new secret data in yaml format so a user can review and/or apply it from the CLI
-// This should only be called upon error to write/update the new secret with the new aws creds.
-func (o *rotateCredOptions) saveSecretYaml(secretNamespace string, secretName string, accessKey *iamTypes.AccessKey) (string, error) {
-	o.log.Warn(o.ctx, "Attempting to save secret yaml to file, ns:'%s', name:'%s'\n", secretNamespace, secretName)
-	if accessKey == nil {
-		err := fmt.Errorf("null AccessKey obj provided to saveSecretYaml")
-		o.log.Warn(o.ctx, "%v", err)
-		return "", err
-	}
-	secret := &corev1.Secret{}
-	err := o.hiveKubeClient.Get(context.TODO(), types.NamespacedName{Name: secretName, Namespace: secretNamespace}, secret)
-	if err != nil {
-		o.log.Warn(o.ctx, "Failed to fetch existing secret: NS:'%s', NAME:'%s'. Err:'%s'", secretNamespace, secretName, err)
-		return "", err
-	}
-	newData := map[string][]byte{
-		"aws_user_name":         []byte(*accessKey.UserName),
-		"aws_access_key_id":     []byte(*accessKey.AccessKeyId),
-		"aws_secret_access_key": []byte(*accessKey.SecretAccessKey),
-	}
-	secret.Data = newData
-	s := k8json.NewYAMLSerializer(k8json.DefaultMetaFactory, scheme.Scheme, scheme.Scheme)
-	if s == nil {
-		err := fmt.Errorf("err saving secret to yaml. Failed to create k8 serializer")
-		o.log.Warn(o.ctx, "%v", err)
-		return "", err
-	}
-	saveFile, err := os.CreateTemp(os.TempDir(), string(*accessKey.UserName))
-	if err != nil {
-		o.log.Warn(o.ctx, "Error creating tmp file to save '%s' secret", *accessKey.UserName)
-		return "", err
-	}
-	if saveFile == nil {
-		err := fmt.Errorf("got nil tmp file attempting to save '%s' secret", *accessKey.UserName)
-		o.log.Warn(o.ctx, "%v", err)
-		return "", err
-	}
-	defer saveFile.Close()
-	//Write to tmp file, return path
-	err = s.Encode(secret, saveFile)
-	if err != nil {
-		o.log.Warn(o.ctx, "Error saving '%s' secret. Err:'%v'", *accessKey.UserName, err)
-		return "", err
-	}
-	fmt.Printf("!! Saved key yaml to: '%s'. Please review, and apply manually if needed. Delete this file after use!\n", saveFile.Name())
-	return saveFile.Name(), nil
-}
-
 // Intended to save a failed syncSet in yaml format so a user can review and/or apply it from the CLI
 func (o *rotateCredOptions) saveSyncSetYaml(syncSet *hiveapiv1.SyncSet) error {
 	o.log.Warn(o.ctx, "Attempting to save syncSet yaml to file, ns:'%s', name:'%s'\n", syncSet.Namespace, syncSet.Name)
@@ -1273,7 +1664,7 @@ func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 		return err
 	}
 
-	fmt.Printf("New creds:\nuser:'%s'\nAccessKey:'%s'\n", *createAccessKeyOutput.AccessKey.UserName, *createAccessKeyOutput.AccessKey.AccessKeyId)
+	fmt.Printf("New key created:\nuser:'%s'\nAccessKey:'%s'\n", *createAccessKeyOutput.AccessKey.UserName, *createAccessKeyOutput.AccessKey.AccessKeyId)
 	// Place new credentials into body for secret
 	newOsdManagedAdminSecretData := map[string][]byte{
 		"aws_user_name":         []byte(*createAccessKeyOutput.AccessKey.UserName),
@@ -1281,17 +1672,12 @@ func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 		"aws_secret_access_key": []byte(*createAccessKeyOutput.AccessKey.SecretAccessKey),
 	}
 
-	fmt.Printf("Got aws access key output:  UserName:'%s', keyid:'%s'\n", *createAccessKeyOutput.AccessKey.UserName, *createAccessKeyOutput.AccessKey.AccessKeyId)
-
 	// Update existing osdManagedAdmin secret
 	// UpdateSecret() includes a check for existing secret
 	o.log.Info(o.ctx, "Updating osdManagedAdmin secret:'%s.%s' with new AWS cred values...\n", common.AWSAccountNamespace, o.secretName)
 	err = common.UpdateSecret(o.hiveKubeClient, o.secretName, common.AWSAccountNamespace, newOsdManagedAdminSecretData)
 	if err != nil {
 		o.log.Warn(o.ctx, "Error updating '%s.%s' secret with new creds. Err:'%s\n", common.AWSAccountNamespace, o.secretName, err)
-		if o.saveSecretOnError {
-			o.saveSecretYaml(common.AWSAccountNamespace, o.secretName, createAccessKeyOutput.AccessKey)
-		}
 		return err
 	}
 
@@ -1300,9 +1686,6 @@ func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 	err = common.UpdateSecret(o.hiveKubeClient, "aws", o.account.Spec.ClaimLinkNamespace, newOsdManagedAdminSecretData)
 	if err != nil {
 		o.log.Warn(o.ctx, "Error updating '%s.%s' secret with new creds. Err:'%s\n", o.account.Spec.ClaimLinkNamespace, "aws", err)
-		if o.saveSecretOnError {
-			o.saveSecretYaml(o.account.Spec.ClaimLinkNamespace, "aws", createAccessKeyOutput.AccessKey)
-		}
 		return err
 	}
 
@@ -1561,14 +1944,11 @@ func (o *rotateCredOptions) doRotateCcsCreds() error {
 		err = common.UpdateSecret(o.hiveKubeClient, secretName, o.account.Spec.ClaimLinkNamespace, newOsdCcsAdminSecretData)
 		if err != nil {
 			o.log.Warn(o.ctx, "Error updating '%s.%s' secret with new creds. Err:'%s\n", o.account.Spec.ClaimLinkNamespace, secretName, err)
-			if !o.saveSecretOnError {
-				o.saveSecretYaml(o.account.Spec.ClaimLinkNamespace, secretName, createAccessKeyOutputCCS.AccessKey)
-			}
 			return err
 		}
 		o.log.Debug(o.ctx, "Successfully updated secrets for '%s'\n", userName)
 	} else {
-		// Thi is a secondary check, and should have also been performed early on.
+		// This is a secondary check, and should have also been performed early on.
 		// before any intrusive ops are attempted to avoid confusing the end user as
 		// to what ops will-be/have-been completed
 		o.log.Warn(o.ctx, "account:'%s' is not BYOC/CCS, skipping osdCcsAdmin credential rotation", o.accountID)
