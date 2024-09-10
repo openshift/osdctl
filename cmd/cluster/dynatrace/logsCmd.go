@@ -56,8 +56,8 @@ func NewCmdLogs() *cobra.Command {
 	return logsCmd
 }
 
-func getLinkToWebConsole(dtURL string, since int, base64Url string) string {
-	return fmt.Sprintf("\nLink to Web Console - \n%sui/apps/dynatrace.classic.logs.events/ui/logs-events?gtf=-%dh&gf=all&sortDirection=desc&advancedQueryMode=true&isDefaultQuery=false&visualizationType=table#%s\n\n", dtURL, since, base64Url)
+func GetLinkToWebConsole(dtURL string, since int, base64Url string) string {
+	return fmt.Sprintf("%sui/apps/dynatrace.classic.logs.events/ui/logs-events?gtf=-%dh&gf=all&sortDirection=desc&advancedQueryMode=true&isDefaultQuery=false&visualizationType=table#%s\n\n", dtURL, since, base64Url)
 }
 
 func main(clusterID string) error {
@@ -70,13 +70,13 @@ func main(clusterID string) error {
 		return fmt.Errorf("failed to acquire cluster details %v", err)
 	}
 
-	query, err := getQuery(hcpCluster)
+	query, err := GetQuery(hcpCluster)
 	if err != nil {
 		return fmt.Errorf("failed to build query for Dynatrace %v", err)
 	}
 
 	fmt.Println(query.Build())
-	fmt.Println(getLinkToWebConsole(hcpCluster.DynatraceURL, since, base64.StdEncoding.EncodeToString([]byte(query.finalQuery))))
+	fmt.Println("\nLink to Web Console - \n", GetLinkToWebConsole(hcpCluster.DynatraceURL, since, base64.StdEncoding.EncodeToString([]byte(query.finalQuery))))
 
 	if dryRun {
 		return nil
@@ -99,7 +99,7 @@ func main(clusterID string) error {
 	return nil
 }
 
-func getQuery(hcpCluster HCPCluster) (query DTQuery, error error) {
+func GetQuery(hcpCluster HCPCluster) (query DTQuery, error error) {
 	q := DTQuery{}
 	q.InitLogs(since).Cluster(hcpCluster.managementClusterName)
 

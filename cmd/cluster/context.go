@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -72,8 +73,9 @@ type contextData struct {
 	// Current OCM environment (e.g., "production" or "stage")
 	OCMEnv string
 
-	// Dynatrace Environment URL
-	DyntraceEnvURL string
+	// Dynatrace Environment URL and Logs URL
+	DyntraceEnvURL  string
+	DyntraceLogsURL string
 
 	// limited Support Status
 	LimitedSupportReasons []*cmv1.LimitedSupportReason
@@ -239,7 +241,7 @@ func (o *contextOptions) printLongOutput(data *contextData) {
 	fmt.Println()
 
 	// Print Dynatrace URL
-	printDynatraceEnvURL(data)
+	printDynatraceResources(data)
 }
 
 func (o *contextOptions) printShortOutput(data *contextData) {
@@ -401,10 +403,8 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		defer utils.StartDelayTracker(o.verbose, "Dynatrace URL").End()
 
 		hcpCluster, err := dynatrace.FetchClusterDetails(clusterID)
-
 		if err != nil {
 			if strings.Contains(err.Error(), "not an HCP or MC Cluster") {
-				//
 				data.DyntraceEnvURL = "Not an HCP/MC Cluster"
 			} else {
 				errors = append(errors, fmt.Errorf("failed to acquire cluster details %v", err))
@@ -412,7 +412,13 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			}
 			return
 		} else {
+			query, err := dynatrace.GetQuery(hcpCluster)
+			if err != nil {
+				errors = append(errors, fmt.Errorf("failed to build query for Dynatrace %v", err))
+			}
+			queryTxt := query.Build()
 			data.DyntraceEnvURL = hcpCluster.DynatraceURL
+			data.DyntraceLogsURL = dynatrace.GetLinkToWebConsole(hcpCluster.DynatraceURL, 10, base64.StdEncoding.EncodeToString([]byte(queryTxt)))
 		}
 	}
 
@@ -694,10 +700,30 @@ func skippableEvent(eventName string) bool {
 	return false
 }
 
-func printDynatraceEnvURL(data *contextData) {
-	var name string = "Dynatrace Environment URL"
+func printDynatraceResources(data *contextData) {
+	var name string = "Dynatrace Details"
 	fmt.Println(delimiter + name)
-	fmt.Println(data.DyntraceEnvURL)
+
+	links := map[string]string{
+		"Dynatrace Tenant URL": data.DyntraceEnvURL,
+		"Logs App URL":         data.DyntraceLogsURL,
+	}
+
+	// Sort, so it's always a predictable order
+	var keys []string
+	for k := range links {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+	for _, link := range keys {
+		table.AddRow([]string{link, strings.TrimSpace(links[link])})
+	}
+
+	if err := table.Flush(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error printing %s: %v\n", name, err)
+	}
 }
 
 func (data *contextData) printClusterHeader() {
