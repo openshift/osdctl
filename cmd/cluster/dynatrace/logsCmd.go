@@ -65,7 +65,7 @@ func main(clusterID string) error {
 	if since <= 0 {
 		return fmt.Errorf("invalid time duration")
 	}
-	hcpCluster, err := fetchClusterDetails(clusterID)
+	hcpCluster, err := FetchClusterDetails(clusterID)
 	if err != nil {
 		return fmt.Errorf("failed to acquire cluster details %v", err)
 	}
@@ -76,7 +76,7 @@ func main(clusterID string) error {
 	}
 
 	fmt.Println(query.Build())
-	fmt.Println(getLinkToWebConsole(hcpCluster.dynatraceURL, since, base64.StdEncoding.EncodeToString([]byte(query.finalQuery))))
+	fmt.Println(getLinkToWebConsole(hcpCluster.DynatraceURL, since, base64.StdEncoding.EncodeToString([]byte(query.finalQuery))))
 
 	if dryRun {
 		return nil
@@ -87,11 +87,11 @@ func main(clusterID string) error {
 		return fmt.Errorf("failed to acquire access token %v", err)
 	}
 
-	requestToken, err := getDTQueryExecution(hcpCluster.dynatraceURL, accessToken, query.finalQuery)
+	requestToken, err := getDTQueryExecution(hcpCluster.DynatraceURL, accessToken, query.finalQuery)
 	if err != nil {
 		return fmt.Errorf("failed to get  vault token %v", err)
 	}
-	err = getLogs(hcpCluster.dynatraceURL, accessToken, requestToken, nil)
+	err = getLogs(hcpCluster.DynatraceURL, accessToken, requestToken, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get logs %v", err)
 	}

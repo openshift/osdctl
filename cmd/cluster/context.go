@@ -395,27 +395,25 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		}
 	}
 
-	GetDynatraceURL := func() {
+	GetDynatraceDetails := func() {
 		var clusterID string = o.clusterID
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Dynatrace URL").End()
 
-		// clusterID, _, err := dynatrace.GetManagementCluster(ocmClient, o.cluster)
-		// if err != nil {
-		// 	errors = append(errors, err)
-		// 	data.DyntraceEnvURL = err.Error()
-		// 	return
-		// }
-		// data.DyntraceEnvURL, err = ocmutil.GetDynatraceURLFromLabel(ocmClient, clusterID)
-		// if err != nil {
-		errors = append(errors, fmt.Errorf("error The Dynatrace Environemnt URL could not be determined from Label. Using fallback method%s", err))
-		// FallBack method to determine via Cluster Login
-		data.DyntraceEnvURL, err = dynatrace.GetDynatraceURLFromManagementCluster(clusterID)
+		hcpCluster, err := dynatrace.FetchClusterDetails(clusterID)
+
 		if err != nil {
-			errors = append(errors, fmt.Errorf("error The Dynatrace Environemnt URL could not be determined %s", err))
-			data.DyntraceEnvURL = "the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there"
+			if strings.Contains(err.Error(), "not an HCP or MC Cluster") {
+				//
+				data.DyntraceEnvURL = "Not an HCP/MC Cluster"
+			} else {
+				errors = append(errors, fmt.Errorf("failed to acquire cluster details %v", err))
+				data.DyntraceEnvURL = "Failed to fetch Dynatrace URL"
+			}
+			return
+		} else {
+			data.DyntraceEnvURL = hcpCluster.DynatraceURL
 		}
-		// }
 	}
 
 	GetPagerDutyAlerts := func() {
@@ -450,7 +448,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		GetJiraIssues,
 		GetSupportExceptions,
 		GetPagerDutyAlerts,
-		GetDynatraceURL,
+		GetDynatraceDetails,
 	)
 
 	if o.output == longOutputConfigValue {

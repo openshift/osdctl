@@ -53,7 +53,7 @@ func gatherLogs(clusterID string) (error error) {
 		return fmt.Errorf("failed to acquire access token %v", err)
 	}
 
-	hcpCluster, err := fetchClusterDetails(clusterID)
+	hcpCluster, err := FetchClusterDetails(clusterID)
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func gatherLogs(clusterID string) (error error) {
 			return err
 		}
 
-		err = dumpPodLogs(pods, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.dynatraceURL, accessToken, since, tail, sortOrder)
+		err = dumpPodLogs(pods, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, accessToken, since, tail, sortOrder)
 		if err != nil {
 			return err
 		}
@@ -94,7 +94,7 @@ func gatherLogs(clusterID string) (error error) {
 			return err
 		}
 
-		err = dumpEvents(deployments, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.dynatraceURL, accessToken, since, tail, sortOrder)
+		err = dumpEvents(deployments, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, accessToken, since, tail, sortOrder)
 		if err != nil {
 			return err
 		}

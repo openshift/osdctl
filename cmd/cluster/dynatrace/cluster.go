@@ -22,10 +22,10 @@ type HCPCluster struct {
 	hostedNS              string
 	hcpNamespace          string
 	managementClusterName string
-	dynatraceURL          string
+	DynatraceURL          string
 }
 
-func fetchClusterDetails(clusterKey string) (hcpCluster HCPCluster, error error) {
+func FetchClusterDetails(clusterKey string) (hcpCluster HCPCluster, error error) {
 	hcpCluster = HCPCluster{}
 	if err := ocmutils.IsValidClusterKey(clusterKey); err != nil {
 		return hcpCluster, err
@@ -54,7 +54,7 @@ func fetchClusterDetails(clusterKey string) (hcpCluster HCPCluster, error error)
 			if err != nil {
 				return HCPCluster{}, fmt.Errorf("the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there \n\nError Details - %s", err)
 			}
-			hcpCluster.dynatraceURL = url
+			hcpCluster.DynatraceURL = url
 			return hcpCluster, nil
 		}
 	}
@@ -76,7 +76,7 @@ func fetchClusterDetails(clusterKey string) (hcpCluster HCPCluster, error error)
 		return HCPCluster{}, fmt.Errorf("the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there \n\nError Details - %s", err)
 	}
 
-	hcpCluster.dynatraceURL = url
+	hcpCluster.DynatraceURL = url
 	hcpCluster.internalID = cluster.ID()
 	hcpCluster.managementClusterID = mgmtCluster.ID()
 	hcpCluster.name = cluster.Name()
