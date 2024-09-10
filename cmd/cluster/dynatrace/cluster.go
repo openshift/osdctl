@@ -8,8 +8,6 @@ import (
 
 	"github.com/Dynatrace/dynatrace-operator/src/api/v1beta1"
 	"github.com/Dynatrace/dynatrace-operator/src/api/v1beta1/dynakube"
-	sdk "github.com/openshift-online/ocm-sdk-go"
-	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/k8s"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,7 +15,6 @@ import (
 )
 
 type HCPCluster struct {
-	validHCP              bool
 	name                  string
 	internalID            string
 	managementClusterID   string
@@ -43,114 +40,50 @@ func fetchClusterDetails(clusterKey string) (hcpCluster HCPCluster, error error)
 	if err != nil {
 		return HCPCluster{}, err
 	}
-	if cluster.Hypershift().Enabled() == false {
-		return HCPCluster{}, fmt.Errorf("Not an HCP or MC Cluster")
+
+	if !cluster.Hypershift().Enabled() {
+		isMC, err := ocmutils.IsManagementCluster(cluster.ID())
+		if !isMC || err != nil {
+			// if the cluster is not a HCP or MC, then return an error
+			return HCPCluster{}, fmt.Errorf("not an HCP or MC Cluster")
+		} else {
+			// if the cluster is not a HCP but a MC, then return a just relevant info for HCPCluster Object
+			hcpCluster.managementClusterID = cluster.ID()
+			hcpCluster.managementClusterName = cluster.Name()
+			url, err := ocmutils.GetDynatraceURLFromLabel(hcpCluster.managementClusterID)
+			if err != nil {
+				return HCPCluster{}, fmt.Errorf("the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there \n\nError Details - %s", err)
+			}
+			hcpCluster.dynatraceURL = url
+			return hcpCluster, nil
+		}
 	}
 
-	mgmtClusterID, mgmtClusterName, err := GetManagementCluster(connection, cluster)
+	mgmtCluster, err := ocmutils.GetManagementCluster(cluster.ID())
 	if err != nil {
-		return HCPCluster{}, err
+		return HCPCluster{}, fmt.Errorf("error retreiving Management Cluster for given HCP %s", err)
 	}
 
-	hcpNamespace, err := ocmutils.GetHCPNamespace(clusterKey)
+	hcpCluster.hcpNamespace, err = ocmutils.GetHCPNamespace(clusterKey)
 	if err != nil {
 		return HCPCluster{}, fmt.Errorf("error retreiving HCP Namespace for given cluster")
 	}
+	hcpCluster.klusterletNS = fmt.Sprintf("klusterlet-%s", cluster.ID())
+	hcpCluster.hostedNS = strings.SplitAfter(hcpCluster.hcpNamespace, cluster.ID())[0]
 
-	url, err := GetDynatraceURLFromLabel(connection, mgmtClusterID)
+	url, err := ocmutils.GetDynatraceURLFromLabel(mgmtCluster.ID())
 	if err != nil {
 		return HCPCluster{}, fmt.Errorf("the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there \n\nError Details - %s", err)
 	}
 
-	hostedNS := strings.SplitAfter(hcpNamespace, cluster.ID())[0]
-
-	fmt.Println("Hosted NS - ", hostedNS)
-
 	hcpCluster.dynatraceURL = url
 	hcpCluster.internalID = cluster.ID()
-	hcpCluster.managementClusterID = mgmtClusterID
+	hcpCluster.managementClusterID = mgmtCluster.ID()
 	hcpCluster.name = cluster.Name()
-	hcpCluster.klusterletNS = fmt.Sprintf("klusterlet-%s", cluster.ID())
-	hcpCluster.hostedNS = fmt.Sprintf(hostedNS)
-	hcpCluster.hcpNamespace = hcpNamespace
-	hcpCluster.managementClusterName = mgmtClusterName
+
+	hcpCluster.managementClusterName = mgmtCluster.Name()
 
 	return hcpCluster, nil
-}
-
-func GetManagementCluster(connection *sdk.Connection, cluster *v1.Cluster) (id string, name string, error error) {
-	clusterID := cluster.ID()
-	clusterName := cluster.Name()
-	if cluster.Hypershift().Enabled() {
-		ManagementCluster, err := ocmutils.GetManagementCluster(clusterID)
-		if err != nil {
-			return "", "", fmt.Errorf("error retreiving Management Cluster for given HCP")
-		}
-		clusterID = ManagementCluster.ID()
-		clusterName = ManagementCluster.Name()
-	}
-
-	isMC, err := isManagementCluster(connection, clusterID)
-	if err != nil {
-		return "", "", fmt.Errorf("could not verify if the cluster is HCP/Management Cluster %v", err)
-	}
-
-	if !isMC && !cluster.Hypershift().Enabled() {
-		return "", "", fmt.Errorf("cluster is not a HCP/Management Cluster")
-	}
-	return clusterID, clusterName, nil
-}
-
-// Sanity Check for MC Cluster
-func isManagementCluster(connection *sdk.Connection, clusterID string) (isMC bool, err error) {
-	collection := connection.ClustersMgmt().V1().Clusters()
-	// Get the labels externally available for the cluster
-	resource := collection.Cluster(clusterID).ExternalConfiguration().Labels()
-	// Send the request to retrieve the list of external cluster labels:
-	response, err := resource.List().Send()
-	if err != nil {
-		return false, fmt.Errorf("can't retrieve cluster labels: %v", err)
-	}
-
-	labels, ok := response.GetItems()
-	if !ok {
-		return false, nil
-	}
-
-	for _, label := range labels.Slice() {
-		if l, ok := label.GetKey(); ok {
-			// If the label is found as the key, we know its an Managemnt Cluster
-			if l == HypershiftClusterTypeLabel {
-				return true, nil
-			}
-		}
-	}
-	return false, nil
-}
-
-func GetDynatraceURLFromLabel(connection *sdk.Connection, clusterID string) (url string, err error) {
-	subscription, err := ocmutils.GetSubscription(connection, clusterID)
-	if err != nil {
-		return "", err
-	}
-
-	subscriptionLabels, err := connection.AccountsMgmt().V1().Subscriptions().Subscription(subscription.ID()).Labels().List().Send()
-	labels, ok := subscriptionLabels.GetItems()
-	if !ok {
-		return "", err
-	}
-
-	for _, label := range labels.Slice() {
-		if key, ok := label.GetKey(); ok {
-			if key == DynatraceTenantKeyLabel {
-				if value, ok := label.GetValue(); ok {
-					url := fmt.Sprintf("https://%s.apps.dynatrace.com/", value)
-					return url, nil
-				}
-			}
-		}
-	}
-	return "", fmt.Errorf("DT Tenant Not Found")
 }
 
 func GetDynatraceURLFromManagementCluster(clusterID string) (string, error) {

@@ -61,10 +61,10 @@ func getLinkToWebConsole(dtURL string, since int, base64Url string) string {
 }
 
 func main(clusterID string) error {
+	var hcpCluster HCPCluster
 	if since <= 0 {
 		return fmt.Errorf("invalid time duration")
 	}
-
 	hcpCluster, err := fetchClusterDetails(clusterID)
 	if err != nil {
 		return fmt.Errorf("failed to acquire cluster details %v", err)
@@ -103,8 +103,13 @@ func getQuery(hcpCluster HCPCluster) (query DTQuery, error error) {
 	q := DTQuery{}
 	q.InitLogs(since).Cluster(hcpCluster.managementClusterName)
 
-	namespaceList = append(namespaceList, hcpCluster.hcpNamespace)
-	q.Namespaces(namespaceList)
+	if hcpCluster.hcpNamespace != "" {
+		namespaceList = append(namespaceList, hcpCluster.hcpNamespace)
+	}
+
+	if len(namespaceList) > 0 {
+		q.Namespaces(namespaceList)
+	}
 
 	if len(nodeList) > 0 {
 		q.Nodes(nodeList)

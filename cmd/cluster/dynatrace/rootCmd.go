@@ -5,8 +5,7 @@ import (
 )
 
 const (
-	DynatraceTenantKeyLabel    string = "sre-capabilities.dtp.tenant"
-	HypershiftClusterTypeLabel string = "ext-hypershift.openshift.io/cluster-type"
+	
 )
 
 func NewCmdDynatrace() *cobra.Command {
