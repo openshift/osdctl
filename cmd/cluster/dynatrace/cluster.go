@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/Dynatrace/dynatrace-operator/src/api/v1beta1"
 	"github.com/Dynatrace/dynatrace-operator/src/api/v1beta1/dynakube"
@@ -11,38 +12,70 @@ import (
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/k8s"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func fetchClusterDetails(clusterKey string) (clusterID string, mcName string, dynatraceURL string, error error) {
+type HCPCluster struct {
+	validHCP              bool
+	name                  string
+	internalID            string
+	managementClusterID   string
+	klusterletNS          string
+	hostedNS              string
+	hcpNamespace          string
+	managementClusterName string
+	dynatraceURL          string
+}
+
+func fetchClusterDetails(clusterKey string) (hcpCluster HCPCluster, error error) {
+	hcpCluster = HCPCluster{}
 	if err := ocmutils.IsValidClusterKey(clusterKey); err != nil {
-		return "", "", "", err
+		return hcpCluster, err
 	}
 	connection, err := ocmutils.CreateConnection()
 	if err != nil {
-		return "", "", "", err
+		return HCPCluster{}, err
 	}
 	defer connection.Close()
 
 	cluster, err := ocmutils.GetCluster(connection, clusterKey)
 	if err != nil {
-		return "", "", "", err
+		return HCPCluster{}, err
+	}
+	if cluster.Hypershift().Enabled() == false {
+		return HCPCluster{}, fmt.Errorf("Not an HCP or MC Cluster")
 	}
 
 	mgmtClusterID, mgmtClusterName, err := GetManagementCluster(connection, cluster)
 	if err != nil {
-		return "", "", "", err
+		return HCPCluster{}, err
+	}
+
+	hcpNamespace, err := ocmutils.GetHCPNamespace(clusterKey)
+	if err != nil {
+		return HCPCluster{}, fmt.Errorf("error retreiving HCP Namespace for given cluster")
 	}
 
 	url, err := GetDynatraceURLFromLabel(connection, mgmtClusterID)
 	if err != nil {
-		return "", "", "", fmt.Errorf("the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there \n\nError Details - %s", err)
+		return HCPCluster{}, fmt.Errorf("the Dynatrace Environemnt URL could not be determined. \nPlease refer the SOP to determine the correct Dyntrace Tenant URL- https://github.com/openshift/ops-sop/tree/master/dynatrace#what-environments-are-there \n\nError Details - %s", err)
 	}
-	return cluster.ID(), mgmtClusterName, url, nil
+
+	hostedNS := strings.SplitAfter(hcpNamespace, cluster.ID())[0]
+
+	fmt.Println("Hosted NS - ", hostedNS)
+
+	hcpCluster.dynatraceURL = url
+	hcpCluster.internalID = cluster.ID()
+	hcpCluster.managementClusterID = mgmtClusterID
+	hcpCluster.name = cluster.Name()
+	hcpCluster.klusterletNS = fmt.Sprintf("klusterlet-%s", cluster.ID())
+	hcpCluster.hostedNS = fmt.Sprintf(hostedNS)
+	hcpCluster.hcpNamespace = hcpNamespace
+	hcpCluster.managementClusterName = mgmtClusterName
+
+	return hcpCluster, nil
 }
 
 func GetManagementCluster(connection *sdk.Connection, cluster *v1.Cluster) (id string, name string, error error) {
@@ -150,18 +183,4 @@ func GetDynatraceURLFromManagementCluster(clusterID string) (string, error) {
 	}
 	DTURL := fmt.Sprintf("%s://%s", DTApiURL.Scheme, DTApiURL.Host)
 	return DTURL, nil
-}
-
-func GetHCPNamespacesFromInternalID(clientset *kubernetes.Clientset, clusterID string) (klusterletNS string, shortNS string, hcpNS string, error error) {
-	labelSelector := metav1.LabelSelector{MatchLabels: map[string]string{"api.openshift.com/id": clusterID}}
-	nsList, err := clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{LabelSelector: labels.Set(labelSelector.MatchLabels).String()})
-	if err != nil {
-		return "", "", "", fmt.Errorf("failed to determine HCP namespace %v", err)
-	}
-	if len(nsList.Items) != 1 {
-		return "", "", "", fmt.Errorf("failed to determine HCP namespace, matchiing namespaces %v", len(nsList.Items))
-	}
-
-	ns := nsList.Items[0]
-	return fmt.Sprintf("klusterlet-%s", clusterID), ns.Name, fmt.Sprintf("%s-%s", ns.Name, ns.Labels["api.openshift.com/name"]), nil
 }

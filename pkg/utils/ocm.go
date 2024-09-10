@@ -454,6 +454,29 @@ func GetManagementCluster(clusterId string) (*cmv1.Cluster, error) {
 	return nil, fmt.Errorf("no management cluster found for %s", clusterId)
 }
 
+func GetHCPNamespace(clusterId string) (namespace string, err error) {
+	conn, err := CreateConnection()
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	hypershiftResp, err := conn.ClustersMgmt().V1().Clusters().
+		Cluster(clusterId).
+		Hypershift().
+		Get().
+		Send()
+	if err != nil {
+		return "", err
+	}
+
+	if namespace, ok := hypershiftResp.Body().GetHCPNamespace(); ok {
+		return namespace, nil
+	}
+
+	return "", fmt.Errorf("no hcp namespace found for %s", clusterId)
+}
+
 func SendRequest(request *sdk.Request) (*sdk.Response, error) {
 	response, err := request.Send()
 	if err != nil {

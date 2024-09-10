@@ -53,29 +53,20 @@ func gatherLogs(clusterID string) (error error) {
 		return fmt.Errorf("failed to acquire access token %v", err)
 	}
 
-	clusterInternalID, managementClusterName, DTURL, err := fetchClusterDetails(clusterID)
-	if err != nil {
-		return err
-	}
-	managementClusterInternalID, _, _, err := fetchClusterDetails(managementClusterName)
+	hcpCluster, err := fetchClusterDetails(clusterID)
 	if err != nil {
 		return err
 	}
 
-	_, _, clientset, err := common.GetKubeConfigAndClient(managementClusterInternalID, "", "")
+	_, _, clientset, err := common.GetKubeConfigAndClient(hcpCluster.managementClusterID, "", "")
 	if err != nil {
-		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", managementClusterInternalID, err)
+		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", hcpCluster.managementClusterID, err)
 	}
 
-	klusterletNS, shortNS, hcpNS, err := GetHCPNamespacesFromInternalID(clientset, clusterInternalID)
-	if err != nil {
-		return err
-	}
+	fmt.Println(fmt.Sprintf("Using HCP Namespace %v", hcpCluster.hcpNamespace))
 
-	fmt.Println(fmt.Sprintf("Using HCP Namespace %v", hcpNS))
-
-	gatherNamespaces := []string{hcpNS, klusterletNS, shortNS, "hypershift", "cert-manager", "redhat-cert-manager-operator"}
-	gatherDir, err := setupGatherDir(hcpNS)
+	gatherNamespaces := []string{hcpCluster.hcpNamespace, hcpCluster.klusterletNS, hcpCluster.hostedNS, "hypershift", "cert-manager", "redhat-cert-manager-operator"}
+	gatherDir, err := setupGatherDir(hcpCluster.hcpNamespace)
 	if err != nil {
 		return err
 	}
@@ -93,7 +84,7 @@ func gatherLogs(clusterID string) (error error) {
 			return err
 		}
 
-		err = dumpPodLogs(pods, nsDir, gatherNS, managementClusterName, DTURL, accessToken, since, tail, sortOrder)
+		err = dumpPodLogs(pods, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.dynatraceURL, accessToken, since, tail, sortOrder)
 		if err != nil {
 			return err
 		}
@@ -103,7 +94,7 @@ func gatherLogs(clusterID string) (error error) {
 			return err
 		}
 
-		err = dumpEvents(deployments, nsDir, gatherNS, managementClusterName, DTURL, accessToken, since, tail, sortOrder)
+		err = dumpEvents(deployments, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.dynatraceURL, accessToken, since, tail, sortOrder)
 		if err != nil {
 			return err
 		}

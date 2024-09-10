@@ -4,18 +4,15 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	"github.com/openshift/osdctl/cmd/common"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 var (
 	dryRun        bool
-	hcp           bool
 	tail          int
 	since         int
 	contains      string
-	cluster       string
 	sortOrder     string
 	namespaceList []string
 	nodeList      []string
@@ -50,7 +47,6 @@ func NewCmdLogs() *cobra.Command {
 	logsCmd.Flags().IntVar(&since, "since", 1, "Number of hours (integer) since which to search (defaults to 1 hour)")
 	logsCmd.Flags().StringVar(&contains, "contains", "", "Include logs which contain a phrase")
 	logsCmd.Flags().StringVar(&sortOrder, "sort", "desc", "Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'")
-	logsCmd.Flags().BoolVar(&hcp, "hcp", false, "Set true to Include the HCP Namespace")
 	logsCmd.Flags().StringSliceVar(&namespaceList, "namespace", []string{}, "Namespace(s) (comma-separated)")
 	logsCmd.Flags().StringSliceVar(&nodeList, "node", []string{}, "Node name(s) (comma-separated)")
 	logsCmd.Flags().StringSliceVar(&podList, "pod", []string{}, "Pod name(s) (comma-separated)")
@@ -69,18 +65,18 @@ func main(clusterID string) error {
 		return fmt.Errorf("invalid time duration")
 	}
 
-	clusterInternalID, mgmtClusterName, DTURL, err := fetchClusterDetails(clusterID)
+	hcpCluster, err := fetchClusterDetails(clusterID)
 	if err != nil {
 		return fmt.Errorf("failed to acquire cluster details %v", err)
 	}
 
-	query, err := getQuery(clusterInternalID, mgmtClusterName)
+	query, err := getQuery(hcpCluster)
 	if err != nil {
 		return fmt.Errorf("failed to build query for Dynatrace %v", err)
 	}
 
 	fmt.Println(query.Build())
-	fmt.Println(getLinkToWebConsole(DTURL, since, base64.StdEncoding.EncodeToString([]byte(query.finalQuery))))
+	fmt.Println(getLinkToWebConsole(hcpCluster.dynatraceURL, since, base64.StdEncoding.EncodeToString([]byte(query.finalQuery))))
 
 	if dryRun {
 		return nil
@@ -91,8 +87,11 @@ func main(clusterID string) error {
 		return fmt.Errorf("failed to acquire access token %v", err)
 	}
 
-	requestToken, err := getDTQueryExecution(DTURL, accessToken, query.finalQuery)
-	err = getLogs(DTURL, accessToken, requestToken, nil)
+	requestToken, err := getDTQueryExecution(hcpCluster.dynatraceURL, accessToken, query.finalQuery)
+	if err != nil {
+		return fmt.Errorf("failed to get  vault token %v", err)
+	}
+	err = getLogs(hcpCluster.dynatraceURL, accessToken, requestToken, nil)
 	if err != nil {
 		return fmt.Errorf("failed to get logs %v", err)
 	}
@@ -100,28 +99,12 @@ func main(clusterID string) error {
 	return nil
 }
 
-func getQuery(clusterID string, mgmtClusterName string) (query DTQuery, error error) {
+func getQuery(hcpCluster HCPCluster) (query DTQuery, error error) {
 	q := DTQuery{}
-	q.InitLogs(since).Cluster(mgmtClusterName)
+	q.InitLogs(since).Cluster(hcpCluster.managementClusterName)
 
-	if len(namespaceList) > 0 || hcp {
-		if hcp {
-			managementClusterInternalID, _, _, err := fetchClusterDetails(mgmtClusterName)
-			if err != nil {
-				return q, err
-			}
-			_, _, clientset, err := common.GetKubeConfigAndClient(managementClusterInternalID, "", "")
-			if err != nil {
-				return q, fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", managementClusterInternalID, err)
-			}
-			_, _, hcpNS, err := GetHCPNamespacesFromInternalID(clientset, clusterID)
-			if err != nil {
-				return q, err
-			}
-			namespaceList = append(namespaceList, hcpNS)
-		}
-		q.Namespaces(namespaceList)
-	}
+	namespaceList = append(namespaceList, hcpCluster.hcpNamespace)
+	q.Namespaces(namespaceList)
 
 	if len(nodeList) > 0 {
 		q.Nodes(nodeList)
