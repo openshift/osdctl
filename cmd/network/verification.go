@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/openshift/osd-network-verifier/pkg/data/cpu"
 	"log"
 	"os"
 	"strings"
@@ -15,9 +14,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/openshift-online/ocm-cli/pkg/dump"
+	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift-online/ocm-sdk-go/logging"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	"github.com/openshift/osd-network-verifier/pkg/data/cpu"
 	"github.com/openshift/osd-network-verifier/pkg/helpers"
 	"github.com/openshift/osd-network-verifier/pkg/output"
 	"github.com/openshift/osd-network-verifier/pkg/probes/curl"
@@ -176,13 +178,22 @@ func (e *EgressVerification) Run(ctx context.Context) {
 		out := onv.ValidateEgress(c, *inputs[i])
 		out.Summary(e.Debug)
 
-		// Only suggest sending a service log if the failures are egress-url related
+		// Move cluster into LS if in case cluster can't connect with PD(OR)DMS || service log if the failures other egress-url related
 		if !out.IsSuccessful() && len(out.GetEgressURLFailures()) > 0 {
 			postCmd := generateServiceLog(out, e.ClusterId)
-			if err := postCmd.Run(); err != nil {
+
+			bUrl := strings.Join(postCmd.TemplateParams, ",")
+
+			if strings.Contains(bUrl, "deadmanssnitch") || strings.Contains(bUrl, "pagerduty") {
+				fmt.Println("This cluster traffic has block pagerdury (OR) DMS outgoing traffic")
+				err := putLimitedSupport(e.ClusterId)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+			} else if err := postCmd.Run(); err != nil {
 				fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
-				fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
-					e.ClusterId, blockedEgressTemplateUrl, strings.Join(postCmd.TemplateParams, " -p "))
+				fmt.Printf("osdctl servicelog post %v -t %v -p %v\n", e.ClusterId, blockedEgressTemplateUrl, strings.Join(postCmd.TemplateParams, " -p "))
 			}
 		}
 	}
@@ -789,4 +800,61 @@ func printVersion() {
 		log.Fatal("Unable to find version for network verifier: %w", err)
 	}
 	log.Println(fmt.Sprintf("Using osd-network-verifier version %v", version))
+}
+
+// Put Cluster to LS if it can't access pd (OR) DMS
+func putLimitedSupport(ClusterId string) error {
+
+	connection, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err = connection.Close(); err != nil {
+			fmt.Printf("Cannot close the connection: %q\n", err)
+			os.Exit(1)
+		}
+	}()
+
+	summary := "Your cluster requires you to take action. SRE has observed that there have been changes made to the network configuration which impacts normal working of the cluster, including lack of network egress to these internet-based resources which are required for the cluster operation and support. Please revert changes, and refer to documentation regarding firewall requirements for PrivateLink clusters: https://access.redhat.com/documentation/en-us/red_hat_openshift_service_on_aws/4/html/prepare_your_environment/rosa-sts-aws-prereqs#osd-aws-privatelink-firewall-prerequisites_rosa-sts-aws-prereqs"
+	limitedSupportBuilder := cmv1.NewLimitedSupportReason().Summary("Cluster is in Limited Support due to unsupported network configuration").Details(summary).DetectionType("manual")
+	limitedSupport, err := limitedSupportBuilder.Build()
+	if err != nil {
+		return fmt.Errorf("failed to build new limited support reason: %w", err)
+	}
+
+	fmt.Printf("The following limited support reason will be sent to %s:\n", ClusterId)
+	if err = printLimitedSupportReason(limitedSupport); err != nil {
+		return fmt.Errorf("failed to print limited support reason template: %w", err)
+	}
+
+	if !utils.ConfirmPrompt() {
+		return nil
+	}
+
+	postLimitedSupportResponse, err := sendLimitedSupportPostRequest(connection, ClusterId, limitedSupport)
+	if err != nil {
+		return fmt.Errorf("failed to post limited support reason: %w", err)
+	}
+	fmt.Printf("Successfully added new limited support reason with ID %v\n", postLimitedSupportResponse.Body().ID())
+	return nil
+
+}
+
+func printLimitedSupportReason(limitedSupport *cmv1.LimitedSupportReason) error {
+	buf := bytes.Buffer{}
+	err := cmv1.MarshalLimitedSupportReason(limitedSupport, &buf)
+	if err != nil {
+		return fmt.Errorf("failed to marshal limited support reason: %w", err)
+	}
+
+	return dump.Pretty(os.Stdout, buf.Bytes())
+}
+
+func sendLimitedSupportPostRequest(ocmClient *sdk.Connection, clusterID string, limitedSupport *cmv1.LimitedSupportReason) (*cmv1.LimitedSupportReasonsAddResponse, error) {
+	response, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(clusterID).LimitedSupportReasons().Add().Body(limitedSupport).Send()
+	if err != nil {
+		return nil, fmt.Errorf("failed to post new limited support reason: %w", err)
+	}
+	return response, nil
 }
