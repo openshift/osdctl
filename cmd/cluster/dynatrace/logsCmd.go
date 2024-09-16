@@ -57,7 +57,7 @@ func NewCmdLogs() *cobra.Command {
 }
 
 func GetLinkToWebConsole(dtURL string, since int, base64Url string) string {
-	return fmt.Sprintf("%sui/apps/dynatrace.classic.logs.events/ui/logs-events?gtf=-%dh&gf=all&sortDirection=desc&advancedQueryMode=true&isDefaultQuery=false&visualizationType=table#%s\n\n", dtURL, since, base64Url)
+	return fmt.Sprintf("%sui/apps/dynatrace.logs/?gtf=-%dh&gf=all&sortDirection=desc&advancedQueryMode=true&isDefaultQuery=false&visualizationType=table#%s\n\n", dtURL, since, base64Url)
 }
 
 func main(clusterID string) error {
