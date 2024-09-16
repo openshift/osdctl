@@ -798,14 +798,3 @@ func printVersion() {
 	}
 	log.Println(fmt.Sprintf("Using osd-network-verifier version %v", version))
 }
-
-// Generate LimitedSupportTemplate
-func generateLimitedSupportTemplate(out *output.Output) lsupport.Post {
-	failures := out.GetEgressURLFailures()
-	if len(failures) > 0 {
-		return lsupport.Post{
-			Template: LimitedSupportTemplate,
-		}
-	}
-	return lsupport.Post{}
-}
