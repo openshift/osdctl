@@ -184,12 +184,10 @@ func (e *EgressVerification) Run(ctx context.Context) {
 			blockedUrl := strings.Join(postCmd.TemplateParams, ",")
 			if strings.Contains(blockedUrl, "deadmanssnitch") || strings.Contains(blockedUrl, "pagerduty") {
 				fmt.Println("PagerDuty and/or DMS outgoing traffic is blocked, resulting in a loss of observability. As a result, Red Hat can no longer guarantee SLAs and the cluster should be put in limited support")
-				pCmd := generateLimitedSupportTemplate(out)
+				pCmd := lsupport.Post{Template: LimitedSupportTemplate}
 				if err := pCmd.Run(e.ClusterId); err != nil {
 					fmt.Printf("failed to post limited support reason: %v", err)
-
 				}
-
 			} else if err := postCmd.Run(); err != nil {
 				fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
 				fmt.Printf("osdctl servicelog post %v -t %v -p %v\n", e.ClusterId, blockedEgressTemplateUrl, strings.Join(postCmd.TemplateParams, " -p "))
