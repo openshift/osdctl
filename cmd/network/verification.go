@@ -43,7 +43,7 @@ const (
 	blockedEgressTemplateUrl     = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json"
 	caBundleConfigMapKey         = "ca-bundle.crt"
 	networkVerifierDepPath       = "github.com/openshift/osd-network-verifier"
-	LimitedSupportTemplate       = "https://raw.githubusercontent.com/TheUndeadKing/managed-notifications/PDLimitedSupport/osd/limited_support/egressFailureLimitedSupport.json"
+	LimitedSupportTemplate       = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/limited_support/egressFailureLimitedSupport.json"
 )
 
 type EgressVerification struct {
