@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -44,6 +43,7 @@ const (
 	blockedEgressTemplateUrl     = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json"
 	caBundleConfigMapKey         = "ca-bundle.crt"
 	networkVerifierDepPath       = "github.com/openshift/osd-network-verifier"
+	LimitedSupportTemplate       = "https://raw.githubusercontent.com/TheUndeadKing/managed-notifications/PDLimitedSupport/osd/limited_support/egressFailureLimitedSupport.json"
 )
 
 type EgressVerification struct {
@@ -184,9 +184,10 @@ func (e *EgressVerification) Run(ctx context.Context) {
 			blockedUrl := strings.Join(postCmd.TemplateParams, ",")
 			if strings.Contains(blockedUrl, "deadmanssnitch") || strings.Contains(blockedUrl, "pagerduty") {
 				fmt.Println("PagerDuty and/or DMS outgoing traffic is blocked, resulting in a loss of observability. As a result, Red Hat can no longer guarantee SLAs and the cluster should be put in limited support")
-				err := putLimitedSupport(e.ClusterId)
-				if err != nil {
-					fmt.Println("failed to post limited support reason: %w", err)
+				pCmd := generateLimitedSupportTemplate(out)
+				if err := pCmd.Run(e.ClusterId); err != nil {
+					fmt.Printf("failed to post limited support reason: %v", err)
+
 				}
 
 			} else if err := postCmd.Run(); err != nil {
@@ -800,80 +801,18 @@ func printVersion() {
 	log.Println(fmt.Sprintf("Using osd-network-verifier version %v", version))
 }
 
-// Put Cluster to LS if it can't access pd (OR) DMS
-func putLimitedSupport(ClusterId string) error {
-	var cID *cmv1.Cluster
-
-	connection, err := utils.CreateConnection()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err = connection.Close(); err != nil {
-			fmt.Printf("Cannot close the connection: %q\n", err)
-			os.Exit(1)
+// Generate LimitedSupportTemplate
+func generateLimitedSupportTemplate(out *output.Output) lsupport.Post {
+	failures := out.GetEgressURLFailures()
+	if len(failures) > 0 {
+		egressUrls := make([]string, len(failures))
+		for i, failure := range failures {
+			egressUrls[i] = failure.EgressURL()
 		}
-	}()
 
-	// Prompt putting the cluster into LS if cluster belongs to Critical Customer.
-	cID, err = utils.GetCluster(connection, ClusterId)
-	if err != nil {
-		return fmt.Errorf("can't retrieve cluster: %w", err)
-	}
-
-	subscriptionResponse, err := connection.
-		AccountsMgmt().
-		V1().
-		Subscriptions().
-		Subscription(cID.Subscription().ID()).
-		Get().Send()
-	if err != nil {
-		fmt.Errorf("failed to retrieve cluster subscription: %w", err)
-	}
-
-	labelResponse, err := connection.
-		AccountsMgmt().
-		V1().
-		Organizations().
-		Organization(subscriptionResponse.Body().OrganizationID()).
-		Labels().
-		Label("capability.organization.managed_critical_customer").
-		Get().Send()
-
-	if err != nil {
-		// if the label is missing, there's no need to show an error to the user
-		if labelResponse.Error().Status() != http.StatusNotFound {
-			return fmt.Errorf("failed to retrieve cluster labels: %w", err)
-		}
-	} else if labelResponse.Body().Value() == "true" {
-		fmt.Println(`WARNING: This cluster is owned by a critical customer. Make sure that an SL has been sent and proactive case opened with the customer. Only continue if there has been no customer response for 24 hours.
-
-See: https://source.redhat.com/groups/public/sre/wiki/defining_limited_support_process_for_osdrosa_for_critical_customers`)
-		if !utils.ConfirmPrompt() {
-			return nil
+		return lsupport.Post{
+			Template: LimitedSupportTemplate,
 		}
 	}
-
-	summary := "Your cluster requires you to take action. SRE has observed that there have been changes made to the network configuration which impacts normal working of the cluster, including lack of network egress to these internet-based resources which are required for the cluster operation and support. Please revert changes, and refer to documentation regarding firewall requirements for PrivateLink clusters: https://access.redhat.com/documentation/en-us/red_hat_openshift_service_on_aws/4/html/prepare_your_environment/rosa-sts-aws-prereqs#osd-aws-privatelink-firewall-prerequisites_rosa-sts-aws-prereqs"
-	limitedSupportBuilder := cmv1.NewLimitedSupportReason().Summary("Cluster is in Limited Support due to unsupported network configuration").Details(summary).DetectionType("manual")
-	limitedSupport, err := limitedSupportBuilder.Build()
-	if err != nil {
-		return fmt.Errorf("failed to build new limited support reason: %w", err)
-	}
-
-	fmt.Printf("The following limited support reason will be sent to %s:\n", ClusterId)
-	if err = lsupport.PrintLimitedSupportReason(limitedSupport); err != nil {
-		return fmt.Errorf("failed to print limited support reason template: %w", err)
-	}
-
-	if !utils.ConfirmPrompt() {
-		return nil
-	}
-
-	postLimitedSupportResponse, err := lsupport.SendLimitedSupportPostRequest(connection, ClusterId, limitedSupport)
-	if err != nil {
-		return fmt.Errorf("failed to post limited support reason: %w", err)
-	}
-	fmt.Printf("Successfully added new limited support reason with ID %v\n", postLimitedSupportResponse.Body().ID())
-	return nil
+	return lsupport.Post{}
 }
