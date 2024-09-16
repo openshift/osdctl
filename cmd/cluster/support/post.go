@@ -212,7 +212,7 @@ See: https://source.redhat.com/groups/public/sre/wiki/defining_limited_support_p
 	}
 
 	fmt.Printf("The following limited support reason will be sent to %s:\n", clusterID)
-	if err = printLimitedSupportReason(limitedSupport); err != nil {
+	if err = PrintLimitedSupportReason(limitedSupport); err != nil {
 		return fmt.Errorf("failed to print limited support reason template: %w", err)
 	}
 
@@ -220,7 +220,7 @@ See: https://source.redhat.com/groups/public/sre/wiki/defining_limited_support_p
 		return nil
 	}
 
-	postLimitedSupportResponse, err := sendLimitedSupportPostRequest(connection, p.cluster.ID(), limitedSupport)
+	postLimitedSupportResponse, err := SendLimitedSupportPostRequest(connection, p.cluster.ID(), limitedSupport)
 	if err != nil {
 		return fmt.Errorf("failed to post limited support reason: %w", err)
 	}
@@ -388,7 +388,7 @@ func (p *Post) checkLeftovers(template *TemplateFile) {
 	}
 }
 
-func printLimitedSupportReason(limitedSupport *cmv1.LimitedSupportReason) error {
+func PrintLimitedSupportReason(limitedSupport *cmv1.LimitedSupportReason) error {
 	buf := bytes.Buffer{}
 	err := cmv1.MarshalLimitedSupportReason(limitedSupport, &buf)
 	if err != nil {
@@ -398,7 +398,7 @@ func printLimitedSupportReason(limitedSupport *cmv1.LimitedSupportReason) error 
 	return dump.Pretty(os.Stdout, buf.Bytes())
 }
 
-func sendLimitedSupportPostRequest(ocmClient *sdk.Connection, clusterID string, limitedSupport *cmv1.LimitedSupportReason) (*cmv1.LimitedSupportReasonsAddResponse, error) {
+func SendLimitedSupportPostRequest(ocmClient *sdk.Connection, clusterID string, limitedSupport *cmv1.LimitedSupportReason) (*cmv1.LimitedSupportReasonsAddResponse, error) {
 	response, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(clusterID).LimitedSupportReasons().Add().Body(limitedSupport).Send()
 	if err != nil {
 		return nil, fmt.Errorf("failed to post new limited support reason: %w", err)

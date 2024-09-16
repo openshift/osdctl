@@ -15,8 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/openshift-online/ocm-cli/pkg/dump"
-	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift-online/ocm-sdk-go/logging"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
@@ -28,6 +26,7 @@ import (
 	"github.com/openshift/osd-network-verifier/pkg/proxy"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
 	onvAwsClient "github.com/openshift/osd-network-verifier/pkg/verifier/aws"
+	lsupport "github.com/openshift/osdctl/cmd/cluster/support"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/osdCloud"
@@ -178,14 +177,11 @@ func (e *EgressVerification) Run(ctx context.Context) {
 		e.log.Info(ctx, "running network verifier for subnet  %+v, security group %+v", inputs[i].SubnetID, inputs[i].AWS.SecurityGroupIDs)
 		out := onv.ValidateEgress(c, *inputs[i])
 		out.Summary(e.Debug)
-
 		// Prompt putting the cluster into LS if egresses crucial for monitoring (PagerDuty/DMS) are blocked.
 		// Prompt sending a service log instead for other blocked egresses.
 		if !out.IsSuccessful() && len(out.GetEgressURLFailures()) > 0 {
 			postCmd := generateServiceLog(out, e.ClusterId)
-
 			blockedUrl := strings.Join(postCmd.TemplateParams, ",")
-
 			if strings.Contains(blockedUrl, "deadmanssnitch") || strings.Contains(blockedUrl, "pagerduty") {
 				fmt.Println("PagerDuty and/or DMS outgoing traffic is blocked, resulting in a loss of observability. As a result, Red Hat can no longer guarantee SLAs and the cluster should be put in limited support")
 				err := putLimitedSupport(e.ClusterId)
@@ -866,7 +862,7 @@ See: https://source.redhat.com/groups/public/sre/wiki/defining_limited_support_p
 	}
 
 	fmt.Printf("The following limited support reason will be sent to %s:\n", ClusterId)
-	if err = printLimitedSupportReason(limitedSupport); err != nil {
+	if err = lsupport.PrintLimitedSupportReason(limitedSupport); err != nil {
 		return fmt.Errorf("failed to print limited support reason template: %w", err)
 	}
 
@@ -874,29 +870,10 @@ See: https://source.redhat.com/groups/public/sre/wiki/defining_limited_support_p
 		return nil
 	}
 
-	postLimitedSupportResponse, err := sendLimitedSupportPostRequest(connection, ClusterId, limitedSupport)
+	postLimitedSupportResponse, err := lsupport.SendLimitedSupportPostRequest(connection, ClusterId, limitedSupport)
 	if err != nil {
 		return fmt.Errorf("failed to post limited support reason: %w", err)
 	}
 	fmt.Printf("Successfully added new limited support reason with ID %v\n", postLimitedSupportResponse.Body().ID())
 	return nil
-
-}
-
-func printLimitedSupportReason(limitedSupport *cmv1.LimitedSupportReason) error {
-	buf := bytes.Buffer{}
-	err := cmv1.MarshalLimitedSupportReason(limitedSupport, &buf)
-	if err != nil {
-		return fmt.Errorf("failed to marshal limited support reason: %w", err)
-	}
-
-	return dump.Pretty(os.Stdout, buf.Bytes())
-}
-
-func sendLimitedSupportPostRequest(ocmClient *sdk.Connection, clusterID string, limitedSupport *cmv1.LimitedSupportReason) (*cmv1.LimitedSupportReasonsAddResponse, error) {
-	response, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(clusterID).LimitedSupportReasons().Add().Body(limitedSupport).Send()
-	if err != nil {
-		return nil, fmt.Errorf("failed to post new limited support reason: %w", err)
-	}
-	return response, nil
 }
