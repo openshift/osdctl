@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -805,6 +806,7 @@ func printVersion() {
 
 // Put Cluster to LS if it can't access pd (OR) DMS
 func putLimitedSupport(ClusterId string) error {
+	var cID *cmv1.Cluster
 
 	connection, err := utils.CreateConnection()
 	if err != nil {
@@ -816,6 +818,45 @@ func putLimitedSupport(ClusterId string) error {
 			os.Exit(1)
 		}
 	}()
+
+	// Prompt putting the cluster into LS if cluster belongs to Critical Customer.
+	cID, err = utils.GetCluster(connection, ClusterId)
+	if err != nil {
+		return fmt.Errorf("can't retrieve cluster: %w", err)
+	}
+
+	subscriptionResponse, err := connection.
+		AccountsMgmt().
+		V1().
+		Subscriptions().
+		Subscription(cID.Subscription().ID()).
+		Get().Send()
+	if err != nil {
+		fmt.Errorf("failed to retrieve cluster subscription: %w", err)
+	}
+
+	labelResponse, err := connection.
+		AccountsMgmt().
+		V1().
+		Organizations().
+		Organization(subscriptionResponse.Body().OrganizationID()).
+		Labels().
+		Label("capability.organization.managed_critical_customer").
+		Get().Send()
+
+	if err != nil {
+		// if the label is missing, there's no need to show an error to the user
+		if labelResponse.Error().Status() != http.StatusNotFound {
+			return fmt.Errorf("failed to retrieve cluster labels: %w", err)
+		}
+	} else if labelResponse.Body().Value() == "true" {
+		fmt.Println(`WARNING: This cluster is owned by a critical customer. Make sure that an SL has been sent and proactive case opened with the customer. Only continue if there has been no customer response for 24 hours.
+
+See: https://source.redhat.com/groups/public/sre/wiki/defining_limited_support_process_for_osdrosa_for_critical_customers`)
+		if !utils.ConfirmPrompt() {
+			return nil
+		}
+	}
 
 	summary := "Your cluster requires you to take action. SRE has observed that there have been changes made to the network configuration which impacts normal working of the cluster, including lack of network egress to these internet-based resources which are required for the cluster operation and support. Please revert changes, and refer to documentation regarding firewall requirements for PrivateLink clusters: https://access.redhat.com/documentation/en-us/red_hat_openshift_service_on_aws/4/html/prepare_your_environment/rosa-sts-aws-prereqs#osd-aws-privatelink-firewall-prerequisites_rosa-sts-aws-prereqs"
 	limitedSupportBuilder := cmv1.NewLimitedSupportReason().Summary("Cluster is in Limited Support due to unsupported network configuration").Details(summary).DetectionType("manual")
