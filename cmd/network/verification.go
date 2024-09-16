@@ -805,11 +805,6 @@ func printVersion() {
 func generateLimitedSupportTemplate(out *output.Output) lsupport.Post {
 	failures := out.GetEgressURLFailures()
 	if len(failures) > 0 {
-		egressUrls := make([]string, len(failures))
-		for i, failure := range failures {
-			egressUrls[i] = failure.EgressURL()
-		}
-
 		return lsupport.Post{
 			Template: LimitedSupportTemplate,
 		}
