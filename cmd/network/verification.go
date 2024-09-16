@@ -178,17 +178,18 @@ func (e *EgressVerification) Run(ctx context.Context) {
 		out := onv.ValidateEgress(c, *inputs[i])
 		out.Summary(e.Debug)
 
-		// Move cluster into LS if in case cluster can't connect with PD(OR)DMS || service log if the failures other egress-url related
+		// Prompt putting the cluster into LS if egresses crucial for monitoring (PagerDuty/DMS) are blocked.
+		// Prompt sending a service log instead for other blocked egresses.
 		if !out.IsSuccessful() && len(out.GetEgressURLFailures()) > 0 {
 			postCmd := generateServiceLog(out, e.ClusterId)
 
-			bUrl := strings.Join(postCmd.TemplateParams, ",")
+			blockedUrl := strings.Join(postCmd.TemplateParams, ",")
 
-			if strings.Contains(bUrl, "deadmanssnitch") || strings.Contains(bUrl, "pagerduty") {
-				fmt.Println("This cluster traffic has block pagerdury (OR) DMS outgoing traffic")
+			if strings.Contains(blockedUrl, "deadmanssnitch") || strings.Contains(blockedUrl, "pagerduty") {
+				fmt.Println("PagerDuty and/or DMS outgoing traffic is blocked, resulting in a loss of observability. As a result, Red Hat can no longer guarantee SLAs and the cluster should be put in limited support")
 				err := putLimitedSupport(e.ClusterId)
 				if err != nil {
-					log.Fatal(err)
+					fmt.Println("failed to post limited support reason: %w", err)
 				}
 
 			} else if err := postCmd.Run(); err != nil {
