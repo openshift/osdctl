@@ -3,6 +3,7 @@ package support
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/printer"
@@ -58,23 +59,27 @@ func (o *statusOptions) complete(cmd *cobra.Command, args []string) error {
 }
 
 func (o *statusOptions) run() error {
-
 	clusterLimitedSupportReasons, err := getLimitedSupportReasons(o.clusterID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to get limited support reasons: %v\n", err)
 		return err
 	}
 
-	// No reasons found, cluster is fully supported
-	if len(clusterLimitedSupportReasons) == 0 {
-		fmt.Printf("Cluster is fully supported\n")
-		return nil
-	}
-
+	var clusterSupportLimited = false
 	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
-	table.AddRow([]string{"Reason ID", "Summary", "Details"})
+	table.AddRow([]string{"Reason ID", "Summary", "Overridden (SUPPORTEX)", "Details"})
 	for _, clusterLimitedSupportReason := range clusterLimitedSupportReasons {
-		table.AddRow([]string{clusterLimitedSupportReason.ID(), clusterLimitedSupportReason.Summary(), clusterLimitedSupportReason.Details()})
+		clusterSupportLimited = clusterSupportLimited || !clusterLimitedSupportReason.Override().Enabled()
+		table.AddRow([]string{
+			clusterLimitedSupportReason.ID(),
+			clusterLimitedSupportReason.Summary(),
+			strconv.FormatBool(clusterLimitedSupportReason.Override().Enabled()),
+			clusterLimitedSupportReason.Details(),
+		})
+	}
+	// No reasons found, cluster is fully supported
+	if clusterSupportLimited {
+		fmt.Printf("No limited support reasons found or all reasons are overridden, the cluster is fully supported\n")
 	}
 	// Add empty row for readability
 	table.AddRow([]string{})
