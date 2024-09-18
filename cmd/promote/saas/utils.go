@@ -36,7 +36,7 @@ func listServiceNames(appInterface git.AppInterface) error {
 	return nil
 }
 
-func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string, osd, hcp bool) error {
+func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string, namespaceRef string, osd, hcp bool) error {
 	_, err := GetServiceNames(appInterface, OSDSaasDir, BPSaasDir, CADSaasDir)
 	if err != nil {
 		return err
@@ -58,7 +58,7 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 		return fmt.Errorf("failed to read SAAS file: %v", err)
 	}
 
-	currentGitHash, serviceRepo, err := git.GetCurrentGitHashFromAppInterface(serviceData, serviceName)
+	currentGitHash, serviceRepo, err := git.GetCurrentGitHashFromAppInterface(serviceData, serviceName, namespaceRef)
 	if err != nil {
 		return fmt.Errorf("failed to get current git hash or service repo: %v", err)
 	}
