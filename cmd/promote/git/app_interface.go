@@ -83,7 +83,7 @@ func checkAppInterfaceCheckout(directory string) error {
 	return nil
 }
 
-func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string) (string, string, error) {
+func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, namespaceRef string) (string, string, error) {
 	var currentGitHash string
 	var serviceRepo string
 	var service Service
@@ -92,7 +92,16 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string) 
 		log.Fatal(fmt.Errorf("cannot unmarshal yaml data of service %s: %v", serviceName, err))
 	}
 
-	if service.Name == "saas-configuration-anomaly-detection-db" {
+	if namespaceRef != "" {
+		for _, resourceTemplate := range service.ResourceTemplates {
+			for _, target := range resourceTemplate.Targets {
+				if strings.Contains(target.Namespace["$ref"], namespaceRef) {
+					currentGitHash = target.Ref
+					break
+				}
+			}
+		}
+	} else if service.Name == "saas-configuration-anomaly-detection-db" {
 		for _, resourceTemplate := range service.ResourceTemplates {
 			for _, target := range resourceTemplate.Targets {
 				if strings.Contains(target.Namespace["$ref"], "app-sre-observability-production-int.yml") {
@@ -113,7 +122,7 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string) 
 	} else if strings.Contains(service.Name, "rhobs-rules-and-dashboards") {
 		for _, resourceTemplate := range service.ResourceTemplates {
 			for _, target := range resourceTemplate.Targets {
-				if strings.Contains(service.Name, "rhobsp02ue1-production") {
+				if strings.Contains(service.Name, "production") {
 					currentGitHash = target.Ref
 					break
 				}

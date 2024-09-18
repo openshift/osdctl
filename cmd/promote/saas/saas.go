@@ -16,6 +16,7 @@ type saasOptions struct {
 	appInterfaceCheckoutDir string
 	serviceName             string
 	gitHash                 string
+	namespaceRef            string
 }
 
 // newCmdSaas implementes the saas command to interact with promoting SaaS services/operators
@@ -54,7 +55,7 @@ func NewCmdSaas() *cobra.Command {
 				os.Exit(1)
 			}
 
-			err := servicePromotion(appInterface, ops.serviceName, ops.gitHash, ops.osd, ops.hcp)
+			err := servicePromotion(appInterface, ops.serviceName, ops.gitHash, ops.namespaceRef, ops.osd, ops.hcp)
 			if err != nil {
 				fmt.Printf("Error while promoting service: %v\n", err)
 				os.Exit(1)
@@ -68,6 +69,7 @@ func NewCmdSaas() *cobra.Command {
 	saasCmd.Flags().BoolVarP(&ops.list, "list", "l", false, "List all SaaS services/operators")
 	saasCmd.Flags().StringVarP(&ops.serviceName, "serviceName", "", "", "SaaS service/operator getting promoted")
 	saasCmd.Flags().StringVarP(&ops.gitHash, "gitHash", "g", "", "Git hash of the SaaS service/operator commit getting promoted")
+	saasCmd.Flags().StringVarP(&ops.namespaceRef, "namespaceRef", "n", "", "SaaS target namespace reference name")
 	saasCmd.Flags().BoolVarP(&ops.osd, "osd", "", false, "OSD service/operator getting promoted")
 	saasCmd.Flags().BoolVarP(&ops.hcp, "hcp", "", false, "HCP service/operator getting promoted")
 	saasCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "appInterfaceDir", "", "", "location of app-interfache checkout. Falls back to `pwd` and "+git.DefaultAppInterfaceDirectory())
