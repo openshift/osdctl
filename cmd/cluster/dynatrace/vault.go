@@ -13,10 +13,10 @@ type response struct {
 	} `json:"data"`
 }
 
-func setupVaultToken(vaultAddr, vaultPath string) error {
+func setupVaultToken(vaultAddr string) error {
 	err := os.Setenv("VAULT_ADDR", vaultAddr)
 	if err != nil {
-		return fmt.Errorf("Error setting environment variable: %v", err)
+		return fmt.Errorf("error setting environment variable: %v", err)
 	}
 
 	tokenCheckCmd := exec.Command("vault", "token", "lookup")
@@ -30,7 +30,7 @@ func setupVaultToken(vaultAddr, vaultPath string) error {
 		loginCmd.Stdout = nil
 		loginCmd.Stderr = nil
 		if err = loginCmd.Run(); err != nil {
-			return fmt.Errorf("Error running 'vault login': %v", err)
+			return fmt.Errorf("error running 'vault login': %v", err)
 		}
 
 		fmt.Println("Acquired vault token")

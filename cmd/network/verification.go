@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/openshift/osd-network-verifier/pkg/data/cpu"
 	"log"
 	"os"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift-online/ocm-sdk-go/logging"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	"github.com/openshift/osd-network-verifier/pkg/data/cpu"
 	"github.com/openshift/osd-network-verifier/pkg/helpers"
 	"github.com/openshift/osd-network-verifier/pkg/output"
 	"github.com/openshift/osd-network-verifier/pkg/probes/curl"
@@ -25,6 +25,7 @@ import (
 	"github.com/openshift/osd-network-verifier/pkg/proxy"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
 	onvAwsClient "github.com/openshift/osd-network-verifier/pkg/verifier/aws"
+	lsupport "github.com/openshift/osdctl/cmd/cluster/support"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/osdCloud"
@@ -42,6 +43,7 @@ const (
 	blockedEgressTemplateUrl     = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json"
 	caBundleConfigMapKey         = "ca-bundle.crt"
 	networkVerifierDepPath       = "github.com/openshift/osd-network-verifier"
+	LimitedSupportTemplate       = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/limited_support/egressFailureLimitedSupport.json"
 )
 
 type EgressVerification struct {
@@ -175,14 +177,20 @@ func (e *EgressVerification) Run(ctx context.Context) {
 		e.log.Info(ctx, "running network verifier for subnet  %+v, security group %+v", inputs[i].SubnetID, inputs[i].AWS.SecurityGroupIDs)
 		out := onv.ValidateEgress(c, *inputs[i])
 		out.Summary(e.Debug)
-
-		// Only suggest sending a service log if the failures are egress-url related
+		// Prompt putting the cluster into LS if egresses crucial for monitoring (PagerDuty/DMS) are blocked.
+		// Prompt sending a service log instead for other blocked egresses.
 		if !out.IsSuccessful() && len(out.GetEgressURLFailures()) > 0 {
 			postCmd := generateServiceLog(out, e.ClusterId)
-			if err := postCmd.Run(); err != nil {
+			blockedUrl := strings.Join(postCmd.TemplateParams, ",")
+			if strings.Contains(blockedUrl, "deadmanssnitch") || strings.Contains(blockedUrl, "pagerduty") {
+				fmt.Println("PagerDuty and/or DMS outgoing traffic is blocked, resulting in a loss of observability. As a result, Red Hat can no longer guarantee SLAs and the cluster should be put in limited support")
+				pCmd := lsupport.Post{Template: LimitedSupportTemplate}
+				if err := pCmd.Run(e.ClusterId); err != nil {
+					fmt.Printf("failed to post limited support reason: %v", err)
+				}
+			} else if err := postCmd.Run(); err != nil {
 				fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
-				fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
-					e.ClusterId, blockedEgressTemplateUrl, strings.Join(postCmd.TemplateParams, " -p "))
+				fmt.Printf("osdctl servicelog post %v -t %v -p %v\n", e.ClusterId, blockedEgressTemplateUrl, strings.Join(postCmd.TemplateParams, " -p "))
 			}
 		}
 	}
