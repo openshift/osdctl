@@ -4,10 +4,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	
-)
-
 func NewCmdDynatrace() *cobra.Command {
 	dtCmd := &cobra.Command{
 		Use:               "dynatrace",

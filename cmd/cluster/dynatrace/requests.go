@@ -96,7 +96,7 @@ func getAccessToken() (string, error) {
 		return "", err
 	}
 
-	err = setupVaultToken(vaultAddr, vaultPath)
+	err = setupVaultToken(vaultAddr)
 	if err != nil {
 		return "", err
 	}
