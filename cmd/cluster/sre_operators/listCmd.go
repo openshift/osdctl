@@ -3,8 +3,12 @@ package sre_operators
 import (
 	"fmt"
 
+	// csvutil "github.com/operator-framework/api/pkg/operators/v1alpha1"
 	"github.com/spf13/cobra"
+	"k8s.io/kubectl/pkg/cmd/util"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 type sreOperatorsListOptions struct {
@@ -20,10 +24,14 @@ const (
 	# List SRE operators
 	$ osdctl cluster sre-operators list
 	`
+	appInterfaceURL   = "git@gitlab.cee.redhat.com:service/app-interface.git"
+	referenceYamlPath = "data/services/osd-operators/app.yml"
 )
 
-func newCmdList() *cobra.Command {
-	opts := &sreOperatorsListOptions{}
+func newCmdList(client client.Client) *cobra.Command {
+	opts := &sreOperatorsListOptions{
+		kubeCli: client,
+	}
 
 	listCmd := &cobra.Command{
 		Use:               "list",
@@ -32,7 +40,8 @@ func newCmdList() *cobra.Command {
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			ListOperators()
+			util.CheckErr(opts.checks(cmd))
+			opts.ListOperators(cmd)
 		},
 	}
 
@@ -42,8 +51,19 @@ func newCmdList() *cobra.Command {
 	return listCmd
 }
 
+// Command validity checking
+func (ctx *sreOperatorsListOptions) checks(cmd *cobra.Command) error {
+	if _, err := config.GetConfig(); err != nil {
+		return util.UsageErrorf(cmd, "could not find KUBECONFIG, please make sure you are logged into a cluster")
+	}
+	fmt.Println("success")
+	return nil
+}
+
 // main
-func ListOperators() {
+func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) error {
+
+	// list of operators to check (SRE only)
 	listOfOperators := []string{
 		"addon-operator",
 		"aws-vpce-operator",
@@ -69,23 +89,27 @@ func ListOperators() {
 		"pagerduty-operator",
 		"route-monitor-operator",
 	}
+	// csvList := csvutil.ClusterServiceVersion{}
 
 	// one simple reason for this instead of empty slice:
 	// allows for later on easier removal of operators with no version,
 	// i.e. not present on cluster.
 	currentVersion := make([]string, len(listOfOperators))
-	expectedVersion := "test"
+	expectedVersion := make([]string, len(listOfOperators))
 
 	fmt.Printf("%-40s %-10s %-10s\n", "OPERATOR", "CURRENT", "EXPECTED")
 	for operator := range listOfOperators {
 		// TODO: get current version of each operator via kube API
-		// AS EXAMPLE => cmd := "oc get csv -n " + listOfOperators[operator] + "-o json | jq '.items[].spec.version' "
 
-		// TODO: insert current version into currentVersion slice below
+		// TODO: get expected version of each operator via app-interface
+
+		// TODO: insert versions into slices below
 		currentVersion[operator] = "test"
+		expectedVersion[operator] = "test"
 
-		fmt.Printf("%-40s %-10s %-10s\n", listOfOperators[operator], currentVersion[operator], expectedVersion)
+		fmt.Printf("%-40s %-10s %-10s\n", listOfOperators[operator], currentVersion[operator], expectedVersion[operator])
 		fmt.Println() // returns to newline at end of output
 	}
 
+	return nil
 }
