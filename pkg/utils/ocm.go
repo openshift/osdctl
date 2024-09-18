@@ -19,10 +19,12 @@ import (
 const ClusterServiceClusterSearch = "id = '%s' or name = '%s' or external_id = '%s'"
 
 const (
-	productionURL    = "https://api.openshift.com"
-	stagingURL       = "https://api.stage.openshift.com"
-	integrationURL   = "https://api.integration.openshift.com"
-	productionGovURL = "https://api-admin.openshiftusgov.com"
+	productionURL              = "https://api.openshift.com"
+	stagingURL                 = "https://api.stage.openshift.com"
+	integrationURL             = "https://api.integration.openshift.com"
+	productionGovURL           = "https://api-admin.openshiftusgov.com"
+	HypershiftClusterTypeLabel = "ext-hypershift.openshift.io/cluster-type"
+	DynatraceTenantKeyLabel    = "sre-capabilities.dtp.tenant"
 )
 
 var urlAliases = map[string]string{
@@ -452,6 +454,91 @@ func GetManagementCluster(clusterId string) (*cmv1.Cluster, error) {
 	}
 
 	return nil, fmt.Errorf("no management cluster found for %s", clusterId)
+}
+
+// Sanity Check for MC Cluster
+func IsManagementCluster(clusterID string) (isMC bool, err error) {
+	conn, err := CreateConnection()
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+	collection := conn.ClustersMgmt().V1().Clusters()
+	// Get the labels externally available for the cluster
+	resource := collection.Cluster(clusterID).ExternalConfiguration().Labels()
+	// Send the request to retrieve the list of external cluster labels:
+	response, err := resource.List().Send()
+	if err != nil {
+		return false, fmt.Errorf("can't retrieve cluster labels: %v", err)
+	}
+
+	labels, ok := response.GetItems()
+	if !ok {
+		return false, nil
+	}
+
+	for _, label := range labels.Slice() {
+		if l, ok := label.GetKey(); ok {
+			// If the label is found as the key, we know its an Managemnt Cluster
+			if l == HypershiftClusterTypeLabel {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func GetHCPNamespace(clusterId string) (namespace string, err error) {
+	conn, err := CreateConnection()
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+
+	hypershiftResp, err := conn.ClustersMgmt().V1().Clusters().
+		Cluster(clusterId).
+		Hypershift().
+		Get().
+		Send()
+	if err != nil {
+		return "", err
+	}
+
+	if namespace, ok := hypershiftResp.Body().GetHCPNamespace(); ok {
+		return namespace, nil
+	}
+
+	return "", fmt.Errorf("no hcp namespace found for %s", clusterId)
+}
+
+func GetDynatraceURLFromLabel(clusterID string) (url string, err error) {
+	conn, err := CreateConnection()
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+	subscription, err := GetSubscription(conn, clusterID)
+	if err != nil {
+		return "", err
+	}
+
+	subscriptionLabels, err := conn.AccountsMgmt().V1().Subscriptions().Subscription(subscription.ID()).Labels().List().Send()
+	labels, ok := subscriptionLabels.GetItems()
+	if !ok {
+		return "", err
+	}
+
+	for _, label := range labels.Slice() {
+		if key, ok := label.GetKey(); ok {
+			if key == DynatraceTenantKeyLabel {
+				if value, ok := label.GetValue(); ok {
+					url := fmt.Sprintf("https://%s.apps.dynatrace.com/", value)
+					return url, nil
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("DT Tenant Not Found")
 }
 
 func SendRequest(request *sdk.Request) (*sdk.Response, error) {

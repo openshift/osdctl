@@ -53,35 +53,26 @@ func gatherLogs(clusterID string) (error error) {
 		return fmt.Errorf("failed to acquire access token %v", err)
 	}
 
-	clusterInternalID, managementClusterName, DTURL, err := fetchClusterDetails(clusterID)
-	if err != nil {
-		return err
-	}
-	managementClusterInternalID, _, _, err := fetchClusterDetails(managementClusterName)
+	hcpCluster, err := FetchClusterDetails(clusterID)
 	if err != nil {
 		return err
 	}
 
-	_, _, clientset, err := common.GetKubeConfigAndClient(managementClusterInternalID, "", "")
+	_, _, clientset, err := common.GetKubeConfigAndClient(hcpCluster.managementClusterID, "", "")
 	if err != nil {
-		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", managementClusterInternalID, err)
+		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", hcpCluster.managementClusterID, err)
 	}
 
-	klusterletNS, shortNS, hcpNS, err := GetHCPNamespacesFromInternalID(clientset, clusterInternalID)
-	if err != nil {
-		return err
-	}
+	fmt.Printf("Using HCP Namespace %v\n", hcpCluster.hcpNamespace)
 
-	fmt.Println(fmt.Sprintf("Using HCP Namespace %v", hcpNS))
-
-	gatherNamespaces := []string{hcpNS, klusterletNS, shortNS, "hypershift", "cert-manager", "redhat-cert-manager-operator"}
-	gatherDir, err := setupGatherDir(hcpNS)
+	gatherNamespaces := []string{hcpCluster.hcpNamespace, hcpCluster.klusterletNS, hcpCluster.hostedNS, "hypershift", "cert-manager", "redhat-cert-manager-operator"}
+	gatherDir, err := setupGatherDir(hcpCluster.hcpNamespace)
 	if err != nil {
 		return err
 	}
 
 	for _, gatherNS := range gatherNamespaces {
-		fmt.Println(fmt.Sprintf("Gathering for %s", gatherNS))
+		fmt.Printf("Gathering for %s\n", gatherNS)
 
 		pods, err := getPodsForNamespace(clientset, gatherNS)
 		if err != nil {
@@ -93,7 +84,7 @@ func gatherLogs(clusterID string) (error error) {
 			return err
 		}
 
-		err = dumpPodLogs(pods, nsDir, gatherNS, managementClusterName, DTURL, accessToken, since, tail, sortOrder)
+		err = dumpPodLogs(pods, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, accessToken, since, tail, sortOrder)
 		if err != nil {
 			return err
 		}
@@ -103,7 +94,7 @@ func gatherLogs(clusterID string) (error error) {
 			return err
 		}
 
-		err = dumpEvents(deployments, nsDir, gatherNS, managementClusterName, DTURL, accessToken, since, tail, sortOrder)
+		err = dumpEvents(deployments, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, accessToken, since, tail, sortOrder)
 		if err != nil {
 			return err
 		}
@@ -116,7 +107,7 @@ func gatherLogs(clusterID string) (error error) {
 func dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS string, managementClusterName string, DTURL string, accessToken string, since int, tail int, sortOrder string) error {
 	totalDeployments := len(deploys.Items)
 	for k, d := range deploys.Items {
-		fmt.Println(fmt.Sprintf("[%d/%d] Deployment events for %s", k+1, totalDeployments, d.Name))
+		fmt.Printf("[%d/%d] Deployment events for %s\n", k+1, totalDeployments, d.Name)
 
 		eventQuery, err := getEventQuery(d.Name, targetNS, since, tail, sortOrder, managementClusterName)
 		if err != nil {
@@ -133,6 +124,9 @@ func dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS strin
 
 		deploymentYamlPath := filepath.Join(eventsDirPath, deploymentYamlFileName)
 		deploymentYaml, err := yaml.Marshal(d)
+		if err != nil {
+			return fmt.Errorf("failed to marshal YAML: %v", err)
+		}
 		f, err := os.OpenFile(deploymentYamlPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0655)
 		if err != nil {
 			return err
@@ -147,6 +141,10 @@ func dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS strin
 		}
 
 		eventsRequestToken, err := getDTQueryExecution(DTURL, accessToken, eventQuery.finalQuery)
+		if err != nil {
+			log.Print("failed to get request token", err)
+			continue
+		}
 		err = getEvents(DTURL, accessToken, eventsRequestToken, f)
 		f.Close()
 		if err != nil {
@@ -161,7 +159,7 @@ func dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS strin
 func dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, managementClusterName string, DTURL string, accessToken string, since int, tail int, sortOrder string) error {
 	totalPods := len(pods.Items)
 	for k, p := range pods.Items {
-		fmt.Println(fmt.Sprintf("[%d/%d] Pod logs for %s", k+1, totalPods, p.Name))
+		fmt.Printf("[%d/%d] Pod logs for %s\n", k+1, totalPods, p.Name)
 
 		podLogsQuery, err := getPodQuery(p.Name, targetNS, since, tail, sortOrder, managementClusterName)
 		if err != nil {
@@ -178,6 +176,9 @@ func dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, manage
 
 		podYamlFilePath := filepath.Join(podDirPath, podYamlFileName)
 		podYaml, err := yaml.Marshal(p)
+		if err != nil {
+			return fmt.Errorf("failed to marshal YAML: %v", err)
+		}
 		f, err := os.OpenFile(podYamlFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0655)
 		if err != nil {
 			return err
@@ -192,6 +193,10 @@ func dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, manage
 		}
 
 		podLogsRequestToken, err := getDTQueryExecution(DTURL, accessToken, podLogsQuery.finalQuery)
+		if err != nil {
+			log.Print("failed to get request token", err)
+			continue
+		}
 		err = getLogs(DTURL, accessToken, podLogsRequestToken, f)
 		f.Close()
 		if err != nil {

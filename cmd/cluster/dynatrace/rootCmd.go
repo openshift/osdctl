@@ -4,11 +4,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	DynatraceTenantKeyLabel    string = "sre-capabilities.dtp.tenant"
-	HypershiftClusterTypeLabel string = "ext-hypershift.openshift.io/cluster-type"
-)
-
 func NewCmdDynatrace() *cobra.Command {
 	dtCmd := &cobra.Command{
 		Use:               "dynatrace",
