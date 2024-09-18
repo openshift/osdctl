@@ -404,8 +404,8 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 
 		hcpCluster, err := dynatrace.FetchClusterDetails(clusterID)
 		if err != nil {
-			if strings.Contains(err.Error(), "not an HCP or MC Cluster") {
-				data.DyntraceEnvURL = "Not an HCP/MC Cluster"
+			if err == dynatrace.ErrUnsupportedCluster {
+				data.DyntraceEnvURL = dynatrace.ErrUnsupportedCluster.Error()
 			} else {
 				errors = append(errors, fmt.Errorf("failed to acquire cluster details %v", err))
 				data.DyntraceEnvURL = "Failed to fetch Dynatrace URL"
@@ -718,7 +718,13 @@ func printDynatraceResources(data *contextData) {
 
 	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
 	for _, link := range keys {
-		table.AddRow([]string{link, strings.TrimSpace(links[link])})
+		url := strings.TrimSpace(links[link])
+		if url == dynatrace.ErrUnsupportedCluster.Error() {
+			fmt.Println(dynatrace.ErrUnsupportedCluster.Error())
+			break
+		} else if url != "" {
+			table.AddRow([]string{link, url})
+		}
 	}
 
 	if err := table.Flush(); err != nil {

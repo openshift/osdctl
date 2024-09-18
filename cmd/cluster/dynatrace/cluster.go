@@ -25,6 +25,8 @@ type HCPCluster struct {
 	DynatraceURL          string
 }
 
+var ErrUnsupportedCluster = fmt.Errorf("Not an HCP or MC Cluster")
+
 func FetchClusterDetails(clusterKey string) (hcpCluster HCPCluster, error error) {
 	hcpCluster = HCPCluster{}
 	if err := ocmutils.IsValidClusterKey(clusterKey); err != nil {
@@ -45,7 +47,7 @@ func FetchClusterDetails(clusterKey string) (hcpCluster HCPCluster, error error)
 		isMC, err := ocmutils.IsManagementCluster(cluster.ID())
 		if !isMC || err != nil {
 			// if the cluster is not a HCP or MC, then return an error
-			return HCPCluster{}, fmt.Errorf("not an HCP or MC Cluster")
+			return HCPCluster{}, ErrUnsupportedCluster
 		} else {
 			// if the cluster is not a HCP but a MC, then return a just relevant info for HCPCluster Object
 			hcpCluster.managementClusterID = cluster.ID()
