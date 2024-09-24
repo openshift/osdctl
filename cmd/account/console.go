@@ -35,7 +35,6 @@ func newCmdConsole() *cobra.Command {
 	consoleCmd.Flags().StringVarP(&ops.awsAccountID, "accountId", "i", "", "AWS Account ID")
 	consoleCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", "", "AWS Profile")
 	consoleCmd.Flags().StringVarP(&ops.region, "region", "r", "", "Region")
-	consoleCmd.Flags().StringVarP(&ops.clusterID, "clusterID", "C", "", "Cluster ID")
 
 	return consoleCmd
 }
@@ -48,7 +47,6 @@ type consoleOptions struct {
 	awsAccountID string
 	awsProfile   string
 	region       string
-	clusterID    string
 
 	consoleDuration int32
 }
@@ -59,26 +57,8 @@ func newConsoleOptions() *consoleOptions {
 
 func (o *consoleOptions) complete(cmd *cobra.Command) error {
 
-	var err error
-
-	ocmClient, err := utils.CreateConnection()
-	if err != nil {
-		return err
-	}
-
-	if o.awsAccountID == "" && o.clusterID == "" {
-		return fmt.Errorf("please specify -i or -C")
-	}
-
-	if o.awsAccountID != "" && o.clusterID != "" {
-		return fmt.Errorf("-i and -c are mutually exclusive, please only specify one")
-	}
-
-	if o.clusterID != "" {
-		o.awsAccountID, err = utils.GetAWSAccountIdForCluster(ocmClient, o.clusterID)
-		if err != nil {
-			return err
-		}
+	if o.awsAccountID == "" {
+		return fmt.Errorf("please specify -i")
 	}
 
 	if o.region == "" {
@@ -90,7 +70,6 @@ func (o *consoleOptions) complete(cmd *cobra.Command) error {
 
 func (o *consoleOptions) run() error {
 
-	isCCS := false
 	var err error
 
 	ocmClient, err := utils.CreateConnection()
@@ -98,14 +77,6 @@ func (o *consoleOptions) run() error {
 		return err
 	}
 	defer ocmClient.Close()
-
-	// If a cluster ID was provided, determine if the cluster is CCS
-	if o.clusterID != "" {
-		isCCS, err = utils.IsClusterCCS(ocmClient, o.clusterID)
-		if err != nil {
-			return err
-		}
-	}
 
 	// Build the base AWS client using the provide credentials (profile or env vars)
 	awsClient, err := aws.NewAwsClient(o.awsProfile, o.region, "")
@@ -129,32 +100,6 @@ func (o *consoleOptions) run() error {
 
 	// By default, the target role arn is OrganizationAccountAccessRole (works for -i and non-CCS clusters)
 	targetRoleArnString := aws.GenerateRoleARN(o.awsAccountID, osdCloud.OrganizationAccountAccessRole)
-
-	if isCCS {
-		// If a cluster is provided and it's CCS, the target role is the Managed Support role arn
-		targetRoleArnString, err = utils.GetSupportRoleArnForCluster(ocmClient, o.clusterID)
-		if err != nil {
-			return err
-		}
-
-		// The AWS client used to generate the URL should be the jump role for CCS clusters
-		jumpRoleCreds, err := osdCloud.GenerateJumpRoleCredentials(awsClient, o.region, sessionName)
-		if err != nil {
-			return err
-		}
-
-		awsClient, err = aws.NewAwsClientWithInput(
-			&aws.ClientInput{
-				AccessKeyID:     *jumpRoleCreds.AccessKeyId,
-				SecretAccessKey: *jumpRoleCreds.SecretAccessKey,
-				SessionToken:    *jumpRoleCreds.SessionToken,
-				Region:          o.region,
-			},
-		)
-		if err != nil {
-			return err
-		}
-	}
 
 	targetRoleArn, err := arn.Parse(targetRoleArnString)
 	if err != nil {
