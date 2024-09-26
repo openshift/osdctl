@@ -2,13 +2,17 @@ package sre_operators
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"regexp"
-
-	// csvutil "github.com/operator-framework/api/pkg/operators/v1alpha1"
+	"strings"
 
 	"github.com/spf13/cobra"
-	v1 "k8s.io/api/core/v1"
+	"github.com/spf13/viper"
+	"github.com/xanzy/go-gitlab"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/kubectl/pkg/cmd/util"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -19,6 +23,7 @@ type sreOperatorsListOptions struct {
 	short    bool
 	outdated bool
 
+	genericclioptions.IOStreams
 	kubeCli client.Client
 }
 
@@ -27,8 +32,7 @@ const (
 	# List SRE operators
 	$ osdctl cluster sre-operators list
 	`
-	appInterfaceURL   = "git@gitlab.cee.redhat.com:service/app-interface.git"
-	referenceYamlPath = "data/services/osd-operators/app.yml"
+	repositoryBranch = "production"
 )
 
 func newCmdList(client client.Client) *cobra.Command {
@@ -54,7 +58,7 @@ func newCmdList(client client.Client) *cobra.Command {
 	return listCmd
 }
 
-// Command validity checking
+// Command validity check
 func (ctx *sreOperatorsListOptions) checks(cmd *cobra.Command) error {
 	if _, err := config.GetConfig(); err != nil {
 		return util.UsageErrorf(cmd, "could not find KUBECONFIG, please make sure you are logged into a cluster")
@@ -62,10 +66,9 @@ func (ctx *sreOperatorsListOptions) checks(cmd *cobra.Command) error {
 	return nil
 }
 
-// main
 func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) error {
 
-	// list of operators to check (SRE only)
+	// list of SRE operators to check
 	listOfOperators := []string{
 		"openshift-addon-operator",
 		"aws-vpce-operator", // unverified
@@ -91,57 +94,99 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) error {
 		"openshift-pagerduty-operator", // unverified
 		"openshift-route-monitor-operator",
 	}
-	// csvList := csvutil.ClusterServiceVersion{}
-	// csvutil.ClusterServiceVersion{}
 
-	// one simple reason for this instead of empty slice:
-	// allows for later on easier removal of operators with no version,
-	// i.e. not present on cluster.
-	// listOfExistingOperators := make(map[string]string)
+	listOfOperatorNames := []string{
+		"addon-operator",
+		"aws-vpce-operator",
+		"custom-domains-operator",
+		"managed-node-metadata-operator",
+		"managed-upgrade-operator",
+		"must-gather-operator",
+		"ocm-agent-operator",
+		"osd-metrics-exporter",
+		"rbac-permissions-operator",
+		"splunk-forwarder-operator",
+		"aws-account-operator",
+		"certman-operator",
+		"cloud-ingress-operator",
+		"configure-alertmanager-operator",
+		"deadmanssnitch-operator",
+		"deployment-validation-operator",
+		"dynatrace-operator",
+		"gcp-project-operator",
+		"managed-velero-operator",
+		"observability-operator",
+		"opentelemetry-operator",
+		"pagerduty-operator",
+		"route-monitor-operator",
+	}
+
 	currentVersion := make([]string, len(listOfOperators))
-	expectedVersion := make([]string, len(listOfOperators))
+	// expectedVersion := make([]string, len(listOfOperators))
+	operatorChannel := ""
 
-	fmt.Printf("%-40s %-10s %-10s %-10s %-10s\n", "OPERATOR", "CURRENT", "EXPECTED", "CHANNEL", "STATUS")
+	// Unstructured csv and csvList
+	csv := &unstructured.Unstructured{}
+	csv.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "operators.coreos.com",
+		Version: "v1alpha1",
+		Kind:    "ClusterServiceVersion",
+	})
+
+	sub := &unstructured.Unstructured{}
+	sub.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "operators.coreos.com",
+		Version: "v1alpha1",
+		Kind:    "Subscription",
+	})
+
+	csvList := &unstructured.UnstructuredList{}
+	csvList.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "operators.coreos.com",
+		Version: "v1alpha1",
+		Kind:    "ClusterServiceVersionList",
+	})
+
+	fmt.Printf("%-45s %-20s %-20s %-15s %-15s\n", "NAME", "CURRENT", "EXPECTED", "STATUS", "CHANNEL")
+
 	for operator := range listOfOperators {
 
-		podList := &v1.PodList{}
-
-		if err := ctx.kubeCli.List(context.TODO(), podList, client.InNamespace(listOfOperators[operator])); err != nil {
-			// fmt.Println("failed to retrieve pods", err)
-			// return fmt.Errorf("failed to retrieve pods: %v", err)
+		if err := ctx.kubeCli.List(context.TODO(), csvList, client.InNamespace(listOfOperators[operator])); err != nil {
 			continue
 		} else {
-			if envVar := podList.Items[0].Spec.Containers[0].Env; envVar != nil {
-				version := envVar[len(envVar)-1] // gets last element of envVar slice
-				formattedVersion := extractVersion(version.Value)
-				currentVersion[operator] = formattedVersion
-			} else if envVar := podList.Items[1].Spec.Containers[0].Env; envVar != nil {
-				version := envVar[len(envVar)-1]
-				formattedVersion := extractVersion(version.Value)
-				currentVersion[operator] = formattedVersion
-			} else {
-				// TODO: find a way to handle operators with no version
-				// operators such as ocm-agent-operator and config-operator
-				// do not seem to contain any version numbers within metadata.
+			// iterates through namespace to find SRE operator
+			operatorStatus := ""
+			for _, item := range csvList.Items {
+				if strings.Contains(item.GetName(), listOfOperatorNames[operator]) {
+					operatorStatus = item.Object["status"].(map[string]interface{})["phase"].(string)
+					currentVersion[operator] = item.GetName()
+				}
 			}
+			currentVersion[operator] = extractVersion(currentVersion[operator])
 
-			// TODO: get expected version of each operator via app-interface
+			latestVersion := getLatestVersion(listOfOperatorNames[operator])
 
-			// TODO: insert versions into slices below
-			// listOfExistingOperators[listOfOperators[operator]] =
-			// currentVersion[operator] = formattedVersion
-			expectedVersion[operator] = "test"
+			// p := printer.NewTablePrinter(ctx.IOStreams.Out, 20, 1, 3, ' ')
 
-			fmt.Printf("%-40s %-10s %-10s\n", listOfOperators[operator], currentVersion[operator], expectedVersion[operator])
-			fmt.Println() // returns to newline at end of output
+			// if ctx.short {
+			// 	p.AddRow(listOfOperatorNames[operator], currentVersion[operator], latestVersion, operatorStatus, "")
+			// 	p.Print()
+			// } else {
+			// 	p.AddRow(listOfOperatorNames[operator], currentVersion[operator], latestVersion, operatorStatus, "")
+			// 	p.Print()
+			// }
+
+			// if ctx.outdated && currentVersion[operator] == latestVersion {
+
+			fmt.Printf("%-45s %-20s %-20s %-15s %-15s\n", listOfOperatorNames[operator], currentVersion[operator], latestVersion, operatorStatus, operatorChannel)
 		}
-
 	}
+	fmt.Println()
 	return nil
 }
 func extractVersion(input string) string {
-
-	regex := regexp.MustCompile(`.*v([0-9\.]+)-`)
+	// extracts version number from image name; might want to get hash later as well
+	regex := regexp.MustCompile(`.*(v[0-9\.]+)-`)
 	match := regex.FindStringSubmatch(input)
 
 	if len(match) > 1 {
@@ -149,4 +194,37 @@ func extractVersion(input string) string {
 	} else {
 		return ""
 	}
+}
+
+func getLatestVersion(operatorName string) string {
+
+	// obtain personal access token from osdctl config
+	gitlab_access := viper.GetString("gitlab_access")
+	if gitlab_access == "" {
+		fmt.Println("gitlab access token not found, please ensure your gitlab access token is set in the osdctl config")
+	}
+	// Generate gitlab client
+	gitClient, err := gitlab.NewClient(gitlab_access, gitlab.WithBaseURL("https://gitlab.cee.redhat.com/"))
+	if err != nil {
+		fmt.Println("failed to create gitlab client:", err)
+	}
+
+	repoLink := "service/saas-" + operatorName + "-bundle"
+	filePath := operatorName + "/" + operatorName + ".package.yaml"
+
+	fileYaml, _, err := gitClient.RepositoryFiles.GetFile(repoLink, filePath, &gitlab.GetFileOptions{Ref: gitlab.Ptr(repositoryBranch)})
+	if err != nil {
+		fmt.Printf("failed to get file: %s", err)
+		return ""
+	}
+
+	// decode base64
+	decodedYamlString, err := base64.StdEncoding.DecodeString(fileYaml.Content)
+	if err != nil {
+		fmt.Printf("failed to decode file: %s", err)
+	}
+
+	expectedVersion := extractVersion(string(decodedYamlString))
+
+	return expectedVersion
 }
