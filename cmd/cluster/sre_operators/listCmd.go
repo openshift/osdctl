@@ -273,7 +273,7 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 
 func extractVersion(input string) string {
 	// extract version from csv name
-	regex := regexp.MustCompile(`(v[0-9\.]+)(?:-.*)?`)
+	regex := regexp.MustCompile(`(?:.?)(v[0-9\.]+)(?:-.*)?`)
 	extracted := regex.FindStringSubmatch(input)
 
 	if len(extracted) > 1 {
@@ -284,6 +284,29 @@ func extractVersion(input string) string {
 }
 
 func getLatestVersion(gitClient *gitlab.Client, operatorName string) string {
+
+	// Special case for deployment-validation-operator: version is stored in a text file
+	if operatorName == "deployment-validation-operator" {
+		repoLink := "service/saas-operator-versions"
+		filePath := "deployment-validation-operator/deployment-validation-operator-versions.txt"
+
+		fileTxt, _, err := gitClient.RepositoryFiles.GetFile(repoLink, filePath, &gitlab.GetFileOptions{Ref: gitlab.Ptr("master")})
+		if err != nil {
+			fmt.Println(operatorName, "- Failed to obtain GitLab file: ", err)
+			return ""
+		}
+		decodedFileTxt, err := base64.StdEncoding.DecodeString(fileTxt.Content)
+		if err != nil {
+			fmt.Println(operatorName, "failed to decode file: ", err)
+		}
+		line := strings.Split(string(decodedFileTxt), "\n")
+		for i := len(line) - 1; i >= 0; i-- {
+			if line[i] != "" {
+				expectedVersion := extractVersion("v" + line[i])
+				return expectedVersion
+			}
+		}
+	}
 
 	repoLink := "service/saas-" + operatorName + "-bundle"
 	filePath := operatorName + "/" + operatorName + ".package.yaml"
