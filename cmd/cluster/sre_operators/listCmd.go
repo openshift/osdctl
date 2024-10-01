@@ -217,6 +217,7 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 		gitlab_access := viper.GetString("gitlab_access")
 		if gitlab_access == "" {
 			fmt.Println("gitlab access token not found, please ensure your gitlab access token is set in the osdctl config")
+			return nil, nil
 		}
 		gitClient, _ = gitlab.NewClient(gitlab_access, gitlab.WithBaseURL("https://gitlab.cee.redhat.com/"))
 	}
