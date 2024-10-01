@@ -51,7 +51,7 @@ const (
 	repositoryBranch = "production"
 )
 
-func newCmdList(client client.Client) *cobra.Command {
+func newCmdList(streams genericclioptions.IOStreams, client client.Client) *cobra.Command {
 	opts := &sreOperatorsListOptions{
 		kubeCli: client,
 	}
@@ -89,7 +89,7 @@ func (ctx *sreOperatorsListOptions) checks(cmd *cobra.Command) error {
 // Print output in table format
 // WIP: To be changed to use printer module - currently commented out
 func (ctx *sreOperatorsListOptions) printText(opList []sreOperator) error {
-	// p := printer.NewTablePrinter(o.IOStreams.Out, 20, 1, 3, ' ')
+	// p := printer.NewTablePrinter(ctx.IOStreams.Out, 20, 1, 3, ' ')
 
 	if !ctx.short {
 		header := []string{"NAME", "CURRENT", "EXPECTED", "STATUS", "CHANNEL"}
