@@ -27,10 +27,26 @@ type sreOperatorsListOptions struct {
 	kubeCli client.Client
 }
 
+type sreOperator struct {
+	Name     string
+	Current  string
+	Expected string
+	Status   string
+	Channel  string
+}
+
+var opList []sreOperator
+
 const (
 	sreOperatorsListExample = `
 	# List SRE operators
 	$ osdctl cluster sre-operators list
+	
+	# List SRE operators without fetching the latest version for faster output
+	$ osdctl cluster sre-operators list --short
+	
+	# List only SRE operators that are running outdated versions
+	$ osdctl cluster sre-operators list --outdated
 	`
 	repositoryBranch = "production"
 )
@@ -48,11 +64,12 @@ func newCmdList(client client.Client) *cobra.Command {
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			util.CheckErr(opts.checks(cmd))
-			opts.ListOperators(cmd)
+			output, _ := opts.ListOperators(cmd)
+			opts.printText(output)
 		},
 	}
 
-	listCmd.Flags().BoolVar(&opts.short, "short", false, "Excluse fetching the latest version from app-interface for faster output")
+	listCmd.Flags().BoolVar(&opts.short, "short", false, "Exclude fetching the latest version from repositories for faster output")
 	listCmd.Flags().BoolVar(&opts.outdated, "outdated", false, "Filter to only show operators running outdated versions")
 
 	return listCmd
@@ -63,15 +80,60 @@ func (ctx *sreOperatorsListOptions) checks(cmd *cobra.Command) error {
 	if _, err := config.GetConfig(); err != nil {
 		return util.UsageErrorf(cmd, "could not find KUBECONFIG, please make sure you are logged into a cluster")
 	}
+	if ctx.outdated && ctx.short {
+		return util.UsageErrorf(cmd, "cannot use both --short and --outdated flags together")
+	}
 	return nil
 }
 
-func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) error {
+// Print output in table format
+// WIP: To be changed to use printer module - currently commented out
+func (ctx *sreOperatorsListOptions) printText(opList []sreOperator) error {
+	// p := printer.NewTablePrinter(o.IOStreams.Out, 20, 1, 3, ' ')
 
-	// list of SRE operators to check
+	if !ctx.short {
+		header := []string{"NAME", "CURRENT", "EXPECTED", "STATUS", "CHANNEL"}
+		fmt.Printf("%-45s %-20s %-20s %-15s %-15s\n", header[0], header[1], header[2], header[3], header[4])
+
+	} else {
+		header := []string{"NAME", "CURRENT", "STATUS", "CHANNEL"}
+		fmt.Printf("%-45s %-20s %-15s %-15s\n", header[0], header[1], header[2], header[3])
+	}
+
+	if ctx.outdated {
+		for _, op := range opList {
+			if op.Current != op.Expected {
+				fmt.Printf("%-45s %-20s %-20s %-15s %-15s\n", op.Name, op.Current, op.Expected, op.Status, op.Channel)
+			}
+		}
+		return nil
+	}
+
+	for _, op := range opList {
+		if !ctx.short {
+			fmt.Printf("%-45s %-20s %-20s %-15s %-15s\n", op.Name, op.Current, op.Expected, op.Status, op.Channel)
+		} else {
+			fmt.Printf("%-45s %-20s %-15s %-15s\n", op.Name, op.Current, op.Status, op.Channel)
+		}
+	}
+
+	// for _, op := range opList {
+	// 	row := []string{op.Name, op.Current, op.Expected, op.Status, op.Channel}
+	// 	fmt.Println(row)
+	// 	p.AddRow(row)
+	// }
+	// if err := p.Flush(); err != nil {
+	// 	return err
+	// }
+
+	return nil
+}
+
+func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOperator, error) {
+
 	listOfOperators := []string{
 		"openshift-addon-operator",
-		"aws-vpce-operator", // unverified
+		"aws-vpce-operator",
 		"openshift-custom-domains-operator",
 		"openshift-managed-node-metadata-operator",
 		"openshift-managed-upgrade-operator",
@@ -80,18 +142,18 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) error {
 		"openshift-osd-metrics",
 		"openshift-rbac-permissions",
 		"openshift-splunk-forwarder-operator",
-		"aws-account-operator", // unverified
-		"certman-operator",     // unverified
+		"aws-account-operator",
+		"certman-operator",
 		"openshift-cloud-ingress-operator",
 		"openshift-config-operator",
-		"deadmanssnitch-operator", // unverified
+		"deadmanssnitch-operator",
 		"openshift-deployment-validation-operator",
-		"dynatrace-operator",   // unverified
-		"gcp-project-operator", // unverified
+		"dynatrace-operator",
+		"gcp-project-operator",
 		"openshift-velero",
 		"openshift-observability-operator",
-		"opentelemetry-operator",       // unverified
-		"openshift-pagerduty-operator", // unverified
+		"opentelemetry-operator",
+		"pagerduty-operator",
 		"openshift-route-monitor-operator",
 	}
 
@@ -122,106 +184,119 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) error {
 	}
 
 	currentVersion := make([]string, len(listOfOperators))
-	// expectedVersion := make([]string, len(listOfOperators))
-	operatorChannel := ""
+	latestVersion, operatorStatus, operatorChannel := "", "", ""
+	gitClient := &gitlab.Client{}
 
-	// Unstructured csv and csvList
 	csv := &unstructured.Unstructured{}
 	csv.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "operators.coreos.com",
 		Version: "v1alpha1",
 		Kind:    "ClusterServiceVersion",
 	})
-
-	sub := &unstructured.Unstructured{}
-	sub.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "operators.coreos.com",
-		Version: "v1alpha1",
-		Kind:    "Subscription",
-	})
-
 	csvList := &unstructured.UnstructuredList{}
 	csvList.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "operators.coreos.com",
 		Version: "v1alpha1",
 		Kind:    "ClusterServiceVersionList",
 	})
+	sub := &unstructured.Unstructured{}
+	sub.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "operators.coreos.com",
+		Version: "v1alpha1",
+		Kind:    "Subscription",
+	})
+	subList := &unstructured.UnstructuredList{}
+	subList.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "operators.coreos.com",
+		Version: "v1alpha1",
+		Kind:    "SubscriptionList",
+	})
 
-	fmt.Printf("%-45s %-20s %-20s %-15s %-15s\n", "NAME", "CURRENT", "EXPECTED", "STATUS", "CHANNEL")
+	// Initialize gitlab client
+	if !ctx.short {
+		gitlab_access := viper.GetString("gitlab_access")
+		if gitlab_access == "" {
+			fmt.Println("gitlab access token not found, please ensure your gitlab access token is set in the osdctl config")
+		}
+		gitClient, _ = gitlab.NewClient(gitlab_access, gitlab.WithBaseURL("https://gitlab.cee.redhat.com/"))
+	}
 
+	// iterates through list of operators
 	for operator := range listOfOperators {
-
 		if err := ctx.kubeCli.List(context.TODO(), csvList, client.InNamespace(listOfOperators[operator])); err != nil {
 			continue
 		} else {
-			// iterates through namespace to find SRE operator
-			operatorStatus := ""
+
 			for _, item := range csvList.Items {
 				if strings.Contains(item.GetName(), listOfOperatorNames[operator]) {
-					operatorStatus = item.Object["status"].(map[string]interface{})["phase"].(string)
 					currentVersion[operator] = item.GetName()
+					operatorStatus = item.Object["status"].(map[string]interface{})["phase"].(string)
 				}
 			}
+
+			if currentVersion[operator] == "" {
+				continue
+			}
+
+			// get channel
+			if err := ctx.kubeCli.List(context.TODO(), subList, client.InNamespace(listOfOperators[operator])); err != nil {
+				continue
+			} else {
+				for _, item := range subList.Items {
+					if strings.Contains(item.GetName(), listOfOperatorNames[operator]) {
+						operatorChannel = item.Object["spec"].(map[string]interface{})["channel"].(string)
+					}
+				}
+			}
+
 			currentVersion[operator] = extractVersion(currentVersion[operator])
 
-			latestVersion := getLatestVersion(listOfOperatorNames[operator])
-
-			// p := printer.NewTablePrinter(ctx.IOStreams.Out, 20, 1, 3, ' ')
-
-			// if ctx.short {
-			// 	p.AddRow(listOfOperatorNames[operator], currentVersion[operator], latestVersion, operatorStatus, "")
-			// 	p.Print()
-			// } else {
-			// 	p.AddRow(listOfOperatorNames[operator], currentVersion[operator], latestVersion, operatorStatus, "")
-			// 	p.Print()
-			// }
-
-			// if ctx.outdated && currentVersion[operator] == latestVersion {
-
-			fmt.Printf("%-45s %-20s %-20s %-15s %-15s\n", listOfOperatorNames[operator], currentVersion[operator], latestVersion, operatorStatus, operatorChannel)
+			if !ctx.short {
+				latestVersion = getLatestVersion(gitClient, listOfOperatorNames[operator])
+			}
 		}
-	}
-	fmt.Println()
-	return nil
-}
-func extractVersion(input string) string {
-	// extracts version number from image name; might want to get hash later as well
-	regex := regexp.MustCompile(`.*(v[0-9\.]+)-`)
-	match := regex.FindStringSubmatch(input)
 
-	if len(match) > 1 {
-		return match[1]
+		op := sreOperator{
+			Name:     listOfOperatorNames[operator],
+			Current:  currentVersion[operator],
+			Expected: latestVersion,
+			Status:   operatorStatus,
+			Channel:  operatorChannel,
+		}
+
+		opList = append(opList, op)
+	}
+
+	return opList, nil
+}
+
+func extractVersion(input string) string {
+	// extract version from csv name
+	regex := regexp.MustCompile(`(v[0-9\.]+)(?:-.*)?`)
+	extracted := regex.FindStringSubmatch(input)
+
+	if len(extracted) > 1 {
+		return extracted[1]
 	} else {
 		return ""
 	}
 }
 
-func getLatestVersion(operatorName string) string {
-
-	// obtain personal access token from osdctl config
-	gitlab_access := viper.GetString("gitlab_access")
-	if gitlab_access == "" {
-		fmt.Println("gitlab access token not found, please ensure your gitlab access token is set in the osdctl config")
-	}
-	// Generate gitlab client
-	gitClient, err := gitlab.NewClient(gitlab_access, gitlab.WithBaseURL("https://gitlab.cee.redhat.com/"))
-	if err != nil {
-		fmt.Println("failed to create gitlab client:", err)
-	}
+func getLatestVersion(gitClient *gitlab.Client, operatorName string) string {
 
 	repoLink := "service/saas-" + operatorName + "-bundle"
 	filePath := operatorName + "/" + operatorName + ".package.yaml"
 
 	fileYaml, _, err := gitClient.RepositoryFiles.GetFile(repoLink, filePath, &gitlab.GetFileOptions{Ref: gitlab.Ptr(repositoryBranch)})
 	if err != nil {
-		fmt.Printf("failed to get file: %s", err)
+		fmt.Println(operatorName, "- Failed to obtain GitLab file: ", err)
 		return ""
 	}
 
 	// decode base64
 	decodedYamlString, err := base64.StdEncoding.DecodeString(fileYaml.Content)
 	if err != nil {
-		fmt.Printf("failed to decode file: %s", err)
+		fmt.Println(operatorName, "failed to decode file: ", err)
 	}
 
 	expectedVersion := extractVersion(string(decodedYamlString))
