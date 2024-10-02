@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/xanzy/go-gitlab"
@@ -20,8 +21,9 @@ import (
 )
 
 type sreOperatorsListOptions struct {
-	short    bool
-	outdated bool
+	short     bool
+	outdated  bool
+	noHeaders bool
 
 	genericclioptions.IOStreams
 	kubeCli client.Client
@@ -53,7 +55,8 @@ const (
 
 func newCmdList(streams genericclioptions.IOStreams, client client.Client) *cobra.Command {
 	opts := &sreOperatorsListOptions{
-		kubeCli: client,
+		kubeCli:   client,
+		IOStreams: streams,
 	}
 
 	listCmd := &cobra.Command{
@@ -71,6 +74,7 @@ func newCmdList(streams genericclioptions.IOStreams, client client.Client) *cobr
 
 	listCmd.Flags().BoolVar(&opts.short, "short", false, "Exclude fetching the latest version from repositories for faster output")
 	listCmd.Flags().BoolVar(&opts.outdated, "outdated", false, "Filter to only show operators running outdated versions")
+	listCmd.Flags().BoolVar(&opts.noHeaders, "no-headers", false, "Exclude headers from the output")
 
 	return listCmd
 }
@@ -87,44 +91,30 @@ func (ctx *sreOperatorsListOptions) checks(cmd *cobra.Command) error {
 }
 
 // Print output in table format
-// WIP: To be changed to use printer module - currently commented out
 func (ctx *sreOperatorsListOptions) printText(opList []sreOperator) error {
-	// p := printer.NewTablePrinter(ctx.IOStreams.Out, 20, 1, 3, ' ')
+	p := printer.NewTablePrinter(ctx.IOStreams.Out, 20, 1, 3, ' ')
 
-	if !ctx.short {
+	if !ctx.noHeaders {
 		header := []string{"NAME", "CURRENT", "EXPECTED", "STATUS", "CHANNEL"}
-		fmt.Printf("%-45s %-20s %-20s %-15s %-15s\n", header[0], header[1], header[2], header[3], header[4])
-
-	} else {
-		header := []string{"NAME", "CURRENT", "STATUS", "CHANNEL"}
-		fmt.Printf("%-45s %-20s %-15s %-15s\n", header[0], header[1], header[2], header[3])
-	}
-
-	if ctx.outdated {
-		for _, op := range opList {
-			if op.Current != op.Expected {
-				fmt.Printf("%-45s %-20s %-20s %-15s %-15s\n", op.Name, op.Current, op.Expected, op.Status, op.Channel)
-			}
+		if ctx.short {
+			header = []string{"NAME", "CURRENT", "STATUS", "CHANNEL"}
 		}
-		return nil
+		p.AddRow(header)
 	}
 
 	for _, op := range opList {
-		if !ctx.short {
-			fmt.Printf("%-45s %-20s %-20s %-15s %-15s\n", op.Name, op.Current, op.Expected, op.Status, op.Channel)
-		} else {
-			fmt.Printf("%-45s %-20s %-15s %-15s\n", op.Name, op.Current, op.Status, op.Channel)
+		if ctx.outdated && op.Current == op.Expected {
+			continue
 		}
+		row := []string{op.Name, op.Current, op.Status, op.Channel}
+		if !ctx.short {
+			row = []string{op.Name, op.Current, op.Expected, op.Status, op.Channel}
+		}
+		p.AddRow(row)
 	}
-
-	// for _, op := range opList {
-	// 	row := []string{op.Name, op.Current, op.Expected, op.Status, op.Channel}
-	// 	fmt.Println(row)
-	// 	p.AddRow(row)
-	// }
-	// if err := p.Flush(); err != nil {
-	// 	return err
-	// }
+	if err := p.Flush(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -148,11 +138,11 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 		"openshift-config-operator",
 		"deadmanssnitch-operator",
 		"openshift-deployment-validation-operator",
-		"dynatrace-operator",
+		// "dynatrace-operator", // skip for now
 		"gcp-project-operator",
 		"openshift-velero",
-		"openshift-observability-operator",
-		"opentelemetry-operator",
+		// "openshift-observability-operator", // skip for now
+		// "opentelemetry-operator", // skip for now
 		"pagerduty-operator",
 		"openshift-route-monitor-operator",
 	}
@@ -174,11 +164,11 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 		"configure-alertmanager-operator",
 		"deadmanssnitch-operator",
 		"deployment-validation-operator",
-		"dynatrace-operator",
+		// "dynatrace-operator", // skip for now
 		"gcp-project-operator",
 		"managed-velero-operator",
-		"observability-operator",
-		"opentelemetry-operator",
+		// "observability-operator", // skip for now
+		// "opentelemetry-operator", // skip for now
 		"pagerduty-operator",
 		"route-monitor-operator",
 	}
