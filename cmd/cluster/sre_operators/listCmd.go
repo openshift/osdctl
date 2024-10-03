@@ -68,7 +68,7 @@ func newCmdList(streams genericclioptions.IOStreams, client client.Client) *cobr
 		Run: func(cmd *cobra.Command, args []string) {
 			util.CheckErr(opts.checks(cmd))
 			output, _ := opts.ListOperators(cmd)
-			opts.printText(output)
+			util.CheckErr(opts.printText(output))
 		},
 	}
 
