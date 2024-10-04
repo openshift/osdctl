@@ -5,7 +5,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
+	"sync"
 
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/spf13/cobra"
@@ -37,7 +39,7 @@ type sreOperator struct {
 	Channel  string
 }
 
-var opList []sreOperator
+var mapMutex sync.Mutex
 
 const (
 	sreOperatorsListExample = `
@@ -102,6 +104,10 @@ func (ctx *sreOperatorsListOptions) printText(opList []sreOperator) error {
 		p.AddRow(header)
 	}
 
+	sort.Slice(opList, func(i, j int) bool {
+		return opList[i].Name < opList[j].Name
+	})
+
 	for _, op := range opList {
 		if ctx.outdated && op.Current == op.Expected {
 			continue
@@ -117,6 +123,11 @@ func (ctx *sreOperatorsListOptions) printText(opList []sreOperator) error {
 	}
 
 	return nil
+}
+
+type operatorResult struct {
+	Operator sreOperator
+	Error    error
 }
 
 func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOperator, error) {
@@ -138,13 +149,13 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 		"openshift-config-operator",
 		"deadmanssnitch-operator",
 		"openshift-deployment-validation-operator",
-		// "dynatrace-operator", // skip for now
 		"gcp-project-operator",
 		"openshift-velero",
-		// "openshift-observability-operator", // skip for now
-		// "opentelemetry-operator", // skip for now
 		"pagerduty-operator",
 		"openshift-route-monitor-operator",
+		// "dynatrace-operator", // skip for now
+		// "openshift-observability-operator", // skip for now
+		// "opentelemetry-operator", // skip for now
 	}
 
 	listOfOperatorNames := []string{
@@ -164,17 +175,18 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 		"configure-alertmanager-operator",
 		"deadmanssnitch-operator",
 		"deployment-validation-operator",
-		// "dynatrace-operator", // skip for now
 		"gcp-project-operator",
 		"managed-velero-operator",
-		// "observability-operator", // skip for now
-		// "opentelemetry-operator", // skip for now
 		"pagerduty-operator",
 		"route-monitor-operator",
+		// "dynatrace-operator", // skip for now
+		// "observability-operator", // skip for now
+		// "opentelemetry-operator", // skip for now
 	}
 
-	currentVersion := make([]string, len(listOfOperators))
-	latestVersion, operatorStatus, operatorChannel := "", "", ""
+	resultChannel := make(chan operatorResult, len(listOfOperators))
+	var wg sync.WaitGroup
+
 	gitClient := &gitlab.Client{}
 
 	csv := &unstructured.Unstructured{}
@@ -214,50 +226,79 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 
 	// iterates through list of operators
 	for operator := range listOfOperators {
-		if err := ctx.kubeCli.List(context.TODO(), csvList, client.InNamespace(listOfOperators[operator])); err != nil {
-			continue
-		} else {
+		wg.Add(1)
+		go func(oper, operatorName string, i int) {
+			defer wg.Done()
 
-			for _, item := range csvList.Items {
-				if strings.Contains(item.GetName(), listOfOperatorNames[operator]) {
-					currentVersion[operator] = item.GetName()
-					operatorStatus = item.Object["status"].(map[string]interface{})["phase"].(string)
-				}
-			}
+			currentVersion := make([]string, len(listOfOperators))
+			latestVersion, operatorStatus, operatorChannel := make([]string, len(listOfOperators)), make([]string, len(listOfOperators)), make([]string, len(listOfOperators))
 
-			if currentVersion[operator] == "" {
-				continue
-			}
-
-			// get channel
-			if err := ctx.kubeCli.List(context.TODO(), subList, client.InNamespace(listOfOperators[operator])); err != nil {
-				continue
+			mapMutex.Lock()
+			if err := ctx.kubeCli.List(context.TODO(), csvList, client.InNamespace(listOfOperators[i])); err != nil {
+				mapMutex.Unlock()
+				return
 			} else {
-				for _, item := range subList.Items {
-					if strings.Contains(item.GetName(), listOfOperatorNames[operator]) {
-						operatorChannel = item.Object["spec"].(map[string]interface{})["channel"].(string)
+				mapMutex.Unlock()
+				for _, item := range csvList.Items {
+					if strings.Contains(item.GetName(), listOfOperatorNames[i]) {
+						currentVersion[i] = item.GetName()
+						mapMutex.Lock()
+						operatorStatus[i] = item.Object["status"].(map[string]interface{})["phase"].(string)
+						mapMutex.Unlock()
 					}
 				}
+				// get channel
+				mapMutex.Lock()
+				if err := ctx.kubeCli.List(context.TODO(), subList, client.InNamespace(listOfOperators[i])); err != nil {
+					mapMutex.Unlock()
+					return
+				} else {
+					mapMutex.Unlock()
+					for _, item := range subList.Items {
+						if strings.Contains(item.GetName(), listOfOperatorNames[i]) {
+							operatorChannel[i] = item.Object["spec"].(map[string]interface{})["channel"].(string)
+						}
+					}
+				}
+
+				if currentVersion[i] == "" {
+					return
+				}
+
+				currentVersion[i] = extractVersion(currentVersion[i])
+
+				if !ctx.short {
+					mapMutex.Lock()
+					latestVersion[i] = getLatestVersion(gitClient, listOfOperatorNames[i])
+					mapMutex.Unlock()
+				}
 			}
 
-			currentVersion[operator] = extractVersion(currentVersion[operator])
-
-			if !ctx.short {
-				latestVersion = getLatestVersion(gitClient, listOfOperatorNames[operator])
+			op := sreOperator{
+				Name:     listOfOperatorNames[i],
+				Current:  currentVersion[i],
+				Expected: latestVersion[i],
+				Status:   operatorStatus[i],
+				Channel:  operatorChannel[i],
 			}
-		}
+			resultChannel <- operatorResult{Operator: op, Error: nil}
+		}(listOfOperators[operator], listOfOperatorNames[operator], operator)
 
-		op := sreOperator{
-			Name:     listOfOperatorNames[operator],
-			Current:  currentVersion[operator],
-			Expected: latestVersion,
-			Status:   operatorStatus,
-			Channel:  operatorChannel,
-		}
-
-		opList = append(opList, op)
+		// opList = append(opList, op)
 	}
 
+	go func() {
+		wg.Wait()
+		close(resultChannel)
+	}()
+
+	var opList []sreOperator
+	for result := range resultChannel {
+		if result.Error != nil {
+			fmt.Println("Error: ", result.Error)
+		}
+		opList = append(opList, result.Operator)
+	}
 	return opList, nil
 }
 
