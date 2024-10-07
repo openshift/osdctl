@@ -39,7 +39,7 @@ type sreOperator struct {
 	Channel  string
 }
 
-var mapMutex sync.Mutex
+var mapMutex sync.RWMutex
 
 const (
 	sreOperatorsListExample = `
@@ -146,7 +146,7 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 		"aws-account-operator",
 		"certman-operator",
 		"openshift-cloud-ingress-operator",
-		"openshift-config-operator",
+		"openshift-monitoring",
 		"deadmanssnitch-operator",
 		"openshift-deployment-validation-operator",
 		"gcp-project-operator",
@@ -187,8 +187,6 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 	resultChannel := make(chan operatorResult, len(listOfOperators))
 	var wg sync.WaitGroup
 
-	gitClient := &gitlab.Client{}
-
 	csv := &unstructured.Unstructured{}
 	csv.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "operators.coreos.com",
@@ -214,7 +212,7 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 		Kind:    "SubscriptionList",
 	})
 
-	// Initialize gitlab client
+	gitClient := &gitlab.Client{}
 	if !ctx.short {
 		gitlab_access := viper.GetString("gitlab_access")
 		if gitlab_access == "" {
@@ -224,14 +222,15 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 		gitClient, _ = gitlab.NewClient(gitlab_access, gitlab.WithBaseURL("https://gitlab.cee.redhat.com/"))
 	}
 
-	// iterates through list of operators
+	// iterate through list of operators
 	for operator := range listOfOperators {
 		wg.Add(1)
 		go func(oper, operatorName string, i int) {
 			defer wg.Done()
 
 			currentVersion := make([]string, len(listOfOperators))
-			latestVersion, operatorStatus, operatorChannel := make([]string, len(listOfOperators)), make([]string, len(listOfOperators)), make([]string, len(listOfOperators))
+			latestVersion := make([]string, len(listOfOperators))
+			operatorChannel, operatorStatus := "", ""
 
 			mapMutex.Lock()
 			if err := ctx.kubeCli.List(context.TODO(), csvList, client.InNamespace(listOfOperators[i])); err != nil {
@@ -242,27 +241,21 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 				for _, item := range csvList.Items {
 					if strings.Contains(item.GetName(), listOfOperatorNames[i]) {
 						currentVersion[i] = item.GetName()
-						mapMutex.Lock()
-						operatorStatus[i] = item.Object["status"].(map[string]interface{})["phase"].(string)
-						mapMutex.Unlock()
+						operatorStatus = item.Object["status"].(map[string]interface{})["phase"].(string)
 					}
 				}
-				// get channel
-				mapMutex.Lock()
-				if err := ctx.kubeCli.List(context.TODO(), subList, client.InNamespace(listOfOperators[i])); err != nil {
-					mapMutex.Unlock()
-					return
-				} else {
-					mapMutex.Unlock()
-					for _, item := range subList.Items {
-						if strings.Contains(item.GetName(), listOfOperatorNames[i]) {
-							operatorChannel[i] = item.Object["spec"].(map[string]interface{})["channel"].(string)
-						}
-					}
-				}
-
 				if currentVersion[i] == "" {
 					return
+				}
+
+				if err := ctx.kubeCli.List(context.TODO(), subList, client.InNamespace(listOfOperators[i])); err != nil {
+					return
+				} else {
+					for _, item := range subList.Items {
+						if strings.Contains(item.GetName(), listOfOperatorNames[i]) {
+							operatorChannel = item.Object["spec"].(map[string]interface{})["channel"].(string)
+						}
+					}
 				}
 
 				currentVersion[i] = extractVersion(currentVersion[i])
@@ -278,13 +271,11 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 				Name:     listOfOperatorNames[i],
 				Current:  currentVersion[i],
 				Expected: latestVersion[i],
-				Status:   operatorStatus[i],
-				Channel:  operatorChannel[i],
+				Status:   operatorStatus,
+				Channel:  operatorChannel,
 			}
 			resultChannel <- operatorResult{Operator: op, Error: nil}
 		}(listOfOperators[operator], listOfOperatorNames[operator], operator)
-
-		// opList = append(opList, op)
 	}
 
 	go func() {
