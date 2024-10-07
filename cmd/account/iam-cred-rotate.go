@@ -358,7 +358,6 @@ func (o *rotateCredOptions) run() error {
 			return err
 		}
 	}
-	//
 	err = o.deleteAWSCredRequestSecrets()
 	if err != nil {
 		o.log.Warn(o.ctx, "fetchCredentialsRequests returned err:'%s'\n", err)
