@@ -17,8 +17,8 @@ import (
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift-online/ocm-sdk-go/logging"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	"github.com/openshift/osd-network-verifier/pkg/data/cloud"
 	"github.com/openshift/osd-network-verifier/pkg/data/cpu"
-	"github.com/openshift/osd-network-verifier/pkg/helpers"
 	"github.com/openshift/osd-network-verifier/pkg/output"
 	"github.com/openshift/osd-network-verifier/pkg/probes/curl"
 	"github.com/openshift/osd-network-verifier/pkg/probes/legacy"
@@ -54,9 +54,11 @@ type EgressVerification struct {
 	// ClusterId is the internal or external OCM cluster ID.
 	// This is optional, but typically is used to automatically detect the correct settings.
 	ClusterId string
-	// PlatformType is an optional override for which endpoints to test. Either 'aws' or 'hostedcluster'
-	// TODO: Technically 'gcp' is supported, but not functional yet
-	PlatformType string
+	// platformName is an optional override for the verifier's PlatformType parameter, which indicates
+	// the cloud platform/product under test and controls verifier behavior like which egress URLs
+	// are tested. Accepts any value accepted by cloud.ByName(). Don't read this value directly outside
+	// of GetPlatform(); use that function instead
+	platformName string
 	// AWS Region is an optional override if not specified via AWS credentials.
 	Region string
 	// SubnetIds is an optional override for specifying an AWS subnet ID.
@@ -135,7 +137,7 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().StringVar(&e.Region, "region", "", "(optional) AWS region")
 	validateEgressCmd.Flags().BoolVar(&e.Debug, "debug", false, "(optional) if provided, enable additional debug-level logging")
 	validateEgressCmd.Flags().BoolVarP(&e.AllSubnets, "all-subnets", "A", false, "(optional) an option for Privatelink clusters to run osd-network-verifier against all subnets listed by ocm.")
-	validateEgressCmd.Flags().StringVar(&e.PlatformType, "platform", "", "(optional) override for which endpoints to test. Either 'aws' or 'hostedcluster'")
+	validateEgressCmd.Flags().StringVar(&e.platformName, "platform", "", "(optional) override for cloud platform/product. E.g., 'aws-classic' (OSD/ROSA Classic), 'aws-hcp' (ROSA HCP), or 'aws-hcpzeroegress'")
 	validateEgressCmd.Flags().DurationVar(&e.EgressTimeout, "egress-timeout", 5*time.Second, "(optional) timeout for individual egress verification requests")
 	validateEgressCmd.Flags().BoolVar(&e.Version, "version", false, "When present, prints out the version of osd-network-verifier being used")
 	validateEgressCmd.Flags().StringVar(&e.Probe, "probe", "curl", "(optional) select the probe to be used for egress testing. Either 'curl' (default) or 'legacy'")
@@ -271,7 +273,7 @@ func (e *EgressVerification) setup(ctx context.Context) (*aws.Config, error) {
 		return &cfg, nil
 	}
 
-	if e.SubnetIds == nil || e.SecurityGroupId == "" || e.PlatformType == "" {
+	if e.SubnetIds == nil || e.SecurityGroupId == "" || e.platformName == "" {
 		return nil, fmt.Errorf("--subnet-id, --security-group, and --platform are required when --cluster-id is not specified")
 	}
 
@@ -318,12 +320,12 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 		return nil, fmt.Errorf("failed to assemble validate egress input: %s", err)
 	}
 
-	platform, err := e.getPlatformType()
+	// Configure verifier's PlatformType based on cluster info or user request
+	input.PlatformType, err = e.getPlatform()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("requested platform not supported by the verifier: %w", err)
 	}
-	e.log.Info(ctx, "using platform: %s", platform)
-	input.PlatformType = platform
+	e.log.Info(ctx, "using platform: %s", input.PlatformType)
 
 	input.CPUArchitecture = e.cpuArch
 
@@ -415,28 +417,25 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 	return inputs, nil
 }
 
-// getPlatformType returns the platform type of a cluster, with e.PlatformType acting as an override.
-func (e *EgressVerification) getPlatformType() (string, error) {
-	switch e.PlatformType {
-	case helpers.PlatformAWS:
-		fallthrough
-	case helpers.PlatformHostedCluster:
-		return e.PlatformType, nil
-	case "":
+// getPlatform returns a cloud.Platform struct corresponding to the cluster's cloud platform
+// reported by OCM or to the e.platformName override string specified by the user
+func (e *EgressVerification) getPlatform() (cloud.Platform, error) {
+	platform, err := cloud.ByName(e.platformName)
+	if err != nil {
+		// Fail if user explicitly specified an invalid platform
+		if e.platformName != "" {
+			return platform, fmt.Errorf("network verifier rejected platform request: %w", err)
+		}
+
+		// Choose sane defaults if no platform specified by user
 		if e.cluster.Hypershift().Enabled() {
-			e.PlatformType = helpers.PlatformHostedCluster
-			return helpers.PlatformHostedCluster, nil
+			return cloud.AWSHCP, nil
 		}
-
 		if e.cluster.CloudProvider().ID() == "aws" {
-			e.PlatformType = helpers.PlatformAWS
-			return helpers.PlatformAWS, nil
+			return cloud.AWSClassic, nil
 		}
-
-		return "", fmt.Errorf("only supports platform types: %s and %s", helpers.PlatformAWS, helpers.PlatformHostedCluster)
-	default:
-		return "", fmt.Errorf("only supports platform types: %s and %s", helpers.PlatformAWS, helpers.PlatformHostedCluster)
 	}
+	return platform, err
 }
 
 // getSubnetIds attempts to return a private subnet ID or all private subnet IDs of the cluster.
@@ -581,8 +580,12 @@ func (e *EgressVerification) getSecurityGroupId(ctx context.Context) (string, er
 	}
 
 	var filters []types.Filter
-	switch e.PlatformType {
-	case helpers.PlatformHostedCluster:
+	platform, err := e.getPlatform()
+	if err != nil {
+		return "", err
+	}
+	switch platform {
+	case cloud.AWSHCP, cloud.AWSHCPZeroEgress:
 		filters = []types.Filter{
 			{
 				Name:   aws.String("tag:Name"),
@@ -779,11 +782,10 @@ func defaultValidateEgressInput(ctx context.Context, cluster *cmv1.Cluster, regi
 	}
 
 	return &onv.ValidateEgressInput{
-		Ctx:          ctx,
-		SubnetID:     "",
-		Proxy:        proxy.ProxyConfig{},
-		PlatformType: helpers.PlatformAWS,
-		Tags:         networkVerifierDefaultTags,
+		Ctx:      ctx,
+		SubnetID: "",
+		Proxy:    proxy.ProxyConfig{},
+		Tags:     networkVerifierDefaultTags,
 		AWS: onv.AwsEgressConfig{
 			SecurityGroupIDs: []string{},
 		},
