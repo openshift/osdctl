@@ -232,6 +232,10 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 			latestVersion := make([]string, len(listOfOperators))
 			operatorChannel, operatorStatus := "", ""
 
+			if !ctx.short {
+				latestVersion[i] = getLatestVersion(gitClient, listOfOperatorNames[i])
+			}
+
 			mapMutex.Lock()
 			if err := ctx.kubeCli.List(context.TODO(), csvList, client.InNamespace(listOfOperators[i])); err != nil {
 				mapMutex.Unlock()
@@ -259,12 +263,6 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 				}
 
 				currentVersion[i] = extractVersion(currentVersion[i])
-
-				if !ctx.short {
-					mapMutex.Lock()
-					latestVersion[i] = getLatestVersion(gitClient, listOfOperatorNames[i])
-					mapMutex.Unlock()
-				}
 			}
 
 			op := sreOperator{
