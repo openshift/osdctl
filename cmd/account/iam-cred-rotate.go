@@ -179,7 +179,7 @@ type rotateCredOptions struct {
 	cluster           *cmv1.Cluster         // Cluster object representing user cluster of 'clusterID'
 	clusterKubeClient client.Client         // Cluster BP kube client connection
 	clusterClientset  *kubernetes.Clientset // Cluster BP Kube ClientSet
-	ocmConn           *sdk.Connection       // ocm connection object
+	isCCS             bool                  // Flag to indicate cluster is CCS
 	hiveCluster       *cmv1.Cluster         // Hive cluster/shard managing this user cluster
 	hiveKubeClient    client.Client         // Hive kube client connection
 	cdName            string                // Cluster Deployments name
@@ -276,14 +276,9 @@ func (o *rotateCredOptions) preRunCliChecks(cmd *cobra.Command, args []string) e
 /* Main function used to run this CLI utility */
 func (o *rotateCredOptions) run() error {
 	var err error = nil
-	/*err = o.preRunSetup()
-	if err != nil {
-		return err
-	}*/
-	// defer the command cleanup...
-	defer o.postRunCleanup()
-
-	err = o.printClusterInfo()
+	if o.log.DebugEnabled() && !o.updateMgmtCredsCli && !o.updateCcsCredsCli {
+		err = o.printClusterInfo()
+	}
 	if err != nil {
 		return err
 	}
@@ -401,12 +396,6 @@ func (o *rotateCredOptions) isValidAccessKeyId(keyId string) bool {
 }
 
 func (o *rotateCredOptions) printClusterInfo() error {
-	// currently using account byoc value for ccs sanity checks, is this needed?
-	isCCS, err := utils.IsClusterCCS(o.ocmConn, o.clusterID)
-	if err != nil {
-		return err
-	}
-	o.log.Debug(o.ctx, "Is Cluster CCS?:%t\n", isCCS)
 	output := os.Stdout
 	if o.output != standardFormat {
 		output = os.Stderr
@@ -416,7 +405,7 @@ func (o *rotateCredOptions) printClusterInfo() error {
 	fmt.Fprintf(w, "Cluster ID:\t%s\n", o.clusterID)
 	fmt.Fprintf(w, "Cluster External ID:\t%s\n", o.cluster.ExternalID())
 	fmt.Fprintf(w, "Cluster Name:\t%s\n", o.cluster.Name())
-	fmt.Fprintf(w, "Cluster Is CCS:\t%t\n", isCCS)
+	fmt.Fprintf(w, "Cluster Is CCS:\t%t\n", o.isCCS)
 	fmt.Fprintf(w, "----------------------------------------------------------------------\n")
 	w.Flush()
 	return nil
@@ -635,16 +624,21 @@ inputLoop:
 func (o *rotateCredOptions) preRunSetup() error {
 	var err error
 	o.log.Debug(o.ctx, "Creating OCM connection...\n")
-	if o.ocmConn == nil {
-		o.ocmConn, err = utils.CreateConnection()
-		if err != nil {
-			return fmt.Errorf("failed to create OCM client: %w", err)
-		}
-	}
-	// Fetch the cluster info, this will return an error if more than 1 cluster is matched
-	cluster, err := utils.GetClusterAnyStatus(o.ocmConn, o.clusterID)
+	ocmConn, err := utils.CreateConnection()
 	if err != nil {
-		o.log.Error(o.ctx, "Failed to fetch cluster:'%s' from OCM using:'%s'", o.clusterID, o.ocmConn.URL())
+		return fmt.Errorf("failed to create OCM client: %w", err)
+	}
+	defer o.closeOcmConn(ocmConn)
+	// currently using account account.spec.byoc value later for ccs sanity checks, are both values still needed?
+	o.isCCS, err = utils.IsClusterCCS(ocmConn, o.clusterID)
+	if err != nil {
+		return err
+	}
+	o.log.Debug(o.ctx, "Is Cluster CCS?:%t\n", o.isCCS)
+	// Fetch the cluster info, this will return an error if more than 1 cluster is matched
+	cluster, err := utils.GetClusterAnyStatus(ocmConn, o.clusterID)
+	if err != nil {
+		o.log.Error(o.ctx, "Failed to fetch cluster:'%s' from OCM using:'%s'", o.clusterID, ocmConn.URL())
 		return fmt.Errorf("failed to fetch cluster:'%s' from OCM. err: %w", o.clusterID, err)
 	}
 	// Store the cluster obj...
@@ -662,17 +656,16 @@ func (o *rotateCredOptions) preRunSetup() error {
 	return nil
 }
 
-/* Command cleanup */
-func (o *rotateCredOptions) postRunCleanup() error {
+/* OCM connection cleanup */
+func (o *rotateCredOptions) closeOcmConn(ocmConn *sdk.Connection) {
 	// Close ocm connection if created...
-	if o.ocmConn != nil {
-		ocmCloseErr := o.ocmConn.Close()
+	if ocmConn != nil {
+		ocmCloseErr := ocmConn.Close()
 		if ocmCloseErr != nil {
-			return fmt.Errorf("error during ocm.close() (possible memory leak): %q", ocmCloseErr)
+			o.log.Error(o.ctx, "Error during ocm.close() (possible memory leak): %q", ocmCloseErr)
 		}
-		o.ocmConn = nil
+		ocmConn = nil
 	}
-	return nil
 }
 
 /* populate aws account claim name info */
@@ -711,18 +704,22 @@ func (o *rotateCredOptions) fetchAwsClaimNameInfo() error {
 }
 
 /* fetch aws account claim CR name from resources output
- * used as a backup to newer 'k8s.GetAccountClaimFromClusterID()'
+ * This should not be called in a normal flow and only used
+ * here as a backup to newer 'k8s.GetAccountClaimFromClusterID()'
  */
 func (o *rotateCredOptions) getResourcesClaimName() (string, error) {
 	o.claimName = ""
-	if o.ocmConn == nil {
-		err := o.preRunSetup()
-		if err != nil {
-			return "", err
-		}
+	if len(o.clusterID) <= 0 {
+		return "", fmt.Errorf("clusterID has not been populated prior to cluster resources request")
 	}
+	o.log.Debug(o.ctx, "Creating OCM connection to fetch claim info...\n")
+	ocmConn, err := utils.CreateConnection()
+	if err != nil {
+		return "", fmt.Errorf("failed to create OCM client: %w", err)
+	}
+	defer o.closeOcmConn(ocmConn)
 	//o.ocmConn.ClustersMgmt().V1().AWSInquiries().STSCredentialRequests().List().Send()
-	liveResponse, err := o.ocmConn.ClustersMgmt().V1().Clusters().Cluster(o.clusterID).Resources().Live().Get().Send()
+	liveResponse, err := ocmConn.ClustersMgmt().V1().Clusters().Cluster(o.clusterID).Resources().Live().Get().Send()
 	if err != nil {
 		return "", fmt.Errorf("error fetching cluster resources: %w", err)
 	}
@@ -1234,7 +1231,8 @@ func (o *rotateCredOptions) fetchAWSAccountInfo() error {
 	if accountObj.Spec.ManualSTSMode {
 		return fmt.Errorf("account %s is manual STS mode - No IAM User Credentials to Rotate", o.claimName)
 	}
-	if !accountObj.Spec.BYOC && o.updateCcsCredsCli {
+	// Are both byoc and ccs value checks needed?
+	if !accountObj.Spec.BYOC && !o.isCCS && o.updateCcsCredsCli {
 		// Check for specifics early? ...or should this just be ignored and a no-op later?
 		o.log.Warn(o.ctx, "arg '--rotate-ccs-admin' provided to rotate osdCcsAdmin creds on non-CCS cluster id:'%s', name:'%s'\n. No changes were made to this cluster\n", o.cluster.Name(), o.clusterID)
 		return fmt.Errorf("arg '--rotate-ccs-admin' provided to rotate osdCcsAdmin creds on non-CCS cluster")
@@ -1288,9 +1286,9 @@ func (o *rotateCredOptions) setupAwsClient() error {
 
 	var credentials *stsTypes.Credentials
 	// Need to role chain if the cluster is CCS
-	if o.account.Spec.BYOC {
+	if o.isCCS {
 		o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
-		o.log.Debug(o.ctx, "Cluster is BYOC, CCS. Begin AWS role chaining...\n")
+		o.log.Debug(o.ctx, "Cluster is CCS. Begin AWS role chaining...\n")
 		o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
 		// Get the aws-account-operator configmap
 		cm := &corev1.ConfigMap{}
@@ -1357,7 +1355,7 @@ func (o *rotateCredOptions) setupAwsClient() error {
 
 	} else {
 		o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
-		o.log.Debug(o.ctx, "Cluster is 'NOT' BYOC, CCS. Begin AWS role chaining...\n")
+		o.log.Debug(o.ctx, "Cluster is 'NOT' CCS. Begin AWS role chaining...\n")
 		o.log.Debug(o.ctx, "Using 'AWS Initial setup' client to fetch creds using '%s' ARN...\n", awsv1alpha1.AccountOperatorIAMRole)
 		o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
 
@@ -1926,7 +1924,7 @@ func (o *rotateCredOptions) doRotateCcsCreds() error {
 	o.log.Info(o.ctx, "ccs cli flag was set. Attempting to update '%s' user creds...\n", userName)
 	o.log.Debug(o.ctx, "----------------------------------------------------------------------------\n")
 	// Only update if the Account CR is actually CCS
-	if o.account.Spec.BYOC {
+	if o.isCCS && o.account.Spec.BYOC {
 
 		err := o.checkAccessKeysMaxDelete(userName, o.account.Spec.ClaimLinkNamespace, secretName, "")
 		if err != nil {
