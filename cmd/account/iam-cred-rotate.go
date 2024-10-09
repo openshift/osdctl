@@ -744,7 +744,7 @@ func (o *rotateCredOptions) getResourcesClaimName() (string, error) {
 
 // Connect Backplane client to target cluster...
 func (o *rotateCredOptions) connectClusterClient() error {
-	o.log.Info(o.ctx, "Connect BP client cluster:'%s'\n", o.clusterID)
+	o.log.Debug(o.ctx, "Connect BP client cluster:'%s'\n", o.clusterID)
 	if len(o.reason) <= 0 {
 		return fmt.Errorf("accessing cred secrets requires a reason for elevated command")
 	}
@@ -832,7 +832,7 @@ func (o *rotateCredOptions) connectHiveClient() error {
 		// If/when there are upstream exported functions allowing config objects to be passed between them, much of this
 		// should go away.
 
-		o.log.Info(o.ctx, "Using ocm config for hive connection:'%s'", o.ocmConfigHivePath)
+		o.log.Debug(o.ctx, "Using ocm config for hive connection:'%s'", o.ocmConfigHivePath)
 
 		// First fetch and read in the backplane config file content for the potential proxy-url list, and
 		// then check each backplane proxy against the OCM url from the 'cli provided config' (not env) to find a working proxy.
@@ -845,6 +845,7 @@ func (o *rotateCredOptions) connectHiveClient() error {
 		// config and url provided by the user instead.
 
 		bpFilePath, err := bpconfig.GetConfigFilePath()
+		o.log.Debug(o.ctx, "Using backplane config:'%s'", bpFilePath)
 		if err != nil {
 			return err
 		}
@@ -864,6 +865,12 @@ func (o *rotateCredOptions) connectHiveClient() error {
 			return fmt.Errorf("proxy-url must be set explicitly in either config file or via the environment HTTPS_PROXY")
 		}
 		proxyURLs := viper.GetStringSlice("proxy-url")
+
+		// Provide warning as well as config+path if aws proxy not provided...
+		awsProxyUrl := viper.GetString(awsprovider.ProxyConfigKey)
+		if awsProxyUrl == "" {
+			o.log.Warn(o.ctx, "key:'%s' not found in config:'%s'", awsprovider.ProxyConfigKey, viper.GetViper().ConfigFileUsed())
+		}
 
 		// Now get the backplane url and access token from OCM...
 		ocmConfig, err := readOcmConfigFile(o.ocmConfigHivePath)
