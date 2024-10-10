@@ -65,11 +65,11 @@ func (o *statusOptions) run() error {
 		return err
 	}
 
-	var clusterSupportLimited = false
+	var limitedSupportOverridden = false
 	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
 	table.AddRow([]string{"Reason ID", "Summary", "Overridden (SUPPORTEX)", "Details"})
 	for _, clusterLimitedSupportReason := range clusterLimitedSupportReasons {
-		clusterSupportLimited = clusterSupportLimited || !clusterLimitedSupportReason.Override().Enabled()
+		limitedSupportOverridden = limitedSupportOverridden || clusterLimitedSupportReason.Override().Enabled()
 		table.AddRow([]string{
 			clusterLimitedSupportReason.ID(),
 			clusterLimitedSupportReason.Summary(),
@@ -78,7 +78,7 @@ func (o *statusOptions) run() error {
 		})
 	}
 	// No reasons found, cluster is fully supported
-	if clusterSupportLimited {
+	if limitedSupportOverridden {
 		fmt.Printf("No limited support reasons found or all reasons are overridden, the cluster is fully supported\n")
 	}
 	// Add empty row for readability
