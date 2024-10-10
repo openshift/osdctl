@@ -137,7 +137,7 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().StringVar(&e.Region, "region", "", "(optional) AWS region")
 	validateEgressCmd.Flags().BoolVar(&e.Debug, "debug", false, "(optional) if provided, enable additional debug-level logging")
 	validateEgressCmd.Flags().BoolVarP(&e.AllSubnets, "all-subnets", "A", false, "(optional) an option for Privatelink clusters to run osd-network-verifier against all subnets listed by ocm.")
-	validateEgressCmd.Flags().StringVar(&e.platformName, "platform", "", "(optional) override for cloud platform/product. E.g., 'aws-classic' (OSD/ROSA Classic), 'aws-hcp' (ROSA HCP), or 'aws-hcpzeroegress'")
+	validateEgressCmd.Flags().StringVar(&e.platformName, "platform", "", "(optional) override for cloud platform/product. E.g., 'aws-classic' (OSD/ROSA Classic), 'aws-hcp' (ROSA HCP), or 'aws-hcp-zeroegress'")
 	validateEgressCmd.Flags().DurationVar(&e.EgressTimeout, "egress-timeout", 5*time.Second, "(optional) timeout for individual egress verification requests")
 	validateEgressCmd.Flags().BoolVar(&e.Version, "version", false, "When present, prints out the version of osd-network-verifier being used")
 	validateEgressCmd.Flags().StringVar(&e.Probe, "probe", "curl", "(optional) select the probe to be used for egress testing. Either 'curl' (default) or 'legacy'")
