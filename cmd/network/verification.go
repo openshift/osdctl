@@ -323,7 +323,7 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 	// Configure verifier's PlatformType based on cluster info or user request
 	input.PlatformType, err = e.getPlatform()
 	if err != nil {
-		return nil, fmt.Errorf("requested platform not supported by the verifier: %w", err)
+		return nil, fmt.Errorf("platform not supported: %w", err)
 	}
 	e.log.Info(ctx, "using platform: %s", input.PlatformType)
 
@@ -434,6 +434,10 @@ func (e *EgressVerification) getPlatform() (cloud.Platform, error) {
 		if e.cluster.CloudProvider().ID() == "aws" {
 			return cloud.AWSClassic, nil
 		}
+	}
+	// TODO drop this check once GCP support enabled
+	if platform == cloud.GCPClassic {
+		err = fmt.Errorf("osdctl's implementation of the network verifier doesn't yet support GCP")
 	}
 	return platform, err
 }
