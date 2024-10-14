@@ -39,8 +39,6 @@ type sreOperator struct {
 	Channel  string
 }
 
-var mapMutex sync.RWMutex
-
 const (
 	sreOperatorsListExample = `
 	# List SRE operators
@@ -236,13 +234,13 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 				latestVersion[i] = getLatestVersion(gitClient, listOfOperatorNames[i])
 			}
 
-			mapMutex.Lock()
-			if err := ctx.kubeCli.List(context.TODO(), csvList, client.InNamespace(listOfOperators[i])); err != nil {
-				mapMutex.Unlock()
+			csvListCopy := csvList.DeepCopy()
+			subListCopy := subList.DeepCopy()
+
+			if err := ctx.kubeCli.List(context.TODO(), csvListCopy, client.InNamespace(listOfOperators[i])); err != nil {
 				return
 			} else {
-				mapMutex.Unlock()
-				for _, item := range csvList.Items {
+				for _, item := range csvListCopy.Items {
 					if strings.Contains(item.GetName(), listOfOperatorNames[i]) {
 						currentVersion[i] = item.GetName()
 						operatorStatus = item.Object["status"].(map[string]interface{})["phase"].(string)
@@ -252,10 +250,10 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 					return
 				}
 
-				if err := ctx.kubeCli.List(context.TODO(), subList, client.InNamespace(listOfOperators[i])); err != nil {
+				if err := ctx.kubeCli.List(context.TODO(), subListCopy, client.InNamespace(listOfOperators[i])); err != nil {
 					return
 				} else {
-					for _, item := range subList.Items {
+					for _, item := range subListCopy.Items {
 						if strings.Contains(item.GetName(), listOfOperatorNames[i]) {
 							operatorChannel = item.Object["spec"].(map[string]interface{})["channel"].(string)
 						}
