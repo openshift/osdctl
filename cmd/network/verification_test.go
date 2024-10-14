@@ -13,6 +13,7 @@ import (
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift-online/ocm-sdk-go/logging"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
+	"github.com/openshift/osd-network-verifier/pkg/data/cloud"
 	"github.com/openshift/osd-network-verifier/pkg/output"
 	"github.com/openshift/osd-network-verifier/pkg/proxy"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
@@ -80,7 +81,7 @@ func Test_egressVerificationSetup(t *testing.T) {
 		},
 		{
 			name:      "no ClusterId with platform type",
-			e:         &EgressVerification{PlatformType: "aws"},
+			e:         &EgressVerification{platformName: "aws"},
 			expectErr: true,
 		},
 		{
@@ -95,7 +96,7 @@ func Test_egressVerificationSetup(t *testing.T) {
 			name: "no ClusterId with subnet and platform type",
 			e: &EgressVerification{
 				SubnetIds:    []string{"subnet-a", "subnet-b", "subnet-c"},
-				PlatformType: "aws",
+				platformName: "aws",
 			},
 			expectErr: true,
 		},
@@ -103,7 +104,7 @@ func Test_egressVerificationSetup(t *testing.T) {
 			name: "no ClusterId with security group and platform type",
 			e: &EgressVerification{
 				SecurityGroupId: "sg-b",
-				PlatformType:    "aws",
+				platformName:    "aws",
 			},
 			expectErr: true,
 		},
@@ -112,7 +113,7 @@ func Test_egressVerificationSetup(t *testing.T) {
 			e: &EgressVerification{
 				SubnetIds:       []string{"subnet-a", "subnet-b", "subnet-c"},
 				SecurityGroupId: "sg-b",
-				PlatformType:    "aws",
+				platformName:    "aws",
 			},
 			expectErr: false,
 		},
@@ -290,11 +291,11 @@ func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
 	}
 }
 
-func Test_egressVerificationGetPlatformType(t *testing.T) {
+func Test_egressVerificationGetPlatform(t *testing.T) {
 	tests := []struct {
 		name      string
 		e         *EgressVerification
-		expected  string
+		expected  cloud.Platform
 		expectErr bool
 	}{
 		{
@@ -303,7 +304,7 @@ func Test_egressVerificationGetPlatformType(t *testing.T) {
 				cluster: newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("aws"))),
 				log:     newTestLogger(t),
 			},
-			expected:  "aws",
+			expected:  cloud.AWSClassic,
 			expectErr: false,
 		},
 		{
@@ -312,17 +313,17 @@ func Test_egressVerificationGetPlatformType(t *testing.T) {
 				cluster: newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("aws")).Hypershift(cmv1.NewHypershift().Enabled(true))),
 				log:     newTestLogger(t),
 			},
-			expected:  "hostedcluster",
+			expected:  cloud.AWSHCP,
 			expectErr: false,
 		},
 		{
 			name: "override",
 			e: &EgressVerification{
 				cluster:      newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("aws")).Hypershift(cmv1.NewHypershift().Enabled(true))),
-				PlatformType: "aws",
+				platformName: "aws",
 				log:          newTestLogger(t),
 			},
-			expected:  "aws",
+			expected:  cloud.AWSClassic,
 			expectErr: false,
 		},
 		{
@@ -337,7 +338,7 @@ func Test_egressVerificationGetPlatformType(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actual, err := test.e.getPlatformType()
+			actual, err := test.e.getPlatform()
 			if err != nil {
 				if !test.expectErr {
 					t.Errorf("expected no err, got %s", err)
@@ -374,6 +375,7 @@ func Test_egressVerificationGetSecurityGroupId(t *testing.T) {
 					},
 				},
 				log:             newTestLogger(t),
+				cluster:         newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("aws"))),
 				SecurityGroupId: "override",
 			},
 			expected:  "override",
@@ -387,7 +389,8 @@ func Test_egressVerificationGetSecurityGroupId(t *testing.T) {
 						SecurityGroups: []types.SecurityGroup{},
 					},
 				},
-				log: newTestLogger(t),
+				log:     newTestLogger(t),
+				cluster: newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("aws"))),
 			},
 			expectErr: true,
 		},
@@ -403,7 +406,8 @@ func Test_egressVerificationGetSecurityGroupId(t *testing.T) {
 						},
 					},
 				},
-				log: newTestLogger(t),
+				log:     newTestLogger(t),
+				cluster: newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("aws"))),
 			},
 			expected:  "sg-abcd",
 			expectErr: false,
