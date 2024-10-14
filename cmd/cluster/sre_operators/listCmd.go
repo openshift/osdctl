@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -41,13 +42,13 @@ type sreOperator struct {
 
 const (
 	sreOperatorsListExample = `
-	# List SRE operators
-	$ osdctl cluster sre-operators list
-	
-	# List SRE operators without fetching the latest version for faster output
-	$ osdctl cluster sre-operators list --short
-	
-	# List only SRE operators that are running outdated versions
+		# List SRE operators
+		$ osdctl cluster sre-operators list
+		
+		# List SRE operators without fetching the latest version for faster output
+		$ osdctl cluster sre-operators list --short
+		
+		# List only SRE operators that are running outdated versions
 	$ osdctl cluster sre-operators list --outdated
 	`
 	repositoryBranch = "production"
@@ -182,8 +183,11 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 		// "opentelemetry-operator", // skip for now
 	}
 
+	// dynamically allocates number of workers based on CPU cores
+	workerLimit := runtime.NumCPU() * 2
 	resultChannel := make(chan operatorResult, len(listOfOperators))
 	var wg sync.WaitGroup
+	sem := make(chan struct{}, workerLimit)
 
 	csv := &unstructured.Unstructured{}
 	csv.SetGroupVersionKind(schema.GroupVersionKind{
@@ -225,6 +229,8 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 		wg.Add(1)
 		go func(oper, operatorName string, i int) {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 
 			currentVersion := make([]string, len(listOfOperators))
 			latestVersion := make([]string, len(listOfOperators))
