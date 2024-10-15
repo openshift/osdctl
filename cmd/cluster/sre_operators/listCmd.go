@@ -27,6 +27,7 @@ type sreOperatorsListOptions struct {
 	short     bool
 	outdated  bool
 	noHeaders bool
+	operator  string
 
 	genericclioptions.IOStreams
 	kubeCli client.Client
@@ -76,6 +77,7 @@ func newCmdList(streams genericclioptions.IOStreams, client client.Client) *cobr
 	listCmd.Flags().BoolVar(&opts.short, "short", false, "Exclude fetching the latest version from repositories for faster output")
 	listCmd.Flags().BoolVar(&opts.outdated, "outdated", false, "Filter to only show operators running outdated versions")
 	listCmd.Flags().BoolVar(&opts.noHeaders, "no-headers", false, "Exclude headers from the output")
+	listCmd.Flags().StringVar(&opts.operator, "operator", "", "Filter to only show the specified operator.")
 
 	return listCmd
 }
@@ -94,6 +96,10 @@ func (ctx *sreOperatorsListOptions) checks(cmd *cobra.Command) error {
 // Print output in table format
 func (ctx *sreOperatorsListOptions) printText(opList []sreOperator) error {
 	p := printer.NewTablePrinter(ctx.IOStreams.Out, 20, 1, 3, ' ')
+
+	if opList == nil {
+		return nil
+	}
 
 	if !ctx.noHeaders {
 		header := []string{"NAME", "CURRENT", "EXPECTED", "STATUS", "CHANNEL"}
@@ -222,6 +228,19 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 			return nil, nil
 		}
 		gitClient, _ = gitlab.NewClient(gitlab_access, gitlab.WithBaseURL("https://gitlab.cee.redhat.com/"))
+	}
+
+	if ctx.operator != "" {
+		for i, operator := range listOfOperators {
+			if operator == ctx.operator || listOfOperatorNames[i] == ctx.operator {
+				listOfOperators = []string{operator}
+				listOfOperatorNames = []string{listOfOperatorNames[i]}
+				break
+			} else if i == len(listOfOperators)-1 {
+				fmt.Printf("Error: Operator '%s' not found", ctx.operator)
+				return nil, nil
+			}
+		}
 	}
 
 	// iterate through list of operators
