@@ -39,6 +39,7 @@ func newCmdRotateSecret(streams genericclioptions.IOStreams, client *k8s.LazyCli
 			cmdutil.CheckErr(ops.complete(cmd, args))
 			cmdutil.CheckErr(ops.run())
 		},
+		Deprecated: "This command is being deprecated. This utility has been consolidated into the iam-secret-mgmt command.",
 	}
 
 	rotateSecretCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile")
