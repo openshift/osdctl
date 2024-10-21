@@ -25,17 +25,18 @@ import (
 	"github.com/openshift/osd-network-verifier/pkg/proxy"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
 	onvAwsClient "github.com/openshift/osd-network-verifier/pkg/verifier/aws"
-	lsupport "github.com/openshift/osdctl/cmd/cluster/support"
-	"github.com/openshift/osdctl/cmd/servicelog"
-	"github.com/openshift/osdctl/pkg/k8s"
-	"github.com/openshift/osdctl/pkg/osdCloud"
-	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	lsupport "github.com/openshift/osdctl/cmd/cluster/support"
+	"github.com/openshift/osdctl/cmd/servicelog"
+	"github.com/openshift/osdctl/pkg/k8s"
+	"github.com/openshift/osdctl/pkg/osdCloud"
+	"github.com/openshift/osdctl/pkg/utils"
 )
 
 const (

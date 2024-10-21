@@ -9,13 +9,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
-	"github.com/openshift/osdctl/pkg/k8s"
-	"github.com/openshift/osdctl/pkg/osdCloud"
-	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
 	capav1beta2 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/osdctl/pkg/k8s"
+	"github.com/openshift/osdctl/pkg/osdCloud"
+	"github.com/openshift/osdctl/pkg/utils"
 )
 
 type cleanup struct {
