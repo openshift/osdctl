@@ -28,6 +28,7 @@ require (
 	github.com/deckarep/golang-set v1.8.0
 	github.com/fatih/color v1.16.0
 	github.com/golang/mock v1.6.0
+	github.com/google/go-github/v63 v63.0.0
 	github.com/google/uuid v1.6.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/onsi/ginkgo v1.16.5
@@ -65,7 +66,6 @@ require (
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.3.1
 	sigs.k8s.io/controller-runtime v0.16.3
 	sigs.k8s.io/yaml v1.4.0
-	github.com/google/go-github/v63 v63.0.0
 )
 
 require (
