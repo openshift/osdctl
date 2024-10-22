@@ -163,8 +163,6 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 		"pagerduty-operator",
 		"openshift-route-monitor-operator",
 		"openshift-observability-operator",
-		// "dynatrace-operator", // skip for now
-		// "opentelemetry-operator", // skip for now
 	}
 
 	listOfOperatorNames := []string{
@@ -188,9 +186,7 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 		"managed-velero-operator",
 		"pagerduty-operator",
 		"route-monitor-operator",
-		"observability-operator", // skip for now
-		// "dynatrace-operator", // skip for now
-		// "opentelemetry-operator", // skip for now
+		"observability-operator",
 	}
 
 	// dynamically allocates number of workers based on CPU cores

@@ -15,6 +15,7 @@ func NewCmdSREOperators(streams genericclioptions.IOStreams, client client.Clien
 	}
 
 	sreOperatorsCmd.AddCommand(newCmdList(streams, client))
+	sreOperatorsCmd.AddCommand(newCmdDescribe(streams, client))
 
 	return sreOperatorsCmd
 }
