@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/go-github/v63/github"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -50,7 +51,10 @@ const (
 		$ osdctl cluster sre-operators list --short
 		
 		# List only SRE operators that are running outdated versions
-	$ osdctl cluster sre-operators list --outdated
+		$ osdctl cluster sre-operators list --outdated
+
+		# List a specific SRE operator
+		$ osdctl cluster sre-operators list --operator='OPERATOR_NAME'
 	`
 	repositoryBranch = "production"
 )
@@ -158,8 +162,8 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 		"openshift-velero",
 		"pagerduty-operator",
 		"openshift-route-monitor-operator",
+		"openshift-observability-operator",
 		// "dynatrace-operator", // skip for now
-		// "openshift-observability-operator", // skip for now
 		// "opentelemetry-operator", // skip for now
 	}
 
@@ -184,8 +188,8 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 		"managed-velero-operator",
 		"pagerduty-operator",
 		"route-monitor-operator",
+		"observability-operator", // skip for now
 		// "dynatrace-operator", // skip for now
-		// "observability-operator", // skip for now
 		// "opentelemetry-operator", // skip for now
 	}
 
@@ -220,14 +224,14 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 		Kind:    "SubscriptionList",
 	})
 
-	gitClient := &gitlab.Client{}
+	gitlabClient := &gitlab.Client{}
 	if !ctx.short {
 		gitlab_access := viper.GetString("gitlab_access")
 		if gitlab_access == "" {
 			fmt.Println("gitlab access token not found, please ensure your gitlab access token is set in the osdctl config")
 			return nil, nil
 		}
-		gitClient, _ = gitlab.NewClient(gitlab_access, gitlab.WithBaseURL("https://gitlab.cee.redhat.com/"))
+		gitlabClient, _ = gitlab.NewClient(gitlab_access, gitlab.WithBaseURL("https://gitlab.cee.redhat.com/"))
 	}
 
 	if ctx.operator != "" {
@@ -256,7 +260,7 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 			operatorChannel, operatorStatus := "", ""
 
 			if !ctx.short {
-				latestVersion[i] = getLatestVersion(gitClient, listOfOperatorNames[i])
+				latestVersion[i] = getLatestVersion(gitlabClient, listOfOperatorNames[i])
 			}
 
 			csvListCopy := csvList.DeepCopy()
@@ -350,6 +354,34 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) string {
 			}
 		}
 	}
+	// Special case for observability-operator
+	if operatorName == "observability-operator" {
+		repoLink := "service/app-interface"
+		filePath := "data/services/osd-operators/cicd/saas/saas-observability-operator.yaml"
+		fileYaml, _, err := gitClient.RepositoryFiles.GetFile(repoLink, filePath, &gitlab.GetFileOptions{Ref: gitlab.Ptr("master")})
+		if err != nil {
+			fmt.Println(operatorName, "- Failed to obtain GitLab file: ", err)
+			return ""
+		}
+		// decode base64
+		decodedYamlString, err := base64.StdEncoding.DecodeString(fileYaml.Content)
+		if err != nil {
+			fmt.Println(operatorName, "failed to decode file: ", err)
+		}
+		yamlContent := string(decodedYamlString)
+		re := regexp.MustCompile(`hivep01ue1/cluster-scope.yml
+    ref:\s*(\S+)`)
+		matches := re.FindStringSubmatch(yamlContent)
+
+		if len(matches) == 0 {
+			fmt.Println("Failed to extract version from observability-operator")
+		}
+
+		version := getObservabilityOperatorVersion(matches[1])
+
+		return version
+
+	}
 
 	repoLink := "service/saas-" + operatorName + "-bundle"
 	filePath := operatorName + "/" + operatorName + ".package.yaml"
@@ -369,4 +401,19 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) string {
 	expectedVersion := extractVersion(string(decodedYamlString))
 
 	return expectedVersion
+}
+
+func getObservabilityOperatorVersion(sha string) string {
+	githubClient := github.NewClient(nil)
+
+	fileGithub, _, _ := githubClient.Repositories.ListTags(context.TODO(), "rhobs", "observability-operator", &github.ListOptions{})
+
+	for _, tag := range fileGithub {
+		if *tag.Commit.SHA == sha {
+			expectedVersion := *tag.Name
+			return expectedVersion
+		}
+	}
+
+	return ""
 }
