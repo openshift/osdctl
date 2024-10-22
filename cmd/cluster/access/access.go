@@ -152,10 +152,12 @@ func (c *clusterAccessOptions) Run(cmd *cobra.Command, args []string) error {
 	}
 	c.Println(fmt.Sprintf("Kubeconfig Secret: %s", kubeconfigSecret.Name))
 
-	// If Cluster is PrivateLink - access via jump pod on hive
-	if cluster.AWS().PrivateLink() {
+	isPscCluster := cluster.GCP().PrivateServiceConnect().ServiceAttachmentSubnet() != ""
+
+	// If Cluster is PrivateLink or PrivateServiceConnect - access via jump pod on hive
+	if cluster.AWS().PrivateLink() || isPscCluster {
 		c.Println("")
-		c.Println("Cluster is PrivateLink, and is only accessible via a jump pod on Hive")
+		c.Println("Cluster is PrivateLink or Private Service Connect, and is only accessible via a jump pod on Hive")
 		return c.createJumpPodAccess(cluster, kubeconfigSecret)
 	}
 
