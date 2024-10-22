@@ -3,16 +3,18 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"math"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
 	pd "github.com/PagerDuty/go-pagerduty"
 	"github.com/andygrunwald/go-jira"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"github.com/openshift/osdctl/pkg/printer"
-	"math"
-	"os"
-	"strings"
-	"time"
 )
 
 const (
@@ -107,10 +109,17 @@ func PrintLimitedSupportReasons(limitedSupportReasons []*cmv1.LimitedSupportReas
 		return
 	}
 
+	var limitedSupportOverridden = false
 	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
-	table.AddRow([]string{"Reason ID", "Summary", "Details"})
+	table.AddRow([]string{"Reason ID", "Summary", "Overridden (SUPPORTEX)", "Details"})
 	for _, clusterLimitedSupportReason := range limitedSupportReasons {
-		table.AddRow([]string{clusterLimitedSupportReason.ID(), clusterLimitedSupportReason.Summary(), clusterLimitedSupportReason.Details()})
+		limitedSupportOverridden = limitedSupportOverridden || clusterLimitedSupportReason.Override().Enabled()
+		table.AddRow([]string{
+			clusterLimitedSupportReason.ID(),
+			clusterLimitedSupportReason.Summary(),
+			strconv.FormatBool(limitedSupportOverridden),
+			clusterLimitedSupportReason.Details(),
+		})
 	}
 	// Add empty row for readability
 	table.AddRow([]string{})
