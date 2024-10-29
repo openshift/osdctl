@@ -10,8 +10,8 @@ import (
 	organizationTypes "github.com/aws/aws-sdk-go-v2/service/organizations/types"
 	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	resourceGroupsTaggingApiTypes "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi/types"
-	"github.com/golang/mock/gomock"
 	"github.com/openshift/osdctl/pkg/provider/aws/mock"
+	"go.uber.org/mock/gomock"
 )
 
 type mocks struct {

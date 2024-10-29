@@ -13,11 +13,11 @@ import (
 	resourceGroupsTaggingApiTypes "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	stsTypes "github.com/aws/aws-sdk-go-v2/service/sts/types"
-	"github.com/golang/mock/gomock"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	awsInternal "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/provider/aws/mock"
 	"github.com/spf13/viper"
+	"go.uber.org/mock/gomock"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 

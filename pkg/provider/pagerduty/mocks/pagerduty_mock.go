@@ -9,7 +9,7 @@ import (
 	reflect "reflect"
 
 	go_pagerduty "github.com/PagerDuty/go-pagerduty"
-	gomock "go.uber.org/mock/gomock"
+	"go.uber.org/mock/gomock"
 )
 
 // MockpdClientInterface is a mock of pdClientInterface interface.
