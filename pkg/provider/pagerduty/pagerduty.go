@@ -1,5 +1,8 @@
 package pagerduty
 
+// Generate client mocks for testing
+//go:generate mockgen -source=pagerduty.go -package=mock -destination=mocks/pagerduty_mock.go
+
 import (
 	"context"
 	"fmt"
