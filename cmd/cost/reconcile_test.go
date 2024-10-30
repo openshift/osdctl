@@ -9,9 +9,9 @@ import (
 	costExplorerTypes "github.com/aws/aws-sdk-go-v2/service/costexplorer/types"
 	"github.com/aws/aws-sdk-go-v2/service/organizations"
 	organizationTypes "github.com/aws/aws-sdk-go-v2/service/organizations/types"
-	"github.com/golang/mock/gomock"
 	"github.com/onsi/gomega"
 	"github.com/openshift/osdctl/pkg/provider/aws/mock"
+	"go.uber.org/mock/gomock"
 )
 
 func TestReconcileCostCategories(t *testing.T) {

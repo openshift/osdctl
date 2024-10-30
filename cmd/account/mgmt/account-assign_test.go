@@ -9,9 +9,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/organizations"
 	organizationTypes "github.com/aws/aws-sdk-go-v2/service/organizations/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
-	"github.com/golang/mock/gomock"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/provider/aws/mock"
+	"go.uber.org/mock/gomock"
 )
 
 func TestIsOwned(t *testing.T) {
