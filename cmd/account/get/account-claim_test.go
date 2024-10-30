@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	. "github.com/onsi/gomega"
+	"go.uber.org/mock/gomock"
 
 	mockk8s "github.com/openshift/osdctl/cmd/hive/clusterdeployment/mock/k8s"
 	"github.com/openshift/osdctl/internal/utils/globalflags"

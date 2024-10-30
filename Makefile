@@ -56,7 +56,7 @@ mockgen: ensure-mockgen
 	@git diff --exit-code -- ./pkg/provider/aws/mock
 
 ensure-mockgen:
-	GOBIN=${BASE_DIR}/bin/  go install github.com/golang/mock/mockgen@v1.6.0
+	GOBIN=${BASE_DIR}/bin/ go install go.uber.org/mock/mockgen@v0.5.0
 
 test:
 	go test ${BUILDFLAGS} ./... -covermode=atomic -coverpkg=./...

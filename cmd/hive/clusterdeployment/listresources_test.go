@@ -3,12 +3,12 @@ package clusterdeployment_test
 import (
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
 	. "github.com/openshift/osdctl/cmd/hive/clusterdeployment"
 	mockk8s "github.com/openshift/osdctl/cmd/hive/clusterdeployment/mock/k8s"
 	mockprinter "github.com/openshift/osdctl/cmd/hive/clusterdeployment/mock/printer"
 	"github.com/spf13/cobra"
+	"go.uber.org/mock/gomock"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/onsi/gomega"

@@ -10,9 +10,9 @@ import (
 	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/aws/aws-sdk-go-v2/service/sts/types"
-	"github.com/golang/mock/gomock"
 	. "github.com/onsi/gomega"
 	"github.com/openshift/osdctl/pkg/provider/aws/mock"
+	"go.uber.org/mock/gomock"
 )
 
 const (
