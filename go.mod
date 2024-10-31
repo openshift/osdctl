@@ -48,9 +48,9 @@ require (
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/mock v0.4.0
+	go.uber.org/zap v1.26.0
 	golang.org/x/sync v0.8.0
 	golang.org/x/term v0.25.0
-	go.uber.org/zap v1.26.0
 	google.golang.org/api v0.171.0
 	google.golang.org/genproto v0.0.0-20240311173647-c811ad7063a7
 	gopkg.in/yaml.v2 v2.4.0
