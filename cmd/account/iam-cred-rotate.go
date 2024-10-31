@@ -25,6 +25,7 @@ import (
 	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
 	bpocmcli "github.com/openshift/backplane-cli/pkg/ocm"
 	"github.com/spf13/viper"
+	"go.uber.org/zap/zapcore"
 	"k8s.io/client-go/rest"
 
 	"github.com/openshift-online/ocm-sdk-go/logging"
@@ -47,10 +48,10 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
-
-//import 	klogv2 "k8s.io/klog/v2" // k8s may dump backtrace when logger is not set.
 
 const cmdName string = "iam-secret-mgmt"
 
@@ -264,12 +265,28 @@ func (o *rotateCredOptions) preRunCliChecks(cmd *cobra.Command, args []string) e
 		o.log.Error(o.ctx, "Failed to load AWS config:'%v'\n", err)
 		return err
 	}
-	// This attempts to set and mute the k8s logger to avoid
+	// This attempts to setthe k8s logger to avoid
 	// random kubernetes backtraces + warnings about not setting it.
 	// This should only impact klog used by vendored kubernetes, and not the goLogger
 	// which is primarily used throughout this osdctl cmd.
-	//klogv2.SetOutput(io.Discard)
-	//controllerruntime.SetLogger(klogv2.Background())
+	zlevel := zapcore.InfoLevel
+	switch {
+	case o.verboseLevel > 3:
+		zlevel = zapcore.DebugLevel
+	case o.verboseLevel == 3:
+		zlevel = zapcore.InfoLevel
+	case o.verboseLevel == 2:
+		zlevel = zapcore.WarnLevel
+	case o.verboseLevel <= 1:
+		zlevel = zapcore.ErrorLevel
+	default:
+		zlevel = zapcore.DebugLevel
+	}
+	controllerruntime.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{
+		Development: true, //Zap development config (stacktraces on warnings, no sampling)
+		//DestWriter:  os.Stderr, //defaults to os.Stderr
+		Level: zlevel, //Defaults to Debug when Development is true and Info otherwise
+	})))
 	return nil
 }
 
