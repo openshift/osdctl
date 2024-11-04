@@ -456,6 +456,54 @@ func GetManagementCluster(clusterId string) (*cmv1.Cluster, error) {
 	return nil, fmt.Errorf("no management cluster found for %s", clusterId)
 }
 
+// GetServiceCluster returns the hypershift Service Cluster object for a provided HCP clusterId
+func GetServiceCluster(clusterId string) (*cmv1.Cluster, error) {
+	conn, err := CreateConnection()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	var svcClusterName, mgmtClusterName string
+
+	hypershiftResp, err := conn.ClustersMgmt().V1().Clusters().
+		Cluster(clusterId).
+		Hypershift().
+		Get().
+		Send()
+	if err != nil {
+		return nil, err
+	}
+
+	if err == nil && hypershiftResp != nil {
+		mgmtClusterName = hypershiftResp.Body().ManagementCluster()
+	}
+
+	if mgmtClusterName == "" {
+		return nil, fmt.Errorf("failed to lookup management cluster for cluster %s", clusterId)
+	}
+
+	// Get the osd_fleet_mgmt reference for the given mgmt_cluster
+	ofmResp, err := conn.OSDFleetMgmt().V1().ManagementClusters().
+		List().
+		Parameter("search", fmt.Sprintf("name='%s'", mgmtClusterName)).
+		Send()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the fleet manager information for management cluster %s", mgmtClusterName)
+	}
+
+	if kind := ofmResp.Items().Get(0).Parent().Kind(); kind == "ServiceCluster" {
+		svcClusterName = ofmResp.Items().Get(0).Parent().Name()
+	}
+
+	svcCluster, err := GetClusterAnyStatus(conn, svcClusterName)
+	if err != nil {
+		return nil, err
+	}
+
+	return svcCluster, nil
+}
+
 // Sanity Check for MC Cluster
 func IsManagementCluster(clusterID string) (isMC bool, err error) {
 	conn, err := CreateConnection()
@@ -486,6 +534,22 @@ func IsManagementCluster(clusterID string) (isMC bool, err error) {
 		}
 	}
 	return false, nil
+}
+
+func IsHostedCluster(clusterID string) (bool, error) {
+	conn, err := CreateConnection()
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+
+	cluster := conn.ClustersMgmt().V1().Clusters().Cluster(clusterID)
+	res, err := cluster.Hypershift().Get().Send()
+	if err != nil {
+		return false, err
+	}
+
+	return res.Body().Enabled(), nil
 }
 
 func GetHCPNamespace(clusterId string) (namespace string, err error) {

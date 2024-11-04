@@ -8,10 +8,11 @@ import (
 
 	"github.com/Dynatrace/dynatrace-operator/src/api/v1beta1"
 	"github.com/Dynatrace/dynatrace-operator/src/api/v1beta1/dynakube"
-	"github.com/openshift/osdctl/pkg/k8s"
-	ocmutils "github.com/openshift/osdctl/pkg/utils"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/osdctl/pkg/k8s"
+	ocmutils "github.com/openshift/osdctl/pkg/utils"
 )
 
 type HCPCluster struct {
@@ -23,6 +24,8 @@ type HCPCluster struct {
 	hcpNamespace          string
 	managementClusterName string
 	DynatraceURL          string
+	serviceClusterID      string
+	serviceClusterName    string
 }
 
 var ErrUnsupportedCluster = fmt.Errorf("Not an HCP or MC Cluster")
@@ -65,7 +68,10 @@ func FetchClusterDetails(clusterKey string) (hcpCluster HCPCluster, error error)
 	if err != nil {
 		return HCPCluster{}, fmt.Errorf("error retreiving Management Cluster for given HCP %s", err)
 	}
-
+	svcCluster, err := ocmutils.GetServiceCluster(cluster.ID())
+	if err != nil {
+		return HCPCluster{}, fmt.Errorf("error retreiving Service Cluster for given HCP %s", err)
+	}
 	hcpCluster.hcpNamespace, err = ocmutils.GetHCPNamespace(clusterKey)
 	if err != nil {
 		return HCPCluster{}, fmt.Errorf("error retreiving HCP Namespace for given cluster")
@@ -82,8 +88,9 @@ func FetchClusterDetails(clusterKey string) (hcpCluster HCPCluster, error error)
 	hcpCluster.internalID = cluster.ID()
 	hcpCluster.managementClusterID = mgmtCluster.ID()
 	hcpCluster.name = cluster.Name()
-
 	hcpCluster.managementClusterName = mgmtCluster.Name()
+	hcpCluster.serviceClusterID = svcCluster.ID()
+	hcpCluster.serviceClusterName = svcCluster.Name()
 
 	return hcpCluster, nil
 }

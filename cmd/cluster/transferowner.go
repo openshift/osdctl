@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -12,21 +13,26 @@ import (
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	hiveapiv1 "github.com/openshift/hive/apis/hive/v1"
 	hiveinternalv1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
-	"github.com/openshift/osdctl/cmd/common"
-	"github.com/openshift/osdctl/cmd/servicelog"
+	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	workv1 "open-cluster-management.io/api/work/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/osdctl/cmd/common"
+	"github.com/openshift/osdctl/cmd/servicelog"
 
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	amv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
-	"github.com/openshift/osdctl/internal/utils/globalflags"
-	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+
+	"github.com/openshift/osdctl/internal/utils/globalflags"
+	"github.com/openshift/osdctl/pkg/utils"
 )
 
 const CheckSyncMaxAttempts = 24
@@ -38,6 +44,7 @@ type transferOwnerOptions struct {
 	newOwnerName string
 	reason       string
 	dryrun       bool
+	hypershift   bool
 	cluster      *cmv1.Cluster
 
 	genericclioptions.IOStreams
@@ -275,6 +282,139 @@ func verifyClusterPullSecret(clientset *kubernetes.Clientset, expectedPullSecret
 	return nil
 }
 
+func updateManifestWork(conn *sdk.Connection, kubeCli client.Client, clusterID, mgmtClusterName string, pullsecret []byte) error {
+
+	if err := workv1.AddToScheme(kubeCli.Scheme()); err != nil {
+		return fmt.Errorf("failed to add scheme: %w", err)
+	}
+
+	manifestWorkName := clusterID
+	manifestWorkNamespace := mgmtClusterName
+	hostedCluster, err := utils.GetClusterAnyStatus(conn, clusterID)
+	if err != nil {
+		return fmt.Errorf("failed to get cluster: %w", err)
+	}
+
+	secretNamePrefix := hostedCluster.Name() + "-pull"
+
+	// Generate a random new secret name based on the existing pull secret name
+	randomSuffix := func(chars string, length int) string {
+		rand.Seed(time.Now().UnixNano())
+		result := make([]byte, length)
+		for i := range result {
+			result[i] = chars[rand.Intn(len(chars))]
+		}
+		return string(result)
+	}
+	newSecretName := secretNamePrefix + "-" + randomSuffix("0123456789abcdef", 6)
+
+	manifestWork := &workv1.ManifestWork{}
+	err = kubeCli.Get(context.TODO(), types.NamespacedName{Name: manifestWorkName, Namespace: manifestWorkNamespace}, manifestWork)
+	if err != nil {
+		return fmt.Errorf("failed to get the target manifestwork for given cluster %v: %w", clusterID, err)
+	}
+
+	for i, manifest := range manifestWork.Spec.Workload.Manifests {
+		if manifest.Raw != nil {
+			var manifestData map[string]interface{}
+			err := json.Unmarshal(manifest.Raw, &manifestData)
+			if err != nil {
+				return err
+			}
+
+			jsonData, err := json.Marshal(manifestData)
+			if err != nil {
+				return err
+			}
+
+			if manifestData["kind"] == "Secret" {
+				secret := &corev1.Secret{}
+				err = json.Unmarshal(jsonData, secret)
+				if err != nil {
+					return err
+				}
+				if strings.Contains(secret.Name, secretNamePrefix) {
+					// Firstly, get the ecr auth from the existing pull secret and append it to new pull secret
+					oldPullSecret := secret.Data[".dockerconfigjson"]
+					newPullSecret, err := appendECRAuth(oldPullSecret, pullsecret)
+					if err != nil {
+						return fmt.Errorf("cannot append the existing ECR auth to the new pull secret: %w", err)
+					}
+					// Then, update the secret with new name and new value
+					secret.Name = newSecretName
+					secret.Data[".dockerconfigjson"] = newPullSecret
+				}
+				secretJson, err := json.Marshal(secret)
+				if err != nil {
+					return err
+				}
+				manifestWork.Spec.Workload.Manifests[i].Raw = secretJson
+			}
+			if manifestData["kind"] == "HostedCluster" {
+				hc := &hypershiftv1beta1.HostedCluster{}
+				err = json.Unmarshal(jsonData, hc)
+				if err != nil {
+					return err
+				}
+				// Update the hosted cluster reference secret name to the new name
+				hc.Spec.PullSecret.Name = newSecretName
+				hcJson, err := json.Marshal(hc)
+				if err != nil {
+					return err
+				}
+				manifestWork.Spec.Workload.Manifests[i].Raw = hcJson
+			}
+		}
+	}
+
+	err = kubeCli.Update(context.TODO(), manifestWork, &client.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("cannot update the pull-secret within manifestwork: %w", err)
+	}
+
+	// The secret will be synced to the management cluster and guest cluster in a few seconds, wait here
+	fmt.Println("sleep 60 seconds here to make sure secret gets synced on guest cluster")
+	time.Sleep(time.Second * 60)
+
+	return nil
+}
+
+// appendECRAuth append the existing ECR auth to the new pull secret
+func appendECRAuth(oldpullsecret, newpullsecret []byte) ([]byte, error) {
+	type Auth struct {
+		Auth  string `json:"auth"`
+		Email string `json:"email"`
+	}
+
+	type Auths struct {
+		Auths map[string]Auth `json:"auths"`
+	}
+
+	var oldAuths, newAuths Auths
+
+	err := json.Unmarshal(oldpullsecret, &oldAuths)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(newpullsecret, &newAuths)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range oldAuths.Auths {
+		if strings.HasSuffix(k, "amazonaws.com") {
+			newAuths.Auths[k] = v
+		}
+	}
+
+	auth, err := json.Marshal(newAuths)
+	if err != nil {
+		return nil, err
+	}
+
+	return auth, nil
+}
+
 func (o *transferOwnerOptions) run() error {
 	fmt.Println("Notify the customer before ownership transfer commences. Sending service log.")
 	postCmd := generateServiceLog(o.clusterID, "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_starting.json")
@@ -305,17 +445,42 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("Failed to get username from new user id")
 	}
 
+	var mgmtCluster, svcCluster, hiveCluster, masterCluster *cmv1.Cluster
+
+	o.hypershift, err = utils.IsHostedCluster(o.clusterID)
+	if err != nil {
+		return fmt.Errorf("failed to check if the given cluster is HCP")
+	}
+
 	// Find and setup all resources that are needed
-	hiveCluster, err := utils.GetHiveCluster(o.clusterID)
+	if o.hypershift {
+		fmt.Println("Given cluster is HCP, start to proceed the HCP owner transfer")
+		mgmtCluster, err = utils.GetManagementCluster(o.clusterID)
+		svcCluster, err = utils.GetServiceCluster(o.clusterID)
+		if err != nil {
+			return err
+		}
+		masterCluster = svcCluster
+	} else {
+		fmt.Println("Given cluster is OSD/ROSA classic, start to proceed the classic owner transfer")
+		hiveCluster, err = utils.GetHiveCluster(o.clusterID)
+		if err != nil {
+			return err
+		}
+		masterCluster = hiveCluster
+	}
+
 	elevationReasons := []string{
 		o.reason,
 		fmt.Sprintf("Updating pull secret using osdctl to tranfert owner to %s", o.newOwnerName),
 	}
-	hiveKubeCli, _, hivecClientset, err := common.GetKubeConfigAndClient(hiveCluster.ID(), elevationReasons...)
+
+	masterKubeCli, _, masterKubeClientSet, err := common.GetKubeConfigAndClient(masterCluster.ID(), elevationReasons...)
 	if err != nil {
-		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for Hive cluster ID %s: %w", hiveCluster.ID(), err)
+		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for Hive cluster ID %s: %w", masterCluster.ID(), err)
 	}
 
+	// Fetch the pull secret with the given new username
 	response, err := ocm.AccountsMgmt().V1().AccessToken().Post().Impersonate(userName).Parameter("body", nil).Send()
 	if err != nil {
 		return fmt.Errorf("Can't send request: %w", err)
@@ -357,22 +522,32 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("operation aborted by the user")
 	}
 
-	err = updatePullSecret(ocm, hiveKubeCli, hivecClientset, o.clusterID, pullSecret)
-	if err != nil {
-		return fmt.Errorf("failed to update pull secret for Hive cluster with ID %s: %w", o.clusterID, err)
+	if o.hypershift {
+		err = updateManifestWork(ocm, masterKubeCli, o.clusterID, mgmtCluster.Name(), pullSecret)
+		if err != nil {
+			return fmt.Errorf("failed to update pull secret for service cluster with ID %s: %w", o.clusterID, err)
+		}
+	} else {
+		err = updatePullSecret(ocm, masterKubeCli, masterKubeClientSet, o.clusterID, pullSecret)
+		if err != nil {
+			return fmt.Errorf("failed to update pull secret for Hive cluster with ID %s: %w", o.clusterID, err)
+		}
 	}
 
-	_, _, clientset, err := common.GetKubeConfigAndClient(o.clusterID, elevationReasons...)
+	_, _, targetClientSet, err := common.GetKubeConfigAndClient(o.clusterID, elevationReasons...)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", o.clusterID, err)
 	}
 
-	err = rolloutTelemeterClientPods(clientset, "openshift-monitoring", "app.kubernetes.io/name=telemeter-client")
-	if err != nil {
-		return fmt.Errorf("failed to roll out Telemeter Client pods in namespace 'openshift-monitoring' with label selector 'app.kubernetes.io/name=telemeter-client': %w", err)
+	// Rollout the telemeterClient pod for non HCP clusters
+	if !o.hypershift {
+		err = rolloutTelemeterClientPods(targetClientSet, "openshift-monitoring", "app.kubernetes.io/name=telemeter-client")
+		if err != nil {
+			return fmt.Errorf("failed to roll out Telemeter Client pods in namespace 'openshift-monitoring' with label selector 'app.kubernetes.io/name=telemeter-client': %w", err)
+		}
 	}
 
-	err = verifyClusterPullSecret(clientset, string(pullSecret))
+	err = verifyClusterPullSecret(targetClientSet, string(pullSecret))
 	if err != nil {
 		return fmt.Errorf("error verifying cluster pull secret: %w", err)
 	}

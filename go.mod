@@ -1,6 +1,8 @@
 module github.com/openshift/osdctl
 
-go 1.21
+go 1.22.0
+
+toolchain go1.22.8
 
 require (
 	cloud.google.com/go/compute v1.25.0
@@ -33,12 +35,13 @@ require (
 	github.com/onsi/gomega v1.33.1
 	github.com/openshift-online/ocm-cli v0.1.74
 	github.com/openshift-online/ocm-sdk-go v0.1.445
-	github.com/openshift/api v0.0.0-20240124164020-e2ce40831f2e
+	github.com/openshift/api v0.0.0-20240524162738-d899f8877d22
 	github.com/openshift/aws-account-operator/api v0.0.0-20230322125717-5b5a00a3e99f
 	github.com/openshift/backplane-cli v0.1.33
 	github.com/openshift/cloud-credential-operator v0.0.0-20240522005141-2f29d9103ce2
 	github.com/openshift/gcp-project-operator v0.0.0-20220920194256-df38e31387a7
 	github.com/openshift/hive/apis v0.0.0-20240216200617-8c54fc9cac45
+	github.com/openshift/hypershift/api v0.0.0-20241102085541-7ba3433476ee
 	github.com/openshift/osd-network-verifier v1.1.2
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/shopspring/decimal v1.3.1
@@ -54,12 +57,13 @@ require (
 	google.golang.org/genproto v0.0.0-20240311173647-c811ad7063a7
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.29.2
-	k8s.io/apimachinery v0.29.2
+	k8s.io/api v0.30.3
+	k8s.io/apimachinery v0.30.3
 	k8s.io/cli-runtime v0.29.2
 	k8s.io/client-go v0.29.2
 	k8s.io/kubectl v0.28.4
-	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
+	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0
+	open-cluster-management.io/api v0.13.0
 	sigs.k8s.io/cluster-api-provider-aws/v2 v2.3.1
 	sigs.k8s.io/controller-runtime v0.16.3
 	sigs.k8s.io/yaml v1.4.0
@@ -107,7 +111,7 @@ require (
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/getkin/kin-openapi v0.113.0 // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
-	github.com/go-logr/logr v1.4.1 // indirect
+	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.2.4 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
@@ -222,8 +226,8 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	k8s.io/apiextensions-apiserver v0.29.1 // indirect
 	k8s.io/component-base v0.29.1 // indirect
-	k8s.io/klog/v2 v2.120.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20231113174909-778a5567bc1e // indirect
+	k8s.io/klog/v2 v2.130.1 // indirect
+	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
 	sigs.k8s.io/cluster-api v1.5.3 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kustomize/api v0.17.2 // indirect
