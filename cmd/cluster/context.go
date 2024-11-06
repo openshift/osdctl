@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -418,7 +417,10 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			}
 			queryTxt := query.Build()
 			data.DyntraceEnvURL = hcpCluster.DynatraceURL
-			data.DyntraceLogsURL = dynatrace.GetLinkToWebConsole(hcpCluster.DynatraceURL, 10, base64.StdEncoding.EncodeToString([]byte(queryTxt)))
+			data.DyntraceLogsURL, err = dynatrace.GetLinkToWebConsole(hcpCluster.DynatraceURL, 10, queryTxt)
+			if err != nil {
+				errors = append(errors, fmt.Errorf("failed to get url: %v", err))
+			}
 		}
 	}
 
