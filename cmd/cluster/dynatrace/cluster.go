@@ -72,7 +72,7 @@ func FetchClusterDetails(clusterKey string) (hcpCluster HCPCluster, error error)
 	if err != nil {
 		return HCPCluster{}, fmt.Errorf("error retreiving Service Cluster for given HCP %s", err)
 	}
-	hcpCluster.hcpNamespace, err = ocmutils.GetHCPNamespace(clusterKey)
+	hcpCluster.hcpNamespace, err = ocmutils.GetHCPNamespace(cluster.ID())
 	if err != nil {
 		return HCPCluster{}, fmt.Errorf("error retreiving HCP Namespace for given cluster")
 	}

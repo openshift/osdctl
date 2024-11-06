@@ -1,8 +1,9 @@
 package dynatrace
 
 import (
-	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net/url"
 
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -56,8 +57,43 @@ func NewCmdLogs() *cobra.Command {
 	return logsCmd
 }
 
-func GetLinkToWebConsole(dtURL string, since int, base64Url string) string {
-	return fmt.Sprintf("%sui/apps/dynatrace.logs/?gtf=-%dh&gf=all&sortDirection=desc&advancedQueryMode=true&isDefaultQuery=false&visualizationType=table#%s\n\n", dtURL, since, base64Url)
+func GetLinkToWebConsole(dtURL string, since int, finalQuery string) (string, error) {
+	SearchQuery := map[string]interface{}{
+		"version": "0",
+		"data": map[string]interface{}{
+			"tableConfig": map[string]interface{}{
+				"visibleColumns": []string{"timestamp", "status", "content"},
+				"columnAttributes": map[string]interface{}{
+					"columnWidths": map[string]interface{}{},
+					"lineWraps": map[string]interface{}{
+						"timestamp": true,
+						"status":    true,
+						"content":   true,
+					},
+					"tableLineWrap": true,
+				},
+				"columnOrder": []string{"timestamp", "status", "content"},
+			},
+			"queryConfig": map[string]interface{}{
+				"query":     finalQuery,
+				"timeframe": map[string]interface{}{"from": fmt.Sprintf("now()-%vh", since), "to": "now()"},
+				"filter": map[string]interface{}{
+					"datatype": "logs",
+					"filters":  map[string]interface{}{},
+					"sort": map[string]interface{}{
+						"field":     "timestamp",
+						"direction": "desc",
+					},
+				},
+				"showDqlEditor": true,
+			},
+		},
+	}
+	mStr, err := json.Marshal(SearchQuery)
+	if err != nil {
+		return "", fmt.Errorf("failed to create JSON for sharable URL: %v", err)
+	}
+	return fmt.Sprintf("%sui/apps/dynatrace.logs/?gtf=-%dh&gf=all&sortDirection=desc&advancedQueryMode=true&isDefaultQuery=false&visualizationType=table#%s\n\n", dtURL, since, url.PathEscape(string(mStr))), nil
 }
 
 func main(clusterID string) error {
@@ -76,7 +112,14 @@ func main(clusterID string) error {
 	}
 
 	fmt.Println(query.Build())
-	fmt.Println("\nLink to Web Console - \n", GetLinkToWebConsole(hcpCluster.DynatraceURL, since, base64.StdEncoding.EncodeToString([]byte(query.finalQuery))))
+
+	url, err := GetLinkToWebConsole(hcpCluster.DynatraceURL, since, query.finalQuery)
+
+	if err != nil {
+		return fmt.Errorf("failed to get url: %v:", err)
+	}
+
+	fmt.Println("\nLink to Web Console - \n", url)
 
 	if dryRun {
 		return nil
