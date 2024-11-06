@@ -91,7 +91,7 @@ func GetLinkToWebConsole(dtURL string, since int, finalQuery string) (string, er
 	}
 	mStr, err := json.Marshal(SearchQuery)
 	if err != nil {
-		return fmt.Sprintf("failed to create JSON for sharable URL"), err
+		return "", fmt.Errorf("failed to create JSON for sharable URL: %v", err)
 	}
 	return fmt.Sprintf("%sui/apps/dynatrace.logs/?gtf=-%dh&gf=all&sortDirection=desc&advancedQueryMode=true&isDefaultQuery=false&visualizationType=table#%s\n\n", dtURL, since, url.PathEscape(string(mStr))), nil
 }
