@@ -37,7 +37,7 @@ const (
   $ osdctl cluster dynatrace logs
 
   # Get the logs of a specific HCP cluster
-  $ osdctl cluster dynatrace logs -c <cluster-id>
+  $ osdctl cluster dynatrace logs --cluster <cluster-id>
 
   # Get the logs of the pod alertmanager-main-0 in namespace openshift-monitoring
   $ osdctl cluster dynatrace logs --po alertmanager-main-0 --namespace openshift-monitoring
@@ -83,7 +83,7 @@ func NewCmdLogs() *cobra.Command {
 	logsCmd.Flags().StringSliceVar(&podList, "pod", []string{}, "Pod name(s) (comma-separated)")
 	logsCmd.Flags().StringSliceVar(&podList, "po", []string{}, "Pod name(s) (comma-separated)")
 	logsCmd.Flags().StringSliceVar(&statusList, "status", []string{}, "Status(Info/Warn/Error) (comma-separated)")
-	logsCmd.Flags().StringSliceVarP(&containerList, "container", "c", []string{}, "Container name(s) (comma-separated)")
+	logsCmd.Flags().StringSliceVar(&containerList, "container", []string{}, "Container name(s) (comma-separated)")
 	logsCmd.Flags().StringSliceVarP(&namespaceList, "namespace", "n", []string{}, "Namespace(s) (comma-separated)")
 
 	return logsCmd
