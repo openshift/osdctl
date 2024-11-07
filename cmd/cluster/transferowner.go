@@ -295,7 +295,8 @@ func updateManifestWork(conn *sdk.Connection, kubeCli client.Client, clusterID, 
 		return fmt.Errorf("failed to get cluster: %w", err)
 	}
 
-	secretNamePrefix := hostedCluster.Name() + "-pull"
+	// Use domain prefix here instead of hostedcluster.Name, since the pull secret will follow the domain prefix
+	secretNamePrefix := hostedCluster.DomainPrefix() + "-pull"
 
 	// Generate a random new secret name based on the existing pull secret name
 	randomSuffix := func(chars string, length int) string {
