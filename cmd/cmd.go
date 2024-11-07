@@ -153,9 +153,5 @@ func versionCheck() {
 
 	if utils.Version != strings.TrimPrefix(latestVersion, "v") {
 		_, _ = fmt.Fprintf(os.Stderr, "WARN: The current version (%s) is different than the latest released version (%s). It is recommended that you update to the latest released version to ensure that no known bugs or issues are hit.\n", utils.Version, latestVersion)
-
-		if !utils.ConfirmPrompt() {
-			os.Exit(0)
-		}
 	}
 }
