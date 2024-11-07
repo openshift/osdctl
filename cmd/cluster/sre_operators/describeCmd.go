@@ -25,11 +25,7 @@ type sreOperatorsDescribeOptions struct {
 }
 
 type sreOperatorDetails struct {
-	Name      string
-	Current   string
-	Expected  string
-	CsvStatus string
-	Channel   string
+	basic sreOperator
 
 	CsvHealthPhase   string
 	CsvHealthMessage string
@@ -51,8 +47,8 @@ const (
   Helps obtain various health information about a specified SRE operator within a cluster,
   including CSV, Subscription, OperatorGroup, Deployment, and Pod health statuses.
 
-  A GitLab access token is required to fetch the latest version of the operator,
-  and can be set in the '.config/osdctl' file as 'gitlab_access: <TOKEN>'.
+  A git_access token is required to fetch the latest version of the operators, and can be 
+  set within the config file using the 'osdctl setup' command.
 
   The command creates a Kubernetes client to access the current cluster context, and GitLab/GitHub
   clients to fetch the latest versions of each operator from its respective repository.
@@ -93,16 +89,17 @@ func (ctx *sreOperatorsDescribeOptions) printText(output []sreOperatorDetails) e
 	p := printer.NewTablePrinter(ctx.IOStreams.Out, 20, 1, 3, ' ')
 
 	for _, op := range output {
-		p.AddRow([]string{"Operator Name:", op.Name})
-		if op.Current != op.Expected {
-			p.AddRow([]string{"Current Version:", Red + op.Current + " (outdated)" + RestoreColor})
-			p.AddRow([]string{"Expected Version:", op.Expected})
+		p.AddRow([]string{"Operator Name:", op.basic.Name})
+		if op.basic.Current != op.basic.Expected {
+			p.AddRow([]string{"Current Version:", Red + op.basic.Current + " (outdated)" + RestoreColor})
+			p.AddRow([]string{"Expected Version:", op.basic.Expected})
 		} else {
-			p.AddRow([]string{"Current Version:", op.Current})
-			p.AddRow([]string{"Expected Version:", op.Expected})
+			p.AddRow([]string{"Current Version:", op.basic.Current})
+			p.AddRow([]string{"Expected Version:", op.basic.Expected})
 		}
-		p.AddRow([]string{"Channel:", op.Channel})
-		p.AddRow([]string{"CSV Status:", op.CsvStatus})
+		p.AddRow([]string{"Expected Version Commit URL:", op.basic.CommitURL})
+		p.AddRow([]string{"Channel:", op.basic.Channel})
+		p.AddRow([]string{"CSV Status:", op.basic.Status})
 		p.AddRow([]string{"CSV Phase:", op.CsvHealthPhase})
 		p.AddRow([]string{"Latest CSV Health Message:", op.CsvHealthMessage})
 		p.AddRow([]string{"Latest Subscription Message:", op.SubscriptionMessage})
@@ -119,53 +116,6 @@ func (ctx *sreOperatorsDescribeOptions) printText(output []sreOperatorDetails) e
 }
 
 func (ctx *sreOperatorsDescribeOptions) DescribeOperator(cmd *cobra.Command, operatorName string) ([]sreOperatorDetails, error) {
-	listOfOperators := []string{
-		"openshift-addon-operator",
-		"aws-vpce-operator",
-		"openshift-custom-domains-operator",
-		"openshift-managed-node-metadata-operator",
-		"openshift-managed-upgrade-operator",
-		"openshift-must-gather-operator",
-		"openshift-ocm-agent-operator",
-		"openshift-osd-metrics",
-		"openshift-rbac-permissions",
-		"openshift-splunk-forwarder-operator",
-		"aws-account-operator",
-		"certman-operator",
-		"openshift-cloud-ingress-operator",
-		"openshift-monitoring",
-		"deadmanssnitch-operator",
-		"openshift-deployment-validation-operator",
-		"gcp-project-operator",
-		"openshift-velero",
-		"pagerduty-operator",
-		"openshift-route-monitor-operator",
-		"openshift-observability-operator",
-	}
-
-	listOfOperatorNames := []string{
-		"addon-operator",
-		"aws-vpce-operator",
-		"custom-domains-operator",
-		"managed-node-metadata-operator",
-		"managed-upgrade-operator",
-		"must-gather-operator",
-		"ocm-agent-operator",
-		"osd-metrics-exporter",
-		"rbac-permissions-operator",
-		"splunk-forwarder-operator",
-		"aws-account-operator",
-		"certman-operator",
-		"cloud-ingress-operator",
-		"configure-alertmanager-operator",
-		"deadmanssnitch-operator",
-		"deployment-validation-operator",
-		"gcp-project-operator",
-		"managed-velero-operator",
-		"pagerduty-operator",
-		"route-monitor-operator",
-		"observability-operator",
-	}
 
 	csv := &unstructured.Unstructured{}
 	csv.SetGroupVersionKind(schema.GroupVersionKind{
@@ -173,30 +123,35 @@ func (ctx *sreOperatorsDescribeOptions) DescribeOperator(cmd *cobra.Command, ope
 		Version: "v1alpha1",
 		Kind:    "ClusterServiceVersion",
 	})
+
 	csvList := &unstructured.UnstructuredList{}
 	csvList.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "operators.coreos.com",
 		Version: "v1alpha1",
 		Kind:    "ClusterServiceVersionList",
 	})
+
 	sub := &unstructured.Unstructured{}
 	sub.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "operators.coreos.com",
 		Version: "v1alpha1",
 		Kind:    "Subscription",
 	})
+
 	subList := &unstructured.UnstructuredList{}
 	subList.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "operators.coreos.com",
 		Version: "v1alpha1",
 		Kind:    "SubscriptionList",
 	})
+
 	opGroup := &unstructured.Unstructured{}
 	opGroup.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "operators.coreos.com",
 		Version: "v1",
 		Kind:    "OperatorGroup",
 	})
+
 	opGroupList := &unstructured.UnstructuredList{}
 	opGroupList.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "operators.coreos.com",
@@ -230,7 +185,7 @@ func (ctx *sreOperatorsDescribeOptions) DescribeOperator(cmd *cobra.Command, ope
 	opIndex := slices.Index(listOfOperatorNames, operatorName)
 
 	currentVersion, csvStatus, operatorChannel, csvHealthPhase, csvHealthMessage, subMessage, opGroupStatus, podHealth, deploymentHealth := "", "", "", "", "", "", "", "", ""
-	ExpectedVersion := getLatestVersion(gitlabClient, operatorName)
+	ExpectedVersion, commitUrl := getLatestVersion(gitlabClient, operatorName)
 
 	if err := ctx.kubeCli.List(context.TODO(), csvList, client.InNamespace(listOfOperators[opIndex])); err != nil {
 		fmt.Println("Error retrieving CSV details")
@@ -303,15 +258,9 @@ func (ctx *sreOperatorsDescribeOptions) DescribeOperator(cmd *cobra.Command, ope
 			}
 		}
 	}
-
 	currentVersion = extractVersion(currentVersion)
-
 	op := sreOperatorDetails{
-		Name:      operatorName,
-		Current:   currentVersion,
-		Expected:  ExpectedVersion,
-		CsvStatus: csvStatus,
-		Channel:   operatorChannel,
+		basic: sreOperator{operatorName, currentVersion, ExpectedVersion, csvStatus, operatorChannel, commitUrl},
 
 		CsvHealthPhase:   csvHealthPhase,
 		CsvHealthMessage: csvHealthMessage,

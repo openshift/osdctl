@@ -30,25 +30,20 @@ type sreOperatorsListOptions struct {
 	outdated  bool
 	noHeaders bool
 	operator  string
+	commit    bool
 
 	genericclioptions.IOStreams
 	kubeCli client.Client
 }
 
 type sreOperator struct {
-	Name     string
-	Current  string
-	Expected string
-	Status   string
-	Channel  string
+	Name      string
+	Current   string
+	Expected  string
+	Status    string
+	Channel   string
+	CommitURL string
 }
-
-var (
-	RestoreColor = "\033[0m"
-	Red          = "\033[31m"
-	Bold         = "\u001b[1m"
-	Gap          = "         "
-)
 
 const (
 	sreOperatorsListExample = `
@@ -61,20 +56,79 @@ const (
 	# List only SRE operators that are running outdated versions
 	$ osdctl cluster sre-operators list --outdated
 
+	# List SRE operators with their expected version commit links
+	$ osdctl cluster sre-operators list --commit
+	
 	# List a specific SRE operator
 	$ osdctl cluster sre-operators list --operator='OPERATOR_NAME'
 	`
 	sreOperatorsListDescription = `
-  Lists the current version, channel, and status of SRE operators running in the current 
-  cluster context, and by default fetches the latest version from the operators' repositories.
-  
-  A GitLab access token is required to fetch the latest version of the operators,
-  and can be set in the '.config/osdctl' file as 'gitlab_access: <TOKEN>'.
-
-  The command creates a Kubernetes client to access the current cluster context, and GitLab/GitHub
-  clients to fetch the latest versions of each operator from its respective repository.
+	Lists the current version, channel, and status of SRE operators running in the current 
+	cluster context, and by default fetches the latest version from the operators' repositories.
+	
+	A git_access token is required to fetch the latest version of the operators, and can be 
+	set within the config file using the 'osdctl setup' command.
+	
+	The command creates a Kubernetes client to access the current cluster context, and GitLab/GitHub
+	clients to fetch the latest versions of each operator from its respective repository.
 	`
+
 	repositoryBranch = "production"
+)
+
+var listOfOperators = []string{
+	"openshift-addon-operator",
+	"aws-vpce-operator",
+	"openshift-custom-domains-operator",
+	"openshift-managed-node-metadata-operator",
+	"openshift-managed-upgrade-operator",
+	"openshift-must-gather-operator",
+	"openshift-ocm-agent-operator",
+	"openshift-osd-metrics",
+	"openshift-rbac-permissions",
+	"openshift-splunk-forwarder-operator",
+	"aws-account-operator",
+	"certman-operator",
+	"openshift-cloud-ingress-operator",
+	"openshift-monitoring",
+	"deadmanssnitch-operator",
+	"openshift-deployment-validation-operator",
+	"gcp-project-operator",
+	"openshift-velero",
+	"pagerduty-operator",
+	"openshift-route-monitor-operator",
+	"openshift-observability-operator",
+}
+
+var listOfOperatorNames = []string{
+	"addon-operator",
+	"aws-vpce-operator",
+	"custom-domains-operator",
+	"managed-node-metadata-operator",
+	"managed-upgrade-operator",
+	"must-gather-operator",
+	"ocm-agent-operator",
+	"osd-metrics-exporter",
+	"rbac-permissions-operator",
+	"splunk-forwarder-operator",
+	"aws-account-operator",
+	"certman-operator",
+	"cloud-ingress-operator",
+	"configure-alertmanager-operator",
+	"deadmanssnitch-operator",
+	"deployment-validation-operator",
+	"gcp-project-operator",
+	"managed-velero-operator",
+	"pagerduty-operator",
+	"route-monitor-operator",
+	"observability-operator",
+}
+
+var (
+	RestoreColor = "\033[0m"
+	Red          = "\033[31m"
+	Bold         = "\u001b[1m"
+	Gap          = "         "
 )
 
 func newCmdList(streams genericclioptions.IOStreams, client client.Client) *cobra.Command {
@@ -101,6 +155,7 @@ func newCmdList(streams genericclioptions.IOStreams, client client.Client) *cobr
 	listCmd.Flags().BoolVar(&opts.outdated, "outdated", false, "Filter to only show operators running outdated versions")
 	listCmd.Flags().BoolVar(&opts.noHeaders, "no-headers", false, "Exclude headers from the output")
 	listCmd.Flags().StringVar(&opts.operator, "operator", "", "Filter to only show the specified operator.")
+	listCmd.Flags().BoolVar(&opts.commit, "commit", false, "Include the commit URL for each operator")
 
 	return listCmd
 }
@@ -112,6 +167,9 @@ func (ctx *sreOperatorsListOptions) checks(cmd *cobra.Command) error {
 	}
 	if ctx.outdated && ctx.short {
 		return util.UsageErrorf(cmd, "cannot use both --short and --outdated flags together")
+	}
+	if ctx.short && ctx.commit {
+		return util.UsageErrorf(cmd, "cannot use both --short and --commit flags together")
 	}
 	return nil
 }
@@ -127,6 +185,9 @@ func (ctx *sreOperatorsListOptions) printText(opList []sreOperator) error {
 	if !ctx.noHeaders {
 		p.AddRow([]string{Bold})
 		header := []string{"NAME", "CURRENT", "EXPECTED", "STATUS", "CHANNEL" + RestoreColor}
+		if ctx.commit {
+			header = []string{"NAME", "CURRENT", "EXPECTED", "STATUS", "CHANNEL", "EXPECTED VERSION COMMIT URL" + RestoreColor}
+		}
 		if ctx.short {
 			header = []string{"NAME", "CURRENT", "STATUS", "CHANNEL" + RestoreColor}
 		}
@@ -147,6 +208,9 @@ func (ctx *sreOperatorsListOptions) printText(opList []sreOperator) error {
 			if op.Current != op.Expected {
 				row = []string{Red + Bold + op.Name, Gap + op.Current, Gap + op.Expected, Gap + op.Status, Gap + op.Channel + RestoreColor}
 			}
+			if ctx.commit {
+				row = append(row, op.CommitURL)
+			}
 		}
 		p.AddRow(row)
 	}
@@ -163,54 +227,6 @@ type operatorResult struct {
 }
 
 func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOperator, error) {
-
-	listOfOperators := []string{
-		"openshift-addon-operator",
-		"aws-vpce-operator",
-		"openshift-custom-domains-operator",
-		"openshift-managed-node-metadata-operator",
-		"openshift-managed-upgrade-operator",
-		"openshift-must-gather-operator",
-		"openshift-ocm-agent-operator",
-		"openshift-osd-metrics",
-		"openshift-rbac-permissions",
-		"openshift-splunk-forwarder-operator",
-		"aws-account-operator",
-		"certman-operator",
-		"openshift-cloud-ingress-operator",
-		"openshift-monitoring",
-		"deadmanssnitch-operator",
-		"openshift-deployment-validation-operator",
-		"gcp-project-operator",
-		"openshift-velero",
-		"pagerduty-operator",
-		"openshift-route-monitor-operator",
-		"openshift-observability-operator",
-	}
-
-	listOfOperatorNames := []string{
-		"addon-operator",
-		"aws-vpce-operator",
-		"custom-domains-operator",
-		"managed-node-metadata-operator",
-		"managed-upgrade-operator",
-		"must-gather-operator",
-		"ocm-agent-operator",
-		"osd-metrics-exporter",
-		"rbac-permissions-operator",
-		"splunk-forwarder-operator",
-		"aws-account-operator",
-		"certman-operator",
-		"cloud-ingress-operator",
-		"configure-alertmanager-operator",
-		"deadmanssnitch-operator",
-		"deployment-validation-operator",
-		"gcp-project-operator",
-		"managed-velero-operator",
-		"pagerduty-operator",
-		"route-monitor-operator",
-		"observability-operator",
-	}
 
 	// dynamically allocates number of workers based on CPU cores
 	workerLimit := runtime.NumCPU() * 2
@@ -276,10 +292,10 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 
 			currentVersion := make([]string, len(listOfOperators))
 			latestVersion := make([]string, len(listOfOperators))
-			operatorChannel, operatorStatus := "", ""
+			operatorChannel, operatorStatus, commitUrl := "", "", ""
 
 			if !ctx.short {
-				latestVersion[i] = getLatestVersion(gitlabClient, listOfOperatorNames[i])
+				latestVersion[i], commitUrl = getLatestVersion(gitlabClient, listOfOperatorNames[i])
 			}
 
 			csvListCopy := csvList.DeepCopy()
@@ -312,11 +328,12 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 			}
 
 			op := sreOperator{
-				Name:     listOfOperatorNames[i],
-				Current:  currentVersion[i],
-				Expected: latestVersion[i],
-				Status:   operatorStatus,
-				Channel:  operatorChannel,
+				Name:      listOfOperatorNames[i],
+				Current:   currentVersion[i],
+				Expected:  latestVersion[i],
+				Status:    operatorStatus,
+				Channel:   operatorChannel,
+				CommitURL: commitUrl,
 			}
 			resultChannel <- operatorResult{Operator: op, Error: nil}
 		}(listOfOperators[operator], listOfOperatorNames[operator], operator)
@@ -349,7 +366,22 @@ func extractVersion(input string) string {
 	}
 }
 
-func getLatestVersion(gitClient *gitlab.Client, operatorName string) string {
+func extractCommit(input string) string {
+	regex := regexp.MustCompile(`((?:)v[0-9\.]+-(.*))`)
+	extracted := regex.FindStringSubmatch(input)
+
+	if len(extracted) > 1 {
+		if len(extracted[2]) > 7 {
+			extracted[2] = extracted[2][1:]
+			return extracted[2]
+		}
+		return extracted[2]
+	} else {
+		return ""
+	}
+}
+
+func getLatestVersion(gitClient *gitlab.Client, operatorName string) (string, string) {
 
 	// Special case for deployment-validation-operator: version is stored in a text file
 	if operatorName == "deployment-validation-operator" {
@@ -359,7 +391,7 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) string {
 		fileTxt, _, err := gitClient.RepositoryFiles.GetFile(repoLink, filePath, &gitlab.GetFileOptions{Ref: gitlab.Ptr("master")})
 		if err != nil {
 			fmt.Println(operatorName, "- Failed to obtain GitLab file: ", err)
-			return ""
+			return "", ""
 		}
 		decodedFileTxt, err := base64.StdEncoding.DecodeString(fileTxt.Content)
 		if err != nil {
@@ -369,7 +401,7 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) string {
 		for i := len(line) - 1; i >= 0; i-- {
 			if line[i] != "" {
 				expectedVersion := extractVersion("v" + line[i])
-				return expectedVersion
+				return expectedVersion, "https://github.com/app-sre/deployment-validation-operator/tree/" + line[i]
 			}
 		}
 	}
@@ -381,7 +413,7 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) string {
 		repositoryBranches, _, err := gitClient.Branches.ListBranches("service/saas-must-gather-operator-bundle", &gitlab.ListBranchesOptions{})
 		if err != nil {
 			fmt.Println("Failed to list branches: ", err)
-			return ""
+			return "", ""
 		}
 		repositoryBranch := ""
 		highestVersion := 0.0
@@ -401,14 +433,14 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) string {
 		fileYaml, _, err := gitClient.RepositoryFiles.GetFile(repoLink, filePath, &gitlab.GetFileOptions{Ref: gitlab.Ptr(repositoryBranch)})
 		if err != nil {
 			fmt.Println(operatorName, "- Failed to obtain GitLab file: ", err)
-			return ""
+			return "", ""
 		}
 		decodedYamlString, err := base64.StdEncoding.DecodeString(fileYaml.Content)
 		if err != nil {
 			fmt.Println(operatorName, "failed to decode file: ", err)
 		}
 		expectedVersion := extractVersion(string(decodedYamlString))
-		return expectedVersion
+		return expectedVersion, "https://github.com/openshift/must-gather-operator/tree/" + repositoryBranch
 	}
 	// Special case for observability-operator
 	if operatorName == "observability-operator" {
@@ -417,7 +449,7 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) string {
 		fileYaml, _, err := gitClient.RepositoryFiles.GetFile(repoLink, filePath, &gitlab.GetFileOptions{Ref: gitlab.Ptr("master")})
 		if err != nil {
 			fmt.Println(operatorName, "- Failed to obtain GitLab file: ", err)
-			return ""
+			return "", ""
 		}
 		// decode base64
 		decodedYamlString, err := base64.StdEncoding.DecodeString(fileYaml.Content)
@@ -435,7 +467,7 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) string {
 
 		version := getObservabilityOperatorVersion(matches[1])
 
-		return version
+		return version, "https://github.com/rhobs/observability-operator/tree/" + version
 
 	}
 
@@ -445,7 +477,7 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) string {
 	fileYaml, _, err := gitClient.RepositoryFiles.GetFile(repoLink, filePath, &gitlab.GetFileOptions{Ref: gitlab.Ptr(repositoryBranch)})
 	if err != nil {
 		fmt.Println(operatorName, "- Failed to obtain GitLab file: ", err)
-		return ""
+		return "", ""
 	}
 
 	// decode base64
@@ -456,7 +488,9 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) string {
 
 	expectedVersion := extractVersion(string(decodedYamlString))
 
-	return expectedVersion
+	commitUrl := "https://github.com/openshift/" + operatorName + "/tree/" + extractCommit(string(decodedYamlString))
+
+	return expectedVersion, commitUrl
 }
 
 func getObservabilityOperatorVersion(sha string) string {
