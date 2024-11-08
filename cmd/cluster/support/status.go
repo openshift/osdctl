@@ -73,7 +73,7 @@ func (o *statusOptions) run() error {
 		table.AddRow([]string{
 			clusterLimitedSupportReason.ID(),
 			clusterLimitedSupportReason.Summary(),
-			strconv.FormatBool(clusterLimitedSupportReason.Override().Enabled()),
+			strconv.FormatBool(limitedSupportOverridden),
 			clusterLimitedSupportReason.Details(),
 		})
 	}
