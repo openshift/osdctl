@@ -318,6 +318,22 @@ osdctl cluster break-glass cleanup <cluster identifier>
 # Non-PrivateLink - remove any Kubeconfig files saved locally in /tmp/
 ```
 
+### Cluster Dynatrace
+#### Fetch logs from Dynatrace
+```bash
+osdctl cluster dynatrace logs
+```
+
+#### Gather all Pod logs and Application event from HCP
+```bash
+osdctl cluster dynatrace gather-logs <cluster-id>
+```
+
+#### Get Dynatrace Tenant URL for given MC or HCP cluster
+```bash
+osdctl cluster dynatrace url <cluster-id>
+```
+
 ### Send a servicelog to a cluster
 
 #### List servicelogs
