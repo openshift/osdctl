@@ -74,6 +74,14 @@ key1: value1
 key2: value2
 ```
 
+### Config File Setup Command
+The `setup` command prompts the user to enter relevant necessary (and optional) config file values.
+```bash
+$ osdctl setup
+Enter prod_jumprole_account_id  [default ]: <user input>
+Enter aws_proxy  [default http://squid.corp.redhat.com:3128]: <user input>
+```
+
 ### AWS Account CR reset
 
 `reset` command resets the Account CR status and cleans up related secrets.
