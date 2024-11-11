@@ -114,6 +114,7 @@ func Test_egressVerificationSetup(t *testing.T) {
 				SubnetIds:       []string{"subnet-a", "subnet-b", "subnet-c"},
 				SecurityGroupId: "sg-b",
 				platformName:    "aws",
+				log:             newTestLogger(t),
 			},
 			expectErr: false,
 		},
@@ -121,7 +122,13 @@ func Test_egressVerificationSetup(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := test.e.setup(context.TODO())
+			ctx := context.Background()
+			err := test.e.fetchCluster(ctx)
+			if err != nil {
+				t.Errorf("expected no err, got %s", err)
+			}
+
+			_, err = test.e.setupForAws(ctx)
 			if err != nil {
 				if !test.expectErr {
 					t.Errorf("expected no err, got %s", err)
@@ -327,9 +334,18 @@ func Test_egressVerificationGetPlatform(t *testing.T) {
 			expectErr: false,
 		},
 		{
-			name: "invalid",
+			name: "gcp",
 			e: &EgressVerification{
 				cluster: newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("gcp"))),
+				log:     newTestLogger(t),
+			},
+			expected:  cloud.GCPClassic,
+			expectErr: false,
+		},
+		{
+			name: "invalid",
+			e: &EgressVerification{
+				cluster: newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("foo"))),
 				log:     newTestLogger(t),
 			},
 			expectErr: true,
