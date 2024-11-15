@@ -10,8 +10,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/google/uuid"
-	"github.com/openshift-online/ocm-cli/pkg/properties"
 	conn "github.com/openshift-online/ocm-common/pkg/ocm/connection-builder"
+	"github.com/openshift-online/ocm-common/pkg/ocm/consts"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 )
@@ -124,7 +124,7 @@ func CreateConnection() (*sdk.Connection, error) {
 	connection = connection.AsAgent("osdctl/" + Version)
 
 	// overwrite the config URL if the environment variable is set
-	if overrideUrl := os.Getenv(properties.URLEnvKey); overrideUrl != "" {
+	if overrideUrl := os.Getenv(consts.URLEnvKey); overrideUrl != "" {
 		connection = connection.WithApiUrl(overrideUrl)
 	}
 
