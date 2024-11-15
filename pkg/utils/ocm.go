@@ -2,15 +2,16 @@ package utils
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
+	"os"
 	"regexp"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/google/uuid"
-	"github.com/openshift-online/ocm-common/pkg/ocm/config"
+	"github.com/openshift-online/ocm-cli/pkg/properties"
+	conn "github.com/openshift-online/ocm-common/pkg/ocm/connection-builder"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 )
@@ -18,31 +19,9 @@ import (
 const ClusterServiceClusterSearch = "id = '%s' or name = '%s' or external_id = '%s'"
 
 const (
-	productionURL              = "https://api.openshift.com"
-	stagingURL                 = "https://api.stage.openshift.com"
-	integrationURL             = "https://api.integration.openshift.com"
-	productionGovURL           = "https://api-admin.openshiftusgov.com"
 	HypershiftClusterTypeLabel = "ext-hypershift.openshift.io/cluster-type"
 	DynatraceTenantKeyLabel    = "sre-capabilities.dtp.tenant"
 )
-
-var urlAliases = map[string]string{
-	"production":     productionURL,
-	"prod":           productionURL,
-	"prd":            productionURL,
-	productionURL:    productionURL,
-	"staging":        stagingURL,
-	"stage":          stagingURL,
-	"stg":            stagingURL,
-	stagingURL:       stagingURL,
-	"integration":    integrationURL,
-	"int":            integrationURL,
-	integrationURL:   integrationURL,
-	"productiongov":  productionGovURL,
-	"prodgov":        productionGovURL,
-	"prdgov":         productionGovURL,
-	productionGovURL: productionGovURL,
-}
 
 // GetClusterAnyStatus returns an OCM cluster object given an OCM connection and cluster id
 // (internal id, external id, and name all supported).
@@ -141,41 +120,54 @@ func GenerateQuery(clusterIdentifier string) string {
 }
 
 func CreateConnection() (*sdk.Connection, error) {
-	ocmConfigError := "Unable to load OCM config\nLogin with 'ocm login' or set OCM_TOKEN, OCM_URL and OCM_REFRESH_TOKEN environment variables"
+	connection := conn.NewConnection()
+	connection = connection.AsAgent("osdctl/" + Version)
 
-	connectionBuilder := sdk.NewConnectionBuilder()
-
-	config, err := config.Load()
-	if err != nil {
-		return nil, err
+	// overwrite the config URL if the environment variable is set
+	if overrideUrl := os.Getenv(properties.URLEnvKey); overrideUrl != "" {
+		connection = connection.WithApiUrl(overrideUrl)
 	}
 
-	connectionBuilder.Tokens(config.AccessToken, config.RefreshToken)
-
-	if config.URL == "" {
-		return nil, errors.New(ocmConfigError)
-	}
-
-	// Parse the URL in case it is an alias
-	gatewayURL, ok := urlAliases[config.URL]
-	if !ok {
-		return nil, fmt.Errorf("invalid OCM_URL found: %s\nValid URL aliases are: 'production', 'staging', 'integration'", config.URL)
-	}
-	connectionBuilder.URL(gatewayURL)
-
-	connectionBuilder.Client(config.ClientID, config.ClientSecret)
-
-	connection, err := connectionBuilder.Build()
-
-	if err != nil {
-		if strings.Contains(err.Error(), "Not logged in, run the") {
-			return nil, errors.New(ocmConfigError)
-		}
-		return nil, fmt.Errorf("failed to create OCM connection: %v", err)
-	}
-
-	return connection, nil
+	return connection.Build()
 }
+
+// func CreateConnection() (*sdk.Connection, error) {
+//
+// 	ocmConfigError := "Unable to load OCM config\nLogin with 'ocm login' or set OCM_TOKEN, OCM_URL and OCM_REFRESH_TOKEN environment variables"
+//
+// 	connectionBuilder := sdk.NewConnectionBuilder()
+//
+// 	config, err := config.Load()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+//
+// 	connectionBuilder.Tokens(config.AccessToken, config.RefreshToken)
+//
+// 	if config.URL == "" {
+// 		return nil, errors.New(ocmConfigError)
+// 	}
+//
+// 	// Parse the URL in case it is an alias
+// 	gatewayURL, ok := urlAliases[config.URL]
+// 	if !ok {
+// 		return nil, fmt.Errorf("invalid OCM_URL found: %s\nValid URL aliases are: 'production', 'staging', 'integration'", config.URL)
+// 	}
+// 	connectionBuilder.URL(gatewayURL)
+//
+// 	connectionBuilder.Client(config.ClientID, config.ClientSecret)
+//
+// 	connection, err := connectionBuilder.Build()
+//
+// 	if err != nil {
+// 		if strings.Contains(err.Error(), "Not logged in, run the") {
+// 			return nil, errors.New(ocmConfigError)
+// 		}
+// 		return nil, fmt.Errorf("failed to create OCM connection: %v", err)
+// 	}
+//
+// 	return connection, nil
+// }
 
 func GetSupportRoleArnForCluster(ocmClient *sdk.Connection, clusterID string) (string, error) {
 
