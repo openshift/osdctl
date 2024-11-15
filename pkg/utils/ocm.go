@@ -5,13 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/google/uuid"
+	"github.com/openshift-online/ocm-common/pkg/ocm/config"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 )
@@ -43,22 +42,6 @@ var urlAliases = map[string]string{
 	"prodgov":        productionGovURL,
 	"prdgov":         productionGovURL,
 	productionGovURL: productionGovURL,
-}
-
-// Config describes the OCM client configuration
-// Taken wholesale from openshift-online/ocm-cli
-type Config struct {
-	AccessToken  string   `json:"access_token,omitempty" doc:"Bearer access token."`
-	ClientID     string   `json:"client_id,omitempty" doc:"OpenID client identifier."`
-	ClientSecret string   `json:"client_secret,omitempty" doc:"OpenID client secret."`
-	Insecure     bool     `json:"insecure,omitempty" doc:"Enables insecure communication with the server. This disables verification of TLS certificates and host names."`
-	Password     string   `json:"password,omitempty" doc:"User password."`
-	RefreshToken string   `json:"refresh_token,omitempty" doc:"Offline or refresh token."`
-	Scopes       []string `json:"scopes,omitempty" doc:"OpenID scope. If this option is used it will replace completely the default scopes. Can be repeated multiple times to specify multiple scopes."`
-	TokenURL     string   `json:"token_url,omitempty" doc:"OpenID token URL."`
-	URL          string   `json:"url,omitempty" doc:"URL of the API gateway. The value can be the complete URL or an alias. The valid aliases are 'production', 'staging' and 'integration'."`
-	User         string   `json:"user,omitempty" doc:"User name."`
-	Pager        string   `json:"pager,omitempty" doc:"Pager command, for example 'less'. If empty no pager will be used."`
 }
 
 // GetClusterAnyStatus returns an OCM cluster object given an OCM connection and cluster id
@@ -157,119 +140,14 @@ func GenerateQuery(clusterIdentifier string) string {
 	}
 }
 
-// Finds the OCM Configuration file and returns the path to it
-// Taken wholesale from	openshift-online/ocm-cli
-func getOCMConfigLocation() (string, error) {
-	if ocmconfig := os.Getenv("OCM_CONFIG"); ocmconfig != "" {
-		return ocmconfig, nil
-	}
-
-	// Determine home directory to use for the legacy file path
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-
-	path := filepath.Join(home, ".ocm.json")
-
-	_, err = os.Stat(path)
-	if os.IsNotExist(err) {
-		// Determine standard config directory
-		configDir, err := os.UserConfigDir()
-		if err != nil {
-			return path, err
-		}
-
-		// Use standard config directory
-		path = filepath.Join(configDir, "/ocm/ocm.json")
-	}
-
-	return path, nil
-}
-
-// Loads the OCM Configuration file
-// Taken wholesale from	openshift-online/ocm-cli
-func loadOCMConfig() (*Config, error) {
-	var err error
-
-	file, err := getOCMConfigLocation()
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = os.Stat(file)
-	if os.IsNotExist(err) {
-		cfg := &Config{}
-		err = nil
-		return cfg, err
-	}
-
-	if err != nil {
-		err = fmt.Errorf("can't check if config file '%s' exists: %v", file, err)
-		return nil, err
-	}
-
-	data, err := os.ReadFile(file)
-	if err != nil {
-		err = fmt.Errorf("can't read config file '%s': %v", file, err)
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		return nil, nil
-	}
-
-	cfg := &Config{}
-	err = json.Unmarshal(data, cfg)
-
-	if err != nil {
-		err = fmt.Errorf("can't parse config file '%s': %v", file, err)
-		return cfg, err
-	}
-
-	return cfg, nil
-}
-
-func getOcmConfiguration(ocmConfigLoader func() (*Config, error)) (*Config, error) {
-	tokenEnv := os.Getenv("OCM_TOKEN")
-	urlEnv := os.Getenv("OCM_URL")
-	refreshTokenEnv := os.Getenv("OCM_REFRESH_TOKEN") // Unlikely to be set, but check anyway
-
-	config := &Config{}
-
-	// If missing required data, load from the config file.
-	// We don't want to always load this, because the user might only use environment variables.
-	if tokenEnv == "" || refreshTokenEnv == "" || urlEnv == "" {
-		var fileConfigLoadError error
-		config, fileConfigLoadError = ocmConfigLoader()
-		if fileConfigLoadError != nil {
-			return config, fmt.Errorf("could not load OCM configuration file")
-		}
-	}
-
-	// Overwrite with set environment variables, to allow users to overwrite
-	// their configuration file's variables
-	if tokenEnv != "" {
-		config.AccessToken = tokenEnv
-	}
-	if urlEnv != "" {
-		config.URL = urlEnv
-	}
-	if refreshTokenEnv != "" {
-		config.RefreshToken = refreshTokenEnv
-	}
-
-	return config, nil
-}
-
 func CreateConnection() (*sdk.Connection, error) {
 	ocmConfigError := "Unable to load OCM config\nLogin with 'ocm login' or set OCM_TOKEN, OCM_URL and OCM_REFRESH_TOKEN environment variables"
 
 	connectionBuilder := sdk.NewConnectionBuilder()
 
-	config, err := getOcmConfiguration(loadOCMConfig)
+	config, err := config.Load()
 	if err != nil {
-		return nil, errors.New(ocmConfigError)
+		return nil, err
 	}
 
 	connectionBuilder.Tokens(config.AccessToken, config.RefreshToken)
