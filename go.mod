@@ -44,6 +44,7 @@ require (
 	github.com/openshift/hive/apis v0.0.0-20240216200617-8c54fc9cac45
 	github.com/openshift/hypershift/api v0.0.0-20241102085541-7ba3433476ee
 	github.com/openshift/osd-network-verifier v1.1.2
+	github.com/openshift/rosa v1.2.24
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/shopspring/decimal v1.3.1
 	github.com/sirupsen/logrus v1.9.3
@@ -69,6 +70,8 @@ require (
 	sigs.k8s.io/controller-runtime v0.16.3
 	sigs.k8s.io/yaml v1.4.0
 )
+
+replace github.com/openshift-online/ocm-common v0.0.13 => /Users/kbater/Projects/openshift-online/ocm-common
 
 require (
 	cloud.google.com/go/compute/metadata v0.3.0 // indirect

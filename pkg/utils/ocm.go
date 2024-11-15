@@ -131,44 +131,6 @@ func CreateConnection() (*sdk.Connection, error) {
 	return connection.Build()
 }
 
-// func CreateConnection() (*sdk.Connection, error) {
-//
-// 	ocmConfigError := "Unable to load OCM config\nLogin with 'ocm login' or set OCM_TOKEN, OCM_URL and OCM_REFRESH_TOKEN environment variables"
-//
-// 	connectionBuilder := sdk.NewConnectionBuilder()
-//
-// 	config, err := config.Load()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-//
-// 	connectionBuilder.Tokens(config.AccessToken, config.RefreshToken)
-//
-// 	if config.URL == "" {
-// 		return nil, errors.New(ocmConfigError)
-// 	}
-//
-// 	// Parse the URL in case it is an alias
-// 	gatewayURL, ok := urlAliases[config.URL]
-// 	if !ok {
-// 		return nil, fmt.Errorf("invalid OCM_URL found: %s\nValid URL aliases are: 'production', 'staging', 'integration'", config.URL)
-// 	}
-// 	connectionBuilder.URL(gatewayURL)
-//
-// 	connectionBuilder.Client(config.ClientID, config.ClientSecret)
-//
-// 	connection, err := connectionBuilder.Build()
-//
-// 	if err != nil {
-// 		if strings.Contains(err.Error(), "Not logged in, run the") {
-// 			return nil, errors.New(ocmConfigError)
-// 		}
-// 		return nil, fmt.Errorf("failed to create OCM connection: %v", err)
-// 	}
-//
-// 	return connection, nil
-// }
-
 func GetSupportRoleArnForCluster(ocmClient *sdk.Connection, clusterID string) (string, error) {
 
 	clusterResponse, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(clusterID).Get().Send()

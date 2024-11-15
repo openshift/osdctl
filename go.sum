@@ -471,6 +471,8 @@ github.com/openshift/hypershift/api v0.0.0-20241102085541-7ba3433476ee h1:KcTMIN
 github.com/openshift/hypershift/api v0.0.0-20241102085541-7ba3433476ee/go.mod h1:NIT2Bs83re4seKsT3Xp+ENOOCN2Gl++mguuGGhNnN/8=
 github.com/openshift/osd-network-verifier v1.1.2 h1:iF8Wk6W5Q/fNFQi4h8mOF/rsLpgmI1y7WNKimv+jqJk=
 github.com/openshift/osd-network-verifier v1.1.2/go.mod h1:X3dVNkC91NYTf2kTXUS/PeRTNvfS97WbvIqPIDP083M=
+github.com/openshift/rosa v1.2.24 h1:vv0yYnWHx6CCPEAau/0rS54P2ksaf+uWXb1TQPWxiYE=
+github.com/openshift/rosa v1.2.24/go.mod h1:MVXB27O3PF8WoOic23I03mmq6/9kVxpFx6FKyLMCyrQ=
 github.com/pelletier/go-toml/v2 v2.2.2 h1:aYUidT7k73Pcl9nb2gScu7NSrKCSHIDE89b3+6Wq+LM=
 github.com/pelletier/go-toml/v2 v2.2.2/go.mod h1:1t835xjRzz80PqgE6HHgN2JOsmgYu/h4qDAS4n929Rs=
 github.com/perimeterx/marshmallow v1.1.4 h1:pZLDH9RjlLGGorbXhcaQLhfuV0pFMNfPO55FuFkxqLw=
