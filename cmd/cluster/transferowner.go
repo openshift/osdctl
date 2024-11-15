@@ -3,6 +3,7 @@ package cluster
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -34,6 +35,9 @@ import (
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/utils"
 )
+
+type RegistryMap = map[string]map[string]string
+type AuthsMap = map[string]map[string]map[string]string
 
 const CheckSyncMaxAttempts = 24
 
@@ -284,10 +288,6 @@ func verifyClusterPullSecret(clientset *kubernetes.Clientset, expectedPullSecret
 
 func updateManifestWork(conn *sdk.Connection, kubeCli client.Client, clusterID, mgmtClusterName string, pullsecret []byte) error {
 
-	if err := workv1.AddToScheme(kubeCli.Scheme()); err != nil {
-		return fmt.Errorf("failed to add scheme: %w", err)
-	}
-
 	manifestWorkName := clusterID
 	manifestWorkNamespace := mgmtClusterName
 	hostedCluster, err := utils.GetClusterAnyStatus(conn, clusterID)
@@ -480,6 +480,18 @@ func (o *transferOwnerOptions) run() error {
 	if err != nil {
 		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for Hive cluster ID %s: %w", masterCluster.ID(), err)
 	}
+	// For Hypershift the old pull-secret can contain AWS registry that will not be part of the OCM pull-secret
+	// oc get ManifestWork -n $MC_CLUSTER_NAME $CLUSTER_ID -o json | jq -r '.spec.workload.manifests[] | select(.metadata.name | contains("-pull")) | .data.".dockerconfigjson"' | base64 -d | jq > oldpullsecret.json
+	var oldPullSecret AuthsMap
+	if o.hypershift {
+		if err := workv1.AddToScheme(masterKubeCli.Scheme()); err != nil {
+			return fmt.Errorf("failed to add scheme: %w", err)
+		}
+		oldPullSecret, err = retrieveOldPullSecret(masterKubeCli, o.clusterID, mgmtCluster.Name())
+		if err != nil {
+			return fmt.Errorf("Failed to retrieve old pull secret for the cluster: %w", err)
+		}
+	}
 
 	// Fetch the pull secret with the given new username
 	response, err := ocm.AccountsMgmt().V1().AccessToken().Post().Impersonate(userName).Parameter("body", nil).Send()
@@ -491,15 +503,21 @@ func (o *transferOwnerOptions) run() error {
 	if !ok {
 		return fmt.Errorf("Error validating pull secret structure. This shouldn't happen, so you might need to contact SDB")
 	}
-	authsMap := map[string]map[string]string{}
+	authsMap := RegistryMap{}
 	for k, auth := range auths {
 		authsMap[k] = map[string]string{
 			"auth":  auth.Auth(),
 			"email": auth.Email(),
 		}
 	}
+	if o.hypershift {
+		authsMap, err = mergePullSecrets(authsMap, oldPullSecret["auths"])
+		if err != nil {
+			return fmt.Errorf("Failed to merged old a new pull secrets: %w", err)
+		}
+	}
 
-	pullSecret, err := json.Marshal(map[string]map[string]map[string]string{
+	pullSecret, err := json.Marshal(AuthsMap{
 		"auths": authsMap,
 	})
 	if err != nil {
@@ -740,6 +758,73 @@ func (o *transferOwnerOptions) run() error {
 	}
 
 	return nil
+}
+
+// Retrieves the currently in-use pullsecrets from the ManifestWork of the servicecluster.
+func retrieveOldPullSecret(masterKubeCli client.Client, clusterId, managementClusterName string) (AuthsMap, error) {
+	var decodedSecret AuthsMap
+	var decodedSecretBytes []byte
+	manifestWorkName := clusterId
+	manifestWorkNamespace := managementClusterName
+	manifestWork := &workv1.ManifestWork{}
+	err := masterKubeCli.Get(context.TODO(), types.NamespacedName{Name: manifestWorkName, Namespace: manifestWorkNamespace}, manifestWork)
+	if err != nil {
+		return decodedSecret, fmt.Errorf("failed to retrieve existing ManifestWork for Hypershift transfer: %w", err)
+	}
+	for _, manifest := range manifestWork.Spec.Workload.Manifests {
+		oldPullSecret := &corev1.Secret{}
+		if manifest.Object.GetObjectKind().GroupVersionKind().Kind == "Secret" {
+			err = json.Unmarshal(manifest.Raw, oldPullSecret)
+			if err != nil {
+				continue
+			}
+		}
+		if strings.Contains(oldPullSecret.Name, "-pull") {
+			val, ok := oldPullSecret.Data[".dockerconfigjson"]
+			if !ok {
+				continue
+			}
+			_, err = base64.StdEncoding.Decode(decodedSecretBytes, val)
+			if err != nil {
+				return decodedSecret, fmt.Errorf("Could not decode old pullsecret: %w", err)
+			}
+		}
+	}
+	err = json.Unmarshal(decodedSecretBytes, decodedSecret)
+	if err != nil {
+		return decodedSecret, fmt.Errorf("Could not JSON unmarshall old pullsecret: %w", err)
+	}
+	return decodedSecret, nil
+}
+
+// Merges the two pull secret maps - keeps all the secrets of the new map, but
+// will add missing ones from the old map.
+// This expects the pull-secrets without the 'auths' wrapper:
+//
+//	{
+//	  "my-registry": {
+//	    "auth": "myauth",
+//	    "email": "somemail@somewhere.somedomain"
+//	  }
+//	}
+func mergePullSecrets(newPullSecrets RegistryMap, oldPullSecrets RegistryMap) (RegistryMap, error) {
+	fmt.Println("Merging old a new pull secrets")
+	mergedSecrets := make(RegistryMap, len(newPullSecrets))
+	// Create a shallow copy
+	for key, val := range newPullSecrets {
+		mergedSecrets[key] = val
+	}
+	for registryKey, registryValue := range oldPullSecrets {
+		newRegistry, exists := mergedSecrets[registryKey]
+		if exists {
+			continue
+		}
+		for registrySubKey, registrySubValue := range registryValue {
+			fmt.Println("Adding missing registry to new pull secrets: %s", registryKey)
+			newRegistry[registrySubKey] = registrySubValue
+		}
+	}
+	return mergedSecrets, nil
 }
 
 func getRoleBinding(ocm *sdk.Connection, subscriptionID string) (*amv1.RoleBinding, error) {
