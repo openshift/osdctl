@@ -337,9 +337,9 @@ func updateManifestWork(conn *sdk.Connection, kubeCli client.Client, clusterID, 
 				if strings.Contains(secret.Name, secretNamePrefix) {
 					// Firstly, get the ecr auth from the existing pull secret and append it to new pull secret
 					oldPullSecret := secret.Data[".dockerconfigjson"]
-					newPullSecret, err := appendECRAuth(oldPullSecret, pullsecret)
+					newPullSecret, err := buildNewSecret(oldPullSecret, pullsecret)
 					if err != nil {
-						return fmt.Errorf("cannot append the existing ECR auth to the new pull secret: %w", err)
+						return fmt.Errorf("cannot build the new pull secret: %w", err)
 					}
 					// Then, update the secret with new name and new value
 					secret.Name = newSecretName
@@ -380,8 +380,8 @@ func updateManifestWork(conn *sdk.Connection, kubeCli client.Client, clusterID, 
 	return nil
 }
 
-// appendECRAuth append the existing ECR auth to the new pull secret
-func appendECRAuth(oldpullsecret, newpullsecret []byte) ([]byte, error) {
+// buildNewSecret will build the pull secret with updating the old pullsecret from the give new pullsecret
+func buildNewSecret(oldpullsecret, newpullsecret []byte) ([]byte, error) {
 	type Auth struct {
 		Auth  string `json:"auth"`
 		Email string `json:"email"`
@@ -402,13 +402,11 @@ func appendECRAuth(oldpullsecret, newpullsecret []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	for k, v := range oldAuths.Auths {
-		if strings.HasSuffix(k, "amazonaws.com") {
-			newAuths.Auths[k] = v
-		}
+	for k, v := range newAuths.Auths {
+		oldAuths.Auths[k] = v
 	}
 
-	auth, err := json.Marshal(newAuths)
+	auth, err := json.Marshal(oldAuths)
 	if err != nil {
 		return nil, err
 	}
