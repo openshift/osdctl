@@ -1,7 +1,6 @@
 package network
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -10,13 +9,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/openshift/osd-network-verifier/pkg/data/cloud"
-	"github.com/openshift/osd-network-verifier/pkg/data/cpu"
-	"github.com/openshift/osd-network-verifier/pkg/probes/curl"
-	"github.com/openshift/osd-network-verifier/pkg/probes/legacy"
-	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
+	"github.com/openshift/osd-network-verifier/pkg/verifier"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
-	"os"
 	"strings"
 )
 
@@ -29,11 +24,6 @@ type egressVerificationAWSClient interface {
 // setupForAws configures an EgressVerification's awsClient and cluster depending on whether the ClusterId or profile
 // flags are supplied. It also returns an aws.Config if needed.
 func (e *EgressVerification) setupForAws(ctx context.Context) (*aws.Config, error) {
-	e.cpuArch = cpu.ArchitectureByName(e.CpuArchName)
-	if e.CpuArchName != "" && !e.cpuArch.IsValid() {
-		return nil, fmt.Errorf("%s is not a valid architecture", e.CpuArchName)
-	}
-
 	// If ClusterId is supplied, leverage ocm and ocm-backplane to get an AWS client.
 	// We previously hydrated the EgressVerification struct with a `cluster` in this scenario.
 	if e.ClusterId != "" && e.cluster != nil {
@@ -90,42 +80,20 @@ func (e *EgressVerification) setupForAws(ctx context.Context) (*aws.Config, erro
 }
 
 // generateAWSValidateEgressInput is an opinionated interface in front of osd-network-verifier.
-// Its input is an OCM internal/external ClusterId and it returns the corresponding input to osd-network-verifier with
+// Its input is an OCM internal/external ClusterId, and it returns the corresponding input to osd-network-verifier with
 // default AWS tags, one of the cluster's private subnet IDs, and the cluster's master security group.
 // Can override SecurityGroupId and SubnetIds.
-func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context, region string) ([]*onv.ValidateEgressInput, error) {
-	// We can auto-detect information from OCM
-	if e.cluster != nil {
-		if e.cluster.Product().ID() != "rosa" &&
-			e.cluster.Product().ID() != "osd" &&
-			e.cluster.Product().ID() != "osdtrial" {
-			return nil, fmt.Errorf("only supports rosa, osd, and osdtrial, got %s", e.cluster.Product().ID())
-		}
-	}
-
-	input, err := defaultValidateEgressInput(ctx, e.cluster, region)
+func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context, platform cloud.Platform) ([]*verifier.ValidateEgressInput, error) {
+	input, err := e.defaultValidateEgressInput(ctx, platform)
 	if err != nil {
 		return nil, fmt.Errorf("failed to assemble validate egress input: %s", err)
 	}
 
-	// Configure verifier's PlatformType based on cluster info or user request
-	input.PlatformType, err = e.getPlatform()
-	if err != nil {
-		return nil, fmt.Errorf("platform not supported: %w", err)
+	// Append any tags from OCM for this cluster
+	for k, v := range e.cluster.AWS().Tags() {
+		input.Tags[k] = v
 	}
-	e.log.Info(ctx, "using platform: %s", input.PlatformType)
-
-	input.CPUArchitecture = e.cpuArch
-
-	// Setup proxy configuration that is not automatically determined
-	input.Proxy.NoTls = e.NoTls
-	if e.CaCert != "" {
-		cert, err := os.ReadFile(e.CaCert)
-		if err != nil {
-			return nil, err
-		}
-		input.Proxy.Cacert = bytes.NewBuffer(cert).String()
-	}
+	input.Tags["Name"] = "osd-network-verifier"
 
 	if e.cluster != nil {
 		// If a KMS key is defined for the cluster, use it as the default aws/ebs key may not exist
@@ -137,26 +105,10 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 				input.AWS.KmsKeyID = kmsKeyArn
 			}
 		}
-
-		// If the cluster has a cluster-wide proxy, configure it
-		if e.cluster.Proxy() != nil && !e.cluster.Proxy().Empty() {
-			input.Proxy.HttpProxy = e.cluster.Proxy().HTTPProxy()
-			input.Proxy.HttpsProxy = e.cluster.Proxy().HTTPSProxy()
-		}
-
-		// The actual trust bundle is redacted in OCM, but is an indicator that --cacert is required
-		if e.cluster.AdditionalTrustBundle() != "" && e.CaCert == "" {
-			caBundle, err := e.getCABundle(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get additional CA trust bundle from hive with error: %v, consider specifying --cacert", err)
-			}
-
-			input.Proxy.Cacert = caBundle
-		}
 	}
 
 	// Obtain subnet ids to run against
-	subnetId, err := e.getSubnetIds(context.TODO())
+	subnetId, err := e.getAwsSubnetIds(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -172,31 +124,18 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 	}
 
 	// Obtain security group id to use
-	sgId, err := e.getSecurityGroupId(context.TODO())
+	sgId, err := e.getSecurityGroupId(ctx)
 	if err != nil {
 		return nil, err
 	}
 	input.AWS.SecurityGroupIDs = []string{sgId}
 
-	// Forward the timeout
-	input.Timeout = e.EgressTimeout
-
-	switch strings.ToLower(e.Probe) {
-	case "curl":
-		input.Probe = curl.Probe{}
-	case "legacy":
-		input.Probe = legacy.Probe{}
-	default:
-		e.log.Info(ctx, "unrecognized probe %s - defaulting to curl probe.", e.Probe)
-		input.Probe = curl.Probe{}
-	}
-
 	// Creating a slice of input values for the network-verifier to loop over.
 	// All inputs are essentially equivalent except their subnet ids
-	inputs := make([]*onv.ValidateEgressInput, len(subnetId))
+	inputs := make([]*verifier.ValidateEgressInput, len(subnetId))
 	for i := range subnetId {
 		// Copying a pointer to avoid overwriting it
-		var myinput = &onv.ValidateEgressInput{}
+		var myinput = &verifier.ValidateEgressInput{}
 		*myinput = *input
 		inputs[i] = myinput
 		inputs[i].SubnetID = subnetId[i]
@@ -205,12 +144,12 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 	return inputs, nil
 }
 
-// getSubnetIds attempts to return a private subnet ID or all private subnet IDs of the cluster.
+// getAwsSubnetIds attempts to return a private subnet ID or all private subnet IDs of the cluster.
 // e.SubnetIds acts as an override, otherwise e.awsClient will be used to attempt to determine the correct subnets
-func (e *EgressVerification) getSubnetIds(ctx context.Context) ([]string, error) {
+func (e *EgressVerification) getAwsSubnetIds(ctx context.Context) ([]string, error) {
 	// A SubnetIds was manually specified, just use that
 	if e.SubnetIds != nil {
-		e.log.Info(ctx, "using manually specified subnet-id: %s", e.SubnetIds)
+		e.log.Info(ctx, "using manually specified subnet-id(s): %s", e.SubnetIds)
 		return e.SubnetIds, nil
 	}
 

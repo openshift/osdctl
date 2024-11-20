@@ -1,9 +1,13 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"github.com/openshift/osd-network-verifier/pkg/probes/curl"
+	"github.com/openshift/osd-network-verifier/pkg/probes/legacy"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -17,6 +21,7 @@ import (
 	"github.com/openshift/osd-network-verifier/pkg/proxy"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
 	onvAwsClient "github.com/openshift/osd-network-verifier/pkg/verifier/aws"
+	onvGcpClient "github.com/openshift/osd-network-verifier/pkg/verifier/gcp"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,9 +43,15 @@ const (
 	LimitedSupportTemplate       = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/limited_support/egressFailureLimitedSupport.json"
 )
 
+var networkVerifierDefaultTags = map[string]string{
+	"osd-network-verifier": "owned",
+	"red-hat-managed":      "true",
+}
+
 type EgressVerification struct {
 	awsClient egressVerificationAWSClient
 	cluster   *cmv1.Cluster
+	cpuArch   cpu.Architecture
 	log       logging.Logger
 
 	// ClusterId is the internal or external OCM cluster ID.
@@ -76,7 +87,10 @@ type EgressVerification struct {
 	Probe string
 	// CpuArchName the architecture to use for the compute instance
 	CpuArchName string
-	cpuArch     cpu.Architecture
+	// GcpProjectId is used in the cases where we can't automatically get this from OCM
+	GcpProjectID string
+	// VpcName is the VPC where the verifier will run
+	VpcName string
 }
 
 func NewCmdValidateEgress() *cobra.Command {
@@ -128,12 +142,14 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().BoolVar(&e.NoTls, "no-tls", false, "(optional) if provided, ignore all ssl certificate validations on client-side.")
 	validateEgressCmd.Flags().StringVar(&e.Region, "region", "", "(optional) AWS region")
 	validateEgressCmd.Flags().BoolVar(&e.Debug, "debug", false, "(optional) if provided, enable additional debug-level logging")
-	validateEgressCmd.Flags().BoolVarP(&e.AllSubnets, "all-subnets", "A", false, "(optional) an option for Privatelink clusters to run osd-network-verifier against all subnets listed by ocm.")
+	validateEgressCmd.Flags().BoolVarP(&e.AllSubnets, "all-subnets", "A", false, "(optional) an option for AWS Privatelink clusters to run osd-network-verifier against all subnets listed by ocm.")
 	validateEgressCmd.Flags().StringVar(&e.platformName, "platform", "", "(optional) override for cloud platform/product. E.g., 'aws-classic' (OSD/ROSA Classic), 'aws-hcp' (ROSA HCP), or 'aws-hcp-zeroegress'")
 	validateEgressCmd.Flags().DurationVar(&e.EgressTimeout, "egress-timeout", 5*time.Second, "(optional) timeout for individual egress verification requests")
 	validateEgressCmd.Flags().BoolVar(&e.Version, "version", false, "When present, prints out the version of osd-network-verifier being used")
 	validateEgressCmd.Flags().StringVar(&e.Probe, "probe", "curl", "(optional) select the probe to be used for egress testing. Either 'curl' (default) or 'legacy'")
 	validateEgressCmd.Flags().StringVar(&e.CpuArchName, "cpu-arch", "x86", "(optional) compute instance CPU architecture. E.g., 'x86' or 'arm'")
+	validateEgressCmd.Flags().StringVar(&e.GcpProjectID, "gcp-project-id", "", "(optional) the GCP project ID to run verification for")
+	validateEgressCmd.Flags().StringVar(&e.VpcName, "vpc", "", "(optional) VPC name for cases where it can't be fetched from OCM")
 
 	// If a cluster-id is specified, don't allow the foot-gun of overriding region
 	validateEgressCmd.MarkFlagsMutuallyExclusive("cluster-id", "region")
@@ -157,6 +173,11 @@ func (e *EgressVerification) Run(ctx context.Context) {
 		log.Fatalf("network verification failed to build logger: %s", err)
 	}
 	e.log = logger
+
+	e.cpuArch = cpu.ArchitectureByName(e.CpuArchName)
+	if e.CpuArchName != "" && !e.cpuArch.IsValid() {
+		log.Fatalf("%s is not a valid CPU architecture", e.CpuArchName)
+	}
 
 	// If no ClusterId is provided, fetch from OCM
 	err = e.fetchCluster(ctx)
@@ -184,17 +205,31 @@ func (e *EgressVerification) Run(ctx context.Context) {
 			log.Fatalf("failed to assemble osd-network-verifier client: %s", err)
 		}
 
-		inputs, err = e.generateAWSValidateEgressInput(ctx, cfg.Region)
+		inputs, err = e.generateAWSValidateEgressInput(ctx, platform)
 		if err != nil {
 			log.Fatal(err)
 		}
 	case cloud.GCPClassic:
-		log.Fatal("GCP platform not supported at this time")
+		credentials, err := e.setupForGcp(ctx)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		verifier, err = onvGcpClient.NewGcpVerifier(credentials, e.Debug)
+		if err != nil {
+			log.Fatalf("failed to assemble osd-network-verifier client: %s", err)
+		}
+
+		inputs, err = e.generateGcpValidateEgressInput(ctx, platform)
+		if err != nil {
+			log.Fatal(err)
+		}
 	default:
 		log.Fatalf("unsupported platform: %s", platform)
 	}
 
 	e.log.Info(ctx, "Preparing to check %+v subnet(s) with network verifier.", len(inputs))
+	var failures int
 	for i := range inputs {
 		e.log.Info(ctx, "running network verifier for subnet  %+v, security group %+v", inputs[i].SubnetID, inputs[i].AWS.SecurityGroupIDs)
 		out := onv.ValidateEgress(verifier, *inputs[i])
@@ -202,6 +237,7 @@ func (e *EgressVerification) Run(ctx context.Context) {
 		// Prompt putting the cluster into LS if egresses crucial for monitoring (PagerDuty/DMS) are blocked.
 		// Prompt sending a service log instead for other blocked egresses.
 		if !out.IsSuccessful() && len(out.GetEgressURLFailures()) > 0 {
+			failures++
 			postCmd := generateServiceLog(out, e.ClusterId)
 			blockedUrl := strings.Join(postCmd.TemplateParams, ",")
 			if strings.Contains(blockedUrl, "deadmanssnitch") || strings.Contains(blockedUrl, "pagerduty") {
@@ -214,6 +250,9 @@ func (e *EgressVerification) Run(ctx context.Context) {
 				fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
 				fmt.Printf("osdctl servicelog post %v -t %v -p %v\n", e.ClusterId, blockedEgressTemplateUrl, strings.Join(postCmd.TemplateParams, " -p "))
 			}
+		}
+		if failures > 0 {
+			os.Exit(1)
 		}
 	}
 }
@@ -405,31 +444,56 @@ func filtersToString(filters []types.Filter) string {
 
 // defaultValidateEgressInput generates an opinionated default osd-network-verifier ValidateEgressInput.
 // Tags from the cluster are passed to the network-verifier instance
-func defaultValidateEgressInput(ctx context.Context, cluster *cmv1.Cluster, region string) (*onv.ValidateEgressInput, error) {
-	networkVerifierDefaultTags := map[string]string{
-		"osd-network-verifier": "owned",
-		"red-hat-managed":      "true",
-		"Name":                 "osd-network-verifier",
-	}
-
-	// TODO: When this command supports GCP this will need to be adjusted
-	for k, v := range cluster.AWS().Tags() {
-		networkVerifierDefaultTags[k] = v
-	}
-
-	if onvAwsClient.GetAMIForRegion(region) == "" {
-		return nil, fmt.Errorf("unsupported region: %s", region)
-	}
-
-	return &onv.ValidateEgressInput{
-		Ctx:      ctx,
-		SubnetID: "",
-		Proxy:    proxy.ProxyConfig{},
-		Tags:     networkVerifierDefaultTags,
-		AWS: onv.AwsEgressConfig{
-			SecurityGroupIDs: []string{},
+func (e *EgressVerification) defaultValidateEgressInput(ctx context.Context, platform cloud.Platform) (*onv.ValidateEgressInput, error) {
+	input := &onv.ValidateEgressInput{
+		Ctx:             ctx,
+		CPUArchitecture: e.cpuArch,
+		PlatformType:    platform,
+		Proxy: proxy.ProxyConfig{
+			NoTls: e.NoTls,
 		},
-	}, nil
+		Timeout: e.EgressTimeout,
+		Tags:    networkVerifierDefaultTags,
+	}
+
+	switch strings.ToLower(e.Probe) {
+	case "curl":
+		input.Probe = curl.Probe{}
+	case "legacy":
+		input.Probe = legacy.Probe{}
+	default:
+		e.log.Info(ctx, "unrecognized probe %s - defaulting to curl probe.", e.Probe)
+		input.Probe = curl.Probe{}
+	}
+
+	if e.cluster != nil {
+		// If the cluster has a cluster-wide proxy, configure it
+		if e.cluster.Proxy() != nil && !e.cluster.Proxy().Empty() {
+			input.Proxy.HttpProxy = e.cluster.Proxy().HTTPProxy()
+			input.Proxy.HttpsProxy = e.cluster.Proxy().HTTPSProxy()
+		}
+
+		// The actual trust bundle is redacted in OCM, but is an indicator that --cacert is required
+		if e.cluster.AdditionalTrustBundle() != "" && e.CaCert == "" {
+			caBundle, err := e.getCABundle(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get additional CA trust bundle from hive with error: %v, consider specifying --cacert", err)
+			}
+
+			input.Proxy.Cacert = caBundle
+		}
+	}
+
+	// Setup proxy configuration that is not automatically determined
+	if e.CaCert != "" {
+		cert, err := os.ReadFile(e.CaCert)
+		if err != nil {
+			return nil, err
+		}
+		input.Proxy.Cacert = bytes.NewBuffer(cert).String()
+	}
+
+	return input, nil
 }
 
 func (e *EgressVerification) fetchCluster(ctx context.Context) error {
@@ -446,6 +510,13 @@ func (e *EgressVerification) fetchCluster(ctx context.Context) error {
 		}
 		e.log.Debug(ctx, "cluster %s found from OCM: %s", e.ClusterId, cluster.ID())
 		e.cluster = cluster
+
+		switch e.cluster.Product().ID() {
+		case "rosa", "osd", "osdtrial":
+			break
+		default:
+			log.Fatalf("only supports rosa, osd, and osdtrial, got %s", e.cluster.Product().ID())
+		}
 	}
 
 	return nil
@@ -454,8 +525,7 @@ func (e *EgressVerification) fetchCluster(ctx context.Context) error {
 func printVersion() {
 	version, err := utils.GetDependencyVersion(networkVerifierDepPath)
 	if err != nil {
-		// This line should never be hit
-		log.Fatal("Unable to find version for network verifier: %w", err)
+		panic(fmt.Errorf("unable to find version for network verifier: %w", err))
 	}
 	log.Println(fmt.Sprintf("Using osd-network-verifier version %v", version))
 }
