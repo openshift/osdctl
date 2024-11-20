@@ -27,21 +27,17 @@ func (e *EgressVerification) setupForAws(ctx context.Context) (*aws.Config, erro
 	// If ClusterId is supplied, leverage ocm and ocm-backplane to get an AWS client.
 	// We previously hydrated the EgressVerification struct with a `cluster` in this scenario.
 	if e.ClusterId != "" && e.cluster != nil {
+		// We currently have insufficient permissions to run network verifier on ROSA HCP
+		// We can update or, if applicable, remove this warning after https://issues.redhat.com/browse/XCMSTRAT-245
+		if e.cluster.Hypershift().Enabled() {
+			return nil, errors.New("SRE has insufficient AWS permissions to run network verifier on hosted control plane clusters. Exiting")
+		}
+
 		ocmClient, err := utils.CreateConnection()
 		if err != nil {
 			return nil, fmt.Errorf("error creating OCM connection: %v", err)
 		}
 		defer ocmClient.Close()
-
-		// We currently have insufficient permissions to run network verifier on ROSA HCP
-		// We can update or, if applicable, remove this warning after https://issues.redhat.com/browse/XCMSTRAT-245
-		if e.cluster.Hypershift().Enabled() {
-			e.log.Warn(ctx, "Generally, SRE has insufficient AWS permissions"+
-				" to run network verifier on hosted control plane clusters. Run anyway?")
-			if !utils.ConfirmPrompt() {
-				return nil, errors.New("You can try the network verifier script in ops-sop/hypershift/utils/verify-egress.sh")
-			}
-		}
 
 		e.log.Info(ctx, "getting AWS credentials from backplane-api")
 		cfg, err := osdCloud.CreateAWSV2Config(ocmClient, e.cluster)
