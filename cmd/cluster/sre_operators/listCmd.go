@@ -30,19 +30,21 @@ type sreOperatorsListOptions struct {
 	outdated  bool
 	noHeaders bool
 	operator  string
-	commit    bool
+	noCommit  bool
 
 	genericclioptions.IOStreams
 	kubeCli client.Client
 }
 
 type sreOperator struct {
-	Name      string
-	Current   string
-	Expected  string
-	Status    string
-	Channel   string
-	CommitURL string
+	Name           string
+	Current        string
+	CurrentCommit  string
+	Expected       string
+	ExpectedCommit string
+	Status         string
+	Channel        string
+	RepositoryURL  string
 }
 
 const (
@@ -56,8 +58,8 @@ const (
 	# List only SRE operators that are running outdated versions
 	$ osdctl cluster sre-operators list --outdated
 
-	# List SRE operators with their expected version commit links
-	$ osdctl cluster sre-operators list --commit
+	# List SRE operators without their commit shas and repositry URL
+	$ osdctl cluster sre-operators list --no-commit
 	
 	# List a specific SRE operator
 	$ osdctl cluster sre-operators list --operator='OPERATOR_NAME'
@@ -155,7 +157,7 @@ func newCmdList(streams genericclioptions.IOStreams, client client.Client) *cobr
 	listCmd.Flags().BoolVar(&opts.outdated, "outdated", false, "Filter to only show operators running outdated versions")
 	listCmd.Flags().BoolVar(&opts.noHeaders, "no-headers", false, "Exclude headers from the output")
 	listCmd.Flags().StringVar(&opts.operator, "operator", "", "Filter to only show the specified operator.")
-	listCmd.Flags().BoolVar(&opts.commit, "commit", false, "Include the commit URL for each operator")
+	listCmd.Flags().BoolVar(&opts.noCommit, "no-commit", false, "Excluse commit shas and repository URL from the output")
 
 	return listCmd
 }
@@ -168,15 +170,12 @@ func (ctx *sreOperatorsListOptions) checks(cmd *cobra.Command) error {
 	if ctx.outdated && ctx.short {
 		return util.UsageErrorf(cmd, "cannot use both --short and --outdated flags together")
 	}
-	if ctx.short && ctx.commit {
-		return util.UsageErrorf(cmd, "cannot use both --short and --commit flags together")
-	}
 	return nil
 }
 
 // Print output in table format
 func (ctx *sreOperatorsListOptions) printText(opList []sreOperator) error {
-	p := printer.NewTablePrinter(ctx.IOStreams.Out, 20, 1, 3, ' ')
+	p := printer.NewTablePrinter(ctx.IOStreams.Out, 18, 1, 3, ' ')
 
 	if opList == nil {
 		return nil
@@ -184,11 +183,14 @@ func (ctx *sreOperatorsListOptions) printText(opList []sreOperator) error {
 
 	if !ctx.noHeaders {
 		p.AddRow([]string{Bold})
-		header := []string{"NAME", "CURRENT", "EXPECTED", "STATUS", "CHANNEL" + RestoreColor}
-		if ctx.commit {
-			header = []string{"NAME", "CURRENT", "EXPECTED", "STATUS", "CHANNEL", "EXPECTED VERSION COMMIT URL" + RestoreColor}
+		header := []string{"NAME", "CURRENT", "CUR. COMMIT", "EXPECTED", "EXP. COMMIT", "STATUS", "CHANNEL", "Operator Repository URL" + RestoreColor}
+		if ctx.noCommit {
+			header = []string{"NAME", "CURRENT", "EXPECTED", "STATUS", "CHANNEL" + RestoreColor}
 		}
 		if ctx.short {
+			header = []string{"NAME", "CURRENT", "CUR. COMMIT", "STATUS", "CHANNEL" + RestoreColor}
+		}
+		if ctx.short && ctx.noCommit {
 			header = []string{"NAME", "CURRENT", "STATUS", "CHANNEL" + RestoreColor}
 		}
 		p.AddRow(header)
@@ -202,16 +204,23 @@ func (ctx *sreOperatorsListOptions) printText(opList []sreOperator) error {
 		if ctx.outdated && op.Current == op.Expected {
 			continue
 		}
-		row := []string{op.Name, op.Current, op.Status, op.Channel}
+		row := []string{op.Name, op.Current, op.CurrentCommit, op.Status, op.Channel}
 		if !ctx.short {
-			row = []string{op.Name, op.Current, op.Expected, op.Status, op.Channel}
-			if op.Current != op.Expected {
-				row = []string{Red + Bold + op.Name, Gap + op.Current, Gap + op.Expected, Gap + op.Status, Gap + op.Channel + RestoreColor}
+			row = []string{op.Name, op.Current, op.CurrentCommit, op.Expected, op.ExpectedCommit, op.Status, op.Channel, op.RepositoryURL}
+			if ctx.noCommit {
+				row = []string{op.Name, op.Current, op.Expected, op.Status, op.Channel}
 			}
-			if ctx.commit {
-				row = append(row, op.CommitURL)
+			if op.Current != op.Expected {
+				row = []string{Red + Bold + op.Name, Gap + op.Current, Gap + op.CurrentCommit, Gap + op.Expected, Gap + op.ExpectedCommit, Gap + op.Status, Gap + op.Channel, Gap + op.RepositoryURL + RestoreColor}
+				if ctx.noCommit {
+					row = []string{Red + Bold + op.Name, Gap + op.Current, Gap + op.Expected, Gap + op.Status, Gap + op.Channel + RestoreColor}
+				}
 			}
 		}
+		if ctx.short && ctx.noCommit {
+			row = []string{op.Name, op.Current, op.Status, op.Channel}
+		}
+
 		p.AddRow(row)
 	}
 	if err := p.Flush(); err != nil {
@@ -292,10 +301,10 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 
 			currentVersion := make([]string, len(listOfOperators))
 			latestVersion := make([]string, len(listOfOperators))
-			operatorChannel, operatorStatus, commitUrl := "", "", ""
+			currentCommit, expectedCommit, operatorChannel, operatorStatus, repositoryUrl := "", "", "", "", ""
 
 			if !ctx.short {
-				latestVersion[i], commitUrl = getLatestVersion(gitlabClient, listOfOperatorNames[i])
+				latestVersion[i], repositoryUrl, expectedCommit = getLatestVersion(gitlabClient, listOfOperatorNames[i])
 			}
 
 			csvListCopy := csvList.DeepCopy()
@@ -324,16 +333,19 @@ func (ctx *sreOperatorsListOptions) ListOperators(cmd *cobra.Command) ([]sreOper
 					}
 				}
 
+				currentCommit = extractCommit(currentVersion[i])
 				currentVersion[i] = extractVersion(currentVersion[i])
 			}
 
 			op := sreOperator{
-				Name:      listOfOperatorNames[i],
-				Current:   currentVersion[i],
-				Expected:  latestVersion[i],
-				Status:    operatorStatus,
-				Channel:   operatorChannel,
-				CommitURL: commitUrl,
+				Name:           listOfOperatorNames[i],
+				Current:        currentVersion[i],
+				CurrentCommit:  currentCommit,
+				Expected:       latestVersion[i],
+				ExpectedCommit: expectedCommit,
+				Status:         operatorStatus,
+				Channel:        operatorChannel,
+				RepositoryURL:  repositoryUrl,
 			}
 			resultChannel <- operatorResult{Operator: op, Error: nil}
 		}(listOfOperators[operator], listOfOperatorNames[operator], operator)
@@ -381,7 +393,7 @@ func extractCommit(input string) string {
 	}
 }
 
-func getLatestVersion(gitClient *gitlab.Client, operatorName string) (string, string) {
+func getLatestVersion(gitClient *gitlab.Client, operatorName string) (string, string, string) {
 
 	// Special case for deployment-validation-operator: version is stored in a text file
 	if operatorName == "deployment-validation-operator" {
@@ -391,7 +403,7 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) (string, st
 		fileTxt, _, err := gitClient.RepositoryFiles.GetFile(repoLink, filePath, &gitlab.GetFileOptions{Ref: gitlab.Ptr("master")})
 		if err != nil {
 			fmt.Println(operatorName, "- Failed to obtain GitLab file: ", err)
-			return "", ""
+			return "", "", ""
 		}
 		decodedFileTxt, err := base64.StdEncoding.DecodeString(fileTxt.Content)
 		if err != nil {
@@ -401,7 +413,8 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) (string, st
 		for i := len(line) - 1; i >= 0; i-- {
 			if line[i] != "" {
 				expectedVersion := extractVersion("v" + line[i])
-				return expectedVersion, "https://github.com/app-sre/deployment-validation-operator/tree/" + line[i]
+				expectedCommit := extractCommit("v" + line[i])
+				return expectedVersion, "https://github.com/app-sre/deployment-validation-operator/", expectedCommit
 			}
 		}
 	}
@@ -413,7 +426,7 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) (string, st
 		repositoryBranches, _, err := gitClient.Branches.ListBranches("service/saas-must-gather-operator-bundle", &gitlab.ListBranchesOptions{})
 		if err != nil {
 			fmt.Println("Failed to list branches: ", err)
-			return "", ""
+			return "", "", ""
 		}
 		repositoryBranch := ""
 		highestVersion := 0.0
@@ -433,14 +446,14 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) (string, st
 		fileYaml, _, err := gitClient.RepositoryFiles.GetFile(repoLink, filePath, &gitlab.GetFileOptions{Ref: gitlab.Ptr(repositoryBranch)})
 		if err != nil {
 			fmt.Println(operatorName, "- Failed to obtain GitLab file: ", err)
-			return "", ""
+			return "", "", ""
 		}
 		decodedYamlString, err := base64.StdEncoding.DecodeString(fileYaml.Content)
 		if err != nil {
 			fmt.Println(operatorName, "failed to decode file: ", err)
 		}
 		expectedVersion := extractVersion(string(decodedYamlString))
-		return expectedVersion, "https://github.com/openshift/must-gather-operator/tree/" + repositoryBranch
+		return expectedVersion, "https://github.com/openshift/must-gather-operator/", extractCommit(string(decodedYamlString))
 	}
 	// Special case for observability-operator
 	if operatorName == "observability-operator" {
@@ -449,7 +462,7 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) (string, st
 		fileYaml, _, err := gitClient.RepositoryFiles.GetFile(repoLink, filePath, &gitlab.GetFileOptions{Ref: gitlab.Ptr("master")})
 		if err != nil {
 			fmt.Println(operatorName, "- Failed to obtain GitLab file: ", err)
-			return "", ""
+			return "", "", ""
 		}
 		// decode base64
 		decodedYamlString, err := base64.StdEncoding.DecodeString(fileYaml.Content)
@@ -465,9 +478,9 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) (string, st
 			fmt.Println("Failed to extract version from observability-operator")
 		}
 
-		version := getObservabilityOperatorVersion(matches[1])
+		version, sha := getObservabilityOperatorVersion(matches[1])
 
-		return version, "https://github.com/rhobs/observability-operator/tree/" + version
+		return version, "https://github.com/rhobs/observability-operator/", sha
 
 	}
 
@@ -477,7 +490,7 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) (string, st
 	fileYaml, _, err := gitClient.RepositoryFiles.GetFile(repoLink, filePath, &gitlab.GetFileOptions{Ref: gitlab.Ptr(repositoryBranch)})
 	if err != nil {
 		fmt.Println(operatorName, "- Failed to obtain GitLab file: ", err)
-		return "", ""
+		return "", "", ""
 	}
 
 	// decode base64
@@ -488,12 +501,12 @@ func getLatestVersion(gitClient *gitlab.Client, operatorName string) (string, st
 
 	expectedVersion := extractVersion(string(decodedYamlString))
 
-	commitUrl := "https://github.com/openshift/" + operatorName + "/tree/" + extractCommit(string(decodedYamlString))
+	repositoryUrl := "https://github.com/openshift/" + operatorName
 
-	return expectedVersion, commitUrl
+	return expectedVersion, repositoryUrl, extractCommit(string(decodedYamlString))
 }
 
-func getObservabilityOperatorVersion(sha string) string {
+func getObservabilityOperatorVersion(sha string) (string, string) {
 	githubClient := github.NewClient(nil)
 
 	fileGithub, _, _ := githubClient.Repositories.ListTags(context.TODO(), "rhobs", "observability-operator", &github.ListOptions{})
@@ -501,9 +514,10 @@ func getObservabilityOperatorVersion(sha string) string {
 	for _, tag := range fileGithub {
 		if *tag.Commit.SHA == sha {
 			expectedVersion := *tag.Name
-			return expectedVersion
+			sha = sha[:7]
+			return expectedVersion, sha
 		}
 	}
 
-	return ""
+	return "", ""
 }

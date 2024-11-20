@@ -89,15 +89,18 @@ func (ctx *sreOperatorsDescribeOptions) printText(output []sreOperatorDetails) e
 	p := printer.NewTablePrinter(ctx.IOStreams.Out, 20, 1, 3, ' ')
 
 	for _, op := range output {
+		p.AddRow([]string{"", ""})
 		p.AddRow([]string{"Operator Name:", op.basic.Name})
 		if op.basic.Current != op.basic.Expected {
-			p.AddRow([]string{"Current Version:", Red + op.basic.Current + " (outdated)" + RestoreColor})
-			p.AddRow([]string{"Expected Version:", op.basic.Expected})
+			p.AddRow([]string{"Current Version:", Red + Bold + op.basic.Current + " (outdated)" + RestoreColor})
 		} else {
 			p.AddRow([]string{"Current Version:", op.basic.Current})
-			p.AddRow([]string{"Expected Version:", op.basic.Expected})
 		}
-		p.AddRow([]string{"Expected Version Commit URL:", op.basic.CommitURL})
+		p.AddRow([]string{"Expected Version:", op.basic.Expected})
+		p.AddRow([]string{"", ""})
+		p.AddRow([]string{"Current Version Commit:", op.basic.CurrentCommit})
+		p.AddRow([]string{"Expected Version Commit:", op.basic.ExpectedCommit})
+		p.AddRow([]string{"", ""})
 		p.AddRow([]string{"Channel:", op.basic.Channel})
 		p.AddRow([]string{"CSV Status:", op.basic.Status})
 		p.AddRow([]string{"CSV Phase:", op.CsvHealthPhase})
@@ -106,6 +109,8 @@ func (ctx *sreOperatorsDescribeOptions) printText(output []sreOperatorDetails) e
 		p.AddRow([]string{"OperatorGroup Status:", op.OperartorGroupHealth})
 		p.AddRow([]string{"Deployment Status:", op.DeploymentHealth})
 		p.AddRow([]string{"Pod Status:", op.PodHealth})
+		p.AddRow([]string{"", ""})
+		p.AddRow([]string{"Operator Repository URL:", op.basic.RepositoryURL})
 	}
 
 	if err := p.Flush(); err != nil {
@@ -185,7 +190,7 @@ func (ctx *sreOperatorsDescribeOptions) DescribeOperator(cmd *cobra.Command, ope
 	opIndex := slices.Index(listOfOperatorNames, operatorName)
 
 	currentVersion, csvStatus, operatorChannel, csvHealthPhase, csvHealthMessage, subMessage, opGroupStatus, podHealth, deploymentHealth := "", "", "", "", "", "", "", "", ""
-	ExpectedVersion, commitUrl := getLatestVersion(gitlabClient, operatorName)
+	ExpectedVersion, repositoryUrl, expectedCommit := getLatestVersion(gitlabClient, operatorName)
 
 	if err := ctx.kubeCli.List(context.TODO(), csvList, client.InNamespace(listOfOperators[opIndex])); err != nil {
 		fmt.Println("Error retrieving CSV details")
@@ -258,9 +263,10 @@ func (ctx *sreOperatorsDescribeOptions) DescribeOperator(cmd *cobra.Command, ope
 			}
 		}
 	}
+	currentCommit := extractCommit(currentVersion)
 	currentVersion = extractVersion(currentVersion)
 	op := sreOperatorDetails{
-		basic: sreOperator{operatorName, currentVersion, ExpectedVersion, csvStatus, operatorChannel, commitUrl},
+		basic: sreOperator{operatorName, currentVersion, currentCommit, ExpectedVersion, expectedCommit, csvStatus, operatorChannel, repositoryUrl},
 
 		CsvHealthPhase:   csvHealthPhase,
 		CsvHealthMessage: csvHealthMessage,
