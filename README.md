@@ -50,6 +50,9 @@ Goreleaser uses the latest Git tag from the repository to create a release. To m
 ```shell
 # Creating a new osdctl Github release
 
+# Ensure you have the latest set of tags pulled
+git fetch upstream --tags
+
 # Create a git tag to be the basis of the release
 git tag -a vX.Y.Z -m "new release message"
 git push origin vX.Y.Z
