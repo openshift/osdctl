@@ -544,12 +544,12 @@ func IsHostedCluster(clusterID string) (bool, error) {
 	defer conn.Close()
 
 	cluster := conn.ClustersMgmt().V1().Clusters().Cluster(clusterID)
-	res, err := cluster.Hypershift().Get().Send()
+	res, err := cluster.Get().Send()
 	if err != nil {
 		return false, err
 	}
 
-	return res.Body().Enabled(), nil
+	return res.Body().Hypershift().Enabled(), nil
 }
 
 func GetHCPNamespace(clusterId string) (namespace string, err error) {
