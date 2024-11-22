@@ -448,7 +448,7 @@ func (o *transferOwnerOptions) run() error {
 
 	o.hypershift, err = utils.IsHostedCluster(o.clusterID)
 	if err != nil {
-		return fmt.Errorf("failed to check if the given cluster is HCP")
+		return fmt.Errorf("failed to check if the given cluster is HCP: %w", err)
 	}
 
 	// Find and setup all resources that are needed
