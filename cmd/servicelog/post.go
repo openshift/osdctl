@@ -38,7 +38,7 @@ type PostCmdOptions struct {
 	isDryRun        bool
 	skipPrompts     bool
 	clustersFile    string
-	internalOnly    bool
+	InternalOnly    bool
 	ClusterId       string
 
 	// Messaged clusters
@@ -84,7 +84,7 @@ func newPostCmd() *cobra.Command {
 	postCmd.Flags().BoolVarP(&opts.skipPrompts, "yes", "y", false, "Skips all prompts.")
 	postCmd.Flags().StringArrayVarP(&opts.filterFiles, "query-file", "f", []string{}, "File containing search queries to apply. All lines in the file will be concatenated into a single query. If this flag is called multiple times, every file's search query will be combined with logical AND.")
 	postCmd.Flags().StringVarP(&opts.clustersFile, "clusters-file", "c", "", `Read a list of clusters to post the servicelog to. the format of the file is: {"clusters":["$CLUSTERID"]}`)
-	postCmd.Flags().BoolVarP(&opts.internalOnly, "internal", "i", false, "Internal only service log. Use MESSAGE for template parameter (eg. -p MESSAGE='My super secret message').")
+	postCmd.Flags().BoolVarP(&opts.InternalOnly, "internal", "i", false, "Internal only service log. Use MESSAGE for template parameter (eg. -p MESSAGE='My super secret message').")
 
 	return postCmd
 }
@@ -375,7 +375,7 @@ func (o *PostCmdOptions) parseTemplate(jsonFile []byte) error {
 
 // readTemplate loads the template into the Message variable
 func (o *PostCmdOptions) readTemplate() {
-	if o.internalOnly {
+	if o.InternalOnly {
 		// fixed template for internal service logs
 		messageTemplate := []byte(`
 		{
@@ -463,6 +463,7 @@ func (o *PostCmdOptions) replaceFlags(flagName string, flagValue string) {
 		found = true
 		o.Message.ReplaceWithFlag(flagName, flagValue)
 	}
+
 	if strings.Contains(o.filtersFromFile, flagName) {
 		found = true
 		o.filtersFromFile = strings.ReplaceAll(o.filtersFromFile, flagName, flagValue)
@@ -503,7 +504,7 @@ func (o *PostCmdOptions) createPostRequest(ocmClient *sdk.Connection, cluster *v
 
 	o.Message.ClusterUUID = cluster.ExternalID()
 	o.Message.ClusterID = cluster.ID()
-	o.Message.InternalOnly = o.internalOnly
+	o.Message.InternalOnly = o.InternalOnly
 	if subscription := cluster.Subscription(); subscription != nil {
 		o.Message.SubscriptionID = cluster.Subscription().ID()
 	}
