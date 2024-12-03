@@ -65,7 +65,7 @@ func gatherLogs(clusterID string) (error error) {
 
 	fmt.Printf("Using HCP Namespace %v\n", hcpCluster.hcpNamespace)
 
-	gatherNamespaces := []string{hcpCluster.hcpNamespace, hcpCluster.klusterletNS, hcpCluster.hostedNS, "hypershift", "cert-manager", "redhat-cert-manager-operator"}
+	gatherNamespaces := []string{hcpCluster.hcpNamespace, hcpCluster.klusterletNS, hcpCluster.hostedNS, "hypershift", "cert-manager", "redhat-cert-manager-operator", "open-cluster-management-agent", "open-cluster-management-agent-addon"}
 	gatherDir, err := setupGatherDir(hcpCluster.hcpNamespace)
 	if err != nil {
 		return err
