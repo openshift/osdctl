@@ -35,7 +35,12 @@ import (
 	"github.com/openshift/osdctl/pkg/utils"
 )
 
-const CheckSyncMaxAttempts = 24
+const (
+	CheckSyncMaxAttempts = 24
+
+	SL_TRANSFER_INITIATED = "https://github.com/openshift/managed-notifications/raw/refs/heads/master/osd/clustertransfer_starting.json"
+	SL_TRANSFER_COMPLETE  = "https://github.com/openshift/managed-notifications/raw/refs/heads/master/osd/clustertransfer_completed.json"
+)
 
 // transferOwnerOptions defines the struct for running transferOwner command
 type transferOwnerOptions struct {
@@ -82,11 +87,29 @@ func newTransferOwnerOptions(streams genericclioptions.IOStreams, globalOpts *gl
 	}
 }
 
-func generateServiceLog(clusterId string, template string) servicelog.PostCmdOptions {
+type serviceLogParameters struct {
+	ClusterID             string
+	OldOwnerName          string
+	OldOwnerID            string
+	NewOwnerName          string
+	NewOwnerID            string
+	IsExternalOrgTransfer bool
+}
+
+func generateInternalServiceLog(params serviceLogParameters) servicelog.PostCmdOptions {
 	return servicelog.PostCmdOptions{
-		Template:       template,
-		ClusterId:      clusterId,
-		TemplateParams: []string{fmt.Sprintf("DATE=%v", time.Now().UTC().Format(time.RFC3339))},
+		ClusterId: params.ClusterID,
+		TemplateParams: []string{
+			"MESSAGE=" + fmt.Sprintf("From user '%s' in Red Hat account %s => user '%s' in Red Hat account %s.", params.OldOwnerName, params.OldOwnerID, params.NewOwnerName, params.NewOwnerID),
+		},
+		InternalOnly: true,
+	}
+}
+
+func generateServiceLog(params serviceLogParameters, template string) servicelog.PostCmdOptions {
+	return servicelog.PostCmdOptions{
+		Template:  template,
+		ClusterId: params.ClusterID,
 	}
 }
 
@@ -415,13 +438,7 @@ func buildNewSecret(oldpullsecret, newpullsecret []byte) ([]byte, error) {
 }
 
 func (o *transferOwnerOptions) run() error {
-	fmt.Println("Notify the customer before ownership transfer commences. Sending service log.")
-	postCmd := generateServiceLog(o.clusterID, "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_starting.json")
-	if err := postCmd.Run(); err != nil {
-		fmt.Println("Failed to generate service log. Please manually send a service log to Notify the customer before ownership transfer commences:")
-		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
-			o.clusterID, "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_starting.json", strings.Join(postCmd.TemplateParams, " -p "))
-	}
+	// Initiate Connections First
 
 	// Create an OCM client to talk to the cluster API
 	// the user has to be logged in (e.g. 'ocm login')
@@ -434,6 +451,8 @@ func (o *transferOwnerOptions) run() error {
 			fmt.Printf("Cannot close the ocm (possible memory leak): %q", ocmCloseErr)
 		}
 	}()
+
+	// Gather all required data
 	cluster, err := utils.GetClusterAnyStatus(ocm, o.clusterID)
 	o.cluster = cluster
 	o.clusterID = cluster.ID()
@@ -472,6 +491,141 @@ func (o *transferOwnerOptions) run() error {
 	elevationReasons := []string{
 		o.reason,
 		fmt.Sprintf("Updating pull secret using osdctl to tranfert owner to %s", o.newOwnerName),
+	}
+
+	// Gather all required information
+	fmt.Println("Gathering all required information for the cluster transfer...")
+	cluster, err = utils.GetCluster(ocm, o.clusterID)
+	if err != nil {
+		return fmt.Errorf("failed to get cluster information for cluster with ID %s: %w", o.clusterID, err)
+	}
+
+	externalClusterID, ok := cluster.GetExternalID()
+	if !ok {
+		return fmt.Errorf("cluster has no external id")
+	}
+
+	subscription, err := utils.GetSubscription(ocm, o.clusterID)
+	if err != nil {
+		return fmt.Errorf("could not get subscription: %w", err)
+	}
+
+	subscriptionID, ok := subscription.GetID()
+	if !ok {
+		return fmt.Errorf("Could not get subscription id")
+	}
+
+	oldOwnerAccount, ok := subscription.GetCreator()
+	if !ok {
+		return fmt.Errorf("cluster has no owner account")
+	}
+
+	oldOrganizationId, ok := subscription.GetOrganizationID()
+	if !ok {
+		return fmt.Errorf("old organization has no ID")
+	}
+
+	// We have to get the organization from the ID because it's not nested
+	// under the subscription.GetCreator
+	oldOrganization, err := utils.GetOrganization(ocm, subscriptionID)
+	if err != nil {
+		fmt.Printf("Error: %s", err)
+		return fmt.Errorf("could not get current owner organization")
+	}
+
+	newAccount, err := utils.GetAccount(ocm, o.newOwnerName)
+	if err != nil {
+		return fmt.Errorf("could not get new owners account: %w", err)
+	}
+
+	newOrganization, ok := newAccount.GetOrganization()
+	if !ok {
+		return fmt.Errorf("new account has no organization")
+	}
+
+	newOrganizationId, ok := newOrganization.GetID()
+	if !ok {
+		return fmt.Errorf("new organization has no ID")
+	}
+
+	accountID, ok := newAccount.GetID()
+	if !ok {
+		return fmt.Errorf("account has no id")
+	}
+
+	clusterConsole, ok := cluster.GetConsole()
+	if !ok {
+		return fmt.Errorf("cluster has no console url")
+	}
+
+	clusterURL, ok := clusterConsole.GetURL()
+	if !ok {
+		return fmt.Errorf("cluster has no console url")
+	}
+
+	displayName, ok := subscription.GetDisplayName()
+	if !ok {
+		return fmt.Errorf("subscription has no displayName")
+	}
+
+	oldOwnerAccountID, ok := oldOwnerAccount.GetID()
+	if !ok {
+		return fmt.Errorf("cannot get old owner account id")
+	}
+
+	oldOwnerAccount, err = utils.GetAccount(ocm, oldOwnerAccountID)
+	if err != nil {
+		return fmt.Errorf("cannot get old owner account")
+	}
+
+	oldOwnerUsername, ok := oldOwnerAccount.GetUsername()
+	if !ok {
+		return fmt.Errorf("cannot get old owner username")
+	}
+
+	oldOrganizationEbsAccountID, ok := oldOrganization.GetEbsAccountID()
+	if !ok {
+		return fmt.Errorf("cannot get old org ebs id")
+	}
+
+	newOwnerUsername, ok := newAccount.GetUsername()
+	if !ok {
+		return fmt.Errorf("cannot get new owner username")
+	}
+
+	newOrganizationEbsAccountID, ok := newOrganization.GetEbsAccountID()
+	if !ok {
+		return fmt.Errorf("cannot get new org ebs id")
+	}
+
+	orgChanged := oldOrganizationId != newOrganizationId
+
+	// build common SL parameters struct
+	slParams := serviceLogParameters{
+		ClusterID:             o.clusterID,
+		OldOwnerName:          oldOwnerUsername,
+		OldOwnerID:            oldOrganizationEbsAccountID,
+		NewOwnerName:          newOwnerUsername,
+		NewOwnerID:            newOrganizationEbsAccountID,
+		IsExternalOrgTransfer: orgChanged,
+	}
+
+	// Send a SL saying we're about to start
+	fmt.Println("Notify the customer before ownership transfer commences. Sending service log.")
+	postCmd := generateServiceLog(slParams, SL_TRANSFER_INITIATED)
+	if err := postCmd.Run(); err != nil {
+		fmt.Println("Failed to POST customer service log. Please manually send a service log to notify the customer before ownership transfer commences:")
+		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
+			o.clusterID, SL_TRANSFER_INITIATED, strings.Join(postCmd.TemplateParams, " -p "))
+	}
+
+	// Send internal SL to cluster with additional details in case we
+	// need them later. This prevents leaking PII to customers.
+	postCmd = generateInternalServiceLog(slParams)
+	fmt.Println("Internal SL Being Sent")
+	if err := postCmd.Run(); err != nil {
+		fmt.Println("Failed to POST internal service log. Please manually send a service log to persist details of the customer transfer before proceeding:")
+		fmt.Println(fmt.Sprintf("osdctl servicelog post -i -p MESSAGE=\"From user '%s' in Red Hat account %s => user '%s' in Red Hat account %s.\" %s", slParams.OldOwnerName, slParams.OldOwnerID, slParams.NewOwnerName, slParams.NewOwnerID, slParams.ClusterID))
 	}
 
 	masterKubeCli, _, masterKubeClientSet, err := common.GetKubeConfigAndClient(masterCluster.ID(), elevationReasons...)
@@ -551,71 +705,6 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("error verifying cluster pull secret: %w", err)
 	}
 
-	cluster, err = utils.GetCluster(ocm, o.clusterID)
-	if err != nil {
-		return fmt.Errorf("failed to get cluster information for cluster with ID %s: %w", o.clusterID, err)
-	}
-
-	externalClusterID, ok := cluster.GetExternalID()
-	if !ok {
-		return fmt.Errorf("cluster has no external id")
-	}
-
-	subscription, err := utils.GetSubscription(ocm, o.clusterID)
-	if err != nil {
-		return fmt.Errorf("could not get subscription: %w", err)
-	}
-
-	oldOwnerAccount, ok := subscription.GetCreator()
-	if !ok {
-		return fmt.Errorf("cluster has no owner account")
-	}
-
-	oldOrganizationId, ok := subscription.GetOrganizationID()
-	if !ok {
-		return fmt.Errorf("old organization has no ID")
-	}
-
-	newAccount, err := utils.GetAccount(ocm, o.newOwnerName)
-	if err != nil {
-		return fmt.Errorf("could not get new owners account: %w", err)
-	}
-
-	newOrganization, ok := newAccount.GetOrganization()
-	if !ok {
-		return fmt.Errorf("new account has no organization")
-	}
-
-	newOrganizationId, ok := newOrganization.GetID()
-	if !ok {
-		return fmt.Errorf("new organization has no ID")
-	}
-
-	accountID, ok := newAccount.GetID()
-	if !ok {
-		return fmt.Errorf("account has no id")
-	}
-
-	subscriptionID, ok := subscription.GetID()
-	if !ok {
-		return fmt.Errorf("subscription has no id")
-	}
-
-	clusterConsole, ok := cluster.GetConsole()
-	if !ok {
-		return fmt.Errorf("cluster has no console url")
-	}
-
-	clusterURL, ok := clusterConsole.GetURL()
-	if !ok {
-		return fmt.Errorf("cluster has no console url")
-	}
-
-	displayName, ok := subscription.GetDisplayName()
-	if !ok {
-		return fmt.Errorf("subscription has no displayName")
-	}
-
 	fmt.Printf("Transfer cluster: \t\t'%v' (%v)\n", externalClusterID, cluster.Name())
 	fmt.Printf("from user \t\t\t'%v' to '%v'\n", oldOwnerAccount.ID(), accountID)
 	if !utils.ConfirmPrompt() {
@@ -629,8 +718,6 @@ func (o *transferOwnerOptions) run() error {
 			return nil
 		}
 	}
-
-	orgChanged := oldOrganizationId != newOrganizationId
 
 	subscriptionOrgPatch, err := amv1.NewSubscription().OrganizationID(newOrganizationId).Build()
 
@@ -730,11 +817,11 @@ func (o *transferOwnerOptions) run() error {
 	fmt.Print("Transfer complete\n")
 
 	fmt.Println("Notify the customer the ownership transfer is completed. Sending service log.")
-	postCmd = generateServiceLog(o.clusterID, "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_completed.json")
+	postCmd = generateServiceLog(slParams, SL_TRANSFER_COMPLETE)
 	if err := postCmd.Run(); err != nil {
-		fmt.Println("Failed to generate service log. Please manually send a service log to Notify the customer  the ownership transfer is completed:")
+		fmt.Println("Failed to POST service log. Please manually send a service log to notify the customer the ownership transfer is completed:")
 		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
-			o.clusterID, "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/maintenance_completed.json", strings.Join(postCmd.TemplateParams, " -p "))
+			o.clusterID, SL_TRANSFER_COMPLETE, strings.Join(postCmd.TemplateParams, " -p "))
 	}
 
 	return nil
