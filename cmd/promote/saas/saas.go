@@ -62,7 +62,6 @@ func NewCmdSaas() *cobra.Command {
 			}
 
 			os.Exit(0)
-
 		},
 	}
 
