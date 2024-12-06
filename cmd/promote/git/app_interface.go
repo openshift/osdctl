@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -17,6 +18,7 @@ type Service struct {
 		Name    string `yaml:"name"`
 		URL     string `yaml:"url"`
 		Targets []struct {
+			Name       string
 			Namespace  map[string]string      `yaml:"namespace"`
 			Ref        string                 `yaml:"ref"`
 			Parameters map[string]interface{} `yaml:"parameters"`
@@ -83,7 +85,7 @@ func checkAppInterfaceCheckout(directory string) error {
 	return nil
 }
 
-func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, namespaceRef string) (string, string, error) {
+func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, namespaceRef string, canary string) (string, string, error) {
 	var currentGitHash string
 	var serviceRepo string
 	var service Service
@@ -141,9 +143,17 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, 
 		for _, resourceTemplate := range service.ResourceTemplates {
 			if !strings.Contains(resourceTemplate.Name, "package") {
 				for _, target := range resourceTemplate.Targets {
-					if strings.Contains(target.Namespace["$ref"], "hivep") {
-						currentGitHash = target.Ref
-						break
+					if canary != "no" {
+						if strings.Contains(target.Name, "prod-canary") {
+							currentGitHash = target.Ref
+							break
+						}
+					}
+					if canary != "yes" && currentGitHash == "" {
+						if strings.Contains(target.Namespace["$ref"], "hivep") {
+							currentGitHash = target.Ref
+							break
+						}
 					}
 				}
 			}
@@ -196,7 +206,7 @@ func GetCurrentPackageTagFromAppInterface(saasFile string) (string, error) {
 	return currentPackageTag, nil
 }
 
-func (a AppInterface) UpdateAppInterface(serviceName, saasFile, currentGitHash, promotionGitHash, branchName string) error {
+func (a AppInterface) UpdateAppInterface(serviceName, saasFile, currentGitHash, promotionGitHash, branchName string, canary string) error {
 	cmd := exec.Command("git", "checkout", "master")
 	cmd.Dir = a.GitDirectory
 	err := cmd.Run()
@@ -223,9 +233,17 @@ func (a AppInterface) UpdateAppInterface(serviceName, saasFile, currentGitHash, 
 	if err != nil {
 		return fmt.Errorf("failed to read file %s: %v", saasFile, err)
 	}
+	var newContent string
+	canaryRegex := regexp.MustCompile(`(-\s+name:\s+.+prod-canary.*\n+\s+namespace:\n+\s+\$ref:\s.+\n\s+ref:)(.+)`)
 
-	// Replace the hash in the file content
-	newContent := strings.ReplaceAll(string(fileContent), currentGitHash, promotionGitHash)
+	if canaryRegex.Match(fileContent) && canary != "no" {
+		// If canary promotion is requested, replace the hash only in canary targets in the file content
+		// If auto mode is selected, replace canary targets if available. Otherwise proceed to promoting to all prod hives.
+		newContent = canaryRegex.ReplaceAllString(string(fileContent), "${1} "+promotionGitHash)
+	} else {
+		// Replace the hash in the file content
+		newContent = strings.ReplaceAll(string(fileContent), currentGitHash, promotionGitHash)
+	}
 
 	err = os.WriteFile(saasFile, []byte(newContent), 0644)
 	if err != nil {

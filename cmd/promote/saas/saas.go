@@ -9,9 +9,10 @@ import (
 )
 
 type saasOptions struct {
-	list bool
-	osd  bool
-	hcp  bool
+	list   bool
+	osd    bool
+	hcp    bool
+	canary string
 
 	appInterfaceCheckoutDir string
 	serviceName             string
@@ -19,7 +20,7 @@ type saasOptions struct {
 	namespaceRef            string
 }
 
-// newCmdSaas implementes the saas command to interact with promoting SaaS services/operators
+// NewCmdSaas implementes the saas command to interact with promoting SaaS services/operators
 func NewCmdSaas() *cobra.Command {
 	ops := &saasOptions{}
 	saasCmd := &cobra.Command{
@@ -31,8 +32,8 @@ func NewCmdSaas() *cobra.Command {
 		# List all SaaS services/operators
 		osdctl promote saas --list
 
-		# Promote a SaaS service/operator
-		osdctl promote saas --serviceName <service-name> --gitHash <git-hash> --osd
+		# Promote a SaaS service/operator to production 
+		osdctl promote saas --serviceName <service-name> --gitHash <git-hash> --osd 
 		or
 		osdctl promote saas --serviceName <service-name> --gitHash <git-hash> --hcp`,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -55,7 +56,7 @@ func NewCmdSaas() *cobra.Command {
 				os.Exit(1)
 			}
 
-			err := servicePromotion(appInterface, ops.serviceName, ops.gitHash, ops.namespaceRef, ops.osd, ops.hcp)
+			err := servicePromotion(appInterface, ops.serviceName, ops.gitHash, ops.namespaceRef, ops.osd, ops.hcp, ops.canary)
 			if err != nil {
 				fmt.Printf("Error while promoting service: %v\n", err)
 				os.Exit(1)
@@ -72,6 +73,7 @@ func NewCmdSaas() *cobra.Command {
 	saasCmd.Flags().StringVarP(&ops.namespaceRef, "namespaceRef", "n", "", "SaaS target namespace reference name")
 	saasCmd.Flags().BoolVarP(&ops.osd, "osd", "", false, "OSD service/operator getting promoted")
 	saasCmd.Flags().BoolVarP(&ops.hcp, "hcp", "", false, "HCP service/operator getting promoted")
+	saasCmd.Flags().StringVarP(&ops.canary, "canary", "", "auto", "Select to promote service to canary production hives (yes/no/auto). By default, auto will deploy to canary only if target names containing -prod-canary- are set up in saas file. Otherwise will deploy to all production targets.")
 	saasCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "appInterfaceDir", "", "", "location of app-interfache checkout. Falls back to `pwd` and "+git.DefaultAppInterfaceDirectory())
 
 	return saasCmd

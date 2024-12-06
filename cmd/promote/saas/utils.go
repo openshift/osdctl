@@ -36,7 +36,7 @@ func listServiceNames(appInterface git.AppInterface) error {
 	return nil
 }
 
-func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string, namespaceRef string, osd, hcp bool) error {
+func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string, namespaceRef string, osd, hcp bool, canary string) error {
 	_, err := GetServiceNames(appInterface, OSDSaasDir, BPSaasDir, CADSaasDir)
 	if err != nil {
 		return err
@@ -58,7 +58,7 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 		return fmt.Errorf("failed to read SAAS file: %v", err)
 	}
 
-	currentGitHash, serviceRepo, err := git.GetCurrentGitHashFromAppInterface(serviceData, serviceName, namespaceRef)
+	currentGitHash, serviceRepo, err := git.GetCurrentGitHashFromAppInterface(serviceData, serviceName, namespaceRef, canary)
 	if err != nil {
 		return fmt.Errorf("failed to get current git hash or service repo: %v", err)
 	}
@@ -77,7 +77,7 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 		return fmt.Errorf("error in executing git log: %v", err)
 	}
 	branchName := fmt.Sprintf("promote-%s-%s", serviceName, promotionGitHash)
-	err = appInterface.UpdateAppInterface(serviceName, saasDir, currentGitHash, promotionGitHash, branchName)
+	err = appInterface.UpdateAppInterface(serviceName, saasDir, currentGitHash, promotionGitHash, branchName, canary)
 	if err != nil {
 		fmt.Printf("FAILURE: %v\n", err)
 	}
@@ -107,11 +107,11 @@ func GetServiceNames(appInterface git.AppInterface, saaDirs ...string) ([]string
 		if err != nil {
 			return nil, err
 		}
-		for _, filepath := range filepaths {
-			filename := strings.TrimPrefix(filepath, baseDir+"/"+dir+"/")
+		for _, fp := range filepaths {
+			filename := strings.TrimPrefix(fp, baseDir+"/"+dir+"/")
 			filename = strings.TrimSuffix(filename, ".yaml")
 			ServicesSlice = append(ServicesSlice, filename)
-			ServicesFilesMap[filename] = filepath
+			ServicesFilesMap[filename] = fp
 		}
 	}
 
