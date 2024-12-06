@@ -121,6 +121,9 @@ func NewCmdValidateEgress() *cobra.Command {
   # Override automatic selection of a subnet or security group id
   osdctl network verify-egress --cluster-id my-rosa-cluster --subnet-id subnet-abcd --security-group sg-abcd
 
+  # Run against multiple manually supplied subnet IDs
+  osdctl network verify-egress --cluster-id my-rosa-cluster --subnet-id subnet-abcd --subnet-id subnet-efgh
+
   # Override automatic selection of the list of endpoints to check
   osdctl network verify-egress --cluster-id my-rosa-cluster --platform hostedcluster
 
@@ -173,6 +176,10 @@ func (e *EgressVerification) Run(ctx context.Context) {
 		log.Fatalf("network verification failed to build logger: %s", err)
 	}
 	e.log = logger
+
+	if err := e.validateInput(); err != nil {
+		log.Fatalf("network verification failed to validate input: %s", err)
+	}
 
 	e.cpuArch = cpu.ArchitectureByName(e.CpuArchName)
 	if e.CpuArchName != "" && !e.cpuArch.IsValid() {
@@ -517,6 +524,16 @@ func (e *EgressVerification) fetchCluster(ctx context.Context) error {
 		default:
 			log.Fatalf("only supports rosa, osd, and osdtrial, got %s", e.cluster.Product().ID())
 		}
+	}
+
+	return nil
+}
+
+func (e *EgressVerification) validateInput() error {
+	// Validate proper usage of --subnet-id flag
+	if len(e.SubnetIds) == 1 && len(strings.Split(e.SubnetIds[0], ",")) > 1 {
+		return fmt.Errorf("multiple subnets passed to a single --subnet-id flag, you must pass the flag per subnet, eg " +
+			"--subnet-id foo --subnet-id bar")
 	}
 
 	return nil

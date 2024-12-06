@@ -217,7 +217,6 @@ func (e *EgressVerification) isSubnetPublic(ctx context.Context, subnetID string
 	var routeTable string
 
 	// Try and find a Route Table associated with the given subnet
-
 	routeTable, err := utils.FindRouteTableForSubnetForVerification(e.awsClient, subnetID)
 
 	// Check that the RouteTable for the subnet has a default route to 0.0.0.0/0
