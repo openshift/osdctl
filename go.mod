@@ -9,18 +9,18 @@ require (
 	github.com/Dynatrace/dynatrace-operator v0.14.2
 	github.com/PagerDuty/go-pagerduty v1.8.0
 	github.com/andygrunwald/go-jira v1.16.0
-	github.com/aws/aws-sdk-go-v2 v1.30.1
+	github.com/aws/aws-sdk-go-v2 v1.30.3
 	github.com/aws/aws-sdk-go-v2/config v1.27.24
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.24
 	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.39.2
 	github.com/aws/aws-sdk-go-v2/service/costexplorer v1.32.2
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.134.0
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.152.0
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancing v1.20.2
-	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.24.2
+	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.34.0
 	github.com/aws/aws-sdk-go-v2/service/iam v1.27.2
 	github.com/aws/aws-sdk-go-v2/service/organizations v1.22.2
 	github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.18.2
-	github.com/aws/aws-sdk-go-v2/service/route53 v1.34.2
+	github.com/aws/aws-sdk-go-v2/service/route53 v1.40.3
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.42.2
 	github.com/aws/aws-sdk-go-v2/service/servicequotas v1.18.2
 	github.com/aws/aws-sdk-go-v2/service/sts v1.30.1
@@ -35,6 +35,7 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.33.1
 	github.com/openshift-online/ocm-cli v0.1.74
+	github.com/openshift-online/ocm-common v0.0.13
 	github.com/openshift-online/ocm-sdk-go v0.1.445
 	github.com/openshift/api v0.0.0-20240524162738-d899f8877d22
 	github.com/openshift/aws-account-operator/api v0.0.0-20230322125717-5b5a00a3e99f
@@ -44,6 +45,7 @@ require (
 	github.com/openshift/hive/apis v0.0.0-20240216200617-8c54fc9cac45
 	github.com/openshift/hypershift/api v0.0.0-20241102085541-7ba3433476ee
 	github.com/openshift/osd-network-verifier v1.1.2
+	github.com/openshift/rosa v1.2.24
 	github.com/pkg/browser v0.0.0-20210911075715-681adbf594b8
 	github.com/shopspring/decimal v1.3.1
 	github.com/sirupsen/logrus v1.9.3
@@ -72,6 +74,8 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
+replace github.com/openshift-online/ocm-common v0.0.13 => /Users/kbater/Projects/openshift-online/ocm-common
+
 require (
 	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
@@ -82,10 +86,10 @@ require (
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/alessio/shellescape v1.4.2 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.5.1 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.2 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.9 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.13 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.13 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.15 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.15 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.0 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.2.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.11.3 // indirect
