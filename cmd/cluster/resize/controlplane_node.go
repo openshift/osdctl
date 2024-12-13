@@ -637,7 +637,7 @@ func (o *controlPlane) runWithCPMS(ctx context.Context) error {
 	// Wait infinitely
 	log.Println("Waiting for control plane resize to complete - this normally takes around 30 minutes per machine/90 minutes total")
 	log.Println("If this command terminates before completing, please remember to send a service log manually")
-	log.Printf("osdctl servicelog post %s -t %s -p INSTANCE_TYPE=%s JIRA_ID=${JIRA_ID} JUSTIFICATION=${JUSTIFICATION}", o.clusterID, resizeControlPlaneServiceLogTemplate, o.newMachineType)
+	log.Printf("osdctl servicelog post %s -t %s -p INSTANCE_TYPE=%s -p JIRA_ID=${JIRA_ID} -p JUSTIFICATION=${JUSTIFICATION}", o.clusterID, resizeControlPlaneServiceLogTemplate, o.newMachineType)
 	if err := wait.PollUntilContextCancel(ctx, 3*time.Minute, false, func(ctx context.Context) (bool, error) {
 		cpms := &machinev1.ControlPlaneMachineSet{}
 		if err := o.client.Get(ctx, client.ObjectKey{Namespace: cpmsNamespace, Name: cpmsName}, cpms); err != nil {
