@@ -2,12 +2,15 @@ package servicelog
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +35,7 @@ type PostCmdOptions struct {
 	ClustersFile    servicelog.ClustersFile
 	Template        string
 	TemplateParams  []string
+	Overrides       []string
 	filterFiles     []string // Path to filter file
 	filtersFromFile string   // Contents of filterFiles
 	filterParams    []string
@@ -63,6 +67,12 @@ func newPostCmd() *cobra.Command {
   # Post a service log to a single cluster via a remote URL, providing a parameter
   osdctl servicelog post ${CLUSTER_ID} -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/incident_resolved.json -p ALERT_NAME="alert"
 
+  # Post an internal-only service log message
+  osdctl servicelog post ${CLUSTER_ID} -i -p "MESSAGE=This is an internal message"
+
+  # Post a short external message
+  osdctl servicelog post ${CLUSTER_ID} -r "summary=External Message" -r "description=This is an external message" -r internal_only=False
+
   # Post a service log to a group of clusters, determined by an OCM query
   ocm list cluster -p search="cloud_provider.id is 'gcp' and managed='true' and state is 'ready'"
   osdctl servicelog post -q "cloud_provider.id is 'gcp' and managed='true' and state is 'ready'" -t file.json
@@ -76,9 +86,10 @@ func newPostCmd() *cobra.Command {
 		},
 	}
 
-	// define required flags
+	// define flags
 	postCmd.Flags().StringVarP(&opts.Template, "template", "t", "", "Message template file or URL")
 	postCmd.Flags().StringArrayVarP(&opts.TemplateParams, "param", "p", opts.TemplateParams, "Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.")
+	postCmd.Flags().StringArrayVarP(&opts.Overrides, "override", "r", opts.Overrides, "Specify a key-value pair (eg. -r FOO=BAR) to replace a JSON key in the document, only supports string fields, specifying -r without -t or -i will use a default template with severity `Info` and internal_only=True unless these are also overridden.")
 	postCmd.Flags().BoolVarP(&opts.isDryRun, "dry-run", "d", false, "Dry-run - print the service log about to be sent but don't send it.")
 	postCmd.Flags().StringArrayVarP(&opts.filterParams, "query", "q", []string{}, "Specify a search query (eg. -q \"name like foo\") for a bulk-post to matching clusters.")
 	postCmd.Flags().BoolVarP(&opts.skipPrompts, "yes", "y", false, "Skips all prompts.")
@@ -129,13 +140,26 @@ func (o *PostCmdOptions) Run() error {
 		return err
 	}
 
-	o.parseUserParameters() // parse all the '-p' user flags
-	o.readFilterFile()      // parse the ocm filters in file provided via '-f' flag
-	o.readTemplate()        // parse the given JSON template provided via '-t' flag
+	o.parseUserParameters()                // parse all the '-p' user flags
+	overrideMap, err := o.parseOverrides() // parse all the '-o' flags
+	if err != nil {
+		log.Fatalf("Error parsing overrides: %s", err)
+	}
+
+	o.readFilterFile() // parse the ocm filters in file provided via '-f' flag
+	o.readTemplate()   // parse the given JSON template provided via '-t' flag
 
 	// For every '-p' flag, replace its related placeholder in the template & filterFiles
 	for k := range userParameterNames {
 		o.replaceFlags(userParameterNames[k], userParameterValues[k])
+	}
+
+	// Replace any overrides
+	for overrideKey, overrideValue := range overrideMap {
+		err := o.overrideField(overrideKey, overrideValue)
+		if err != nil {
+			log.Fatalf("could not override '%s': %s", overrideKey, err)
+		}
 	}
 
 	// Check if there are any remaining placeholders in the template that are not replaced by a parameter,
@@ -337,6 +361,68 @@ func (o *PostCmdOptions) parseUserParameters() {
 	}
 }
 
+// parseOverides parses all the '-o FOO=BAR' overrides which replace items in the final JSON document
+func (o *PostCmdOptions) parseOverrides() (map[string]string, error) {
+	usageMessageError := errors.New("invalid syntax. Usage: '-r FOO=BAR'")
+	overrideMap := make(map[string]string)
+
+	for _, v := range o.Overrides {
+		if !strings.Contains(v, "=") {
+			return nil, usageMessageError
+		}
+
+		param := strings.SplitN(v, "=", 2)
+		if param[0] == "" || param[1] == "" {
+			return nil, usageMessageError
+		}
+
+		overrideMap[param[0]] = param[1]
+	}
+
+	return overrideMap, nil
+}
+
+func (o *PostCmdOptions) overrideField(overrideKey string, overrideValue string) (err error) {
+	// Get a pointer, then the value of that pointer so that we can edit the fields
+	rt := reflect.ValueOf(&o.Message).Elem()
+
+	for i := 0; i < rt.NumField(); i++ {
+		// Get JSON field name
+		field := rt.Type().Field(i)
+		jsonName := strings.Split(field.Tag.Get("json"), ",")[0]
+
+		if overrideKey == jsonName {
+			// This shouldn't happen, but if it does we should make a nice error
+			if !rt.Field(i).CanSet() {
+				return fmt.Errorf("field cannot be modified")
+			}
+
+			kind := rt.Field(i).Kind()
+
+			// Set the field to the overridden value, since we have a string
+			// we may have to parse it to get the right type
+			switch kind {
+			case reflect.String:
+				rt.Field(i).SetString(overrideValue)
+
+			case reflect.Bool:
+				overrideBool, err := strconv.ParseBool(overrideValue)
+				if err != nil {
+					return fmt.Errorf("couldn't parse bool: %s", err)
+				}
+				rt.Field(i).SetBool(overrideBool)
+
+			default:
+				return fmt.Errorf("overriding of type %s not implemented", kind)
+			}
+
+			return nil
+		}
+	}
+
+	return fmt.Errorf("field does not exist")
+}
+
 // accessFile returns the contents of a local file or url, and any errors encountered
 func (o *PostCmdOptions) accessFile(filePath string) ([]byte, error) {
 
@@ -388,6 +474,21 @@ func (o *PostCmdOptions) readTemplate() {
 		`)
 		if err := o.parseTemplate(messageTemplate); err != nil {
 			log.Fatalf("Cannot not parse the JSON internal message template.\nError: %q\n", err)
+		}
+		return
+	}
+
+	// If neither `-i` or `-t` is specified, but `-r` is specified at least once then use a pre-canned template
+	if !o.InternalOnly && (o.Template == "") && (len(o.Overrides) != 0) {
+		messageTemplate := []byte(`
+		{
+			"severity": "Info",
+			"service_name": "SREManualAction",
+			"internal_only": true
+		}
+		`)
+		if err := o.parseTemplate(messageTemplate); err != nil {
+			log.Fatalf("Cannot not parse the default message template.\nError: %q\n", err)
 		}
 		return
 	}
