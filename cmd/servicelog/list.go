@@ -20,34 +20,41 @@ const (
 	InternalShortFlag    = "i"
 )
 
-// listCmd represents the list command
-var listCmd = &cobra.Command{
-	Use:   "list [flags] [options] cluster-identifier",
-	Short: "gets all servicelog messages for a given cluster",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		allMessages, err := cmd.Flags().GetBool(AllMessagesFlag)
-		if err != nil {
-			return fmt.Errorf("failed to get flag `--%v`/`-%v`, %w", AllMessagesFlag, AllMessagesShortFlag, err)
-		}
-
-		internalOnly, err := cmd.Flags().GetBool(InternalFlag)
-		if err != nil {
-			return fmt.Errorf("failed to get flag `--%v`/`-%v`, %w", InternalFlag, InternalShortFlag, err)
-		}
-
-		return ListServiceLogs(args[0], allMessages, internalOnly)
-	},
+type listCmdOptions struct {
+	allMessages bool
+	internal    bool
 }
 
-func init() {
-	// define flags
-	listCmd.Flags().BoolP(AllMessagesFlag, AllMessagesShortFlag, false, "Toggle if we should see all of the messages or only SRE-P specific ones")
-	listCmd.Flags().BoolP(InternalFlag, InternalShortFlag, false, "Toggle if we should see internal messages")
+func newListCmd() *cobra.Command {
+	opts := &listCmdOptions{}
+	cmd := &cobra.Command{
+		Use: "list [flags] [options] cluster-identifier",
+		Long: `Get service logs for a given cluster identifier.
+
+# To return just service logs created by SREs
+osdctl servicelog list
+
+# To return all service logs, including those by automated systems
+osdctl servicelog list --all-messages
+
+# To return all service logs, as well as internal service logs
+osdctl servicelog list --all-messages --internal
+`,
+		Short: "Get service logs for a given cluster identifier.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return listServiceLogs(args[0], opts)
+		},
+	}
+
+	cmd.Flags().BoolP("all-messages", "A", opts.allMessages, "Toggle if we should see all of the messages or only SRE-P specific ones")
+	cmd.Flags().BoolP("internal", "i", opts.internal, "Toggle if we should see internal messages")
+
+	return cmd
 }
 
-func ListServiceLogs(clusterID string, allMessages bool, internalOnly bool) error {
-	response, err := FetchServiceLogs(clusterID, allMessages, internalOnly)
+func listServiceLogs(clusterID string, opts *listCmdOptions) error {
+	response, err := FetchServiceLogs(clusterID, opts.allMessages, opts.internal)
 	if err != nil {
 		return fmt.Errorf("failed to fetch service logs: %w", err)
 	}
