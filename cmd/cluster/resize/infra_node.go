@@ -85,7 +85,7 @@ func newCmdResizeInfra() *cobra.Command {
 
 	infraResizeCmd.Flags().StringVarP(&r.clusterId, "cluster-id", "C", "", "OCM internal/external cluster id or cluster name to resize infra nodes for.")
 	infraResizeCmd.Flags().StringVar(&r.instanceType, "instance-type", "", "(optional) Override for an AWS or GCP instance type to resize the infra nodes to, by default supported instance types are automatically selected.")
-	infraResizeCmd.Flags().StringVar(&r.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	infraResizeCmd.Flags().StringVar(&r.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
 	infraResizeCmd.Flags().StringVar(&r.justification, "justification", "", "The justification behind resize")
 
 	infraResizeCmd.MarkFlagRequired("cluster-id")
