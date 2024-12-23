@@ -50,27 +50,39 @@ func (capture *LogCapture) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
+type etcdHealthCheckOptions struct {
+	reason string
+}
+
 func newCmdEtcdHealthCheck() *cobra.Command {
-	return &cobra.Command{
-		Use:               "etcd-health-check <cluster-id>",
+	opts := etcdHealthCheckOptions{}
+	cmd := &cobra.Command{
+		Use:               "etcd-health-check <cluster-id> --reason <reason for escalation>",
 		Short:             "Checks the etcd components and member health",
 		Long:              `Checks etcd component health status for member replacement`,
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(EtcdHealthCheck(args[0]))
+			cmdutil.CheckErr(EtcdHealthCheck(args[0], opts))
 		},
 	}
+
+	cmd.Flags().StringVar(&opts.reason, "reason", "", "Specify a reason for privilege escalation")
+	err := cmd.MarkFlagRequired("reason")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: failed to mark flag '--reason' as required: %v", err)
+	}
+	return cmd
 }
 
-func EtcdHealthCheck(clusterId string) error {
+func EtcdHealthCheck(clusterId string, opts etcdHealthCheckOptions) error {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Fatal("error : ", err)
 		}
 	}()
 
-	kubeCli, kconfig, clientset, err := common.GetKubeConfigAndClient(clusterId)
+	kubeCli, kconfig, clientset, err := common.GetKubeConfigAndClient(clusterId, opts.reason)
 	if err != nil {
 		return err
 	}
