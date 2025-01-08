@@ -72,9 +72,9 @@ func newCmdResizeControlPlane() *cobra.Command {
   The user will be prompted to send a service log after the resize is complete.`,
 		Example: `
   # Resize all control plane instances to m5.4xlarge using control plane machine sets
-  osdctl cluster resize control-plane -c "${CLUSTER_ID}" --machine-type m5.4xlarge --reason "${OHSS}" --cpms
+  osdctl cluster resize control-plane -c "${CLUSTER_ID}" --machine-type m5.4xlarge --reason "${OHSS}"
 
-  # Resize a control plane node to m5.4xlarge, should be repeated for all control plane nodes
+  # Legacy: Resize a control plane node on a cluster without active controlplane machineset, should be repeated for all control plane nodes
   osdctl cluster resize control-plane-node -c "${CLUSTER_ID}" --machine-type m5.4xlarge --node ip-12-3-456-789.us-east-1.compute.internal --reason "${OHSS}"`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
@@ -87,13 +87,11 @@ func newCmdResizeControlPlane() *cobra.Command {
 	}
 	resizeControlPlaneNodeCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "The internal ID of the cluster to perform actions on")
 	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.newMachineType, "machine-type", "", "The target AWS machine type to resize to (e.g. m5.2xlarge)")
-	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.node, "node", "", "The control plane node to resize (e.g. ip-127.0.0.1.eu-west-2.compute.internal). Required when not using --cpms.")
+	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.node, "node", "", "Specify a node for legacy (single node) resize, when the controlplane-machineset is unavailable. (e.g. ip-127.0.0.1.eu-west-2.compute.internal)")
 	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
-	resizeControlPlaneNodeCmd.Flags().BoolVar(&ops.cpms, "cpms", true, "Set this flag to leverage control plane machine sets to resize the control plane")
 	resizeControlPlaneNodeCmd.MarkFlagRequired("cluster-id")
 	resizeControlPlaneNodeCmd.MarkFlagRequired("machine-type")
 	resizeControlPlaneNodeCmd.MarkFlagRequired("reason")
-	resizeControlPlaneNodeCmd.MarkFlagsMutuallyExclusive("node", "cpms")
 
 	return resizeControlPlaneNodeCmd
 }
@@ -124,9 +122,6 @@ func (o *controlPlane) New() error {
 	// Ensure we store the internal OCM cluster id
 	o.clusterID = cluster.ID()
 
-	if strings.ToUpper(cluster.CloudProvider().ID()) != "AWS" {
-		return errors.New("this command is only available for AWS clusters")
-	}
 	/*
 		Ideally we would want additional validation here for:
 		- the machine type exists
@@ -136,33 +131,28 @@ func (o *controlPlane) New() error {
 		machine type doesn't exist and can be re-run.
 	*/
 
-	if !o.cpms {
+	if o.node != "" {
 		// Ignore error if we fail to marshal the cluster's version into a semver, we lose the opportunity to suggest
-		// using --cpms which is best-effort
+		// using cpms
 		version, err := semver.NewVersion(o.cluster.OpenshiftVersion())
 		if err == nil {
 			if version.Major == 4 && version.Minor >= 12 {
-				log.Printf("cluster version: %s supports control plane machine sets. Would you like to retry with the --cpms flag?", o.cluster.OpenshiftVersion())
+				log.Printf("cluster version: %s supports control plane machine sets, but a node has been given for legacy (single node) resize. If cpms is active you cannot use the --node flag and have to resize via controlplane machineset.", o.cluster.OpenshiftVersion())
 				if utils.ConfirmPrompt() {
-					return fmt.Errorf("osdctl cluster resize control-plane --cluster-id %s --machine-type %s --reason %s --cpms", o.clusterID, o.newMachineType, o.reason)
+					return fmt.Errorf("osdctl cluster resize control-plane --cluster-id %s --machine-type %s --reason %s", o.clusterID, o.newMachineType, o.reason)
 				}
 			}
 		}
 
-		if o.node == "" {
-			return errors.New("a node must be specified with --node when --cpms is not set to true")
-		}
-
 		if o.cluster.CloudProvider().ID() != "aws" {
-			return errors.New("osdctl cluster resize-control-plane-node")
+			return errors.New("Legacy (single node) resize is only available for AWS. If controlplane machine set is unavailable, please manually resize the controlplane.")
 		}
+		// Do legacy resize
+		o.cpms = false
+		return nil
 	}
-
-	if o.cpms {
-		return o.newWithCPMS()
-	}
-
-	return nil
+	o.cpms = true
+	return o.newWithCPMS()
 }
 
 func (o *controlPlane) newWithCPMS() error {
@@ -584,11 +574,11 @@ func (o *controlPlane) run() error {
 func (o *controlPlane) runWithCPMS(ctx context.Context) error {
 	cpms := &machinev1.ControlPlaneMachineSet{}
 	if err := o.client.Get(ctx, client.ObjectKey{Namespace: cpmsNamespace, Name: cpmsName}, cpms); err != nil {
-		return fmt.Errorf("error retrieving control plane machine set: %v", err)
+		return fmt.Errorf("error retrieving control plane machine set: %v\nIf CPMS is unavailable, consider using the legacy (single node) resize by specifying --node and repeating for all controlplane nodes.", err)
 	}
 
 	if cpms.Spec.State != machinev1.ControlPlaneMachineSetStateActive {
-		return fmt.Errorf("control plane machine set is unexpectedly in %s state, must be %s - check for service logs, support exceptions, or ask for a second opinion", cpms.Spec.State, machinev1.ControlPlaneMachineSetStateActive)
+		return fmt.Errorf("control plane machine set is unexpectedly in %s state, must be %s - check for service logs, support exceptions, ask for a second opinion or consider using legacy (single node) resize with the --node flag.", cpms.Spec.State, machinev1.ControlPlaneMachineSetStateActive)
 	}
 
 	patch := client.MergeFrom(cpms.DeepCopy())
