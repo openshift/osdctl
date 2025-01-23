@@ -187,17 +187,21 @@ func getOCMConfigLocation() (string, error) {
 	return path, nil
 }
 
-// Loads the OCM Configuration file
-// Taken wholesale from	openshift-online/ocm-cli
+// Loads the OCM Configuration file from 'OCM_CONFIG' env var.
 func loadOCMConfig() (*Config, error) {
-	var err error
-
 	file, err := getOCMConfigLocation()
 	if err != nil {
 		return nil, err
 	}
+	return LoadOCMConfigPath(file)
+}
 
-	_, err = os.Stat(file)
+// Loads the OCM Configuration file at provided file path
+// Taken from openshift-online/ocm-cli
+func LoadOCMConfigPath(filePath string) (*Config, error) {
+	var err error
+
+	_, err = os.Stat(filePath)
 	if os.IsNotExist(err) {
 		cfg := &Config{}
 		err = nil
@@ -205,13 +209,13 @@ func loadOCMConfig() (*Config, error) {
 	}
 
 	if err != nil {
-		err = fmt.Errorf("can't check if config file '%s' exists: %v", file, err)
+		err = fmt.Errorf("can't check if config file '%s' exists: %v", filePath, err)
 		return nil, err
 	}
 
-	data, err := os.ReadFile(file)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
-		err = fmt.Errorf("can't read config file '%s': %v", file, err)
+		err = fmt.Errorf("can't read config file '%s': %v", filePath, err)
 		return nil, err
 	}
 
@@ -223,7 +227,7 @@ func loadOCMConfig() (*Config, error) {
 	err = json.Unmarshal(data, cfg)
 
 	if err != nil {
-		err = fmt.Errorf("can't parse config file '%s': %v", file, err)
+		err = fmt.Errorf("can't parse config file '%s': %v", filePath, err)
 		return cfg, err
 	}
 
@@ -265,12 +269,22 @@ func getOcmConfiguration(ocmConfigLoader func() (*Config, error)) (*Config, erro
 func CreateConnection() (*sdk.Connection, error) {
 	ocmConfigError := "Unable to load OCM config\nLogin with 'ocm login' or set OCM_TOKEN, OCM_URL and OCM_REFRESH_TOKEN environment variables"
 
-	connectionBuilder := sdk.NewConnectionBuilder()
-
 	config, err := getOcmConfiguration(loadOCMConfig)
+
 	if err != nil {
 		return nil, errors.New(ocmConfigError)
 	}
+	return CreateConnectionFromConfig(config)
+}
+
+// Create OCM connection from provided config. The config obj should be final and already handled
+// processing any environment vars, config files, run time args, and ordering/precedence, etc..
+func CreateConnectionFromConfig(config *Config) (*sdk.Connection, error) {
+	ocmConfigError := "Unable to load OCM config\nLogin with 'ocm login' or set OCM_TOKEN, OCM_URL and OCM_REFRESH_TOKEN environment variables"
+	if config == nil {
+		return nil, fmt.Errorf("nil config object passed to CreateConnectionFromConfig")
+	}
+	connectionBuilder := sdk.NewConnectionBuilder()
 
 	connectionBuilder.Tokens(config.AccessToken, config.RefreshToken)
 
