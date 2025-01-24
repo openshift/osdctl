@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/openshift/osdctl/cmd/cluster/access"
-	"github.com/openshift/osdctl/cmd/cluster/dynatrace"
 	"github.com/openshift/osdctl/cmd/cluster/resize"
 	"github.com/openshift/osdctl/cmd/cluster/sre_operators"
 	"github.com/openshift/osdctl/cmd/cluster/ssh"
@@ -41,7 +40,6 @@ func NewCmdCluster(streams genericclioptions.IOStreams, client *k8s.LazyClient, 
 	clusterCmd.AddCommand(newCmdFromInfraId(globalOpts))
 	clusterCmd.AddCommand(NewCmdHypershiftInfo(streams))
 	clusterCmd.AddCommand(newCmdOrgId())
-	clusterCmd.AddCommand(dynatrace.NewCmdDynatrace())
 	clusterCmd.AddCommand(newCmdCleanupLeakedEC2())
 	clusterCmd.AddCommand(newCmdDetachStuckVolume())
 	clusterCmd.AddCommand(ssh.NewCmdSSH())
