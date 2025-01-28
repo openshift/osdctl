@@ -361,10 +361,28 @@ osdctl servicelog list ${CLUSTERID} --all-messages
 
 #### Post servicelogs
 
+**Notes:**
+
+* `-t` is used for loading a template from disk, or from a URI
+
+* `-i` is useful for posting an internal-only service log using a built-in template
+
+* `-r` is used to override the individual fields in the final JSON message. If it us used without `-t` or `-i` then it will provide its own defaults of `severity=Info` and `internal_only=True`, unless these are also overridden.
+
+* The `--dry-run` flag simulates the command and prints the SL without sending it.
+
+* Only valid fields (e.g summary, description, severity, internal_only) can be overridden using the `-r` flag. Invalid fields will result in errors.
+
 ```bash
 CLUSTER_ID= # the unique cluster name, or internal, external id for a cluster
 TEMPLATE= # file or url in which the template exists in
 osdctl servicelog post ${CLUSTER_ID} --template=${TEMPLATE} --dry-run
+
+# Post an internal-only service log message
+osdctl servicelog post ${CLUSTER_ID} -i -p "MESSAGE=This is an internal message" --dry-run
+
+# Post a short external message
+osdctl servicelog post ${CLUSTER_ID} -r "summary=External Message" -r "description=This is an external message" -r internal_only=False --dry-run
 
 QUERIES_HERE= # queries that can be run on ocm's `clusters` resource
 TEMPLATE= # file or url in which the template exists in
