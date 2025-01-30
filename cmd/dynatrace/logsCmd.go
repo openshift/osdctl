@@ -17,9 +17,9 @@ var (
 	contains      string
 	sortOrder     string
 	clusterID     string
+	pod           string
 	namespaceList []string
 	nodeList      []string
-	podList       []string
 	containerList []string
 	statusList    []string
 	console       bool
@@ -57,7 +57,7 @@ func NewCmdLogs() *cobra.Command {
 		Short:             "Fetch logs from Dynatrace",
 		Long:              logsCmdDescription,
 		Example:           logsCmdExample,
-		Args:              cobra.NoArgs,
+		Args:              cobra.MaximumNArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
@@ -67,6 +67,11 @@ func NewCmdLogs() *cobra.Command {
 					cmdutil.CheckErr(err)
 				}
 			}
+
+			if len(args) > 0 {
+				pod = args[0]
+			}
+
 			err = main(clusterID)
 			if err != nil {
 				cmdutil.CheckErr(err)
@@ -81,8 +86,6 @@ func NewCmdLogs() *cobra.Command {
 	logsCmd.Flags().StringVar(&contains, "contains", "", "Include logs which contain a phrase")
 	logsCmd.Flags().StringVar(&sortOrder, "sort", "asc", "Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'. Defaults to 'asc'")
 	logsCmd.Flags().StringSliceVar(&nodeList, "node", []string{}, "Node name(s) (comma-separated)")
-	logsCmd.Flags().StringSliceVar(&podList, "pod", []string{}, "Pod name(s) (comma-separated)")
-	logsCmd.Flags().StringSliceVar(&podList, "po", []string{}, "Pod name(s) (comma-separated)")
 	logsCmd.Flags().StringSliceVar(&statusList, "status", []string{}, "Status(Info/Warn/Error) (comma-separated)")
 	logsCmd.Flags().StringSliceVar(&containerList, "container", []string{}, "Container name(s) (comma-separated)")
 	logsCmd.Flags().StringSliceVarP(&namespaceList, "namespace", "n", []string{}, "Namespace(s) (comma-separated)")
@@ -198,8 +201,8 @@ func GetQuery(hcpCluster HCPCluster) (query DTQuery, error error) {
 		q.Nodes(nodeList)
 	}
 
-	if len(podList) > 0 {
-		q.Pods(podList)
+	if len(pod) > 0 {
+		q.Pods([]string{pod})
 	}
 
 	if len(containerList) > 0 {
