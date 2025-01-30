@@ -24,6 +24,7 @@ import (
 	"github.com/openshift/osdctl/cmd/cloudtrail"
 	"github.com/openshift/osdctl/cmd/cluster"
 	"github.com/openshift/osdctl/cmd/cost"
+	"github.com/openshift/osdctl/cmd/dynatrace"
 	"github.com/openshift/osdctl/cmd/env"
 	"github.com/openshift/osdctl/cmd/hive"
 	"github.com/openshift/osdctl/cmd/iampermissions"
@@ -103,6 +104,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(setup.NewCmdSetup())
 	rootCmd.AddCommand(swarm.Cmd)
 	rootCmd.AddCommand(iampermissions.NewCmdIamPermissions())
+	rootCmd.AddCommand(dynatrace.NewCmdDynatrace())
 
 	// Add cost command to use AWS Cost Manager
 	rootCmd.AddCommand(cost.NewCmdCost(streams, globalOpts))
