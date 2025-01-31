@@ -18,9 +18,8 @@ func NewCmdServiceLog() *cobra.Command {
 		},
 	}
 
-	// Add subcommands
-	servicelogCmd.AddCommand(listCmd)      // servicelog list
-	servicelogCmd.AddCommand(newPostCmd()) // servicelog post
+	servicelogCmd.AddCommand(newListCmd())
+	servicelogCmd.AddCommand(newPostCmd())
 
 	return servicelogCmd
 }

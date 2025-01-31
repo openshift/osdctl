@@ -21,6 +21,7 @@ const (
 	DtVaultPath             = "dt_vault_path"
 	VaultAddress            = "vault_address"
 	CloudTrailCmdLists      = "cloudtrail_cmd_lists"
+	GitLabToken             = "gitlab_access"
 	JiraTokenRegex          = "^[A-Z0-9]{7}$"
 	PdTokenRegex            = "^[a-zA-Z0-9+_-]{20}$"
 	AwsAccountRegex         = "^[0-9]{12}$"
@@ -28,6 +29,7 @@ const (
 	VaultURLRegex           = `^https:\/\/[a-zA-Z0-9.-]+\/?$`
 	DtVaultPathRegex        = `^[a-zA-Z0-9\-/]+$`
 	CloudTrailCmdListsRegex = `^\s*-\s+.*$`
+	GitLabTokenRegex        = `^[a-zA-Z0-9]{20}$`
 )
 
 // NewCmdSetup implements the setup command
@@ -49,6 +51,7 @@ func NewCmdSetup() *cobra.Command {
 				PdUserToken,
 				JiraToken,
 				CloudTrailCmdLists,
+				GitLabToken,
 			}
 
 			values := make(map[string]string)
@@ -104,6 +107,10 @@ func NewCmdSetup() *cobra.Command {
 				case CloudTrailCmdLists:
 					if value != "" && value != defaultValue {
 						_, err = ValidateCloudTrailCmdLists(value)
+					}
+				case GitLabToken:
+					if value != "" && value != defaultValue {
+						_, err = ValidateGitLabToken(value)
 					}
 				}
 
@@ -227,4 +234,16 @@ func ValidateCloudTrailCmdLists(cloudTrailCmd string) (string, error) {
 		return "", errors.New("invalid CloudTrail command")
 	}
 	return cloudTrailCmd, nil
+}
+
+func ValidateGitLabToken(GitLabtoken string) (string, error) {
+	GitLabtoken = strings.TrimSpace(GitLabtoken)
+	match, err := regexp.MatchString(GitLabTokenRegex, GitLabtoken)
+	if err != nil {
+		return "", err
+	}
+	if !match {
+		return "", errors.New("invalid GitLab token")
+	}
+	return GitLabtoken, nil
 }

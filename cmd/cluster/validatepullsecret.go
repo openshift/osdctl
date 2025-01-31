@@ -3,6 +3,8 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"os"
+
 	v1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/k8s"
@@ -11,27 +13,24 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"os"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-var BackplaneClusterAdmin = "backplane-cluster-admin"
 
 // validatePullSecretOptions defines the struct for running validate-pull-secret command
 type validatePullSecretOptions struct {
 	clusterID string
 	elevate   bool
-	kubeCli   *k8s.LazyClient
 	reason    string
 }
 
-func newCmdValidatePullSecret(kubeCli *k8s.LazyClient) *cobra.Command {
-	ops := newValidatePullSecretOptions(kubeCli)
+func newCmdValidatePullSecret() *cobra.Command {
+	ops := newValidatePullSecretOptions()
 	validatePullSecretCmd := &cobra.Command{
 		Use:   "validate-pull-secret [CLUSTER_ID]",
 		Short: "Checks if the pull secret email matches the owner email",
 		Long: `Checks if the pull secret email matches the owner email.
 
-The owner's email to check will be determined by the cluster identifier passed to the command, while the pull secret checked will be determined by the cluster that the caller is currently logged in to.
+This command will automatically login to the cluster to check the current pull-secret defined in 'openshift-config/pull-secret'
 `,
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
@@ -45,10 +44,8 @@ The owner's email to check will be determined by the cluster identifier passed t
 	return validatePullSecretCmd
 }
 
-func newValidatePullSecretOptions(client *k8s.LazyClient) *validatePullSecretOptions {
-	return &validatePullSecretOptions{
-		kubeCli: client,
-	}
+func newValidatePullSecretOptions() *validatePullSecretOptions {
+	return &validatePullSecretOptions{}
 }
 
 func (o *validatePullSecretOptions) run() error {
@@ -62,7 +59,7 @@ func (o *validatePullSecretOptions) run() error {
 	}
 
 	// get the pull secret in cluster
-	emailCluster, err, done := getPullSecretElevated(o.clusterID, o.kubeCli, o.reason)
+	emailCluster, err, done := getPullSecretElevated(o.clusterID, o.reason)
 	if err != nil {
 		return err
 	}
@@ -83,13 +80,15 @@ func (o *validatePullSecretOptions) run() error {
 	return nil
 }
 
-// getPullSecretElevated gets the pull-secret in the cluster
-// with backplane elevation.
-func getPullSecretElevated(clusterID string, kubeCli *k8s.LazyClient, reason string) (email string, err error, sentSL bool) {
-	fmt.Println("Getting the pull-secret in the cluster with elevated permissions")
-	kubeCli.Impersonate(BackplaneClusterAdmin, reason, fmt.Sprintf("Elevation required to get pull secret email to check if it matches the owner email for %s cluster", clusterID))
+// getPullSecretElevated gets the pull-secret in the cluster with backplane elevation.
+func getPullSecretElevated(clusterID string, reason string) (email string, err error, sentSL bool) {
+	kubeClient, err := k8s.NewAsBackplaneClusterAdmin(clusterID, client.Options{}, reason)
+	if err != nil {
+		return "", fmt.Errorf("failed to login to cluster as 'backplane-cluster-admin': %w", err), false
+	}
+
 	secret := &corev1.Secret{}
-	if err := kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: "openshift-config", Name: "pull-secret"}, secret); err != nil {
+	if err := kubeClient.Get(context.TODO(), types.NamespacedName{Namespace: "openshift-config", Name: "pull-secret"}, secret); err != nil {
 		return "", err, false
 	}
 

@@ -88,7 +88,6 @@ func findDefaultRouteTableForVPC(awsClient aws.Client, vpcID string) (string, er
 // Try and find a Route Table associated with the given subnet for Egress Verification
 
 func FindRouteTableForSubnetForVerification(verificationAwsClient verificationAWSClient, subnetID string) (string, error) {
-
 	var routeTable string
 	describeRouteTablesOutput, err := verificationAwsClient.DescribeRouteTables(context.TODO(), &ec2.DescribeRouteTablesInput{
 		Filters: []types.Filter{

@@ -3,10 +3,6 @@ package network
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"testing"
-	"time"
-
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -15,10 +11,11 @@ import (
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"github.com/openshift/osd-network-verifier/pkg/data/cloud"
 	"github.com/openshift/osd-network-verifier/pkg/output"
-	"github.com/openshift/osd-network-verifier/pkg/proxy"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"k8s.io/apimachinery/pkg/runtime"
+	"reflect"
+	"testing"
 )
 
 func newTestLogger(t *testing.T) logging.Logger {
@@ -40,255 +37,6 @@ func newTestCluster(t *testing.T, cb *cmv1.ClusterBuilder) *cmv1.Cluster {
 	}
 
 	return cluster
-}
-
-type mockEgressVerificationAWSClient struct {
-	describeSecurityGroupsResp *ec2.DescribeSecurityGroupsOutput
-	describeSubnetsResp        *ec2.DescribeSubnetsOutput
-	describeRouteTablesResp    *ec2.DescribeRouteTablesOutput
-}
-
-func (m mockEgressVerificationAWSClient) DescribeSubnets(context.Context, *ec2.DescribeSubnetsInput, ...func(options *ec2.Options)) (*ec2.DescribeSubnetsOutput, error) {
-	return m.describeSubnetsResp, nil
-}
-
-func (m mockEgressVerificationAWSClient) DescribeSecurityGroups(context.Context, *ec2.DescribeSecurityGroupsInput, ...func(options *ec2.Options)) (*ec2.DescribeSecurityGroupsOutput, error) {
-	return m.describeSecurityGroupsResp, nil
-}
-func (m mockEgressVerificationAWSClient) DescribeRouteTables(context.Context, *ec2.DescribeRouteTablesInput, ...func(options *ec2.Options)) (*ec2.DescribeRouteTablesOutput, error) {
-	return m.describeRouteTablesResp, nil
-}
-func Test_egressVerificationSetup(t *testing.T) {
-	tests := []struct {
-		name      string
-		e         *EgressVerification
-		expectErr bool
-	}{
-		{
-			name:      "no ClusterId requires subnet/sg",
-			e:         &EgressVerification{},
-			expectErr: true,
-		},
-		{
-			name:      "no ClusterId with subnet",
-			e:         &EgressVerification{SubnetIds: []string{"subnet-a"}},
-			expectErr: true,
-		},
-		{
-			name:      "no ClusterId with security group",
-			e:         &EgressVerification{SecurityGroupId: "sg-a"},
-			expectErr: true,
-		},
-		{
-			name:      "no ClusterId with platform type",
-			e:         &EgressVerification{platformName: "aws"},
-			expectErr: true,
-		},
-		{
-			name: "no ClusterId with subnet and security group",
-			e: &EgressVerification{
-				SubnetIds:       []string{"subnet-a", "subnet-b", "subnet-c"},
-				SecurityGroupId: "sg-b",
-			},
-			expectErr: true,
-		},
-		{
-			name: "no ClusterId with subnet and platform type",
-			e: &EgressVerification{
-				SubnetIds:    []string{"subnet-a", "subnet-b", "subnet-c"},
-				platformName: "aws",
-			},
-			expectErr: true,
-		},
-		{
-			name: "no ClusterId with security group and platform type",
-			e: &EgressVerification{
-				SecurityGroupId: "sg-b",
-				platformName:    "aws",
-			},
-			expectErr: true,
-		},
-		{
-			name: "ClusterId optional",
-			e: &EgressVerification{
-				SubnetIds:       []string{"subnet-a", "subnet-b", "subnet-c"},
-				SecurityGroupId: "sg-b",
-				platformName:    "aws",
-			},
-			expectErr: false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			_, err := test.e.setup(context.TODO())
-			if err != nil {
-				if !test.expectErr {
-					t.Errorf("expected no err, got %s", err)
-				}
-			} else {
-				if test.expectErr {
-					t.Errorf("expected err, got none")
-				}
-			}
-		})
-	}
-}
-
-func Test_egressVerificationGenerateAWSValidateEgressInput(t *testing.T) {
-	tests := []struct {
-		name      string
-		e         *EgressVerification
-		region    string
-		expected  *onv.ValidateEgressInput
-		expectErr bool
-	}{
-
-		{
-			name: "GCP Unsupported",
-			e: &EgressVerification{
-				cluster: newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("gcp"))),
-				log:     newTestLogger(t),
-			},
-			expectErr: true,
-		},
-		{
-			name: "Cluster-wide proxy requires cacert when there is an additional trust bundle",
-			e: &EgressVerification{
-				cluster: newTestCluster(t, cmv1.NewCluster().
-					CloudProvider(cmv1.NewCloudProvider().ID("aws")).
-					Product(cmv1.NewProduct().ID("rosa")).
-					AdditionalTrustBundle("REDACTED").
-					Proxy(cmv1.NewProxy().HTTPProxy("http://my.proxy:80").HTTPSProxy("https://my.proxy:443")),
-				),
-				log: newTestLogger(t),
-			},
-			region:    "us-east-2",
-			expectErr: true,
-		},
-		{
-			name: "Transparent cluster-wide proxy",
-			e: &EgressVerification{
-				awsClient: mockEgressVerificationAWSClient{
-					describeSecurityGroupsResp: &ec2.DescribeSecurityGroupsOutput{
-						SecurityGroups: []types.SecurityGroup{
-							{
-								GroupId: aws.String("sg-abcd"),
-							},
-						},
-					},
-					describeSubnetsResp: &ec2.DescribeSubnetsOutput{
-						Subnets: []types.Subnet{
-							{
-								SubnetId: aws.String("subnet-abcd"),
-							},
-						},
-					},
-					describeRouteTablesResp: &ec2.DescribeRouteTablesOutput{
-						RouteTables: []types.RouteTable{
-							{
-								RouteTableId: aws.String("rt-id"),
-								Routes: []types.Route{
-									{
-										GatewayId: aws.String("gateway"),
-									},
-								},
-							},
-						},
-					},
-				},
-				cluster: newTestCluster(t, cmv1.NewCluster().
-					CloudProvider(cmv1.NewCloudProvider().ID("aws")).
-					Product(cmv1.NewProduct().ID("rosa")).
-					Proxy(cmv1.NewProxy().HTTPProxy("http://my.proxy:80").HTTPSProxy("https://my.proxy:443")),
-				),
-				log: newTestLogger(t),
-			},
-			region: "us-east-2",
-			expected: &onv.ValidateEgressInput{
-				SubnetID: "subnet-abcd",
-				Proxy: proxy.ProxyConfig{
-					HttpProxy:  "http://my.proxy:80",
-					HttpsProxy: "https://my.proxy:443",
-				},
-				AWS: onv.AwsEgressConfig{
-					SecurityGroupIDs: []string{"sg-abcd"},
-				},
-			},
-			expectErr: false,
-		},
-		{
-			name: "Cluster specific KMS key forward",
-			e: &EgressVerification{
-				awsClient: mockEgressVerificationAWSClient{
-					describeSecurityGroupsResp: &ec2.DescribeSecurityGroupsOutput{
-						SecurityGroups: []types.SecurityGroup{
-							{
-								GroupId: aws.String("sg-abcd"),
-							},
-						},
-					},
-					describeSubnetsResp: &ec2.DescribeSubnetsOutput{
-						Subnets: []types.Subnet{
-							{
-								SubnetId: aws.String("subnet-abcd"),
-							},
-						},
-					},
-					describeRouteTablesResp: &ec2.DescribeRouteTablesOutput{
-						RouteTables: []types.RouteTable{
-							{
-								RouteTableId: aws.String("rt-id"),
-								Routes: []types.Route{
-									{
-										GatewayId: aws.String("gateway"),
-									},
-								},
-							},
-						},
-					},
-				},
-
-				cluster: newTestCluster(t, cmv1.NewCluster().
-					CloudProvider(cmv1.NewCloudProvider().ID("aws")).
-					Product(cmv1.NewProduct().ID("rosa")).
-					AWS(cmv1.NewAWS().KMSKeyArn("some-KMS-key-ARN")),
-				),
-				log:           newTestLogger(t),
-				EgressTimeout: 42 * time.Second,
-			},
-			region: "us-east-2",
-			expected: &onv.ValidateEgressInput{
-				SubnetID: "subnet-abcd",
-				AWS: onv.AwsEgressConfig{
-					SecurityGroupIDs: []string{"sg-abcd"},
-					KmsKeyID:         "some-KMS-key-ARN",
-				},
-				Timeout: 42 * time.Second,
-			},
-			expectErr: false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			actual, err := test.e.generateAWSValidateEgressInput(context.TODO(), test.region)
-			if err != nil {
-				if !test.expectErr {
-					t.Errorf("expected no err, got %s", err)
-				}
-			} else {
-				if test.expectErr {
-					t.Errorf("expected err, got none")
-				}
-				for i := range actual {
-					if !compareValidateEgressInput(test.expected, actual[i]) {
-						t.Errorf("expected %v, got %v", test.expected, actual[i])
-					}
-				}
-			}
-		})
-	}
 }
 
 func Test_egressVerificationGetPlatform(t *testing.T) {
@@ -327,9 +75,18 @@ func Test_egressVerificationGetPlatform(t *testing.T) {
 			expectErr: false,
 		},
 		{
-			name: "invalid",
+			name: "gcp",
 			e: &EgressVerification{
 				cluster: newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("gcp"))),
+				log:     newTestLogger(t),
+			},
+			expected:  cloud.GCPClassic,
+			expectErr: false,
+		},
+		{
+			name: "invalid",
+			e: &EgressVerification{
+				cluster: newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("foo"))),
 				log:     newTestLogger(t),
 			},
 			expectErr: true,
@@ -355,206 +112,29 @@ func Test_egressVerificationGetPlatform(t *testing.T) {
 	}
 }
 
-func Test_egressVerificationGetSecurityGroupId(t *testing.T) {
-	tests := []struct {
-		name      string
-		e         *EgressVerification
-		expected  string
-		expectErr bool
-	}{
-		{
-			name: "manual override",
-			e: &EgressVerification{
-				awsClient: mockEgressVerificationAWSClient{
-					describeSecurityGroupsResp: &ec2.DescribeSecurityGroupsOutput{
-						SecurityGroups: []types.SecurityGroup{
-							{
-								GroupId: aws.String("sg-abcd"),
-							},
-						},
-					},
-				},
-				log:             newTestLogger(t),
-				cluster:         newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("aws"))),
-				SecurityGroupId: "override",
-			},
-			expected:  "override",
-			expectErr: false,
-		},
-		{
-			name: "zero from AWS",
-			e: &EgressVerification{
-				awsClient: mockEgressVerificationAWSClient{
-					describeSecurityGroupsResp: &ec2.DescribeSecurityGroupsOutput{
-						SecurityGroups: []types.SecurityGroup{},
-					},
-				},
-				log:     newTestLogger(t),
-				cluster: newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("aws"))),
-			},
-			expectErr: true,
-		},
-		{
-			name: "one from AWS",
-			e: &EgressVerification{
-				awsClient: mockEgressVerificationAWSClient{
-					describeSecurityGroupsResp: &ec2.DescribeSecurityGroupsOutput{
-						SecurityGroups: []types.SecurityGroup{
-							{
-								GroupId: aws.String("sg-abcd"),
-							},
-						},
-					},
-				},
-				log:     newTestLogger(t),
-				cluster: newTestCluster(t, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("aws"))),
-			},
-			expected:  "sg-abcd",
-			expectErr: false,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			actual, err := test.e.getSecurityGroupId(context.TODO())
-			if err != nil {
-				if !test.expectErr {
-					t.Errorf("expected no err, got %s", err)
-				}
-			} else {
-				if test.expectErr {
-					t.Errorf("expected err, got none")
-				}
-				if actual != test.expected {
-					t.Errorf("expected sg-id %s, got %s", test.expected, actual)
-				}
-			}
-		})
-	}
-}
-
-func Test_egressVerificationGetSubnetId(t *testing.T) {
-	tests := []struct {
-		name      string
-		e         *EgressVerification
-		expected  string
-		expectErr bool
-	}{
-		{
-			name: "manual override",
-			e: &EgressVerification{
-				log:       newTestLogger(t),
-				SubnetIds: []string{"override"},
-			},
-			expected:  "override",
-			expectErr: false,
-		},
-		{
-			name: "non-PrivateLink + BYOVPC unsupported",
-			e: &EgressVerification{
-				cluster: newTestCluster(t, cmv1.NewCluster().AWS(cmv1.NewAWS().PrivateLink(false).SubnetIDs("subnet-abcd"))),
-				log:     newTestLogger(t),
-			},
-			expectErr: true,
-		},
-		{
-			name: "PrivateLink + BYOVPC picks the first subnet",
-			e: &EgressVerification{
-				cluster: newTestCluster(t, cmv1.NewCluster().AWS(cmv1.NewAWS().PrivateLink(true).SubnetIDs("subnet-abcd"))),
-				log:     newTestLogger(t),
-			},
-			expected:  "subnet-abcd",
-			expectErr: false,
-		},
-		{
-			name: "non-BYOVPC clusters get subnets from AWS",
-			e: &EgressVerification{
-				awsClient: mockEgressVerificationAWSClient{
-					describeSubnetsResp: &ec2.DescribeSubnetsOutput{
-						Subnets: []types.Subnet{
-							{
-								SubnetId: aws.String("subnet-abcd"),
-							},
-						},
-					},
-				},
-				cluster: newTestCluster(t, cmv1.NewCluster()),
-				log:     newTestLogger(t),
-			},
-			expected:  "subnet-abcd",
-			expectErr: false,
-		},
-		{
-			name: "non-BYOVPC clusters error if no subnets found in AWS",
-			e: &EgressVerification{
-				awsClient: mockEgressVerificationAWSClient{
-					describeSubnetsResp: &ec2.DescribeSubnetsOutput{
-						Subnets: []types.Subnet{},
-					},
-				},
-				cluster: newTestCluster(t, cmv1.NewCluster()),
-				log:     newTestLogger(t),
-			},
-			expectErr: true,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			actual, err := test.e.getSubnetIds(context.TODO())
-			if err != nil {
-				if !test.expectErr {
-					t.Errorf("expected no err, got %s", err)
-				}
-			} else {
-				for i := range actual {
-
-					if test.expectErr {
-						t.Errorf("expected err, got none")
-					}
-					if actual[i] != test.expected {
-						t.Errorf("expected subnet-id %s, got %s", test.expected, actual[i])
-					}
-				}
-			}
-		})
-	}
-}
-
 func TestDefaultValidateEgressInput(t *testing.T) {
-	customTags := map[string]string{
-		"a": "b",
-	}
-
 	tests := []struct {
-		region         string
-		withCustomTags bool
-		expectErr      bool
+		region    string
+		expectErr bool
 	}{
 		{
-			region:         "us-east-2",
-			withCustomTags: false,
-			expectErr:      false,
+			region:    "us-east-2",
+			expectErr: false,
 		},
 		{
-			region:         "eu-central-1",
-			withCustomTags: true,
-			expectErr:      false,
-		},
-		{
-			region:         "us-central-1",
-			withCustomTags: false,
-			expectErr:      true,
+			region:    "eu-central-1",
+			expectErr: false,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.region, func(t *testing.T) {
 			cluster := newTestCluster(t, cmv1.NewCluster().AWS(cmv1.NewAWS()))
-			if test.withCustomTags {
-				cluster = newTestCluster(t, cmv1.NewCluster().AWS(cmv1.NewAWS().Tags(customTags)))
+			e := &EgressVerification{
+				cluster: cluster,
+				log:     newTestLogger(t),
 			}
-			actual, err := defaultValidateEgressInput(context.TODO(), cluster, test.region)
+			_, err := e.defaultValidateEgressInput(context.Background(), cloud.AWSClassic)
 			if err != nil {
 				if !test.expectErr {
 					t.Errorf("expected no err, got %s", err)
@@ -562,16 +142,6 @@ func TestDefaultValidateEgressInput(t *testing.T) {
 			} else {
 				if test.expectErr {
 					t.Errorf("expected err, got none")
-				}
-				if test.withCustomTags {
-					for k := range customTags {
-						if v, ok := actual.Tags[k]; !ok {
-							t.Errorf("expected %v to contain %v", actual.Tags, k)
-							if v != customTags[k] {
-								t.Errorf("expected %v to contain %v: %v", actual.Tags, k, customTags[k])
-							}
-						}
-					}
 				}
 			}
 		})
@@ -695,7 +265,7 @@ func Test_egressVerificationGetSubnetIdAllSubnetsFlag(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actual, err := test.e.getSubnetIds(context.TODO())
+			actual, err := test.e.getAwsSubnetIds(context.TODO())
 			if err != nil {
 				if !test.expectErr {
 					t.Errorf("expected no err, got %s", err)

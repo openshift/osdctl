@@ -42,7 +42,7 @@ func NewCmdHCPMustGather() *cobra.Command {
 
 	hcpMgCmd.Flags().IntVar(&since, "since", 10, "Number of hours (integer) since which to pull logs and events")
 	hcpMgCmd.Flags().IntVar(&tail, "tail", 0, "Last 'n' logs and events to fetch. By default it will pull everything")
-	hcpMgCmd.Flags().StringVar(&sortOrder, "sort", "desc", "Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'")
+	hcpMgCmd.Flags().StringVar(&sortOrder, "sort", "asc", "Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'")
 
 	return hcpMgCmd
 }
@@ -65,7 +65,7 @@ func gatherLogs(clusterID string) (error error) {
 
 	fmt.Printf("Using HCP Namespace %v\n", hcpCluster.hcpNamespace)
 
-	gatherNamespaces := []string{hcpCluster.hcpNamespace, hcpCluster.klusterletNS, hcpCluster.hostedNS, "hypershift", "cert-manager", "redhat-cert-manager-operator"}
+	gatherNamespaces := []string{hcpCluster.hcpNamespace, hcpCluster.klusterletNS, hcpCluster.hostedNS, "hypershift", "cert-manager", "redhat-cert-manager-operator", "open-cluster-management-agent", "open-cluster-management-agent-addon"}
 	gatherDir, err := setupGatherDir(hcpCluster.hcpNamespace)
 	if err != nil {
 		return err
