@@ -38,10 +38,12 @@ import (
 
 var BackplaneClusterAdmin = "backplane-cluster-admin"
 
+// Default auth section used to validate ocm account email againstsa
 const cloudAuthKey = "cloud.openshift.com"
 
 type Result int
 
+// Const values for results table entries
 const (
 	Fail Result = iota
 	Pass
@@ -50,18 +52,19 @@ const (
 
 // validatePullSecretOptions defines the struct for running validate-pull-secret command
 type validatePullSecretOptions struct {
-	//elevate   bool //This appears unused ?
-	account           *v1.Account
-	clusterID         string
-	kubeCli           *k8s.LazyClient
-	reason            string
-	hiveOCMConfigPath string
-	ocm               *sdk.Connection
-	results           *printer.Printer
-	debugEnabled      bool
-	log               logging.Logger
-	verboseLevel      int             //Logging level
-	ctx               context.Context // Context to user for rotation ops
+	account           *v1.Account      // Account which owns target cluster
+	clusterID         string           // Target cluster containing pull-secret to be validated against OCM values
+	kubeCli           *k8s.LazyClient  // Kubecli/api client for target cluster
+	reason            string           // Reason or justification for accessing sensitive data. (ie jira ticket)
+	hiveOCMConfigPath string           // Optional path to OCM config used to access hive cluster
+	ocm               *sdk.Connection  // openshift api client
+	results           *printer.Printer // Used for printing tabled results
+	log               logging.Logger   // Simple stderr logger
+	verboseLevel      int              // Logging level
+	ctx               context.Context  // Context to user for rotation ops
+	checkHive         bool             // Flag to validate hive secret data against ocm values
+	useAccessToken    bool             // Flag to use OCM access token values for validations
+	useRegCreds       bool             // Flag to use OCM registry credentials values for validations
 }
 
 func newCmdValidatePullSecret(kubeCli *k8s.LazyClient) *cobra.Command {
@@ -73,21 +76,23 @@ func newCmdValidatePullSecret(kubeCli *k8s.LazyClient) *cobra.Command {
 	Attempts to validate if a cluster's pull-secret auth and email values are in sync with account, 
 	registry_credential, and access token data stored in OCM. 
 	This requires the caller to be logged into the cluster to be validated. 
-	Note: This utility attempts to validate that the data stored in the pull-secret on the cluster
-	is in sync with data stored in OCM. It does not attempt to validate that the cluster pull-secret is in sync with Hive, 
-	and/or that Hive is in-sync with OCM. 
 `,
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
-		PreRun:            func(cmd *cobra.Command, args []string) { cmdutil.CheckErr(ops.preRun()) },
+		PreRun:            func(cmd *cobra.Command, args []string) { cmdutil.CheckErr(ops.preRun(cmd, args)) },
 		Run: func(cmd *cobra.Command, args []string) {
-			ops.clusterID = args[0]
+			//ops.clusterID = args[0]
 			cmdutil.CheckErr(ops.run())
 		},
 	}
-	validatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command to be run (usualy an OHSS or PD ticket), mandatory when using elevate")
+	validatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command to be run (usually an OHSS or PD ticket), mandatory when using elevate")
 	validatePullSecretCmd.Flags().StringVar(&ops.hiveOCMConfigPath, "hive-config-path", "", "Path to OCM 'prod' config used to connect to hive when target cluster is using 'stage' or 'integration' envs ")
 	validatePullSecretCmd.Flags().IntVarP(&ops.verboseLevel, "verbose", "v", 3, "debug=4, (default)info=3, warn=2, error=1")
+	validatePullSecretCmd.Flags().BoolVar(&ops.checkHive, "check-hive", false, "Check values on Hive against OCM for this target cluster")
+	validatePullSecretCmd.Flags().BoolVar(&ops.useAccessToken, "check-token", false, "Check OCM Access Token Auth values against cluster")
+	validatePullSecretCmd.Flags().BoolVar(&ops.useRegCreds, "check-regcreds", false, "Check OCM Registry Credentials against cluster")
+	validatePullSecretCmd.Flags().Bool("check-all", true, "Run all checks: Access Token, Registry Credentials, Hive.")
+
 	_ = validatePullSecretCmd.MarkFlagRequired("reason")
 	return validatePullSecretCmd
 }
@@ -98,7 +103,12 @@ func newValidatePullSecretOptions(client *k8s.LazyClient) *validatePullSecretOpt
 	}
 }
 
-func (o *validatePullSecretOptions) preRun() error {
+func (o *validatePullSecretOptions) preRun(cmd *cobra.Command, args []string) error {
+	if len(args) != 1 {
+		return cmdutil.UsageErrorf(cmd, "Required 1 positional arg for 'Cluster ID'")
+	}
+	o.clusterID = args[0]
+
 	// init context
 	o.ctx = context.TODO()
 
@@ -113,34 +123,6 @@ func (o *validatePullSecretOptions) preRun() error {
 		return fmt.Errorf("failed to build logger: %s", err)
 	}
 	o.log = logger
-
-	// init results table...
-	o.results = printer.NewTablePrinter(os.Stdout, 1, 1, 1, ' ')
-	o.results.AddRow([]string{"----------", "----", "---------", "------", "____", "______"})
-	o.results.AddRow([]string{"OCM_SOURCE", "AUTH", "NAMESPACE", "SECRET", "ATTR", "RESULT"})
-	o.results.AddRow([]string{"----------", "----", "---------", "------", "____", "______"})
-	return nil
-}
-
-func (o *validatePullSecretOptions) run() error {
-	var err error
-	// Create OCM connection...
-	o.ocm, err = utils.CreateConnection()
-	if err != nil {
-		return err
-	}
-	// Defer closing OCM connection once run() completes...
-	defer func() {
-		if ocmCloseErr := o.ocm.Close(); ocmCloseErr != nil {
-			o.log.Warn(o.ctx, "Cannot close OCM connection (possible memory leak): %q", ocmCloseErr)
-		}
-	}()
-
-	// Print whatever results are available when done
-	defer func() {
-		fmt.Println("\n")
-		o.results.Flush()
-	}()
 
 	// Check that current kubecli connection is established, and to the correct cluster...
 	//TODO: to avoid relying on external config/connection, this tool should establish the backplane connection?
@@ -165,17 +147,46 @@ func (o *validatePullSecretOptions) run() error {
 			o.clusterID = clusterID
 		}
 	}
+	// init results table...
+	o.results = printer.NewTablePrinter(os.Stdout, 1, 1, 1, ' ')
+	o.results.AddRow([]string{"----------", "----", "---------", "------", "____", "______"})
+	o.results.AddRow([]string{"OCM_SOURCE", "AUTH", "NAMESPACE", "SECRET", "ATTR", "RESULT"})
+	o.results.AddRow([]string{"----------", "----", "---------", "------", "____", "______"})
+
+	return nil
+}
+
+func (o *validatePullSecretOptions) run() error {
+	var err error
+	// Create OCM connection...
+	o.ocm, err = utils.CreateConnection()
+	if err != nil {
+		return err
+	}
+	// Defer closing OCM connection once run() completes...
+	defer func() {
+		if ocmCloseErr := o.ocm.Close(); ocmCloseErr != nil {
+			o.log.Warn(o.ctx, "Cannot close OCM connection (possible memory leak): %q", ocmCloseErr)
+		}
+	}()
+
+	// Defer printing whatever results are available when run() returns
+	defer func() {
+		fmt.Printf("\n\n")
+		o.results.Flush()
+	}()
 
 	// get account info from OCM
 	o.account, err = o.getOCMAccountInfo()
 	if err != nil {
 		return err
 	}
+	// account email to be for auth comparison
 	emailOCM := o.account.Email()
 	o.log.Info(o.ctx, "Found email for cluster's OCM account: %s\n", emailOCM)
 
 	// Get a portion of the pull secret from OCM registry_credentials
-	// Note: this does not contain the token from: '/api/accounts_mgmt/v1/access_token'
+	// Note: this does not contain the remaining auths from from: '/api/accounts_mgmt/v1/access_token'
 	regCreds, err, done := o.getOCMRegistryCredentials(o.account.ID())
 	if err != nil {
 		return err
@@ -217,9 +228,8 @@ func (o *validatePullSecretOptions) run() error {
 	if err != nil {
 		return err
 	}
-	o.log.Debug(o.ctx, "Checking OCM AccessToken auth values against secret:%s:%s on cluster...\n", pullSecret.Namespace, pullSecret.Name)
 	/* Compare OCM stored access token to cluster's pull secret...*/
-
+	o.log.Debug(o.ctx, "Checking OCM AccessToken auth values against secret:%s:%s on cluster...\n", pullSecret.Namespace, pullSecret.Name)
 	userName := o.account.Username()
 	if len(userName) <= 0 {
 		return fmt.Errorf("found empty 'username', needed for accessToken. See account:'%s'", o.account.HREF())
@@ -675,7 +685,7 @@ func getPullSecretTokenAuth(registryID string, secret *corev1.Secret) (*v1.Acces
 // getPullSecretElevated gets the pull-secret in the cluster
 // with backplane elevation.
 func getPullSecretElevated(clusterID string, kubeCli *k8s.LazyClient, reason string, secret *corev1.Secret) (email string, err error, sentSL bool) {
-	fmt.Fprintf(os.Stderr, "Getting the pull-secret in the cluster with elevated permissions")
+	fmt.Fprintf(os.Stderr, "Getting the pull-secret in the cluster with elevated permissions\n")
 	kubeCli.Impersonate(BackplaneClusterAdmin, reason, fmt.Sprintf("Elevation required to get pull secret email to check if it matches the owner email for %s cluster", clusterID))
 	//secret := &corev1.Secret{}
 	if err := kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: "openshift-config", Name: "pull-secret"}, secret); err != nil {
@@ -687,7 +697,7 @@ func getPullSecretElevated(clusterID string, kubeCli *k8s.LazyClient, reason str
 	if done {
 		return "", err, true
 	}
-	fmt.Fprintf(os.Stderr, "Email from cluster pull-secret['%s]: %s\n", cloudAuthKey, clusterPullSecretEmail)
+	fmt.Fprintf(os.Stderr, "Email from cluster pull-secret auth['%s]: %s\n", cloudAuthKey, clusterPullSecretEmail)
 
 	return clusterPullSecretEmail, nil, false
 }
