@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/fatih/color"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
@@ -30,8 +31,6 @@ import (
 	kubernetes "k8s.io/client-go/kubernetes"
 	k8srest "k8s.io/client-go/rest"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-
-	"github.com/fatih/color"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8sclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -48,6 +47,34 @@ const (
 	Fail Result = iota
 	Pass
 	NotRun
+)
+
+const (
+	examples = `
+	# Compare OCM Access-Token, Registry-Credentials, and Account Email against cluster's secret
+	# Note: OCM permissions may generate prompt to exclude AccessToken checks	
+	osdctl cluster validate-pull-secret ${CLUSTER_ID} --reason "OSD-XYZ" 
+
+	# Compare both Cluster and Hive secrets to OCM
+	osdctl cluster validate-pull-secret ${CLUSTER_ID} --reason "OSD-XYZ" --hive	
+
+	# Run against STAGE or INTEGRATION Cluster + Hive
+	# Note: Current OCM env vars are assumed to be STAGE/INT, 
+	#        and a production OCM config must be provided in this case
+	osdctl cluster validate-pull-secret ${CLUSTER_ID} --reason "OSD-XYZ" --hive-ocmconfig ~/.config/ocm/ocm.prod.json --hive
+
+	# Exclude Access-Token, and Registry-Credential checks...
+	osdctl cluster validate-pull-secret ${CLUSTER_ID} --reason "OSD-XYZ" --no-token --no-regcreds
+
+	# Check Hive only...
+	osdctl cluster validate-pull-secret ${CLUSTER_ID} --reason "OSD-XYZ" --hive-only
+	
+	`
+	longDesc = `
+	Attempts to validate if a cluster's pull-secret auth and email values are in sync with account, 
+	registry_credential, and access token data stored in OCM. 
+	This requires the caller to be logged into the cluster to be validated. 
+	`
 )
 
 type validation struct {
@@ -80,13 +107,10 @@ type validatePullSecretOptions struct {
 func newCmdValidatePullSecret() *cobra.Command {
 	ops := newValidatePullSecretOptions()
 	validatePullSecretCmd := &cobra.Command{
-		Use:   "validate-pull-secret [CLUSTER_ID]",
-		Short: "Checks if the pull-secret data is synced with current OCM data",
-		Long: `
-	Attempts to validate if a cluster's pull-secret auth and email values are in sync with account, 
-	registry_credential, and access token data stored in OCM. 
-	This requires the caller to be logged into the cluster to be validated. 
-`,
+		Use:               "validate-pull-secret [CLUSTER_ID]",
+		Short:             "Checks if the pull-secret data is synced with current OCM data",
+		Long:              longDesc,
+		Example:           examples,
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		PreRun:            func(cmd *cobra.Command, args []string) { cmdutil.CheckErr(ops.preRun(cmd, args)) },

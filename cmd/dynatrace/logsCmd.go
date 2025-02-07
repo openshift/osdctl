@@ -17,11 +17,12 @@ var (
 	contains      string
 	sortOrder     string
 	clusterID     string
+	pod           string
 	namespaceList []string
 	nodeList      []string
-	podList       []string
 	containerList []string
 	statusList    []string
+	console       bool
 )
 
 const (
@@ -56,7 +57,7 @@ func NewCmdLogs() *cobra.Command {
 		Short:             "Fetch logs from Dynatrace",
 		Long:              logsCmdDescription,
 		Example:           logsCmdExample,
-		Args:              cobra.NoArgs,
+		Args:              cobra.MaximumNArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			var err error
@@ -66,6 +67,11 @@ func NewCmdLogs() *cobra.Command {
 					cmdutil.CheckErr(err)
 				}
 			}
+
+			if len(args) > 0 {
+				pod = args[0]
+			}
+
 			err = main(clusterID)
 			if err != nil {
 				cmdutil.CheckErr(err)
@@ -75,16 +81,15 @@ func NewCmdLogs() *cobra.Command {
 
 	logsCmd.Flags().StringVar(&clusterID, "cluster", "", "Name or ID of the cluster (defaults to current cluster context)")
 	logsCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Only builds the query without fetching any logs from the tenant")
-	logsCmd.Flags().IntVar(&tail, "tail", 100, "Last 'n' logs to fetch (defaults to 100)")
+	logsCmd.Flags().IntVar(&tail, "tail", 1000, "Last 'n' logs to fetch (defaults to 100)")
 	logsCmd.Flags().IntVar(&since, "since", 1, "Number of hours (integer) since which to search (defaults to 1 hour)")
 	logsCmd.Flags().StringVar(&contains, "contains", "", "Include logs which contain a phrase")
-	logsCmd.Flags().StringVar(&sortOrder, "sort", "desc", "Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'")
+	logsCmd.Flags().StringVar(&sortOrder, "sort", "asc", "Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'. Defaults to 'asc'")
 	logsCmd.Flags().StringSliceVar(&nodeList, "node", []string{}, "Node name(s) (comma-separated)")
-	logsCmd.Flags().StringSliceVar(&podList, "pod", []string{}, "Pod name(s) (comma-separated)")
-	logsCmd.Flags().StringSliceVar(&podList, "po", []string{}, "Pod name(s) (comma-separated)")
 	logsCmd.Flags().StringSliceVar(&statusList, "status", []string{}, "Status(Info/Warn/Error) (comma-separated)")
 	logsCmd.Flags().StringSliceVar(&containerList, "container", []string{}, "Container name(s) (comma-separated)")
 	logsCmd.Flags().StringSliceVarP(&namespaceList, "namespace", "n", []string{}, "Namespace(s) (comma-separated)")
+	logsCmd.Flags().BoolVar(&console, "console", false, "Print the url to the dynatrace web console instead of outputting the logs")
 
 	return logsCmd
 }
@@ -114,7 +119,7 @@ func GetLinkToWebConsole(dtURL string, since int, finalQuery string) (string, er
 					"filters":  map[string]interface{}{},
 					"sort": map[string]interface{}{
 						"field":     "timestamp",
-						"direction": "desc",
+						"direction": sortOrder,
 					},
 				},
 				"showDqlEditor": true,
@@ -138,6 +143,10 @@ func main(clusterID string) error {
 		return fmt.Errorf("failed to acquire cluster details %v", err)
 	}
 
+	if sortOrder != "asc" && sortOrder != "desc" {
+		return fmt.Errorf("invalid sort order, expecting 'asc' or 'desc'")
+	}
+
 	query, err := GetQuery(hcpCluster)
 	if err != nil {
 		return fmt.Errorf("failed to build query for Dynatrace %v", err)
@@ -145,15 +154,17 @@ func main(clusterID string) error {
 
 	fmt.Println(query.Build())
 
-	url, err := GetLinkToWebConsole(hcpCluster.DynatraceURL, since, query.finalQuery)
+	if console {
+		url, err := GetLinkToWebConsole(hcpCluster.DynatraceURL, since, query.finalQuery)
+		if err != nil {
+			return fmt.Errorf("failed to get url: %v", err)
+		}
 
-	if err != nil {
-		return fmt.Errorf("failed to get url: %v:", err)
-	}
+		fmt.Println("\nLink to Web Console - \n", url)
 
-	fmt.Println("\nLink to Web Console - \n", url)
-
-	if dryRun {
+		if dryRun {
+			return nil
+		}
 		return nil
 	}
 
@@ -190,8 +201,8 @@ func GetQuery(hcpCluster HCPCluster) (query DTQuery, error error) {
 		q.Nodes(nodeList)
 	}
 
-	if len(podList) > 0 {
-		q.Pods(podList)
+	if len(pod) > 0 {
+		q.Pods([]string{pod})
 	}
 
 	if len(containerList) > 0 {
