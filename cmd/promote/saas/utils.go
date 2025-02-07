@@ -73,9 +73,6 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	}
 	fmt.Printf("Service: %s will be promoted to %s\n", serviceName, promotionGitHash)
 
-	if err != nil {
-		return fmt.Errorf("error in executing git log: %v", err)
-	}
 	branchName := fmt.Sprintf("promote-%s-%s", serviceName, promotionGitHash)
 	err = appInterface.UpdateAppInterface(serviceName, saasDir, currentGitHash, promotionGitHash, branchName)
 	if err != nil {
