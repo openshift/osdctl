@@ -61,7 +61,7 @@ const (
 	# Run against STAGE or INTEGRATION Cluster + Hive
 	# Note: Current OCM env vars are assumed to be STAGE/INT, 
 	#        and a production OCM config must be provided in this case
-	osdctl cluster validate-pull-secret ${CLUSTER_ID} --reason "OSD-XYZ" --hive-ocmconfig ~/.config/ocm/ocm.prod.json --hive
+	osdctl cluster validate-pull-secret ${CLUSTER_ID} --reason "OSD-XYZ" --hive-ocm ~/.config/ocm/ocm.prod.json --hive
 
 	# Exclude Access-Token, and Registry-Credential checks...
 	osdctl cluster validate-pull-secret ${CLUSTER_ID} --reason "OSD-XYZ" --no-token --no-regcreds
@@ -72,8 +72,7 @@ const (
 	`
 	longDesc = `
 	Attempts to validate if a cluster's pull-secret auth and email values are in sync with account, 
-	registry_credential, and access token data stored in OCM. 
-	This requires the caller to be logged into the cluster to be validated. 
+	registry_credential, and access token data stored in OCM.  
 	`
 )
 
@@ -118,13 +117,13 @@ func newCmdValidatePullSecret() *cobra.Command {
 			cmdutil.CheckErr(ops.run())
 		},
 	}
-	validatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command to be run (usually an OHSS or PD ticket), mandatory when using elevate")
+	validatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command to be run (usually an OHSS or PD ticket).")
 	validatePullSecretCmd.Flags().IntVarP(&ops.verboseLevel, "verbose", "v", 3, "debug=4, (default)info=3, warn=2, error=1")
 	validatePullSecretCmd.Flags().BoolVar(&ops.checkHive, "hive", false, "Check secret values on Hive against OCM for this target cluster")
-	validatePullSecretCmd.Flags().BoolVar(&ops.hiveOnly, "hive-only", false, "Check Hive only, exclude checks against target cluster")
-	validatePullSecretCmd.Flags().StringVar(&ops.hiveOCMConfigPath, "hive-ocmconfig", "", "Path to OCM 'prod' config used to connect to hive when target cluster is using 'stage' or 'integration' envs ")
+	validatePullSecretCmd.Flags().BoolVar(&ops.hiveOnly, "hive-only", false, "Exclude checks against target cluster. Check Hive only.")
+	validatePullSecretCmd.Flags().StringVar(&ops.hiveOCMConfigPath, "hive-ocm", "", "Path to OCM 'prod' config used to connect to hive when target cluster is using 'stage' or 'integration' envs ")
 	validatePullSecretCmd.Flags().Bool("no-regcreds", false, "Exclude OCM Registry Credentials checks against cluster secret")
-	validatePullSecretCmd.Flags().Bool("no-token", false, "Check OCM Access Token Auth values against cluster secret")
+	validatePullSecretCmd.Flags().Bool("no-token", false, "Exclude OCM Access Token checks against cluster secret")
 
 	_ = validatePullSecretCmd.MarkFlagRequired("reason")
 	return validatePullSecretCmd
