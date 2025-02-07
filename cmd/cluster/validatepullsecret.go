@@ -384,7 +384,7 @@ func (o *validatePullSecretOptions) run() error {
 
 func (o *validatePullSecretOptions) validateAuthEmail(pullSecret *corev1.Secret, emailOCM string, authKey string) error {
 	// Extract email from cluster pull-secret.
-	emailCluster, err := getPullSecretEmail(o.clusterID, pullSecret, authKey)
+	emailCluster, err := getPullSecretEmail(o.clusterID, pullSecret, authKey, true)
 	if err != nil {
 		o.log.Error(o.ctx, "Error fetching pull secret email:'%s'", err)
 		return err
@@ -941,16 +941,19 @@ func sendServiceLog(postCmd servicelog.PostCmdOptions, message string) error {
 }
 
 // getPullSecretEmail extract the email from the pull-secret secret in cluster
-func getPullSecretEmail(clusterID string, secret *corev1.Secret, authKey string) (string, error) {
+func getPullSecretEmail(clusterID string, secret *corev1.Secret, authKey string, serviceLogPrompt bool) (string, error) {
 	dockerConfigJsonBytes, found := secret.Data[".dockerconfigjson"]
+	var err error = nil
 	if !found {
 		// Indicates issue w/ pull-secret, so we can stop evaluating and specify a more direct course of action
-		err := fmt.Errorf("secret does not contain expected key '.dockerconfigjson'")
-		postCmd := servicelog.PostCmdOptions{
-			Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json",
-			ClusterId: clusterID,
+		err = fmt.Errorf("secret does not contain expected key '.dockerconfigjson'")
+		if serviceLogPrompt {
+			postCmd := servicelog.PostCmdOptions{
+				Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json",
+				ClusterId: clusterID,
+			}
+			sendServiceLog(postCmd, fmt.Sprintf("%s", err))
 		}
-		sendServiceLog(postCmd, fmt.Sprintf("%s", err))
 		return "", err
 	}
 
@@ -962,12 +965,14 @@ func getPullSecretEmail(clusterID string, secret *corev1.Secret, authKey string)
 
 	auth, found := dockerConfigJson.Auths()[authKey]
 	if !found {
-		err := fmt.Errorf("secret does not contain entry for %s", authKey)
-		postCmd := servicelog.PostCmdOptions{
-			Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json",
-			ClusterId: clusterID,
+		err = fmt.Errorf("secret does not contain entry for %s", authKey)
+		if serviceLogPrompt {
+			postCmd := servicelog.PostCmdOptions{
+				Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json",
+				ClusterId: clusterID,
+			}
+			sendServiceLog(postCmd, fmt.Sprintf("%s", err))
 		}
-		sendServiceLog(postCmd, fmt.Sprintf("%s", err))
 		return "", err
 	}
 
