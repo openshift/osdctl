@@ -39,6 +39,10 @@ func TestGetAWSAccount(t *testing.T) {
 			title: "success",
 			localObjects: []runtime.Object{
 				&awsv1alpha1.Account{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "Account",
+						APIVersion: "aws.managed.openshift.io/v1alpha1",
+					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "bar",
 						Namespace: "foo",
@@ -160,6 +164,10 @@ func TestGetAWSAccountClaim(t *testing.T) {
 			title: "success",
 			localObjects: []runtime.Object{
 				&awsv1alpha1.AccountClaim{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "AccountClaim",
+						APIVersion: "aws.managed.openshift.io/v1alpha1",
+					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "bar",
 						Namespace: "foo",

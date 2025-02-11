@@ -29,7 +29,6 @@ require (
 	github.com/coreos/go-semver v0.3.1
 	github.com/deckarep/golang-set v1.8.0
 	github.com/fatih/color v1.18.0
-	github.com/golang/mock v1.6.0
 	github.com/google/go-github/v63 v63.0.0
 	github.com/google/uuid v1.6.0
 	github.com/olekukonko/tablewriter v0.0.5
@@ -40,6 +39,7 @@ require (
 	github.com/openshift/api v0.0.0-20250207102212-9e59a77ed2e0
 	github.com/openshift/aws-account-operator/api v0.0.0-20250205151445-6455c35fc4ae
 	github.com/openshift/backplane-cli v0.1.39
+	github.com/openshift/client-go v0.0.0-20250131180035-f7ec47e2d87a
 	github.com/openshift/cloud-credential-operator v0.0.0-20250120201329-db5f2531a5b4
 	github.com/openshift/gcp-project-operator v0.0.0-20241024143818-ec4eabd35aba
 	github.com/openshift/hive/apis v0.0.0-20250206153200-5a34ea42e678
@@ -213,7 +213,6 @@ require (
 	github.com/oasdiff/yaml v0.0.0-20241214135536-5f7845c759c8 // indirect
 	github.com/oasdiff/yaml3 v0.0.0-20241214160948-977117996672 // indirect
 	github.com/openshift/backplane-api v0.0.0-20241127094828-0f66644ff53d // indirect
-	github.com/openshift/client-go v0.0.0-20250131180035-f7ec47e2d87a // indirect
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 // indirect
 	github.com/openshift/library-go v0.0.0-20250203131244-80620876b7c2 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
