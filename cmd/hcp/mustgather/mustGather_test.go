@@ -79,7 +79,7 @@ func TestCreateTarball_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create the tarball
-	tarballName := fmt.Sprintf("%s/testdata.tar.gz", dir)
+	tarballName := fmt.Sprintf("%s/osdctl-targz-test-output-testdata.tar.gz", "/tmp")
 	err = createTarball(dir, tarballName)
 	require.NoError(t, err)
 
