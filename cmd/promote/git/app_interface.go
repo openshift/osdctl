@@ -334,7 +334,6 @@ func (a AppInterface) CommitSaasFile(saasFile, commitMessage string) error {
 		return fmt.Errorf("failed to add file %s: %v", saasFile, err)
 	}
 
-	//commitMessage := fmt.Sprintf("Promote %s to %s", serviceName, promotionGitHash)
 	cmd = exec.Command("git", "commit", "-m", commitMessage)
 	cmd.Dir = a.GitDirectory
 	err = cmd.Run()
