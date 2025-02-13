@@ -332,17 +332,17 @@ osdctl cluster break-glass cleanup <cluster identifier>
 ### Cluster Dynatrace
 #### Fetch logs from Dynatrace
 ```bash
-osdctl cluster dynatrace logs
+osdctl dt logs
 ```
 
 #### Gather all Pod logs and Application event from HCP
 ```bash
-osdctl cluster dynatrace gather-logs <cluster-id>
+osdctl dt gather-logs <cluster-id>
 ```
 
 #### Get Dynatrace Tenant URL for given MC or HCP cluster
 ```bash
-osdctl cluster dynatrace url <cluster-id>
+osdctl dt url <cluster-id>
 ```
 
 ### Send a servicelog to a cluster

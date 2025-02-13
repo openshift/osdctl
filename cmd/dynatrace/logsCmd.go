@@ -34,20 +34,26 @@ const (
 `
 
 	logsCmdExample = `
-  # Get the logs of HCP cluster in current cluster context.
-  $ osdctl cluster dynatrace logs
+  # Get the logs of the cluster in the current context.
+  $ osdctl dt logs
 
-  # Get the logs of a specific HCP cluster
-  $ osdctl cluster dynatrace logs --cluster <cluster-id>
+  # Get the logs of a specific cluster
+  $ osdctl dt logs --cluster <cluster-id>
 
-  # Get the logs of the pod alertmanager-main-0 in namespace openshift-monitoring
-  $ osdctl cluster dynatrace logs --po alertmanager-main-0 --namespace openshift-monitoring
+ # Get a link to the dynatrace UI for the current cluster context.
+  $ osdctl dt logs --console
+
+  # Get the logs of the pod alertmanager-main-0 in namespace openshift-monitoring in the current cluster context.
+  $ osdctl dt logs alertmanager-main-0 -n openshift-monitoring
+
+ # Get the logs of the pod alertmanager-main-0 in namespace openshift-monitoring for a specific HCP cluster
+  $ osdctl dt logs alertmanager-main-0 -n openshift-monitoring --cluster <cluster-id>
 
   # Only return logs newer than 2 hours old (an integer in hours)
-  $ osdctl cluster dynatrace logs --since 2
+  $ osdctl dt logs alertmanager-main-0 -n openshift-monitoring --since 2
 
   # Restrict return of logs to those that contain a specific phrase
-  $ osdctl cluster dynatrace logs --contains <phrase>
+  $ osdctl dt logs alertmanager-main-0 -n openshift-monitoring --contains <phrase>
 `
 )
 
