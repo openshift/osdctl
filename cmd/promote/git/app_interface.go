@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
@@ -15,9 +16,8 @@ import (
 )
 
 const (
-	canaryStr    = "-prod-canary"
-	prodHiveStr  = "hivep"
-	resourcePath = "/hack/olm-registry/olm-artifacts-template.yaml"
+	canaryStr   = "-prod-canary"
+	prodHiveStr = "hivep"
 )
 
 type Service struct {
@@ -46,24 +46,29 @@ func replaceTargetSha(fileContent string, targetSuffix string, promotionGitHash 
 		return "", fmt.Errorf("error parsing saas YAML: %v", err), false
 	}
 	targetFound := false
-	targets, err := kyaml.Lookup("resourceTemplates", "[path="+resourcePath+"]", "targets").Filter(node)
+	rts, err := kyaml.Lookup("resourceTemplates").Filter(node)
 	if err != nil {
-		return "", fmt.Errorf("error querying saas YAML: %v", err), false
+		return "", fmt.Errorf("error querying resource templates: %v", err), false
 	}
-	err = targets.VisitElements(func(element *kyaml.RNode) error {
-		name, _ := element.GetString("name")
-		match, _ := regexp.MatchString("(.*)"+targetSuffix, name)
-		if match {
-			targetFound = true
-			fmt.Println("updating target: ", name)
-			_, err = element.Pipe(kyaml.SetField("ref", kyaml.NewStringRNode(promotionGitHash)))
-			if err != nil {
-				return fmt.Errorf("error setting ref: %v", err)
-			}
+	for i := range len(rts.Content()) {
+		targets, err := kyaml.Lookup("resourceTemplates", strconv.Itoa(i), "targets").Filter(node)
+		if err != nil {
+			return "", fmt.Errorf("error querying saas YAML: %v", err), false
 		}
-		return nil
-	})
-
+		err = targets.VisitElements(func(element *kyaml.RNode) error {
+			name, _ := element.GetString("name")
+			match, _ := regexp.MatchString("(.*)"+targetSuffix, name)
+			if match {
+				targetFound = true
+				fmt.Println("updating target: ", name)
+				_, err = element.Pipe(kyaml.SetField("ref", kyaml.NewStringRNode(promotionGitHash)))
+				if err != nil {
+					return fmt.Errorf("error setting ref: %v", err)
+				}
+			}
+			return nil
+		})
+	}
 	return node.MustString(), err, targetFound
 }
 
@@ -279,11 +284,8 @@ func (a AppInterface) UpdateAppInterface(serviceName, saasFile, currentGitHash, 
 		return fmt.Errorf("error modifying YAML: %v", err)
 	}
 	if !canaryTargetsSetUp {
-		fmt.Println("canary targets not set, continuing to promote all production hives.")
-		newContent, err, _ = replaceTargetSha(string(fileContent), prodHiveStr, promotionGitHash)
-	}
-	if err != nil {
-		return fmt.Errorf("error modifying YAML: %v", err)
+		fmt.Println("canary targets not set, continuing to replace all occurrences of sha.")
+		newContent = strings.ReplaceAll(string(fileContent), currentGitHash, promotionGitHash)
 	}
 
 	err = os.WriteFile(saasFile, []byte(newContent), 0644)
