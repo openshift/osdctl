@@ -17,7 +17,16 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
+type GatherLogsOpts struct {
+	Since     int
+	Tail      int
+	SortOrder string
+	DestDir   string
+}
+
 func NewCmdHCPMustGather() *cobra.Command {
+	g := &GatherLogsOpts{}
+
 	hcpMgCmd := &cobra.Command{
 		Use:     "gather-logs <cluster-id>",
 		Aliases: []string{"gl"},
@@ -33,21 +42,22 @@ func NewCmdHCPMustGather() *cobra.Command {
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			err := gatherLogs(args[0])
+			err := g.GatherLogs(args[0])
 			if err != nil {
 				cmdutil.CheckErr(err)
 			}
 		},
 	}
 
-	hcpMgCmd.Flags().IntVar(&since, "since", 10, "Number of hours (integer) since which to pull logs and events")
-	hcpMgCmd.Flags().IntVar(&tail, "tail", 0, "Last 'n' logs and events to fetch. By default it will pull everything")
-	hcpMgCmd.Flags().StringVar(&sortOrder, "sort", "asc", "Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'")
+	hcpMgCmd.Flags().IntVar(&g.Since, "since", 10, "Number of hours (integer) since which to pull logs and events")
+	hcpMgCmd.Flags().IntVar(&g.Tail, "tail", 0, "Last 'n' logs and events to fetch. By default it will pull everything")
+	hcpMgCmd.Flags().StringVar(&g.SortOrder, "sort", "asc", "Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'")
+	hcpMgCmd.Flags().StringVar(&g.DestDir, "dest-dir", "", "Destination directory for the logs dump, defaults to the local directory.")
 
 	return hcpMgCmd
 }
 
-func gatherLogs(clusterID string) (error error) {
+func (g *GatherLogsOpts) GatherLogs(clusterID string) (error error) {
 	accessToken, err := getAccessToken()
 	if err != nil {
 		return fmt.Errorf("failed to acquire access token %v", err)
@@ -66,7 +76,8 @@ func gatherLogs(clusterID string) (error error) {
 	fmt.Printf("Using HCP Namespace %v\n", hcpCluster.hcpNamespace)
 
 	gatherNamespaces := []string{hcpCluster.hcpNamespace, hcpCluster.klusterletNS, hcpCluster.hostedNS, "hypershift", "cert-manager", "redhat-cert-manager-operator", "open-cluster-management-agent", "open-cluster-management-agent-addon"}
-	gatherDir, err := setupGatherDir(hcpCluster.hcpNamespace)
+
+	gatherDir, err := setupGatherDir(g.DestDir, hcpCluster.hcpNamespace)
 	if err != nil {
 		return err
 	}
@@ -84,7 +95,7 @@ func gatherLogs(clusterID string) (error error) {
 			return err
 		}
 
-		err = dumpPodLogs(pods, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, accessToken, since, tail, sortOrder)
+		err = g.dumpPodLogs(pods, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, accessToken, g.Since, g.Tail, g.SortOrder)
 		if err != nil {
 			return err
 		}
@@ -94,7 +105,7 @@ func gatherLogs(clusterID string) (error error) {
 			return err
 		}
 
-		err = dumpEvents(deployments, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, accessToken, since, tail, sortOrder)
+		err = g.dumpEvents(deployments, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, accessToken, g.Since, g.Tail, g.SortOrder)
 		if err != nil {
 			return err
 		}
@@ -104,12 +115,12 @@ func gatherLogs(clusterID string) (error error) {
 	return nil
 }
 
-func dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS string, managementClusterName string, DTURL string, accessToken string, since int, tail int, sortOrder string) error {
+func (g *GatherLogsOpts) dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS string, managementClusterName string, DTURL string, accessToken string, since int, tail int, sortOrder string) error {
 	totalDeployments := len(deploys.Items)
 	for k, d := range deploys.Items {
 		fmt.Printf("[%d/%d] Deployment events for %s\n", k+1, totalDeployments, d.Name)
 
-		eventQuery, err := getEventQuery(d.Name, targetNS, since, tail, sortOrder, managementClusterName)
+		eventQuery, err := getEventQuery(d.Name, targetNS, g.Since, g.Tail, g.SortOrder, managementClusterName)
 		if err != nil {
 			return err
 		}
@@ -156,12 +167,12 @@ func dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS strin
 	return nil
 }
 
-func dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, managementClusterName string, DTURL string, accessToken string, since int, tail int, sortOrder string) error {
+func (g *GatherLogsOpts) dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, managementClusterName string, DTURL string, accessToken string, since int, tail int, sortOrder string) error {
 	totalPods := len(pods.Items)
 	for k, p := range pods.Items {
 		fmt.Printf("[%d/%d] Pod logs for %s\n", k+1, totalPods, p.Name)
 
-		podLogsQuery, err := getPodQuery(p.Name, targetNS, since, tail, sortOrder, managementClusterName)
+		podLogsQuery, err := getPodQuery(p.Name, targetNS, g.Since, g.Tail, g.SortOrder, managementClusterName)
 		if err != nil {
 			return err
 		}
@@ -208,8 +219,8 @@ func dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, manage
 	return nil
 }
 
-func setupGatherDir(dirName string) (logsDir string, error error) {
-	dirPath := filepath.Join(".", fmt.Sprintf("hcp-must-gather-%s", dirName))
+func setupGatherDir(destBaseDir string, dirName string) (logsDir string, error error) {
+	dirPath := filepath.Join(destBaseDir, fmt.Sprintf("hcp-logs-dump-%s", dirName))
 	err := os.MkdirAll(dirPath, os.ModePerm)
 	if err != nil {
 		return "", fmt.Errorf("failed to setup logs directory %v", err)

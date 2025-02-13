@@ -40,7 +40,6 @@ func NewCmdCluster(streams genericclioptions.IOStreams, client *k8s.LazyClient, 
 	clusterCmd.AddCommand(newCmdFromInfraId(globalOpts))
 	clusterCmd.AddCommand(NewCmdHypershiftInfo(streams))
 	clusterCmd.AddCommand(newCmdOrgId())
-	clusterCmd.AddCommand(newCmdCleanupLeakedEC2())
 	clusterCmd.AddCommand(newCmdDetachStuckVolume())
 	clusterCmd.AddCommand(ssh.NewCmdSSH())
 	clusterCmd.AddCommand(sre_operators.NewCmdSREOperators(streams, client))
