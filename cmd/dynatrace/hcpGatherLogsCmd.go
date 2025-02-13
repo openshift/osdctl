@@ -38,7 +38,7 @@ func NewCmdHCPMustGather() *cobra.Command {
 		`,
 		Example: `
   # Gather logs for a HCP cluster with cluster id hcp-cluster-id-123
-  osdctl cluster dynatrace gather-logs hcp-cluster-id-123`,
+  osdctl dt gather-logs hcp-cluster-id-123`,
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
