@@ -6,9 +6,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
+	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
+
 	"gopkg.in/yaml.v3"
+)
+
+const (
+	canaryStr   = "-prod-canary"
+	prodHiveStr = "hivep"
 )
 
 type Service struct {
@@ -17,6 +26,7 @@ type Service struct {
 		Name    string `yaml:"name"`
 		URL     string `yaml:"url"`
 		Targets []struct {
+			Name       string
 			Namespace  map[string]string      `yaml:"namespace"`
 			Ref        string                 `yaml:"ref"`
 			Parameters map[string]interface{} `yaml:"parameters"`
@@ -26,6 +36,40 @@ type Service struct {
 
 type AppInterface struct {
 	GitDirectory string
+}
+
+// replaceTargetSha replaces sha for targets in file whose name matches a given substring
+// returns updated yaml, error, and false if no targets were found.
+func replaceTargetSha(fileContent string, targetSuffix string, promotionGitHash string) (string, error, bool) {
+	node, err := kyaml.Parse(fileContent)
+	if err != nil {
+		return "", fmt.Errorf("error parsing saas YAML: %v", err), false
+	}
+	targetFound := false
+	rts, err := kyaml.Lookup("resourceTemplates").Filter(node)
+	if err != nil {
+		return "", fmt.Errorf("error querying resource templates: %v", err), false
+	}
+	for i := range len(rts.Content()) {
+		targets, err := kyaml.Lookup("resourceTemplates", strconv.Itoa(i), "targets").Filter(node)
+		if err != nil {
+			return "", fmt.Errorf("error querying saas YAML: %v", err), false
+		}
+		err = targets.VisitElements(func(element *kyaml.RNode) error {
+			name, _ := element.GetString("name")
+			match, _ := regexp.MatchString("(.*)"+targetSuffix, name)
+			if match {
+				targetFound = true
+				fmt.Println("updating target: ", name)
+				_, err = element.Pipe(kyaml.SetField("ref", kyaml.NewStringRNode(promotionGitHash)))
+				if err != nil {
+					return fmt.Errorf("error setting ref: %v", err)
+				}
+			}
+			return nil
+		})
+	}
+	return node.MustString(), err, targetFound
 }
 
 func DefaultAppInterfaceDirectory() string {
@@ -141,9 +185,17 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, 
 		for _, resourceTemplate := range service.ResourceTemplates {
 			if !strings.Contains(resourceTemplate.Name, "package") {
 				for _, target := range resourceTemplate.Targets {
-					if strings.Contains(target.Namespace["$ref"], "hivep") {
-						currentGitHash = target.Ref
+					if strings.Contains(target.Name, canaryStr) {
+						currentGitHash = target.Ref // get canary target ref
 						break
+					}
+				}
+				if currentGitHash == "" { // canary targets not found
+					for _, target := range resourceTemplate.Targets {
+						if strings.Contains(target.Namespace["$ref"], prodHiveStr) {
+							currentGitHash = target.Ref
+							break
+						}
 					}
 				}
 			}
@@ -187,7 +239,7 @@ func GetCurrentPackageTagFromAppInterface(saasFile string) (string, error) {
 	for _, resourceTemplate := range service.ResourceTemplates {
 		if strings.Contains(resourceTemplate.Name, "package") {
 			for _, target := range resourceTemplate.Targets {
-				if strings.Contains(target.Namespace["$ref"], "hivep") {
+				if strings.Contains(target.Namespace["$ref"], prodHiveStr) {
 					currentPackageTag = target.Parameters["PACKAGE_TAG"].(string)
 				}
 			}
@@ -223,9 +275,21 @@ func (a AppInterface) UpdateAppInterface(serviceName, saasFile, currentGitHash, 
 	if err != nil {
 		return fmt.Errorf("failed to read file %s: %v", saasFile, err)
 	}
+	var newContent string
 
-	// Replace the hash in the file content
-	newContent := strings.ReplaceAll(string(fileContent), currentGitHash, promotionGitHash)
+	// If canary targets are set up in saas, replace the hash only in canary targets in the file content
+	// Otherwise proceed to promoting to all prod hives.
+	newContent, err, canaryTargetsSetUp := replaceTargetSha(string(fileContent), canaryStr, promotionGitHash)
+	if err != nil {
+		return fmt.Errorf("error modifying YAML: %v", err)
+	}
+	if !canaryTargetsSetUp {
+		fmt.Println("canary targets not set, continuing to promote all production hives.")
+		newContent, err, _ = replaceTargetSha(string(fileContent), prodHiveStr, promotionGitHash)
+	}
+	if err != nil {
+		return fmt.Errorf("error modifying YAML: %v", err)
+	}
 
 	err = os.WriteFile(saasFile, []byte(newContent), 0644)
 	if err != nil {
