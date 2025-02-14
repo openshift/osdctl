@@ -282,3 +282,7 @@ require (
 	sigs.k8s.io/kustomize/api v0.19.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.5.0 // indirect
 )
+
+// We import 'oc' which relies on this, and is pointed at the GitHub repo which no longer exists.
+// Since we don't use it, and it causes 'go list' to fail (mainly used in IDEs), replace it with nothing.
+replace github.com/apcera/gssapi => ./empty
