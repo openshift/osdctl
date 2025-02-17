@@ -248,9 +248,7 @@ func (o *contextOptions) printLongOutput(data *contextData) {
 	printDynatraceResources(data)
 
 	// Print User Banned Details
-	if data.UserBanned {
-		printUserBannedStatus(data)
-	}
+	printUserBannedStatus(data)
 }
 
 func (o *contextOptions) printShortOutput(data *contextData) {
@@ -763,12 +761,16 @@ func printDynatraceResources(data *contextData) {
 
 func printUserBannedStatus(data *contextData) {
 	var name string = "User Ban Details"
-	fmt.Println(delimiter + name)
-	fmt.Println("User is banned")
-	fmt.Printf("Ban code = %v\n", data.BanCode)
-	fmt.Printf("Ban description = %v\n", data.BanDescription)
-	if data.BanCode == BanCodeExportControlCompliance {
-		fmt.Println("User banned due to export control compliance.\nPlease follow the steps detailed here: https://github.com/openshift/ops-sop/blob/master/v4/alerts/UpgradeConfigSyncFailureOver4HrSRE.md#user-banneddisabled-due-to-export-control-compliance .")
+	fmt.Println("\n" + delimiter + name)
+	if data.UserBanned {
+		fmt.Println("User is banned")
+		fmt.Printf("Ban code = %v\n", data.BanCode)
+		fmt.Printf("Ban description = %v\n", data.BanDescription)
+		if data.BanCode == BanCodeExportControlCompliance {
+			fmt.Println("User banned due to export control compliance.\nPlease follow the steps detailed here: https://github.com/openshift/ops-sop/blob/master/v4/alerts/UpgradeConfigSyncFailureOver4HrSRE.md#user-banneddisabled-due-to-export-control-compliance .")
+		}
+	} else {
+		fmt.Println("User is not banned")
 	}
 }
 
