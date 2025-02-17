@@ -95,6 +95,11 @@ type contextData struct {
 
 	// OCM Cluster description
 	Description string
+
+	// User Banned Information
+	UserBanned     bool
+	BanCode        string
+	BanDescription string
 }
 
 // newCmdContext implements the context command to show the current context of a cluster
@@ -241,6 +246,11 @@ func (o *contextOptions) printLongOutput(data *contextData) {
 
 	// Print Dynatrace URL
 	printDynatraceResources(data)
+
+	// Print User Banned Details
+	if data.UserBanned {
+		printUserBannedStatus(data)
+	}
 }
 
 func (o *contextOptions) printShortOutput(data *contextData) {
@@ -378,6 +388,22 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		}
 	}
 
+	GetBannedUser := func() {
+		defer wg.Done()
+		defer utils.StartDelayTracker(o.verbose, "Check Banned User").End()
+		subscription, err := utils.GetSubscription(ocmClient, data.ClusterID)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("error while getting subscripton %v", err))
+		}
+		creator, err := utils.GetAccount(ocmClient, subscription.Creator().ID())
+		if err != nil {
+			errors = append(errors, fmt.Errorf("error while checking if user is banned %v", err))
+		}
+		data.UserBanned = creator.Banned()
+		data.BanCode = creator.BanCode()
+		data.BanDescription = creator.BanDescription()
+	}
+
 	GetJiraIssues := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Jira Issues").End()
@@ -457,6 +483,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		GetSupportExceptions,
 		GetPagerDutyAlerts,
 		GetDynatraceDetails,
+		GetBannedUser,
 	)
 
 	if o.output == longOutputConfigValue {
@@ -731,6 +758,17 @@ func printDynatraceResources(data *contextData) {
 
 	if err := table.Flush(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error printing %s: %v\n", name, err)
+	}
+}
+
+func printUserBannedStatus(data *contextData) {
+	var name string = "User Ban Details"
+	fmt.Println(delimiter + name)
+	fmt.Println("User is banned")
+	fmt.Printf("Ban code = %v\n", data.BanCode)
+	fmt.Printf("Ban description = %v\n", data.BanDescription)
+	if data.BanCode == BanCodeExportControlCompliance {
+		fmt.Println("User banned due to export control compliance.\nPlease follow the steps detailed here: https://github.com/openshift/ops-sop/blob/master/v4/alerts/UpgradeConfigSyncFailureOver4HrSRE.md#user-banneddisabled-due-to-export-control-compliance .")
 	}
 }
 
