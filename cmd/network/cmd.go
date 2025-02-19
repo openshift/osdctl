@@ -19,6 +19,7 @@ func NewCmdNetwork(streams genericclioptions.IOStreams, client *k8s.LazyClient) 
 
 	netCmd.AddCommand(newCmdPacketCapture(streams, client))
 	netCmd.AddCommand(NewCmdValidateEgress())
+	netCmd.AddCommand(newCmdRebuildOVN(streams))
 	return netCmd
 }
 
