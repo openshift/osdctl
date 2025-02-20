@@ -46,8 +46,8 @@ func NewCmdDynatrace() *cobra.Command {
 			}
 
 			if ops.component == "" {
-				fmt.Println("Error: Please provide dynatrace component to promote.\n\n")
-				fmt.Println("Please run 'osdctl promote dynatrace --list' to check available dynatrace components for promotion.\n\n")
+				fmt.Printf("Error: Please provide dynatrace component to promote.\n\n")
+				fmt.Printf("Please run 'osdctl promote dynatrace --list' to check available dynatrace components for promotion.\n\n")
 				cmd.Help()
 				os.Exit(1)
 			}
