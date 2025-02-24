@@ -191,7 +191,7 @@ func (mg *mustGather) Run() error {
 				hcName := cluster.DomainPrefix()
 				hcNamespace := strings.TrimSuffix(hcpNamespace, "-"+hcName)
 
-				// TODO(typeid): replace this with an official ACM release image once it's avaiable
+				// TODO(ACM-16170): replace this with an official ACM release image once it's available
 				acmHyperShiftImage := "quay.io/rokejungrh/must-gather:v2.13.0-33-linux"
 				gatherScript := fmt.Sprintf("/usr/bin/gather hosted-cluster-namespace=%s hosted-cluster-name=%s", hcNamespace, hcName)
 				if err := createMustGather(mcRestCfg, mcK8sCli, []string{"--dest-dir=" + destDir, "--image=" + acmHyperShiftImage, gatherScript}); err != nil {
