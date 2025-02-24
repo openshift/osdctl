@@ -138,6 +138,7 @@ func printClusters(items []*accountsv1.Subscription) {
 		for _, item := range items {
 			subscription := map[string]string{
 				"cluster_id":   item.ClusterID(),
+				"external_id":  item.ExternalClusterID(),
 				"display_name": item.DisplayName(),
 				"status":       item.Status(),
 			}
@@ -146,12 +147,13 @@ func printClusters(items []*accountsv1.Subscription) {
 		PrintJson(subscriptions)
 	} else {
 		table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
-		table.AddRow([]string{"DISPLAY NAME", "CLUSTER ID", "STATUS"})
+		table.AddRow([]string{"DISPLAY NAME", "INTERNAL CLUSTER ID", "EXTERNAL CLUSTER ID", "STATUS"})
 
 		for _, subscription := range items {
 			table.AddRow([]string{
 				subscription.DisplayName(),
 				subscription.ClusterID(),
+				subscription.ExternalClusterID(),
 				subscription.Status(),
 			})
 		}
