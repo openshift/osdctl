@@ -170,3 +170,15 @@ func GetCurrentCluster() (string, error) {
 	}
 	return cluster.ClusterID, nil
 }
+
+func LazyClientInit(fc client.WithWatch) *LazyClient {
+	return &LazyClient{
+		client: fc,
+	}
+}
+
+func LazyClientMock(c client.Client) *LazyClient {
+	return &LazyClient{
+		client: c,
+	}
+}
