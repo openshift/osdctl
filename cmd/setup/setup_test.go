@@ -24,7 +24,6 @@ var _ = Describe("Validation Functions", func() {
 			token, _ := ValidateJiraToken("ABC1234")
 			//Expect(err).To(BeNil())
 			Expect(token).To(Equal("ABC1234"))
-
 		})
 
 		It("should fail invalid Jira token", func() {
@@ -127,18 +126,12 @@ var _ = Describe("Validation Functions", func() {
 
 var _ = Describe("NewCmdSetup Command", func() {
 	BeforeEach(func() {
-		// Reset viper configuration before each test
 		viper.Reset()
-		// Use in-memory filesystem for config
 		fs := afero.NewMemMapFs()
 		viper.SetFs(fs)
-		// Disable config file lookup to prevent ConfigFileNotFoundError
 		viper.SetConfigName("") // Make sure config file lookup is not used
-		// Set config type to avoid file lookup errors
 		viper.SetConfigType("yaml")
-		// Use a temporary file for the in-memory config
 		viper.SetConfigFile("/tmp/config.yaml")
-		// Set default values for the configuration
 		viper.SetDefault("prod_jumprole_account_id", "123456789012")
 		viper.SetDefault("aws_proxy", "http://proxy.example.com")
 		viper.SetDefault("stage_jumprole_account_id", "987654321098")
@@ -154,25 +147,22 @@ var _ = Describe("NewCmdSetup Command", func() {
 		It("should correctly set and save the configuration", func() {
 			// Simulate user input for the required keys
 			inputs := []string{
-				"123456789012",              // ProdJumproleConfigKey
-				"http://proxy.example.com",  // AwsProxy
-				"987654321098",              // StageJumproleConfigKey
-				"dt-vault-path",             // DtVaultPath (optional)
-				"https://vault.example.com", // VaultAddress (optional)
-				"abcdEFGHijklMNOPqrst",      // PdUserToken (optional)
-				"ABC1234",                   // JiraToken (optional)
-				"  - aws s3 ls",             // CloudTrailCmdLists (optional)
-				"abcdEFGHijklMNOPqrst",      // GitLabToken (optional)
+				"123456789012",
+				"http://proxy.example.com",
+				"987654321098",
+				"dt-vault-path",
+				"https://vault.example.com",
+				"abcdEFGHijklMNOPqrst",
+				"ABC1234",
+				"  - aws s3 ls",
+				"abcdEFGHijklMNOPqrst",
 			}
-			// Create a buffer to simulate user input
+
 			inputBuffer := bytes.NewBufferString(strings.Join(inputs, "\n"))
-			// Override the input reader to use our buffer
 			reader := bufio.NewReader(inputBuffer)
-			// Mock the setup command
 			setupCmd := NewCmdSetup()
-			setupCmd.SetOut(os.Stdout) // Set output to standard out
-			setupCmd.SetIn(reader)     // Set input to our mocked buffer
-			// Execute the setup command and expect no error
+			setupCmd.SetOut(os.Stdout)
+			setupCmd.SetIn(reader)
 			err := setupCmd.Execute()
 			Expect(err).To(BeNil())
 			// Verify that the correct values have been set in viper
