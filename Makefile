@@ -24,6 +24,12 @@ ARCH := $(shell go env GOARCH)
 download-goreleaser:
 	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser@v1.21.2
 
+#Update documentation as a part of every release
+
+.PHONY: generate-docs 
+generate-docs:
+	@go run main.go docgen --cmd-path=./cmd --docs-dir=./docs --commands-file=osdctl_commands.md
+
 # CI build containers don't include goreleaser by default,
 # so they need to get it first, and then run the build
 .PHONY: ci-build
@@ -39,6 +45,7 @@ build:
 	goreleaser build --clean --snapshot --single-target=${SINGLE_TARGET}
 
 release:
+	make generate-docs
 	goreleaser release --clean
 
 install:
