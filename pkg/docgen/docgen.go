@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/openshift/osdctl/cmd"
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -137,11 +136,11 @@ func GenerateDocs(opts *Options) error {
 
 	// Ensure docs directory exists
 	if err := os.MkdirAll(opts.DocsDir, 0755); err != nil {
-		return errors.Wrap(err, "creating docs directory")
+		return fmt.Errorf("creating docs directory: %w", err)
 	}
 
 	if _, err := os.Stat(opts.CmdPath); os.IsNotExist(err) {
-		return errors.Errorf("cmd directory '%s' does not exist", opts.CmdPath)
+		return fmt.Errorf("cmd directory '%s' does not exist", opts.CmdPath)
 	}
 
 	opts.Logger.Println("🔄 Generating documentation...")
@@ -154,12 +153,12 @@ func GenerateDocs(opts *Options) error {
 
 	// Generate markdown documentation for all commands in the docs directory
 	if err := doc.GenMarkdownTree(rootCmd, opts.DocsDir); err != nil {
-		return errors.Wrap(err, "generating command documentation")
+		return fmt.Errorf("generating command documentation: %w", err)
 	}
 
 	// Generate the standalone command reference file in the root directory
 	if err := generateCommandReferenceMd(opts.CommandsFile, commands); err != nil {
-		return errors.Wrap(err, "creating command reference file")
+		return fmt.Errorf("creating command reference file: %w", err)
 	}
 
 	opts.Logger.Printf("✅ Documentation successfully generated in %s and %s created in root directory",
