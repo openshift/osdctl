@@ -32,7 +32,7 @@ func newCmdList() *cobra.Command {
 		Use:     "list",
 		Short:   "List ROSA HCP Management Clusters",
 		Long:    "List ROSA HCP Management Clusters. Supported output formats: ' ', text, json, yaml",
-		Example: "osdctl mc list || osdctl mc list --output || osdctl mc list --output json, || osdctl mc list --output yaml",
+		Example: "osdctl mc list || osdctl mc list --output || osdctl mc list --output json || osdctl mc list --output yaml || osdctl mc list --output text",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 
@@ -103,9 +103,6 @@ func (l *list) Run() error {
 	case "text":
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		for i, item := range output {
-			if i > 0 {
-				fmt.Fprintln(w, "")
-			}
 			fmt.Fprintf(w, "Management Cluster #%d:\n", i+1)
 			fmt.Fprintf(w, " Name:\t%s\n", item.Name)
 			fmt.Fprintf(w, " ID:\t%s\n", item.ID)
@@ -113,6 +110,11 @@ func (l *list) Run() error {
 			fmt.Fprintf(w, " Region:\t%s\n", item.Region)
 			fmt.Fprintf(w, " Account ID:\t%s\n", item.AccountID)
 			fmt.Fprintf(w, " Status:\t%s\n", item.Status)
+
+			if i < len(output)-1 {
+				fmt.Fprintln(w, "")
+			}
+			w.Flush()
 		}
 	default:
 
