@@ -10,15 +10,13 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 type list struct {
-	// Add a reference to the output format
 	outputFormat string
 }
 
-// Define a struct for output formatting
 type managementClusterOutput struct {
 	Name      string `json:"name" yaml:"name"`
 	ID        string `json:"id" yaml:"id"`
@@ -33,11 +31,11 @@ func newCmdList() *cobra.Command {
 	listCmd := &cobra.Command{
 		Use:     "list",
 		Short:   "List ROSA HCP Management Clusters",
-		Long:    "List ROSA HCP Management Clusters",
-		Example: "osdctl mc list",
+		Long:    "List ROSA HCP Management Clusters. Supported output formats: ' ', text, json, yaml",
+		Example: "osdctl mc list || osdctl mc list --output || osdctl mc list --output json, || osdctl mc list --output yaml",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Get the global output flag value
+
 			l.outputFormat = cmd.Flag("output").Value.String()
 			return l.Run()
 		},
@@ -58,7 +56,6 @@ func (l *list) Run() error {
 		return fmt.Errorf("failed to list management clusters: %v", err)
 	}
 
-	// Prepare a slice to hold the structured output
 	output := []managementClusterOutput{}
 
 	for _, mc := range managementClusters.Items().Slice() {
@@ -74,12 +71,12 @@ func (l *list) Run() error {
 			supportRoleARN, err := arn.Parse(supportRole)
 			if err != nil {
 				log.Printf("failed to convert %s to an ARN: %v", supportRole, err)
-			} else {
-				awsAccountID = supportRoleARN.AccountID
 			}
+
+			awsAccountID = supportRoleARN.AccountID
+
 		}
 
-		// Add the cluster info to our output slice
 		output = append(output, managementClusterOutput{
 			Name:      mc.Name(),
 			ID:        mc.ClusterManagementReference().ClusterId(),
@@ -90,7 +87,6 @@ func (l *list) Run() error {
 		})
 	}
 
-	// Handle output based on the format flag
 	switch l.outputFormat {
 	case "json":
 		jsonOutput, err := json.MarshalIndent(output, "", "  ")
@@ -105,21 +101,21 @@ func (l *list) Run() error {
 		}
 		fmt.Println(string(yamlOutput))
 	case "text":
-		// Plain text output format, one cluster per section with labeled fields
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		for i, item := range output {
 			if i > 0 {
-				fmt.Println() // Add blank line between clusters
+				fmt.Fprintln(w, "")
 			}
-			fmt.Printf("Management Cluster #%d:\n", i+1)
-			fmt.Printf("  Name:       %s\n", item.Name)
-			fmt.Printf("  ID:         %s\n", item.ID)
-			fmt.Printf("  Sector:     %s\n", item.Sector)
-			fmt.Printf("  Region:     %s\n", item.Region)
-			fmt.Printf("  Account ID: %s\n", item.AccountID)
-			fmt.Printf("  Status:     %s\n", item.Status)
+			fmt.Fprintf(w, "Management Cluster #%d:\n", i+1)
+			fmt.Fprintf(w, " Name:\t%s\n", item.Name)
+			fmt.Fprintf(w, " ID:\t%s\n", item.ID)
+			fmt.Fprintf(w, " Sector:\t%s\n", item.Sector)
+			fmt.Fprintf(w, " Region:\t%s\n", item.Region)
+			fmt.Fprintf(w, " Account ID:\t%s\n", item.AccountID)
+			fmt.Fprintf(w, " Status:\t%s\n", item.Status)
 		}
 	default:
-		// Default tabular output
+
 		w := tabwriter.NewWriter(os.Stdout, 1, 1, 1, ' ', 0)
 		fmt.Fprintln(w, "NAME\tID\tSECTOR\tREGION\tACCOUNT_ID\tSTATUS")
 		for _, item := range output {
