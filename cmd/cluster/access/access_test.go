@@ -456,16 +456,6 @@ func TestNewCmdAccess(t *testing.T) {
 		args        []string
 		expectError bool
 	}{
-		// {
-		// 	name:        "valid input with reason flag",
-		// 	args:        []string{"cluster123"},
-		// 	expectError: false,
-		// },
-		// {
-		// 	name:        "missing reason flag",
-		// 	args:        []string{"cluster123"},
-		// 	expectError: true,
-		// },
 		{
 			name:        "invalid number of arguments",
 			args:        []string{},
@@ -480,19 +470,14 @@ func TestNewCmdAccess(t *testing.T) {
 			client := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(runtime.NewScheme()))
 			streams := genericclioptions.IOStreams{In: strings.NewReader(updateEnvResponse), Out: os.Stdout, ErrOut: os.Stderr}
 
-			// Create the command
 			cmd := NewCmdAccess(streams, client)
 
-			// Set flags for testing
 			cmd.Flags().Set("reason", "test-reason")
 
-			// Set the args for the command
 			cmd.SetArgs(tt.args)
 
-			// Execute the command
 			err := cmd.Execute()
 
-			// Check if error is expected
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
@@ -514,11 +499,6 @@ func TestAccessCmdComplete(t *testing.T) {
 			args:        []string{"cluster123"},
 			expectedErr: false,
 		},
-		// {
-		// 	name:        "invalid cluster identifier",
-		// 	args:        []string{"invalid-cluster"},
-		// 	expectedErr: true,
-		// },
 		{
 			name:        "too many arguments",
 			args:        []string{"cluster123", "extra-arg"},
