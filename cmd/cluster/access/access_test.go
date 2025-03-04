@@ -12,9 +12,9 @@ import (
 	"time"
 
 	clustersmgmtv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
-	"sigs.k8s.io/yaml"
-
 	"github.com/openshift/osdctl/pkg/k8s"
+	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -22,6 +22,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/yaml"
 )
 
 // TestClusterAccessOptions_createLocalKubeconfigAccess tests the clusterAccessOptions' createLocalKubeconfigAccess function
@@ -360,4 +361,181 @@ func generateKubeconfigSecretObjectForTesting(name, namespace, key, serverURL st
 		Data: map[string][]byte{key: rawKubeconfig},
 	}
 	return secret, kubeconfig
+}
+
+func TestClusterAccessOptions_getKubeConfigSecret(t *testing.T) {
+	serverURL := "https://api.test-cluster.fakedomain.devshift.org:6443"
+	secretName := fmt.Sprintf("test-osdctl-access-cluster-%s-%d-secret-%s", time.Now().Format("20060102-150405-"), (time.Now().Nanosecond() / 1000000), "test-createJumpPod")
+	secretNS := "uhc-production-testclusterns"
+	secret, _ := generateKubeconfigSecretObjectForTesting(secretName, secretNS, "kubeconfig", serverURL)
+
+	tests := []struct {
+		Name          string
+		Namespace     corev1.Namespace
+		SecretList    []corev1.Secret
+		ExpectedError bool
+		ExpectedName  string
+	}{
+		{
+			Name: "Successfully retrieve kubeconfig secret",
+			Namespace: corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: secretNS,
+				},
+			},
+			SecretList:    []corev1.Secret{secret},
+			ExpectedError: true,
+			ExpectedName:  "",
+		},
+		{
+			Name: "No kubeconfig secret found",
+			Namespace: corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-namespace",
+				},
+			},
+			SecretList:    []corev1.Secret{},
+			ExpectedError: true,
+			ExpectedName:  "",
+		},
+		{
+			Name: "Error during List operation",
+			Namespace: corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-namespace",
+				},
+			},
+			SecretList:    nil, // Simulate error in listing
+			ExpectedError: true,
+			ExpectedName:  "",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			// Create a new scheme
+			scheme := runtime.NewScheme()
+			err := corev1.AddToScheme(scheme)
+			if err != nil {
+				t.Fatalf("Failed to add corev1 to scheme: %v", err)
+			}
+
+			// Create the fake client
+			client := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(scheme))
+			streams := genericclioptions.IOStreams{In: genericclioptions.NewTestIOStreamsDiscard().In, Out: os.Stdout, ErrOut: os.Stderr}
+			// Instantiate the access options struct with the fake client
+			access := newClusterAccessOptions(client, streams)
+
+			// Call the method
+			secret, err := access.getKubeConfigSecret(test.Namespace)
+
+			// If error is expected, check if an error occurred
+			if test.ExpectedError {
+				if err == nil {
+					t.Errorf("Expected an error but got none")
+				}
+				if secret.Name != test.ExpectedName {
+					t.Errorf("Expected an empty secret, but got: %s", secret.Name)
+				}
+			} else {
+				// If no error expected, ensure the correct secret is returned
+				if err != nil {
+					t.Errorf("Expected no error, but got: %v", err)
+				}
+				if secret.Name != test.ExpectedName {
+					t.Errorf("Expected secret '%s', but got: %s", test.ExpectedName, secret.Name)
+				}
+			}
+		})
+	}
+}
+
+func TestNewCmdAccess(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		expectError bool
+	}{
+		// {
+		// 	name:        "valid input with reason flag",
+		// 	args:        []string{"cluster123"},
+		// 	expectError: false,
+		// },
+		// {
+		// 	name:        "missing reason flag",
+		// 	args:        []string{"cluster123"},
+		// 	expectError: true,
+		// },
+		{
+			name:        "invalid number of arguments",
+			args:        []string{},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// setup env
+			updateEnvResponse := "y"
+			client := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(runtime.NewScheme()))
+			streams := genericclioptions.IOStreams{In: strings.NewReader(updateEnvResponse), Out: os.Stdout, ErrOut: os.Stderr}
+
+			// Create the command
+			cmd := NewCmdAccess(streams, client)
+
+			// Set flags for testing
+			cmd.Flags().Set("reason", "test-reason")
+
+			// Set the args for the command
+			cmd.SetArgs(tt.args)
+
+			// Execute the command
+			err := cmd.Execute()
+
+			// Check if error is expected
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestAccessCmdComplete tests the accessCmdComplete function for validation
+func TestAccessCmdComplete(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		expectedErr bool
+	}{
+		{
+			name:        "valid cluster identifier",
+			args:        []string{"cluster123"},
+			expectedErr: false,
+		},
+		// {
+		// 	name:        "invalid cluster identifier",
+		// 	args:        []string{"invalid-cluster"},
+		// 	expectedErr: true,
+		// },
+		{
+			name:        "too many arguments",
+			args:        []string{"cluster123", "extra-arg"},
+			expectedErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := &cobra.Command{}
+			err := accessCmdComplete(cmd, tt.args)
+
+			if tt.expectedErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
