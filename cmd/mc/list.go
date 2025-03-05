@@ -31,8 +31,8 @@ func newCmdList() *cobra.Command {
 	listCmd := &cobra.Command{
 		Use:     "list",
 		Short:   "List ROSA HCP Management Clusters",
-		Long:    "List ROSA HCP Management Clusters. Supported output formats: ' ', text, json, yaml",
-		Example: "osdctl mc list || osdctl mc list --output || osdctl mc list --output json || osdctl mc list --output yaml || osdctl mc list --output text",
+		Long:    "List ROSA HCP Management Clusters.",
+		Example: "osdctl mc list",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 
@@ -40,6 +40,14 @@ func newCmdList() *cobra.Command {
 			return l.Run()
 		},
 	}
+
+	flagSet := listCmd.Flags()
+	flagSet.StringVar(
+		&l.outputFormat,
+		"output",
+		"",
+		"Output format. Supported output formats include: text, json, yaml",
+	)
 
 	return listCmd
 }
