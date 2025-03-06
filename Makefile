@@ -30,11 +30,18 @@ download-goreleaser:
 generate-docs:
 	@go run main.go docgen --cmd-path=./cmd --docs-dir=./docs --commands-file=osdctl_commands.md
 
+#Install git hooks for checking documentation update as a part of every push
 .PHONY: install-hooks
 install-hooks:
 	@echo "Installing git hooks..."
 	@bash scripts/install-hooks.sh
 	@echo "Git hooks installed."
+
+#Verify documents using PROW as a part of every PR raised for osdctl
+
+.PHONY: verify-docs
+verify-docs:
+	./scripts/verify-docs.sh
 
 # CI build containers don't include goreleaser by default,
 # so they need to get it first, and then run the build

@@ -35,7 +35,7 @@ make build
 
 Then you can find the `osdctl` binary file in the `./dist` subdirectory matching your architecture.
 
-### Update documentation after every release##
+### Update documentation after every release
 
 make install-hooks
 
