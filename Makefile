@@ -30,6 +30,12 @@ download-goreleaser:
 generate-docs:
 	@go run main.go docgen --cmd-path=./cmd --docs-dir=./docs --commands-file=osdctl_commands.md
 
+.PHONY: install-hooks
+install-hooks:
+	@echo "Installing git hooks..."
+	@bash scripts/install-hooks.sh
+	@echo "Git hooks installed."
+
 # CI build containers don't include goreleaser by default,
 # so they need to get it first, and then run the build
 .PHONY: ci-build
@@ -45,7 +51,6 @@ build:
 	goreleaser build --clean --snapshot --single-target=${SINGLE_TARGET}
 
 release:
-	make generate-docs
 	goreleaser release --clean
 
 install:
@@ -70,3 +75,5 @@ test:
 
 lint:
 	golangci-lint run
+
+setup: install-hooks

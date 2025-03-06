@@ -1,11 +1,30 @@
-## osdctl promote
+## osdctl promote dynatrace
 
-Utilities to promote services/operators
+Utilities to promote dynatrace
+
+```
+osdctl promote dynatrace [flags]
+```
+
+### Examples
+
+```
+
+		# List all Dynatrace components available for promotion
+		osdctl promote dynatrace --list
+
+		# Promote a dynatrace component
+		osdctl promote dynatrace --component <component> --gitHash <git-hash>
+```
 
 ### Options
 
 ```
-  -h, --help   help for promote
+      --appInterfaceDir pwd   location of app-interfache checkout. Falls back to pwd and /home/strinaga/git/app-interface
+  -c, --component string      Dynatrace component getting promoted
+  -g, --gitHash string        Git hash of the SaaS service/operator commit getting promoted
+  -h, --help                  help for dynatrace
+  -l, --list                  List all SaaS services/operators
 ```
 
 ### Options inherited from parent commands
@@ -25,8 +44,5 @@ Utilities to promote services/operators
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
-* [osdctl promote dynatrace](osdctl_promote_dynatrace.md)	 - Utilities to promote dynatrace
-* [osdctl promote package](osdctl_promote_package.md)	 - Utilities to promote package-operator services
-* [osdctl promote saas](osdctl_promote_saas.md)	 - Utilities to promote SaaS services/operators
+* [osdctl promote](osdctl_promote.md)	 - Utilities to promote services/operators
 

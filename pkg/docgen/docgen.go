@@ -1,10 +1,13 @@
-// Package docgen provides functionality for generating osdctl documentation
 package docgen
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/openshift/osdctl/cmd"
@@ -17,30 +20,23 @@ const (
 	DefaultCmdPath      = "./cmd"
 	DefaultDocsDir      = "./docs"
 	DefaultCommandsFile = "osdctl_commands.md"
+	StateFile           = ".docgen_state"
 )
 
-// CommandCategory represents a categorized command
 type CommandCategory struct {
 	Name        string
 	Description string
 	Category    string
 }
 
-// Options holds the configuration for the documentation generator
 type Options struct {
-	// CmdPath is the path to the cmd directory
-	CmdPath string
-	// DocsDir is the output directory for generated docs
-	DocsDir string
-	// CommandsFile is the file to write the command reference to
+	CmdPath      string
+	DocsDir      string
 	CommandsFile string
-	// Logger for output
-	Logger *log.Logger
-	// IOStreams for command initialization
-	IOStreams genericclioptions.IOStreams
+	Logger       *log.Logger
+	IOStreams    genericclioptions.IOStreams
 }
 
-// NewDefaultOptions returns a new Options with default values
 func NewDefaultOptions() *Options {
 	return &Options{
 		CmdPath:      DefaultCmdPath,
@@ -55,7 +51,62 @@ func NewDefaultOptions() *Options {
 	}
 }
 
-// categorizeCommand determines the command category based on its hierarchy
+func getDirectoryHash(dir string) (string, error) {
+	hasher := sha256.New()
+
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			hasher.Write([]byte(path))
+			hasher.Write([]byte(info.ModTime().String()))
+
+			f, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			if _, err := io.Copy(hasher, f); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+func loadState() (string, error) {
+	data, err := os.ReadFile(StateFile)
+	if os.IsNotExist(err) {
+		return "", nil
+	}
+	return string(data), err
+}
+
+func saveState(state string) error {
+	return os.WriteFile(StateFile, []byte(state), 0644)
+}
+
+func hasCmdDirChanged(cmdPath string) (bool, error) {
+	currentHash, err := getDirectoryHash(cmdPath)
+	if err != nil {
+		return false, err
+	}
+
+	previousHash, err := loadState()
+	if err != nil {
+		return false, err
+	}
+
+	return currentHash != previousHash, nil
+}
+
 func categorizeCommand(cmd *cobra.Command) string {
 	if cmd == nil {
 		return "General Commands"
@@ -68,7 +119,6 @@ func categorizeCommand(cmd *cobra.Command) string {
 	return "General Commands"
 }
 
-// extractCommands builds a map of all commands and their categories
 func extractCommands(cmd *cobra.Command) map[string]CommandCategory {
 	commands := make(map[string]CommandCategory)
 
@@ -87,7 +137,6 @@ func extractCommands(cmd *cobra.Command) map[string]CommandCategory {
 				Description: subCmd.Short,
 				Category:    categorizeCommand(subCmd),
 			}
-			// Recursively get subcommands
 			for k, v := range extractCommands(subCmd) {
 				commands[k] = v
 			}
@@ -97,15 +146,12 @@ func extractCommands(cmd *cobra.Command) map[string]CommandCategory {
 	return commands
 }
 
-// generateCommandReferenceMd creates a standalone markdown file with command references
 func generateCommandReferenceMd(commandsFile string, commands map[string]CommandCategory) error {
 	var output strings.Builder
 
-	// Add header
 	output.WriteString("# OSDCTL Command Reference\n\n")
 	output.WriteString("This document provides a comprehensive list of all available osdctl commands, organized by category.\n\n")
 
-	// Group commands by category
 	categorizedCommands := make(map[string][]CommandCategory)
 	for _, cmd := range commands {
 		category := cmd.Category
@@ -115,7 +161,6 @@ func generateCommandReferenceMd(commandsFile string, commands map[string]Command
 		categorizedCommands[category] = append(categorizedCommands[category], cmd)
 	}
 
-	// Write commands by category
 	for category, cmds := range categorizedCommands {
 		output.WriteString(fmt.Sprintf("## %s\n\n", category))
 		for _, cmd := range cmds {
@@ -124,17 +169,24 @@ func generateCommandReferenceMd(commandsFile string, commands map[string]Command
 		output.WriteString("\n")
 	}
 
-	// Write the content to the output file
 	return os.WriteFile(commandsFile, []byte(output.String()), 0644)
 }
 
-// GenerateDocs generates the documentation for osdctl commands
 func GenerateDocs(opts *Options) error {
 	if opts == nil {
 		opts = NewDefaultOptions()
 	}
 
-	// Ensure docs directory exists
+	changed, err := hasCmdDirChanged(opts.CmdPath)
+	if err != nil {
+		return fmt.Errorf("checking cmd directory state: %w", err)
+	}
+
+	if !changed {
+		opts.Logger.Println("📋 No changes detected in cmd directory, skipping documentation generation")
+		return nil
+	}
+
 	if err := os.MkdirAll(opts.DocsDir, 0755); err != nil {
 		return fmt.Errorf("creating docs directory: %w", err)
 	}
@@ -145,20 +197,24 @@ func GenerateDocs(opts *Options) error {
 
 	opts.Logger.Println("🔄 Generating documentation...")
 
-	// Initialize root command
 	rootCmd := cmd.NewCmdRoot(opts.IOStreams)
 
-	// Extract all commands and their information
 	commands := extractCommands(rootCmd)
 
-	// Generate markdown documentation for all commands in the docs directory
 	if err := doc.GenMarkdownTree(rootCmd, opts.DocsDir); err != nil {
 		return fmt.Errorf("generating command documentation: %w", err)
 	}
 
-	// Generate the standalone command reference file in the root directory
 	if err := generateCommandReferenceMd(opts.CommandsFile, commands); err != nil {
 		return fmt.Errorf("creating command reference file: %w", err)
+	}
+
+	newHash, err := getDirectoryHash(opts.CmdPath)
+	if err != nil {
+		return fmt.Errorf("calculating new state hash: %w", err)
+	}
+	if err := saveState(newHash); err != nil {
+		return fmt.Errorf("saving state: %w", err)
 	}
 
 	opts.Logger.Printf("✅ Documentation successfully generated in %s and %s created in root directory",
@@ -167,19 +223,17 @@ func GenerateDocs(opts *Options) error {
 	return nil
 }
 
-// Command returns a cobra command that can be used to generate documentation
 func Command() *cobra.Command {
 	opts := NewDefaultOptions()
 	cmd := &cobra.Command{
 		Use:   "docgen",
 		Short: "Generate osdctl documentation",
-		Long:  "Generate markdown documentation for osdctl commands",
+		Long:  "Generate markdown documentation for osdctl commands when cmd directory changes",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return GenerateDocs(opts)
 		},
 	}
 
-	// Add flags
 	cmd.Flags().StringVar(&opts.CmdPath, "cmd-path", opts.CmdPath, "Path to the cmd directory")
 	cmd.Flags().StringVar(&opts.DocsDir, "docs-dir", opts.DocsDir, "Path to the docs output directory")
 	cmd.Flags().StringVar(&opts.CommandsFile, "commands-file", opts.CommandsFile, "Filename for the command reference file")
@@ -187,7 +241,6 @@ func Command() *cobra.Command {
 	return cmd
 }
 
-// Main function that can be called directly from a main.go file
 func Main() {
 	cmd := Command()
 	if err := cmd.Execute(); err != nil {
