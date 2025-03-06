@@ -2,7 +2,7 @@
 
 set -e
 
-echo "Running pre-push hook to check documentation..."
+echo "Running pre-push hook to check documentation"
 
 if [[ -f "osdctl_commands.md" ]]; then
     PRE_MD5=$(md5sum "osdctl_commands.md" | cut -d ' ' -f 1)
@@ -10,7 +10,7 @@ else
     PRE_MD5=""
 fi
 
-echo "Generating documentation..."
+
 if make generate-docs; then
     echo "Documentation generated successfully."
 else
