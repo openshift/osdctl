@@ -35,6 +35,12 @@ make build
 
 Then you can find the `osdctl` binary file in the `./dist` subdirectory matching your architecture.
 
+### Update documentation after every release##
+
+make install-hooks
+
+This will install the git hook necessary for checking documentation updates before pushing code to the repository, if there are any changes are detected the hook will run make generate-dcos to generate documentation.
+
 ### Download from release
 
 Release are available on Github
