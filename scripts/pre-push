@@ -38,7 +38,7 @@ if [ -f "osdctl_commands.md" ]; then
     if [ "$PRE_MD5" != "$POST_MD5" ]; then
         echo "ERROR: Documentation is out of date. The pre-push hook updated it."
         echo "Please add and commit the updated documentation before pushing:"
-        echo "    git add docs/ osdctl_commands.md"
+        echo "    git add ."
         echo "    git commit -m \"Update documentation\""
         exit 1
     else
