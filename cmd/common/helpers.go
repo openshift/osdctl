@@ -6,6 +6,7 @@ import (
 
 	bplogin "github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
 	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
+	"github.com/openshift/osdctl/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -35,15 +36,24 @@ func UpdateSecret(kubeClient client.Client, secretName string, secretNamespace s
 
 // If some elevationReasons are provided, then the config will be elevated with user backplane-cluster-admin
 func GetKubeConfigAndClient(clusterID string, elevationReasons ...string) (client.Client, *rest.Config, *kubernetes.Clientset, error) {
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to create ocm client: %w", err)
+	}
+	cluster, err := utils.GetCluster(ocmClient, clusterID)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to retrieve cluster: %w", err)
+	}
+
 	bp, err := bpconfig.GetBackplaneConfiguration()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
 	}
 	var kubeconfig *rest.Config
 	if len(elevationReasons) == 0 {
-		kubeconfig, err = bplogin.GetRestConfig(bp, clusterID)
+		kubeconfig, err = bplogin.GetRestConfig(bp, cluster.ID())
 	} else {
-		kubeconfig, err = bplogin.GetRestConfigAsUser(bp, clusterID, "backplane-cluster-admin", elevationReasons...)
+		kubeconfig, err = bplogin.GetRestConfigAsUser(bp, cluster.ID(), "backplane-cluster-admin", elevationReasons...)
 	}
 	if err != nil {
 		return nil, nil, nil, err
