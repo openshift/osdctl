@@ -128,8 +128,9 @@ These operations require the following:
 
 	rotateAWSCredsCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile from local config to use(default='default')")
 	rotateAWSCredsCmd.Flags().StringVarP(&ops.reason, "reason", "r", "", "(Required) The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket).")
-	rotateAWSCredsCmd.Flags().BoolVar(&ops.updateMgmtCredsCli, "rotate-managed-admin", false, "Rotate osdManagedAdmin user credentials. Interactive. Use caution.")
-	rotateAWSCredsCmd.Flags().BoolVar(&ops.updateCcsCredsCli, "rotate-ccs-admin", false, "Rotate osdCcsAdmin user credentials. Interactive. Use caution!")
+	rotateAWSCredsCmd.Flags().BoolVar(&ops.updateMgmtCredsCli, "rotate-managed-admin", false, "Rotate osdManagedAdmin user credentials, and CR secrets. Interactive. Use caution.")
+	rotateAWSCredsCmd.Flags().BoolVar(&ops.updateCcsCredsCli, "rotate-ccs-admin", false, "Rotate osdCcsAdmin user credentials, and CR secrets. Interactive. Use caution!")
+	rotateAWSCredsCmd.Flags().BoolVar(&ops.rotateCRSecretsOnly, "rotate-cr-secrets", false, "Delete Openshift secrets related to AWSProvider Credential Requests w/o needing to rotate IAM keys")
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.describeKeysCli, "describe-keys", false, "Print AWS AccessKey info for osdManagedAdmin and osdCcsAdmin relevant cred rotation, and exit")
 	rotateAWSCredsCmd.Flags().BoolVar(&ops.describeSecretsCli, "describe-secrets", false, "Print AWS CredentialRequests ref'd secrets info relevant to cred rotation, and exit")
 	rotateAWSCredsCmd.Flags().StringVar(&ops.osdManagedAdminUsername, "admin-username", "", "The admin username to use for generating access keys. Must be in the format of `osdManagedAdmin*`. If not specified, this is inferred from the account CR.")
@@ -138,12 +139,15 @@ These operations require the following:
 	rotateAWSCredsCmd.Flags().IntVarP(&ops.verboseLevel, "verbose", "v", 3, "debug=4, (default)info=3, warn=2, error=1")
 	// Reason is required for elevated backplane-admin impersonated requests
 	_ = rotateAWSCredsCmd.MarkFlagRequired("reason")
-	rotateAWSCredsCmd.MarkFlagsOneRequired("describe-keys", "describe-secrets", "rotate-managed-admin", "rotate-ccs-admin")
+	rotateAWSCredsCmd.MarkFlagsOneRequired("describe-keys", "describe-secrets", "rotate-managed-admin", "rotate-ccs-admin", "rotate-cr-secrets")
 	// Dont allow mixing describe and rotate options...
 	rotateAWSCredsCmd.MarkFlagsMutuallyExclusive("describe-keys", "rotate-managed-admin")
 	rotateAWSCredsCmd.MarkFlagsMutuallyExclusive("describe-keys", "rotate-ccs-admin")
+	rotateAWSCredsCmd.MarkFlagsMutuallyExclusive("describe-keys", "rotate-cr-secrets")
 	rotateAWSCredsCmd.MarkFlagsMutuallyExclusive("describe-secrets", "rotate-managed-admin")
 	rotateAWSCredsCmd.MarkFlagsMutuallyExclusive("describe-secrets", "rotate-ccs-admin")
+	rotateAWSCredsCmd.MarkFlagsMutuallyExclusive("describe-secrets", "rotate-cr-secrets")
+
 	return rotateAWSCredsCmd
 }
 
@@ -154,6 +158,7 @@ type rotateCredOptions struct {
 	reason                  string // Reason used to justify elevate/impersonate ops
 	updateCcsCredsCli       bool   // Bool flag to indicate whether or not to update special AWS user 'osdCcsAdmin' creds.
 	updateMgmtCredsCli      bool   // Bool flag to indicate whether or not to update AWS user 'osdManagedAdmin' creds.
+	rotateCRSecretsOnly     bool   // Bool flag to delete secrets related to AWSProvider Credential Requests w/o rotating IAM keys
 	osdManagedAdminUsername string // Name of AWS Managed Admin user. Legacy default values are used if not provided.
 	describeSecretsCli      bool   // Print Cred requests ref'd AWS secrets info and exit
 	describeKeysCli         bool   // Print Access Key info and exit
@@ -162,13 +167,13 @@ type rotateCredOptions struct {
 	awsAccountTimeout       *int32 // Default timeout
 	ocmConfigHivePath       string // Optional OCM config path to use for Hive connections
 
-	//Runtime attrs
+	// Runtime attrs
 	verboseLevel int             //Logging level
 	log          logging.Logger  // Used for logging runtime messages (default stdout)
 	ctx          context.Context // Context to user for rotation ops
 	genericclioptions.IOStreams
 
-	//AWS runtime attrs
+	// AWS runtime attrs
 	account              *awsv1alpha1.Account // aws-account-operator account obj
 	accountIDSuffixLabel string               // account suffix label
 	accountID            string               // AWS account id
@@ -176,7 +181,7 @@ type rotateCredOptions struct {
 	secretName           string               // account AWS creds secret
 	awsClient            awsprovider.Client   //AWS client used for final access and cred rotation
 
-	//Openshift runtime attrs
+	// Openshift runtime attrs
 	cluster           *cmv1.Cluster         // Cluster object representing user cluster of 'clusterID'
 	clusterKubeClient client.Client         // Cluster BP kube client connection
 	clusterClientset  *kubernetes.Clientset // Cluster BP Kube ClientSet
@@ -212,7 +217,7 @@ func (o *rotateCredOptions) preRunCliChecks(cmd *cobra.Command, args []string) e
 	o.awsAccountTimeout = awsSdk.Int32(900)
 
 	if o.osdManagedAdminUsername != "" && !strings.HasPrefix(o.osdManagedAdminUsername, common.OSDManagedAdminIAM) {
-		return cmdutil.UsageErrorf(cmd, fmt.Sprintf("admin-username must start with %v", common.OSDManagedAdminIAM))
+		return cmdutil.UsageErrorf(cmd, "admin-username must start with %s", common.OSDManagedAdminIAM)
 	}
 
 	if len(o.ocmConfigHivePath) > 0 {
@@ -239,10 +244,10 @@ func (o *rotateCredOptions) preRunCliChecks(cmd *cobra.Command, args []string) e
 	}
 	o.log = logger
 	// This is also caught by the Cobra flags, but Cobra's error message is a bit cryptic so catching here first...
-	if !o.updateCcsCredsCli && !o.updateMgmtCredsCli && !o.describeKeysCli && !o.describeSecretsCli {
-		return cmdutil.UsageErrorf(cmd, "must provide one or more actions: ('--rotate-managed-admin' and/or '--rotate-ccs-admin'), or '--describe-secrets', or '--describe-keys'")
+	if !o.updateCcsCredsCli && !o.updateMgmtCredsCli && !o.rotateCRSecretsOnly && !o.describeKeysCli && !o.describeSecretsCli {
+		return cmdutil.UsageErrorf(cmd, "must provide one or more actions: ('--rotate-managed-admin', and/or '--rotate-ccs-admin', or '--rotate-cr-secrets), or '--describe-secrets', or '--describe-keys'")
 	}
-	if (o.updateCcsCredsCli || o.updateMgmtCredsCli) && (o.describeKeysCli || o.describeSecretsCli) {
+	if (o.updateCcsCredsCli || o.updateMgmtCredsCli || o.rotateCRSecretsOnly) && (o.describeKeysCli || o.describeSecretsCli) {
 		return cmdutil.UsageErrorf(cmd, "can not combine 'describe*' with 'rotate*' commands")
 	}
 
@@ -265,7 +270,7 @@ func (o *rotateCredOptions) preRunCliChecks(cmd *cobra.Command, args []string) e
 		o.log.Error(o.ctx, "Failed to load AWS config:'%v'\n", err)
 		return err
 	}
-	// This attempts to setthe k8s logger to avoid
+	// This attempts to set the k8s logger to avoid
 	// random kubernetes backtraces + warnings about not setting it.
 	// This should only impact klog used by vendored kubernetes, and not the goLogger
 	// which is primarily used throughout this osdctl cmd.
@@ -293,7 +298,7 @@ func (o *rotateCredOptions) preRunCliChecks(cmd *cobra.Command, args []string) e
 /* Main function used to run this CLI utility */
 func (o *rotateCredOptions) run() error {
 	var err error = nil
-	if o.log.DebugEnabled() && !o.updateMgmtCredsCli && !o.updateCcsCredsCli {
+	if o.log.DebugEnabled() && (o.describeKeysCli || o.describeSecretsCli) {
 		err = o.printClusterInfo()
 	}
 	if err != nil {
@@ -301,6 +306,14 @@ func (o *rotateCredOptions) run() error {
 	}
 
 	if o.describeSecretsCli {
+		// Make sure we have a backplane connection to the target cluster...
+		if o.clusterKubeClient == nil {
+			err := o.connectClusterClient()
+			if err != nil {
+				o.log.Error(o.ctx, "Error connecting to cluster:'%v'", err)
+				return err
+			}
+		}
 		// Print info for secrets referenced by AWS provider credentialRequests then exit...
 		err = o.printAWSCredRequestSecrets(nil)
 		if err != nil {
@@ -311,22 +324,25 @@ func (o *rotateCredOptions) run() error {
 		}
 	}
 
-	err = o.connectHiveClient()
-	if err != nil {
-		return err
-	}
-	err = o.fetchAwsClaimNameInfo()
-	if err != nil {
-		return err
-	}
+	// Setup AWS/Hive related artifacts if requested op requires them...
+	if o.updateMgmtCredsCli || o.updateCcsCredsCli || o.describeKeysCli {
+		err = o.connectHiveClient()
+		if err != nil {
+			return err
+		}
+		err = o.fetchAwsClaimNameInfo()
+		if err != nil {
+			return err
+		}
 
-	err = o.fetchAWSAccountInfo()
-	if err != nil {
-		return err
-	}
-	err = o.setupAwsClient()
-	if err != nil {
-		return err
+		err = o.fetchAWSAccountInfo()
+		if err != nil {
+			return err
+		}
+		err = o.setupAwsClient()
+		if err != nil {
+			return err
+		}
 	}
 
 	if o.describeKeysCli {
@@ -344,17 +360,19 @@ func (o *rotateCredOptions) run() error {
 	}
 
 	// Begin rotate specific operations...
-	if !o.updateMgmtCredsCli && !o.updateCcsCredsCli {
-		// user did not select a rotate operation, this should be caught in pre-run checks
+	if !o.updateMgmtCredsCli && !o.updateCcsCredsCli && !o.rotateCRSecretsOnly {
+		// user did not select a rotate operation, nothing more to do here.
 		return nil
 	}
+
 	// Display cluster info, let user confirm they are on the correct cluster, etc...
 	o.printClusterInfo()
-	fmt.Println("Proceed with Managed Admin AWS credentials rotation on this cluster?")
+	fmt.Printf("Confirm cluster info above is correct. Proceed?\n")
 	if !utils.ConfirmPrompt() {
 		fmt.Println("User quit.")
 		return nil
 	}
+
 	// Rotate credentials for IAM user OsdManagedAdmin
 	if o.updateMgmtCredsCli {
 		err = o.doRotateManagedAdminAWSCreds()
@@ -431,6 +449,10 @@ func (o *rotateCredOptions) printClusterInfo() error {
 // Get list of credentialsRequests with openshift namespaces for AWS provider type.
 // The secrets referenced by these credReqs will need to be updated after cred rotation.
 func (o *rotateCredOptions) getAWSCredentialsRequests(nameSpace string) ([]credreqv1.CredentialsRequest, error) {
+	// Make sure context and cluster connections have been established first
+	if o.ctx == nil {
+		return nil, fmt.Errorf("invalid ctx, nil")
+	}
 	// Make sure we have a backplane connection to the target cluster...
 	if o.clusterKubeClient == nil {
 		err := o.connectClusterClient()
@@ -438,18 +460,17 @@ func (o *rotateCredOptions) getAWSCredentialsRequests(nameSpace string) ([]credr
 			return nil, err
 		}
 	}
-	if o.ctx == nil {
-		return nil, fmt.Errorf("invalid ctx, nil")
-	}
+
 	const AWSProviderSpecType string = "AWSProviderSpec"
 	delCredReqList := []credreqv1.CredentialsRequest{}
 	var credRequestList credreqv1.CredentialsRequestList
 	var listOptions = client.ListOptions{}
-	// TODO:!! If 'nameSpace' is not provided query is agaist all namespaces.
-	// Limiting this to the 'cloud-credential' op namespace does exclude some relevant secrets.
-	// Should this provide a namespace here? ie namespace="openshift-cloud-credential-operator"
-	// Original aws-creds-rotate.sh script does provide the -n $namespace,
-	// 'but' also provides -A which would negate the provided namespace(?)
+	//NOTE:
+	// Original aws-creds-rotate.sh script uses -A to query all namespaces.
+	// CCO manages CRs outside the 'openshift-cloud-credential-operator' namespace
+	// so for OSD/ROSA gathering CRs from all namespaces may be needed at this time.
+	// Could possibly cross check with managed fields to confirm the CR is managed by
+	// CCO.
 	if len(nameSpace) > 0 {
 		// ie: listOptions.Namespace = credreqv1.CloudCredOperatorNamespace
 		listOptions.Namespace = nameSpace
@@ -499,6 +520,7 @@ func getProviderSpecKind(cr credreqv1.CredentialsRequest) (string, error) {
 	}
 }
 
+// Struct for displaying CR secret info
 type credReqSecrets struct {
 	SecretName                 string                       `json:"SecretName"`
 	SecretNamespace            string                       `json:"SecretNamespace"`
@@ -513,7 +535,7 @@ func (o *rotateCredOptions) printAWSCredRequestSecrets(awsCredReqs *[]credreqv1.
 	if awsCredReqs == nil {
 		reqs, err := o.getAWSCredentialsRequests("")
 		if err != nil {
-			o.log.Warn(o.ctx, "Error fetching AWS related credentialRequests to delete secrets, err:'%s'\n", err)
+			o.log.Warn(o.ctx, "Error fetching AWS provider credentialRequests, err:'%s'\n", err)
 			return err
 		}
 		awsCredReqs = &reqs
@@ -527,7 +549,7 @@ func (o *rotateCredOptions) printAWSCredRequestSecrets(awsCredReqs *[]credreqv1.
 	if o.output == standardFormat {
 		w = tabwriter.NewWriter(os.Stdout, 1, 1, 1, ' ', 0)
 		fmt.Fprintf(w, "--------------------------------------------------------------------------\n")
-		fmt.Fprintf(w, "AWS CredentialsRequest referenced secrets:\n")
+		fmt.Fprintf(w, "AWS Provider CredentialsRequest referenced secrets:\n")
 		fmt.Fprintf(w, "--------------------------------------------------------------------------\n")
 	}
 	for ind, cr := range *awsCredReqs {
@@ -557,10 +579,10 @@ func (o *rotateCredOptions) printAWSCredRequestSecrets(awsCredReqs *[]credreqv1.
 // #2 Prompt user after printing, ask to continue.
 // #3 Prompt User per secret before deleting.
 func (o *rotateCredOptions) deleteAWSCredRequestSecrets() error {
-	awsCredReqs, err := o.getAWSCredentialsRequests("")
 	rotateAllWithoutPrompts := false
+	awsCredReqs, err := o.getAWSCredentialsRequests("")
 	if err != nil {
-		o.log.Warn(o.ctx, "Error fetching AWS related credentialRequests to delete secrets, err:'%s'\n", err)
+		o.log.Warn(o.ctx, "Error fetching AWS related credentialRequests, err:'%s'\n", err)
 		return err
 	}
 	if awsCredReqs == nil {
@@ -643,15 +665,12 @@ func (o *rotateCredOptions) preRunSetup() error {
 	o.log.Debug(o.ctx, "Creating OCM connection...\n")
 	ocmConn, err := utils.CreateConnection()
 	if err != nil {
-		return fmt.Errorf("failed to create OCM client: %w", err)
-	}
-	defer o.closeOcmConn(ocmConn)
-	// currently using account account.spec.byoc value later for ccs sanity checks, are both values still needed?
-	o.isCCS, err = utils.IsClusterCCS(ocmConn, o.clusterID)
-	if err != nil {
+		o.log.Error(o.ctx, "Failed to create OCM connection: %w", err)
 		return err
 	}
-	o.log.Debug(o.ctx, "Is Cluster CCS?:%t\n", o.isCCS)
+	defer o.closeOcmConn(ocmConn)
+	o.log.Debug(o.ctx, "Created OCM connection")
+
 	// Fetch the cluster info, this will return an error if more than 1 cluster is matched
 	cluster, err := utils.GetClusterAnyStatus(ocmConn, o.clusterID)
 	if err != nil {
@@ -670,6 +689,14 @@ func (o *rotateCredOptions) preRunSetup() error {
 	if o.clusterID == "" {
 		return fmt.Errorf("OCM cluster.ID() returned empty value")
 	}
+
+	// currently using account account.spec.byoc value later for ccs sanity checks, are both values still needed?
+	o.isCCS, err = utils.IsClusterCCS(ocmConn, o.clusterID)
+	if err != nil {
+		return err
+	}
+	o.log.Debug(o.ctx, "Is Cluster CCS?:%t\n", o.isCCS)
+
 	return nil
 }
 
@@ -809,10 +836,12 @@ func (o *rotateCredOptions) connectHiveClient() error {
 	elevationReasons = append(elevationReasons, o.reason)
 	elevationReasons = append(elevationReasons, fmt.Sprintf("Elevation required to rotate secrets '%s' aws-account-cr-name", o.claimName))
 	if len(o.ocmConfigHivePath) <= 0 {
-		// Build hive client connection config from discovered env vars...
+		// This is the expected prod path for hive connections using env vars which
+		// are shared with the target cluster.
 		hiveCluster, err := utils.GetHiveCluster(o.clusterID)
 		if err != nil {
-			o.log.Warn(o.ctx, "error fetching hive for cluster:'%s'.\n", err)
+			o.log.Error(o.ctx, "error fetching hive for cluster:'%s'.\n", err)
+			o.log.Error(o.ctx, "If target cluster is not using prod, see option'--ocm-config-hive'. Confirm token is not expired")
 			return err
 		}
 		o.hiveCluster = hiveCluster
@@ -830,13 +859,18 @@ func (o *rotateCredOptions) connectHiveClient() error {
 		o.hiveKubeClient = hiveKubeCli
 		return nil
 	} else {
-		//TODO: - Should this be simplified to just overwrite the URL?
+		// This is the expected non-prod path where the (int/staging) target cluster does not share
+		// the same env/vars as the (prod) Hive connection. See OSD-28241.
+		//TODO: - This path allows for testing outside of production environments.
+		//      - Most of the code in this path can/should be implemented in backplane cli, and
+		//        this code can removed from this util at that time. (see OSD-28241)
 		//      - What else could be unique between OCM envs now or in the future?
 		//
 		// This portion builds a hive client using CLI provided OCM config path `--ocm-config-hive`
 		// This is intended to allow use with clusters running outside of the same 'production' env hive runs in.
 		// At the time of writing this, Hive can exist in 'prod' while the target cluster can reside in staging,
-		// integration, or other environments. This seems to require different sets of OCM config per environment.
+		// integration, or other environments. This seems to require different sets of OCM config per environment and
+		// backplane cli libs does not appear to support this at this time.
 		// This differs from typical(?) usage where OCM settings, and config paths are set + shared using environment vars,
 		// expecting a single OCM environment.
 		// The following attempts to use 'only' config found within the provided --ocm-config-hive file
@@ -1007,7 +1041,7 @@ func (o *rotateCredOptions) connectHiveClient() error {
 func (o *rotateCredOptions) getHiveShardCluster(sdkConn *sdk.Connection, clusterID string) (*cmv1.Cluster, error) {
 	connection, err := utils.CreateConnection()
 	if err != nil {
-		o.log.Error(o.ctx, "Failed to create defaults ocm sdk connection, err:'%s'", err)
+		o.log.Error(o.ctx, "Failed to create default ocm sdk connection, err:'%s'", err)
 		return nil, err
 	}
 	defer connection.Close()
@@ -1290,7 +1324,7 @@ func (o *rotateCredOptions) setupAwsClient() error {
 	// Since this is only using "IAM", hard coding to us-east-1 region should be ok...
 	awsSetupClient, err := awsprovider.NewAwsClient(o.profile, "us-east-1", "")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create initial AWS client. Check local AWS config/profile:'%s', connection, etc?\n", o.profile)
+		o.log.Error(o.ctx, "Failed to create initial AWS client using AWS profile:'%s'. Err:'%v'\n", o.profile, err)
 		return err
 	}
 
@@ -1660,7 +1694,7 @@ func (o *rotateCredOptions) saveSyncSetYaml(syncSet *hiveapiv1.SyncSet) error {
 
 func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 	if o.awsClient == nil {
-		return fmt.Errorf("AWS client has not been created yet for doRotateAWSCreds()")
+		return fmt.Errorf("AWS client has not been created yet for doRotateManagedAdminAWSCreds()")
 	}
 	// Update osdManagedAdmin secrets
 	osdManagedAdminUsername, err := o.checkOsdManagedUsername()
