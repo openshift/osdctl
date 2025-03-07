@@ -9,9 +9,7 @@ import (
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/backplane-cli/pkg/ocm"
 
-	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/openshift/osdctl/cmd/network"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
@@ -141,45 +139,13 @@ func (o *cpdOptions) run() error {
 }
 
 func isSubnetRouteValid(awsClient aws.Client, subnetID string) (bool, error) {
-	var routeTable string
-
-	// Try and find a Route Table associated with the given subnet
-	describeRouteTablesOutput, err := awsClient.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
-		Filters: []types.Filter{
-			{
-				Name:   awsSdk.String("association.subnet-id"),
-				Values: []string{subnetID},
-			},
-		},
-	})
+	routeTable, err := utils.FindRouteTableForSubnet(awsClient, subnetID)
 	if err != nil {
-		return false, fmt.Errorf("failed to describe route tables associated to subnet %s: %w", subnetID, err)
-	}
-
-	// If there are no associated RouteTables, then the subnet uses the default RoutTable for the VPC
-	if len(describeRouteTablesOutput.RouteTables) == 0 {
-		// Get the VPC ID for the subnet
-		describeSubnetOutput, err := awsClient.DescribeSubnets(&ec2.DescribeSubnetsInput{
-			SubnetIds: []string{subnetID},
-		})
-		if err != nil {
-			return false, fmt.Errorf("failed to describe subnets: %w", err)
-		}
-		if len(describeSubnetOutput.Subnets) == 0 {
-			return false, fmt.Errorf("no subnets returned for subnet id %v", subnetID)
-		}
-
-		vpcID := *describeSubnetOutput.Subnets[0].VpcId
-
-		// Set the route table to the default for the VPC
-		routeTable, err = utils.FindRouteTableForSubnet(awsClient, vpcID)
-		if err != nil {
-			return false, fmt.Errorf("failed to find route table for subnet: %w", err)
-		}
+		return false, fmt.Errorf("failed to find routetable for subnet: %w", err)
 	}
 
 	// Check that the RouteTable for the subnet has a default route to 0.0.0.0/0
-	describeRouteTablesOutput, err = awsClient.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
+	describeRouteTablesOutput, err := awsClient.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
 		RouteTableIds: []string{routeTable},
 	})
 	if err != nil {
