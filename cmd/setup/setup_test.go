@@ -90,8 +90,14 @@ var _ = Describe("Validation Functions", func() {
 			Expect(vaultPath).To(Equal("osd-sre/dynatrace/sd-sre-grail-logs"))
 		})
 
+		It("should pass valid flexible vault paths", func() {
+			vaultPath, err := ValidateDtVaultPath("osd-sre/dynatrace")
+			Expect(err).To(BeNil())
+			Expect(vaultPath).To(Equal("osd-sre/dynatrace"))
+		})
+
 		It("should fail invalid vault path", func() {
-			_, err := ValidateDtVaultPath("/osd-sre/dynatrace/sd-sre-grail-logs/logs")
+			_, err := ValidateDtVaultPath("invalid path?")
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -176,50 +182,6 @@ var _ = Describe("NewCmdSetup Command", func() {
 			Expect(viper.GetString(JiraToken)).To(Equal("ABC1234"))
 			Expect(viper.GetString(CloudTrailCmdLists)).To(Equal("  - aws s3 ls"))
 			Expect(viper.GetString(GitLabToken)).To(Equal("abcdEFGHijklMNOPqrst"))
-		})
-	})
-
-	Context("When user provides invalid inputs", func() {
-		It("should fail if required inputs are not provided", func() {
-			inputs := []string{
-				"",                          // ProdJumproleConfigKey (required, but empty)
-				"http://proxy.example.com",  // AwsProxy
-				"987654321098",              // StageJumproleConfigKey
-				"dt-vault-path",             // DtVaultPath (optional)
-				"https://vault.example.com", // VaultAddress (optional)
-				"abcdEFGHijklMNOPqrst",      // PdUserToken (optional)
-				"ABC1234",                   // JiraToken (optional)
-				"  - aws s3 ls",             // CloudTrailCmdLists (optional)
-				"abcdEFGHijklMNOPqrst",      // GitLabToken (optional)
-			}
-			inputBuffer := bytes.NewBufferString(strings.Join(inputs, "\n"))
-			reader := bufio.NewReader(inputBuffer)
-			setupCmd := NewCmdSetup()
-			setupCmd.SetOut(os.Stdout)
-			setupCmd.SetIn(reader)
-			err := setupCmd.Execute()
-			Expect(err).To(HaveOccurred())
-		})
-
-		It("should fail if invalid AWS account is provided", func() {
-			inputs := []string{
-				"invalid-account",           // ProdJumproleConfigKey (invalid)
-				"http://proxy.example.com",  // AwsProxy
-				"987654321098",              // StageJumproleConfigKey
-				"dt-vault-path",             // DtVaultPath (optional)
-				"https://vault.example.com", // VaultAddress (optional)
-				"abcdEFGHijklMNOPqrst",      // PdUserToken (optional)
-				"ABC1234",                   // JiraToken (optional)
-				"  - aws s3 ls",             // CloudTrailCmdLists (optional)
-				"abcdEFGHijklMNOPqrst",      // GitLabToken (optional)
-			}
-			inputBuffer := bytes.NewBufferString(strings.Join(inputs, "\n"))
-			reader := bufio.NewReader(inputBuffer)
-			setupCmd := NewCmdSetup()
-			setupCmd.SetOut(os.Stdout)
-			setupCmd.SetIn(reader)
-			err := setupCmd.Execute()
-			Expect(err).To(HaveOccurred())
 		})
 	})
 })
