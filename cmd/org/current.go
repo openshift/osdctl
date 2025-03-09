@@ -19,7 +19,16 @@ var (
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(run(cmd))
+			ocmClient, err := utils.CreateConnection() 
+			if err != nil {
+				cmdutil.CheckErr(err)
+			}
+			defer func() {
+				if err := ocmClient.Close(); err != nil {
+					fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
+				}
+			}()
+			cmdutil.CheckErr(run(cmd, ocmClient))
 		},
 	}
 )
@@ -34,12 +43,11 @@ func init() {
 	AddOutputFlag(flags)
 }
 
-func run(cmd *cobra.Command) error {
-	response, err := getCurrentOrg()
+func run(cmd *cobra.Command, ocmClient *sdk.Connection) error {
+	response, err := getCurrentOrg(ocmClient)
 	if err != nil {
 		return fmt.Errorf("invalid input: %q", err)
 	}
-
 	acc := Account{}
 	json.Unmarshal(response.Bytes(), &acc)
 	printOrg(acc.Organization)
@@ -47,29 +55,15 @@ func run(cmd *cobra.Command) error {
 	return nil
 }
 
-func getCurrentOrg() (*sdk.Response, error) {
-	// Create OCM client to talk
-	ocmClient, err := utils.CreateConnection()
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err := ocmClient.Close(); err != nil {
-			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
-		}
-	}()
-
-	// Now get the current org
+func getCurrentOrg(ocmClient *sdk.Connection) (*sdk.Response, error) {
 	return sendRequest(createGetCurrentOrgRequest(ocmClient))
 }
 
 func createGetCurrentOrgRequest(ocmClient *sdk.Connection) *sdk.Request {
-	// Create and populate the request:
 	request := ocmClient.Get()
 	err := arguments.ApplyPathArg(request, currentAccountApiPath)
 	if err != nil {
 		log.Fatalf("Can't parse API path '%s': %v\n", currentAccountApiPath, err)
 	}
-
 	return request
 }

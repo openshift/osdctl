@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	sdk "github.com/openshift-online/ocm-sdk-go"
 	amv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -19,7 +20,16 @@ var (
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(getCustomers(cmd))
+			ocmClient, err := utils.CreateConnection() 
+			if err != nil {
+				cmdutil.CheckErr(err)
+			}
+			defer func() {
+				if err := ocmClient.Close(); err != nil {
+					fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
+				}
+			}()
+			cmdutil.CheckErr(getCustomers(cmd, ocmClient))
 		},
 	}
 	paying   bool   = true
@@ -51,20 +61,9 @@ func init() {
 	AddOutputFlag(flags)
 }
 
-func getCustomers(cmd *cobra.Command) error {
+func getCustomers(cmd *cobra.Command, ocmClient *sdk.Connection) error {
 	pageSize := 1000
 	pageIndex := 1
-
-	// Create OCM client to talk
-	ocmClient, err := utils.CreateConnection()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := ocmClient.Close(); err != nil {
-			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
-		}
-	}()
 
 	if !paying {
 		subsType = "Config"
@@ -74,7 +73,7 @@ func getCustomers(cmd *cobra.Command) error {
 	var customerList []Customer
 
 	for {
-
+		var response *amv1.ResourceQuotasListResponse
 		response, err := ocmClient.AccountsMgmt().V1().ResourceQuota().List().
 			Size(pageSize).
 			Page(pageIndex).
