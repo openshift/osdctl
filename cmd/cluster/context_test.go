@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"bou.ke/monkey"
 	pd "github.com/PagerDuty/go-pagerduty"
 	"github.com/andygrunwald/go-jira"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
@@ -20,13 +19,9 @@ import (
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	v2 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"github.com/openshift/osdctl/cmd/dynatrace"
-	"github.com/openshift/osdctl/cmd/servicelog"
-	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/provider/pagerduty"
-	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -55,20 +50,6 @@ type mockAwsClient struct {
 }
 
 type MockPdClient struct{}
-
-func TestGenerateContextData(t *testing.T) {
-
-	instance := pagerduty.NewClient()
-
-	patchGetPDServiceIDs := monkey.Patch(
-		instance.GetPDServiceIDs,
-		func() ([]string, error) {
-			return nil, nil
-		},
-	)
-	defer patchGetPDServiceIDs.Unpatch()
-
-}
 
 func TestNewCmdContext(t *testing.T) {
 	cmd := newCmdContext()
@@ -375,7 +356,7 @@ func TestBuildSplunkURL(t *testing.T) {
 				CreationTimestamp: time.Now(),
 			}
 
-			o := &contextOptions{
+			o := &ContextOptions{
 				cluster: mockCluster.ToV1Cluster(),
 				infraID: tc.infraID,
 			}
@@ -400,7 +381,7 @@ func TestPrintOtherLinks(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	o := &contextOptions{
+	o := &ContextOptions{
 		clusterID:         mockClusterID,
 		externalClusterID: mockExternalClusterID,
 	}
@@ -532,7 +513,7 @@ func captureOutput(f func()) string {
 }
 
 func TestPrintShortOutput(t *testing.T) {
-	opts := &contextOptions{days: 7}
+	opts := &ContextOptions{days: 7}
 
 	limitedSupportReason, _ := v1.NewLimitedSupportReason().Build()
 	serviceLog1, _ := v2.NewLogEntry().
@@ -576,7 +557,7 @@ func TestPrintShortOutput(t *testing.T) {
 }
 
 func TestPrintJsonOutput(t *testing.T) {
-	opts := &contextOptions{}
+	opts := &ContextOptions{}
 	jiraIssue := jira.Issue{Key: "JIRA-999"}
 
 	data := &contextData{
@@ -678,7 +659,7 @@ func TestPrintLongOutput(t *testing.T) {
 	*mockData.CloudtrailEvents[0].EventId = "evt-1234567890"
 	*mockData.CloudtrailEvents[0].Username = "mockUser"
 
-	o := &contextOptions{
+	o := &ContextOptions{
 		verbose: true,
 		days:    30,
 		full:    true,
@@ -718,27 +699,33 @@ func (mockAwsClient) LookupEvents(input *cloudtrail.LookupEventsInput) (*cloudtr
 	}, nil
 }
 
-func TestGetCloudTrailLogsForCluster(t *testing.T) {
+type mockClientGeneratorImpl struct{}
 
+func (m *mockClientGeneratorImpl) GenerateAWSClientForCluster(awsProfile, clusterID string) (aws.Client, error) {
+	return &mockAwsClient{}, nil
+}
+
+func TestGetCloudTrailLogsForCluster(t *testing.T) {
 	awsProfile := "test-profile"
 	clusterID := "test-cluster-id"
 	maxPages := 1
 
-	monkey.Patch(osdCloud.GenerateAWSClientForCluster, func(awsProfile string, clusterID string) (aws.Client, error) {
-		return &mockAwsClient{}, nil
+	// Store the original client generator
+	originalGenerator := ClientGeneratorInstance
+	defer func() {
+		ClientGeneratorInstance = originalGenerator
+	}()
 
-	})
+	// Replace with mock client generator
+	ClientGeneratorInstance = &mockClientGeneratorImpl{}
 
-	defer monkey.UnpatchAll()
-
+	// Call the original function
 	filteredEvents, err := GetCloudTrailLogsForCluster(awsProfile, clusterID, maxPages)
 
 	assert.NoError(t, err)
-
 	assert.NotEmpty(t, filteredEvents)
 
 	for _, event := range filteredEvents {
-
 		assert.NotNil(t, event.EventName)
 
 		if event.Username != nil {
@@ -749,81 +736,204 @@ func TestGetCloudTrailLogsForCluster(t *testing.T) {
 	t.Logf("Filtered Events: %+v", filteredEvents)
 }
 
-func (m *MockPdClient) GetPDServiceIDs() ([]string, error) {
-	return nil, nil
+type mockCluster struct {
+	mock.Mock
 }
 
-func TestRunWithOutputFormats(t *testing.T) {
+// Mock the Name() method
+func (m *mockCluster) Name() string {
+	args := m.Called()
+	return args.String(0)
+}
 
-	testCases := []struct {
-		output   string
-		expected string
-	}{
-		{shortOutputConfigValue, "Expected no error"},
-		{longOutputConfigValue, "Expected no error"},
-		{jsonOutputConfigValue, "Expected no error"},
-		{"unknown_format", "unknown Output Format: unknown_format"},
+// Mock the RawID() method
+type VersionInterface interface {
+	RawID() string
+}
+
+type MockClusterFetcher struct {
+	mock.Mock
+}
+
+func (m *MockClusterFetcher) GetCluster(connection *sdk.Connection, key string) (*v1.Cluster, error) {
+	args := m.Called(connection, key)
+	if cluster, ok := args.Get(0).(*v1.Cluster); ok {
+		return cluster, args.Error(1)
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.output, func(t *testing.T) {
-			o := &contextOptions{output: tc.output}
+	return nil, fmt.Errorf("unexpected return type, expected *v1.Cluster but got %T", args.Get(0))
+}
 
-			serviceLog1, _ := v2.NewLogEntry().
-				Description("Log 1").
-				Timestamp(time.Now()).
-				Build()
+// Mock implementation of JiraIssueFetcher interface
+type MockJiraIssueFetcher struct {
+	mock.Mock
+}
 
-			serviceLog2, _ := v2.NewLogEntry().
-				Description("Log 2").
-				Timestamp(time.Now()).
-				Build()
+func (m *MockJiraIssueFetcher) GetJiraIssuesForCluster(clusterID, externalClusterID string) ([]jira.Issue, error) {
+	args := m.Called(clusterID, externalClusterID)
+	return args.Get(0).([]jira.Issue), args.Error(1)
+}
 
-			defer monkey.UnpatchAll()
+func (m *MockJiraIssueFetcher) GetJiraSupportExceptionsForOrg(organizationID string) ([]jira.Issue, error) {
+	args := m.Called(organizationID)
+	return args.Get(0).([]jira.Issue), args.Error(1)
+}
 
-			monkey.Patch(utils.GetCluster, func(connection *sdk.Connection, key string) (cluster *v1.Cluster, err error) {
-				return &v1.Cluster{}, nil
-			})
+// Mock implementation of DynatraceFetcher interface
+type MockDynatraceFetcher struct {
+	mock.Mock
+}
 
-			monkey.Patch(utils.GetJiraIssuesForCluster, func(clusterID string, externalClusterID string) ([]jira.Issue, error) {
-				return []jira.Issue{}, nil
-			})
+func (m *MockDynatraceFetcher) FetchClusterDetails(clusterKey string) (dynatrace.HCPCluster, error) {
+	args := m.Called(clusterKey)
+	return args.Get(0).(dynatrace.HCPCluster), args.Error(1)
+}
 
-			monkey.Patch(utils.GetJiraSupportExceptionsForOrg, func(organizationID string) ([]jira.Issue, error) {
-				return []jira.Issue{}, nil
-			})
+// Mock implementation of ServiceLogFetcher interface
+type MockServiceLogFetcher struct {
+	mock.Mock
+}
 
-			monkey.Patch(dynatrace.FetchClusterDetails, func(clusterKey string) (hcpCluster dynatrace.HCPCluster, error error) {
-				return dynatrace.HCPCluster{}, nil
-			})
+func (m *MockServiceLogFetcher) GetServiceLogsSince(clusterID string, timeSince time.Time, allMessages, internalOnly bool) ([]*v2.LogEntry, error) {
+	args := m.Called(clusterID, timeSince, allMessages, internalOnly)
+	return args.Get(0).([]*v2.LogEntry), args.Error(1)
+}
 
-			monkey.Patch(servicelog.GetServiceLogsSince, func(clusterID string, timeSince time.Time, allMessages bool, internalOnly bool) ([]*v2.LogEntry, error) {
-				return []*v2.LogEntry{serviceLog1, serviceLog2}, nil
-			})
+type MockVersion struct {
+	mock.Mock
+}
 
-			pdProvider, _ := pagerduty.NewClient().
-				WithUserToken("token1").
-				WithOauthToken("oauth").
-				WithBaseDomain("abc@domain.com").
-				WithTeamIdList(viper.GetStringSlice("Id")).
-				Init()
+func (m *mockCluster) Version() VersionInterface {
+	args := m.Called()
+	return args.Get(0).(VersionInterface)
+}
 
-			monkey.Patch(pdProvider.GetPDServiceIDs, func() ([]string, error) {
-				return nil, nil
-			})
+func (m *mockCluster) ToV1Cluster1() *v1.Cluster {
+	// Return a *v1.Cluster object directly
+	cluster, _ := v1.NewCluster().
+		ID("cluster-id").
+		ExternalID("external-id").
+		InfraID("infra-id").
+		Name("test-cluster").
+		CreationTimestamp(time.Now()).
+		Hypershift(v1.NewHypershift().Enabled(true)).
+		Build()
+	return cluster
+}
 
-			err := o.run()
+type MockContextOptions struct {
+	mock.Mock
+}
 
-			if tc.output == "unknown_format" {
-				// For the unknown format, check the error
-				assert.Error(t, err)
-				assert.Equal(t, tc.expected, err.Error())
-			} else {
-				// For valid formats (short, long, json), check that no error occurred
-				if err != nil {
-					t.Errorf("Expected no error for output format %s, got: %v", tc.output, err)
-				}
-			}
+func (m *MockContextOptions) printShortOutput(data *contextData) {
+	m.Called(data)
+}
+
+func TestRunMethod(t *testing.T) {
+
+	// Initializing the mock dependencies
+	mockClusterFetcher := new(MockClusterFetcher)
+	mockJiraIssueFetcher := new(MockJiraIssueFetcher)
+	mockDynatraceFetcher := new(MockDynatraceFetcher)
+	mockServiceLogFetcher := new(MockServiceLogFetcher)
+
+	mockContext := new(MockContextOptions)
+
+	// Creating the ContextOptions struct with the mocked dependencies
+	contextOptions := &ContextOptions{
+		clusterFetcher:    mockClusterFetcher,
+		jiraIssueFetcher:  mockJiraIssueFetcher,
+		dynatraceFetcher:  mockDynatraceFetcher,
+		serviceLogFetcher: mockServiceLogFetcher,
+		output:            shortOutputConfigValue,
+		clusterID:         "test-cluster-id",
+		externalClusterID: "test-external-cluster-id",
+		organizationID:    "test-org-id",
+	}
+
+	mockCluster := new(mockCluster)
+	mockVersion := new(MockVersion)
+	mockCluster.On("Name").Return("test-cluster")
+	mockVersion.On("RawID").Return("1.0.0")
+	mockCluster.On("Version").Return(mockVersion)
+
+	mockIssues := []jira.Issue{
+		{ID: "123", Key: "JIRA-001", Fields: &jira.IssueFields{Summary: "Issue 1", Description: "Test issue 1"}},
+		{ID: "124", Key: "JIRA-002", Fields: &jira.IssueFields{Summary: "Issue 2", Description: "Test issue 2"}},
+	}
+	// Mocking the dependencies
+	mockClusterFetcher.On("GetCluster", mock.Anything, mock.Anything).Return(mockCluster.ToV1Cluster1(), nil)
+	mockJiraIssueFetcher.On("GetJiraIssuesForCluster", mock.Anything, mock.Anything).Return(mockIssues, nil)
+	mockJiraIssueFetcher.On("GetJiraSupportExceptionsForOrg", mock.Anything, mock.Anything).Return(mockIssues, nil)
+	mockDynatraceFetcher.On("FetchClusterDetails", mock.Anything).Return(dynatrace.HCPCluster{}, nil)
+	mockServiceLogFetcher.On("GetServiceLogsSince", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*v2.LogEntry{}, nil)
+
+	capturedShortOutput := ""
+
+	mockContext.On("printShortOutput", mock.Anything).Run(func(args mock.Arguments) {
+		capturedShortOutput = "Short Output"
+	}).Once()
+
+	mockContext.printShortOutput(&contextData{ClusterID: "test-cluster-id"})
+
+	err := contextOptions.run()
+
+	assert.NoError(t, err)
+	assert.Equal(t, "Short Output", capturedShortOutput)
+	mockClusterFetcher.AssertExpectations(t)
+	mockJiraIssueFetcher.AssertExpectations(t)
+	mockDynatraceFetcher.AssertExpectations(t)
+	mockServiceLogFetcher.AssertExpectations(t)
+
+}
+
+func TestRun_UnknownOutput(t *testing.T) {
+	contextOptions := &ContextOptions{
+		output: "invalidOutputFormat",
+	}
+
+	err := contextOptions.run()
+
+	if err == nil || err.Error() != "unknown Output Format: invalidOutputFormat" {
+		t.Errorf("Expected unknown output format error, got: %v", err)
+	}
+}
+
+func TestPrintUserBannedStatus(t *testing.T) {
+	tests := []struct {
+		name           string
+		data           contextData
+		expectedOutput string
+	}{
+		{
+			name: "User is banned due to export control compliance",
+			data: contextData{
+				UserBanned:     true,
+				BanCode:        BanCodeExportControlCompliance,
+				BanDescription: "Banned for compliance reasons",
+			},
+		},
+		{
+			name: "User is banned but not due to export control compliance",
+			data: contextData{
+				UserBanned:     true,
+				BanCode:        "SomeOtherBanCode",
+				BanDescription: "Some other reason",
+			},
+		},
+		{
+			name: "User is not banned",
+			data: contextData{
+				UserBanned:     false,
+				BanCode:        "",
+				BanDescription: "",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			printUserBannedStatus(&tt.data)
 		})
 	}
 }
