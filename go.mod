@@ -53,6 +53,7 @@ require (
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.10.0
 	github.com/xanzy/go-gitlab v0.115.0
+	github.com/zclconf/go-cty v1.13.0
 	go.uber.org/mock v0.5.0
 	golang.org/x/oauth2 v0.26.0
 	golang.org/x/sync v0.11.0
@@ -248,7 +249,6 @@ require (
 	github.com/xlab/treeprint v1.2.0 // indirect
 	github.com/yosssi/ace v0.0.5 // indirect
 	github.com/zalando/go-keyring v0.2.6 // indirect
-	github.com/zclconf/go-cty v1.13.0 // indirect
 	gitlab.com/c0b/go-ordered-json v0.0.0-20201030195603-febf46534d5a // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.59.0 // indirect
