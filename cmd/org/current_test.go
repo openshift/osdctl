@@ -11,7 +11,7 @@ import (
 
 func Test_run(t *testing.T) {
 
-	t.Run("tt.name", func(t *testing.T) {
+	t.Run("Success Test", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)

@@ -19,7 +19,7 @@ var (
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			ocmClient, err := utils.CreateConnection() 
+			ocmClient, err := utils.CreateConnection()
 			if err != nil {
 				cmdutil.CheckErr(err)
 			}
