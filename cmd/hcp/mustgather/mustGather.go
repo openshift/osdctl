@@ -54,7 +54,7 @@ func NewCmdMustGather() *cobra.Command {
 
 	defaultAcmImage := "quay.io/stolostron/must-gather:2.11.4-SNAPSHOT-2024-12-02-15-19-44"
 	mustGatherCommand.Flags().StringVar(&mg.reason, "reason", "", "The reason for this command, which requires elevation (e.g., OHSS ticket or PD incident).")
-	mustGatherCommand.Flags().StringVar(&mg.gatherTargets, "gather", "hcp", "Comma-separated list of gather targets (available: sc_mg, sc_acm, mc_mg, mc_acm, hc, hcp).")
+	mustGatherCommand.Flags().StringVar(&mg.gatherTargets, "gather", "hcp", "Comma-separated list of gather targets (available: sc, sc_acm, mc, hcp).")
 	mustGatherCommand.Flags().StringVar(&mg.acmMustGatherImage, "acm_image", defaultAcmImage, "Overrides the acm must-gather image being used for acm mc, sc as well as hcp must-gathers.")
 
 	mustGatherCommand.MarkFlagRequired("reason")
@@ -80,11 +80,6 @@ func (mg *mustGather) Run() error {
 	}
 
 	sc, err := utils.GetServiceCluster(cluster.ID())
-	if err != nil {
-		return err
-	}
-
-	_, hcRestCfg, hcK8sCli, err := common.GetKubeConfigAndClient(cluster.ID(), mg.reason)
 	if err != nil {
 		return err
 	}
@@ -152,42 +147,59 @@ func (mg *mustGather) Run() error {
 		wg.Add(1)
 		go func(gatherTarget string) {
 			defer wg.Done()
+			// Mark this gatherTarget as completed for progress tracking
+			defer completed.Store(gatherTarget, true)
 
 			switch gatherTarget {
-			case "sc_mg":
-				if err := createMustGather(scRestCfg, scK8sCli, outputDir+"/sc_infra", ""); err != nil {
+			case "sc":
+				destDir := outputDir + "/sc_infra"
+				if err := createMustGather(scRestCfg, scK8sCli, []string{"--dest-dir=" + destDir}); err != nil {
 					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
 				}
 			case "sc_acm":
-				if err := createMustGather(scRestCfg, scK8sCli, outputDir+"/sc_acm", mg.acmMustGatherImage); err != nil {
+				destDir := outputDir + "/sc_acm"
+				if err := createMustGather(scRestCfg, scK8sCli, []string{"--dest-dir=" + destDir, "--image=" + mg.acmMustGatherImage}); err != nil {
 					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
 				}
-			case "mc_mg":
-				if err := createMustGather(mcRestCfg, mcK8sCli, outputDir+"/mc_infra", ""); err != nil {
-					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
-				}
-			case "mc_acm":
-				if err := createMustGather(mcRestCfg, mcK8sCli, outputDir+"/mc_acm", mg.acmMustGatherImage); err != nil {
+			case "mc":
+				destDir := outputDir + "/mc_infra"
+				if err := createMustGather(mcRestCfg, mcK8sCli, []string{"--dest-dir=" + destDir}); err != nil {
 					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
 				}
 			case "hcp":
-				// TODO(typeid): add ACM must-gather to dump the HCP yamls, following https://issues.redhat.com/browse/ACM-16170
-				fmt.Println("WARNING: must-gather target `hcp` currently only gathers logs. Please gather the hypershift dump manually using the hypershift binary. In the near future, this will be automated as the ACM image will contain the dump binary.")
+				destDir := outputDir + "/hcp"
 
-				gatherOptions := &dynatrace.GatherLogsOpts{Since: 72, SortOrder: "asc", DestDir: outputDir + "/hcp_logs_dump"}
+				// 1. Gather logs from DT
+				gatherOptions := &dynatrace.GatherLogsOpts{Since: 72, SortOrder: "asc", DestDir: destDir}
 				if err := gatherOptions.GatherLogs(mg.clusterId); err != nil {
 					fmt.Printf("failed to gather HCP dynatrace logs: %v\n", err)
 				}
-			case "hc":
-				if err := createMustGather(hcRestCfg, hcK8sCli, outputDir+"/hc", ""); err != nil {
+
+				// 2. ACM must-gather which includes running the hypershift binary for a dump
+				clusterHyperShift, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(mg.clusterId).Hypershift().Get().Send()
+				if err != nil {
+					fmt.Printf("failed to get OCM cluster hypershift info for %s: %v\n", mg.clusterId, err)
+					return
+				}
+
+				hcpNamespace, ok := clusterHyperShift.Body().GetHCPNamespace()
+				if !ok {
+					fmt.Println("failed to get HCP namespace")
+					return
+				}
+
+				hcName := cluster.DomainPrefix()
+				hcNamespace := strings.TrimSuffix(hcpNamespace, "-"+hcName)
+
+				// TODO(ACM-16170): replace this with an official ACM release image once it's available
+				acmHyperShiftImage := "quay.io/rokejungrh/must-gather:v2.13.0-33-linux"
+				gatherScript := fmt.Sprintf("/usr/bin/gather hosted-cluster-namespace=%s hosted-cluster-name=%s", hcNamespace, hcName)
+				if err := createMustGather(mcRestCfg, mcK8sCli, []string{"--dest-dir=" + destDir, "--image=" + acmHyperShiftImage, gatherScript}); err != nil {
 					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
 				}
 			default:
 				fmt.Printf("unknown gather type: %s\n", gatherTarget)
 			}
-
-			// Mark this gatherTarget as completed for progress tracking
-			completed.Store(gatherTarget, true)
 		}(gatherTarget)
 	}
 
@@ -212,7 +224,7 @@ func (mg *mustGather) Run() error {
 	return nil
 }
 
-func createMustGather(restCfg *rest.Config, k8sCli *kubernetes.Clientset, destDir, image string) error {
+func createMustGather(restCfg *rest.Config, k8sCli *kubernetes.Clientset, additionalFlags []string) error {
 	// We used to run this programatically by directly using the must-gather package  (see https://github.com/openshift/osdctl/pull/660)
 	// from the oc cli, but decided to opt for oc.Exec instead.
 	// Reasoning:
@@ -234,7 +246,10 @@ func createMustGather(restCfg *rest.Config, k8sCli *kubernetes.Clientset, destDi
 		cancel()
 	}()
 
-	cmd := exec.CommandContext(ctx, "oc", "adm", "must-gather", "--image="+image, "--dest-dir="+destDir, "--kubeconfig="+kubeConfigFile)
+	cmdArgs := []string{"adm", "must-gather", "--kubeconfig=" + kubeConfigFile}
+	cmdArgs = append(cmdArgs, additionalFlags...)
+
+	cmd := exec.CommandContext(ctx, "oc", cmdArgs...)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
