@@ -5,7 +5,6 @@ go 1.23.0
 toolchain go1.23.6
 
 require (
-	bou.ke/monkey v1.0.2
 	cloud.google.com/go/compute v1.33.0
 	github.com/Dynatrace/dynatrace-operator v0.14.2
 	github.com/PagerDuty/go-pagerduty v1.8.0
