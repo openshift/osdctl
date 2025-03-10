@@ -296,7 +296,7 @@ func addServiceLogs(clusterInfo *ClusterInfo) error {
 
 func addJiraIssues(clusterInfo *ClusterInfo, externalId string) error {
 	var jiraIssuesErr error
-	clusterInfo.JiraIssues, jiraIssuesErr = utils.GetJiraIssuesForCluster(clusterInfo.ID, externalId)
+	clusterInfo.JiraIssues, jiraIssuesErr = utils.GetJiraIssuesForCluster(clusterInfo.ID, externalId, "")
 	if jiraIssuesErr != nil {
 		return fmt.Errorf("failed to fetch Jira issues for cluster %v: %v", clusterInfo.ID, jiraIssuesErr)
 	}
