@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -252,8 +251,8 @@ func TestGenerateServiceLog(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			got := generateServiceLog(tc.output, tc.clusterId)
-			if diff := cmp.Diff(tc.want, got); diff != "" {
-				t.Errorf("generateServiceLog() mismatch (-want +got):\n%s", diff)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("generateServiceLog() = %v, want %v", got, tc.want)
 			}
 		})
 	}
