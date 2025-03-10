@@ -3,26 +3,29 @@ package network
 import (
 	"context"
 	"fmt"
-	"github.com/openshift-online/ocm-sdk-go/logging"
+	"reflect"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	"github.com/openshift-online/ocm-sdk-go/logging"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 
-	"reflect"
-
-	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osd-network-verifier/pkg/data/cloud"
 	"github.com/openshift/osd-network-verifier/pkg/data/cpu"
 	"github.com/openshift/osd-network-verifier/pkg/output"
 	"github.com/openshift/osd-network-verifier/pkg/probes/curl"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
+
 	"github.com/openshift/osdctl/cmd/servicelog"
-	"github.com/stretchr/testify/assert"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func newTestLogger(t *testing.T) logging.Logger {
@@ -249,8 +252,8 @@ func TestGenerateServiceLog(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			got := generateServiceLog(tc.output, tc.clusterId)
-			if !reflect.DeepEqual(got, tc.want) {
-				t.Errorf("generateServiceLog() = %v, want %v", got, tc.want)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("generateServiceLog() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -272,7 +275,6 @@ func TestEgressVerification_GetCABundle(t *testing.T) {
 			want:    "",
 			wantErr: false,
 		},
-		// Add more test cases for different scenarios
 	}
 
 	for _, tt := range tests {
@@ -308,7 +310,6 @@ func TestFiltersToString(t *testing.T) {
 			},
 			want: "[name: tag:Name, values: test]",
 		},
-		// Add more test cases
 	}
 
 	for _, tt := range tests {
@@ -459,7 +460,6 @@ func compareValidateEgressInput(expected, actual *onv.ValidateEgressInput) bool 
 	return true
 }
 
-// Testing multiple subnets
 func Test_egressVerificationGetSubnetIdAllSubnetsFlag(t *testing.T) {
 	tests := []struct {
 		name      string
