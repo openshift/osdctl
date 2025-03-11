@@ -197,7 +197,6 @@ func newContextOptions() *ContextOptions {
 	}
 }
 
-
 func (o *ContextOptions) setup(args []string) error {
 	if o.days < 1 {
 		return fmt.Errorf("cannot have a days value lower than 1")
