@@ -15,14 +15,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/coreos/go-semver/semver"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	machinev1 "github.com/openshift/api/machine/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	bpelevate "github.com/openshift/backplane-cli/pkg/elevate"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/k8s"
-	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -41,14 +39,8 @@ const (
 // controlPlane defines the struct for running resizeControlPlaneNode command
 type controlPlane struct {
 	clusterID      string
-	node           string
 	newMachineType string
 	cluster        *cmv1.Cluster
-
-	// cpms is a boolean flag to indicate that the resize will be done by
-	// control plane machine sets
-	// https://docs.openshift.com/container-platform/latest/machine_management/control_plane_machine_management/cpmso-about.html
-	cpms bool
 
 	// clientAdmin is a K8s client to cluster
 	client client.Client
@@ -72,22 +64,18 @@ func newCmdResizeControlPlane() *cobra.Command {
   The user will be prompted to send a service log after the resize is complete.`,
 		Example: `
   # Resize all control plane instances to m5.4xlarge using control plane machine sets
-  osdctl cluster resize control-plane -c "${CLUSTER_ID}" --machine-type m5.4xlarge --reason "${OHSS}"
-
-  # Legacy: Resize a control plane node on a cluster without active controlplane machineset, should be repeated for all control plane nodes
-  osdctl cluster resize control-plane-node -c "${CLUSTER_ID}" --machine-type m5.4xlarge --node ip-12-3-456-789.us-east-1.compute.internal --reason "${OHSS}"`,
+  osdctl cluster resize control-plane -c "${CLUSTER_ID}" --machine-type m5.4xlarge --reason "${OHSS}"`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := ops.New(); err != nil {
 				return err
 			}
-			return ops.run()
+			return ops.run(context.Background())
 		},
 	}
 	resizeControlPlaneNodeCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "The internal ID of the cluster to perform actions on")
 	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.newMachineType, "machine-type", "", "The target AWS machine type to resize to (e.g. m5.2xlarge)")
-	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.node, "node", "", "Specify a node for legacy (single node) resize, when the controlplane-machineset is unavailable. (e.g. ip-127.0.0.1.eu-west-2.compute.internal)")
 	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
 	resizeControlPlaneNodeCmd.MarkFlagRequired("cluster-id")
 	resizeControlPlaneNodeCmd.MarkFlagRequired("machine-type")
@@ -122,40 +110,6 @@ func (o *controlPlane) New() error {
 	// Ensure we store the internal OCM cluster id
 	o.clusterID = cluster.ID()
 
-	/*
-		Ideally we would want additional validation here for:
-		- the machine type exists
-		- the node exists on the cluster
-
-		As this command is idempotent, it will just fail on a later stage if e.g. the
-		machine type doesn't exist and can be re-run.
-	*/
-
-	if o.node != "" {
-		// Ignore error if we fail to marshal the cluster's version into a semver, we lose the opportunity to suggest
-		// using cpms
-		version, err := semver.NewVersion(o.cluster.OpenshiftVersion())
-		if err == nil {
-			if version.Major == 4 && version.Minor >= 12 {
-				log.Printf("cluster version: %s supports control plane machine sets, but a node has been given for legacy (single node) resize. If cpms is active you cannot use the --node flag and have to resize via controlplane machineset.", o.cluster.OpenshiftVersion())
-				if utils.ConfirmPrompt() {
-					return fmt.Errorf("osdctl cluster resize control-plane --cluster-id %s --machine-type %s --reason %s", o.clusterID, o.newMachineType, o.reason)
-				}
-			}
-		}
-
-		if o.cluster.CloudProvider().ID() != "aws" {
-			return errors.New("Legacy (single node) resize is only available for AWS. If controlplane machine set is unavailable, please manually resize the controlplane.")
-		}
-		// Do legacy resize
-		o.cpms = false
-		return nil
-	}
-	o.cpms = true
-	return o.newWithCPMS()
-}
-
-func (o *controlPlane) newWithCPMS() error {
 	scheme := runtime.NewScheme()
 	// Register machinev1 for ControlPlaneMachineSets
 	if err := machinev1.Install(scheme); err != nil {
@@ -483,102 +437,16 @@ type resizeControlPlaneNodeAWSClient interface {
 	ModifyInstanceAttribute(ctx context.Context, params *ec2.ModifyInstanceAttributeInput, optFns ...func(*ec2.Options)) (*ec2.ModifyInstanceAttributeOutput, error)
 }
 
-// run performs a control plane resize one node at a time by:
-// Draining the node, stopping the EC2 instance, changing the instance type, starting the EC2 instance, and uncordoning
-func (o *controlPlane) run() error {
-	if o.cpms {
-		return o.runWithCPMS(context.Background())
-	}
-
-	ocmClient, err := utils.CreateConnection()
-	if err != nil {
-		return err
-	}
-	defer ocmClient.Close()
-
-	cfg, err := osdCloud.CreateAWSV2Config(ocmClient, o.cluster)
-	if err != nil {
-		return err
-	}
-	awsClient := ec2.NewFromConfig(cfg)
-
-	machineName, nodeAwsID, err := getNodeAwsInstanceData(context.TODO(), o.node, awsClient)
-	if err != nil {
-		return err
-	}
-	fmt.Println() // Add an empty line for better output formatting
-
-	// drain node with oc adm drain <node> --ignore-daemonsets --delete-emptydir-data
-	// drainNode has its own retry dialog.
-	err = o.drainNode(o.node, o.reason)
-	if err != nil {
-		return err
-	}
-	fmt.Println() // Add an empty line for better output formatting
-
-	// Stop the node instance
-	err = withRetryCancelOption(func() error { return stopNode(context.TODO(), awsClient, nodeAwsID) }, "stopping node")
-	if err != nil {
-		return err
-	}
-	fmt.Println() // Add an empty line for better output formatting
-
-	// Once stopped, change the instance type
-	err = withRetryCancelOption(func() error { return modifyInstanceAttribute(context.TODO(), awsClient, nodeAwsID, o.newMachineType) }, "modify instance attribute")
-	if err != nil {
-		return err
-	}
-	fmt.Println() // Add an empty line for better output formatting
-
-	// Start the node instance
-	err = withRetryCancelOption(func() error { return startNode(context.TODO(), awsClient, nodeAwsID) }, "starting node")
-	if err != nil {
-		return err
-	}
-	fmt.Println() // Add an empty line for better output formatting
-
-	// uncordon node with oc adm uncordon <node>
-	err = withRetrySkipCancelOption(func() error { return uncordonNode(o.node) }, "uncordoning node")
-	if err != nil {
-		return err
-	}
-	fmt.Println() // Add an empty line for better output formatting
-
-	fmt.Println("To continue, please confirm that the node is up and running and that the cluster is in the desired state to proceed.")
-	if !utils.ConfirmPrompt() {
-		return nil
-	}
-	fmt.Println() // Add an empty line for better output formatting
-
-	fmt.Println("To finish the node resize, it is suggested to update the machine spec. This requires ***elevated privileges***. Do you want to proceed?")
-	if !utils.ConfirmPrompt() {
-		fmt.Println("Node resized, machine type not patched. Exiting...")
-		return nil
-	}
-	fmt.Println() // Add an empty line for better output formatting
-
-	// Patch node machine to update .spec
-	err = withRetryCancelOption(func() error { return o.patchMachineType(machineName, o.newMachineType, o.reason) }, "patch machine type")
-	if err != nil {
-		fmt.Println("Control plane node resized but could not patch machine .spec.")
-		return err
-	}
-
-	fmt.Println("Control plane node successfully resized.")
-
-	return promptGenerateResizeSL(o.clusterID, o.newMachineType)
-}
-
-// runWithCPMS performs a control plane resize leveraging control plane machine sets
+// run performs a control plane resize leveraging control plane machine sets
 // https://docs.openshift.com/container-platform/latest/machine_management/control_plane_machine_management/cpmso-about.html
-func (o *controlPlane) runWithCPMS(ctx context.Context) error {
+func (o *controlPlane) run(ctx context.Context) error {
 	cpms := &machinev1.ControlPlaneMachineSet{}
 	if err := o.client.Get(ctx, client.ObjectKey{Namespace: cpmsNamespace, Name: cpmsName}, cpms); err != nil {
-		return fmt.Errorf("error retrieving control plane machine set: %v\nIf CPMS is unavailable, consider using the legacy (single node) resize by specifying --node and repeating for all controlplane nodes.", err)
+		return fmt.Errorf("error retrieving control plane machine set: %v", err)
 	}
 
 	if cpms.Spec.State != machinev1.ControlPlaneMachineSetStateActive {
-		return fmt.Errorf("control plane machine set is unexpectedly in %s state, must be %s - check for service logs, support exceptions, ask for a second opinion or consider using legacy (single node) resize with the --node flag.", cpms.Spec.State, machinev1.ControlPlaneMachineSetStateActive)
+		return fmt.Errorf("control plane machine set is unexpectedly in %s state, must be %s - check for service logs, support exceptions, ask for a second opinion.", cpms.Spec.State, machinev1.ControlPlaneMachineSetStateActive)
 	}
 
 	patch := client.MergeFrom(cpms.DeepCopy())
