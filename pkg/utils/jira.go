@@ -18,7 +18,7 @@ const (
 // config
 func GetJiraClient(jiratoken string) (*jira.Client, error) {
 	if jiratoken == "" {
-		if !viper.IsSet(JiraTokenConfigKey) {
+		if viper.IsSet(JiraTokenConfigKey) {
 			jiratoken = viper.GetString(JiraTokenConfigKey)
 		}
 		if os.Getenv("JIRA_API_TOKEN") != "" {
