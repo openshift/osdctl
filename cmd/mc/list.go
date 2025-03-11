@@ -125,7 +125,6 @@ func (l *list) Run() error {
 			w.Flush()
 		}
 	default:
-
 		w := tabwriter.NewWriter(os.Stdout, 1, 1, 1, ' ', 0)
 		fmt.Fprintln(w, "NAME\tID\tSECTOR\tREGION\tACCOUNT_ID\tSTATUS")
 		for _, item := range output {
