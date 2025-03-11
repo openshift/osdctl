@@ -29,7 +29,12 @@ var (
 					fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
 				}
 			}()
-			cmdutil.CheckErr(getCustomers(cmd, ocmClient))
+
+			customers, err := getCustomers(cmd, ocmClient)
+			if err != nil {
+				cmdutil.CheckErr(err)
+			}
+			printCustomers(customers)
 		},
 	}
 	paying   bool   = true
@@ -61,7 +66,7 @@ func init() {
 	AddOutputFlag(flags)
 }
 
-func getCustomers(cmd *cobra.Command, ocmClient *sdk.Connection) error {
+func getCustomers(cmd *cobra.Command, ocmClient *sdk.Connection) ([]Customer, error) {
 	pageSize := 1000
 	pageIndex := 1
 
@@ -99,7 +104,7 @@ func getCustomers(cmd *cobra.Command, ocmClient *sdk.Connection) error {
 		pageIndex++
 	}
 	printCustomers(customerList)
-	return nil
+	return customerList, nil
 }
 
 func printCustomers(items []Customer) {

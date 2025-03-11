@@ -28,7 +28,12 @@ var (
 					fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
 				}
 			}()
-			cmdutil.CheckErr(run(cmd, ocmClient))
+		
+			org, err := run(cmd, ocmClient)
+			if err != nil {
+				cmdutil.CheckErr(err)
+			}
+			printOrg(org) 
 		},
 	}
 )
@@ -43,16 +48,18 @@ func init() {
 	AddOutputFlag(flags)
 }
 
-func run(cmd *cobra.Command, ocmClient *sdk.Connection) error {
+func run(cmd *cobra.Command, ocmClient *sdk.Connection) (Organization, error) {
 	response, err := getCurrentOrg(ocmClient)
 	if err != nil {
-		return fmt.Errorf("invalid input: %q", err)
+		return Organization{}, fmt.Errorf("invalid input: %q", err)
 	}
-	acc := Account{}
-	json.Unmarshal(response.Bytes(), &acc)
-	printOrg(acc.Organization)
 
-	return nil
+	acc := Account{}
+	if err := json.Unmarshal(response.Bytes(), &acc); err != nil {
+		return Organization{}, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return acc.Organization, nil
 }
 
 func getCurrentOrg(ocmClient *sdk.Connection) (*sdk.Response, error) {

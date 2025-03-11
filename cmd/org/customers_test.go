@@ -33,16 +33,33 @@ func Test_getCustomers(t *testing.T) {
 
 		conn, err := sdk.NewConnectionBuilder().
 			URL(server.URL).
-			TokenURL(server.URL+"/oauth2/token").
+			TokenURL(server.URL + "/oauth2/token").
 			Insecure(true).
 			Client("fake-id", "fake-secret").
 			Build()
 		if err != nil {
 			t.Fatalf("Failed to build connection: %v", err)
 		}
-		err = getCustomers(nil, conn)
+
+		customers, err := getCustomers(nil, conn)
 		if err != nil {
 			t.Errorf("getCustomers() returned an error: %v", err)
 		}
+
+		expected := []Customer{
+			{ID: "cust-1", OrganizationID: "org-1", SKU: "sku-1"},
+			{ID: "cust-2", OrganizationID: "org-2", SKU: "sku-2"},
+		}
+
+		if len(customers) != len(expected) {
+			t.Errorf("Expected %d customers, got %d", len(expected), len(customers))
+		}
+
+		for i, customer := range customers {
+			if customer != expected[i] {
+				t.Errorf("Expected customer %+v, got %+v", expected[i], customer)
+			}
+		}
 	})
 }
+
