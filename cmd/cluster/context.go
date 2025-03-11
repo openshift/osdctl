@@ -28,7 +28,6 @@ import (
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 const (
@@ -110,14 +109,17 @@ func newCmdContext() *cobra.Command {
 		Short:             "Shows the context of a specified cluster",
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
-		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(ops.complete(cmd, args))
-			cmdutil.CheckErr(ops.run())
+		RunE: func(cmd *cobra.Command, args []string) error {
+			err := ops.setup(args)
+			if err != nil {
+				return err
+			}
+
+			return ops.run()
 		},
 	}
 
 	contextCmd.Flags().StringVarP(&ops.output, "output", "o", "long", "Valid formats are ['long', 'short', 'json']. Output is set to 'long' by default")
-	contextCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Cluster ID")
 	contextCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", "", "AWS Profile")
 	contextCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 	contextCmd.Flags().BoolVar(&ops.full, "full", false, "Run full suite of checks.")
@@ -134,11 +136,7 @@ func newContextOptions() *contextOptions {
 	return &contextOptions{}
 }
 
-func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
-	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, "Provide exactly one cluster ID")
-	}
-
+func (o *contextOptions) setup(args []string) error {
 	if o.days < 1 {
 		return fmt.Errorf("cannot have a days value lower than 1")
 	}
