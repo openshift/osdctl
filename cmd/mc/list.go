@@ -35,7 +35,6 @@ func newCmdList() *cobra.Command {
 		Example: "osdctl mc list",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-
 			l.outputFormat = cmd.Flag("output").Value.String()
 			return l.Run()
 		},
@@ -45,10 +44,9 @@ func newCmdList() *cobra.Command {
 	flagSet.StringVar(
 		&l.outputFormat,
 		"output",
-		"",
-		"Output format. Supported output formats include: text, json, yaml",
+		"table",
+		"Output format. Supported output formats include: table, text, json, yaml",
 	)
-
 	return listCmd
 }
 
@@ -65,7 +63,6 @@ func (l *list) Run() error {
 	}
 
 	output := []managementClusterOutput{}
-
 	for _, mc := range managementClusters.Items().Slice() {
 		cluster, err := ocm.ClustersMgmt().V1().Clusters().Cluster(mc.ClusterManagementReference().ClusterId()).Get().Send()
 		if err != nil {
@@ -80,9 +77,7 @@ func (l *list) Run() error {
 			if err != nil {
 				log.Printf("failed to convert %s to an ARN: %v", supportRole, err)
 			}
-
 			awsAccountID = supportRoleARN.AccountID
-
 		}
 
 		output = append(output, managementClusterOutput{
@@ -97,7 +92,7 @@ func (l *list) Run() error {
 
 	switch l.outputFormat {
 	case "json":
-		jsonOutput, err := json.MarshalIndent(output, "", "  ")
+		jsonOutput, err := json.MarshalIndent(output, "", " ")
 		if err != nil {
 			return fmt.Errorf("failed to format JSON output: %v", err)
 		}
@@ -118,13 +113,12 @@ func (l *list) Run() error {
 			fmt.Fprintf(w, " Region:\t%s\n", item.Region)
 			fmt.Fprintf(w, " Account ID:\t%s\n", item.AccountID)
 			fmt.Fprintf(w, " Status:\t%s\n", item.Status)
-
 			if i < len(output)-1 {
 				fmt.Fprintln(w, "")
 			}
 			w.Flush()
 		}
-	default:
+	case "table":
 		w := tabwriter.NewWriter(os.Stdout, 1, 1, 1, ' ', 0)
 		fmt.Fprintln(w, "NAME\tID\tSECTOR\tREGION\tACCOUNT_ID\tSTATUS")
 		for _, item := range output {
@@ -138,6 +132,8 @@ func (l *list) Run() error {
 			)
 		}
 		w.Flush()
+	default:
+		return fmt.Errorf("unsupported output format: %s, must be one of: table, text, json, yaml", l.outputFormat)
 	}
 
 	return nil
