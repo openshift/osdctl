@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/openshift/osdctl/cmd"
 	"github.com/spf13/cobra"
@@ -19,6 +20,7 @@ const (
 	DefaultCmdPath = "./cmd"
 	DefaultDocsDir = "./docs"
 	StateFile      = ".docgen_state"
+	CommandsMdFile = "osdctl_commands.md"
 )
 
 type Options struct {
@@ -101,6 +103,90 @@ func hasChanged(cmdPath string) (bool, error) {
 	return currentHash != previousHash, nil
 }
 
+// Generate a single commands markdown file in README format in the root directory
+func generateCommandsMarkdown(rootCmd *cobra.Command) error {
+	// Place the file in the root directory
+	filename := CommandsMdFile
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// Write header
+	fmt.Fprintf(f, "# osdctl Commands\n\n")
+	fmt.Fprintf(f, "## Command Overview\n\n")
+
+	// Helper function to recursively list commands
+	var writeCommands func(cmd *cobra.Command, depth int)
+	writeCommands = func(cmd *cobra.Command, depth int) {
+		if !cmd.IsAvailableCommand() || cmd.IsAdditionalHelpTopicCommand() {
+			return
+		}
+
+		// Indent based on depth
+		indent := strings.Repeat("  ", depth)
+
+		// Write command with proper heading level
+		fmt.Fprintf(f, "%s- `%s` - %s\n", indent, cmd.Use, cmd.Short)
+
+		// Process subcommands
+		for _, subcmd := range cmd.Commands() {
+			writeCommands(subcmd, depth+1)
+		}
+	}
+
+	// Process all commands
+	for _, cmd := range rootCmd.Commands() {
+		writeCommands(cmd, 0)
+	}
+
+	// Add detailed command documentation
+	fmt.Fprintf(f, "\n## Command Details\n\n")
+
+	var writeCommandDetails func(cmd *cobra.Command, path string)
+	writeCommandDetails = func(cmd *cobra.Command, path string) {
+		if !cmd.IsAvailableCommand() || cmd.IsAdditionalHelpTopicCommand() {
+			return
+		}
+
+		cmdPath := path
+		if path != "" {
+			cmdPath = path + " " + cmd.Name()
+		} else {
+			cmdPath = cmd.Name()
+		}
+
+		// Add command header
+		fmt.Fprintf(f, "### %s\n\n", cmdPath)
+
+		// Add description
+		if cmd.Long != "" {
+			fmt.Fprintf(f, "%s\n\n", cmd.Long)
+		} else if cmd.Short != "" {
+			fmt.Fprintf(f, "%s\n\n", cmd.Short)
+		}
+
+		// Add usage if available
+		fmt.Fprintf(f, "```\n%s\n```\n\n", cmd.UseLine())
+
+		// Add flags if available
+		if len(cmd.Flags().FlagUsages()) > 0 {
+			fmt.Fprintf(f, "#### Flags\n\n```\n%s```\n\n", cmd.Flags().FlagUsages())
+		}
+
+		// Process subcommands
+		for _, subcmd := range cmd.Commands() {
+			writeCommandDetails(subcmd, cmdPath)
+		}
+	}
+
+	// Start with root command
+	writeCommandDetails(rootCmd, "")
+
+	return nil
+}
+
 // Generate documentation for all commands
 func GenerateDocs(opts *Options) error {
 	if opts == nil {
@@ -132,9 +218,14 @@ func GenerateDocs(opts *Options) error {
 	// Get root command
 	rootCmd := cmd.NewCmdRoot(opts.IOStreams)
 
-	// Generate markdown documentation
+	// Generate markdown documentation (individual files)
 	if err := doc.GenMarkdownTree(rootCmd, opts.DocsDir); err != nil {
 		return fmt.Errorf("generating command documentation: %w", err)
+	}
+
+	// Generate single commands markdown file in README format in the root directory
+	if err := generateCommandsMarkdown(rootCmd); err != nil {
+		return fmt.Errorf("generating commands markdown file: %w", err)
 	}
 
 	// Save new state
@@ -147,6 +238,7 @@ func GenerateDocs(opts *Options) error {
 	}
 
 	opts.Logger.Printf("✅ Documentation successfully generated in %s", opts.DocsDir)
+	opts.Logger.Printf("✅ Commands overview generated in %s", CommandsMdFile)
 
 	return nil
 }
