@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -e
 
 HOOK_DIR=".git/hooks"
@@ -10,32 +9,39 @@ mkdir -p $SCRIPTS_DIR
 
 cat > "$SCRIPTS_DIR/pre-commit" << 'EOL'
 #!/bin/bash
-
 set -e
 
-echo "Running pre-commit hook to check documentation..."
+echo "Running pre-commit hook to check docs/ directory..."
 
-# Check if there are any changes to Go code files that might affect documentation
-if git diff --staged --name-only | grep -E '\.go$'; then
-    echo "Generating documentation..."
-    if make generate-docs; then
-        echo "Documentation generated successfully."
-    else
-        echo "Failed to generate documentation. Fix errors before committing."
-        exit 1
-    fi
+CHANGED_FILES=$(git diff --staged --name-only)
 
-    # Check if there are any changes to the documentation file
-    if git diff --name-only --cached | grep -q "osdctl_commands.md"; then
-        echo "Documentation file is already staged for commit."
-    elif git diff --name-only | grep -q "osdctl_commands.md"; then
-        echo "ERROR: Documentation is out of date."
-        echo "Please stage the updated documentation before committing:"
-        echo "    git add osdctl_commands.md"
-        exit 1
-    else
-        echo "Documentation is up to date."
+if echo "$CHANGED_FILES" | grep -q -v "^docs/" && echo "$CHANGED_FILES" | grep -q "\.go$"; then
+  echo "Go files changed, checking if docs need updating..."
+  
+  if [ -d "docs" ]; then
+    DOCS_HASH_BEFORE=$(find docs -type f -print0 | sort -z | xargs -0 sha1sum | sha1sum | cut -d ' ' -f 1)
+  else
+    DOCS_HASH_BEFORE=""
+  fi
+  
+  if ! make generate-docs; then
+    echo "Failed to generate documentation. Fix errors before committing."
+    exit 1
+  fi
+  
+  if [ -d "docs" ]; then
+    DOCS_HASH_AFTER=$(find docs -type f -print0 | sort -z | xargs -0 sha1sum | sha1sum | cut -d ' ' -f 1)
+    
+    if [ "$DOCS_HASH_BEFORE" != "$DOCS_HASH_AFTER" ]; then
+      echo "ERROR: Documentation in docs/ directory is out of date."
+      echo "Please stage the updated documentation before committing:"
+      echo " git add docs/"
+      exit 1
     fi
+  else
+    echo "ERROR: docs/ directory not found after generation."
+    exit 1
+  fi
 fi
 
 echo "Pre-commit hook completed successfully."
@@ -46,5 +52,5 @@ chmod +x "$SCRIPTS_DIR/pre-commit"
 
 ln -sf "../../$SCRIPTS_DIR/pre-commit" "$HOOK_DIR/pre-commit"
 
-echo "Git hooks installed successfully!"
-echo "The pre-commit hook will check documentation when Go files are modified."
+echo "Git hook installed successfully!"
+echo "Pre-commit hook will check for changes in the docs/ directory when source files are modified."

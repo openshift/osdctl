@@ -26,9 +26,9 @@ download-goreleaser:
 
 #Update documentation as a part of every release
 
-.PHONY: generate-docs 
+.PHONY: generate-docs
 generate-docs:
-	@go run main.go docgen --cmd-path=./cmd --docs-dir=./docs --commands-file=osdctl_commands.md
+	@go run main.go docgen --cmd-path=./cmd --docs-dir=./docs
 
 #Install git hooks for checking documentation update as a part of every push
 .PHONY: install-hooks
