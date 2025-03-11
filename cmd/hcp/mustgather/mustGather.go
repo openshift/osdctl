@@ -4,44 +4,36 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
-	configclient "github.com/openshift/client-go/config/clientset/versioned"
-	imagev1client "github.com/openshift/client-go/image/clientset/versioned/typed/image/v1"
-	"github.com/openshift/oc/pkg/cli/admin/mustgather"
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/cmd/dynatrace"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/cli-runtime/pkg/genericiooptions"
-	"k8s.io/cli-runtime/pkg/printers"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
-	kcmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"k8s.io/kubectl/pkg/scheme"
-)
-
-var (
-	acmMustGatherImage = "quay.io/stolostron/must-gather:2.11.4-SNAPSHOT-2024-12-02-15-19-44"
 )
 
 type mustGather struct {
-	clusterId     string
-	reason        string
-	gatherTargets string
+	clusterId          string
+	reason             string
+	gatherTargets      string
+	acmMustGatherImage string
 }
 
 func NewCmdMustGather() *cobra.Command {
@@ -60,8 +52,10 @@ func NewCmdMustGather() *cobra.Command {
 		},
 	}
 
+	defaultAcmImage := "quay.io/stolostron/must-gather:2.11.4-SNAPSHOT-2024-12-02-15-19-44"
 	mustGatherCommand.Flags().StringVar(&mg.reason, "reason", "", "The reason for this command, which requires elevation (e.g., OHSS ticket or PD incident).")
-	mustGatherCommand.Flags().StringVar(&mg.gatherTargets, "gather", "hcp", "Comma-separated list of gather targets (available: sc_mg, sc_acm, mc_mg, mc_acm, hc, hcp).")
+	mustGatherCommand.Flags().StringVar(&mg.gatherTargets, "gather", "hcp", "Comma-separated list of gather targets (available: sc, sc_acm, mc, hcp).")
+	mustGatherCommand.Flags().StringVar(&mg.acmMustGatherImage, "acm_image", defaultAcmImage, "Overrides the acm must-gather image being used for acm mc, sc as well as hcp must-gathers.")
 
 	mustGatherCommand.MarkFlagRequired("reason")
 
@@ -86,11 +80,6 @@ func (mg *mustGather) Run() error {
 	}
 
 	sc, err := utils.GetServiceCluster(cluster.ID())
-	if err != nil {
-		return err
-	}
-
-	_, hcRestCfg, hcK8sCli, err := common.GetKubeConfigAndClient(cluster.ID(), mg.reason)
 	if err != nil {
 		return err
 	}
@@ -158,39 +147,59 @@ func (mg *mustGather) Run() error {
 		wg.Add(1)
 		go func(gatherTarget string) {
 			defer wg.Done()
+			// Mark this gatherTarget as completed for progress tracking
+			defer completed.Store(gatherTarget, true)
 
 			switch gatherTarget {
-			case "sc_mg":
-				if err := createMustGather(scRestCfg, scK8sCli, outputDir+"/sc_infra", ""); err != nil {
+			case "sc":
+				destDir := outputDir + "/sc_infra"
+				if err := createMustGather(scRestCfg, scK8sCli, []string{"--dest-dir=" + destDir}); err != nil {
 					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
 				}
 			case "sc_acm":
-				if err := createMustGather(scRestCfg, scK8sCli, outputDir+"/sc_acm", acmMustGatherImage); err != nil {
+				destDir := outputDir + "/sc_acm"
+				if err := createMustGather(scRestCfg, scK8sCli, []string{"--dest-dir=" + destDir, "--image=" + mg.acmMustGatherImage}); err != nil {
 					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
 				}
-			case "mc_mg":
-				if err := createMustGather(mcRestCfg, mcK8sCli, outputDir+"/mc_infra", ""); err != nil {
-					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
-				}
-			case "mc_acm":
-				if err := createMustGather(mcRestCfg, mcK8sCli, outputDir+"/mc_acm", acmMustGatherImage); err != nil {
+			case "mc":
+				destDir := outputDir + "/mc_infra"
+				if err := createMustGather(mcRestCfg, mcK8sCli, []string{"--dest-dir=" + destDir}); err != nil {
 					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
 				}
 			case "hcp":
-				gatherOptions := &dynatrace.GatherLogsOpts{Since: 72, SortOrder: "asc", DestDir: outputDir + "/hcp_logs_dump"}
+				destDir := outputDir + "/hcp"
+
+				// 1. Gather logs from DT
+				gatherOptions := &dynatrace.GatherLogsOpts{Since: 72, SortOrder: "asc", DestDir: destDir}
 				if err := gatherOptions.GatherLogs(mg.clusterId); err != nil {
 					fmt.Printf("failed to gather HCP dynatrace logs: %v\n", err)
 				}
-			case "hc":
-				if err := createMustGather(hcRestCfg, hcK8sCli, outputDir+"/hc", ""); err != nil {
+
+				// 2. ACM must-gather which includes running the hypershift binary for a dump
+				clusterHyperShift, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(mg.clusterId).Hypershift().Get().Send()
+				if err != nil {
+					fmt.Printf("failed to get OCM cluster hypershift info for %s: %v\n", mg.clusterId, err)
+					return
+				}
+
+				hcpNamespace, ok := clusterHyperShift.Body().GetHCPNamespace()
+				if !ok {
+					fmt.Println("failed to get HCP namespace")
+					return
+				}
+
+				hcName := cluster.DomainPrefix()
+				hcNamespace := strings.TrimSuffix(hcpNamespace, "-"+hcName)
+
+				// TODO(ACM-16170): replace this with an official ACM release image once it's available
+				acmHyperShiftImage := "quay.io/rokejungrh/must-gather:v2.13.0-33-linux"
+				gatherScript := fmt.Sprintf("/usr/bin/gather hosted-cluster-namespace=%s hosted-cluster-name=%s", hcNamespace, hcName)
+				if err := createMustGather(mcRestCfg, mcK8sCli, []string{"--dest-dir=" + destDir, "--image=" + acmHyperShiftImage, gatherScript}); err != nil {
 					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
 				}
 			default:
 				fmt.Printf("unknown gather type: %s\n", gatherTarget)
 			}
-
-			// Mark this gatherTarget as completed for progress tracking
-			completed.Store(gatherTarget, true)
 		}(gatherTarget)
 	}
 
@@ -215,64 +224,43 @@ func (mg *mustGather) Run() error {
 	return nil
 }
 
-func createMustGather(restCfg *rest.Config, k8sCli *kubernetes.Clientset, destDir, image string) error {
-	// hack(typeid): there's two major issues with using the oc cli's must gather:
-	// 1) oc cli assumes the client used for rsh and will default to a "sibling" command.
-	// This results in oc's rsync (used to copy files from a must-gather pod) to used `oc rsh`
-	// See here: https://github.com/openshift/oc/blob/cbc8edcc9c58cd8b2238d01e55ae8c8b0979ec4e/pkg/cli/rsync/copy_rsync.go#L35
-	// In our case, the default rsync remote shell gets resolved to standard rsh, which does not work as we are passing
-	// parameters like --namespace!
-	// 2) oc cli shells out to call oc rsh (in our case, just rsh) and assumes the kubeconfig.
-	// As we are running must gathers for multiple clusters, we need to make sure we're using the right kubeconfigs
-	// that we created programmatically, vs the one we currently have as a file locally.
-	// See here: https://github.com/openshift/oc/blob/cbc8edcc9c58cd8b2238d01e55ae8c8b0979ec4e/pkg/cli/rsync/copy_rsync.go#L84
-	// WORKAROUND:
-	// [1] we are overriding the `o.RsyncRshCmd` to use `oc rsh` vs `rsh`.
-	// For this, we need to use `mustgather.NewGatherOptions()` vs `mustgather.NewGatherCommand`, which adds a lot of bloat code.
-	// [2] we are passing a kubeconfig parameter, for that, we create a temporary kubeconfig from retrieved restConfig.
-
-	// We're not printing those out, as the logs are in the must-gather output.
-	var stdout, stderr bytes.Buffer
-	streams := genericiooptions.IOStreams{
-		In:     nil,
-		Out:    &stdout,
-		ErrOut: &stderr,
-	}
-
+func createMustGather(restCfg *rest.Config, k8sCli *kubernetes.Clientset, additionalFlags []string) error {
+	// We used to run this programatically by directly using the must-gather package  (see https://github.com/openshift/osdctl/pull/660)
+	// from the oc cli, but decided to opt for oc.Exec instead.
+	// Reasoning:
+	// 1) the must-gather internals, even when called programmatically, already shelled out to `oc rsync`.
+	// We had to hack around this by overriding the shell out with a specific kubeconfig.
+	// 2) the vendored dependencies of oc were causing issues with `go list`, see https://github.com/openshift/osdctl/pull/665.
 	kubeConfigFile := createKubeconfigFileForRestConfig(restCfg)
 	defer os.Remove(kubeConfigFile)
 
-	o := mustgather.NewMustGatherOptions(streams)
-	o.Client = k8sCli
-	o.Images = []string{image}
-	o.DestDir = destDir
-	o.RsyncRshCmd = fmt.Sprintf("oc rsh --kubeconfig=%s", kubeConfigFile)
-	o.Config = restCfg
-	flags := genericclioptions.NewConfigFlags(false)
-	o.RESTClientGetter = kcmdutil.NewFactory(flags)
+	// Handle sigints and sigterms
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	var err error
-	if o.ConfigClient, err = configclient.NewForConfig(restCfg); err != nil {
-		return err
-	}
-	if o.DynamicClient, err = dynamic.NewForConfig(restCfg); err != nil {
-		return err
-	}
-	if o.ImageClient, err = imagev1client.NewForConfig(restCfg); err != nil {
-		return err
-	}
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-signalChan
+		fmt.Println("Received interrupt signal, canceling operation...")
+		cancel()
+	}()
 
-	o.PrinterCreated, err = printers.NewTypeSetter(scheme.Scheme).WrapToPrinter(&printers.NamePrinter{Operation: "created"}, nil)
+	cmdArgs := []string{"adm", "must-gather", "--kubeconfig=" + kubeConfigFile}
+	cmdArgs = append(cmdArgs, additionalFlags...)
+
+	cmd := exec.CommandContext(ctx, "oc", cmdArgs...)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
 	if err != nil {
-		return err
-	}
-	o.PrinterDeleted, err = printers.NewTypeSetter(scheme.Scheme).WrapToPrinter(&printers.NamePrinter{Operation: "deleted"}, nil)
-	if err != nil {
-		return err
-	}
-
-	if err := o.Run(); err != nil {
-		return err
+		if ctx.Err() == context.Canceled {
+			return fmt.Errorf("command was canceled by user (e.g., Ctrl+C): %v\nstderr: %s", err, stderr.String())
+		}
+		return fmt.Errorf("failed to run 'oc adm must-gather': %v\nstderr: %s", err, stderr.String())
 	}
 
 	return nil
