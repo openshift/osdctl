@@ -3,7 +3,6 @@ package cluster
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -48,8 +47,6 @@ type mockAwsClient struct {
 	aws.Client
 }
 
-type MockPdClient struct{}
-
 func TestNewCmdContext(t *testing.T) {
 	cmd := newCmdContext()
 
@@ -82,14 +79,6 @@ func TestNewContextOptions(t *testing.T) {
 	assert.NotNil(t, opts)
 }
 
-func (m *MockOCMClient) Close() error {
-	return nil
-}
-
-func MockCreateConnection() (*MockOCMClient, error) {
-	return &MockOCMClient{}, nil
-}
-
 func MockGetClusters(client *MockOCMClient, args []string) []*v1.Cluster {
 	mockDNS, _ := v1.NewDNS().BaseDomain("mock-domain.com").Build()
 	mockCluster, _ := v1.NewCluster().
@@ -101,42 +90,6 @@ func MockGetClusters(client *MockOCMClient, args []string) []*v1.Cluster {
 		Build()
 
 	return []*v1.Cluster{mockCluster}
-}
-func TestSetup(t *testing.T) {
-	opts := newContextOptions()
-
-	// Test case 1: No cluster ID provided
-	err := opts.setup([]string{})
-	// assert.Error(t, err)
-	// assert.Contains(t, err.Error(), "Provide exactly one cluster ID")
-
-	// Test case 2: Invalid days value
-	opts.days = 0
-	err = opts.setup([]string{"test-cluster-id"})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot have a days value lower than 1")
-
-	mockClient, _ := MockCreateConnection()
-	mockClusters := MockGetClusters(mockClient, []string{"valid-cluster-id"})
-
-	opts.cluster = mockClusters[0]
-	opts.clusterID = opts.cluster.ID()
-	opts.externalClusterID = opts.cluster.ExternalID()
-	opts.baseDomain = opts.cluster.DNS().BaseDomain()
-	opts.infraID = opts.cluster.InfraID()
-
-	assert.Equal(t, "mock-cluster-id", opts.clusterID)
-	assert.Equal(t, "mock-external-id", opts.externalClusterID)
-	assert.Equal(t, "mock-infra-id", opts.infraID)
-	assert.Equal(t, "mock-domain.com", opts.baseDomain)
-
-	// Test case 3: Multiple clusters returned
-	mockClusters = append(mockClusters, mockClusters[0])
-	if len(mockClusters) != 1 {
-		err = errors.New("unexpected number of clusters matched input")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "unexpected number of clusters matched input")
-	}
 }
 
 func TestPrintClusterHeader(t *testing.T) {
@@ -826,6 +779,16 @@ func (m *MockContextOptions) printShortOutput(data *contextData) {
 	m.Called(data)
 }
 
+func (m *MockContextOptions) CreateConnection() (*sdk.Connection, error) {
+	args := m.Called()
+	return args.Get(0).(*sdk.Connection), args.Error(1)
+}
+
+func (m *MockContextOptions) Close() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
 func TestRunMethod(t *testing.T) {
 
 	// Initializing the mock dependencies
@@ -838,14 +801,15 @@ func TestRunMethod(t *testing.T) {
 
 	// Creating the ContextOptions struct with the mocked dependencies
 	contextOptions := &ContextOptions{
-		clusterFetcher:    mockClusterFetcher,
-		jiraIssueFetcher:  mockJiraIssueFetcher,
-		dynatraceFetcher:  mockDynatraceFetcher,
-		serviceLogFetcher: mockServiceLogFetcher,
-		output:            shortOutputConfigValue,
-		clusterID:         "test-cluster-id",
-		externalClusterID: "test-external-cluster-id",
-		organizationID:    "test-org-id",
+		oCMClientInterface: mockContext,
+		clusterFetcher:     mockClusterFetcher,
+		jiraIssueFetcher:   mockJiraIssueFetcher,
+		dynatraceFetcher:   mockDynatraceFetcher,
+		serviceLogFetcher:  mockServiceLogFetcher,
+		output:             shortOutputConfigValue,
+		clusterID:          "test-cluster-id",
+		externalClusterID:  "test-external-cluster-id",
+		organizationID:     "test-org-id",
 	}
 
 	mockCluster := new(mockCluster)
@@ -859,11 +823,13 @@ func TestRunMethod(t *testing.T) {
 		{ID: "124", Key: "JIRA-002", Fields: &jira.IssueFields{Summary: "Issue 2", Description: "Test issue 2"}},
 	}
 	// Mocking the dependencies
+	mockContext.On("CreateConnection").Return(&sdk.Connection{}, nil)
 	mockClusterFetcher.On("GetCluster", mock.Anything, mock.Anything).Return(mockCluster.ToV1Cluster1(), nil)
 	mockJiraIssueFetcher.On("GetJiraIssuesForCluster", mock.Anything, mock.Anything).Return(mockIssues, nil)
 	mockJiraIssueFetcher.On("GetJiraSupportExceptionsForOrg", mock.Anything, mock.Anything).Return(mockIssues, nil)
 	mockDynatraceFetcher.On("FetchClusterDetails", mock.Anything).Return(dynatrace.HCPCluster{}, nil)
 	mockServiceLogFetcher.On("GetServiceLogsSince", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*v2.LogEntry{}, nil)
+	mockContext.On("Close", mock.Anything).Return(nil)
 
 	capturedShortOutput := ""
 

@@ -47,25 +47,26 @@ const (
 type ContextOptions struct {
 	cluster *cmv1.Cluster
 
-	output            string
-	verbose           bool
-	full              bool
-	clusterID         string
-	externalClusterID string
-	baseDomain        string
-	organizationID    string
-	days              int
-	pages             int
-	oauthtoken        string
-	usertoken         string
-	infraID           string
-	awsProfile        string
-	jiratoken         string
-	team_ids          []string
-	clusterFetcher    ClusterFetcher
-	jiraIssueFetcher  JiraIssueFetcher
-	dynatraceFetcher  DynatraceFetcher
-	serviceLogFetcher ServiceLogFetcher
+	output             string
+	verbose            bool
+	full               bool
+	clusterID          string
+	externalClusterID  string
+	baseDomain         string
+	organizationID     string
+	days               int
+	pages              int
+	oauthtoken         string
+	usertoken          string
+	infraID            string
+	awsProfile         string
+	jiratoken          string
+	team_ids           []string
+	clusterFetcher     ClusterFetcher
+	jiraIssueFetcher   JiraIssueFetcher
+	dynatraceFetcher   DynatraceFetcher
+	serviceLogFetcher  ServiceLogFetcher
+	oCMClientInterface OCMClientInterface
 }
 
 type contextData struct {
@@ -152,11 +153,6 @@ func (f serviceLogFetcher) GetServiceLogsSince(clusterID string, timeSince time.
 	return servicelog.GetServiceLogsSince(clusterID, timeSince, allMessages, internalOnly)
 }
 
-// type PagerDutyClient interface {
-// 	GetPDServiceIDs() ([]string, error)
-// 	GetFiringAlertsForCluster(pdServiceIDs []string) (map[string][]pd.Incident, error)
-// }
-
 // newCmdContext implements the context command to show the current context of a cluster
 func newCmdContext() *cobra.Command {
 	ops := newContextOptions()
@@ -190,11 +186,30 @@ func newCmdContext() *cobra.Command {
 
 func newContextOptions() *ContextOptions {
 	return &ContextOptions{
-		clusterFetcher:    &clusterFetcher{},
-		jiraIssueFetcher:  &jiraIssueFetcher{},
-		dynatraceFetcher:  &dynatraceFetcher{},
-		serviceLogFetcher: &serviceLogFetcher{},
+		clusterFetcher:     &clusterFetcher{},
+		jiraIssueFetcher:   &jiraIssueFetcher{},
+		dynatraceFetcher:   &dynatraceFetcher{},
+		serviceLogFetcher:  &serviceLogFetcher{},
+		oCMClientInterface: &OCMClientImpl{},
 	}
+}
+
+type OCMClientInterface interface {
+	CreateConnection() (*sdk.Connection, error)
+	Close() error
+}
+type OCMClientImpl struct {
+	ocm *sdk.Connection
+}
+
+func (o *OCMClientImpl) CreateConnection() (*sdk.Connection, error) {
+	obj, err := utils.CreateConnection()
+	o.ocm = obj
+	return obj, err
+}
+
+func (o *OCMClientImpl) Close() error {
+	return o.ocm.Close()
 }
 
 func (o *ContextOptions) setup(args []string) error {
@@ -403,11 +418,11 @@ func (o *ContextOptions) generateContextData() (*contextData, []error) {
 		errors = append(errors, fmt.Errorf("skipping PagerDuty context collection: %v", err))
 	}
 
-	ocmClient, err := utils.CreateConnection()
+	ocmClient, err := o.oCMClientInterface.CreateConnection()
 	if err != nil {
 		return nil, []error{err}
 	}
-	defer ocmClient.Close()
+	defer o.oCMClientInterface.Close()
 	// Normally the o.cluster would be set by complete function, but in case we want to call this function
 	// in an other context, we can make sure o.cluster is set properly from o.clusterID
 	if o.cluster == nil {
