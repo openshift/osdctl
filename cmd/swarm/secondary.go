@@ -35,7 +35,7 @@ var secondaryCmd = &cobra.Command{
 		osdctl swarm secondary`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		jiraClient, err := utils.GetJiraClient()
+		jiraClient, err := utils.GetJiraClient("")
 		if err != nil {
 			return fmt.Errorf("failed to get Jira client: %w", err)
 		}

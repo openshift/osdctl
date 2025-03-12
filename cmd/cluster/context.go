@@ -403,7 +403,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	GetJiraIssues := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Jira Issues").End()
-		data.JiraIssues, err = utils.GetJiraIssuesForCluster(o.clusterID, o.externalClusterID)
+		data.JiraIssues, err = utils.GetJiraIssuesForCluster(o.clusterID, o.externalClusterID, o.jiratoken)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("error while getting the open jira tickets: %v", err))
 		}
@@ -412,7 +412,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	GetSupportExceptions := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Support Exceptions").End()
-		data.SupportExceptions, err = utils.GetJiraSupportExceptionsForOrg(o.organizationID)
+		data.SupportExceptions, err = utils.GetJiraSupportExceptionsForOrg(o.organizationID, o.jiratoken)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("error while getting support exceptions: %v", err))
 		}
