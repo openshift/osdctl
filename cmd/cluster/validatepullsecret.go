@@ -59,7 +59,6 @@ type PullSecretFetcher interface {
 	getPullSecretFromOCM() (string, error, bool)
 }
 
-// Define an interface for getPullSecretElevated
 type ClusterPullSecretFetcher interface {
 	getPullSecretElevated(clusterID string, reason string) (string, error, bool)
 }

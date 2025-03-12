@@ -365,7 +365,7 @@ func generateKubeconfigSecretObjectForTesting(name, namespace, key, serverURL st
 
 func TestClusterAccessOptions_getKubeConfigSecret(t *testing.T) {
 	serverURL := "https://api.test-cluster.fakedomain.devshift.org:6443"
-	secretName := fmt.Sprintf("test-osdctl-access-cluster-%s-%d-secret-%s", time.Now().Format("20060102-150405-"), (time.Now().Nanosecond() / 1000000), "test-createJumpPod")
+	secretName := fmt.Sprintf("test-osdctl-access-cluster-%s-%d-secret-%s", time.Now().Format("20060102-150405-"), time.Now().Nanosecond()/1000000, "test-createJumpPod")
 	secretNS := "uhc-production-testclusterns"
 	secret, _ := generateKubeconfigSecretObjectForTesting(secretName, secretNS, "kubeconfig", serverURL)
 
@@ -413,20 +413,17 @@ func TestClusterAccessOptions_getKubeConfigSecret(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
-			// Create a new scheme
+
 			scheme := runtime.NewScheme()
 			err := corev1.AddToScheme(scheme)
 			if err != nil {
 				t.Fatalf("Failed to add corev1 to scheme: %v", err)
 			}
 
-			// Create the fake client
 			client := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(scheme))
 			streams := genericclioptions.IOStreams{In: genericclioptions.NewTestIOStreamsDiscard().In, Out: os.Stdout, ErrOut: os.Stderr}
-			// Instantiate the access options struct with the fake client
 			access := newClusterAccessOptions(client, streams)
 
-			// Call the method
 			secret, err := access.getKubeConfigSecret(test.Namespace)
 
 			// If error is expected, check if an error occurred
@@ -487,7 +484,6 @@ func TestNewCmdAccess(t *testing.T) {
 	}
 }
 
-// TestAccessCmdComplete tests the accessCmdComplete function for validation
 func TestAccessCmdComplete(t *testing.T) {
 	tests := []struct {
 		name        string
