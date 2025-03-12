@@ -522,11 +522,14 @@ func setCaptureInterface(o *packetCaptureOptions) error {
 		return fmt.Errorf("failed to determine the network type: %s", err)
 	}
 
-	if networkConfig.Spec.NetworkType == "OVNKubernetes" {
+	switch networkConfig.Spec.NetworkType {
+	case "OVNKubernetes":
 		o.captureInterface = "genev_sys_6081"
 		return nil
-	} else {
+	case "OpenShiftSDN":
 		o.captureInterface = "vxlan_sys_4789"
 		return nil
+	default:
+		return fmt.Errorf("failed to determine network type or unknown network type")
 	}
 }
