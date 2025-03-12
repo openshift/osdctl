@@ -1,13 +1,9 @@
 package docgen
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/openshift/osdctl/cmd"
@@ -19,7 +15,6 @@ import (
 const (
 	DefaultCmdPath = "./cmd"
 	DefaultDocsDir = "./docs"
-	StateFile      = ".docgen_state"
 	CommandsMdFile = "osdctl_commands.md"
 )
 
@@ -41,62 +36,6 @@ func NewDefaultOptions() *Options {
 			ErrOut: os.Stderr,
 		},
 	}
-}
-
-func getDirectoryHash(dir string) (string, error) {
-	hasher := sha256.New()
-
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			hasher.Write([]byte(path))
-			hasher.Write([]byte(info.ModTime().String()))
-
-			f, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-			if _, err := io.Copy(hasher, f); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(hasher.Sum(nil)), nil
-}
-
-func loadState() (string, error) {
-	data, err := os.ReadFile(StateFile)
-	if os.IsNotExist(err) {
-		return "", nil
-	}
-	return string(data), err
-}
-
-func saveState(state string) error {
-	return os.WriteFile(StateFile, []byte(state), 0644)
-}
-
-func hasChanged(cmdPath string) (bool, error) {
-	currentHash, err := getDirectoryHash(cmdPath)
-	if err != nil {
-		return false, err
-	}
-
-	previousHash, err := loadState()
-	if err != nil {
-		return false, err
-	}
-
-	return currentHash != previousHash, nil
 }
 
 func generateCommandsMarkdown(rootCmd *cobra.Command) error {
@@ -173,16 +112,6 @@ func GenerateDocs(opts *Options) error {
 		opts = NewDefaultOptions()
 	}
 
-	changed, err := hasChanged(opts.CmdPath)
-	if err != nil {
-		return fmt.Errorf("checking cmd directory state: %w", err)
-	}
-
-	if !changed {
-		opts.Logger.Println("📋 No changes detected in cmd directory, skipping documentation generation")
-		return nil
-	}
-
 	if err := os.MkdirAll(opts.DocsDir, 0755); err != nil {
 		return fmt.Errorf("creating docs directory: %w", err)
 	}
@@ -203,14 +132,6 @@ func GenerateDocs(opts *Options) error {
 		return fmt.Errorf("generating commands markdown file: %w", err)
 	}
 
-	newHash, err := getDirectoryHash(opts.CmdPath)
-	if err != nil {
-		return fmt.Errorf("calculating new state hash: %w", err)
-	}
-	if err := saveState(newHash); err != nil {
-		return fmt.Errorf("saving state: %w", err)
-	}
-
 	opts.Logger.Printf("✅ Documentation successfully generated in %s", opts.DocsDir)
 	opts.Logger.Printf("✅ Commands overview generated in %s", CommandsMdFile)
 
@@ -222,7 +143,7 @@ func Command() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "docgen",
 		Short: "Generate osdctl documentation",
-		Long:  "Generate markdown documentation for osdctl commands when cmd directory changes",
+		Long:  "Generate markdown documentation for osdctl commands",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return GenerateDocs(opts)
 		},
