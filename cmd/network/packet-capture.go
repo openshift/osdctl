@@ -530,6 +530,6 @@ func setCaptureInterface(o *packetCaptureOptions) error {
 		o.captureInterface = "vxlan_sys_4789"
 		return nil
 	default:
-		return fmt.Errorf("failed to determine network type or unknown network type")
+		return fmt.Errorf("failed to determine network type or unknown network type as OVNKubernetes or OpenShiftSDN")
 	}
 }
