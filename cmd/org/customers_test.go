@@ -1,6 +1,9 @@
 package org
 
 import (
+	"bytes"
+	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/openshift/osdctl/pkg/utils"
@@ -56,5 +59,34 @@ func TestGetCustomersRequest(t *testing.T) {
 	expectedPath := "/api/accounts_mgmt/v1/organizations/test-org-id/customers"
 	if req.GetPath() != expectedPath {
 		t.Errorf("Expected path %s, got %s", expectedPath, req.GetPath())
+	}
+}
+
+func TestPrintCustomers(t *testing.T) {
+	var response struct {
+		Items []Customer `json:"items"`
+	}
+	err := json.Unmarshal([]byte(sampleCustomersJSON), &response)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal sample JSON: %v", err)
+	}
+
+	expected := "Customer ID: cust1, Cluster Count: 3\nCustomer ID: cust2, Cluster Count: 5\n"
+
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	printCustomers(response.Items)
+
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	if output != expected {
+		t.Errorf("Expected:\n%sGot:\n%s", expected, output)
 	}
 }
