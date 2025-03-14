@@ -3,7 +3,6 @@ package org
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
@@ -18,58 +17,56 @@ var (
 		Short:         "gets current organization",
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
-		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(run(cmd))
+		Run: func(_ *cobra.Command, _ []string) {
+			ocmClient, err := utils.CreateConnection()
+			if err != nil {
+				cmdutil.CheckErr(err)
+			}
+			defer func() {
+				if err := ocmClient.Close(); err != nil {
+					cmdutil.CheckErr(fmt.Errorf("cannot close the ocmClient (possible memory leak): %q", err))
+				}
+			}()
+			req, err := getOrgRequest(ocmClient)
+			if err != nil {
+				cmdutil.CheckErr(err)
+			}
+			resp, err := sendRequest(req)
+			if err != nil {
+				cmdutil.CheckErr(fmt.Errorf("invalid input: %q", err))
+			}
+			orgs, err := getCurrentOrg(resp.Bytes())
+			if err != nil {
+				cmdutil.CheckErr(err)
+			}
+			printOrg(*orgs)
 		},
 	}
 )
 
-type Account struct {
+type account struct {
 	Organization Organization `json:"organization"`
 }
 
 func init() {
 	flags := currentCmd.Flags()
-
 	AddOutputFlag(flags)
 }
 
-func run(cmd *cobra.Command) error {
-	response, err := getCurrentOrg()
-	if err != nil {
-		return fmt.Errorf("invalid input: %q", err)
-	}
-
-	acc := Account{}
-	json.Unmarshal(response.Bytes(), &acc)
-	printOrg(acc.Organization)
-
-	return nil
-}
-
-func getCurrentOrg() (*sdk.Response, error) {
-	// Create OCM client to talk
-	ocmClient, err := utils.CreateConnection()
+func getCurrentOrg(data []byte) (*Organization, error) {
+	acc := account{}
+	err := json.Unmarshal(data, &acc)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err := ocmClient.Close(); err != nil {
-			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
-		}
-	}()
-
-	// Now get the current org
-	return sendRequest(createGetCurrentOrgRequest(ocmClient))
+	return &acc.Organization, nil
 }
 
-func createGetCurrentOrgRequest(ocmClient *sdk.Connection) *sdk.Request {
-	// Create and populate the request:
-	request := ocmClient.Get()
-	err := arguments.ApplyPathArg(request, currentAccountApiPath)
+func getOrgRequest(ocmClient *sdk.Connection) (*sdk.Request, error) {
+	req := ocmClient.Get()
+	err := arguments.ApplyPathArg(req, currentAccountApiPath)
 	if err != nil {
-		log.Fatalf("Can't parse API path '%s': %v\n", currentAccountApiPath, err)
+		return nil, fmt.Errorf("can't parse API path '%s': %v\n", currentAccountApiPath, err)
 	}
-
-	return request
+	return req, nil
 }
