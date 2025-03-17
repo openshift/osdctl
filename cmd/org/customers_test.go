@@ -3,90 +3,112 @@ package org
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"reflect"
 	"testing"
 
-	"github.com/openshift/osdctl/pkg/utils"
+	sdk "github.com/openshift-online/ocm-sdk-go"
 )
 
-var sampleCustomersJSON = `
-{
-	"items": [
-		{"id": "cust1", "cluster_count": 3},
-		{"id": "cust2", "cluster_count": 5}
-	]
-}
-`
+var (
+	testToken     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJleHAiOjI1MjQ2MDgwMDB9.signature-placeholder"
+	clientID      = "fake-id"
+	clientSecret  = "fake-secret"
+	tokenPath     = "/oauth2/token"
+	testCustomers = []Customer{
+		{ID: "cust-1", OrganizationID: "org-1", SKU: "sku-1"},
+		{ID: "cust-2", OrganizationID: "org-2", SKU: "sku-2"},
+	}
+)
 
-func TestParseCustomers(t *testing.T) {
-	customers, err := parseCustomers([]byte(sampleCustomersJSON))
-	if err != nil {
-		t.Fatalf("Failed to parse customers: %v", err)
+func Test_getCustomers(t *testing.T) {
+	apiResponse := map[string]interface{}{
+		"page":  1,
+		"size":  len(testCustomers),
+		"total": len(testCustomers),
+		"items": []map[string]string{
+			{"kind": "ResourceQuota", "id": "cust-1", "organization_id": "org-1", "sku": "sku-1"},
+			{"kind": "ResourceQuota", "id": "cust-2", "organization_id": "org-2", "sku": "sku-2"},
+		},
 	}
 
-	if len(customers) != 2 {
-		t.Errorf("Expected 2 customers, got %d", len(customers))
+	tokenResponse := map[string]interface{}{
+		"access_token": testToken,
+		"token_type":   "Bearer",
+		"expires_in":   3600,
 	}
 
-	expected := []Customer{
-		{ID: "cust1", ClusterCount: 3},
-		{ID: "cust2", ClusterCount: 5},
-	}
+	t.Run("Success Test", func(t *testing.T) {
+		// Setup test server
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
 
-	for i, customer := range customers {
-		if customer.ID != expected[i].ID {
-			t.Errorf("Customer %d: Expected ID %s, got %s", i, expected[i].ID, customer.ID)
+			// Handle token request
+			if r.URL.Path == tokenPath {
+				json.NewEncoder(w).Encode(tokenResponse)
+				return
+			}
+
+			// Handle API request
+			json.NewEncoder(w).Encode(apiResponse)
+		}))
+		defer server.Close()
+
+		// Create connection
+		conn, err := sdk.NewConnectionBuilder().
+			URL(server.URL).
+			TokenURL(server.URL+tokenPath).
+			Insecure(true).
+			Client(clientID, clientSecret).
+			Build()
+		if err != nil {
+			t.Fatalf("Failed to build connection: %v", err)
 		}
-		if customer.ClusterCount != expected[i].ClusterCount {
-			t.Errorf("Customer %d: Expected ClusterCount %d, got %d", i, expected[i].ClusterCount, customer.ClusterCount)
+
+		customers, err := getCustomers(nil, conn)
+
+		if err != nil {
+			t.Fatalf("getCustomers() returned an error: %v", err)
 		}
-	}
+
+		if !reflect.DeepEqual(customers, testCustomers) {
+			t.Errorf("Expected customers %+v, got %+v", testCustomers, customers)
+		}
+	})
 }
 
-func TestGetCustomersRequest(t *testing.T) {
-	ocmClient, err := utils.CreateConnection()
-	if err != nil {
-		t.Fatalf("Failed to create OCM connection: %v", err)
-	}
-	defer ocmClient.Close()
-
-	orgID := "test-org-id"
-	req, err := getCustomersRequest(ocmClient, orgID)
-	if err != nil {
-		t.Fatalf("Failed to build customers request: %v", err)
-	}
-
-	expectedPath := "/api/accounts_mgmt/v1/organizations/test-org-id/customers"
-	if req.GetPath() != expectedPath {
-		t.Errorf("Expected path %s, got %s", expectedPath, req.GetPath())
-	}
-}
-
-func TestPrintCustomers(t *testing.T) {
-	var response struct {
-		Items []Customer `json:"items"`
-	}
-	err := json.Unmarshal([]byte(sampleCustomersJSON), &response)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal sample JSON: %v", err)
-	}
-
-	expected := "Customer ID: cust1, Cluster Count: 3\nCustomer ID: cust2, Cluster Count: 5\n"
-
-	old := os.Stdout
+func TestPrintCustomers_TableOutput(t *testing.T) {
+	// Capture stdout
+	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	printCustomers(response.Items)
+	printCustomers(testCustomers)
 
+	// Capture output and restore stdout
 	w.Close()
-	os.Stdout = old
-
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
-	output := buf.String()
-
-	if output != expected {
-		t.Errorf("Expected:\n%sGot:\n%s", expected, output)
+	_, err := buf.ReadFrom(r)
+	if err != nil {
+		t.Fatal("Failed to read from stdout pipe:", err)
 	}
+	os.Stdout = oldStdout
+
+	output := buf.String()
+	if !containsAll(output, "ID", "OrganizationID", "SKU", "cust-1", "org-1", "sku-1") {
+		t.Errorf("Expected output to contain customer data. Got:\n%s", output)
+	}
+}
+
+// Helper to check if all substrings exist in a string
+func containsAll(str string, substrs ...string) bool {
+	for _, s := range substrs {
+		if !bytes.Contains([]byte(str), []byte(s)) {
+			return false
+		}
+	}
+	return true
 }

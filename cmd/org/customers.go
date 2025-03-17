@@ -99,6 +99,7 @@ func getCustomers(cmd *cobra.Command, ocmClient *sdk.Connection) ([]Customer, er
 		if response.Size() < pageSize {
 			break
 		}
+		pageIndex++
 	}
 
 	return customerList, nil
