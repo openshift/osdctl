@@ -1,97 +1,129 @@
 package org
 
 import (
-	"encoding/json"
 	"fmt"
+	"os"
 
-	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
+	amv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
+	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-var customersCmd = &cobra.Command{
-	Use:           "customers",
-	Short:         "Lists customers of the current organization",
-	Args:          cobra.NoArgs,
-	SilenceErrors: true,
-	Run: func(cmd *cobra.Command, args []string) {
-		ocmClient, err := utils.CreateConnection()
-		if err != nil {
-			cmdutil.CheckErr(err)
-		}
-		defer func() {
-			if err := ocmClient.Close(); err != nil {
-				cmdutil.CheckErr(fmt.Errorf("cannot close ocmClient: %v", err))
+var (
+	customersCmd = &cobra.Command{
+		Use:           "customers",
+		Short:         "get paying/non-paying organizations",
+		Args:          cobra.ArbitraryArgs,
+		SilenceErrors: true,
+		Run: func(cmd *cobra.Command, args []string) {
+			ocmClient, err := utils.CreateConnection()
+			if err != nil {
+				cmdutil.CheckErr(err)
 			}
-		}()
+			defer func() {
+				if err := ocmClient.Close(); err != nil {
+					fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
+				}
+			}()
 
-		orgReq, err := getOrgRequest(ocmClient)
-		if err != nil {
-			cmdutil.CheckErr(err)
-		}
-		orgResp, err := sendRequest(orgReq)
-		if err != nil {
-			cmdutil.CheckErr(fmt.Errorf("failed to fetch current organization: %v", err))
-		}
-		org, err := getCurrentOrg(orgResp.Bytes())
-		if err != nil {
-			cmdutil.CheckErr(err)
-		}
+			customers, err := getCustomers(cmd, ocmClient)
+			if err != nil {
+				cmdutil.CheckErr(err)
+			}
+			printCustomers(customers)
+		},
+	}
+	paying   bool   = true
+	subsType string = "Subscription"
+)
 
-		customersReq, err := getCustomersRequest(ocmClient, org.ID)
-		if err != nil {
-			cmdutil.CheckErr(err)
-		}
-		customersResp, err := sendRequest(customersReq)
-		if err != nil {
-			cmdutil.CheckErr(fmt.Errorf("failed to fetch customers: %v", err))
-		}
-		customers, err := parseCustomers(customersResp.Bytes())
-		if err != nil {
-			cmdutil.CheckErr(err)
-		}
-
-		printCustomers(customers)
-	},
+type CustomerItems struct {
+	Customers []Customer `json:"items"`
 }
 
 type Customer struct {
-	ID           string `json:"id"`
-	ClusterCount int    `json:"cluster_count"`
-}
-
-type CustomersList struct {
-	Items []Customer `json:"items"`
+	ID             string `json:"id"`
+	OrganizationID string `json:"organization-id"`
+	SKU            string `json:"sku"`
 }
 
 func init() {
+	// define flags
 	flags := customersCmd.Flags()
+
+	flags.BoolVarP(
+		&paying,
+		"paying",
+		"",
+		true,
+		"get organization based on paying status",
+	)
+
 	AddOutputFlag(flags)
 }
 
-func getCustomersRequest(ocmClient *sdk.Connection, orgID string) (*sdk.Request, error) {
-	req := ocmClient.Get()
-	path := fmt.Sprintf("/api/accounts_mgmt/v1/organizations/%s/customers", orgID)
-	err := arguments.ApplyPathArg(req, path)
-	if err != nil {
-		return nil, fmt.Errorf("cannot apply path '%s': %v", path, err)
+func getCustomers(cmd *cobra.Command, ocmClient *sdk.Connection) ([]Customer, error) {
+	pageSize := 1000
+	pageIndex := 1
+
+	if !paying {
+		subsType = "Config"
 	}
-	return req, nil
+
+	searchQuery := fmt.Sprintf("type='%s'", subsType)
+	var customerList []Customer
+
+	for {
+		response, err := ocmClient.AccountsMgmt().V1().ResourceQuota().List().
+			Size(pageSize).
+			Page(pageIndex).
+			Parameter("search", searchQuery).
+			Send()
+		if err != nil {
+			return nil, fmt.Errorf("can't retrieve accounts: %v", err)
+		}
+
+		response.Items().Each(func(resourseQuota *amv1.ResourceQuota) bool {
+			customer := Customer{
+				ID:             resourseQuota.ID(),
+				OrganizationID: resourseQuota.OrganizationID(),
+				SKU:            resourseQuota.SKU(),
+			}
+			customerList = append(customerList, customer)
+			return true
+		})
+
+		if response.Size() < pageSize {
+			break
+		}
+	}
+
+	return customerList, nil
 }
 
-func parseCustomers(data []byte) ([]Customer, error) {
-	var customersList CustomersList
-	err := json.Unmarshal(data, &customersList)
-	if err != nil {
-		return nil, fmt.Errorf("cannot parse customers JSON: %v", err)
+func printCustomers(items []Customer) {
+	if IsJsonOutput() {
+		customers := CustomerItems{
+			Customers: items,
+		}
+		PrintJson(customers)
+	} else {
+		table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+		table.AddRow([]string{"ID", "OrganizationID", "SKU"})
+
+		for _, customer := range items {
+			table.AddRow([]string{
+				customer.ID,
+				customer.OrganizationID,
+				customer.SKU,
+			})
+		}
+
+		table.AddRow([]string{})
+		table.Flush()
 	}
-	return customersList.Items, nil
 }
 
-func printCustomers(customers []Customer) {
-	for _, customer := range customers {
-		fmt.Printf("Customer ID: %s, Cluster Count: %d\n", customer.ID, customer.ClusterCount)
-	}
-}
