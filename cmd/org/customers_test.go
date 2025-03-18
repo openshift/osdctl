@@ -13,10 +13,10 @@ import (
 )
 
 var (
-	testToken     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJleHAiOjI1MjQ2MDgwMDB9.signature-placeholder"
+	testToken     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJleHAiOjI1MjQ2MDgwMDB9.fake-token"
 	clientID      = "fake-id"
 	clientSecret  = "fake-secret"
-	tokenPath     = "/oauth2/token"
+	tokenPath     = "/fake-path/token"
 	testCustomers = []Customer{
 		{ID: "cust-1", OrganizationID: "org-1", SKU: "sku-1"},
 		{ID: "cust-2", OrganizationID: "org-2", SKU: "sku-2"},
@@ -41,18 +41,13 @@ func Test_getCustomers(t *testing.T) {
 	}
 
 	t.Run("Success Test", func(t *testing.T) {
-		// Setup test server
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-
-			// Handle token request
 			if r.URL.Path == tokenPath {
 				json.NewEncoder(w).Encode(tokenResponse)
 				return
 			}
-
-			// Handle API request
 			json.NewEncoder(w).Encode(apiResponse)
 		}))
 		defer server.Close()
