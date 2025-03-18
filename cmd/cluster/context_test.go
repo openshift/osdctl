@@ -12,16 +12,11 @@ import (
 
 	pd "github.com/PagerDuty/go-pagerduty"
 	"github.com/andygrunwald/go-jira"
-	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
-	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	v2 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
-	"github.com/openshift/osdctl/cmd/dynatrace"
-	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/provider/pagerduty"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 type MockOCMClient struct{}
@@ -33,18 +28,6 @@ type MockCluster struct {
 	Name              string
 	CreationTimestamp time.Time
 	HypershiftEnabled bool
-}
-
-type MockUtils struct {
-	mock.Mock
-}
-
-type MockOcmClient struct {
-	mock.Mock
-}
-
-type mockAwsClient struct {
-	aws.Client
 }
 
 func TestNewCmdContext(t *testing.T) {
@@ -77,19 +60,6 @@ func TestNewCmdContext(t *testing.T) {
 func TestNewContextOptions(t *testing.T) {
 	opts := newContextOptions()
 	assert.NotNil(t, opts)
-}
-
-func MockGetClusters(client *MockOCMClient, args []string) []*v1.Cluster {
-	mockDNS, _ := v1.NewDNS().BaseDomain("mock-domain.com").Build()
-	mockCluster, _ := v1.NewCluster().
-		ID("mock-cluster-id").
-		ExternalID("mock-external-id").
-		InfraID("mock-infra-id").
-		Name("mock-cluster").
-		DNS((*v1.DNSBuilder)(mockDNS)).
-		Build()
-
-	return []*v1.Cluster{mockCluster}
 }
 
 func TestPrintClusterHeader(t *testing.T) {
@@ -306,7 +276,7 @@ func TestBuildSplunkURL(t *testing.T) {
 				CreationTimestamp: time.Now(),
 			}
 
-			o := &ContextOptions{
+			o := &contextOptions{
 				cluster: mockCluster.ToV1Cluster(),
 				infraID: tc.infraID,
 			}
@@ -331,7 +301,7 @@ func TestPrintOtherLinks(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	o := &ContextOptions{
+	o := &contextOptions{
 		clusterID:         mockClusterID,
 		externalClusterID: mockExternalClusterID,
 	}
@@ -463,7 +433,7 @@ func captureOutput(f func()) string {
 }
 
 func TestPrintShortOutput(t *testing.T) {
-	opts := &ContextOptions{days: 7}
+	opts := &contextOptions{days: 7}
 
 	limitedSupportReason, _ := v1.NewLimitedSupportReason().Build()
 	serviceLog1, _ := v2.NewLogEntry().
@@ -507,7 +477,7 @@ func TestPrintShortOutput(t *testing.T) {
 }
 
 func TestPrintJsonOutput(t *testing.T) {
-	opts := &ContextOptions{}
+	opts := &contextOptions{}
 	jiraIssue := jira.Issue{Key: "JIRA-999"}
 
 	data := &contextData{
@@ -609,7 +579,7 @@ func TestPrintLongOutput(t *testing.T) {
 	*mockData.CloudtrailEvents[0].EventId = "evt-1234567890"
 	*mockData.CloudtrailEvents[0].Username = "mockUser"
 
-	o := &ContextOptions{
+	o := &contextOptions{
 		verbose: true,
 		days:    30,
 		full:    true,
@@ -619,239 +589,8 @@ func TestPrintLongOutput(t *testing.T) {
 
 }
 
-func (mockAwsClient) LookupEvents(input *cloudtrail.LookupEventsInput) (*cloudtrail.LookupEventsOutput, error) {
-
-	eventId1 := "12345"
-	eventName1 := "CreateInstance"
-	username1 := "test-user"
-	eventTime1 := time.Now()
-
-	eventId2 := "67890"
-	eventName2 := "DeleteBucket"
-	username2 := "test-user2"
-	eventTime2 := time.Now()
-
-	return &cloudtrail.LookupEventsOutput{
-		Events: []types.Event{
-			{
-				EventId:   &eventId1,
-				EventName: &eventName1,
-				Username:  &username1,
-				EventTime: &eventTime1,
-			},
-			{
-				EventId:   &eventId2,
-				EventName: &eventName2,
-				Username:  &username2,
-				EventTime: &eventTime2,
-			},
-		},
-	}, nil
-}
-
-type mockClientGeneratorImpl struct{}
-
-func (m *mockClientGeneratorImpl) GenerateAWSClientForCluster(awsProfile, clusterID string) (aws.Client, error) {
-	return &mockAwsClient{}, nil
-}
-
-func TestGetCloudTrailLogsForCluster(t *testing.T) {
-	awsProfile := "test-profile"
-	clusterID := "test-cluster-id"
-	maxPages := 1
-
-	// Store the original client generator
-	originalGenerator := ClientGeneratorInstance
-	defer func() {
-		ClientGeneratorInstance = originalGenerator
-	}()
-
-	// Replace with mock client generator
-	ClientGeneratorInstance = &mockClientGeneratorImpl{}
-
-	// Call the original function
-	filteredEvents, err := GetCloudTrailLogsForCluster(awsProfile, clusterID, maxPages)
-
-	assert.NoError(t, err)
-	assert.NotEmpty(t, filteredEvents)
-
-	for _, event := range filteredEvents {
-		assert.NotNil(t, event.EventName)
-
-		if event.Username != nil {
-			assert.NotContains(t, *event.Username, "RH-SRE-")
-		}
-	}
-
-	t.Logf("Filtered Events: %+v", filteredEvents)
-}
-
-type mockCluster struct {
-	mock.Mock
-}
-
-// Mock the Name() method
-func (m *mockCluster) Name() string {
-	args := m.Called()
-	return args.String(0)
-}
-
-// Mock the RawID() method
-type VersionInterface interface {
-	RawID() string
-}
-
-type MockClusterFetcher struct {
-	mock.Mock
-}
-
-func (m *MockClusterFetcher) GetCluster(connection *sdk.Connection, key string) (*v1.Cluster, error) {
-	args := m.Called(connection, key)
-	if cluster, ok := args.Get(0).(*v1.Cluster); ok {
-		return cluster, args.Error(1)
-	}
-
-	return nil, fmt.Errorf("unexpected return type, expected *v1.Cluster but got %T", args.Get(0))
-}
-
-// Mock implementation of JiraIssueFetcher interface
-type MockJiraIssueFetcher struct {
-	mock.Mock
-}
-
-func (m *MockJiraIssueFetcher) GetJiraIssuesForCluster(clusterID, externalClusterID, jiratoken string) ([]jira.Issue, error) {
-	args := m.Called(clusterID, externalClusterID)
-	return args.Get(0).([]jira.Issue), args.Error(1)
-}
-
-func (m *MockJiraIssueFetcher) GetJiraSupportExceptionsForOrg(organizationID, jiratoken string) ([]jira.Issue, error) {
-	args := m.Called(organizationID)
-	return args.Get(0).([]jira.Issue), args.Error(1)
-}
-
-// Mock implementation of DynatraceFetcher interface
-type MockDynatraceFetcher struct {
-	mock.Mock
-}
-
-func (m *MockDynatraceFetcher) FetchClusterDetails(clusterKey string) (dynatrace.HCPCluster, error) {
-	args := m.Called(clusterKey)
-	return args.Get(0).(dynatrace.HCPCluster), args.Error(1)
-}
-
-// Mock implementation of ServiceLogFetcher interface
-type MockServiceLogFetcher struct {
-	mock.Mock
-}
-
-func (m *MockServiceLogFetcher) GetServiceLogsSince(clusterID string, timeSince time.Time, allMessages, internalOnly bool) ([]*v2.LogEntry, error) {
-	args := m.Called(clusterID, timeSince, allMessages, internalOnly)
-	return args.Get(0).([]*v2.LogEntry), args.Error(1)
-}
-
-type MockVersion struct {
-	mock.Mock
-}
-
-func (m *mockCluster) Version() VersionInterface {
-	args := m.Called()
-	return args.Get(0).(VersionInterface)
-}
-
-func (m *mockCluster) ToV1Cluster1() *v1.Cluster {
-	// Return a *v1.Cluster object directly
-	cluster, _ := v1.NewCluster().
-		ID("cluster-id").
-		ExternalID("external-id").
-		InfraID("infra-id").
-		Name("test-cluster").
-		CreationTimestamp(time.Now()).
-		Hypershift(v1.NewHypershift().Enabled(true)).
-		Build()
-	return cluster
-}
-
-type MockContextOptions struct {
-	mock.Mock
-}
-
-func (m *MockContextOptions) printShortOutput(data *contextData) {
-	m.Called(data)
-}
-
-func (m *MockContextOptions) CreateConnection() (*sdk.Connection, error) {
-	args := m.Called()
-	return args.Get(0).(*sdk.Connection), args.Error(1)
-}
-
-func (m *MockContextOptions) Close() error {
-	args := m.Called()
-	return args.Error(0)
-}
-
-func TestRunMethod(t *testing.T) {
-
-	// Initializing the mock dependencies
-	mockClusterFetcher := new(MockClusterFetcher)
-	mockJiraIssueFetcher := new(MockJiraIssueFetcher)
-	mockDynatraceFetcher := new(MockDynatraceFetcher)
-	mockServiceLogFetcher := new(MockServiceLogFetcher)
-
-	mockContext := new(MockContextOptions)
-
-	// Creating the ContextOptions struct with the mocked dependencies
-	contextOptions := &ContextOptions{
-		oCMClientInterface: mockContext,
-		clusterFetcher:     mockClusterFetcher,
-		jiraIssueFetcher:   mockJiraIssueFetcher,
-		dynatraceFetcher:   mockDynatraceFetcher,
-		serviceLogFetcher:  mockServiceLogFetcher,
-		output:             shortOutputConfigValue,
-		clusterID:          "test-cluster-id",
-		externalClusterID:  "test-external-cluster-id",
-		organizationID:     "test-org-id",
-	}
-
-	mockCluster := new(mockCluster)
-	mockVersion := new(MockVersion)
-	mockCluster.On("Name").Return("test-cluster")
-	mockVersion.On("RawID").Return("1.0.0")
-	mockCluster.On("Version").Return(mockVersion)
-
-	mockIssues := []jira.Issue{
-		{ID: "123", Key: "JIRA-001", Fields: &jira.IssueFields{Summary: "Issue 1", Description: "Test issue 1"}},
-		{ID: "124", Key: "JIRA-002", Fields: &jira.IssueFields{Summary: "Issue 2", Description: "Test issue 2"}},
-	}
-	// Mocking the dependencies
-	mockContext.On("CreateConnection").Return(&sdk.Connection{}, nil)
-	mockClusterFetcher.On("GetCluster", mock.Anything, mock.Anything).Return(mockCluster.ToV1Cluster1(), nil)
-	mockJiraIssueFetcher.On("GetJiraIssuesForCluster", mock.Anything, mock.Anything).Return(mockIssues, nil)
-	mockJiraIssueFetcher.On("GetJiraSupportExceptionsForOrg", mock.Anything, mock.Anything).Return(mockIssues, nil)
-	mockDynatraceFetcher.On("FetchClusterDetails", mock.Anything).Return(dynatrace.HCPCluster{}, nil)
-	mockServiceLogFetcher.On("GetServiceLogsSince", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]*v2.LogEntry{}, nil)
-	mockContext.On("Close", mock.Anything).Return(nil)
-
-	capturedShortOutput := ""
-
-	mockContext.On("printShortOutput", mock.Anything).Run(func(args mock.Arguments) {
-		capturedShortOutput = "Short Output"
-	}).Once()
-
-	mockContext.printShortOutput(&contextData{ClusterID: "test-cluster-id"})
-
-	err := contextOptions.run()
-
-	assert.NoError(t, err)
-	assert.Equal(t, "Short Output", capturedShortOutput)
-	mockClusterFetcher.AssertExpectations(t)
-	mockJiraIssueFetcher.AssertExpectations(t)
-	mockDynatraceFetcher.AssertExpectations(t)
-	mockServiceLogFetcher.AssertExpectations(t)
-
-}
-
 func TestRun_UnknownOutput(t *testing.T) {
-	contextOptions := &ContextOptions{
+	contextOptions := &contextOptions{
 		output: "invalidOutputFormat",
 	}
 

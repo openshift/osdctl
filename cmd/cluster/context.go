@@ -11,8 +11,9 @@ import (
 	"sync"
 	"time"
 
-	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
+
+	"github.com/openshift/osdctl/cmd/servicelog"
 
 	pd "github.com/PagerDuty/go-pagerduty"
 	"github.com/andygrunwald/go-jira"
@@ -20,11 +21,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/cmd/dynatrace"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/openshift/osdctl/pkg/printer"
-	"github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/provider/pagerduty"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -43,30 +42,24 @@ const (
 	delimiter                     = ">> "
 )
 
-// making contextOptions exportable in order to allow dependency injection and mock testing
-type ContextOptions struct {
+type contextOptions struct {
 	cluster *cmv1.Cluster
 
-	output             string
-	verbose            bool
-	full               bool
-	clusterID          string
-	externalClusterID  string
-	baseDomain         string
-	organizationID     string
-	days               int
-	pages              int
-	oauthtoken         string
-	usertoken          string
-	infraID            string
-	awsProfile         string
-	jiratoken          string
-	team_ids           []string
-	clusterFetcher     ClusterFetcher
-	jiraIssueFetcher   JiraIssueFetcher
-	dynatraceFetcher   DynatraceFetcher
-	serviceLogFetcher  ServiceLogFetcher
-	oCMClientInterface OCMClientInterface
+	output            string
+	verbose           bool
+	full              bool
+	clusterID         string
+	externalClusterID string
+	baseDomain        string
+	organizationID    string
+	days              int
+	pages             int
+	oauthtoken        string
+	usertoken         string
+	infraID           string
+	awsProfile        string
+	jiratoken         string
+	team_ids          []string
 }
 
 type contextData struct {
@@ -108,51 +101,6 @@ type contextData struct {
 	BanDescription string
 }
 
-type ClusterFetcher interface {
-	GetCluster(connection *sdk.Connection, key string) (*cmv1.Cluster, error)
-}
-
-type clusterFetcher struct{}
-
-func (c *clusterFetcher) GetCluster(connection *sdk.Connection, key string) (*cmv1.Cluster, error) {
-	return utils.GetCluster(connection, key)
-}
-
-type JiraIssueFetcher interface {
-	GetJiraIssuesForCluster(clusterID, externalClusterID, jiratoken string) ([]jira.Issue, error)
-	GetJiraSupportExceptionsForOrg(organizationID, jiratoken string) ([]jira.Issue, error)
-}
-
-type jiraIssueFetcher struct{}
-
-func (f jiraIssueFetcher) GetJiraIssuesForCluster(clusterID, externalClusterID, jiratoken string) ([]jira.Issue, error) {
-	return utils.GetJiraIssuesForCluster(clusterID, externalClusterID, jiratoken)
-}
-
-func (f jiraIssueFetcher) GetJiraSupportExceptionsForOrg(organizationID, jiratoken string) ([]jira.Issue, error) {
-	return utils.GetJiraSupportExceptionsForOrg(organizationID, jiratoken)
-}
-
-type DynatraceFetcher interface {
-	FetchClusterDetails(clusterKey string) (dynatrace.HCPCluster, error)
-}
-
-type dynatraceFetcher struct{}
-
-func (f dynatraceFetcher) FetchClusterDetails(clusterKey string) (dynatrace.HCPCluster, error) {
-	return dynatrace.FetchClusterDetails(clusterKey)
-}
-
-type ServiceLogFetcher interface {
-	GetServiceLogsSince(clusterID string, timeSince time.Time, allMessages, internalOnly bool) ([]*v1.LogEntry, error)
-}
-
-type serviceLogFetcher struct{}
-
-func (f serviceLogFetcher) GetServiceLogsSince(clusterID string, timeSince time.Time, allMessages, internalOnly bool) ([]*v1.LogEntry, error) {
-	return servicelog.GetServiceLogsSince(clusterID, timeSince, allMessages, internalOnly)
-}
-
 // newCmdContext implements the context command to show the current context of a cluster
 func newCmdContext() *cobra.Command {
 	ops := newContextOptions()
@@ -184,35 +132,11 @@ func newCmdContext() *cobra.Command {
 	return contextCmd
 }
 
-func newContextOptions() *ContextOptions {
-	return &ContextOptions{
-		clusterFetcher:     &clusterFetcher{},
-		jiraIssueFetcher:   &jiraIssueFetcher{},
-		dynatraceFetcher:   &dynatraceFetcher{},
-		serviceLogFetcher:  &serviceLogFetcher{},
-		oCMClientInterface: &OCMClientImpl{},
-	}
+func newContextOptions() *contextOptions {
+	return &contextOptions{}
 }
 
-type OCMClientInterface interface {
-	CreateConnection() (*sdk.Connection, error)
-	Close() error
-}
-type OCMClientImpl struct {
-	ocm *sdk.Connection
-}
-
-func (o *OCMClientImpl) CreateConnection() (*sdk.Connection, error) {
-	obj, err := utils.CreateConnection()
-	o.ocm = obj
-	return obj, err
-}
-
-func (o *OCMClientImpl) Close() error {
-	return o.ocm.Close()
-}
-
-func (o *ContextOptions) setup(args []string) error {
+func (o *contextOptions) setup(args []string) error {
 	if o.days < 1 {
 		return fmt.Errorf("cannot have a days value lower than 1")
 	}
@@ -259,7 +183,7 @@ func (o *ContextOptions) setup(args []string) error {
 	return nil
 }
 
-func (o *ContextOptions) run() error {
+func (o *contextOptions) run() error {
 	var printFunc func(*contextData)
 	switch o.output {
 	case shortOutputConfigValue:
@@ -290,7 +214,7 @@ func (o *ContextOptions) run() error {
 	return nil
 }
 
-func (o *ContextOptions) printLongOutput(data *contextData) {
+func (o *contextOptions) printLongOutput(data *contextData) {
 	data.printClusterHeader()
 
 	fmt.Println(strings.TrimSpace(data.Description))
@@ -325,7 +249,7 @@ func (o *ContextOptions) printLongOutput(data *contextData) {
 	printUserBannedStatus(data)
 }
 
-func (o *ContextOptions) printShortOutput(data *contextData) {
+func (o *contextOptions) printShortOutput(data *contextData) {
 	data.printClusterHeader()
 
 	highAlertCount := 0
@@ -381,7 +305,7 @@ func (o *ContextOptions) printShortOutput(data *contextData) {
 	}
 }
 
-func (o *ContextOptions) printJsonOutput(data *contextData) {
+func (o *contextOptions) printJsonOutput(data *contextData) {
 	jsonOut, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't marshal results to json: %v\n", err)
@@ -392,13 +316,13 @@ func (o *ContextOptions) printJsonOutput(data *contextData) {
 }
 
 // generateContextData Creates a contextData struct that contains all the
-// cluster context information requested by the ContextOptions. if a certain
+// cluster context information requested by the contextOptions. if a certain
 // data point can not be queried, the appropriate field will be null and the
 // errors array will contain information about the error. The first return
 // value will only be nil, if this function fails to get basic cluster
 // information. The second return value will *never* be nil, but instead have a
 // length of 0 if no errors occurred
-func (o *ContextOptions) generateContextData() (*contextData, []error) {
+func (o *contextOptions) generateContextData() (*contextData, []error) {
 	data := &contextData{}
 	errors := []error{}
 
@@ -418,15 +342,15 @@ func (o *ContextOptions) generateContextData() (*contextData, []error) {
 		errors = append(errors, fmt.Errorf("skipping PagerDuty context collection: %v", err))
 	}
 
-	ocmClient, err := o.oCMClientInterface.CreateConnection()
+	ocmClient, err := utils.CreateConnection()
 	if err != nil {
 		return nil, []error{err}
 	}
-	defer o.oCMClientInterface.Close()
+	defer ocmClient.Close()
 	// Normally the o.cluster would be set by complete function, but in case we want to call this function
 	// in an other context, we can make sure o.cluster is set properly from o.clusterID
 	if o.cluster == nil {
-		cluster, err := o.clusterFetcher.GetCluster(ocmClient, o.clusterID)
+		cluster, err := utils.GetCluster(ocmClient, o.clusterID)
 		if err != nil {
 			errors = append(errors, err)
 			return nil, errors
@@ -454,7 +378,7 @@ func (o *ContextOptions) generateContextData() (*contextData, []error) {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Service Logs").End()
 		timeToCheckSvcLogs := time.Now().AddDate(0, 0, -o.days)
-		data.ServiceLogs, err = o.serviceLogFetcher.GetServiceLogsSince(o.clusterID, timeToCheckSvcLogs, false, false)
+		data.ServiceLogs, err = servicelog.GetServiceLogsSince(o.clusterID, timeToCheckSvcLogs, false, false)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("error while getting the service logs: %v", err))
 		}
@@ -479,7 +403,7 @@ func (o *ContextOptions) generateContextData() (*contextData, []error) {
 	GetJiraIssues := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Jira Issues").End()
-		data.JiraIssues, err = o.jiraIssueFetcher.GetJiraIssuesForCluster(o.clusterID, o.externalClusterID, o.jiratoken)
+		data.JiraIssues, err = utils.GetJiraIssuesForCluster(o.clusterID, o.externalClusterID, o.jiratoken)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("error while getting the open jira tickets: %v", err))
 		}
@@ -488,7 +412,7 @@ func (o *ContextOptions) generateContextData() (*contextData, []error) {
 	GetSupportExceptions := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Support Exceptions").End()
-		data.SupportExceptions, err = o.jiraIssueFetcher.GetJiraSupportExceptionsForOrg(o.organizationID, o.jiratoken)
+		data.SupportExceptions, err = utils.GetJiraSupportExceptionsForOrg(o.organizationID, o.jiratoken)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("error while getting support exceptions: %v", err))
 		}
@@ -499,7 +423,7 @@ func (o *ContextOptions) generateContextData() (*contextData, []error) {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Dynatrace URL").End()
 
-		hcpCluster, err := o.dynatraceFetcher.FetchClusterDetails(clusterID)
+		hcpCluster, err := dynatrace.FetchClusterDetails(clusterID)
 		if err != nil {
 			if err == dynatrace.ErrUnsupportedCluster {
 				data.DyntraceEnvURL = dynatrace.ErrUnsupportedCluster.Error()
@@ -616,23 +540,8 @@ func (o *ContextOptions) generateContextData() (*contextData, []error) {
 	return data, errors
 }
 
-type ClientGenerator interface {
-	GenerateAWSClientForCluster(awsProfile, clusterID string) (aws.Client, error)
-}
-
-// defaultClientGeneratorImpl is the default implementation
-type defaultClientGeneratorImpl struct{}
-
-// GenerateAWSClientForCluster uses the original method
-func (d *defaultClientGeneratorImpl) GenerateAWSClientForCluster(awsProfile, clusterID string) (aws.Client, error) {
-	return osdCloud.GenerateAWSClientForCluster(awsProfile, clusterID)
-}
-
-// Global variable to hold the client generator
-var ClientGeneratorInstance ClientGenerator = &defaultClientGeneratorImpl{}
-
 func GetCloudTrailLogsForCluster(awsProfile string, clusterID string, maxPages int) ([]*types.Event, error) {
-	awsJumpClient, err := ClientGeneratorInstance.GenerateAWSClientForCluster(awsProfile, clusterID)
+	awsJumpClient, err := osdCloud.GenerateAWSClientForCluster(awsProfile, clusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -714,7 +623,7 @@ func printJIRASupportExceptions(issues []jira.Issue) {
 	}
 }
 
-func (o *ContextOptions) printOtherLinks(data *contextData) {
+func (o *contextOptions) printOtherLinks(data *contextData) {
 	var name string = "External resources"
 	fmt.Println(delimiter + name)
 
@@ -747,7 +656,7 @@ func (o *ContextOptions) printOtherLinks(data *contextData) {
 	}
 }
 
-func (o *ContextOptions) buildSplunkURL(data *contextData) string {
+func (o *contextOptions) buildSplunkURL(data *contextData) string {
 	// Determine the relevant Splunk URL
 	if o.cluster.Hypershift().Enabled() {
 		switch data.OCMEnv {
