@@ -119,18 +119,18 @@ func (c *clusterFetcher) GetCluster(connection *sdk.Connection, key string) (*cm
 }
 
 type JiraIssueFetcher interface {
-	GetJiraIssuesForCluster(clusterID, externalClusterID string) ([]jira.Issue, error)
-	GetJiraSupportExceptionsForOrg(organizationID string) ([]jira.Issue, error)
+	GetJiraIssuesForCluster(clusterID, externalClusterID, jiratoken string) ([]jira.Issue, error)
+	GetJiraSupportExceptionsForOrg(organizationID, jiratoken string) ([]jira.Issue, error)
 }
 
 type jiraIssueFetcher struct{}
 
-func (f jiraIssueFetcher) GetJiraIssuesForCluster(clusterID, externalClusterID string) ([]jira.Issue, error) {
-	return utils.GetJiraIssuesForCluster(clusterID, externalClusterID)
+func (f jiraIssueFetcher) GetJiraIssuesForCluster(clusterID, externalClusterID, jiratoken string) ([]jira.Issue, error) {
+	return utils.GetJiraIssuesForCluster(clusterID, externalClusterID, jiratoken)
 }
 
-func (f jiraIssueFetcher) GetJiraSupportExceptionsForOrg(organizationID string) ([]jira.Issue, error) {
-	return utils.GetJiraSupportExceptionsForOrg(organizationID)
+func (f jiraIssueFetcher) GetJiraSupportExceptionsForOrg(organizationID, jiratoken string) ([]jira.Issue, error) {
+	return utils.GetJiraSupportExceptionsForOrg(organizationID, jiratoken)
 }
 
 type DynatraceFetcher interface {
@@ -479,7 +479,7 @@ func (o *ContextOptions) generateContextData() (*contextData, []error) {
 	GetJiraIssues := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Jira Issues").End()
-		data.JiraIssues, err = o.jiraIssueFetcher.GetJiraIssuesForCluster(o.clusterID, o.externalClusterID)
+		data.JiraIssues, err = o.jiraIssueFetcher.GetJiraIssuesForCluster(o.clusterID, o.externalClusterID, o.jiratoken)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("error while getting the open jira tickets: %v", err))
 		}
@@ -488,7 +488,7 @@ func (o *ContextOptions) generateContextData() (*contextData, []error) {
 	GetSupportExceptions := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Support Exceptions").End()
-		data.SupportExceptions, err = o.jiraIssueFetcher.GetJiraSupportExceptionsForOrg(o.organizationID)
+		data.SupportExceptions, err = o.jiraIssueFetcher.GetJiraSupportExceptionsForOrg(o.organizationID, o.jiratoken)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("error while getting support exceptions: %v", err))
 		}

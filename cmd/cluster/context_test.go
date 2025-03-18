@@ -719,12 +719,12 @@ type MockJiraIssueFetcher struct {
 	mock.Mock
 }
 
-func (m *MockJiraIssueFetcher) GetJiraIssuesForCluster(clusterID, externalClusterID string) ([]jira.Issue, error) {
+func (m *MockJiraIssueFetcher) GetJiraIssuesForCluster(clusterID, externalClusterID, jiratoken string) ([]jira.Issue, error) {
 	args := m.Called(clusterID, externalClusterID)
 	return args.Get(0).([]jira.Issue), args.Error(1)
 }
 
-func (m *MockJiraIssueFetcher) GetJiraSupportExceptionsForOrg(organizationID string) ([]jira.Issue, error) {
+func (m *MockJiraIssueFetcher) GetJiraSupportExceptionsForOrg(organizationID, jiratoken string) ([]jira.Issue, error) {
 	args := m.Called(organizationID)
 	return args.Get(0).([]jira.Issue), args.Error(1)
 }
@@ -875,6 +875,7 @@ func TestPrintUserBannedStatus(t *testing.T) {
 				BanCode:        BanCodeExportControlCompliance,
 				BanDescription: "Banned for compliance reasons",
 			},
+			expectedOutput: "\n>> User Ban Details\nUser is banned\nBan code = export_control_compliance\nBan description = Banned for compliance reasons\nUser banned due to export control compliance.\nPlease follow the steps detailed here: https://github.com/openshift/ops-sop/blob/master/v4/alerts/UpgradeConfigSyncFailureOver4HrSRE.md#user-banneddisabled-due-to-export-control-compliance .\n",
 		},
 		{
 			name: "User is banned but not due to export control compliance",
@@ -883,6 +884,7 @@ func TestPrintUserBannedStatus(t *testing.T) {
 				BanCode:        "SomeOtherBanCode",
 				BanDescription: "Some other reason",
 			},
+			expectedOutput: "\n>> User Ban Details\nUser is banned\nBan code = SomeOtherBanCode\nBan description = Some other reason\n",
 		},
 		{
 			name: "User is not banned",
@@ -891,12 +893,22 @@ func TestPrintUserBannedStatus(t *testing.T) {
 				BanCode:        "",
 				BanDescription: "",
 			},
+			expectedOutput: "\n>> User Ban Details\nUser is not banned\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			printUserBannedStatus(&tt.data)
+			actualOutput := captureOutput(func() {
+				printUserBannedStatus(&tt.data)
+			})
+
+			expected := strings.TrimSpace(tt.expectedOutput)
+			actual := strings.TrimSpace(actualOutput)
+
+			if expected != actual {
+				t.Errorf("expected:\n%q\ngot:\n%q", expected, actual)
+			}
 		})
 	}
 }
