@@ -54,6 +54,9 @@ type Infra struct {
 
 	// reason to provide for resize
 	justification string
+
+	// OHSS ticket to reference in SL
+	ohss string
 }
 
 func newCmdResizeInfra() *cobra.Command {
@@ -87,10 +90,12 @@ func newCmdResizeInfra() *cobra.Command {
 	infraResizeCmd.Flags().StringVar(&r.instanceType, "instance-type", "", "(optional) Override for an AWS or GCP instance type to resize the infra nodes to, by default supported instance types are automatically selected.")
 	infraResizeCmd.Flags().StringVar(&r.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
 	infraResizeCmd.Flags().StringVar(&r.justification, "justification", "", "The justification behind resize")
+	infraResizeCmd.Flags().StringVar(&r.ohss, "ohss", "", "OHSS ticket tracking this infra node resize")
 
 	infraResizeCmd.MarkFlagRequired("cluster-id")
 	infraResizeCmd.MarkFlagRequired("justification")
 	infraResizeCmd.MarkFlagRequired("reason")
+	infraResizeCmd.MarkFlagRequired("ohss")
 
 	return infraResizeCmd
 }
@@ -437,7 +442,7 @@ func (r *Infra) RunInfra(ctx context.Context) error {
 		}
 	}
 
-	postCmd := generateServiceLog(tempMp, r.instanceType, r.justification, r.clusterId)
+	postCmd := generateServiceLog(tempMp, r.instanceType, r.justification, r.clusterId, r.ohss)
 	if err := postCmd.Run(); err != nil {
 		fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
 		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
@@ -541,12 +546,12 @@ func getInstanceType(mp *hivev1.MachinePool) (string, error) {
 }
 
 // Adding change in serviceLog as per the cloud provider.
-func generateServiceLog(mp *hivev1.MachinePool, instanceType, justification, clusterId string) servicelog.PostCmdOptions {
+func generateServiceLog(mp *hivev1.MachinePool, instanceType, justification, clusterId, ohss string) servicelog.PostCmdOptions {
 	if mp.Spec.Platform.AWS != nil {
 		return servicelog.PostCmdOptions{
 			Template:       resizedInfraNodeServiceLogTemplate,
 			ClusterId:      clusterId,
-			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType), fmt.Sprintf("JUSTIFICATION=%s", justification)},
+			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType), fmt.Sprintf("JUSTIFICATION=%s", justification), fmt.Sprintf("JIRA_ID=%s", ohss)},
 		}
 	} else if mp.Spec.Platform.GCP != nil {
 		return servicelog.PostCmdOptions{
