@@ -9,11 +9,12 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/golang-jwt/jwt/v5"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 )
 
 var (
-	testToken     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJleHAiOjI1MjQ2MDgwMDB9.fake-token"
+	testToken, _  = jwt.New(jwt.SigningMethodHS256).SignedString([]byte("test-secret"))
 	clientID      = "fake-id"
 	clientSecret  = "fake-secret"
 	tokenPath     = "/fake-path/token"
