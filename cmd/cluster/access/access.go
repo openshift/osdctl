@@ -30,13 +30,16 @@ import (
 )
 
 const (
+	// impersonateUser represents the user SREs are allowed to impersonate in order to retrieve a cluster's kubeconfig.
 	impersonateUser     = "backplane-cluster-admin"
 	kubeconfigSecretKey = "kubeconfig"
 
+	// PrivateLink "jump pod" configuration
 	jumpImage         = "image-registry.openshift-image-registry.svc:5000/openshift/cli:latest"
 	jumpContainerName = "jump"
 	jumpPodLabelKey   = "automated-break-glass-access/cluster"
 
+	// Lifespan for jump pods in seconds. Currently, PrivateLink jump pods will expire after 8 hours
 	jumpPodLifespan = 28800
 )
 
@@ -45,6 +48,7 @@ var (
 	jumpPodPollTimeout  = 5 * time.Minute
 )
 
+// NewCmdAccess implements the 'break-glass' subcommand
 func NewCmdAccess(streams genericclioptions.IOStreams, client *k8s.LazyClient) *cobra.Command {
 	ops := newClusterAccessOptions(client, streams)
 	accessCmd := &cobra.Command{
@@ -67,6 +71,7 @@ func NewCmdAccess(streams genericclioptions.IOStreams, client *k8s.LazyClient) *
 	return accessCmd
 }
 
+// accessCmdComplete verifies the command's invocation, returning an error if the usage is invalid
 func accessCmdComplete(cmd *cobra.Command) error {
 	clusterID := cmd.Flag("cluster-id").Value.String()
 	if clusterID == "" {
@@ -75,6 +80,7 @@ func accessCmdComplete(cmd *cobra.Command) error {
 	return osdctlutil.IsValidClusterKey(clusterID)
 }
 
+// clusterAccessOptions contains the objects and information required to access a cluster
 type clusterAccessOptions struct {
 	reason    string
 	clusterID string
@@ -83,6 +89,7 @@ type clusterAccessOptions struct {
 	kubeCli *k8s.LazyClient
 }
 
+// newClusterAccessOptions creates a clusterAccessOptions object
 func newClusterAccessOptions(client *k8s.LazyClient, streams genericclioptions.IOStreams) clusterAccessOptions {
 	a := clusterAccessOptions{
 		IOStreams: streams,
@@ -91,23 +98,29 @@ func newClusterAccessOptions(client *k8s.LazyClient, streams genericclioptions.I
 	return a
 }
 
+// Println appends a newline then prints the given msg using the clusterAccessOptions' IOStreams
 func (c *clusterAccessOptions) Println(msg string) {
 	osdctlutil.StreamPrintln(c.IOStreams, msg)
 }
 
+// Print prints the given msg using the clusterAccessOptions' IOStreams
 func (c *clusterAccessOptions) Print(msg string) {
 	osdctlutil.StreamPrint(c.IOStreams, msg)
 }
 
+// Errorln appends a newline then prints the given error msg using the clusterAccessOptions' IOStreams
 func (c *clusterAccessOptions) Errorln(msg string) {
 	osdctlutil.StreamErrorln(c.IOStreams, msg)
 }
 
+// Readln reads a single line of user input using the clusterAccessOptions' IOStreams. User input is returned with all
+// proceeding and following whitespace trimmed
 func (c *clusterAccessOptions) Readln() (string, error) {
 	in, err := osdctlutil.StreamRead(c.IOStreams, '\n')
 	return strings.TrimSpace(in), err
 }
 
+// Run executes the 'break-glass' access subcommand
 func (c *clusterAccessOptions) Run(cmd *cobra.Command) error {
 	clusterIdentifier := c.clusterID
 
@@ -115,6 +128,7 @@ func (c *clusterAccessOptions) Run(cmd *cobra.Command) error {
 
 	c.Println(fmt.Sprintf("Retrieving Kubeconfig for cluster '%s'", clusterIdentifier))
 
+	// Connect to ocm
 	conn, err := osdctlutil.CreateConnection()
 	if err != nil {
 		return err
@@ -129,6 +143,7 @@ func (c *clusterAccessOptions) Run(cmd *cobra.Command) error {
 	}
 	c.Println(fmt.Sprintf("Internal Cluster ID: %s", cluster.ID()))
 
+	// Retrieve the kubeconfig secret from the cluster's namespace on hive
 	ns, err := getClusterNamespace(c.kubeCli, cluster.ID())
 	if err != nil {
 		return err
@@ -143,17 +158,20 @@ func (c *clusterAccessOptions) Run(cmd *cobra.Command) error {
 
 	isPscCluster := cluster.GCP().PrivateServiceConnect().ServiceAttachmentSubnet() != ""
 
+	// If Cluster is PrivateLink or PrivateServiceConnect - access via jump pod on hive
 	if cluster.AWS().PrivateLink() || isPscCluster {
 		c.Println("")
 		c.Println("Cluster is PrivateLink or Private Service Connect, and is only accessible via a jump pod on Hive")
 		return c.createJumpPodAccess(cluster, kubeconfigSecret)
 	}
 
+	// Otherwise, Cluster is not PrivateLink - save kubeconfig locally
 	c.Println("")
 	c.Println("Cluster is accessible via a local Kubeconfig file")
 	return c.createLocalKubeconfigAccess(cluster, kubeconfigSecret)
 }
 
+// createJumpPodAccess grants access to a cluster by creating a pod for users to exec into
 func (c *clusterAccessOptions) createJumpPodAccess(cluster *clustersmgmtv1.Cluster, kubeconfigSecret corev1.Secret) error {
 	c.Println("Attempting to spin up a pod to use for access")
 
@@ -178,12 +196,14 @@ func (c *clusterAccessOptions) createJumpPodAccess(cluster *clustersmgmtv1.Clust
 	return err
 }
 
+// createLocalKubeconfigAccess grants access to a cluster by writing the cluster's kubeconfig file to the local filesystem and (optionally) updating the user's cli environment
 func (c *clusterAccessOptions) createLocalKubeconfigAccess(cluster *clustersmgmtv1.Cluster, kubeconfigSecret corev1.Secret) error {
 	c.Println("Retrieving kubeconfig secret from Hive")
 
 	kubeconfigFilePath := fpath.Join(os.TempDir(), kubeconfigSecret.Name)
 	rawKubeconfig, found := kubeconfigSecret.Data[kubeconfigSecretKey]
 	if !found {
+		// Kubeconfig secret doesn't contain the expected key - write the obtained secret to a temp location so the user can troubleshoot or manually parse
 		c.Errorln(fmt.Sprintf("\nExpected key '%s' not found in Secret", kubeconfigSecretKey))
 		c.Println("Attempting to save Secret locally")
 
@@ -203,13 +223,18 @@ func (c *clusterAccessOptions) createLocalKubeconfigAccess(cluster *clustersmgmt
 		return fmt.Errorf("could not parse cluster's kubeconfig Secret")
 	}
 
+	// Determine if cluster utilizes a Private API
 	listening, listeningOK := cluster.API().GetListening()
 	if !listeningOK {
+		// Do not return if we can't determine the listening status of the apiserver - in both cases (private or non-private), the kubeconfig is needed locally, so we
+		// should pull it anyway, but give clear warning that additional manual action may be required if the kubeconfig fails to work.
 		c.Errorln("\nFailed to determine if the cluster is private.\nIf you're not able to access the cluster, try modifying the resulting kubeconfig according to the SOP: https://github.com/openshift/ops-sop/blob/master/v4/howto/break-glass-kubeadmin.md#for-clusters-with-private-api")
 	} else if listening == clustersmgmtv1.ListeningMethodInternal {
+		// If the cluster has a private API, it must be accessed using a special API url from one of the bastions
 		return c.createPrivateAPIAccess(rawKubeconfig, kubeconfigFilePath)
 	}
 
+	// Write the kubeconfig to the temp filesystem
 	c.Println("Saving kubeconfig")
 	err := saveAsLocalFile(rawKubeconfig, kubeconfigFilePath)
 	if err != nil {
@@ -248,6 +273,7 @@ func (c *clusterAccessOptions) createLocalKubeconfigAccess(cluster *clustersmgmt
 		c.Println(fmt.Sprintf("To add this capability to other terminals, run\n\n    export KUBECONFIG=%s\n\nwherever you'd like to execute commands against this cluster", kubeconfigFilePath))
 		c.Println("When you are done, type 'exit' (or use ctl-D) to return to the original terminal")
 
+		// Spawn a new shell
 		cmd := exec.Command(shell)
 		cmd.Stdout = os.Stdout
 		cmd.Stdin = os.Stdin
@@ -265,6 +291,7 @@ func (c *clusterAccessOptions) createLocalKubeconfigAccess(cluster *clustersmgmt
 	return nil
 }
 
+// createPrivateAPIAccess provides the necessary changes to access clusters with Private APIs
 func (c *clusterAccessOptions) createPrivateAPIAccess(rawKubeconfig []byte, kubeconfigFilePath string) error {
 	c.Println("Cluster is private. Updating kubeconfig to execute commands against the rh-api")
 
@@ -276,6 +303,7 @@ func (c *clusterAccessOptions) createPrivateAPIAccess(rawKubeconfig []byte, kube
 		return err
 	}
 
+	// Replace the server URL w/ the URL for the RH-api
 	for i := range formattedKubeconfig.Clusters {
 		originalServerURL := formattedKubeconfig.Clusters[i].Cluster.Server
 		formattedKubeconfig.Clusters[i].Cluster.Server = strings.Replace(originalServerURL, "api.", "rh-api.", 1)
@@ -294,6 +322,7 @@ func (c *clusterAccessOptions) createPrivateAPIAccess(rawKubeconfig []byte, kube
 		return err
 	}
 
+	// Write the kubeconfig to the temp filesystem
 	c.Println("Saving kubeconfig")
 	err = saveAsLocalFile(rawKubeconfig, kubeconfigFilePath)
 	if err != nil {
@@ -315,6 +344,7 @@ func (c *clusterAccessOptions) createPrivateAPIAccess(rawKubeconfig []byte, kube
 	return nil
 }
 
+// getKubeConfigSecret returns the first secret in the given namespace which contains the "hive.openshift.io/secret-type: kubeconfig" label
 func (c *clusterAccessOptions) getKubeConfigSecret(ns corev1.Namespace) (corev1.Secret, error) {
 	secretList := corev1.SecretList{}
 	labelSelector := metav1.LabelSelector{MatchLabels: map[string]string{"hive.openshift.io/secret-type": "kubeconfig"}}
@@ -331,13 +361,16 @@ func (c *clusterAccessOptions) getKubeConfigSecret(ns corev1.Namespace) (corev1.
 		return corev1.Secret{}, fmt.Errorf("kubeconfig secret not found in namespace '%s'", ns.Name)
 	}
 
+	// Just return the first item in list
 	return secretList.Items[0], nil
 }
 
+// saveAsLocalFile writes data as a file on the local filesystem with mode 0600
 func saveAsLocalFile(data []byte, path string) error {
 	return os.WriteFile(path, data, os.FileMode(0600))
 }
 
+// createJumpPod creates a deployment on hive to access a PrivateLink cluster from.
 func (c *clusterAccessOptions) createJumpPod(kubeconfigSecret corev1.Secret, clusterid string) (corev1.Pod, error) {
 	name := fmt.Sprintf("jumphost-%s-%d", time.Now().Format("20060102-150405-"), (time.Now().Nanosecond() / 1000000))
 	ns := kubeconfigSecret.Namespace
@@ -387,6 +420,7 @@ func (c *clusterAccessOptions) createJumpPod(kubeconfigSecret corev1.Secret, clu
 	return deploy, err
 }
 
+// waitForJumpPod polls until the given pod is ready
 func (c *clusterAccessOptions) waitForJumpPod(pod corev1.Pod, interval time.Duration, timeout time.Duration) error {
 	key := types.NamespacedName{
 		Name:      pod.Name,
