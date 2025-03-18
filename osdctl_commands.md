@@ -1264,7 +1264,6 @@ osdctl cluster context [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-  -C, --cluster-id string                Cluster ID
       --context string                   The name of the kubeconfig context to use
   -d, --days int                         Command will display X days of Error SLs sent to the cluster. Days is set to 30 by default (default 30)
       --full                             Run full suite of checks.
@@ -1598,7 +1597,6 @@ osdctl cluster resize control-plane [flags]
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
       --machine-type string              The target AWS machine type to resize to (e.g. m5.2xlarge)
-      --node string                      Specify a node for legacy (single node) resize, when the controlplane-machineset is unavailable. (e.g. ip-127.0.0.1.eu-west-2.compute.internal)
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --reason string                    The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
@@ -1635,6 +1633,7 @@ osdctl cluster resize infra [flags]
       --instance-type string             (optional) Override for an AWS or GCP instance type to resize the infra nodes to, by default supported instance types are automatically selected.
       --justification string             The justification behind resize
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+      --ohss string                      OHSS ticket tracking this infra node resize
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --reason string                    The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
@@ -2821,7 +2820,7 @@ osdctl mc [flags]
 
 ### osdctl mc list
 
-List ROSA HCP Management Clusters
+List ROSA HCP Management Clusters.
 
 ```
 osdctl mc list [flags]
@@ -2836,7 +2835,7 @@ osdctl mc list [flags]
   -h, --help                             help for list
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
-  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --output string                    Output format. Supported output formats include: table, text, json, yaml (default "table")
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
@@ -3238,16 +3237,19 @@ osdctl promote dynatrace [flags]
       --cluster string                   The name of the kubeconfig cluster to use
   -c, --component string                 Dynatrace component getting promoted
       --context string                   The name of the kubeconfig context to use
+      --dynatraceConfigDir pwd           location of dynatrace-config checkout. Falls back to pwd and /home/strinaga/git/dynatrace-config
   -g, --gitHash string                   Git hash of the SaaS service/operator commit getting promoted
   -h, --help                             help for dynatrace
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
   -l, --list                             List all SaaS services/operators
+  -m, --module string                    module to promote
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
   -S, --skip-version-check               skip checking to see if this is the most recent release
+  -t, --terraform                        deploy dynatrace-config terraform job
 ```
 
 ### osdctl promote package

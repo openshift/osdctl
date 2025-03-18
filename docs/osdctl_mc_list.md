@@ -4,7 +4,7 @@ List ROSA HCP Management Clusters
 
 ### Synopsis
 
-List ROSA HCP Management Clusters
+List ROSA HCP Management Clusters.
 
 ```
 osdctl mc list [flags]
@@ -19,7 +19,8 @@ osdctl mc list
 ### Options
 
 ```
-  -h, --help   help for list
+  -h, --help            help for list
+      --output string   Output format. Supported output formats include: table, text, json, yaml (default "table")
 ```
 
 ### Options inherited from parent commands
@@ -30,7 +31,6 @@ osdctl mc list
       --context string                   The name of the kubeconfig context to use
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
-  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value

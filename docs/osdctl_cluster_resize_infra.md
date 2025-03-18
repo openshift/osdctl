@@ -37,6 +37,7 @@ osdctl cluster resize infra [flags]
   -h, --help                   help for infra
       --instance-type string   (optional) Override for an AWS or GCP instance type to resize the infra nodes to, by default supported instance types are automatically selected.
       --justification string   The justification behind resize
+      --ohss string            OHSS ticket tracking this infra node resize
       --reason string          The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)
 ```
 

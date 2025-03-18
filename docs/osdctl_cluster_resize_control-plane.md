@@ -19,9 +19,6 @@ osdctl cluster resize control-plane [flags]
 
   # Resize all control plane instances to m5.4xlarge using control plane machine sets
   osdctl cluster resize control-plane -c "${CLUSTER_ID}" --machine-type m5.4xlarge --reason "${OHSS}"
-
-  # Legacy: Resize a control plane node on a cluster without active controlplane machineset, should be repeated for all control plane nodes
-  osdctl cluster resize control-plane-node -c "${CLUSTER_ID}" --machine-type m5.4xlarge --node ip-12-3-456-789.us-east-1.compute.internal --reason "${OHSS}"
 ```
 
 ### Options
@@ -30,7 +27,6 @@ osdctl cluster resize control-plane [flags]
   -c, --cluster-id string     The internal ID of the cluster to perform actions on
   -h, --help                  help for control-plane
       --machine-type string   The target AWS machine type to resize to (e.g. m5.2xlarge)
-      --node string           Specify a node for legacy (single node) resize, when the controlplane-machineset is unavailable. (e.g. ip-127.0.0.1.eu-west-2.compute.internal)
       --reason string         The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
 ```
 

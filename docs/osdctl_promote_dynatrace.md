@@ -15,16 +15,25 @@ osdctl promote dynatrace [flags]
 
 		# Promote a dynatrace component
 		osdctl promote dynatrace --component <component> --gitHash <git-hash>
+
+		# List all dynatrace-config modules available for promotion
+		osdctl promote dynatrace --terraform --list
+
+		# Promote a dynatrace module
+		osdctl promote dynatrace --terraform --module=<module-name>
 ```
 
 ### Options
 
 ```
-      --appInterfaceDir pwd   location of app-interfache checkout. Falls back to pwd and /home/strinaga/git/app-interface
-  -c, --component string      Dynatrace component getting promoted
-  -g, --gitHash string        Git hash of the SaaS service/operator commit getting promoted
-  -h, --help                  help for dynatrace
-  -l, --list                  List all SaaS services/operators
+      --appInterfaceDir pwd      location of app-interfache checkout. Falls back to pwd and /home/strinaga/git/app-interface
+  -c, --component string         Dynatrace component getting promoted
+      --dynatraceConfigDir pwd   location of dynatrace-config checkout. Falls back to pwd and /home/strinaga/git/dynatrace-config
+  -g, --gitHash string           Git hash of the SaaS service/operator commit getting promoted
+  -h, --help                     help for dynatrace
+  -l, --list                     List all SaaS services/operators
+  -m, --module string            module to promote
+  -t, --terraform                deploy dynatrace-config terraform job
 ```
 
 ### Options inherited from parent commands
