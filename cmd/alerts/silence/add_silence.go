@@ -26,22 +26,29 @@ type addSilenceCmd struct {
 func NewCmdAddSilence() *cobra.Command {
 	addSilenceCmd := &addSilenceCmd{}
 	cmd := &cobra.Command{
-		Use:               "add <cluster-id> [--all --duration --comment | --alertname --duration --comment]",
+		Use:               "add [--cluster-id=<cluster-id>] [--all --duration --comment | --alertname --duration --comment]",
 		Short:             "Add new silence for alert",
 		Long:              `add new silence for specfic or all alert with comment and duration of alert`,
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			addSilenceCmd.clusterID = args[0]
+			if addSilenceCmd.clusterID == "" {
+				fmt.Println("Error: --cluster-id flag is required")
+				_ = cmd.Help()
+				return
+			}
 			AddSilence(addSilenceCmd)
 		},
 	}
 
+	cmd.Flags().StringVar(&addSilenceCmd.clusterID, "cluster-id", "", "Provide the internal ID of the cluster")
 	cmd.Flags().StringSliceVar(&addSilenceCmd.alertID, "alertname", []string{}, "alertname (comma-separated)")
 	cmd.Flags().StringVarP(&addSilenceCmd.comment, "comment", "c", "Adding silence using the osdctl alert command", "add comment about silence")
 	cmd.Flags().StringVarP(&addSilenceCmd.duration, "duration", "d", "15d", "Adding duration for silence as 15 days") //default duration set to 15 days
 	cmd.Flags().BoolVarP(&addSilenceCmd.all, "all", "a", false, "Adding silences for all alert")
 	cmd.Flags().StringVar(&addSilenceCmd.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+
+	_ = cmd.MarkFlagRequired("cluster-id")
 	_ = cmd.MarkFlagRequired("reason")
 
 	return cmd
@@ -79,8 +86,8 @@ func AddSilence(cmd *addSilenceCmd) {
 	} else {
 		fmt.Println("No valid option specified. Use --all or --alertname.")
 	}
-
 }
+
 func AddAllSilence(clusterID, duration, comment, username, clustername string, kubeconfig *rest.Config, clientset *kubernetes.Clientset) error {
 	alerts := fetchAllAlerts(kubeconfig, clientset)
 	for _, alert := range alerts {
@@ -139,7 +146,7 @@ func AddAlertNameSilence(alertID []string, duration, comment, username string, k
 
 		output, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, addCmd)
 		if err != nil {
-			return fmt.Errorf("Failed to exec in AlertManager pod: %w", err)
+			return fmt.Errorf("failed to exec in AlertManager pod: %w", err)
 		}
 
 		formattedOutput := strings.Replace(output, "\n", "", -1)

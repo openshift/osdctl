@@ -105,12 +105,13 @@ type contextData struct {
 func newCmdContext() *cobra.Command {
 	ops := newContextOptions()
 	contextCmd := &cobra.Command{
-		Use:               "context",
+		Use:               "context --cluster-id <cluster-identifier>",
 		Short:             "Shows the context of a specified cluster",
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := ops.setup(args)
+			// Instead of passing args to setup, we now rely on the flag
+			err := ops.setup()
 			if err != nil {
 				return err
 			}
@@ -118,6 +119,9 @@ func newCmdContext() *cobra.Command {
 			return ops.run()
 		},
 	}
+
+	contextCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "ID or name of the cluster (required)")
+	_ = contextCmd.MarkFlagRequired("cluster-id")
 
 	contextCmd.Flags().StringVarP(&ops.output, "output", "o", "long", "Valid formats are ['long', 'short', 'json']. Output is set to 'long' by default")
 	contextCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", "", "AWS Profile")
@@ -136,7 +140,7 @@ func newContextOptions() *contextOptions {
 	return &contextOptions{}
 }
 
-func (o *contextOptions) setup(args []string) error {
+func (o *contextOptions) setup() error {
 	if o.days < 1 {
 		return fmt.Errorf("cannot have a days value lower than 1")
 	}
@@ -153,7 +157,9 @@ func (o *contextOptions) setup(args []string) error {
 		}
 	}()
 
-	clusters := utils.GetClusters(ocmClient, args)
+	// Use the clusterID flag value instead of args
+	clusterArgs := []string{o.clusterID}
+	clusters := utils.GetClusters(ocmClient, clusterArgs)
 	if len(clusters) != 1 {
 		return fmt.Errorf("unexpected number of clusters matched input. Expected 1 got %d", len(clusters))
 	}

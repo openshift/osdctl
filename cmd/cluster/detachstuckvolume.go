@@ -34,25 +34,25 @@ type detachStuckVolumeOptions struct {
 func newCmdDetachStuckVolume() *cobra.Command {
 	ops := &detachStuckVolumeOptions{}
 	detachstuckvolumeCmd := &cobra.Command{
-		Use:               "detach-stuck-volume",
+		Use:               "detach-stuck-volume --cluster-id <cluster-identifier>",
 		Short:             "Detach openshift-monitoring namespace's volume from a cluster forcefully",
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(ops.detachVolume(args[0]))
+			cmdutil.CheckErr(ops.detachVolume())
 		},
 	}
 
-	detachstuckvolumeCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	detachstuckvolumeCmd.Flags().StringVar(&ops.clusterID, "cluster-id", "", "The internal ID of the cluster")
+	detachstuckvolumeCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
+	_ = detachstuckvolumeCmd.MarkFlagRequired("cluster-id")
 	_ = detachstuckvolumeCmd.MarkFlagRequired("reason")
 
 	return detachstuckvolumeCmd
-
 }
 
-func (o *detachStuckVolumeOptions) detachVolume(clusterID string) error {
-
-	err := utils.IsValidClusterKey(clusterID)
+func (o *detachStuckVolumeOptions) detachVolume() error {
+	err := utils.IsValidClusterKey(o.clusterID)
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func (o *detachStuckVolumeOptions) detachVolume(clusterID string) error {
 		return err
 	}
 	defer connection.Close()
-	cluster, err := utils.GetCluster(connection, clusterID)
+	cluster, err := utils.GetCluster(connection, o.clusterID)
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,6 @@ func (o *detachStuckVolumeOptions) detachVolume(clusterID string) error {
 	}
 
 	return nil
-
 }
 
 // Following function gets the volumeID & region of pv for non running state pod & value into global variable

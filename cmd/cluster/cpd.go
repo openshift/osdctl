@@ -54,7 +54,7 @@ func newCmdCpd() *cobra.Command {
 			cmdutil.CheckErr(ops.run())
 		},
 	}
-	cpdCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", ops.clusterID, "The internal/external (OCM) Cluster ID")
+	cpdCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", ops.clusterID, "The internal (OCM) Cluster ID")
 	cpdCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", ops.awsProfile, "AWS profile name")
 
 	return cpdCmd

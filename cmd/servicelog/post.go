@@ -50,43 +50,44 @@ type PostCmdOptions struct {
 	failedClusters     map[string]string
 }
 
-const documentationBaseURL = "https://docs.openshift.com"
+const (
+	documentationBaseURL = "https://docs.openshift.com"
+	ClusterIDFlag        = "cluster-id"
+)
 
 func newPostCmd() *cobra.Command {
 	var opts = PostCmdOptions{}
 	postCmd := &cobra.Command{
-		Use:   "post CLUSTER_ID",
+		Use:   "post",
 		Short: "Post a service log to a cluster or list of clusters",
 		Long: `Post a service log to a cluster or list of clusters
 
   Docs: https://docs.openshift.com/rosa/logging/sd-accessing-the-service-logs.html`,
 		Example: `
   # Post a service log to a single cluster via a local file
-  osdctl servicelog post ${CLUSTER_ID} -t ~/path/to/file.json
+  osdctl servicelog post --cluster-id=${CLUSTER_ID} -t ~/path/to/file.json
 
   # Post a service log to a single cluster via a remote URL, providing a parameter
-  osdctl servicelog post ${CLUSTER_ID} -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/incident_resolved.json -p ALERT_NAME="alert"
+  osdctl servicelog post --cluster-id=${CLUSTER_ID} -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/incident_resolved.json -p ALERT_NAME="alert"
 
   # Post an internal-only service log message
-  osdctl servicelog post ${CLUSTER_ID} -i -p "MESSAGE=This is an internal message"
+  osdctl servicelog post --cluster-id=${CLUSTER_ID} -i -p "MESSAGE=This is an internal message"
 
   # Post a short external message
-  osdctl servicelog post ${CLUSTER_ID} -r "summary=External Message" -r "description=This is an external message" -r internal_only=False
+  osdctl servicelog post --cluster-id=${CLUSTER_ID} -r "summary=External Message" -r "description=This is an external message" -r internal_only=False
 
   # Post a service log to a group of clusters, determined by an OCM query
   ocm list cluster -p search="cloud_provider.id is 'gcp' and managed='true' and state is 'ready'"
   osdctl servicelog post -q "cloud_provider.id is 'gcp' and managed='true' and state is 'ready'" -t file.json
 `,
-		Args: cobra.MaximumNArgs(1),
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) > 0 {
-				opts.ClusterId = args[0]
-			}
 			return opts.Run()
 		},
 	}
 
 	// define flags
+	postCmd.Flags().StringVarP(&opts.ClusterId, ClusterIDFlag, "", "", "Cluster identifier")
 	postCmd.Flags().StringVarP(&opts.Template, "template", "t", "", "Message template file or URL")
 	postCmd.Flags().StringArrayVarP(&opts.TemplateParams, "param", "p", opts.TemplateParams, "Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.")
 	postCmd.Flags().StringArrayVarP(&opts.Overrides, "override", "r", opts.Overrides, "Specify a key-value pair (eg. -r FOO=BAR) to replace a JSON key in the document, only supports string fields, specifying -r without -t or -i will use a default template with severity `Info` and internal_only=True unless these are also overridden.")
@@ -110,7 +111,7 @@ func (o *PostCmdOptions) Init() error {
 
 func (o *PostCmdOptions) Validate() error {
 	if o.ClusterId == "" && len(o.filterParams) == 0 && o.clustersFile == "" {
-		return fmt.Errorf("no cluster identifier has been found")
+		return fmt.Errorf("no cluster identifier has been found, use --cluster-id flag, -q query flag, or -c clusters-file flag")
 	}
 	return nil
 }
@@ -344,7 +345,6 @@ func (o *PostCmdOptions) check(response *sdk.Response, clusterMessage servicelog
 	}
 }
 
-// parseUserParameters parse all the '-p FOO=BAR' parameters and checks for syntax errors
 func (o *PostCmdOptions) parseUserParameters() {
 	for _, v := range o.TemplateParams {
 		if !strings.Contains(v, "=") {
@@ -361,7 +361,6 @@ func (o *PostCmdOptions) parseUserParameters() {
 	}
 }
 
-// parseOverides parses all the '-o FOO=BAR' overrides which replace items in the final JSON document
 func (o *PostCmdOptions) parseOverrides() (map[string]string, error) {
 	usageMessageError := errors.New("invalid syntax. Usage: '-r FOO=BAR'")
 	overrideMap := make(map[string]string)
@@ -423,7 +422,6 @@ func (o *PostCmdOptions) overrideField(overrideKey string, overrideValue string)
 	return fmt.Errorf("field does not exist")
 }
 
-// accessFile returns the contents of a local file or url, and any errors encountered
 func (o *PostCmdOptions) accessFile(filePath string) ([]byte, error) {
 
 	if utils.IsValidUrl(filePath) {
@@ -449,17 +447,14 @@ func (o *PostCmdOptions) accessFile(filePath string) ([]byte, error) {
 	return nil, fmt.Errorf("cannot read the file %q", filePath)
 }
 
-// parseClustersFile reads the clustrs file into a JSON struct
 func (o *PostCmdOptions) parseClustersFile(jsonFile []byte) error {
 	return json.Unmarshal(jsonFile, &o.ClustersFile)
 }
 
-// parseTemplate reads the template file into a JSON struct
 func (o *PostCmdOptions) parseTemplate(jsonFile []byte) error {
 	return json.Unmarshal(jsonFile, &o.Message)
 }
 
-// readTemplate loads the template into the Message variable
 func (o *PostCmdOptions) readTemplate() {
 	if o.InternalOnly {
 		// fixed template for internal service logs
@@ -619,7 +614,6 @@ func (o *PostCmdOptions) createPostRequest(ocmClient *sdk.Connection, cluster *v
 	return request, nil
 }
 
-// listMessagedClusters prints all the clusters a service log was tried to be posted.
 func (o *PostCmdOptions) listMessagedClusters(clusters map[string]string) error {
 	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
 	table.AddRow([]string{"ID", "Status"})
@@ -634,7 +628,6 @@ func (o *PostCmdOptions) listMessagedClusters(clusters map[string]string) error 
 	return table.Flush()
 }
 
-// printPostOutput prints the main servicelog post output.
 func (o *PostCmdOptions) printPostOutput() {
 	output := fmt.Sprintf("Success: %d, Failed: %d\n", len(o.successfulClusters), len(o.failedClusters))
 	log.Infoln(output + "\n")
@@ -656,7 +649,6 @@ func (o *PostCmdOptions) printPostOutput() {
 	}
 }
 
-// cleanUp performs final actions in case of program termination.
 func (o *PostCmdOptions) cleanUp(clusters []*v1.Cluster) {
 	for _, cluster := range clusters {
 		if _, ok := o.successfulClusters[cluster.ExternalID()]; !ok {

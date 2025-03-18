@@ -37,26 +37,25 @@ var verbose bool = false
 func NewCmdHypershiftInfo(streams genericclioptions.IOStreams) *cobra.Command {
 	ops := newInfoOptions(streams)
 	infoCmd := &cobra.Command{
-		Use:   "hypershift-info CLUSTERID",
+		Use:   "hypershift-info",
 		Short: "Pull information about AWS objects from the cluster, the management cluster and the privatelink cluster",
 		Long: `This command aggregates AWS objects from the cluster, management cluster and privatelink for hypershift cluster.
 It attempts to render the relationships as graphviz if that output format is chosen or will simply print the output as tables.`,
-		Args: func(cmd *cobra.Command, args []string) error {
-			return cobra.ExactArgs(1)(cmd, args)
-		},
-		ArgAliases:        []string{"clusterid"},
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			ops.clusterID = args[0]
 			cmdutil.CheckErr(ops.complete(cmd))
 			cmdutil.CheckErr(ops.run())
 		},
 	}
+	infoCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "Cluster ID to retrieve information for")
 	infoCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", "", "AWS Profile")
 	infoCmd.Flags().StringVarP(&ops.awsRegion, "region", "r", "", "AWS Region")
 	infoCmd.Flags().StringVarP(&ops.privatelinkAccountId, "privatelinkaccount", "l", "", "Privatelink account ID")
 	infoCmd.Flags().StringVarP(&ops.output, "output", "o", "graphviz", "output format ['table', 'graphviz']")
 	infoCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
+
+	// Mark cluster-id as required
+	infoCmd.MarkFlagRequired("cluster-id")
 
 	return infoCmd
 }
@@ -134,8 +133,11 @@ func newInfoOptions(streams genericclioptions.IOStreams) *infoOptions {
 
 func (i *infoOptions) complete(cmd *cobra.Command) error {
 	var errMsg string
+	if i.clusterID == "" {
+		errMsg = "missing required flag --cluster-id. "
+	}
 	if i.awsProfile == "" {
-		errMsg = "missing argument -p. "
+		errMsg += "missing argument -p. "
 	}
 	if i.privatelinkAccountId == "" {
 		errMsg += "missing argument -l."
