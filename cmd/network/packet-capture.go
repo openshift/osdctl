@@ -11,11 +11,11 @@ import (
 	"strconv"
 	"time"
 
+	configv1 "github.com/openshift/api/config/v1"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/spf13/cobra"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -302,7 +302,7 @@ func copyFilesFromPod(o *packetCaptureOptions, pod *corev1.Pod) error {
 		return err
 	}
 	fileName := fmt.Sprintf("%s-%s.pcap", pod.Spec.NodeName, o.startTime.UTC().Format("20060102T150405"))
-	cmd := exec.Command("oc", "cp", pod.Namespace+"/"+pod.Name+":/tmp/capture-output/capture.pcap", outputDir+"/"+fileName) //#nosec G204 -- Subprocess launched with a potential tainted input or cmd arguments
+	cmd := exec.Command("oc", "cp", pod.Namespace+"/"+pod.Name+":/tmp/capture-output/capture.pcap", outputDir+"/"+fileName, "--as", "backplane-cluster-admin") //#nosec G204 -- Subprocess launched with a potential tainted input or cmd arguments
 	var stdBuffer bytes.Buffer
 	mw := io.MultiWriter(os.Stdout, &stdBuffer)
 
@@ -517,15 +517,19 @@ func waitForPacketCapturePod(o *packetCaptureOptions, capturePod *corev1.Pod) er
 }
 
 func setCaptureInterface(o *packetCaptureOptions) error {
-	ds := &appsv1.DaemonSet{}
-	if err := o.kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: "openshift-ovn-kubernetes", Name: "ovnkube-master"}, ds); err != nil && !apierrors.IsNotFound(err) {
+	networkConfig := &configv1.Network{}
+	if err := o.kubeCli.Get(context.Background(), client.ObjectKey{Name: "cluster"}, networkConfig); err != nil {
 		return fmt.Errorf("failed to determine the network type: %s", err)
 	}
 
-	if ds.Status.DesiredNumberScheduled > 0 {
+	switch networkConfig.Spec.NetworkType {
+	case "OVNKubernetes":
 		o.captureInterface = "genev_sys_6081"
 		return nil
+	case "OpenShiftSDN":
+		o.captureInterface = "vxlan_sys_4789"
+		return nil
+	default:
+		return fmt.Errorf("failed to determine network type. Network type %s unknown", networkConfig.Spec.NetworkType)
 	}
-	o.captureInterface = "vxlan_sys_4789"
-	return nil
 }
