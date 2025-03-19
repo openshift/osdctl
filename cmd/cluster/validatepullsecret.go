@@ -5,26 +5,24 @@ import (
 	"fmt"
 	"os"
 
-	sdk "github.com/openshift-online/ocm-sdk-go"
-	v1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
-	"github.com/openshift/osdctl/cmd/servicelog"
-	"github.com/openshift/osdctl/pkg/k8s"
-	"github.com/openshift/osdctl/pkg/utils"
-	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	v1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
+	"github.com/spf13/cobra"
+
+	"github.com/openshift/osdctl/cmd/servicelog"
+	"github.com/openshift/osdctl/pkg/k8s"
+	"github.com/openshift/osdctl/pkg/utils"
 )
 
 // validatePullSecretOptions defines the struct for running validate-pull-secret command
 type validatePullSecretOptions struct {
-	clusterID            string
-	elevate              bool
-	reason               string
-	pullSecretFetcher    PullSecretFetcher
-	clusterSecretFetcher ClusterPullSecretFetcher
-	oCMClientInterface   OCMClientInterface
+	clusterID string
+	elevate   bool
+	reason    string
 }
 
 func newCmdValidatePullSecret() *cobra.Command {
@@ -49,58 +47,12 @@ This command will automatically login to the cluster to check the current pull-s
 }
 
 func newValidatePullSecretOptions() *validatePullSecretOptions {
-	return &validatePullSecretOptions{
-		clusterSecretFetcher: &clusterPullSecretFetcher{},
-		oCMClientInterface:   &OCMClientImpl{},
-	}
-}
-
-type PullSecretFetcher interface {
-	getPullSecretFromOCM() (string, error, bool)
-}
-
-type ClusterPullSecretFetcher interface {
-	getPullSecretElevated(clusterID string, reason string) (string, error, bool)
-}
-
-type clusterPullSecretFetcher struct{}
-
-type OCMClientInterface interface {
-	CreateConnection() (*sdk.Connection, error)
-	GetSubscription(connection *sdk.Connection, key string) (*v1.Subscription, error)
-	GetAccount(connection *sdk.Connection, key string) (*v1.Account, error)
-	GetRegistryCredentials(connection *sdk.Connection, key string) ([]*v1.RegistryCredential, error)
-	Close() error
-}
-type OCMClientImpl struct {
-	ocm *sdk.Connection
-}
-
-func (o *OCMClientImpl) CreateConnection() (*sdk.Connection, error) {
-	obj, err := utils.CreateConnection()
-	o.ocm = obj
-	return obj, err
-}
-
-func (o *OCMClientImpl) GetSubscription(connection *sdk.Connection, key string) (*v1.Subscription, error) {
-	return utils.GetSubscription(connection, key)
-}
-
-func (o *OCMClientImpl) GetAccount(connection *sdk.Connection, key string) (*v1.Account, error) {
-	return utils.GetAccount(connection, key)
-}
-
-func (o *OCMClientImpl) GetRegistryCredentials(connection *sdk.Connection, key string) ([]*v1.RegistryCredential, error) {
-	return utils.GetRegistryCredentials(connection, key)
-}
-
-func (o *OCMClientImpl) Close() error {
-	return o.ocm.Close()
+	return &validatePullSecretOptions{}
 }
 
 func (o *validatePullSecretOptions) run() error {
 	// get the pull secret in OCM
-	emailOCM, err, done := o.pullSecretFetcher.getPullSecretFromOCM()
+	emailOCM, err, done := o.getPullSecretFromOCM()
 	if err != nil {
 		return err
 	}
@@ -109,7 +61,7 @@ func (o *validatePullSecretOptions) run() error {
 	}
 
 	// get the pull secret in cluster
-	emailCluster, err, done := o.clusterSecretFetcher.getPullSecretElevated(o.clusterID, o.reason)
+	emailCluster, err, done := getPullSecretElevated(o.clusterID, o.reason)
 	if err != nil {
 		return err
 	}
@@ -131,7 +83,7 @@ func (o *validatePullSecretOptions) run() error {
 }
 
 // getPullSecretElevated gets the pull-secret in the cluster with backplane elevation.
-func (c clusterPullSecretFetcher) getPullSecretElevated(clusterID string, reason string) (email string, err error, sentSL bool) {
+func getPullSecretElevated(clusterID string, reason string) (email string, err error, sentSL bool) {
 	kubeClient, err := k8s.NewAsBackplaneClusterAdmin(clusterID, client.Options{}, reason)
 	if err != nil {
 		return "", fmt.Errorf("failed to login to cluster as 'backplane-cluster-admin': %w", err), false
@@ -156,29 +108,28 @@ func (c clusterPullSecretFetcher) getPullSecretElevated(clusterID string, reason
 // done means a service log has been sent
 func (o *validatePullSecretOptions) getPullSecretFromOCM() (string, error, bool) {
 	fmt.Println("Getting email from OCM")
-	ocm, err := o.oCMClientInterface.CreateConnection()
+	ocm, err := utils.CreateConnection()
 	if err != nil {
 		return "", err, false
 	}
 	defer func() {
-		if ocmCloseErr := o.oCMClientInterface.Close(); ocmCloseErr != nil {
+		if ocmCloseErr := ocm.Close(); ocmCloseErr != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "Cannot close the ocm (possible memory leak): %q", ocmCloseErr)
 		}
 	}()
 
-	subscription, err := o.oCMClientInterface.GetSubscription(ocm, o.clusterID)
+	subscription, err := utils.GetSubscription(ocm, o.clusterID)
 	if err != nil {
-		fmt.Println("error is", err)
 		return "", err, false
 	}
 
-	account, err := o.oCMClientInterface.GetAccount(ocm, subscription.Creator().ID())
+	account, err := utils.GetAccount(ocm, subscription.Creator().ID())
 	if err != nil {
 		return "", err, false
 	}
 
 	// validate the registryCredentials before return
-	registryCredentials, err := o.oCMClientInterface.GetRegistryCredentials(ocm, account.ID())
+	registryCredentials, err := utils.GetRegistryCredentials(ocm, account.ID())
 	if err != nil {
 		return "", err, false
 	}
