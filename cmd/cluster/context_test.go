@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -68,15 +67,9 @@ func TestPrintClusterHeader(t *testing.T) {
 		ClusterID:   "12345",
 	}
 
-	origStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	data.printClusterHeader()
-
-	w.Close()
-	os.Stdout = origStdout
-	output, _ := io.ReadAll(r)
+	output := captureOutput(func(w io.Writer) {
+		data.printClusterHeader(w)
+	})
 
 	expectedHeader := fmt.Sprintf("%s -- %s", data.ClusterName, data.ClusterID)
 	expectedOutput := fmt.Sprintf("%s\n%s\n%s\n",
@@ -95,15 +88,9 @@ func TestPrintDynatraceResources(t *testing.T) {
 		DyntraceLogsURL: "https://dynatrace.com/logs",
 	}
 
-	origStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	printDynatraceResources(data)
-
-	w.Close()
-	os.Stdout = origStdout
-	output, _ := io.ReadAll(r)
+	output := captureOutput(func(w io.Writer) {
+		printDynatraceResources(data, w)
+	})
 
 	expectedHeader := "Dynatrace Details"
 	expectedLines := []string{
@@ -174,15 +161,10 @@ func TestPrintCloudTrailLogs(t *testing.T) {
 		},
 	}
 
-	origStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	output := captureOutput(func(w io.Writer) {
+		printCloudTrailLogs(events, w)
+	})
 
-	printCloudTrailLogs(events)
-
-	w.Close()
-	os.Stdout = origStdout
-	output, _ := io.ReadAll(r)
 	outputStr := string(output)
 
 	if !strings.Contains(outputStr, "Potentially interesting CloudTrail events") {
@@ -297,10 +279,6 @@ func TestPrintOtherLinks(t *testing.T) {
 	mockExternalClusterID := "mock-external-cluster-id"
 	mockPDServiceID := []string{"PD12345"}
 
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
 	o := &contextOptions{
 		clusterID:         mockClusterID,
 		externalClusterID: mockExternalClusterID,
@@ -310,14 +288,9 @@ func TestPrintOtherLinks(t *testing.T) {
 		pdServiceID: mockPDServiceID,
 	}
 
-	o.printOtherLinks(data)
-
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	output := buf.String()
+	output := captureOutput(func(w io.Writer) {
+		o.printOtherLinks(data, w)
+	})
 
 	expectedLinks := []string{
 		"OHSS Cards",
@@ -345,18 +318,9 @@ func TestPrintJIRASupportExceptions(t *testing.T) {
 		},
 	}
 
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	printJIRASupportExceptions(mockIssues)
-
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	output := buf.String()
+	output := captureOutput(func(w io.Writer) {
+		printJIRASupportExceptions(mockIssues, w)
+	})
 
 	expectedStrings := []string{
 		"- Link: https://issues.redhat.com/browse/JIRA-123",
@@ -378,18 +342,10 @@ func TestPrintHistoricalPDAlertSummary(t *testing.T) {
 	mockServiceIDs := []string{"PD12345"}
 	mockSinceDays := 7
 
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	output := captureOutput(func(w io.Writer) {
+		printHistoricalPDAlertSummary(mockIncidentCounters, mockServiceIDs, mockSinceDays, w)
 
-	printHistoricalPDAlertSummary(mockIncidentCounters, mockServiceIDs, mockSinceDays)
-
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	output := buf.String()
+	})
 
 	expectedStrings := []string{
 		"PagerDuty Historical Alerts",
@@ -405,30 +361,9 @@ func TestPrintHistoricalPDAlertSummary(t *testing.T) {
 	}
 }
 
-func captureOutput(f func()) string {
-	r, w, _ := os.Pipe()
-	stdout := os.Stdout
-	os.Stdout = w
-
-	done := make(chan struct{})
+func captureOutput(f func(io.Writer)) string {
 	var buf bytes.Buffer
-
-	// Read output in a separate goroutine to prevent blocking
-	go func() {
-		io.Copy(&buf, r)
-		close(done)
-	}()
-
-	// Execute the function
-	f()
-
-	// Close writer and restore stdout
-	w.Close()
-	os.Stdout = stdout // Restore stdout
-
-	// Ensure all output is read before returning
-	<-done
-
+	f(&buf) // Passing the buffer as an io.Writer
 	return buf.String()
 }
 
@@ -463,8 +398,8 @@ func TestPrintShortOutput(t *testing.T) {
 		HistoricalAlerts:      map[string][]*pagerduty.IncidentOccurrenceTracker{"service-2": {historicalAlert}},
 	}
 
-	output := captureOutput(func() {
-		opts.printShortOutput(data)
+	output := captureOutput(func(w io.Writer) {
+		opts.printShortOutput(data, w)
 	})
 
 	assert.Contains(t, output, "Version")
@@ -486,8 +421,8 @@ func TestPrintJsonOutput(t *testing.T) {
 		JiraIssues:     []jira.Issue{jiraIssue},
 	}
 
-	output := captureOutput(func() {
-		opts.printJsonOutput(data)
+	output := captureOutput(func(w io.Writer) {
+		opts.printJsonOutput(data, w)
 	})
 
 	var result map[string]interface{}
@@ -585,7 +520,15 @@ func TestPrintLongOutput(t *testing.T) {
 		full:    true,
 	}
 
-	o.printLongOutput(mockData)
+	output := captureOutput(func(w io.Writer) {
+		o.printLongOutput(mockData, w)
+	})
+
+	assert.Contains(t, output, "ClusterABC")
+	assert.Contains(t, output, "cluster-123")
+	assert.Contains(t, output, "Event1")
+	assert.Contains(t, output, "mockUser")
+	assert.Contains(t, output, "This is the cluster description.")
 
 }
 
@@ -638,8 +581,8 @@ func TestPrintUserBannedStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualOutput := captureOutput(func() {
-				printUserBannedStatus(&tt.data)
+			actualOutput := captureOutput(func(w io.Writer) {
+				printUserBannedStatus(&tt.data, w)
 			})
 
 			expected := strings.TrimSpace(tt.expectedOutput)
