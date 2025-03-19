@@ -29,14 +29,7 @@ download-goreleaser:
 .PHONY: generate-docs
 generate-docs:
 	@go run main.go docgen --cmd-path=./cmd --docs-dir=./docs
-
-#Install git hooks for checking documentation update as a part of every push
-.PHONY: install-hooks
-install-hooks:
-	@echo "Installing git hooks..."
-	@bash scripts/install-hooks.sh
-	@echo "Git hooks installed."
-
+	
 #Verify documents using PROW as a part of every PR raised for osdctl
 
 .PHONY: verify-docs
