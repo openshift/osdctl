@@ -37,9 +37,10 @@ Then you can find the `osdctl` binary file in the `./dist` subdirectory matching
 
 ### Update documentation after every release
 
-make install-hooks
+make generate-docs
 
-This will install the git hook necessary for checking documentation updates before pushing code to the repository, if there are any changes are detected the hook will run make generate-dcos to generate documentation.
+This will run the script to check for any changes made to the osdctl commands, if found the latest commands and usage will be updated in osdctl_commands.md, to be run as a part of every PR.
+
 
 ### Download from release
 
