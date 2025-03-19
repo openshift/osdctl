@@ -5,17 +5,15 @@ import (
 	"fmt"
 	"os"
 
+	v1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
+	"github.com/openshift/osdctl/cmd/servicelog"
+	"github.com/openshift/osdctl/pkg/k8s"
+	"github.com/openshift/osdctl/pkg/utils"
+	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	v1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
-	"github.com/spf13/cobra"
-
-	"github.com/openshift/osdctl/cmd/servicelog"
-	"github.com/openshift/osdctl/pkg/k8s"
-	"github.com/openshift/osdctl/pkg/utils"
 )
 
 // validatePullSecretOptions defines the struct for running validate-pull-secret command
