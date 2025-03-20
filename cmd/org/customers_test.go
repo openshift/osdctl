@@ -64,7 +64,7 @@ func Test_getCustomers(t *testing.T) {
 			t.Fatalf("Failed to build connection: %v", err)
 		}
 
-		customers, err := getCustomers(nil, conn)
+		customers, err := getCustomers(conn)
 
 		if err != nil {
 			t.Fatalf("getCustomers() returned an error: %v", err)

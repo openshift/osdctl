@@ -18,7 +18,7 @@ var (
 		Short:         "get paying/non-paying organizations",
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(_ *cobra.Command, _ []string) {
 			ocmClient, err := utils.CreateConnection()
 			if err != nil {
 				cmdutil.CheckErr(err)
@@ -29,7 +29,7 @@ var (
 				}
 			}()
 
-			customers, err := getCustomers(cmd, ocmClient)
+			customers, err := getCustomers(ocmClient)
 			if err != nil {
 				cmdutil.CheckErr(err)
 			}
@@ -65,7 +65,7 @@ func init() {
 	AddOutputFlag(flags)
 }
 
-func getCustomers(cmd *cobra.Command, ocmClient *sdk.Connection) ([]Customer, error) {
+func getCustomers(ocmClient *sdk.Connection) ([]Customer, error) {
 	pageSize := 1000
 	pageIndex := 1
 
