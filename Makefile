@@ -28,7 +28,7 @@ download-goreleaser:
 
 .PHONY: generate-docs
 generate-docs:
-	@go run main.go docgen --cmd-path=./cmd --docs-dir=./docs
+	@go run utils/docgen/main.go --cmd-path=./cmd --docs-dir=./docs
 	
 #Verify documents using PROW as a part of every PR raised for osdctl
 
