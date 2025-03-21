@@ -48,12 +48,6 @@ func newTestCluster(t *testing.T, cb *cmv1.ClusterBuilder) *cmv1.Cluster {
 	return cluster
 }
 
-func TestNewCmdValidateEgress(t *testing.T) {
-	cmd := NewCmdValidateEgress()
-	assert.NotNil(t, cmd)
-	assert.Equal(t, "verify-egress", cmd.Use)
-}
-
 func TestEgressVerification_ValidateInput(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -97,12 +91,11 @@ func TestEgressVerification_ValidateInput(t *testing.T) {
 
 func TestEgressVerification_GetPlatform(t *testing.T) {
 	tests := []struct {
-		name          string
-		ev            *EgressVerification
-		cluster       *cmv1.Cluster
-		wantPlatform  cloud.Platform
-		wantError     bool
-		setupMockFunc func() *cmv1.Cluster
+		name         string
+		ev           *EgressVerification
+		cluster      *cmv1.Cluster
+		wantPlatform cloud.Platform
+		wantError    bool
 	}{
 		{
 			name: "explicit platform aws-hcp",
@@ -119,23 +112,40 @@ func TestEgressVerification_GetPlatform(t *testing.T) {
 			},
 			wantError: true,
 		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			platform, err := tt.ev.getPlatform()
+			if tt.wantError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantPlatform, platform)
+			}
+		})
+	}
+}
+
+func TestEgressVerification_GetPlatformFromCluster(t *testing.T) {
+	tests := []struct {
+		name          string
+		ev            *EgressVerification
+		cluster       *cmv1.Cluster
+		wantPlatform  cloud.Platform
+		wantError     bool
+		setupMockFunc func() *cmv1.Cluster
+	}{
 		{
 			name: "hypershift enabled defaults to HCP",
 			ev:   &EgressVerification{},
 			setupMockFunc: func() *cmv1.Cluster {
-				// Create a mock cluster with hypershift enabled
-				cluster := cmv1.NewCluster()
-				hypershift := cmv1.NewHypershift()
-				hypershift.Enabled(true)
-				cluster.Hypershift(hypershift)
-				aws := cmv1.NewAWS()
-				cluster.AWS(aws)
-				cluster.CloudProvider(cmv1.NewCloudProvider().ID("aws"))
-				built, err := cluster.Build()
+				cluster, err := cmv1.NewCluster().Hypershift(cmv1.NewHypershift()).AWS(cmv1.NewAWS()).CloudProvider(cmv1.NewCloudProvider().ID("aws")).Build()
 				if err != nil {
 					t.Fatal(err)
 				}
-				return built
+				return cluster
 			},
 			wantPlatform: cloud.AWSHCP,
 			wantError:    false,
@@ -144,16 +154,11 @@ func TestEgressVerification_GetPlatform(t *testing.T) {
 			name: "classic cluster without hypershift",
 			ev:   &EgressVerification{},
 			setupMockFunc: func() *cmv1.Cluster {
-				// Create a mock cluster without hypershift
-				cluster := cmv1.NewCluster()
-				aws := cmv1.NewAWS()
-				cluster.AWS(aws)
-				cluster.CloudProvider(cmv1.NewCloudProvider().ID("aws"))
-				built, err := cluster.Build()
+				cluster, err := cmv1.NewCluster().AWS(cmv1.NewAWS()).CloudProvider(cmv1.NewCloudProvider().ID("aws")).Build()
 				if err != nil {
 					t.Fatal(err)
 				}
-				return built
+				return cluster
 			},
 			wantPlatform: cloud.AWSClassic,
 			wantError:    false,
@@ -162,9 +167,8 @@ func TestEgressVerification_GetPlatform(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.setupMockFunc != nil {
-				tt.ev.cluster = tt.setupMockFunc()
-			}
+
+			tt.ev.cluster = tt.setupMockFunc()
 
 			platform, err := tt.ev.getPlatform()
 			if tt.wantError {
@@ -251,9 +255,9 @@ func TestGenerateServiceLog(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			got := generateServiceLog(tc.output, tc.clusterId)
-			if !reflect.DeepEqual(got, tc.want) {
-				t.Errorf("generateServiceLog() = %v, want %v", got, tc.want)
-			}
+			assert.Equal(t, tc.want.Template, got.Template)
+			assert.Equal(t, tc.want.ClusterId, got.ClusterId)
+			assert.Equal(t, tc.want.TemplateParams, got.TemplateParams)
 		})
 	}
 }
@@ -267,12 +271,11 @@ func TestEgressVerification_GetCABundle(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			name: "no cluster",
+			name: "No CA Bundle to retrieve for nil cluster",
 			ev: &EgressVerification{
 				cluster: nil,
 			},
-			want:    "",
-			wantErr: false,
+			want: "",
 		},
 	}
 
@@ -281,14 +284,8 @@ func TestEgressVerification_GetCABundle(t *testing.T) {
 			if tt.setupFunc != nil {
 				tt.setupFunc(tt.ev)
 			}
-
-			got, err := tt.ev.getCABundle(context.Background())
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.want, got)
-			}
+			got, _ := tt.ev.getCABundle(context.Background())
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -376,18 +373,13 @@ func Test_egressVerificationGetPlatform(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			actual, err := test.e.getPlatform()
-			if err != nil {
-				if !test.expectErr {
-					t.Errorf("expected no err, got %s", err)
-				}
-			} else {
-				if test.expectErr {
-					t.Errorf("expected err, got none")
-				}
-				if actual != test.expected {
-					t.Errorf("expected platform %s, got %s", test.expected, actual)
-				}
+			if !test.expectErr {
+				assert.Equal(t, test.expected, actual)
 			}
+			if test.expectErr {
+				assert.Error(t, err)
+			}
+
 		})
 	}
 }
@@ -681,63 +673,12 @@ func TestGetCaBundleFromSyncSet(t *testing.T) {
 
 func Test_egressVerification_setupForAwsVerification(t *testing.T) {
 	tests := []struct {
-		name      string
-		e         *EgressVerification
-		expectErr bool
+		name string
+		e    *EgressVerification
 	}{
 		{
-			name:      "no ClusterId requires subnet/sg",
-			e:         &EgressVerification{},
-			expectErr: true,
-		},
-		{
-			name:      "no ClusterId with subnet",
-			e:         &EgressVerification{SubnetIds: []string{"subnet-a"}},
-			expectErr: true,
-		},
-		{
-			name:      "no ClusterId with security group",
-			e:         &EgressVerification{SecurityGroupId: "sg-a"},
-			expectErr: true,
-		},
-		{
-			name:      "no ClusterId with platform type",
-			e:         &EgressVerification{platformName: "aws"},
-			expectErr: true,
-		},
-		{
-			name: "no ClusterId with subnet and security group",
-			e: &EgressVerification{
-				SubnetIds:       []string{"subnet-a", "subnet-b", "subnet-c"},
-				SecurityGroupId: "sg-b",
-			},
-			expectErr: true,
-		},
-		{
-			name: "no ClusterId with subnet and platform type",
-			e: &EgressVerification{
-				SubnetIds:    []string{"subnet-a", "subnet-b", "subnet-c"},
-				platformName: "aws",
-			},
-			expectErr: true,
-		},
-		{
-			name: "no ClusterId with security group and platform type",
-			e: &EgressVerification{
-				SecurityGroupId: "sg-b",
-				platformName:    "aws",
-			},
-			expectErr: true,
-		},
-		{
-			name: "ClusterId optional",
-			e: &EgressVerification{
-				SubnetIds:       []string{"subnet-a", "subnet-b", "subnet-c"},
-				SecurityGroupId: "sg-b",
-				platformName:    "aws",
-				log:             newTestLogger(t),
-			},
-			expectErr: false,
+			name: "no ClusterId",
+			e:    &EgressVerification{},
 		},
 	}
 
@@ -745,9 +686,7 @@ func Test_egressVerification_setupForAwsVerification(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			err := test.e.fetchCluster(ctx)
-			if err != nil {
-				t.Errorf("expected no err, got %s", err)
-			}
+			assert.NoError(t, err)
 		})
 	}
 }

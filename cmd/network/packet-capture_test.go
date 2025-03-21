@@ -123,58 +123,6 @@ func TestDesiredPacketCaptureDaemonSet(t *testing.T) {
 	assert.Equal(t, 1, len(ds.Spec.Template.Spec.Containers))
 }
 
-func TestDesiredPacketCapturePodExist(t *testing.T) {
-	ops := &packetCaptureOptions{
-		name:             "test-capture",
-		namespace:        "default",
-		nodeLabelKey:     "node-role.kubernetes.io/worker",
-		nodeLabelValue:   "",
-		duration:         60,
-		captureInterface: "eth0",
-	}
-
-	key := types.NamespacedName{Name: ops.name, Namespace: ops.namespace}
-	pod := desiredPacketCapturePod(ops, key)
-
-	assert.Equal(t, ops.name, pod.Name)
-	assert.Equal(t, ops.namespace, pod.Namespace)
-	assert.Equal(t, map[string]string{"app": ops.name}, pod.Labels)
-	assert.Equal(t, true, pod.Spec.HostNetwork)
-	assert.Equal(t, 1, len(pod.Spec.InitContainers))
-	assert.Equal(t, 1, len(pod.Spec.Containers))
-}
-
-func TestNewPacketCaptureOptionsOne(t *testing.T) {
-	streams := genericclioptions.IOStreams{}
-	lazyClient := &k8s.LazyClient{}
-
-	ops := newPacketCaptureOptions(streams, lazyClient)
-
-	assert.NotNil(t, ops)
-	assert.Equal(t, streams, ops.IOStreams)
-	assert.Equal(t, lazyClient, ops.kubeCli)
-}
-
-func TestDesiredPacketCaptureDaemonSetOne(t *testing.T) {
-	ops := &packetCaptureOptions{
-		name:             "test-capture",
-		namespace:        "test-ns",
-		nodeLabelKey:     "test-key",
-		nodeLabelValue:   "test-value",
-		duration:         60,
-		captureInterface: "test-interface",
-	}
-
-	key := types.NamespacedName{Name: ops.name, Namespace: ops.namespace}
-	ds := desiredPacketCaptureDaemonSet(ops, key)
-
-	assert.Equal(t, ops.name, ds.Name)
-	assert.Equal(t, ops.namespace, ds.Namespace)
-	assert.Equal(t, map[string]string{"app": ops.name}, ds.Spec.Selector.MatchLabels)
-	assert.Equal(t, map[string]string{ops.nodeLabelKey: ops.nodeLabelValue}, ds.Spec.Template.Spec.NodeSelector)
-	assert.True(t, ds.Spec.Template.Spec.HostNetwork)
-}
-
 func TestDesiredPacketCapturePod(t *testing.T) {
 	ops := &packetCaptureOptions{
 		name:             "test-capture",
