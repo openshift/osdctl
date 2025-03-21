@@ -23,31 +23,35 @@ import (
 func newCmdCleanup(client *k8s.LazyClient, streams genericclioptions.IOStreams) *cobra.Command {
 	ops := newCleanupAccessOptions(client, streams)
 	cleanupCmd := &cobra.Command{
-		Use:               "cleanup <cluster identifier>",
+		Use:               "cleanup --cluster-id <cluster-identifier>",
 		Short:             "Drop emergency access to a cluster",
 		Long:              "Relinquish emergency access from the given cluster. If the cluster is PrivateLink, it deletes\nall jump pods in the cluster's namespace (because of this, you must be logged into the hive shard\nwhen dropping access for PrivateLink clusters). For non-PrivateLink clusters, the $KUBECONFIG\nenvironment variable is unset, if applicable.",
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(cleanupCmdComplete(cmd, args))
-			cmdutil.CheckErr(ops.Run(cmd, args))
+			cmdutil.CheckErr(cleanupCmdComplete(cmd))
+			cmdutil.CheckErr(ops.Run(cmd))
 		},
 	}
+	cleanupCmd.Flags().StringVar(&ops.clusterID, "cluster-id", "", "[Mandatory] Provide the Internal ID of the cluster")
 	cleanupCmd.Flags().StringVar(&ops.reason, "reason", "", "[Mandatory for PrivateLink clusters] The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	cleanupCmd.MarkFlagRequired("cluster-id")
 
 	return cleanupCmd
 }
 
-func cleanupCmdComplete(cmd *cobra.Command, args []string) error {
-	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, "Exactly one cluster identifier was expected")
+func cleanupCmdComplete(cmd *cobra.Command) error {
+	clusterID, _ := cmd.Flags().GetString("cluster-id")
+	if clusterID == "" {
+		return cmdutil.UsageErrorf(cmd, "The cluster-id flag is required")
 	}
-	return osdctlutil.IsValidClusterKey(args[0])
+	return osdctlutil.IsValidClusterKey(clusterID)
 }
 
 // cleanupAccessOptions contains the objects and information required to drop access to a cluster
 type cleanupAccessOptions struct {
-	reason string
+	reason    string
+	clusterID string
 
 	genericclioptions.IOStreams
 	kubeCli *k8s.LazyClient
@@ -85,9 +89,7 @@ func (c *cleanupAccessOptions) Readln() (string, error) {
 }
 
 // Run executes the 'cleanup' access subcommand
-func (c *cleanupAccessOptions) Run(cmd *cobra.Command, args []string) error {
-	clusterIdentifier := args[0]
-
+func (c *cleanupAccessOptions) Run(cmd *cobra.Command) error {
 	conn, err := osdctlutil.CreateConnection()
 	if err != nil {
 		return err
@@ -96,7 +98,7 @@ func (c *cleanupAccessOptions) Run(cmd *cobra.Command, args []string) error {
 		cmdutil.CheckErr(conn.Close())
 	}()
 
-	cluster, err := osdctlutil.GetCluster(conn, clusterIdentifier)
+	cluster, err := osdctlutil.GetCluster(conn, c.clusterID)
 	if err != nil {
 		return err
 	}
@@ -112,7 +114,8 @@ func (c *cleanupAccessOptions) Run(cmd *cobra.Command, args []string) error {
 // This primarily consists of deleting any jump pods found to be running against the cluster in hive.
 func (c *cleanupAccessOptions) dropPrivateLinkAccess(cluster *clustersmgmtv1.Cluster) error {
 	if c.reason == "" {
-		c.Errorln("flag \"reason\" not set and is required when Cluster is PrivateLin")
+		c.Errorln("flag \"reason\" not set and is required when Cluster is PrivateLink")
+		return fmt.Errorf("flag \"reason\" not set and is required when Cluster is PrivateLink")
 	}
 	c.kubeCli.Impersonate("backplane-cluster-admin", c.reason, fmt.Sprintf("Elevation required to clean break-glass on PrivateLink Clusters"))
 

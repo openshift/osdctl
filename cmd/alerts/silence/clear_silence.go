@@ -22,20 +22,27 @@ type silenceCmd struct {
 func NewCmdClearSilence() *cobra.Command {
 	silenceCmd := &silenceCmd{}
 	cmd := &cobra.Command{
-		Use:               "expire <cluster-id> [--all | --silence-id <silence-id>]",
+		Use:               "expire [--cluster-id=<cluster-id>] [--all | --silence-id <silence-id>]",
 		Short:             "Expire Silence for alert",
 		Long:              `expire all silence or based on silenceid`,
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			silenceCmd.clusterID = args[0]
+			if silenceCmd.clusterID == "" {
+				fmt.Println("Error: --cluster-id flag is required")
+				_ = cmd.Help()
+				return
+			}
 			ClearSilence(silenceCmd)
 		},
 	}
 
+	cmd.Flags().StringVar(&silenceCmd.clusterID, "cluster-id", "", "Provide the internal ID of the cluster")
 	cmd.Flags().StringSliceVar(&silenceCmd.silenceIDs, "silence-id", []string{}, "silence id (comma-separated)")
 	cmd.Flags().BoolVarP(&silenceCmd.all, "all", "a", false, "clear all silences")
 	cmd.Flags().StringVar(&silenceCmd.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+
+	_ = cmd.MarkFlagRequired("cluster-id")
 	_ = cmd.MarkFlagRequired("reason")
 
 	return cmd
@@ -76,14 +83,12 @@ func ClearAllSilence(kubeconfig *rest.Config, clientset *kubernetes.Clientset) {
 	}
 
 	queryOutput, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, queryCmd)
-
 	if err != nil {
 		fmt.Println("Error encountered while expiring all silence:", err)
 		return
 	}
 
 	formattedOutput := strings.Join(strings.Fields(queryOutput), " ")
-
 	if formattedOutput == " " || formattedOutput == "" {
 		fmt.Println("No Silence has been set for alerts, please create new silence")
 		return
@@ -101,16 +106,13 @@ func ClearAllSilence(kubeconfig *rest.Config, clientset *kubernetes.Clientset) {
 		}
 
 		countsilence = countsilence - 1
-
 		_, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, clearCmd)
-
 		if err != nil {
 			log.Printf("Error expiring silence ID \"%s\" : %v\n", silence, err)
 			return
 		}
 
 		fmt.Printf("SilenceID \"%s\" expired successfully.\n", silence)
-
 		if countsilence == 0 {
 			fmt.Println()
 			fmt.Printf("All SilenceID expired successfully.\n")
@@ -128,8 +130,8 @@ func ClearSilenceByID(silenceIDs []string, kubeconfig *rest.Config, clientset *k
 			silenceId,
 			"--alertmanager.url=" + utils.LocalHostUrl,
 		}
-		_, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, clearCmd)
 
+		_, err := utils.ExecInAlertManagerPod(kubeconfig, clientset, clearCmd)
 		if err != nil {
 			log.Printf("Error expiring silence ID \"%s\" %v\n", silenceId, err)
 			continue

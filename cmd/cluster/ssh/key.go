@@ -24,21 +24,22 @@ const (
 type clusterSSHKeyOpts struct {
 	elevationReason  string
 	skipConfirmation bool
+	clusterID        string
 }
 
 func NewCmdKey() *cobra.Command {
 	opts := &clusterSSHKeyOpts{}
 	cmd := &cobra.Command{
-		Use:   "key [cluster identifier] --reason $reason",
+		Use:   "key --reason $reason [--cluster-id $CLUSTER_ID]",
 		Short: "Retrieve a cluster's SSH key from Hive",
-		Long:  "Retrieve a cluster's SSH key from Hive. If a cluster identifier (internal ID, UUID, name, etc) is provided, then the key retrieved will be for that cluster. If no identifier is provided, then the key for the cluster backplane is currently logged into will be used instead. This command should only be used as a last resort, when all other means of accessing a node are lost.",
-		Example: `$ osdctl cluster ssh key $CLUSTER_ID --reason "OHSS-XXXX"
+		Long:  "Retrieve a cluster's SSH key from Hive. If a cluster-id is provided, then the key retrieved will be for that cluster. If no cluster-id is provided, then the key for the cluster backplane is currently logged into will be used instead. This command should only be used as a last resort, when all other means of accessing a node are lost.",
+		Example: `$ osdctl cluster ssh key --cluster-id $CLUSTER_ID --reason "OHSS-XXXX"
 INFO[0005] Backplane URL retrieved via OCM environment: https://api.backplane.openshift.com
 -----BEGIN RSA PRIVATE KEY-----
 ...
 -----END RSA PRIVATE KEY-----
 
-Providing a $CLUSTER_ID allows you to specify the cluster who's private ssh key you want to view, regardless if you're logged in or not.
+Providing a --cluster-id allows you to specify the cluster who's private ssh key you want to view, regardless if you're logged in or not.
 
 
 $ osdctl cluster ssh key --reason "OHSS-XXXX"
@@ -47,7 +48,7 @@ INFO[0005] Backplane URL retrieved via OCM environment: https://api.backplane.op
 ...
 -----END RSA PRIVATE KEY-----
 
-Omitting the $CLUSTER_ID will print the ssh key for the cluster you're currently logged into.
+Omitting --cluster-id will print the ssh key for the cluster you're currently logged into.
 
 
 $ osdctl cluster ssh key -y --reason "OHSS-XXXX" > /tmp/ssh.key
@@ -58,30 +59,27 @@ $ cat /tmp/ssh.key
 -----END RSA PRIVATE KEY-----
 
 Despite the logs from backplane, the ssh key is the only output channelled through stdout. This means you can safely redirect the output to a file for greater convienence.`,
-		Args: cobra.MaximumNArgs(1),
+		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, args []string) error {
-
-			// If user provides an argument: use it to identify the cluster's hive shard,
+			// If user provides a cluster-id flag: use it to identify the cluster's hive shard,
 			// otherwise use the current cluster's ID
-			clusterID := ""
 			var err error
-			if len(args) == 0 {
-				clusterID, err = k8s.GetCurrentCluster()
+			if opts.clusterID == "" {
+				opts.clusterID, err = k8s.GetCurrentCluster()
 				if err != nil {
 					return fmt.Errorf("failed to retrieve ID for current cluster")
 				}
-			} else {
-				clusterID = args[0]
 			}
 
-			err = PrintKey(clusterID, opts)
+			err = PrintKey(opts.clusterID, opts)
 			if err != nil {
-				return fmt.Errorf("failed to retrieve ssh key for cluster %s: %w", clusterID, err)
+				return fmt.Errorf("failed to retrieve ssh key for cluster %s: %w", opts.clusterID, err)
 			}
 			return nil
 		},
 	}
 
+	cmd.Flags().StringVar(&opts.clusterID, "cluster-id", "", "Cluster identifier (internal ID, UUID, name, etc) to retrieve the SSH key for. If not specified, the current cluster will be used.")
 	cmd.Flags().BoolVarP(&opts.skipConfirmation, "yes", "y", false, "Skip any confirmation prompts and print the key automatically. Useful for redirects and scripting.")
 	cmd.Flags().StringVar(&opts.elevationReason, "reason", "", "Provide a reason for accessing the clusters SSH key, used for backplane. Eg: 'OHSS-XXXX', or '#ITN-2024-XXXXX")
 

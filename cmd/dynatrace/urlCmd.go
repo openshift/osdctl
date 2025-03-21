@@ -8,18 +8,27 @@ import (
 )
 
 func newCmdURL() *cobra.Command {
+	var clusterID string
+
 	urlCmd := &cobra.Command{
-		Use:               "url CLUSTER_ID",
-		Short:             "Get the Dyntrace Tenant URL for a given MC or HCP cluster",
-		Args:              cobra.ExactArgs(1),
+		Use:               "url --cluster-id <cluster-identifier>",
+		Short:             "Get the Dynatrace Tenant URL for a given MC or HCP cluster",
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			hcpCluster, err := FetchClusterDetails(args[0])
+			if clusterID == "" {
+				cmdutil.CheckErr(fmt.Errorf("cluster-id is required"))
+			}
+
+			hcpCluster, err := FetchClusterDetails(clusterID)
 			if err != nil {
 				cmdutil.CheckErr(err)
 			}
 			fmt.Println("Dynatrace Environment URL - ", hcpCluster.DynatraceURL)
 		},
 	}
+
+	urlCmd.Flags().StringVar(&clusterID, "cluster-id", "", "ID of the cluster")
+	urlCmd.MarkFlagRequired("cluster-id")
+
 	return urlCmd
 }

@@ -38,7 +38,7 @@ const (
   $ osdctl dt logs
 
   # Get the logs of a specific cluster
-  $ osdctl dt logs --cluster <cluster-id>
+  $ osdctl dt logs --cluster-id <cluster-id>
 
  # Get a link to the dynatrace UI for the current cluster context.
   $ osdctl dt logs --console
@@ -47,7 +47,7 @@ const (
   $ osdctl dt logs alertmanager-main-0 -n openshift-monitoring
 
  # Get the logs of the pod alertmanager-main-0 in namespace openshift-monitoring for a specific HCP cluster
-  $ osdctl dt logs alertmanager-main-0 -n openshift-monitoring --cluster <cluster-id>
+  $ osdctl dt logs alertmanager-main-0 -n openshift-monitoring --cluster-id <cluster-id>
 
   # Only return logs newer than 2 hours old (an integer in hours)
   $ osdctl dt logs alertmanager-main-0 -n openshift-monitoring --since 2
@@ -59,7 +59,7 @@ const (
 
 func NewCmdLogs() *cobra.Command {
 	logsCmd := &cobra.Command{
-		Use:               "logs",
+		Use:               "logs --cluster-id <cluster-identifier>",
 		Short:             "Fetch logs from Dynatrace",
 		Long:              logsCmdDescription,
 		Example:           logsCmdExample,
@@ -85,7 +85,7 @@ func NewCmdLogs() *cobra.Command {
 		},
 	}
 
-	logsCmd.Flags().StringVar(&clusterID, "cluster", "", "Name or ID of the cluster (defaults to current cluster context)")
+	logsCmd.Flags().StringVar(&clusterID, "cluster-id", "", "Name or Internal ID of the cluster (defaults to current cluster context)")
 	logsCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Only builds the query without fetching any logs from the tenant")
 	logsCmd.Flags().IntVar(&tail, "tail", 1000, "Last 'n' logs to fetch (defaults to 100)")
 	logsCmd.Flags().IntVar(&since, "since", 1, "Number of hours (integer) since which to search (defaults to 1 hour)")
