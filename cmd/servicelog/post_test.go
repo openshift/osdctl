@@ -2,7 +2,6 @@ package servicelog
 
 import (
 	"encoding/json"
-
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -305,7 +304,6 @@ func TestParseUserParameters(t *testing.T) {
 		})
 	}
 }
-
 func TestPrintTemplate(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -337,7 +335,6 @@ func TestPrintTemplate(t *testing.T) {
 		})
 	}
 }
-
 func TestPrintClusters(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -365,7 +362,6 @@ func TestPrintClusters(t *testing.T) {
 		})
 	}
 }
-
 func TestListMessagedClusters(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -373,7 +369,7 @@ func TestListMessagedClusters(t *testing.T) {
 		expected error
 	}{
 		{
-			name:     "Valid clusters input with no errors",
+			name:     "valid_clusters_input_with_no_errors",
 			input:    nil,
 			expected: nil,
 		},
@@ -392,9 +388,7 @@ func TestListMessagedClusters(t *testing.T) {
 		})
 	}
 }
-
 func TestParseClustersFile(t *testing.T) {
-
 	tests := []struct {
 		name     string
 		input    []byte
@@ -427,7 +421,6 @@ func TestParseClustersFile(t *testing.T) {
 		})
 	}
 }
-
 func TestReplaceFlags(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -466,7 +459,6 @@ func TestReplaceFlags(t *testing.T) {
 		})
 	}
 }
-
 func TestCheckLeftovers(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -510,7 +502,6 @@ func TestCheckLeftovers(t *testing.T) {
 		})
 	}
 }
-
 func TestReadTemplate(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -590,51 +581,66 @@ func TestReadTemplate(t *testing.T) {
 		})
 	}
 }
-
 func TestReadFilterFile(t *testing.T) {
 	tests := []struct {
 		name           string
 		options        PostCmdOptions
 		expectedFilter string
-		prepare        func() // Prepare function to set up any necessary conditions for the test
+		prepare        func(t *testing.T, options *PostCmdOptions)
 	}{
 		{
 			name: "No filter files specified",
 			options: PostCmdOptions{
-				filterFiles: []string{}, // No filter files
+				filterFiles: []string{},
 			},
 			expectedFilter: "",
 		},
 		{
 			name: "One filter file",
 			options: PostCmdOptions{
-				filterFiles: []string{"filter1.txt"},
+				filterFiles: []string{},
 			},
-			expectedFilter: "(Filter content from filter1.txt)",
-			prepare: func() {
+			expectedFilter: "(Filter content from filter1)",
+			prepare: func(t *testing.T, options *PostCmdOptions) {
 				// Create a temporary filter file
-				fileContent := "Filter content from filter1.txt"
-				if err := os.WriteFile("filter1.txt", []byte(fileContent), 0644); err != nil {
-					t.Fatalf("Failed to create filter file: %v", err)
+				fileContent := "Filter content from filter1"
+				tmpFile, err := os.CreateTemp("", "filter1_*.txt")
+				if err != nil {
+					t.Fatalf("Failed to create temp filter file: %v", err)
 				}
+				defer tmpFile.Close()
+				if _, err := tmpFile.Write([]byte(fileContent)); err != nil {
+					t.Fatalf("Failed to write to temp filter file: %v", err)
+				}
+				options.filterFiles = append(options.filterFiles, tmpFile.Name())
 			},
 		},
 		{
 			name: "Multiple filter files",
 			options: PostCmdOptions{
-				filterFiles: []string{"filter1.txt", "filter2.txt"},
+				filterFiles: []string{},
 			},
-			expectedFilter: "(Filter content from filter1.txt) and (Filter content from filter2.txt)",
-			prepare: func() {
-				// Create temporary filter files-
-				fileContent1 := "Filter content from filter1.txt"
-				fileContent2 := "Filter content from filter2.txt"
-				if err := os.WriteFile("filter1.txt", []byte(fileContent1), 0644); err != nil {
-					t.Fatalf("Failed to create filter1 file: %v", err)
+			expectedFilter: "(Filter content from filter1) and (Filter content from filter2)",
+			prepare: func(t *testing.T, options *PostCmdOptions) {
+				fileContent1 := "Filter content from filter1"
+				fileContent2 := "Filter content from filter2"
+				tmpFile1, err := os.CreateTemp("", "filter1_*.txt")
+				if err != nil {
+					t.Fatalf("Failed to create temp filter1 file: %v", err)
 				}
-				if err := os.WriteFile("filter2.txt", []byte(fileContent2), 0644); err != nil {
-					t.Fatalf("Failed to create filter2 file: %v", err)
+				defer tmpFile1.Close()
+				tmpFile2, err := os.CreateTemp("", "filter2_*.txt")
+				if err != nil {
+					t.Fatalf("Failed to create temp filter2 file: %v", err)
 				}
+				defer tmpFile2.Close()
+				if _, err := tmpFile1.Write([]byte(fileContent1)); err != nil {
+					t.Fatalf("Failed to write to temp filter1 file: %v", err)
+				}
+				if _, err := tmpFile2.Write([]byte(fileContent2)); err != nil {
+					t.Fatalf("Failed to write to temp filter2 file: %v", err)
+				}
+				options.filterFiles = []string{tmpFile1.Name(), tmpFile2.Name()}
 			},
 		},
 	}
@@ -642,13 +648,10 @@ func TestReadFilterFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.prepare != nil {
-				tt.prepare()
+				tt.prepare(t, &tt.options)
 			}
-			// Call the readFilterFile function (leaving the log.Fatal inside it)
 			tt.options.readFilterFile()
-			// Check if the expected filter was set correctly
 			assert.Equal(t, tt.expectedFilter, tt.options.filtersFromFile)
-			// Cleanup the files that were created
 			for _, filterFile := range tt.options.filterFiles {
 				os.Remove(filterFile)
 			}
@@ -657,7 +660,6 @@ func TestReadFilterFile(t *testing.T) {
 }
 
 // Can't Handle positive case as it is going to logs.Fatal().
-// Commenting out the positive tests so that if inFuture, fatal is changed to error or panic then we can use same test with addition of defer to validate positive cases
 func TestPrintPostOutput(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -670,28 +672,6 @@ func TestPrintPostOutput(t *testing.T) {
 				failedClusters:     map[string]string{},
 			},
 		},
-		/*		{
-					name: "Only successful clusters",
-					inputOptions: PostCmdOptions{
-						successfulClusters: map[string]string{"cluster1": "success"},
-						failedClusters:     map[string]string{},
-					},
-				},
-				{
-					name: "Only failed clusters",
-					inputOptions: PostCmdOptions{
-						successfulClusters: map[string]string{},
-						failedClusters:     map[string]string{"cluster2": "failed"},
-					},
-				},
-				{
-					name: "Both successful and failed clusters",
-					inputOptions: PostCmdOptions{
-						successfulClusters: map[string]string{"cluster1": "success"},
-						failedClusters:     map[string]string{"cluster2": "failed"},
-					},
-				},
-		*/
 	}
 
 	for _, tt := range tests {
