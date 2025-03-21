@@ -284,7 +284,7 @@ func TestParseUserParameters(t *testing.T) {
 		expectValues []string
 	}{
 		{
-			name:         "Valid Parameters",
+			name:         "valid_parameters",
 			input:        []string{"FOO=BAR", "BAZ=QUX"},
 			expectNames:  []string{"${FOO}", "${BAZ}"},
 			expectValues: []string{"BAR", "QUX"},
@@ -311,7 +311,7 @@ func TestPrintTemplate(t *testing.T) {
 		expected error
 	}{
 		{
-			name: "Valid input with no errors",
+			name: "valid_input_with_no_errors",
 			input: &PostCmdOptions{
 				Message: servicelog.Message{
 					Severity:      "info",
@@ -342,7 +342,7 @@ func TestPrintClusters(t *testing.T) {
 		expected error
 	}{
 		{
-			name: "Valid clusters input with no errors",
+			name: "valid_clusters_input_with_no_errors",
 			input: func() []*v1.Cluster {
 				clusters := []*v1.Cluster{}
 				cluster1, _ := v1.NewCluster().ExternalID("cluster-1").Build()
@@ -395,12 +395,12 @@ func TestParseClustersFile(t *testing.T) {
 		expected error
 	}{
 		{
-			name:     "Valid JSON input with no errors",
+			name:     "valid_JSON_input_with_no_errors",
 			input:    []byte(`{"clusters":["cluster-1","cluster-2"]}`),
 			expected: nil,
 		},
 		{
-			name:     "Invalid JSON input with errors",
+			name:     "invalid_JSON_input_with_errors",
 			input:    []byte(`{"clusters":["cluster-1","cluster-2"`),
 			expected: assert.AnError,
 		},
@@ -431,7 +431,7 @@ func TestReplaceFlags(t *testing.T) {
 		expectedFilter string
 	}{
 		{
-			name: "Valid Flag Replacement in Message",
+			name: "valid_flag_replacement_in_Message",
 			inputOptions: PostCmdOptions{
 				Message: servicelog.Message{Summary: "This is a FILTERREPLACE test"},
 			},
@@ -440,7 +440,7 @@ func TestReplaceFlags(t *testing.T) {
 			expectedMsg: "This is a successful test",
 		},
 		{
-			name: "Valid Flag Replacement in filtersFromFile",
+			name: "valid_flag_replacement_in_filtersFromFile",
 			inputOptions: PostCmdOptions{
 				filtersFromFile: "Some filter with FILTERREPLACE",
 			},
@@ -466,28 +466,28 @@ func TestCheckLeftovers(t *testing.T) {
 		excludes     []string
 	}{
 		{
-			name: "No Leftovers",
+			name: "no_leftovers",
 			inputOptions: PostCmdOptions{
 				Message: servicelog.Message{Summary: "This is a test"},
 			},
 			excludes: []string{},
 		},
 		{
-			name: "Leftovers Found in Message",
+			name: "leftovers_found_in_message",
 			inputOptions: PostCmdOptions{
 				Message: servicelog.Message{Summary: "This is a ${PLACEHOLDER} test"},
 			},
 			excludes: []string{"${PLACEHOLDER}"},
 		},
 		{
-			name: "Leftovers Found in filtersFromFile",
+			name: "leftovers_found_in_filtersFromFile",
 			inputOptions: PostCmdOptions{
 				filtersFromFile: "Some filter with ${FILTER}",
 			},
 			excludes: []string{"${FILTER}"},
 		},
 		{
-			name: "Excluded Leftovers",
+			name: "excluded_leftovers",
 			inputOptions: PostCmdOptions{
 				Message: servicelog.Message{Summary: "This is a ${PLACEHOLDER} test"},
 			},
@@ -510,7 +510,7 @@ func TestReadTemplate(t *testing.T) {
 		prepare     func()
 	}{
 		{
-			name: "Internal only template",
+			name: "internal_only_template",
 			options: PostCmdOptions{
 				InternalOnly: true,
 			},
@@ -523,7 +523,7 @@ func TestReadTemplate(t *testing.T) {
 			},
 		},
 		{
-			name: "Pre-canned template with overrides",
+			name: "pre-canned_template_with_overrides",
 			options: PostCmdOptions{
 				InternalOnly: false,
 				Overrides:    []string{"some_override"},
@@ -535,7 +535,7 @@ func TestReadTemplate(t *testing.T) {
 			},
 		},
 		{
-			name: "Template file provided",
+			name: "template_file_provided",
 			options: PostCmdOptions{
 				InternalOnly: false,
 				Template:     "template.json",
@@ -567,14 +567,8 @@ func TestReadTemplate(t *testing.T) {
 			if tt.prepare != nil {
 				tt.prepare()
 			}
-
-			// Run the function
 			tt.options.readTemplate()
-
-			// Check if the expected message is set correctly
 			assert.Equal(t, tt.expectedMsg, tt.options.Message)
-
-			// Remove the template file if it was used
 			if tt.options.Template == "template.json" {
 				os.Remove(tt.options.Template)
 			}
@@ -589,14 +583,14 @@ func TestReadFilterFile(t *testing.T) {
 		prepare        func(t *testing.T, options *PostCmdOptions)
 	}{
 		{
-			name: "No filter files specified",
+			name: "no_filter_files_specified",
 			options: PostCmdOptions{
 				filterFiles: []string{},
 			},
 			expectedFilter: "",
 		},
 		{
-			name: "One filter file",
+			name: "one_filter_file",
 			options: PostCmdOptions{
 				filterFiles: []string{},
 			},
@@ -616,7 +610,7 @@ func TestReadFilterFile(t *testing.T) {
 			},
 		},
 		{
-			name: "Multiple filter files",
+			name: "multiple_filter_files",
 			options: PostCmdOptions{
 				filterFiles: []string{},
 			},
@@ -666,7 +660,7 @@ func TestPrintPostOutput(t *testing.T) {
 		inputOptions PostCmdOptions
 	}{
 		{
-			name: "No clusters",
+			name: "no_clusters",
 			inputOptions: PostCmdOptions{
 				successfulClusters: map[string]string{},
 				failedClusters:     map[string]string{},
