@@ -47,7 +47,7 @@ type validatePullSecretOptions struct {
 	ocm            *sdk.Connection   // openshift api client
 	results        *tabwriter.Writer // Used for printing tabled results
 	log            *logrus.Logger    // Simple stderr logger
-	verboseLevel   int               // Logging level
+	verboseLevel   string            // Logging level
 	useAccessToken bool              // Flag to use OCM access token values for validations
 	useRegCreds    bool              // Flag to use OCM registry credentials values for validations
 }
@@ -58,9 +58,11 @@ func newCmdValidatePullSecret() *cobra.Command {
 		Use:   "validate-pull-secret [CLUSTER_ID]",
 		Short: "Checks if the pull-secret data is synced with current OCM data",
 		Long: `
-	Attempts to validate if a cluster's pull-secret auth and email values are in sync with account, 
+	Attempts to validate if a cluster's pull-secret auth values are in sync with the account's email, 
 	registry_credential, and access token data stored in OCM. 
 	This requires the caller to be logged into the cluster to be validated. 
+	If this is being executed against a cluster which is not owned by the current OCM account, 
+	Region Lead permissions are required to view and validate the OCM AccessToken. 
 `,
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
@@ -69,10 +71,10 @@ func newCmdValidatePullSecret() *cobra.Command {
 			cmdutil.CheckErr(ops.run())
 		},
 	}
-	validatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command to be run (usually an OHSS or PD ticket), mandatory when using elevate")
-	validatePullSecretCmd.Flags().IntVarP(&ops.verboseLevel, "log-level", "l", 3, "debug=4, (default)info=3, warn=2, error=1")
+	validatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "Mandatory reason for this command to be run (usually includes an OHSS or PD ticket)")
+	validatePullSecretCmd.Flags().StringVarP(&ops.verboseLevel, "log-level", "l", "info", "debug, info, warn, error. (default=info)")
 	validatePullSecretCmd.Flags().Bool("skip-registry-creds", false, "Exclude OCM Registry Credentials checks against cluster secret")
-	validatePullSecretCmd.Flags().Bool("skip-access-token", false, "Check OCM Access Token Auth values against cluster secret")
+	validatePullSecretCmd.Flags().Bool("skip-access-token", false, "Exclude OCM AccessToken Auth value checks against cluster secret")
 
 	_ = validatePullSecretCmd.MarkFlagRequired("reason")
 	return validatePullSecretCmd
@@ -93,10 +95,11 @@ func (o *validatePullSecretOptions) preRun(cmd *cobra.Command, args []string) er
 	// Setup logger
 	log := logrus.New()
 	log.ReportCaller = true
-	if o.verboseLevel > 4 {
-		o.verboseLevel = 4
+	level, err := logrus.ParseLevel(o.verboseLevel)
+	if err != nil {
+		return fmt.Errorf("log level error:'%v", err)
 	}
-	log.SetLevel(logrus.Level(o.verboseLevel))
+	log.SetLevel(logrus.Level(level))
 	log.Formatter = new(logrus.TextFormatter)
 	log.Formatter.(*logrus.TextFormatter).DisableLevelTruncation = true
 	log.Formatter.(*logrus.TextFormatter).PadLevelText = true
