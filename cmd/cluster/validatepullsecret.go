@@ -52,6 +52,14 @@ type validatePullSecretOptions struct {
 	useRegCreds    bool              // Flag to use OCM registry credentials values for validations
 }
 
+const VPSExample string = `
+	# Compare OCM Access-Token, OCM Registry-Credentials, and OCM Account Email against cluster's pull secret
+	osdctl cluster validate-pull-secret ${CLUSTER_ID} --reason "OSD-XYZ"
+
+	# Exclude Access-Token, and Registry-Credential checks...
+	osdctl cluster validate-pull-secret ${CLUSTER_ID} --reason "OSD-XYZ" --skip-access-token --skip-registry-creds
+`
+
 func newCmdValidatePullSecret() *cobra.Command {
 	ops := newValidatePullSecretOptions()
 	validatePullSecretCmd := &cobra.Command{
@@ -64,6 +72,7 @@ func newCmdValidatePullSecret() *cobra.Command {
 	If this is being executed against a cluster which is not owned by the current OCM account, 
 	Region Lead permissions are required to view and validate the OCM AccessToken. 
 `,
+		Example:           VPSExample,
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
 		PreRun:            func(cmd *cobra.Command, args []string) { cmdutil.CheckErr(ops.preRun(cmd, args)) },
@@ -74,7 +83,7 @@ func newCmdValidatePullSecret() *cobra.Command {
 	validatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "Mandatory reason for this command to be run (usually includes an OHSS or PD ticket)")
 	validatePullSecretCmd.Flags().StringVarP(&ops.verboseLevel, "log-level", "l", "info", "debug, info, warn, error. (default=info)")
 	validatePullSecretCmd.Flags().Bool("skip-registry-creds", false, "Exclude OCM Registry Credentials checks against cluster secret")
-	validatePullSecretCmd.Flags().Bool("skip-access-token", false, "Exclude OCM AccessToken Auth value checks against cluster secret")
+	validatePullSecretCmd.Flags().Bool("skip-access-token", false, "Exclude OCM AccessToken checks against cluster secret")
 
 	_ = validatePullSecretCmd.MarkFlagRequired("reason")
 	return validatePullSecretCmd
