@@ -7,13 +7,15 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
+
+	"text/tabwriter"
 
 	"github.com/fatih/color"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/k8s"
-	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
 	logrus "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -37,27 +39,17 @@ const (
 	NotRun
 )
 
-type validation struct {
-	category  string
-	source    string
-	namespace string
-	name      string
-	attr      string
-	result    Result
-}
-
 // validatePullSecretOptions defines the struct for running validate-pull-secret command
 type validatePullSecretOptions struct {
-	account        *v1.Account             // Account which owns target cluster
-	clusterID      string                  // Target cluster containing pull-secret to be validated against OCM values
-	reason         string                  // Reason or justification for accessing sensitive data. (ie jira ticket)
-	ocm            *sdk.Connection         // openshift api client
-	results        *printer.Printer        // Used for printing tabled results
-	log            *logrus.Logger          // Simple stderr logger
-	verboseLevel   int                     // Logging level
-	useAccessToken bool                    // Flag to use OCM access token values for validations
-	useRegCreds    bool                    // Flag to use OCM registry credentials values for validations
-	validations    map[string][]validation // results map
+	account        *v1.Account       // Account which owns target cluster
+	clusterID      string            // Target cluster containing pull-secret to be validated against OCM values
+	reason         string            // Reason or justification for accessing sensitive data. (ie jira ticket)
+	ocm            *sdk.Connection   // openshift api client
+	results        *tabwriter.Writer // Used for printing tabled results
+	log            *logrus.Logger    // Simple stderr logger
+	verboseLevel   int               // Logging level
+	useAccessToken bool              // Flag to use OCM access token values for validations
+	useRegCreds    bool              // Flag to use OCM registry credentials values for validations
 }
 
 func newCmdValidatePullSecret() *cobra.Command {
@@ -113,6 +105,7 @@ func (o *validatePullSecretOptions) preRun(cmd *cobra.Command, args []string) er
 		return "", fmt.Sprintf("[%s:%d]", filepath.Base(f.File), f.Line)
 	}
 	o.log = log
+
 	flags := cmd.Flags()
 	noToken, err := flags.GetBool("skip-access-token")
 	if err != nil {
@@ -130,13 +123,12 @@ func (o *validatePullSecretOptions) preRun(cmd *cobra.Command, args []string) er
 	return nil
 }
 
-func addResultsTitles(resultsTable *printer.Printer) {
-	resultsTable.AddRow([]string{"OCM_SOURCE", "AUTH", "NAMESPACE", "SECRET", "ATTR", "RESULT"})
-	addResultsLine(resultsTable)
-}
-
-func addResultsLine(resultsTable *printer.Printer) {
-	resultsTable.AddRow([]string{"----------", "----", "---------", "------", "----", "------"})
+func addResultsTitles(resultsTable *tabwriter.Writer) {
+	lines := []string{"----------", "----", "---------", "------", "----", "------"}
+	titles := []string{"OCM_SOURCE", "AUTH", "NAMESPACE", "SECRET", "ATTR", "RESULT"}
+	fmt.Fprintln(resultsTable, strings.Join(lines, "\t"))
+	fmt.Fprintln(resultsTable, strings.Join(titles, "\t"))
+	fmt.Fprintln(resultsTable, strings.Join(lines, "\t"))
 }
 
 func (o *validatePullSecretOptions) run() error {
@@ -171,8 +163,7 @@ func (o *validatePullSecretOptions) run() error {
 	}
 
 	// init results table...
-	o.results = printer.NewTablePrinter(os.Stdout, 1, 1, 1, ' ')
-	addResultsLine(o.results)
+	o.results = tabwriter.NewWriter(os.Stdout, 1, 1, 1, ' ', 0)
 	addResultsTitles(o.results)
 
 	// Defer printing whatever results are available when run() returns
@@ -232,17 +223,18 @@ func (o *validatePullSecretOptions) run() error {
 	if o.useAccessToken {
 		userName := o.account.Username()
 		if len(userName) <= 0 {
+			o.log.Errorf("found empty 'username' for account:'%s', needed for accessToken", o.account.HREF())
 			err = fmt.Errorf("found empty 'username' for account:'%s', needed for accessToken", o.account.HREF())
 		} else {
 			accessToken, err = o.getAccessTokenFromOCM(userName)
-			if err != nil {
-				accessToken = nil
-				o.addResult("access_token", "-", "-", "-", "-", NotRun)
-				o.log.Error("getAccessTokenFromOCM() got error:'%s'\n", err)
-				fmt.Printf("\nError fetching OCM AccessToken:\n\t%s.\nWould you like to continue with validations? ", err)
-				if !utils.ConfirmPrompt() {
-					return err
-				}
+		}
+		if err != nil {
+			accessToken = nil
+			o.addResult("access_token", "-", "-", "-", "-", NotRun)
+			o.log.Errorf("getAccessTokenFromOCM() got error:'%v'\n", err)
+			fmt.Printf("\nError fetching OCM AccessToken:\n\t%s.\nWould you like to continue with validations? ", err)
+			if !utils.ConfirmPrompt() {
+				return err
 			}
 		}
 	}
@@ -300,7 +292,8 @@ func (o *validatePullSecretOptions) addResult(ocmSource string, auth string, psN
 	default:
 		resultStr = color.CyanString("Unknown(%d)", int(result))
 	}
-	o.results.AddRow([]string{ocmSource, auth, psNamespace, psName, attr, resultStr})
+	resStr := []string{ocmSource, auth, psNamespace, psName, attr, resultStr}
+	fmt.Fprintln(o.results, strings.Join(resStr, "\t"))
 }
 
 // There is likely more auth sections in the pull secret on cluster than in the OCM accessToken.
@@ -313,7 +306,7 @@ func (o *validatePullSecretOptions) checkAccessTokenToPullSecret(accessToken *v1
 		psTokenAuth, err := getPullSecretTokenAuth(akey, pullSecret)
 		if err != nil {
 			o.addResult("access_token", akey, pullSecret.Namespace, pullSecret.Name, "auth", Fail)
-			o.log.Errorf("%v. OCM accessToken.auth['%s'], failed to fetch this auth from cluster pull-secret, err:'%s'", akey, err)
+			o.log.Errorf("OCM accessToken.auth['%s'], failed to fetch this auth from cluster pull-secret, err:'%s'", akey, err)
 			hasErrors = true
 			// no matching auth present containing email + token
 			continue
@@ -431,7 +424,6 @@ func (o *validatePullSecretOptions) checkRegistryCredsAgainstPullSecret(regCreds
 		}
 		//Compare OCM registry_credential token to cluster-config/pull_secret token...
 		if regToken != string(secTokDecoded) {
-			// This should point to the sop and/or ocm pull secret sync util(s) available...
 			o.addResult("registry_credential", regCred.Registry().ID(), pullSecret.Namespace, pullSecret.Name, "token", Fail)
 			o.log.Errorf("OCM registry_credential['%s'] token did NOT match value found in cluster pull_secret!\n"+
 				"May need to sync ocm credentials to cluster pull secret.\n", regName)
@@ -502,6 +494,10 @@ func (o *validatePullSecretOptions) getAccessTokenFromOCM(impersonateUser string
 		return nil, fmt.Errorf("err, getAccessTokenFromOCM() provided empty user string")
 	}
 	currentUserInfo, err := o.getCurrentOCMUserInfo()
+	if err != nil {
+		// log this error, and attempt token request using impersonate regardless
+		o.log.Errorf("Error fetching OCM user info for current osdctl user? err:'%v", err)
+	}
 	if err != nil || currentUserInfo.Username() != impersonateUser {
 		// Impersonate requires elevated (region-lead) permissions.
 		tokenResp, err = o.ocm.AccountsMgmt().V1().AccessToken().Post().Impersonate(impersonateUser).Send()
@@ -512,7 +508,7 @@ func (o *validatePullSecretOptions) getAccessTokenFromOCM(impersonateUser string
 		tokenResp, err = o.ocm.AccountsMgmt().V1().AccessToken().Post().Send()
 	}
 
-	//For test purposes use the caller's ocm user with no impersonation...
+	// Check error to see if user should be informed of Region Lead requirements...
 	if err != nil {
 		if tokenResp != nil {
 			if tokenResp.Status() == 403 {
@@ -593,11 +589,11 @@ func sendServiceLog(postCmd servicelog.PostCmdOptions, message string) error {
 	var err error = nil
 	if len(postCmd.ClusterId) <= 0 {
 		fmt.Fprintf(os.Stderr, "Empty clusterID provided to sendServiceLog()\n")
-		return fmt.Errorf("Empty clusterID provided to sendServiceLog function")
+		return fmt.Errorf("empty clusterID provided to sendServiceLog function")
 	}
 	if len(postCmd.Template) <= 0 {
 		fmt.Fprintf(os.Stderr, "Empty template url provided to sendServiceLog()\n")
-		return fmt.Errorf("Empty template URL provided to sendServiceLog function")
+		return fmt.Errorf("empty template URL provided to sendServiceLog function")
 	}
 	// Print provided message then prompt user whether or not to send a service log.
 	if len(message) > 0 {
