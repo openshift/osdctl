@@ -18,7 +18,6 @@ type alertCmd struct {
 }
 
 // NewCmdListAlerts implements the list alert functionality.
-// NewCmdListAlerts implements the list alert functionality.
 func NewCmdListAlerts() *cobra.Command {
 	alertCmd := &alertCmd{}
 	newCmd := &cobra.Command{

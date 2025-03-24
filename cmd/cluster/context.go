@@ -120,7 +120,7 @@ func newCmdContext() *cobra.Command {
 		},
 	}
 
-	contextCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "ID or name of the cluster (required)")
+	contextCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "Provide internal ID of the cluster")
 	_ = contextCmd.MarkFlagRequired("cluster-id")
 
 	contextCmd.Flags().StringVarP(&ops.output, "output", "o", "long", "Valid formats are ['long', 'short', 'json']. Output is set to 'long' by default")

@@ -22,17 +22,13 @@ type silenceCmd struct {
 func NewCmdClearSilence() *cobra.Command {
 	silenceCmd := &silenceCmd{}
 	cmd := &cobra.Command{
-		Use:               "expire [--cluster-id=<cluster-id>] [--all | --silence-id <silence-id>]",
+		Use:               "expire [--cluster-id <cluster-identifier>] [--all | --silence-id <silence-id>]",
 		Short:             "Expire Silence for alert",
 		Long:              `expire all silence or based on silenceid`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			if silenceCmd.clusterID == "" {
-				fmt.Println("Error: --cluster-id flag is required")
-				_ = cmd.Help()
-				return
-			}
+
 			ClearSilence(silenceCmd)
 		},
 	}

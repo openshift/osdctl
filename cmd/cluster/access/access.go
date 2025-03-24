@@ -73,10 +73,9 @@ func NewCmdAccess(streams genericclioptions.IOStreams, client *k8s.LazyClient) *
 
 // accessCmdComplete verifies the command's invocation, returning an error if the usage is invalid
 func accessCmdComplete(cmd *cobra.Command) error {
+
 	clusterID := cmd.Flag("cluster-id").Value.String()
-	if clusterID == "" {
-		return cmdutil.UsageErrorf(cmd, "Cluster identifier is required")
-	}
+
 	return osdctlutil.IsValidClusterKey(clusterID)
 }
 

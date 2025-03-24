@@ -68,7 +68,7 @@ func newCmdEtcdHealthCheck() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&opts.clusterID, "cluster-id", "", "Internal Cluster ID or name to perform health check on")
+	cmd.Flags().StringVar(&opts.clusterID, "cluster-id", "", "Provide the internal Cluster ID or name to perform health check on")
 	cmd.Flags().StringVar(&opts.reason, "reason", "", "Specify a reason for privilege escalation")
 
 	err := cmd.MarkFlagRequired("cluster-id")

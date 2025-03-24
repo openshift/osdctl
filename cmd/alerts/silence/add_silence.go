@@ -26,18 +26,14 @@ type addSilenceCmd struct {
 func NewCmdAddSilence() *cobra.Command {
 	addSilenceCmd := &addSilenceCmd{}
 	cmd := &cobra.Command{
-		Use:               "add [--cluster-id=<cluster-id>] [--all --duration --comment | --alertname --duration --comment]",
+		Use:               "add [--cluster-id <cluster-identifier>] [--all --duration --comment | --alertname --duration --comment]",
 		Short:             "Add new silence for alert",
 		Long:              `add new silence for specfic or all alert with comment and duration of alert`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			if addSilenceCmd.clusterID == "" {
-				fmt.Println("Error: --cluster-id flag is required")
-				_ = cmd.Help()
-				return
-			}
 			AddSilence(addSilenceCmd)
+
 		},
 	}
 
