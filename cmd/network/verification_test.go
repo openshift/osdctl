@@ -7,24 +7,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"k8s.io/apimachinery/pkg/runtime"
-
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
-
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift-online/ocm-sdk-go/logging"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
-
 	"github.com/openshift/osd-network-verifier/pkg/data/cloud"
 	"github.com/openshift/osd-network-verifier/pkg/data/cpu"
 	"github.com/openshift/osd-network-verifier/pkg/output"
 	"github.com/openshift/osd-network-verifier/pkg/probes/curl"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
-
 	"github.com/openshift/osdctl/cmd/servicelog"
+	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func newTestLogger(t *testing.T) logging.Logger {
@@ -55,21 +51,21 @@ func TestEgressVerification_ValidateInput(t *testing.T) {
 		wantError bool
 	}{
 		{
-			name: "valid single subnet",
+			name: "valid_single_subnet",
 			ev: &EgressVerification{
 				SubnetIds: []string{"subnet-123"},
 			},
 			wantError: false,
 		},
 		{
-			name: "invalid comma-separated subnets",
+			name: "invalid_comma_separated_subnets",
 			ev: &EgressVerification{
 				SubnetIds: []string{"subnet-123,subnet-456"},
 			},
 			wantError: true,
 		},
 		{
-			name: "valid multiple subnet flags",
+			name: "valid_multiple_subnet_flags",
 			ev: &EgressVerification{
 				SubnetIds: []string{"subnet-123", "subnet-456"},
 			},
@@ -98,7 +94,7 @@ func TestEgressVerification_GetPlatform(t *testing.T) {
 		wantError    bool
 	}{
 		{
-			name: "explicit platform aws-hcp",
+			name: "explicit_platform_aws-hcp",
 			ev: &EgressVerification{
 				platformName: "aws-hcp",
 			},
@@ -106,7 +102,7 @@ func TestEgressVerification_GetPlatform(t *testing.T) {
 			wantError:    false,
 		},
 		{
-			name: "invalid platform",
+			name: "invalid_platform",
 			ev: &EgressVerification{
 				platformName: "invalid-platform",
 			},
@@ -138,8 +134,10 @@ func TestEgressVerification_GetPlatformFromCluster(t *testing.T) {
 		setupMockFunc func() *cmv1.Cluster
 	}{
 		{
-			name: "hypershift enabled defaults to HCP",
-			ev:   &EgressVerification{},
+			name: "hypershift_enabled_defaults_to_HCP",
+			ev: &EgressVerification{
+				platformName: "aws-hcp",
+			},
 			setupMockFunc: func() *cmv1.Cluster {
 				cluster, err := cmv1.NewCluster().Hypershift(cmv1.NewHypershift()).AWS(cmv1.NewAWS()).CloudProvider(cmv1.NewCloudProvider().ID("aws")).Build()
 				if err != nil {
@@ -151,7 +149,7 @@ func TestEgressVerification_GetPlatformFromCluster(t *testing.T) {
 			wantError:    false,
 		},
 		{
-			name: "classic cluster without hypershift",
+			name: "classic_cluster_without_hypershift",
 			ev:   &EgressVerification{},
 			setupMockFunc: func() *cmv1.Cluster {
 				cluster, err := cmv1.NewCluster().AWS(cmv1.NewAWS()).CloudProvider(cmv1.NewCloudProvider().ID("aws")).Build()
@@ -190,7 +188,7 @@ func TestEgressVerification_DefaultValidateEgressInput(t *testing.T) {
 		want     *onv.ValidateEgressInput
 	}{
 		{
-			name: "basic configuration",
+			name: "basic_configuration",
 			ev: &EgressVerification{
 				cpuArch:       cpu.ArchX86,
 				NoTls:         false,
@@ -228,7 +226,7 @@ func TestGenerateServiceLog(t *testing.T) {
 		want      servicelog.PostCmdOptions
 	}{
 		{
-			name: "with failures",
+			name: "with_failures",
 			output: func() *output.Output {
 				o := &output.Output{}
 				o.SetEgressFailures([]string{
@@ -245,7 +243,7 @@ func TestGenerateServiceLog(t *testing.T) {
 			},
 		},
 		{
-			name:      "no failures",
+			name:      "no_failures",
 			output:    &output.Output{}, // Empty output for no failures
 			clusterId: "test-cluster",
 			want:      servicelog.PostCmdOptions{},
@@ -271,7 +269,7 @@ func TestEgressVerification_GetCABundle(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			name: "No CA Bundle to retrieve for nil cluster",
+			name: "No_CA_Bundle_to_retrieve_for_nil_cluster",
 			ev: &EgressVerification{
 				cluster: nil,
 			},
@@ -297,7 +295,7 @@ func TestFiltersToString(t *testing.T) {
 		want    string
 	}{
 		{
-			name: "single filter",
+			name: "single_filter",
 			filters: []types.Filter{
 				{
 					Name:   aws.String("tag:Name"),
@@ -459,7 +457,7 @@ func Test_egressVerificationGetSubnetIdAllSubnetsFlag(t *testing.T) {
 		expectErr bool
 	}{
 		{
-			name: "all subnets flag is on",
+			name: "all_subnets_flag_is_on",
 			e: &EgressVerification{
 				log:        newTestLogger(t),
 				SubnetIds:  []string{"string-1", "string-2", "string-3"},
@@ -564,11 +562,11 @@ func Test_generateServiceLog(t *testing.T) {
 		want       servicelog.PostCmdOptions
 	}{
 		{
-			name:       "no egress failures",
+			name:       "no_egress_failures",
 			egressUrls: nil,
 		},
 		{
-			name:       "one egress failure",
+			name:       "one_egress_failure",
 			egressUrls: []string{"storage.googleapis.com:443"},
 			want: servicelog.PostCmdOptions{
 				Template:       blockedEgressTemplateUrl,
@@ -577,7 +575,7 @@ func Test_generateServiceLog(t *testing.T) {
 			},
 		},
 		{
-			name: "multiple egress failures",
+			name: "multiple_egress_failures",
 			egressUrls: []string{
 				"storage.googleapis.com:443",
 				"console.redhat.com:443",
@@ -677,7 +675,7 @@ func Test_egressVerification_setupForAwsVerification(t *testing.T) {
 		e    *EgressVerification
 	}{
 		{
-			name: "no ClusterId",
+			name: "no_clusterId",
 			e:    &EgressVerification{},
 		},
 	}

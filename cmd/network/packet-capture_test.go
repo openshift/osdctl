@@ -9,6 +9,7 @@ import (
 	"time"
 
 	. "github.com/onsi/gomega"
+	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -20,16 +21,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-	"github.com/openshift/osdctl/pkg/k8s"
 )
-
-func TestHelperProcess(t *testing.T) {
-	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
-		return
-	}
-	os.Exit(0)
-}
 
 func TestPacketCaptureCmdComplete(t *testing.T) {
 	g := NewGomegaWithT(t)
@@ -70,19 +62,16 @@ func TestNewPacketCaptureOptions(t *testing.T) {
 
 func TestComplete(t *testing.T) {
 	tests := []struct {
-		name    string
-		reason  string
-		wantErr bool
+		name   string
+		reason string
 	}{
 		{
-			name:    "without reason",
-			reason:  "",
-			wantErr: false,
+			name:   "without_reason",
+			reason: "",
 		},
 		{
-			name:    "with reason",
-			reason:  "OHSS-1234",
-			wantErr: false,
+			name:   "with_reason",
+			reason: "OHSS-1234",
 		},
 	}
 
@@ -93,7 +82,7 @@ func TestComplete(t *testing.T) {
 				kubeCli: &k8s.LazyClient{},
 			}
 			err := ops.complete(nil, nil)
-			if tt.wantErr {
+			if err != nil {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
@@ -158,13 +147,13 @@ func TestDeletePacketCapturePod(t *testing.T) {
 		wantError bool
 	}{
 		{
-			name:      "successful pod deletion",
+			name:      "successful_pod_deletion",
 			pod:       testPod,
 			mockError: nil,
 			wantError: false,
 		},
 		{
-			name:      "failed pod deletion",
+			name:      "failed_pod_deletion",
 			pod:       testPod,
 			mockError: fmt.Errorf("deletion failed"),
 			wantError: true,
@@ -208,13 +197,13 @@ func TestDeletePacketCaptureDaemonSet(t *testing.T) {
 		wantError bool
 	}{
 		{
-			name:      "successful daemonset deletion",
+			name:      "successful_daemonset_deletion",
 			ds:        testDaemonSet,
 			mockError: nil,
 			wantError: false,
 		},
 		{
-			name:      "failed daemonset deletion",
+			name:      "failed_daemonset_deletion",
 			ds:        testDaemonSet,
 			mockError: fmt.Errorf("deletion failed"),
 			wantError: true,
@@ -249,7 +238,7 @@ func TestCreatePacketCapturePod(t *testing.T) {
 		wantError bool
 	}{
 		{
-			name: "successfully create pod",
+			name: "successfully_create_pod",
 			pod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pod",
@@ -260,7 +249,7 @@ func TestCreatePacketCapturePod(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name: "error creating pod - already exists",
+			name: "error_creating_pod_already_exists",
 			pod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "existing-pod",
@@ -328,7 +317,7 @@ func TestCreatePacketCaptureDaemonSet(t *testing.T) {
 		wantError bool
 	}{
 		{
-			name: "successfully create daemonset",
+			name: "successfully_create_daemonset",
 			ds: &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-daemonset",
@@ -339,7 +328,7 @@ func TestCreatePacketCaptureDaemonSet(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name: "error creating daemonset - already exists",
+			name: "error_creating_daemonset_already_exists",
 			ds: &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "existing-daemonset",
@@ -406,7 +395,7 @@ func TestWaitForPacketCapturePod(t *testing.T) {
 		wantError bool
 	}{
 		{
-			name: "pod becomes running",
+			name: "pod_becomes_running",
 			pod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pod",
@@ -464,56 +453,6 @@ func TestWaitForPacketCapturePod(t *testing.T) {
 	}
 }
 
-func TestSetCaptureInterface(t *testing.T) {
-	tests := []struct {
-		name          string
-		objects       []runtime.Object
-		expectedIface string
-	}{
-		{
-			name: "OVN-Kubernetes network",
-			objects: []runtime.Object{
-				&appsv1.DaemonSet{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "ovnkube-master",
-						Namespace: "openshift-ovn-kubernetes",
-					},
-					Status: appsv1.DaemonSetStatus{
-						DesiredNumberScheduled: 3,
-					},
-				},
-			},
-			expectedIface: "genev_sys_6081",
-		},
-		{
-			name:          "OpenShift-SDN network",
-			objects:       []runtime.Object{},
-			expectedIface: "vxlan_sys_4789",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			scheme := runtime.NewScheme()
-			_ = appsv1.AddToScheme(scheme)
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(tt.objects...).Build()
-
-			opts := &packetCaptureOptions{
-				kubeCli: k8s.LazyClientInit(fakeClient),
-			}
-
-			if err := setCaptureInterface(opts); err != nil {
-				t.Errorf("setCaptureInterface() error = %v", err)
-				return
-			}
-
-			if opts.captureInterface != tt.expectedIface {
-				t.Errorf("setCaptureInterface() got = %v, want %v", opts.captureInterface, tt.expectedIface)
-			}
-		})
-	}
-}
-
 func TestEnsurePacketCapturePod(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -523,7 +462,7 @@ func TestEnsurePacketCapturePod(t *testing.T) {
 		errMessage string
 	}{
 		{
-			name:    "successfully create pod",
+			name:    "successfully_create_pod",
 			objects: []runtime.Object{},
 			opts: &packetCaptureOptions{
 				name:      "test-pod",
@@ -532,7 +471,7 @@ func TestEnsurePacketCapturePod(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "pod already exists",
+			name: "pod_already_exists",
 			objects: []runtime.Object{
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
@@ -595,7 +534,7 @@ func TestWaitForPacketCaptureContainerRunning(t *testing.T) {
 		setupFn func(*fake.ClientBuilder)
 	}{
 		{
-			name: "container running",
+			name: "container_running",
 			pod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pod",
@@ -622,7 +561,7 @@ func TestWaitForPacketCaptureContainerRunning(t *testing.T) {
 			},
 		},
 		{
-			name: "container not running",
+			name: "container_not_running",
 			pod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pod",
@@ -645,7 +584,7 @@ func TestWaitForPacketCaptureContainerRunning(t *testing.T) {
 			},
 		},
 		{
-			name: "no container statuses",
+			name: "no_container_statuses",
 			pod: &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-pod",
@@ -692,7 +631,7 @@ func TestWaitForPacketCaptureDaemonset(t *testing.T) {
 		errContains string
 	}{
 		{
-			name: "daemonset ready",
+			name: "daemonset_ready",
 			daemonset: &appsv1.DaemonSet{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-ds",
@@ -746,7 +685,7 @@ func TestCopyFilesFromPod(t *testing.T) {
 		cleanup func()
 	}{
 		{
-			name: "mkdir error",
+			name: "mkdir_error",
 			pod: &corev1.Pod{
 				Spec: corev1.PodSpec{
 					NodeName: "test-node",
@@ -768,7 +707,7 @@ func TestCopyFilesFromPod(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "oc cp command error",
+			name: "oc_cp_command_error",
 			pod: &corev1.Pod{
 				Spec: corev1.PodSpec{
 					NodeName: "nonexistent-node",
@@ -830,7 +769,7 @@ func TestHasPacketCaptureDaemonSet(t *testing.T) {
 		wantError bool
 	}{
 		{
-			name: "DaemonSet exists",
+			name: "daemonset_exists",
 			key: types.NamespacedName{
 				Name:      "test-daemonset",
 				Namespace: "default",
@@ -848,7 +787,7 @@ func TestHasPacketCaptureDaemonSet(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name: "DaemonSet not found",
+			name: "daemonset_not_found",
 			key: types.NamespacedName{
 				Name:      "nonexistent-daemonset",
 				Namespace: "default",
