@@ -377,7 +377,7 @@ func TestClusterAccessOptions_getKubeConfigSecret(t *testing.T) {
 		ExpectedName  string
 	}{
 		{
-			Name: "Successfully retrieve kubeconfig secret",
+			Name: "Successfully_retrieve_kubeconfig_secret",
 			Namespace: corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: secretNS,
@@ -388,7 +388,7 @@ func TestClusterAccessOptions_getKubeConfigSecret(t *testing.T) {
 			ExpectedName:  "",
 		},
 		{
-			Name: "No kubeconfig secret found",
+			Name: "No_kubeconfig_secret_found",
 			Namespace: corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-namespace",
@@ -399,7 +399,7 @@ func TestClusterAccessOptions_getKubeConfigSecret(t *testing.T) {
 			ExpectedName:  "",
 		},
 		{
-			Name: "Error during List operation",
+			Name: "Error_during_List_operation",
 			Namespace: corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-namespace",
@@ -430,9 +430,11 @@ func TestClusterAccessOptions_getKubeConfigSecret(t *testing.T) {
 			if test.ExpectedError {
 				if err == nil {
 					t.Errorf("Expected an error but got none")
+					return
 				}
 				if secret.Name != test.ExpectedName {
 					t.Errorf("Expected an empty secret, but got: %s", secret.Name)
+					return
 				}
 			} else {
 				// If no error expected, ensure the correct secret is returned
@@ -454,7 +456,7 @@ func TestNewCmdAccess(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name:        "invalid number of arguments",
+			name:        "invalid_number_of_arguments",
 			args:        []string{},
 			expectError: true,
 		},
@@ -491,12 +493,12 @@ func TestAccessCmdComplete(t *testing.T) {
 		expectedErr bool
 	}{
 		{
-			name:        "valid cluster identifier",
+			name:        "valid_cluster_identifier",
 			args:        []string{"cluster123"},
 			expectedErr: false,
 		},
 		{
-			name:        "too many arguments",
+			name:        "too_many_arguments",
 			args:        []string{"cluster123", "extra-arg"},
 			expectedErr: true,
 		},
