@@ -24,7 +24,7 @@ var (
 	}
 )
 
-func Test_getCustomers(t *testing.T) {
+func TestGetCustomers(t *testing.T) {
 	apiResponse := map[string]interface{}{
 		"page":  1,
 		"size":  len(testCustomers),
@@ -76,7 +76,7 @@ func Test_getCustomers(t *testing.T) {
 	})
 }
 
-func TestPrintCustomers_TableOutput(t *testing.T) {
+func TestPrintCustomersTableOutput(t *testing.T) {
 	// Capture stdout
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
