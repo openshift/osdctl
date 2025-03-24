@@ -2,21 +2,18 @@ package hive
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
-
-	"os"
-
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	"github.com/openshift/hive/apis/hiveinternal/v1alpha1"
 	mockk8s "github.com/openshift/osdctl/cmd/hive/clusterdeployment/mock/k8s"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Mock data for ClusterDeployment and ClusterSync that are used across all test cases
@@ -39,7 +36,6 @@ var (
 			},
 		},
 	}
-
 	csList = v1alpha1.ClusterSyncList{
 		Items: []v1alpha1.ClusterSync{
 			{
@@ -188,6 +184,7 @@ func TestListFailingClusterSyncs(t *testing.T) {
 func TestSortBy(t *testing.T) {
 
 	tests := []struct {
+		name        string
 		sortField   string
 		sortOrder   string
 		expected    []failingClusterSync
@@ -195,7 +192,7 @@ func TestSortBy(t *testing.T) {
 	}{
 		// Test sorting by name in ascending order
 		{
-			sortField: "name", sortOrder: "asc", expected: []failingClusterSync{
+			name: "sort_by_name_ascending_order", sortField: "name", sortOrder: "asc", expected: []failingClusterSync{
 				{Name: "alpha", Timestamp: "2022-01-01T00:00:00Z", FailingSyncSets: "syncset1"},
 				{Name: "beta", Timestamp: "2023-02-01T00:00:00Z", FailingSyncSets: "syncset2"},
 				{Name: "zeta", Timestamp: "2023-01-01T00:00:00Z", FailingSyncSets: "syncset3"},
@@ -203,7 +200,7 @@ func TestSortBy(t *testing.T) {
 		},
 		// Test sorting by name in descending order
 		{
-			sortField: "name", sortOrder: "desc", expected: []failingClusterSync{
+			name: "sort_by_name_descending_order", sortField: "name", sortOrder: "desc", expected: []failingClusterSync{
 				{Name: "zeta", Timestamp: "2023-01-01T00:00:00Z", FailingSyncSets: "syncset3"},
 				{Name: "beta", Timestamp: "2023-02-01T00:00:00Z", FailingSyncSets: "syncset2"},
 				{Name: "alpha", Timestamp: "2022-01-01T00:00:00Z", FailingSyncSets: "syncset1"},
@@ -211,7 +208,7 @@ func TestSortBy(t *testing.T) {
 		},
 		// Test sorting by timestamp in ascending order
 		{
-			sortField: "timestamp", sortOrder: "asc", expected: []failingClusterSync{
+			name: "sort_by_timestamp_ascending_order", sortField: "timestamp", sortOrder: "asc", expected: []failingClusterSync{
 				{Name: "alpha", Timestamp: "2022-01-01T00:00:00Z", FailingSyncSets: "syncset1"},
 				{Name: "zeta", Timestamp: "2023-01-01T00:00:00Z", FailingSyncSets: "syncset3"},
 				{Name: "beta", Timestamp: "2023-02-01T00:00:00Z", FailingSyncSets: "syncset2"},
@@ -219,7 +216,7 @@ func TestSortBy(t *testing.T) {
 		},
 		// Test sorting by timestamp in descending order
 		{
-			sortField: "timestamp", sortOrder: "desc", expected: []failingClusterSync{
+			name: "sort_by_timestamp_descending_order", sortField: "timestamp", sortOrder: "desc", expected: []failingClusterSync{
 				{Name: "beta", Timestamp: "2023-02-01T00:00:00Z", FailingSyncSets: "syncset2"},
 				{Name: "zeta", Timestamp: "2023-01-01T00:00:00Z", FailingSyncSets: "syncset3"},
 				{Name: "alpha", Timestamp: "2022-01-01T00:00:00Z", FailingSyncSets: "syncset1"},
@@ -227,7 +224,7 @@ func TestSortBy(t *testing.T) {
 		},
 		// Test sorting by failingSyncSets in ascending order
 		{
-			sortField: "failingsyncsets", sortOrder: "asc", expected: []failingClusterSync{
+			name: "sort_by_failingSyncSets_ascending_order", sortField: "failingsyncsets", sortOrder: "asc", expected: []failingClusterSync{
 				{Name: "alpha", Timestamp: "2022-01-01T00:00:00Z", FailingSyncSets: "syncset1"},
 				{Name: "beta", Timestamp: "2023-02-01T00:00:00Z", FailingSyncSets: "syncset2"},
 				{Name: "zeta", Timestamp: "2023-01-01T00:00:00Z", FailingSyncSets: "syncset3"},
@@ -235,7 +232,7 @@ func TestSortBy(t *testing.T) {
 		},
 		// Test sorting by failingSyncSets in descending order
 		{
-			sortField: "failingsyncsets", sortOrder: "desc", expected: []failingClusterSync{
+			name: "sort_by_failingSyncSets_descending_order", sortField: "failingsyncsets", sortOrder: "desc", expected: []failingClusterSync{
 				{Name: "zeta", Timestamp: "2023-01-01T00:00:00Z", FailingSyncSets: "syncset3"},
 				{Name: "beta", Timestamp: "2023-02-01T00:00:00Z", FailingSyncSets: "syncset2"},
 				{Name: "alpha", Timestamp: "2022-01-01T00:00:00Z", FailingSyncSets: "syncset1"},
@@ -243,12 +240,12 @@ func TestSortBy(t *testing.T) {
 		},
 		// Test invalid sort field
 		{
-			sortField: "invalid", sortOrder: "asc", expectedErr: "Specify one of the following fields as a sort argument: name, timestamp, failingsyncsets.",
+			name: "invalid_sort_order", sortField: "invalid", sortOrder: "asc", expectedErr: "Specify one of the following fields as a sort argument: name, timestamp, failingsyncsets.",
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.sortField+"-"+tt.sortOrder, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			options := &clusterSyncFailuresOptions{
 				sortField: tt.sortField,
 				sortOrder: tt.sortOrder,
@@ -261,13 +258,10 @@ func TestSortBy(t *testing.T) {
 			}
 
 			err := options.sortBy(failingClusterSyncList)
-
 			if tt.expectedErr != "" {
-
 				assert.Error(t, err)
 				assert.Equal(t, tt.expectedErr, err.Error())
 			} else {
-
 				assert.NoError(t, err)
 				assert.Equal(t, tt.expected, failingClusterSyncList)
 			}
