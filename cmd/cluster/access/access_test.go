@@ -428,20 +428,18 @@ func TestClusterAccessOptions_getKubeConfigSecret(t *testing.T) {
 			if test.ExpectedError {
 				if err == nil {
 					t.Errorf("Expected an error but got none")
-					return
 				}
 				if secret.Name != test.ExpectedName {
 					t.Errorf("Expected an empty secret, but got: %s", secret.Name)
-					return
 				}
-			} else {
-				// If no error expected, ensure the correct secret is returned
-				if err != nil {
-					t.Errorf("Expected no error, but got: %v", err)
-				}
-				if secret.Name != test.ExpectedName {
-					t.Errorf("Expected secret '%s', but got: %s", test.ExpectedName, secret.Name)
-				}
+				return
+			}
+			// If no error expected, ensure the correct secret is returned
+			if err != nil {
+				t.Errorf("Expected no error, but got: %v", err)
+			}
+			if secret.Name != test.ExpectedName {
+				t.Errorf("Expected secret '%s', but got: %s", test.ExpectedName, secret.Name)
 			}
 		})
 	}
