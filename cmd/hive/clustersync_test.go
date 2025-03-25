@@ -6,16 +6,19 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"github.com/openshift/hive/apis/hiveinternal/v1alpha1"
 	mockk8s "github.com/openshift/osdctl/cmd/hive/clusterdeployment/mock/k8s"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
 
 // Mock data for ClusterDeployment and ClusterSync that are used across all test cases
 var (
