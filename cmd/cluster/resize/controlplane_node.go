@@ -24,9 +24,7 @@ import (
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -42,7 +40,7 @@ type controlPlane struct {
 	newMachineType string
 	cluster        *cmv1.Cluster
 
-	// clientAdmin is a K8s client to cluster
+	// client is a K8s client to cluster
 	client client.Client
 
 	// clientAdmin is a K8s client to cluster impersonating backplane-cluster-admin
@@ -53,15 +51,15 @@ type controlPlane struct {
 }
 
 // This command requires to previously be logged in via `ocm login`
-func newCmdResizeControlPlane() *cobra.Command {
+func NewCmdResizeControlPlane() *cobra.Command {
 	ops := &controlPlane{}
 	resizeControlPlaneNodeCmd := &cobra.Command{
 		Use:   "control-plane",
 		Short: "Resize an OSD/ROSA cluster's control plane nodes",
-		Long: `Resize an OSD/ROSA cluster's' control plane nodes
+		Long: `Resize an OSD/ROSA cluster's control plane nodes
 
   Requires previous login to the api server via "ocm backplane login".
-  The user will be prompted to send a service log after the resize is complete.`,
+  The user will be prompted to send a service log after the resize is initiated.`,
 		Example: `
   # Resize all control plane instances to m5.4xlarge using control plane machine sets
   osdctl cluster resize control-plane -c "${CLUSTER_ID}" --machine-type m5.4xlarge --reason "${OHSS}"`,
@@ -213,7 +211,6 @@ func retrySkipCancelDialog(procedure string) (optionsDialogResponse, error) {
 		fmt.Println("Invalid response, expected 'retry', 'skip' or 'cancel' (case-insensitive).")
 		return retrySkipCancelDialog(procedure)
 	}
-
 }
 
 func withRetrySkipCancelOption(fn func() error, procedure string) (err error) {
@@ -487,43 +484,20 @@ func (o *controlPlane) run(ctx context.Context) error {
 		return errors.New("aborting control plane resize")
 	}
 
+	// Patch the ControlPlaneMachineSet
 	cpms.Spec.Template.OpenShiftMachineV1Beta1Machine.Spec.ProviderSpec.Value = &runtime.RawExtension{Raw: rawBytes}
 	if err := o.clientAdmin.Patch(ctx, cpms, patch); err != nil {
 		return fmt.Errorf("failed patching control plane machine set: %v", err)
 	}
 
-	// Wait infinitely
-	log.Println("Waiting for control plane resize to complete - this normally takes around 30 minutes per machine/90 minutes total")
-	log.Println("If this command terminates before completing, please remember to send a service log manually")
-	log.Printf("osdctl servicelog post %s -t %s -p INSTANCE_TYPE=%s -p JIRA_ID=${JIRA_ID} -p JUSTIFICATION=${JUSTIFICATION}", o.clusterID, resizeControlPlaneServiceLogTemplate, o.newMachineType)
-	if err := wait.PollUntilContextCancel(ctx, 3*time.Minute, false, func(ctx context.Context) (bool, error) {
-		cpms := &machinev1.ControlPlaneMachineSet{}
-		if err := o.client.Get(ctx, client.ObjectKey{Namespace: cpmsNamespace, Name: cpmsName}, cpms); err != nil {
-			log.Printf("error retrieving control plane machine set: %v, continuing to wait", err)
-			return false, nil
-		}
+	log.Println("Control plane machine set patched successfully. The resize process has been initiated and will complete asynchronously.")
 
-		progressingCondition := meta.FindStatusCondition(cpms.Status.Conditions, "Progressing")
-		if progressingCondition == nil {
-			log.Printf("error retrieving the `Progressing` status condition on control plane machine set, continuing to wait")
-			return false, nil
-		}
-
-		if progressingCondition.Status == "True" {
-			log.Printf("control plane machine set is still progressing with reason %s and message %s, continuing to wait", progressingCondition.Reason, progressingCondition.Message)
-			return false, nil
-		} else {
-			return true, nil
-		}
-	}); err != nil {
-		return err
-	}
-
+	// Prompt and send service log immediately
 	return promptGenerateResizeSL(o.clusterID, o.newMachineType)
 }
 
 func promptGenerateResizeSL(clusterID string, newMachineType string) error {
-	fmt.Println("Generating service log - only do this after all nodes have been resized.")
+	fmt.Println("Generating service log for the control plane resize initiation.")
 	if !utils.ConfirmPrompt() {
 		return nil
 	}
