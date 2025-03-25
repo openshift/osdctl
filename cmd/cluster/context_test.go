@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 	"testing"
 	"time"
@@ -67,9 +66,9 @@ func TestPrintClusterHeader(t *testing.T) {
 		ClusterID:   "12345",
 	}
 
-	output := captureOutput(func(w io.Writer) {
-		data.printClusterHeader(w)
-	})
+	var buf bytes.Buffer
+	data.printClusterHeader(&buf)
+	output := buf.String()
 
 	expectedHeader := fmt.Sprintf("%s -- %s", data.ClusterName, data.ClusterID)
 	expectedOutput := fmt.Sprintf("%s\n%s\n%s\n",
@@ -88,9 +87,9 @@ func TestPrintDynatraceResources(t *testing.T) {
 		DyntraceLogsURL: "https://dynatrace.com/logs",
 	}
 
-	output := captureOutput(func(w io.Writer) {
-		printDynatraceResources(data, w)
-	})
+	var buf bytes.Buffer
+	printDynatraceResources(data, &buf)
+	output := buf.String()
 
 	expectedHeader := "Dynatrace Details"
 	expectedLines := []string{
@@ -161,11 +160,9 @@ func TestPrintCloudTrailLogs(t *testing.T) {
 		},
 	}
 
-	output := captureOutput(func(w io.Writer) {
-		printCloudTrailLogs(events, w)
-	})
-
-	outputStr := string(output)
+	var buf bytes.Buffer
+	printCloudTrailLogs(events, &buf)
+	outputStr := buf.String()
 
 	if !strings.Contains(outputStr, "Potentially interesting CloudTrail events") {
 		t.Errorf("Expected output to contain the log header, but got:\n%s", outputStr)
@@ -288,9 +285,9 @@ func TestPrintOtherLinks(t *testing.T) {
 		pdServiceID: mockPDServiceID,
 	}
 
-	output := captureOutput(func(w io.Writer) {
-		o.printOtherLinks(data, w)
-	})
+	var buf bytes.Buffer
+	o.printOtherLinks(data, &buf)
+	output := buf.String()
 
 	expectedLinks := []string{
 		"OHSS Cards",
@@ -318,9 +315,9 @@ func TestPrintJIRASupportExceptions(t *testing.T) {
 		},
 	}
 
-	output := captureOutput(func(w io.Writer) {
-		printJIRASupportExceptions(mockIssues, w)
-	})
+	var buf bytes.Buffer
+	printJIRASupportExceptions(mockIssues, &buf)
+	output := buf.String()
 
 	expectedStrings := []string{
 		"- Link: https://issues.redhat.com/browse/JIRA-123",
@@ -342,10 +339,9 @@ func TestPrintHistoricalPDAlertSummary(t *testing.T) {
 	mockServiceIDs := []string{"PD12345"}
 	mockSinceDays := 7
 
-	output := captureOutput(func(w io.Writer) {
-		printHistoricalPDAlertSummary(mockIncidentCounters, mockServiceIDs, mockSinceDays, w)
-
-	})
+	var buf bytes.Buffer
+	printHistoricalPDAlertSummary(mockIncidentCounters, mockServiceIDs, mockSinceDays, &buf)
+	output := buf.String()
 
 	expectedStrings := []string{
 		"PagerDuty Historical Alerts",
@@ -359,12 +355,6 @@ func TestPrintHistoricalPDAlertSummary(t *testing.T) {
 	for _, expected := range expectedStrings {
 		assert.Contains(t, output, expected, "Output should contain expected text: %s", expected)
 	}
-}
-
-func captureOutput(f func(io.Writer)) string {
-	var buf bytes.Buffer
-	f(&buf) // Passing the buffer as an io.Writer
-	return buf.String()
 }
 
 func TestPrintShortOutput(t *testing.T) {
@@ -398,9 +388,9 @@ func TestPrintShortOutput(t *testing.T) {
 		HistoricalAlerts:      map[string][]*pagerduty.IncidentOccurrenceTracker{"service-2": {historicalAlert}},
 	}
 
-	output := captureOutput(func(w io.Writer) {
-		opts.printShortOutput(data, w)
-	})
+	var buf bytes.Buffer
+	opts.printShortOutput(data, &buf)
+	output := buf.String()
 
 	assert.Contains(t, output, "Version")
 	assert.Contains(t, output, "Supported?")
@@ -421,9 +411,9 @@ func TestPrintJsonOutput(t *testing.T) {
 		JiraIssues:     []jira.Issue{jiraIssue},
 	}
 
-	output := captureOutput(func(w io.Writer) {
-		opts.printJsonOutput(data, w)
-	})
+	var buf bytes.Buffer
+	opts.printJsonOutput(data, &buf)
+	output := buf.String()
 
 	var result map[string]interface{}
 	err := json.Unmarshal([]byte(output), &result)
@@ -520,9 +510,9 @@ func TestPrintLongOutput(t *testing.T) {
 		full:    true,
 	}
 
-	output := captureOutput(func(w io.Writer) {
-		o.printLongOutput(mockData, w)
-	})
+	var buf bytes.Buffer
+	o.printLongOutput(mockData, &buf)
+	output := buf.String()
 
 	assert.Contains(t, output, "ClusterABC")
 	assert.Contains(t, output, "cluster-123")
@@ -581,9 +571,9 @@ func TestPrintUserBannedStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualOutput := captureOutput(func(w io.Writer) {
-				printUserBannedStatus(&tt.data, w)
-			})
+			var buf bytes.Buffer
+			printUserBannedStatus(&tt.data, &buf)
+			actualOutput := buf.String()
 
 			expected := strings.TrimSpace(tt.expectedOutput)
 			actual := strings.TrimSpace(actualOutput)
