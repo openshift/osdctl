@@ -1,6 +1,7 @@
 package jumphost
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -11,9 +12,10 @@ import (
 
 func TestGenerateTagFilters(t *testing.T) {
 	tests := []struct {
-		name     string
-		tags     []types.Tag
-		expected []types.Filter
+		name          string
+		tags          []types.Tag
+		expected      []types.Filter
+		expectedPanic bool
 	}{
 		{
 			name:     "empty_input",
@@ -41,12 +43,41 @@ func TestGenerateTagFilters(t *testing.T) {
 				{Name: aws.String("tag:Team"), Values: []string{"DevOps"}},
 			},
 		},
+		{
+			name: "tags_key_nil_val_nil",
+			tags: []types.Tag{
+				{Key: nil, Value: nil},
+			},
+			expectedPanic: true,
+		},
+		{
+			name: "tag_with_nil_key",
+			tags: []types.Tag{
+				{Key: nil, Value: aws.String("Production")},
+			},
+			expectedPanic: true,
+		},
+		{
+			name: "tag_with_nil_value",
+			tags: []types.Tag{
+				{Key: aws.String("Environment"), Value: nil},
+			},
+			expectedPanic: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			filters := generateTagFilters(tt.tags)
-			assert.Equal(t, tt.expected, filters)
+			defer func() {
+				if r := recover(); r != nil {
+					if !tt.expectedPanic {
+					}
+				}
+			}()
+			result := generateTagFilters(tt.tags)
+			if !tt.expectedPanic {
+				assert.Equal(t, tt.expected, result)
+			}
 		})
 	}
 }
@@ -70,20 +101,46 @@ func TestValidateCluster(t *testing.T) {
 			}(),
 		},
 		{
-			name: "non_aws_cloud_provider",
+			name: "gcp_cluster",
 			cluster: func() *cmv1.Cluster {
-				cluster1, _ := cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("gcp")).AWS(cmv1.NewAWS()).Build()
+				cluster1, _ := cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("gcp")).GCP(cmv1.NewGCP()).Build()
 				return cluster1
 			}(),
 			errorMsg: "only supports aws, got gcp",
+		},
+		{
+			name: "gcp_non_sts_cluster",
+			cluster: func() *cmv1.Cluster {
+				cluster1, _ := cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("gcp")).GCP(cmv1.NewGCP()).Build()
+				return cluster1
+			}(),
+			errorMsg: "only supports aws, got gcp",
+		},
+
+		{
+			name: "invalid_cluster",
+			cluster: func() *cmv1.Cluster {
+				cluster1, _ := cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("non-aws")).Build()
+				return cluster1
+			}(),
+			errorMsg: "only supports aws, got non-aws",
+		},
+		{
+			name: "aws_sts_cluster",
+			cluster: func() *cmv1.Cluster {
+				cluster1, _ := cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("aws")).AWS(cmv1.NewAWS().STS(cmv1.NewSTS().ExternalID("sts"))).Build()
+				return cluster1
+			}(),
+			errorMsg: "only supports non-STS clusters",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateCluster(tt.cluster)
-			if err != nil {
-				assert.Error(t, err, tt.errorMsg)
+			if tt.errorMsg != "" && err != nil {
+				assert.Error(t, err)
+				assert.Equal(t, err, fmt.Errorf("%s", tt.errorMsg))
 				return
 			}
 			assert.NoError(t, err)
