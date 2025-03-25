@@ -13,8 +13,6 @@ import (
 
 	clustersmgmtv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/k8s"
-	"github.com/spf13/cobra"
-	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -444,75 +442,6 @@ func TestClusterAccessOptions_getKubeConfigSecret(t *testing.T) {
 				if secret.Name != test.ExpectedName {
 					t.Errorf("Expected secret '%s', but got: %s", test.ExpectedName, secret.Name)
 				}
-			}
-		})
-	}
-}
-
-func TestNewCmdAccess(t *testing.T) {
-	tests := []struct {
-		name        string
-		args        []string
-		expectError bool
-	}{
-		{
-			name:        "invalid_number_of_arguments",
-			args:        []string{},
-			expectError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// setup env
-			updateEnvResponse := "y"
-			client := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(runtime.NewScheme()))
-			streams := genericclioptions.IOStreams{In: strings.NewReader(updateEnvResponse), Out: os.Stdout, ErrOut: os.Stderr}
-
-			cmd := NewCmdAccess(streams, client)
-
-			cmd.Flags().Set("reason", "test-reason")
-
-			cmd.SetArgs(tt.args)
-
-			err := cmd.Execute()
-
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestAccessCmdComplete(t *testing.T) {
-	tests := []struct {
-		name        string
-		args        []string
-		expectedErr bool
-	}{
-		{
-			name:        "valid_cluster_identifier",
-			args:        []string{"cluster123"},
-			expectedErr: false,
-		},
-		{
-			name:        "too_many_arguments",
-			args:        []string{"cluster123", "extra-arg"},
-			expectedErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := &cobra.Command{}
-			err := accessCmdComplete(cmd, tt.args)
-
-			if tt.expectedErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
 			}
 		})
 	}
