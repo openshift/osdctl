@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"io"
 
 	bplogin "github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
 	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
@@ -13,6 +14,8 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 type lazyClientInitializerInterface interface {
@@ -43,7 +46,7 @@ func (b *lazyClientInitializer) initialize(s *LazyClient) {
 		}
 		cfg.Impersonate = impersonationConfig
 	}
-
+	setRuntimeLoggerDiscard()
 	s.client, err = client.New(cfg, client.Options{})
 	if err != nil {
 		panic(s.err())
@@ -145,7 +148,7 @@ func New(clusterID string, options client.Options) (client.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	setRuntimeLoggerDiscard()
 	return client.New(cfg, options)
 }
 
@@ -159,8 +162,15 @@ func NewAsBackplaneClusterAdmin(clusterID string, options client.Options, elevat
 	if err != nil {
 		return nil, err
 	}
-
+	setRuntimeLoggerDiscard()
 	return client.New(cfg, options)
+}
+
+func setRuntimeLoggerDiscard() {
+	// To avoid warnings/backtrace, if k8s controller-runtime logger has not already been set, do it now...
+	if !log.Log.Enabled() {
+		log.SetLogger(zap.New(zap.WriteTo(io.Discard)))
+	}
 }
 
 func GetCurrentCluster() (string, error) {
