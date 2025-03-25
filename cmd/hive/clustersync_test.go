@@ -2,6 +2,7 @@ package hive
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -74,6 +75,10 @@ var (
 
 // Central function to mock the List method and set expectations
 func setupMockClient(mockClient *mockk8s.MockClient, returnErr error, isEmpty bool) {
+	callTimes := 1
+	if returnErr == nil {
+		callTimes = 2 // We expect two calls only if there's no error
+	}
 	mockClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 			switch v := list.(type) {
@@ -87,7 +92,7 @@ func setupMockClient(mockClient *mockk8s.MockClient, returnErr error, isEmpty bo
 				}
 			}
 			return returnErr
-		}).Times(2) // Expect List to be called twice for ClusterDeployment and ClusterSync
+		}).Times(callTimes) // Expect List to be called n times based on the error condition
 }
 
 func TestNewCmdClusterSyncFailures(t *testing.T) {
@@ -186,7 +191,7 @@ func TestListFailingClusterSyncs(t *testing.T) {
 			errorToReturn: nil,
 			expectedResult: []failingClusterSync{
 				{
-					Name:            "example-clustersync",
+					Name:            "example_clustersync",
 					Namespace:       "uhc-production-1234",
 					Timestamp:       time.Now().Format(time.RFC3339),
 					LimitedSupport:  false,
@@ -198,10 +203,16 @@ func TestListFailingClusterSyncs(t *testing.T) {
 			isEmpty: false,
 		},
 		{
-			name:           "Empty results scenario (List returns no items)",
+			name:           "Empty_results_scenario(List_returns_no_items)",
 			errorToReturn:  nil,
 			expectedResult: []failingClusterSync{}, // Expecting empty results
 			isEmpty:        true,
+		},
+		{
+			name:           "Error_scenario",
+			errorToReturn:  errors.New("failed to list ClusterSync resources due to network timeout"), // Triggering error condition
+			expectedResult: nil,
+			isEmpty:        false,
 		},
 	}
 
