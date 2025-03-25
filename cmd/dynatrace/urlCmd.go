@@ -15,9 +15,6 @@ func newCmdURL() *cobra.Command {
 		Short:             "Get the Dynatrace Tenant URL for a given MC or HCP cluster",
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			if clusterID == "" {
-				cmdutil.CheckErr(fmt.Errorf("cluster-id is required"))
-			}
 
 			hcpCluster, err := FetchClusterDetails(clusterID)
 			if err != nil {

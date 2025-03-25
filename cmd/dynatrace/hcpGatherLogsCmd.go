@@ -42,10 +42,7 @@ func NewCmdHCPMustGather() *cobra.Command {
   osdctl dt gather-logs --cluster-id hcp-cluster-id-123`,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			if g.ClusterID == "" {
-				cmdutil.CheckErr(fmt.Errorf("--cluster-id flag is required"))
-				return
-			}
+
 			err := g.GatherLogs(g.ClusterID)
 			if err != nil {
 				cmdutil.CheckErr(err)

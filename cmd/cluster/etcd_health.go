@@ -72,9 +72,6 @@ func newCmdEtcdHealthCheck() *cobra.Command {
 	cmd.Flags().StringVar(&opts.reason, "reason", "", "Specify a reason for privilege escalation")
 
 	err := cmd.MarkFlagRequired("cluster-id")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "WARNING: failed to mark flag '--cluster-id' as required: %v", err)
-	}
 
 	err = cmd.MarkFlagRequired("reason")
 	if err != nil {

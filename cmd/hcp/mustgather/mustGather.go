@@ -45,9 +45,6 @@ func NewCmdMustGather() *cobra.Command {
 		Long:    "Create a must-gather for an HCP cluster with optional gather targets",
 		Example: "osdctl hcp must-gather --cluster-id CLUSTER_ID --gather sc_mg,mc_mg,sc_acm --reason OHSS-1234",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if mg.clusterId == "" {
-				return fmt.Errorf("cluster-id is required")
-			}
 
 			return mg.Run()
 		},

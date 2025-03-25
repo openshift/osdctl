@@ -66,9 +66,6 @@ func newDeleteOptions(streams genericclioptions.IOStreams, globalOpts *globalfla
 }
 
 func (o *deleteOptions) complete(cmd *cobra.Command, args []string) error {
-	if o.clusterID == "" {
-		return fmt.Errorf("--cluster-id flag is required")
-	}
 
 	if o.limitedSupportReasonID != "" && o.removeAll {
 		return cmdutil.UsageErrorf(cmd, "Cannot provide a reason ID with the `all` flag. Please provide one or the other.")

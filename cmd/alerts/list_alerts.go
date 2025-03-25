@@ -24,7 +24,7 @@ func NewCmdListAlerts() *cobra.Command {
 		Use:   "list --cluster-id <cluster-id> --level [warning, critical, firing, pending, all]",
 		Short: "List all alerts or based on severity",
 		Long:  `Checks the alerts for the cluster and print the list based on severity`,
-		// Remove the Args: cobra.ExactArgs(1) line
+
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			ListAlerts(alertCmd)

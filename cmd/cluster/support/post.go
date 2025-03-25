@@ -79,9 +79,6 @@ The cluster has a second failing ingress controller, which is not supported and 
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if p.ClusterID == "" {
-				return fmt.Errorf("--cluster-id flag is required")
-			}
 			if err := p.Run(p.ClusterID); err != nil {
 				return fmt.Errorf("error posting limited support reason: %w", err)
 			}

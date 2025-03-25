@@ -133,9 +133,7 @@ func newInfoOptions(streams genericclioptions.IOStreams) *infoOptions {
 
 func (i *infoOptions) complete(cmd *cobra.Command) error {
 	var errMsg string
-	if i.clusterID == "" {
-		errMsg = "missing required flag --cluster-id. "
-	}
+
 	if i.awsProfile == "" {
 		errMsg += "missing argument -p. "
 	}

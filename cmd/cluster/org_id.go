@@ -31,12 +31,7 @@ func newCmdOrgId() *cobra.Command {
 		},
 	}
 
-	// Add cluster-id flag
 	orgIdCmd.Flags().StringVarP(&o.clusterID, "cluster-id", "c", "", "The internal ID of the cluster to check (required)")
-	if err := orgIdCmd.MarkFlagRequired("cluster-id"); err != nil {
-		// Handle error in flag configuration
-		fmt.Printf("Error marking cluster-id flag as required: %v\n", err)
-	}
 
 	return orgIdCmd
 }

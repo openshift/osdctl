@@ -45,9 +45,7 @@ osdctl servicelog list --cluster-id=my-cluster-id --all-messages --internal
 		Short: "Get service logs for a given cluster identifier.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if opts.clusterID == "" {
-				return fmt.Errorf("cluster-id is required")
-			}
+
 			return listServiceLogs(opts.clusterID, opts)
 		},
 	}

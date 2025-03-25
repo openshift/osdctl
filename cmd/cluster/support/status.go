@@ -49,9 +49,7 @@ func newStatusOptions(streams genericclioptions.IOStreams, globalOpts *globalfla
 }
 
 func (o *statusOptions) complete(cmd *cobra.Command, args []string) error {
-	if o.clusterID == "" {
-		return fmt.Errorf("cluster-id flag is required")
-	}
+
 	o.output = o.GlobalOptions.Output
 	return nil
 }
