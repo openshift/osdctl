@@ -68,8 +68,7 @@ func newCmdValidatePullSecretExt() *cobra.Command {
 		Short: "Extended checks to confirm pull-secret data is synced with current OCM data",
 		Long: `
 	Attempts to validate if a cluster's pull-secret auth values are in sync with the account's email, 
-	registry_credential, and access token data stored in OCM. 
-	This requires the caller to be logged into the cluster to be validated. 
+	registry_credential, and access token data stored in OCM.  
 	If this is being executed against a cluster which is not owned by the current OCM account, 
 	Region Lead permissions are required to view and validate the OCM AccessToken. 
 `,
