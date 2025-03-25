@@ -26,4 +26,3 @@ osdctl
 # goReleaser 
 dist/
 bin/
-vendor/
