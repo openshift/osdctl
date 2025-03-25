@@ -73,14 +73,18 @@ var (
 )
 
 // Central function to mock the List method and set expectations
-func setupMockClient(mockClient *mockk8s.MockClient, returnErr error) {
+func setupMockClient(mockClient *mockk8s.MockClient, returnErr error, isEmpty bool) {
 	mockClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 			switch v := list.(type) {
 			case *hivev1.ClusterDeploymentList:
 				*v = cdList
 			case *v1alpha1.ClusterSyncList:
-				*v = csList
+				if isEmpty {
+					*v = v1alpha1.ClusterSyncList{} // Return empty ClusterSyncList for the empty case
+				} else {
+					*v = csList // Assuming csList is populated normally
+				}
 			}
 			return returnErr
 		}).Times(2) // Expect List to be called twice for ClusterDeployment and ClusterSync
@@ -92,7 +96,7 @@ func TestNewCmdClusterSyncFailures(t *testing.T) {
 	streams := genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr}
 	mockClient := mockk8s.NewMockClient(mockCtrl)
 
-	setupMockClient(mockClient, nil)
+	setupMockClient(mockClient, nil, false)
 
 	cmd := NewCmdClusterSyncFailures(streams, mockClient)
 	assert.Equal(t, "clustersync-failures [flags]", cmd.Use, "Command use should be 'clustersync-failures [flags]'")
@@ -132,13 +136,13 @@ func TestNewCmdClusterSyncFailures(t *testing.T) {
 	assert.Error(t, err, "Setting invalid flag should return an error")
 }
 
-func testListFailingClusterSyncs(t *testing.T, returnErr error, expectedResults []failingClusterSync) {
+func testListFailingClusterSyncs(t *testing.T, returnErr error, expectedResults []failingClusterSync, isEmpty bool) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
 	mockClient := mockk8s.NewMockClient(mockCtrl)
 
-	setupMockClient(mockClient, returnErr)
+	setupMockClient(mockClient, returnErr, isEmpty)
 
 	options := &clusterSyncFailuresOptions{
 		kubeCli: mockClient,
@@ -151,48 +155,77 @@ func testListFailingClusterSyncs(t *testing.T, returnErr error, expectedResults 
 		assert.Nil(t, result)
 	} else {
 		assert.NoError(t, err)
-		assert.NotNil(t, result)
-		assert.Len(t, result, len(expectedResults))
-		for i, expected := range expectedResults {
-			assert.Equal(t, expected.Name, result[i].Name)
-			assert.Equal(t, expected.Namespace, result[i].Namespace)
-			assert.Equal(t, expected.LimitedSupport, result[i].LimitedSupport)
-			assert.Equal(t, expected.Hibernating, result[i].Hibernating)
-			assert.Contains(t, result[i].FailingSyncSets, expected.FailingSyncSets)
-			assert.Contains(t, result[i].ErrorMessage, expected.ErrorMessage)
+		if isEmpty {
+			// If isEmpty is true, the result should be an empty slice
+			assert.Len(t, result, 0)
+		} else {
+			assert.NotNil(t, result)
+			assert.Len(t, result, len(expectedResults))
+			for i, expected := range expectedResults {
+				assert.Equal(t, expected.Name, result[i].Name)
+				assert.Equal(t, expected.Namespace, result[i].Namespace)
+				assert.Equal(t, expected.LimitedSupport, result[i].LimitedSupport)
+				assert.Equal(t, expected.Hibernating, result[i].Hibernating)
+				assert.Contains(t, result[i].FailingSyncSets, expected.FailingSyncSets)
+				assert.Contains(t, result[i].ErrorMessage, expected.ErrorMessage)
+			}
 		}
 	}
 }
 
 func TestListFailingClusterSyncs(t *testing.T) {
 
-	expectedResults := []failingClusterSync{
+	testCases := []struct {
+		name           string
+		errorToReturn  error
+		expectedResult []failingClusterSync
+		isEmpty        bool
+	}{
 		{
-			Name:            "example-clustersync",
-			Namespace:       "uhc-production-1234",
-			Timestamp:       time.Now().Format(time.RFC3339),
-			LimitedSupport:  false,
-			Hibernating:     true,
-			FailingSyncSets: "selectorsyncset1 syncset1 ",
-			ErrorMessage:    "Failed to sync selectorsyncset1\n\nFailed to sync syncset1\n\n",
+			name:          "Success scenario with expected results",
+			errorToReturn: nil,
+			expectedResult: []failingClusterSync{
+				{
+					Name:            "example-clustersync",
+					Namespace:       "uhc-production-1234",
+					Timestamp:       time.Now().Format(time.RFC3339),
+					LimitedSupport:  false,
+					Hibernating:     true,
+					FailingSyncSets: "selectorsyncset1 syncset1 ",
+					ErrorMessage:    "Failed to sync selectorsyncset1\n\nFailed to sync syncset1\n\n",
+				},
+			},
+			isEmpty: false,
+		},
+		{
+			name:           "Empty results scenario (List returns no items)",
+			errorToReturn:  nil,
+			expectedResult: []failingClusterSync{}, // Expecting empty results
+			isEmpty:        true,
 		},
 	}
 
-	testListFailingClusterSyncs(t, nil, expectedResults)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testListFailingClusterSyncs(t, tc.errorToReturn, tc.expectedResult, tc.isEmpty)
+		})
+	}
 }
 
 func TestSortBy(t *testing.T) {
 
 	tests := []struct {
-		name        string
-		sortField   string
-		sortOrder   string
-		expected    []failingClusterSync
-		expectedErr string
+		name      string
+		sortField string
+		sortOrder string
+		expected  []failingClusterSync
 	}{
 		// Test sorting by name in ascending order
 		{
-			name: "sort_by_name_ascending_order", sortField: "name", sortOrder: "asc", expected: []failingClusterSync{
+			name:      "sort_by_name_ascending_order",
+			sortField: "name",
+			sortOrder: "asc",
+			expected: []failingClusterSync{
 				{Name: "alpha", Timestamp: "2022-01-01T00:00:00Z", FailingSyncSets: "syncset1"},
 				{Name: "beta", Timestamp: "2023-02-01T00:00:00Z", FailingSyncSets: "syncset2"},
 				{Name: "zeta", Timestamp: "2023-01-01T00:00:00Z", FailingSyncSets: "syncset3"},
@@ -200,7 +233,10 @@ func TestSortBy(t *testing.T) {
 		},
 		// Test sorting by name in descending order
 		{
-			name: "sort_by_name_descending_order", sortField: "name", sortOrder: "desc", expected: []failingClusterSync{
+			name:      "sort_by_name_descending_order",
+			sortField: "name",
+			sortOrder: "desc",
+			expected: []failingClusterSync{
 				{Name: "zeta", Timestamp: "2023-01-01T00:00:00Z", FailingSyncSets: "syncset3"},
 				{Name: "beta", Timestamp: "2023-02-01T00:00:00Z", FailingSyncSets: "syncset2"},
 				{Name: "alpha", Timestamp: "2022-01-01T00:00:00Z", FailingSyncSets: "syncset1"},
@@ -208,7 +244,10 @@ func TestSortBy(t *testing.T) {
 		},
 		// Test sorting by timestamp in ascending order
 		{
-			name: "sort_by_timestamp_ascending_order", sortField: "timestamp", sortOrder: "asc", expected: []failingClusterSync{
+			name:      "sort_by_timestamp_ascending_order",
+			sortField: "timestamp",
+			sortOrder: "asc",
+			expected: []failingClusterSync{
 				{Name: "alpha", Timestamp: "2022-01-01T00:00:00Z", FailingSyncSets: "syncset1"},
 				{Name: "zeta", Timestamp: "2023-01-01T00:00:00Z", FailingSyncSets: "syncset3"},
 				{Name: "beta", Timestamp: "2023-02-01T00:00:00Z", FailingSyncSets: "syncset2"},
@@ -216,7 +255,10 @@ func TestSortBy(t *testing.T) {
 		},
 		// Test sorting by timestamp in descending order
 		{
-			name: "sort_by_timestamp_descending_order", sortField: "timestamp", sortOrder: "desc", expected: []failingClusterSync{
+			name:      "sort_by_timestamp_descending_order",
+			sortField: "timestamp",
+			sortOrder: "desc",
+			expected: []failingClusterSync{
 				{Name: "beta", Timestamp: "2023-02-01T00:00:00Z", FailingSyncSets: "syncset2"},
 				{Name: "zeta", Timestamp: "2023-01-01T00:00:00Z", FailingSyncSets: "syncset3"},
 				{Name: "alpha", Timestamp: "2022-01-01T00:00:00Z", FailingSyncSets: "syncset1"},
@@ -224,7 +266,10 @@ func TestSortBy(t *testing.T) {
 		},
 		// Test sorting by failingSyncSets in ascending order
 		{
-			name: "sort_by_failingSyncSets_ascending_order", sortField: "failingsyncsets", sortOrder: "asc", expected: []failingClusterSync{
+			name:      "sort_by_failingSyncSets_ascending_order",
+			sortField: "failingsyncsets",
+			sortOrder: "asc",
+			expected: []failingClusterSync{
 				{Name: "alpha", Timestamp: "2022-01-01T00:00:00Z", FailingSyncSets: "syncset1"},
 				{Name: "beta", Timestamp: "2023-02-01T00:00:00Z", FailingSyncSets: "syncset2"},
 				{Name: "zeta", Timestamp: "2023-01-01T00:00:00Z", FailingSyncSets: "syncset3"},
@@ -232,7 +277,10 @@ func TestSortBy(t *testing.T) {
 		},
 		// Test sorting by failingSyncSets in descending order
 		{
-			name: "sort_by_failingSyncSets_descending_order", sortField: "failingsyncsets", sortOrder: "desc", expected: []failingClusterSync{
+			name:      "sort_by_failingSyncSets_descending_order",
+			sortField: "failingsyncsets",
+			sortOrder: "desc",
+			expected: []failingClusterSync{
 				{Name: "zeta", Timestamp: "2023-01-01T00:00:00Z", FailingSyncSets: "syncset3"},
 				{Name: "beta", Timestamp: "2023-02-01T00:00:00Z", FailingSyncSets: "syncset2"},
 				{Name: "alpha", Timestamp: "2022-01-01T00:00:00Z", FailingSyncSets: "syncset1"},
@@ -240,7 +288,9 @@ func TestSortBy(t *testing.T) {
 		},
 		// Test invalid sort field
 		{
-			name: "invalid_sort_order", sortField: "invalid", sortOrder: "asc", expectedErr: "Specify one of the following fields as a sort argument: name, timestamp, failingsyncsets.",
+			name:      "invalid_sort_order",
+			sortField: "invalid",
+			sortOrder: "asc",
 		},
 	}
 
@@ -258,9 +308,9 @@ func TestSortBy(t *testing.T) {
 			}
 
 			err := options.sortBy(failingClusterSyncList)
-			if tt.expectedErr != "" {
+			if tt.name == "invalid_sort_order" {
 				assert.Error(t, err)
-				assert.Equal(t, tt.expectedErr, err.Error())
+				assert.Equal(t, "Specify one of the following fields as a sort argument: name, timestamp, failingsyncsets.", err.Error())
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.expected, failingClusterSyncList)
