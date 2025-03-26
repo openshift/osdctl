@@ -19,8 +19,7 @@ const (
 	organizationsAPIPath  = "/api/accounts_mgmt/v1/organizations"
 	accountsAPIPath       = "/api/accounts_mgmt/v1/accounts"
 	currentAccountApiPath = "/api/accounts_mgmt/v1/current_account"
-
-	StatusActive = "Active"
+	StatusActive          = "Active"
 )
 
 var (
