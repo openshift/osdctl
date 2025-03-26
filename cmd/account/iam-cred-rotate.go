@@ -629,7 +629,7 @@ inputLoop:
 			fmt.Printf("Delete Secret ('%s')? ", secret.Name)
 			return utils.ConfirmPrompt()
 		}() {
-			o.log.Debugf("Deleting secret(%d/%d):'%s'\n", cr.Spec.SecretRef.Name, idx, len(awsCredReqs))
+			o.log.Debugf("Deleting secret(%d/%d):'%s'\n", idx, len(awsCredReqs), cr.Spec.SecretRef.Name)
 			// Delete the referenced secret
 			err := o.clusterClientset.CoreV1().Secrets(secret.Namespace).Delete(context.TODO(), secret.Name, metav1.DeleteOptions{})
 			if err != nil {
@@ -654,7 +654,7 @@ func (o *rotateCredOptions) preRunSetup() error {
 	o.log.Debugf("Creating OCM connection...\n")
 	ocmConn, err := utils.CreateConnection()
 	if err != nil {
-		o.log.Errorf("Failed to create OCM connection: %w", err)
+		o.log.Errorf("Failed to create OCM connection: %v", err)
 		return err
 	}
 	defer o.closeOcmConn(ocmConn)
@@ -892,7 +892,7 @@ func (o *rotateCredOptions) connectHiveClient() error {
 		}
 		_, err = os.Stat(bpFilePath)
 		if err != nil {
-			o.log.Errorf("Failed to stat ocm config:'%s', err:", o.ocmConfigHivePath, err)
+			o.log.Errorf("Failed to stat ocm config:'%s', err:%v", o.ocmConfigHivePath, err)
 			return fmt.Errorf("failed to stat ocm config:'%s', err:'%v'", o.ocmConfigHivePath, err)
 		}
 		viper.AutomaticEnv()
@@ -933,7 +933,7 @@ func (o *rotateCredOptions) connectHiveClient() error {
 			return err
 		}
 		defer ocmSdkConn.Close()
-		o.log.Debugf("USing ocm sdk connection, url:'%s' \n", ocmSdkConn.URL())
+		o.log.Debugf("Using ocm sdk connection, url:'%s' \n", ocmSdkConn.URL())
 		hiveShard, err := o.getHiveShardCluster(ocmSdkConn, o.clusterID)
 		if err != nil {
 			// For debug purposes see if we can get the shard API url...
@@ -971,7 +971,7 @@ func (o *rotateCredOptions) connectHiveClient() error {
 			} else {
 				errorMessage = "failed to fetch OCM cluster environment resource"
 			}
-			o.log.Errorf("Failed Hive connection: %s: %w", errorMessage, err)
+			o.log.Errorf("Failed Hive connection: %s: %v", errorMessage, err)
 			return fmt.Errorf("%s: %w", errorMessage, err)
 		}
 
