@@ -19,7 +19,6 @@ import (
 )
 
 func TestPrintContextJson(t *testing.T) {
-
 	tests := []struct {
 		name          string
 		clusterInfos  []ClusterInfo
@@ -197,13 +196,17 @@ func Test_printContext(t *testing.T) {
 }
 
 func TestContext_Success(t *testing.T) {
-	// Save original function pointers
+	// Save original function pointers to restore after test
 	origGetCluster := getClusterFunc
 	origGetLimitedSupport := getClusterLimitedSupportFunc
 	origGetServiceLogs := getServiceLogsSinceFunc
 	origGetJiraIssues := getJiraIssuesForClusterFunc
 	origSearchSubs := searchAllSubscriptionsByOrgFunc
 	origCreateConn := createConnectionFunc
+	origAddPDAlerts := addPDAlertsFunc
+	origAddLimitedSupportReasons := addLimitedSupportReasonsFunc
+	origAddServiceLogs := addServiceLogsFunc
+	origAddJiraIssues := addJiraIssuesFunc
 
 	// Restore original functions after test
 	defer func() {
@@ -213,9 +216,12 @@ func TestContext_Success(t *testing.T) {
 		getJiraIssuesForClusterFunc = origGetJiraIssues
 		searchAllSubscriptionsByOrgFunc = origSearchSubs
 		createConnectionFunc = origCreateConn
+		addPDAlertsFunc = origAddPDAlerts
+		addLimitedSupportReasonsFunc = origAddLimitedSupportReasons
+		addServiceLogsFunc = origAddServiceLogs
+		addJiraIssuesFunc = origAddJiraIssues
 	}()
 
-	// Setup test server
 	testToken, _ := jwt.New(jwt.SigningMethodHS256).SignedString([]byte("test-secret"))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -243,46 +249,49 @@ func TestContext_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Mock dependencies
+	mockCluster, _ := cmv1.NewCluster().
+		ID("cluster1").
+		Name("test-cluster").
+		ExternalID("external-1").
+		Version(cmv1.NewVersion().RawID("4.10.0")).
+		DNS(cmv1.NewDNS().BaseDomain("example.com")).
+		CloudProvider(cmv1.NewCloudProvider().ID("aws")).
+		Build()
+
 	getClusterFunc = func(_ *sdk.Connection, clusterID string) (*cmv1.Cluster, error) {
-		return cmv1.NewCluster().
-			ID(clusterID).
-			Name("test-cluster").
-			ExternalID("external-1").
-			Version(cmv1.NewVersion().RawID("4.10.0")).
-			DNS(cmv1.NewDNS().BaseDomain("example.com")).
-			CloudProvider(cmv1.NewCloudProvider().ID("aws")).
-			Build()
+		return mockCluster, nil
 	}
+
+	mockLimitedSupportReasons := []*cmv1.LimitedSupportReason{}
 
 	getClusterLimitedSupportFunc = func(_ *sdk.Connection, _ string) ([]*cmv1.LimitedSupportReason, error) {
-		return []*cmv1.LimitedSupportReason{}, nil
+		return mockLimitedSupportReasons, nil
 	}
+
+	mockServiceLogs := []*v1.LogEntry{}
 
 	getServiceLogsSinceFunc = func(_ string, _ time.Time, _, _ bool) ([]*v1.LogEntry, error) {
-		return []*v1.LogEntry{}, nil
+		return mockServiceLogs, nil
 	}
+
+	mockJiraIssues := []jira.Issue{}
 
 	getJiraIssuesForClusterFunc = func(_, _ string) ([]jira.Issue, error) {
-		return []jira.Issue{}, nil
+		return mockJiraIssues, nil
 	}
+
+	mockSubscription, _ := accountsv1.NewSubscription().
+		ID("sub1").
+		ClusterID("cluster1").
+		Status("Active").
+		Plan(accountsv1.NewPlan().ID("OSD")).
+		CloudProviderID("aws").
+		Build()
 
 	searchAllSubscriptionsByOrgFunc = func(_ string, _ string, _ bool) ([]*accountsv1.Subscription, error) {
-		// sub1, _ := accountsv1.NewSubscription().ClusterID("cluster-1").DisplayName("Cluster One").Status("Active").Build()
-		// sub2, _ := accountsv1.NewSubscription().ClusterID("cluster-1").DisplayName("Cluster One").Status("Active").Build()
-		// expectedSubs := []*accountsv1.Subscription{sub1, sub2}
-
-		sub, _ := accountsv1.NewSubscription().
-			ID("sub1").
-			ClusterID("cluster1").
-			Status("Active").
-			Plan(accountsv1.NewPlan().ID("OSD")).
-			CloudProviderID("aws").
-			// Metrics([]*accountsv1.SubscriptionMetrics).
-			Build()
-		return []*accountsv1.Subscription{sub}, nil
+		return []*accountsv1.Subscription{mockSubscription}, nil
 	}
-	// Metrics([]*accountsv1.Metric{sdk.NewMetric().Nodes(sdk.NewNodes().Total(3))}).
+
 	createConnectionFunc = func() (*sdk.Connection, error) {
 		return sdk.NewConnectionBuilder().
 			URL(server.URL).
@@ -292,17 +301,40 @@ func TestContext_Success(t *testing.T) {
 			Build()
 	}
 
-	// Capture output
-	var output bytes.Buffer
+	addLimitedSupportReasonsFunc = func(ci *ClusterInfo, _ *sdk.Connection) error {
+		ci.LimitedSupportReasons = mockLimitedSupportReasons
+		return nil
+	}
 
-	// Execute test
+	addServiceLogsFunc = func(ci *ClusterInfo) error {
+		ci.ServiceLogs = mockServiceLogs
+		return nil
+	}
+
+	addJiraIssuesFunc = func(ci *ClusterInfo, _ string) error {
+		ci.JiraIssues = mockJiraIssues
+		return nil
+	}
+
+	mockPDAlerts := map[string][]pd.Incident{}
+
+	addPDAlertsFunc = func(ci *ClusterInfo, _ string) error {
+		ci.PdAlerts = mockPDAlerts
+		return nil
+	}
+
+	var output bytes.Buffer
 	clusters, err := contextInternal("test-org", &output)
 
-	// Verify output
-	t.Log(output.String())
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(clusters))
+	assert.Equal(t, "test-cluster", clusters[0].Name)
+	assert.Equal(t, "cluster1", clusters[0].ID)
+	assert.Equal(t, "4.10.0", clusters[0].Version)
+	assert.Equal(t, "aws", clusters[0].CloudProvider)
+	assert.Equal(t, "OSD", clusters[0].Plan)
 
-	// Assertions
-	assert.Error(t, err)
-	assert.Nil(t, clusters, 1)
-
+	outputStr := output.String()
+	assert.Contains(t, outputStr, "Fetching data for 1 clusters in org test-org")
+	assert.Contains(t, outputStr, "Fetched data for 1 of 1 clusters")
 }

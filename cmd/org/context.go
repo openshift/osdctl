@@ -29,6 +29,20 @@ const (
 	ServiceLogDaysSince = 30
 )
 
+var (
+	getClusterFunc                            = utils.GetCluster
+	getClusterLimitedSupportFunc              = utils.GetClusterLimitedSupportReasons
+	getServiceLogsSinceFunc                   = servicelog.GetServiceLogsSince
+	getJiraIssuesForClusterFunc               = utils.GetJiraIssuesForCluster
+	searchAllSubscriptionsByOrgFunc           = SearchAllSubscriptionsByOrg
+	createConnectionFunc                      = connectionFactory
+	addPDAlertsFunc                           = addPDAlerts
+	addLimitedSupportReasonsFunc              = addLimitedSupportReasons
+	addServiceLogsFunc                        = addServiceLogs
+	addJiraIssuesFunc                         = addJiraIssues
+	defaultOutput                   io.Writer = os.Stderr
+)
+
 type ClusterInfo struct {
 	Name                  string
 	Version               string
@@ -95,6 +109,38 @@ osdctl org context 1a2B3c4DefghIjkLMNOpQrSTUV5 -o json`,
 
 func init() {
 	contextCmd.Flags().StringP("output", "o", "", "output format for the results. only supported value currently is 'json'")
+
+	// Ensure all function variables are properly initialized
+	if getClusterFunc == nil {
+		getClusterFunc = utils.GetCluster
+	}
+	if getClusterLimitedSupportFunc == nil {
+		getClusterLimitedSupportFunc = utils.GetClusterLimitedSupportReasons
+	}
+	if getServiceLogsSinceFunc == nil {
+		getServiceLogsSinceFunc = servicelog.GetServiceLogsSince
+	}
+	if getJiraIssuesForClusterFunc == nil {
+		getJiraIssuesForClusterFunc = utils.GetJiraIssuesForCluster
+	}
+	if searchAllSubscriptionsByOrgFunc == nil {
+		searchAllSubscriptionsByOrgFunc = SearchAllSubscriptionsByOrg
+	}
+	if createConnectionFunc == nil {
+		createConnectionFunc = connectionFactory
+	}
+	if addPDAlertsFunc == nil {
+		addPDAlertsFunc = addPDAlerts
+	}
+	if addLimitedSupportReasonsFunc == nil {
+		addLimitedSupportReasonsFunc = addLimitedSupportReasons
+	}
+	if addServiceLogsFunc == nil {
+		addServiceLogsFunc = addServiceLogs
+	}
+	if addJiraIssuesFunc == nil {
+		addJiraIssuesFunc = addJiraIssues
+	}
 }
 
 func printContextJson(w io.Writer, clusterInfos []ClusterInfo) error {
@@ -128,7 +174,7 @@ func printContextJson(w io.Writer, clusterInfos []ClusterInfo) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal json response: %w", err)
 	}
-	_, err = fmt.Fprintln(w, string(bytes)) // Write to the given writer
+	_, err = fmt.Fprintln(w, string(bytes)) 
 	return err
 }
 
@@ -178,27 +224,10 @@ func getPlanDisplayText(plan string) string {
 	return plan
 }
 
-// For testing - these variables can be replaced in tests
-var (
-	getClusterFunc                            = utils.GetCluster
-	getClusterLimitedSupportFunc              = utils.GetClusterLimitedSupportReasons
-	getServiceLogsSinceFunc                   = servicelog.GetServiceLogsSince
-	getJiraIssuesForClusterFunc               = utils.GetJiraIssuesForCluster
-	searchAllSubscriptionsByOrgFunc           = SearchAllSubscriptionsByOrg
-	createConnectionFunc                      = connectionFactory
-	addPDAlertsFunc                           = addPDAlerts
-	defaultOutput                   io.Writer = os.Stderr
-)
-
-// Context gets cluster information for an organization
-// This function remains unchanged for backward compatibility
 func Context(orgId string) ([]ClusterInfo, error) {
-	// Use the internal implementation with the default dependencies
 	return contextInternal(orgId, defaultOutput)
 }
 
-// contextInternal implements the Context functionality with configurable output
-// This allows for testing without changing the public API
 func contextInternal(orgId string, output io.Writer) ([]ClusterInfo, error) {
 	clusterSubscriptions, err := searchAllSubscriptionsByOrgFunc(orgId, StatusActive, true)
 	if err != nil {
@@ -210,14 +239,13 @@ func contextInternal(orgId string, output io.Writer) ([]ClusterInfo, error) {
 		return nil, nil
 	}
 
-	// cluster info
 	ocmClient, err := createConnectionFunc()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OCM client: %w", err)
 	}
 	defer ocmClient.Close()
 
-	var orgClustersInfo []ClusterInfo
+	orgClustersInfo := make([]ClusterInfo, 0, clusterSubscriptionsCount)
 
 	eg, ctx := errgroup.WithContext(context.Background())
 	var mutex sync.Mutex
@@ -253,20 +281,20 @@ func contextInternal(orgId string, output io.Writer) ([]ClusterInfo, error) {
 			dataErrs.Go(func() error {
 				defer dataCtx.Done()
 				ci := &clusterInfo
-				return addLimitedSupportReasons(ci, ocmClient)
+				return addLimitedSupportReasonsFunc(ci, ocmClient)
 			})
 
 			dataErrs.Go(func() error {
 				defer dataCtx.Done()
 				ci := &clusterInfo
-				return addServiceLogs(ci)
+				return addServiceLogsFunc(ci)
 			})
 
 			dataErrs.Go(func() error {
 				defer dataCtx.Done()
 				ci := &clusterInfo
 				externalId := cluster.ExternalID()
-				return addJiraIssues(ci, externalId)
+				return addJiraIssuesFunc(ci, externalId)
 			})
 
 			dataErrs.Go(func() error {
@@ -296,8 +324,6 @@ func contextInternal(orgId string, output io.Writer) ([]ClusterInfo, error) {
 	}
 	return orgClustersInfo, nil
 }
-
-// Helper functions remain largely unchanged but use function variables for testing
 
 func addLimitedSupportReasons(clusterInfo *ClusterInfo, ocmClient *sdk.Connection) error {
 	var limitedSupportReasonsErr error
