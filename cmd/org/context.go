@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"sync"
@@ -85,7 +86,7 @@ osdctl org context 1a2B3c4DefghIjkLMNOpQrSTUV5 -o json`,
 		}
 
 		if outputFormat == "json" {
-			return printContextJson(clusterInfos)
+			return printContextJson(os.Stdout, clusterInfos)
 		}
 
 		return printContext(clusterInfos)
@@ -96,7 +97,7 @@ func init() {
 	contextCmd.Flags().StringP("output", "o", "", "output format for the results. only supported value currently is 'json'")
 }
 
-func printContextJson(clusterInfos []ClusterInfo) error {
+func printContextJson(w io.Writer, clusterInfos []ClusterInfo) error {
 	clusterInfoViews := make([]clusterInfoView, 0, len(clusterInfos))
 	for _, clusterInfo := range clusterInfos {
 		plan := clusterInfo.Plan
@@ -127,9 +128,8 @@ func printContextJson(clusterInfos []ClusterInfo) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal json response: %w", err)
 	}
-	fmt.Println(string(bytes))
-
-	return nil
+	_, err = fmt.Fprintln(w, string(bytes)) // Write to the given writer
+	return err
 }
 
 func printContext(clusterInfos []ClusterInfo) error {
@@ -178,8 +178,29 @@ func getPlanDisplayText(plan string) string {
 	return plan
 }
 
+// For testing - these variables can be replaced in tests
+var (
+	getClusterFunc                            = utils.GetCluster
+	getClusterLimitedSupportFunc              = utils.GetClusterLimitedSupportReasons
+	getServiceLogsSinceFunc                   = servicelog.GetServiceLogsSince
+	getJiraIssuesForClusterFunc               = utils.GetJiraIssuesForCluster
+	searchAllSubscriptionsByOrgFunc           = SearchAllSubscriptionsByOrg
+	createConnectionFunc                      = connectionFactory
+	addPDAlertsFunc                           = addPDAlerts
+	defaultOutput                   io.Writer = os.Stderr
+)
+
+// Context gets cluster information for an organization
+// This function remains unchanged for backward compatibility
 func Context(orgId string) ([]ClusterInfo, error) {
-	clusterSubscriptions, err := SearchAllSubscriptionsByOrg(orgId, StatusActive, true)
+	// Use the internal implementation with the default dependencies
+	return contextInternal(orgId, defaultOutput)
+}
+
+// contextInternal implements the Context functionality with configurable output
+// This allows for testing without changing the public API
+func contextInternal(orgId string, output io.Writer) ([]ClusterInfo, error) {
+	clusterSubscriptions, err := searchAllSubscriptionsByOrgFunc(orgId, StatusActive, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch cluster subscriptions for org with ID %s: %w", orgId, err)
 	}
@@ -190,7 +211,7 @@ func Context(orgId string) ([]ClusterInfo, error) {
 	}
 
 	// cluster info
-	ocmClient, err := utils.CreateConnection()
+	ocmClient, err := createConnectionFunc()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OCM client: %w", err)
 	}
@@ -203,14 +224,15 @@ func Context(orgId string) ([]ClusterInfo, error) {
 	count := 0
 
 	// Print these to stderr so the actual results can be piped to different parsers without worrying about these lines
-	_, _ = fmt.Fprintf(os.Stderr, "Fetching data for %v clusters in org %v...\n", clusterSubscriptionsCount, orgId)
-	_, _ = fmt.Fprintf(os.Stderr, "Fetched data for 0 of %v clusters...\n", clusterSubscriptionsCount)
+	_, _ = fmt.Fprintf(output, "Fetching data for %v clusters in org %v...\n", clusterSubscriptionsCount, orgId)
+	_, _ = fmt.Fprintf(output, "Fetched data for 0 of %v clusters...\n", clusterSubscriptionsCount)
+
 	for _, subscription := range clusterSubscriptions {
 		sub := subscription
 		eg.Go(func() error {
 			defer ctx.Done()
 			clusterId := sub.ClusterID()
-			cluster, getClusterErr := utils.GetCluster(ocmClient, clusterId)
+			cluster, getClusterErr := getClusterFunc(ocmClient, clusterId)
 			if getClusterErr != nil {
 				return fmt.Errorf("failed to get cluster %s: %w", clusterId, getClusterErr)
 			}
@@ -251,7 +273,7 @@ func Context(orgId string) ([]ClusterInfo, error) {
 				defer dataCtx.Done()
 				ci := &clusterInfo
 				baseDomain := cluster.DNS().BaseDomain()
-				return addPDAlerts(ci, baseDomain)
+				return addPDAlertsFunc(ci, baseDomain)
 			})
 
 			if errs := dataErrs.Wait(); errs != nil {
@@ -259,9 +281,9 @@ func Context(orgId string) ([]ClusterInfo, error) {
 			}
 
 			mutex.Lock()
-			_, _ = fmt.Fprintf(os.Stderr, "\033[1A\033[K")
+			_, _ = fmt.Fprintf(output, "\033[1A\033[K")
 			count++
-			_, _ = fmt.Fprintf(os.Stderr, "Fetched data for %v of %v clusters...\n", count, clusterSubscriptionsCount)
+			_, _ = fmt.Fprintf(output, "Fetched data for %v of %v clusters...\n", count, clusterSubscriptionsCount)
 			orgClustersInfo = append(orgClustersInfo, clusterInfo)
 			mutex.Unlock()
 
@@ -275,9 +297,11 @@ func Context(orgId string) ([]ClusterInfo, error) {
 	return orgClustersInfo, nil
 }
 
+// Helper functions remain largely unchanged but use function variables for testing
+
 func addLimitedSupportReasons(clusterInfo *ClusterInfo, ocmClient *sdk.Connection) error {
 	var limitedSupportReasonsErr error
-	clusterInfo.LimitedSupportReasons, limitedSupportReasonsErr = utils.GetClusterLimitedSupportReasons(ocmClient, clusterInfo.ID)
+	clusterInfo.LimitedSupportReasons, limitedSupportReasonsErr = getClusterLimitedSupportFunc(ocmClient, clusterInfo.ID)
 	if limitedSupportReasonsErr != nil {
 		return fmt.Errorf("failed to fetch limited support reasons for cluster %v: %w", clusterInfo.ID, limitedSupportReasonsErr)
 	}
@@ -287,7 +311,7 @@ func addLimitedSupportReasons(clusterInfo *ClusterInfo, ocmClient *sdk.Connectio
 func addServiceLogs(clusterInfo *ClusterInfo) error {
 	var err error
 	timeToCheckSvcLogs := time.Now().AddDate(0, 0, -ServiceLogDaysSince)
-	clusterInfo.ServiceLogs, err = servicelog.GetServiceLogsSince(clusterInfo.ID, timeToCheckSvcLogs, false, false)
+	clusterInfo.ServiceLogs, err = getServiceLogsSinceFunc(clusterInfo.ID, timeToCheckSvcLogs, false, false)
 	if err != nil {
 		return fmt.Errorf("failed to fetch service logs for cluster %v: %w", clusterInfo.ID, err)
 	}
@@ -296,7 +320,7 @@ func addServiceLogs(clusterInfo *ClusterInfo) error {
 
 func addJiraIssues(clusterInfo *ClusterInfo, externalId string) error {
 	var jiraIssuesErr error
-	clusterInfo.JiraIssues, jiraIssuesErr = utils.GetJiraIssuesForCluster(clusterInfo.ID, externalId)
+	clusterInfo.JiraIssues, jiraIssuesErr = getJiraIssuesForClusterFunc(clusterInfo.ID, externalId)
 	if jiraIssuesErr != nil {
 		return fmt.Errorf("failed to fetch Jira issues for cluster %v: %v", clusterInfo.ID, jiraIssuesErr)
 	}

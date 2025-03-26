@@ -25,8 +25,11 @@ const (
 )
 
 var (
-	awsProfile string = ""
-	output     string = ""
+	awsProfile        string = ""
+	output            string = ""
+	connectionFactory        = func() (*sdk.Connection, error) {
+		return utils.CreateConnection()
+	}
 )
 
 type Organization struct {
@@ -122,7 +125,7 @@ func SearchAllSubscriptionsByOrg(orgID string, status string, managedOnly bool) 
 
 func getSubscriptions(orgID string, status string, managedOnly bool, page int, size int) (*accountsv1.SubscriptionsListResponse, error) {
 	// Create OCM client to talk
-	ocmClient, err := utils.CreateConnection()
+	ocmClient, err := connectionFactory()
 	if err != nil {
 		return nil, err
 	}
