@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -25,10 +27,8 @@ import (
 	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
 	bpocmcli "github.com/openshift/backplane-cli/pkg/ocm"
 	"github.com/spf13/viper"
-	"go.uber.org/zap/zapcore"
 	"k8s.io/client-go/rest"
 
-	"github.com/openshift-online/ocm-sdk-go/logging"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
 	credreqv1 "github.com/openshift/cloud-credential-operator/pkg/apis/cloudcredential/v1"
 	hiveapiv1 "github.com/openshift/hive/apis/hive/v1"
@@ -38,18 +38,19 @@ import (
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/utils"
+	logrus "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	k8json "k8s.io/apimachinery/pkg/runtime/serializer/json"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	k8slog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
@@ -169,7 +170,7 @@ type rotateCredOptions struct {
 
 	// Runtime attrs
 	verboseLevel int             //Logging level
-	log          logging.Logger  // Used for logging runtime messages (default stdout)
+	log          *logrus.Logger  // Used for logging runtime messages
 	ctx          context.Context // Context to user for rotation ops
 	genericclioptions.IOStreams
 
@@ -208,6 +209,7 @@ func newRotateAWSOptions(streams genericclioptions.IOStreams) *rotateCredOptions
 
 /* Initial function used to validate user input */
 func (o *rotateCredOptions) preRunCliChecks(cmd *cobra.Command, args []string) error {
+	var err error = nil
 	if len(args) != 1 {
 		return cmdutil.UsageErrorf(cmd, "Required 1 positional arg for 'Cluster ID'")
 	}
@@ -229,20 +231,25 @@ func (o *rotateCredOptions) preRunCliChecks(cmd *cobra.Command, args []string) e
 	if o.profile == "" {
 		o.profile = "default"
 	}
+	// Setup logger
+	logger := logrus.New()
+	logger.ReportCaller = true
+	if o.verboseLevel > int(logrus.DebugLevel) {
+		o.verboseLevel = int(logrus.DebugLevel)
+	}
+	logger.SetLevel(logrus.Level(o.verboseLevel))
+	logger.Formatter = new(logrus.TextFormatter)
+	logger.Formatter.(*logrus.TextFormatter).DisableLevelTruncation = true
+	logger.Formatter.(*logrus.TextFormatter).PadLevelText = true
+	logger.Formatter.(*logrus.TextFormatter).DisableQuote = true
+	logger.Formatter.(*logrus.TextFormatter).CallerPrettyfier = func(f *runtime.Frame) (string, string) {
+		return "", fmt.Sprintf("[%s:%d]", filepath.Base(f.File), f.Line)
+	}
+	o.log = logger
+
 	// init context
 	o.ctx = context.TODO()
 
-	// Setup logger
-	builder := logging.NewGoLoggerBuilder()
-	builder.Debug(bool(o.verboseLevel >= 4))
-	builder.Info(bool(o.verboseLevel >= 3))
-	builder.Warn(bool(o.verboseLevel >= 2))
-	builder.Error(bool(o.verboseLevel >= 1))
-	logger, err := builder.Build()
-	if err != nil {
-		return fmt.Errorf("failed to build logger: %s", err)
-	}
-	o.log = logger
 	// This is also caught by the Cobra flags, but Cobra's error message is a bit cryptic so catching here first...
 	if !o.updateCcsCredsCli && !o.updateMgmtCredsCli && !o.rotateCRSecretsOnly && !o.describeKeysCli && !o.describeSecretsCli {
 		return cmdutil.UsageErrorf(cmd, "must provide one or more actions: ('--rotate-managed-admin', and/or '--rotate-ccs-admin', or '--rotate-cr-secrets), or '--describe-secrets', or '--describe-keys'")
@@ -267,38 +274,20 @@ func (o *rotateCredOptions) preRunCliChecks(cmd *cobra.Command, args []string) e
 	// Fail early if aws config is not correct
 	_, err = config.LoadDefaultConfig(o.ctx, config.WithSharedConfigProfile(o.profile))
 	if err != nil {
-		o.log.Error(o.ctx, "Failed to load AWS config:'%v'\n", err)
+		o.log.Errorf("Failed to load AWS config:'%v'\n", err)
 		return err
 	}
-	// This attempts to set the k8s logger to avoid
-	// random kubernetes backtraces + warnings about not setting it.
-	// This should only impact klog used by vendored kubernetes, and not the goLogger
-	// which is primarily used throughout this osdctl cmd.
-	zlevel := zapcore.InfoLevel
-	switch {
-	case o.verboseLevel > 3:
-		zlevel = zapcore.DebugLevel
-	case o.verboseLevel == 3:
-		zlevel = zapcore.InfoLevel
-	case o.verboseLevel == 2:
-		zlevel = zapcore.WarnLevel
-	case o.verboseLevel <= 1:
-		zlevel = zapcore.ErrorLevel
-	default:
-		zlevel = zapcore.DebugLevel
+	// To avoid warnings/backtrace, if k8s controller-runtime logger is not yet set, do it now...
+	if !k8slog.Log.Enabled() {
+		k8slog.SetLogger(zap.New(zap.WriteTo(io.Discard)))
 	}
-	controllerruntime.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{
-		Development: true, //Zap development config (stacktraces on warnings, no sampling)
-		//DestWriter:  os.Stderr, //defaults to os.Stderr
-		Level: zlevel, //Defaults to Debug when Development is true and Info otherwise
-	})))
 	return nil
 }
 
 /* Main function used to run this CLI utility */
 func (o *rotateCredOptions) run() error {
 	var err error = nil
-	if o.log.DebugEnabled() && (o.describeKeysCli || o.describeSecretsCli) {
+	if o.log.GetLevel() >= logrus.DebugLevel && (o.describeKeysCli || o.describeSecretsCli) {
 		err = o.printClusterInfo()
 	}
 	if err != nil {
@@ -310,7 +299,7 @@ func (o *rotateCredOptions) run() error {
 		if o.clusterKubeClient == nil {
 			err := o.connectClusterClient()
 			if err != nil {
-				o.log.Error(o.ctx, "Error connecting to cluster:'%v'", err)
+				o.log.Errorf("Error connecting to cluster:'%v'", err)
 				return err
 			}
 		}
@@ -382,7 +371,7 @@ func (o *rotateCredOptions) run() error {
 	}
 	// Rotate credentials for IAM user OsdCcsAdmin
 	if o.updateCcsCredsCli {
-		o.log.Info(o.ctx, "ccs cli flag was set. Attempting to update osdCcsAdmin user creds...\n")
+		o.log.Infof("ccs cli flag was set. Attempting to update osdCcsAdmin user creds...\n")
 		err = o.doRotateCcsCreds()
 		if err != nil {
 			return err
@@ -390,7 +379,7 @@ func (o *rotateCredOptions) run() error {
 	}
 	err = o.deleteAWSCredRequestSecrets()
 	if err != nil {
-		o.log.Warn(o.ctx, "fetchCredentialsRequests returned err:'%s'\n", err)
+		o.log.Warnf("fetchCredentialsRequests returned err:'%s'\n", err)
 		return err
 	}
 	fmt.Printf("\nOptions --describe-keys, --describe-secrets can be used to provide additional info/status\n")
@@ -402,7 +391,7 @@ func (o *rotateCredOptions) printJsonYaml(obj any) error {
 	if o.output == jsonFormat {
 		pbuf, err := json.MarshalIndent(obj, "", "    ")
 		if err != nil {
-			o.log.Error(o.ctx, "Failed to marshal json. Err:'%v'\n", err)
+			o.log.Errorf("Failed to marshal json. Err:'%v'\n", err)
 			return err
 		}
 		fmt.Printf("%s\n", string(pbuf))
@@ -411,7 +400,7 @@ func (o *rotateCredOptions) printJsonYaml(obj any) error {
 	if o.output == yamlFormat {
 		pbuf, err := yaml.Marshal(obj)
 		if err != nil {
-			o.log.Error(o.ctx, "Failed to marshal yaml. Err:'%v'\n", err)
+			o.log.Errorf("Failed to marshal yaml. Err:'%v'\n", err)
 			return err
 		}
 		fmt.Printf("%s\n", string(pbuf))
@@ -424,7 +413,7 @@ func (o *rotateCredOptions) printJsonYaml(obj any) error {
 // AWS docs, access key constraints: Minimum length of 16. Maximum length of 128.
 func (o *rotateCredOptions) isValidAccessKeyId(keyId string) bool {
 	if len(keyId) < 16 || len(keyId) > 128 {
-		o.log.Error(o.ctx, "Invalid Access key length:%d\n", len(keyId))
+		o.log.Errorf("Invalid Access key length:%d\n", len(keyId))
 		return false
 	}
 	return true
@@ -477,7 +466,7 @@ func (o *rotateCredOptions) getAWSCredentialsRequests(nameSpace string) ([]credr
 	}
 	err := o.clusterKubeClient.List(o.ctx, &credRequestList, &listOptions)
 	if err != nil {
-		o.log.Warn(o.ctx, "Error fetching CredentialsRequestList:'%s'\n", err)
+		o.log.Warnf("Error fetching CredentialsRequestList:'%s'\n", err)
 		return nil, err
 	}
 
@@ -485,7 +474,7 @@ func (o *rotateCredOptions) getAWSCredentialsRequests(nameSpace string) ([]credr
 		if strings.HasPrefix(cr.Namespace, "openshift") {
 			kindStr, err := getProviderSpecKind(cr)
 			if err != nil {
-				o.log.Warn(o.ctx, "Skipping cr:'%s', err:'%s'\n", cr.Name, err)
+				o.log.Warnf("Skipping cr:'%s', err:'%s'\n", cr.Name, err)
 				continue
 			}
 			if kindStr == AWSProviderSpecType {
@@ -535,13 +524,13 @@ func (o *rotateCredOptions) printAWSCredRequestSecrets(awsCredReqs *[]credreqv1.
 	if awsCredReqs == nil {
 		reqs, err := o.getAWSCredentialsRequests("")
 		if err != nil {
-			o.log.Warn(o.ctx, "Error fetching AWS provider credentialRequests, err:'%s'\n", err)
+			o.log.Warnf("Error fetching AWS provider credentialRequests, err:'%s'\n", err)
 			return err
 		}
 		awsCredReqs = &reqs
 	}
 	if awsCredReqs == nil {
-		o.log.Info(o.ctx, "No AWS provider Credential Requests to show")
+		o.log.Infof("No AWS provider Credential Requests to show")
 		return nil
 	}
 	var w *tabwriter.Writer
@@ -555,7 +544,7 @@ func (o *rotateCredOptions) printAWSCredRequestSecrets(awsCredReqs *[]credreqv1.
 	for ind, cr := range *awsCredReqs {
 		secret, err := o.clusterClientset.CoreV1().Secrets(cr.Spec.SecretRef.Namespace).Get(context.TODO(), cr.Spec.SecretRef.Name, metav1.GetOptions{})
 		if err != nil {
-			o.log.Warn(o.ctx, "Failed to get secret:'%s', err:'%s'", cr.Spec.SecretRef.Name, err)
+			o.log.Warnf("Failed to get secret:'%s', err:'%s'", cr.Spec.SecretRef.Name, err)
 			continue
 		}
 		if o.output == standardFormat {
@@ -582,7 +571,7 @@ func (o *rotateCredOptions) deleteAWSCredRequestSecrets() error {
 	rotateAllWithoutPrompts := false
 	awsCredReqs, err := o.getAWSCredentialsRequests("")
 	if err != nil {
-		o.log.Warn(o.ctx, "Error fetching AWS related credentialRequests, err:'%s'\n", err)
+		o.log.Warnf("Error fetching AWS related credentialRequests, err:'%s'\n", err)
 		return err
 	}
 	if awsCredReqs == nil {
@@ -610,7 +599,7 @@ inputLoop:
 			break inputLoop
 		case "n", "no":
 			userInput = "n"
-			o.log.Info(o.ctx, "User chose to not delete secrets...\n")
+			o.log.Infof("User chose to not delete secrets...\n")
 			return nil
 		case "all":
 			rotateAllWithoutPrompts = true
@@ -640,15 +629,15 @@ inputLoop:
 			fmt.Printf("Delete Secret ('%s')? ", secret.Name)
 			return utils.ConfirmPrompt()
 		}() {
-			o.log.Debug(o.ctx, "Deleting secret(%d/%d):'%s'\n", cr.Spec.SecretRef.Name, idx, len(awsCredReqs))
+			o.log.Debugf("Deleting secret(%d/%d):'%s'\n", cr.Spec.SecretRef.Name, idx, len(awsCredReqs))
 			// Delete the referenced secret
 			err := o.clusterClientset.CoreV1().Secrets(secret.Namespace).Delete(context.TODO(), secret.Name, metav1.DeleteOptions{})
 			if err != nil {
 				return fmt.Errorf("failed to delete secret '%v' in namespace:'%v', err '%w'", secret.Name, secret.Namespace, err)
 			}
-			o.log.Debug(o.ctx, "Deleted Secret: '%s'\n", secret.Name)
+			o.log.Debugf("Deleted Secret: '%s'\n", secret.Name)
 		} else {
-			o.log.Debug(o.ctx, "Skipping secret:'%s'...\n", secret.Name)
+			o.log.Debugf("Skipping secret:'%s'...\n", secret.Name)
 			continue
 		}
 	}
@@ -662,20 +651,24 @@ inputLoop:
  */
 func (o *rotateCredOptions) preRunSetup() error {
 	var err error
-	o.log.Debug(o.ctx, "Creating OCM connection...\n")
+	o.log.Debugf("Creating OCM connection...\n")
 	ocmConn, err := utils.CreateConnection()
 	if err != nil {
-		o.log.Error(o.ctx, "Failed to create OCM connection: %w", err)
+		o.log.Errorf("Failed to create OCM connection: %w", err)
 		return err
 	}
 	defer o.closeOcmConn(ocmConn)
-	o.log.Debug(o.ctx, "Created OCM connection")
+	o.log.Debugf("Created OCM connection")
 
 	// Fetch the cluster info, this will return an error if more than 1 cluster is matched
 	cluster, err := utils.GetClusterAnyStatus(ocmConn, o.clusterID)
 	if err != nil {
-		o.log.Error(o.ctx, "Failed to fetch cluster:'%s' from OCM using:'%s'", o.clusterID, ocmConn.URL())
+		o.log.Errorf("Failed to fetch cluster:'%s' from OCM using:'%s'", o.clusterID, ocmConn.URL())
 		return fmt.Errorf("failed to fetch cluster:'%s' from OCM. err: %w", o.clusterID, err)
+	}
+	if cluster.Hypershift().Enabled() {
+		o.log.Errorf("Cluster '%s' is hypershift enabled. This is currently not supported", cluster.ID())
+		return fmt.Errorf("Cluster '%s' is hypershift enabled. This is currently not supported", cluster.ID())
 	}
 	// Store the cluster obj...
 	o.cluster = cluster
@@ -695,7 +688,7 @@ func (o *rotateCredOptions) preRunSetup() error {
 	if err != nil {
 		return err
 	}
-	o.log.Debug(o.ctx, "Is Cluster CCS?:%t\n", o.isCCS)
+	o.log.Debugf("Is Cluster CCS?:%t\n", o.isCCS)
 
 	return nil
 }
@@ -706,7 +699,7 @@ func (o *rotateCredOptions) closeOcmConn(ocmConn *sdk.Connection) {
 	if ocmConn != nil {
 		ocmCloseErr := ocmConn.Close()
 		if ocmCloseErr != nil {
-			o.log.Error(o.ctx, "Error during ocm.close() (possible memory leak): %q", ocmCloseErr)
+			o.log.Errorf("Error during ocm.close() (possible memory leak): %q", ocmCloseErr)
 		}
 		ocmConn = nil
 	}
@@ -717,25 +710,25 @@ func (o *rotateCredOptions) fetchAwsClaimNameInfo() error {
 	var err error = nil
 	var claimName string = ""
 	if o.hiveKubeClient == nil {
-		o.log.Error(o.ctx, "fetchAwsClaimNameInfo called with nil hive client")
+		o.log.Errorf("fetchAwsClaimNameInfo called with nil hive client")
 		return fmt.Errorf("fetchAwsClaimNameInfo called with nil hive client")
 	}
 	if len(o.clusterID) <= 0 {
-		o.log.Error(o.ctx, "fetchAwsClaimNameInfo called with empty clusterID")
+		o.log.Errorf("fetchAwsClaimNameInfo called with empty clusterID")
 		return fmt.Errorf("fetchAwsClaimNameInfo called with empty clusterID")
 	}
 	accountClaim, err := k8s.GetAccountClaimFromClusterID(o.ctx, o.hiveKubeClient, o.clusterID)
 
 	if err != nil {
-		o.log.Warn(o.ctx, "k8s.GetAccountClaimFromClusterID err:'%s', trying resources instead...\n", err)
+		o.log.Warnf("k8s.GetAccountClaimFromClusterID err:'%s', trying resources instead...\n", err)
 	} else {
-		o.log.Debug(o.ctx, "Got AccountClaimFromClusterID, name:'%s', accountlink:'%s'\n", accountClaim.Name, accountClaim.Spec.AccountLink)
+		o.log.Debugf("Got AccountClaimFromClusterID, name:'%s', accountlink:'%s'\n", accountClaim.Name, accountClaim.Spec.AccountLink)
 		if accountClaim.Spec.AccountLink != "" {
 			o.claimName = accountClaim.Spec.AccountLink
 			o.secretName = o.claimName + "-secret"
 			return nil
 		} else {
-			o.log.Warn(o.ctx, "accountClaim.Spec.AccountLink contained empty string, trying resources instead...\n")
+			o.log.Warnf("accountClaim.Spec.AccountLink contained empty string, trying resources instead...\n")
 		}
 	}
 	claimName, err = o.getResourcesClaimName()
@@ -756,7 +749,7 @@ func (o *rotateCredOptions) getResourcesClaimName() (string, error) {
 	if len(o.clusterID) <= 0 {
 		return "", fmt.Errorf("clusterID has not been populated prior to cluster resources request")
 	}
-	o.log.Debug(o.ctx, "Creating OCM connection to fetch claim info...\n")
+	o.log.Debugf("Creating OCM connection to fetch claim info...\n")
 	ocmConn, err := utils.CreateConnection()
 	if err != nil {
 		return "", fmt.Errorf("failed to create OCM client: %w", err)
@@ -773,10 +766,10 @@ func (o *rotateCredOptions) getResourcesClaimName() (string, error) {
 		var claimObj awsv1alpha1.AccountClaim
 		err = json.Unmarshal([]byte(awsAccountClaim), &claimObj)
 		if err != nil {
-			o.log.Warn(o.ctx, "Error getting account claim:'%s'", err)
+			o.log.Warnf("Error getting account claim:'%s'", err)
 			return "", err
 		} else {
-			o.log.Debug(o.ctx, "Got awsAccountClaim accountLink:'%s'", claimObj.Spec.AccountLink)
+			o.log.Debugf("Got awsAccountClaim accountLink:'%s'", claimObj.Spec.AccountLink)
 		}
 		return claimObj.Spec.AccountLink, nil
 	}
@@ -785,7 +778,7 @@ func (o *rotateCredOptions) getResourcesClaimName() (string, error) {
 
 // Connect Backplane client to target cluster...
 func (o *rotateCredOptions) connectClusterClient() error {
-	o.log.Debug(o.ctx, "Connect BP client cluster:'%s'\n", o.clusterID)
+	o.log.Debugf("Connect BP client cluster:'%s'\n", o.clusterID)
 	if len(o.reason) <= 0 {
 		return fmt.Errorf("accessing cred secrets requires a reason for elevated command")
 	}
@@ -798,7 +791,7 @@ func (o *rotateCredOptions) connectClusterClient() error {
 	// Fetch the backplane kubeconfig, ignore the returned kubecli for now...
 	tmpClient, kubeConfig, kubClientSet, err := common.GetKubeConfigAndClient(o.clusterID, elevationReasons...)
 	if err != nil {
-		o.log.Warn(o.ctx, "Err creating cluster:'%s' client, GetKubeConfigAndClient() err:'%+v'\n", o.clusterID, err)
+		o.log.Warnf("Err creating cluster:'%s' client, GetKubeConfigAndClient() err:'%+v'\n", o.clusterID, err)
 		return err
 	}
 	if tmpClient != nil {
@@ -806,15 +799,15 @@ func (o *rotateCredOptions) connectClusterClient() error {
 	}
 	o.clusterClientset = kubClientSet
 	// Create new kube client with the CredentialsRequest schema using the backplane config from above...
-	scheme := runtime.NewScheme()
+	scheme := k8sruntime.NewScheme()
 	err = credreqv1.AddToScheme(scheme)
 	if err != nil {
-		o.log.Warn(o.ctx, "Error adding CredentialsRequests to schema:'%s'\n", err)
+		o.log.Warnf("Error adding CredentialsRequests to schema:'%s'\n", err)
 		return err
 	}
 	kubeCli, err := client.New(kubeConfig, client.Options{Scheme: scheme})
 	if err != nil {
-		o.log.Warn(o.ctx, "Error creating new schema'd client for cluster:'%s', err:'%s'\n", o.clusterID, err)
+		o.log.Warnf("Error creating new schema'd client for cluster:'%s', err:'%s'\n", o.clusterID, err)
 		return err
 	}
 	o.clusterKubeClient = kubeCli
@@ -826,7 +819,7 @@ func (o *rotateCredOptions) connectHiveClient() error {
 	// This requires a valid ocm login token on 'prod' as at the moment hive only resides in prod.
 	// Creates backplane client for hive and stores the resulting client in o.hiveKubeClient
 
-	o.log.Debug(o.ctx, "Connect hive client for cluster:'%s'\n", o.clusterID)
+	o.log.Debugf("Connect hive client for cluster:'%s'\n", o.clusterID)
 	if len(o.reason) <= 0 {
 		//This client requires a reason in order to impersonate backplane-cluster-admin...
 		return fmt.Errorf("accessing AWS credentials requires a reason for elevated command")
@@ -840,20 +833,20 @@ func (o *rotateCredOptions) connectHiveClient() error {
 		// are shared with the target cluster.
 		hiveCluster, err := utils.GetHiveCluster(o.clusterID)
 		if err != nil {
-			o.log.Error(o.ctx, "error fetching hive for cluster:'%s'.\n", err)
-			o.log.Error(o.ctx, "If target cluster is not using prod, see option'--ocm-config-hive'. Confirm token is not expired")
+			o.log.Errorf("error fetching hive for cluster:'%s'.\n", err)
+			o.log.Errorf("If target cluster is not using prod, see option'--ocm-config-hive'. Confirm token is not expired")
 			return err
 		}
 		o.hiveCluster = hiveCluster
 		if o.hiveCluster == nil || o.hiveCluster.ID() == "" {
 			return fmt.Errorf("failed to fetch hive cluster ID")
 		}
-		o.log.Info(o.ctx, "Using Hive Cluster: '%s'\n", hiveCluster.ID())
+		o.log.Infof("Using Hive Cluster: '%s'\n", hiveCluster.ID())
 		// If some elevationReasons are provided, then the config will be elevated with user backplane-cluster-admin...
-		o.log.Info(o.ctx, "Creating hive backplane client using OCM environment variables")
+		o.log.Infof("Creating hive backplane client using OCM environment variables")
 		hiveKubeCli, _, _, err := common.GetKubeConfigAndClient(o.hiveCluster.ID(), elevationReasons...)
 		if err != nil {
-			o.log.Warn(o.ctx, "Err fetching hive cluster client, GetKubeConfigAndClient() err:'%+v'\n", err)
+			o.log.Warnf("Err fetching hive cluster client, GetKubeConfigAndClient() err:'%+v'\n", err)
 			return err
 		}
 		o.hiveKubeClient = hiveKubeCli
@@ -880,7 +873,7 @@ func (o *rotateCredOptions) connectHiveClient() error {
 		// If/when there are upstream exported functions allowing config objects to be passed between them, much of this
 		// should go away.
 
-		o.log.Debug(o.ctx, "Using ocm config for hive connection:'%s'", o.ocmConfigHivePath)
+		o.log.Debugf("Using ocm config for hive connection:'%s'", o.ocmConfigHivePath)
 
 		// First fetch and read in the backplane config file content for the potential proxy-url list, and
 		// then check each backplane proxy against the OCM url from the 'cli provided config' (not env) to find a working proxy.
@@ -893,20 +886,20 @@ func (o *rotateCredOptions) connectHiveClient() error {
 		// config and url provided by the user instead.
 
 		bpFilePath, err := bpconfig.GetConfigFilePath()
-		o.log.Debug(o.ctx, "Using backplane config:'%s'", bpFilePath)
+		o.log.Debugf("Using backplane config:'%s'", bpFilePath)
 		if err != nil {
 			return err
 		}
 		_, err = os.Stat(bpFilePath)
 		if err != nil {
-			o.log.Error(o.ctx, "Failed to stat ocm config:'%s', err:", o.ocmConfigHivePath, err)
+			o.log.Errorf("Failed to stat ocm config:'%s', err:", o.ocmConfigHivePath, err)
 			return fmt.Errorf("failed to stat ocm config:'%s', err:'%v'", o.ocmConfigHivePath, err)
 		}
 		viper.AutomaticEnv()
 		viper.SetConfigFile(bpFilePath)
 		viper.SetConfigType("json")
 		if err := viper.ReadInConfig(); err != nil {
-			o.log.Error(o.ctx, "Hive OCM config err:'%v", err)
+			o.log.Errorf("Hive OCM config err:'%v", err)
 			return err
 		}
 		if viper.GetStringSlice("proxy-url") == nil && os.Getenv("HTTPS_PROXY") == "" {
@@ -917,16 +910,16 @@ func (o *rotateCredOptions) connectHiveClient() error {
 		// Provide warning as well as config+path if aws proxy not provided...
 		awsProxyUrl := viper.GetString(awsprovider.ProxyConfigKey)
 		if awsProxyUrl == "" {
-			o.log.Warn(o.ctx, "key:'%s' not found in config:'%s'", awsprovider.ProxyConfigKey, viper.GetViper().ConfigFileUsed())
+			o.log.Warnf("key:'%s' not found in config:'%s'", awsprovider.ProxyConfigKey, viper.GetViper().ConfigFileUsed())
 		}
 
 		// Now get the backplane url and access token from OCM...
 		ocmConfig, err := readOcmConfigFile(o.ocmConfigHivePath)
 		if err != nil {
-			o.log.Error(o.ctx, "OCM config error:'%v'", err)
+			o.log.Errorf("OCM config error:'%v'", err)
 			return err
 		}
-		o.log.Debug(o.ctx, "Read ocm config: url:'%s', client:'%s'", ocmConfig.URL, ocmConfig.ClientID)
+		o.log.Debugf("Read ocm config: url:'%s', client:'%s'", ocmConfig.URL, ocmConfig.ClientID)
 		// Can use the sdk.connection builder or alternatively omc cli's connection builder wrappers here.
 		// Each returns an ocm-sdk connection builder.
 		ocmSdkConnBuilder := sdk.NewConnectionBuilder()
@@ -936,23 +929,23 @@ func (o *rotateCredOptions) connectHiveClient() error {
 		ocmSdkConn, err := ocmSdkConnBuilder.Build()
 
 		if err != nil {
-			o.log.Error(o.ctx, "OCM connection error. Config:'%s', err:'%v'", o.ocmConfigHivePath, err)
+			o.log.Errorf("OCM connection error. Config:'%s', err:'%v'", o.ocmConfigHivePath, err)
 			return err
 		}
 		defer ocmSdkConn.Close()
-		o.log.Debug(o.ctx, "USing ocm sdk connection, url:'%s' \n", ocmSdkConn.URL())
+		o.log.Debugf("USing ocm sdk connection, url:'%s' \n", ocmSdkConn.URL())
 		hiveShard, err := o.getHiveShardCluster(ocmSdkConn, o.clusterID)
 		if err != nil {
 			// For debug purposes see if we can get the shard API url...
 			// This might help indicate an ocm env mismatch to the end user(?).
 			hiveShard, debugErr := utils.GetHiveShard(o.clusterID)
 			if debugErr != nil {
-				o.log.Warn(o.ctx, "error fetching hive shard from utils.GetHiveShard():'%s'.\n", err)
+				o.log.Warnf("error fetching hive shard from utils.GetHiveShard():'%s'.\n", err)
 			} else {
-				o.log.Info(o.ctx, "Hive shard API url:'%s'\n", hiveShard)
+				o.log.Infof("Hive shard API url:'%s'\n", hiveShard)
 			}
 			// Return the original error failing to fetch the hive cluster...
-			o.log.Error(o.ctx, "Failed to get hive cluster using OCM config:'%s', err:'%v'", o.ocmConfigHivePath, err)
+			o.log.Errorf("Failed to get hive cluster using OCM config:'%s', err:'%v'", o.ocmConfigHivePath, err)
 			return err
 		}
 
@@ -960,7 +953,7 @@ func (o *rotateCredOptions) connectHiveClient() error {
 			return fmt.Errorf("failed to fetch hive cluster ID")
 		}
 		o.hiveCluster = hiveShard
-		o.log.Info(o.ctx, "Using Hive Cluster: '%s'\n", o.hiveCluster.ID())
+		o.log.Infof("Using Hive Cluster: '%s'\n", o.hiveCluster.ID())
 
 		// Get the backplane URL from the OCM env request/response...
 		responseEnv, err := ocmSdkConn.ClustersMgmt().V1().Environment().Get().Send()
@@ -978,7 +971,7 @@ func (o *rotateCredOptions) connectHiveClient() error {
 			} else {
 				errorMessage = "failed to fetch OCM cluster environment resource"
 			}
-			o.log.Error(o.ctx, "Failed Hive connection: %s: %w", errorMessage, err)
+			o.log.Errorf("Failed Hive connection: %s: %w", errorMessage, err)
 			return fmt.Errorf("%s: %w", errorMessage, err)
 		}
 
@@ -993,18 +986,18 @@ func (o *rotateCredOptions) connectHiveClient() error {
 		// Get the OCM access token...
 		accessToken, err := bpocmcli.DefaultOCMInterface.GetOCMAccessTokenWithConn(ocmSdkConn)
 		if err != nil {
-			o.log.Error(o.ctx, "error fetching OCM access token:'%v'", err)
+			o.log.Errorf("error fetching OCM access token:'%v'", err)
 			return err
 		}
 
 		// Attempt to login and get the backplane API URL for this Hive Cluster...
 		bpAPIClusterURL, err := doLogin(bpUrl, o.hiveCluster.ID(), *accessToken, proxyURL)
 		if err != nil {
-			o.log.Info(o.ctx, "Using backplane URL:'%s', proxy:'%s'", bpUrl, proxyURL)
-			o.log.Error(o.ctx, "Failed BP hive login: URL:'%s', Proxy:'%s'. Check VPN, accessToken, etc...?", bpUrl, proxyURL)
+			o.log.Infof("Using backplane URL:'%s', proxy:'%s'", bpUrl, proxyURL)
+			o.log.Errorf("Failed BP hive login: URL:'%s', Proxy:'%s'. Check VPN, accessToken, etc...?", bpUrl, proxyURL)
 			return fmt.Errorf("failed to backplane login to hive: '%s': '%v'", o.hiveCluster.ID(), err)
 		}
-		o.log.Debug(o.ctx, "Using backplane CLUSTER API URL: '%s'", bpAPIClusterURL)
+		o.log.Debugf("Using backplane CLUSTER API URL: '%s'", bpAPIClusterURL)
 		// Build the KubeConfig to be used to build our Kubernetes client...
 		kubeconfig := rest.Config{
 			Host:        bpAPIClusterURL,
@@ -1026,13 +1019,13 @@ func (o *rotateCredOptions) connectHiveClient() error {
 		// Finally create the kubeclient for the hive cluster connection...
 		kubeCli, err := client.New(&kubeconfig, client.Options{})
 		if err != nil {
-			o.log.Error(o.ctx, "Error creating Hive client:'%v'", err)
+			o.log.Errorf("Error creating Hive client:'%v'", err)
 			return err
 		}
 		if kubeCli == nil {
 			return fmt.Errorf("client.new() returned nil. Failed to setup Hive client")
 		}
-		o.log.Debug(o.ctx, "Success creating Hive kube client using ocm config:'%s'", o.ocmConfigHivePath)
+		o.log.Debugf("Success creating Hive kube client using ocm config:'%s'", o.ocmConfigHivePath)
 		o.hiveKubeClient = kubeCli
 		return nil
 	}
@@ -1041,7 +1034,7 @@ func (o *rotateCredOptions) connectHiveClient() error {
 func (o *rotateCredOptions) getHiveShardCluster(sdkConn *sdk.Connection, clusterID string) (*cmv1.Cluster, error) {
 	connection, err := utils.CreateConnection()
 	if err != nil {
-		o.log.Error(o.ctx, "Failed to create default ocm sdk connection, err:'%s'", err)
+		o.log.Errorf("Failed to create default ocm sdk connection, err:'%s'", err)
 		return nil, err
 	}
 	defer connection.Close()
@@ -1052,27 +1045,27 @@ func (o *rotateCredOptions) getHiveShardCluster(sdkConn *sdk.Connection, cluster
 		Get().
 		Send()
 	if err != nil {
-		o.log.Error(o.ctx, "Failed to get provisionShard, err:'%s'", err)
+		o.log.Errorf("Failed to get provisionShard, err:'%s'", err)
 		return nil, err
 	}
 	if shardPath == nil {
-		o.log.Error(o.ctx, "Failed to get provisionShard, returned nil")
+		o.log.Errorf("Failed to get provisionShard, returned nil")
 		return nil, fmt.Errorf("failed to get provisionShard, returned nil")
 	}
 
 	id, ok := shardPath.Body().GetID()
 	if ok {
-		o.log.Debug(o.ctx, "Got provision shard ID:'%s'", id)
+		o.log.Debugf("Got provision shard ID:'%s'", id)
 	}
 
 	shard := shardPath.Body().HiveConfig().Server()
-	o.log.Debug(o.ctx, "Got provision shard:'%s'", shard)
+	o.log.Debugf("Got provision shard:'%s'", shard)
 
 	hiveApiUrl, ok := shardPath.Body().HiveConfig().GetServer()
 	if !ok {
 		return nil, fmt.Errorf("no provision shard url found for %s", clusterID)
 	}
-	o.log.Debug(o.ctx, "Got hiveApiUrl:'%s'", hiveApiUrl)
+	o.log.Debugf("Got hiveApiUrl:'%s'", hiveApiUrl)
 
 	// Use passed sdk connection to fetch hive cluster in case this is conneciton is created with a cli provided config...
 	resp, err := sdkConn.ClustersMgmt().V1().Clusters().List().
@@ -1200,11 +1193,15 @@ func getClusterResponseProxyUri(rsp *http.Response) (string, error) {
 // Borrowed from backplane-cli/config, repurposed here to allow the backplane url to be provided as an arg instead of
 // discovering the url from the OCM environment vars at the time executed.
 // Test proxy urls, return first proxy-url that results in a successful request to the <backplaneBaseUrl>/healthz endpoint
-func getFirstWorkingProxyURL(bpBaseURL string, proxyURLs []string, logger logging.Logger, ctx context.Context) string {
+func getFirstWorkingProxyURL(bpBaseURL string, proxyURLs []string, logger *logrus.Logger, ctx context.Context) string {
 	bpHealthzURL := bpBaseURL + "/healthz"
 
 	client := &http.Client{
 		Timeout: 5 * time.Second,
+	}
+	if logger == nil {
+		logger = logrus.New()
+		logger.SetLevel(logrus.InfoLevel)
 	}
 
 	for _, testProxy := range proxyURLs {
@@ -1262,9 +1259,9 @@ func (o *rotateCredOptions) fetchAWSAccountInfo() error {
 		return fmt.Errorf("fetchAWSAccountInfo() empty claim name field found. Can not fetch AWS info without it")
 	}
 
-	o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
-	o.log.Debug(o.ctx, "Fetching account info per aws-account-operator\n")
-	o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
+	o.log.Debugf("----------------------------------------------------------------------\n")
+	o.log.Debugf("Fetching account info per aws-account-operator\n")
+	o.log.Debugf("----------------------------------------------------------------------\n")
 	if o.hiveKubeClient == nil {
 		err := o.connectHiveClient()
 		if err != nil {
@@ -1272,10 +1269,10 @@ func (o *rotateCredOptions) fetchAWSAccountInfo() error {
 		}
 	}
 	// Get the associated Account CR from the provided name
-	o.log.Debug(o.ctx, "Fetching aws-account-operator account object for '%s.%s' ...", common.AWSAccountNamespace, o.claimName)
+	o.log.Debugf("Fetching aws-account-operator account object for '%s.%s' ...", common.AWSAccountNamespace, o.claimName)
 	accountObj, err := k8s.GetAWSAccount(o.ctx, o.hiveKubeClient, common.AWSAccountNamespace, o.claimName)
 	if err != nil {
-		o.log.Warn(o.ctx, "k8s.GetAWSAccount() err:'%s'\n", err)
+		o.log.Warnf("k8s.GetAWSAccount() err:'%s'\n", err)
 		return err
 	}
 
@@ -1285,7 +1282,7 @@ func (o *rotateCredOptions) fetchAWSAccountInfo() error {
 	// Are both byoc and ccs value checks needed?
 	if !accountObj.Spec.BYOC && !o.isCCS && o.updateCcsCredsCli {
 		// Check for specifics early? ...or should this just be ignored and a no-op later?
-		o.log.Warn(o.ctx, "arg '--rotate-ccs-admin' provided to rotate osdCcsAdmin creds on non-CCS cluster id:'%s', name:'%s'\n. No changes were made to this cluster\n", o.cluster.Name(), o.clusterID)
+		o.log.Warnf("arg '--rotate-ccs-admin' provided to rotate osdCcsAdmin creds on non-CCS cluster id:'%s', name:'%s'\n. No changes were made to this cluster\n", o.cluster.Name(), o.clusterID)
 		return fmt.Errorf("arg '--rotate-ccs-admin' provided to rotate osdCcsAdmin creds on non-CCS cluster")
 	}
 	o.account = accountObj
@@ -1305,7 +1302,7 @@ func (o *rotateCredOptions) fetchAWSAccountInfo() error {
 	if o.accountIDSuffixLabel == "" {
 		return fmt.Errorf("account label 'iamUserId' is empty string")
 	}
-	o.log.Debug(o.ctx, "AccountID:'%s', iamUserId label:'%s' \n", o.accountID, o.accountIDSuffixLabel)
+	o.log.Debugf("AccountID:'%s', iamUserId label:'%s' \n", o.accountID, o.accountIDSuffixLabel)
 	return nil
 }
 
@@ -1316,15 +1313,15 @@ func (o *rotateCredOptions) setupAwsClient() error {
 	if len(o.accountIDSuffixLabel) <= 0 {
 		return fmt.Errorf("doAwsCredRotate() empty required accountIDSuffixLabel")
 	}
-	o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
-	o.log.Debug(o.ctx, " AWS setup access, local config:'%s'\n", o.profile)
-	o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
+	o.log.Debugf("----------------------------------------------------------------------\n")
+	o.log.Debugf(" AWS setup access, local config:'%s'\n", o.profile)
+	o.log.Debugf("----------------------------------------------------------------------\n")
 
-	o.log.Debug(o.ctx, "Creating 'AWS-Initial-setup' client using local aws profile: '%s'...\n", o.profile)
+	o.log.Debugf("Creating 'AWS-Initial-setup' client using local aws profile: '%s'...\n", o.profile)
 	// Since this is only using "IAM", hard coding to us-east-1 region should be ok...
 	awsSetupClient, err := awsprovider.NewAwsClient(o.profile, "us-east-1", "")
 	if err != nil {
-		o.log.Error(o.ctx, "Failed to create initial AWS client using AWS profile:'%s'. Err:'%v'\n", o.profile, err)
+		o.log.Errorf("Failed to create initial AWS client using AWS profile:'%s'. Err:'%v'\n", o.profile, err)
 		return err
 	}
 
@@ -1333,21 +1330,21 @@ func (o *rotateCredOptions) setupAwsClient() error {
 	if err != nil {
 		return err
 	}
-	o.log.Debug(o.ctx, "STS calleridentity Account:'%s', userid:'%s' \n", *callerIdentityOutput.Account, *callerIdentityOutput.UserId)
+	o.log.Debugf("STS calleridentity Account:'%s', userid:'%s' \n", *callerIdentityOutput.Account, *callerIdentityOutput.UserId)
 
 	var credentials *stsTypes.Credentials
 	// Need to role chain if the cluster is CCS
 	if o.isCCS {
-		o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
-		o.log.Debug(o.ctx, "Cluster is CCS. Begin AWS role chaining...\n")
-		o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
+		o.log.Debugf("----------------------------------------------------------------------\n")
+		o.log.Debugf("Cluster is CCS. Begin AWS role chaining...\n")
+		o.log.Debugf("----------------------------------------------------------------------\n")
 		// Get the aws-account-operator configmap
 		cm := &corev1.ConfigMap{}
-		o.log.Debug(o.ctx, "Fetching SRE CCS Access ARN, and Support Jump ARN from config map: '%s.%s' \n", common.AWSAccountNamespace, common.DefaultConfigMap)
+		o.log.Debugf("Fetching SRE CCS Access ARN, and Support Jump ARN from config map: '%s.%s' \n", common.AWSAccountNamespace, common.DefaultConfigMap)
 		//cmErr := o.kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: common.AWSAccountNamespace, Name: common.DefaultConfigMap}, cm)
 		cmErr := o.hiveKubeClient.Get(context.TODO(), types.NamespacedName{Namespace: common.AWSAccountNamespace, Name: common.DefaultConfigMap}, cm)
 		if cmErr != nil {
-			o.log.Warn(o.ctx, "error getting ConfigMap:'%s'.'%s' needed for SRE Access Role. err: %s", common.AWSAccountNamespace, common.DefaultConfigMap, cmErr)
+			o.log.Warnf("error getting ConfigMap:'%s'.'%s' needed for SRE Access Role. err: %s", common.AWSAccountNamespace, common.DefaultConfigMap, cmErr)
 			return fmt.Errorf("error getting ConfigMap:'%s'.'%s' needed for SRE Access Role. err: %s", common.AWSAccountNamespace, common.DefaultConfigMap, cmErr)
 		}
 		// Get the ARN value
@@ -1360,13 +1357,13 @@ func (o *rotateCredOptions) setupAwsClient() error {
 		if JumpARN == "" {
 			return fmt.Errorf("support jump role ARN is missing from '%s' configmap:'%s'", common.AWSAccountNamespace, common.DefaultConfigMap)
 		}
-		o.log.Debug(o.ctx, "Using 'AWS-Initial-setup' client to fetch assume role creds for 'SRE Access ARN'...\n")
+		o.log.Debugf("Using 'AWS-Initial-setup' client to fetch assume role creds for 'SRE Access ARN'...\n")
 		// Fetch assumed SRE Access role creds
 		srepRoleCredentials, err := awsprovider.GetAssumeRoleCredentials(awsSetupClient, o.awsAccountTimeout, callerIdentityOutput.UserId, &SREAccessARN)
 		if err != nil {
 			return err
 		}
-		o.log.Debug(o.ctx, "Creating new 'AWS-SRE-Access' client using assumed SRE access role creds...\n")
+		o.log.Debugf("Creating new 'AWS-SRE-Access' client using assumed SRE access role creds...\n")
 		// Create client with the SREP role
 		srepRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
 			AccessKeyID:     *srepRoleCredentials.AccessKeyId,
@@ -1379,12 +1376,12 @@ func (o *rotateCredOptions) setupAwsClient() error {
 		}
 
 		// Fetch assumed support jump role creds
-		o.log.Debug(o.ctx, "Using 'AWS-SRE-Access' client to fetch assume role creds for 'Support Jump Role ARN'...\n")
+		o.log.Debugf("Using 'AWS-SRE-Access' client to fetch assume role creds for 'Support Jump Role ARN'...\n")
 		jumpRoleCreds, err := awsprovider.GetAssumeRoleCredentials(srepRoleClient, o.awsAccountTimeout, callerIdentityOutput.UserId, &JumpARN)
 		if err != nil {
 			return err
 		}
-		o.log.Debug(o.ctx, "Creating new 'AWS-Support-Jump-Role' client using assumed Support Jump role creds...\n")
+		o.log.Debugf("Creating new 'AWS-Support-Jump-Role' client using assumed Support Jump role creds...\n")
 		// Create client with the Jump role
 		jumpRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
 			AccessKeyID:     *jumpRoleCreds.AccessKeyId,
@@ -1395,7 +1392,7 @@ func (o *rotateCredOptions) setupAwsClient() error {
 		if err != nil {
 			return err
 		}
-		o.log.Debug(o.ctx, "Using 'AWS-Support-Jump-Role' client to fetch creds using ManagedOpenShift-support role ARN...\n")
+		o.log.Debugf("Using 'AWS-Support-Jump-Role' client to fetch creds using ManagedOpenShift-support role ARN...\n")
 		// Role chain to assume ManagedOpenShift-Support-{uid}
 		roleArn := awsSdk.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", o.accountID, "ManagedOpenShift-Support-"+o.accountIDSuffixLabel))
 		credentials, err = awsprovider.GetAssumeRoleCredentials(jumpRoleClient, o.awsAccountTimeout,
@@ -1405,10 +1402,10 @@ func (o *rotateCredOptions) setupAwsClient() error {
 		}
 
 	} else {
-		o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
-		o.log.Debug(o.ctx, "Cluster is 'NOT' CCS. Begin AWS role chaining...\n")
-		o.log.Debug(o.ctx, "Using 'AWS Initial setup' client to fetch creds using '%s' ARN...\n", awsv1alpha1.AccountOperatorIAMRole)
-		o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
+		o.log.Debugf("----------------------------------------------------------------------\n")
+		o.log.Debugf("Cluster is 'NOT' CCS. Begin AWS role chaining...\n")
+		o.log.Debugf("Using 'AWS Initial setup' client to fetch creds using '%s' ARN...\n", awsv1alpha1.AccountOperatorIAMRole)
+		o.log.Debugf("----------------------------------------------------------------------\n")
 
 		// Assume the OrganizationAdminAccess role
 		roleArn := awsSdk.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", o.accountID, awsv1alpha1.AccountOperatorIAMRole))
@@ -1420,9 +1417,9 @@ func (o *rotateCredOptions) setupAwsClient() error {
 	}
 
 	// Build a new client with the assumed role credentials...
-	o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
-	o.log.Debug(o.ctx, "Creating final AWS client for cred rotation with assumed role...\n")
-	o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
+	o.log.Debugf("----------------------------------------------------------------------\n")
+	o.log.Debugf("Creating final AWS client for cred rotation with assumed role...\n")
+	o.log.Debugf("----------------------------------------------------------------------\n")
 	awsClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
 		AccessKeyID:     *credentials.AccessKeyId,
 		SecretAccessKey: *credentials.SecretAccessKey,
@@ -1432,7 +1429,7 @@ func (o *rotateCredOptions) setupAwsClient() error {
 	if err != nil {
 		return err
 	}
-	o.log.Debug(o.ctx, "Created final AWS client\n")
+	o.log.Debugf("Created final AWS client\n")
 	o.awsClient = awsClient
 	return nil
 }
@@ -1444,8 +1441,8 @@ func (o *rotateCredOptions) getKeyInfo(iamUser string, nameSpace string, secretN
 	}
 	clientInput, err := k8s.GetAWSAccountCredentials(o.ctx, o.hiveKubeClient, nameSpace, secretName)
 	if err != nil {
-		o.log.Warn(o.ctx, "Failed to fetch current aws account creds from secret, err:'%s'\n", err)
-		o.log.Warn(o.ctx, "May require manual check of secret to determine access key in use?\n")
+		o.log.Warnf("Failed to fetch current aws account creds from secret, err:'%s'\n", err)
+		o.log.Warnf("May require manual check of secret to determine access key in use?\n")
 	}
 	return currKeys, clientInput, nil
 }
@@ -1532,9 +1529,9 @@ func (o *rotateCredOptions) hasAccessKey(accessKey string, keys *iam.ListAccessK
  * keys will only be deleted if >1 key exists for the provided iam user.
  */
 func (o *rotateCredOptions) checkAccessKeysMaxDelete(iamUser string, nameSpace string, secretName string, deleteKeyID string) error {
-	o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
-	o.log.Debug(o.ctx, "Checking user:'%s' existing access-keys...\n", iamUser)
-	o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
+	o.log.Debugf("----------------------------------------------------------------------\n")
+	o.log.Debugf("Checking user:'%s' existing access-keys...\n", iamUser)
+	o.log.Debugf("----------------------------------------------------------------------\n")
 	currKeys, clientInput, err := o.getKeyInfo(iamUser, nameSpace, secretName)
 	if err != nil {
 		return err
@@ -1549,7 +1546,7 @@ func (o *rotateCredOptions) checkAccessKeysMaxDelete(iamUser string, nameSpace s
 	if len(currKeys.AccessKeyMetadata) >= 2 {
 		// TODO: Should this script provide an option to delete the oldest key for the user? Too risky?
 		deleteSuccess := false
-		o.log.Warn(o.ctx, "user:'%s' already has max number of access keys:'%d'\n", iamUser, len(currKeys.AccessKeyMetadata))
+		o.log.Warnf("user:'%s' already has max number of access keys:'%d'\n", iamUser, len(currKeys.AccessKeyMetadata))
 
 		if len(deleteKeyID) <= 0 {
 			fmt.Printf("\nIAM User:'%s' already has max number of access keys:'%d'\n", iamUser, len(currKeys.AccessKeyMetadata))
@@ -1573,7 +1570,7 @@ func (o *rotateCredOptions) checkAccessKeysMaxDelete(iamUser string, nameSpace s
 							fmt.Printf("(attempt %d/%d) Key:'%s' not found in iam.ListAccessKeysOutput\n", attempt, max_attempts, keyInput)
 						}
 					} else {
-						o.log.Error(o.ctx, "(attempt %d/%d) Invalid access key ID entered:'%s'", attempt, max_attempts, keyInput)
+						o.log.Errorf("(attempt %d/%d) Invalid access key ID entered:'%s'", attempt, max_attempts, keyInput)
 					}
 				}
 				if len(deleteKeyID) <= 0 {
@@ -1584,17 +1581,17 @@ func (o *rotateCredOptions) checkAccessKeysMaxDelete(iamUser string, nameSpace s
 		if len(deleteKeyID) > 0 {
 			// Iterate over key list to confirm this key exists for this user
 			if o.hasAccessKey(deleteKeyID, currKeys) {
-				o.log.Info(o.ctx, "Attempting to delete AccessKey:%s\n", deleteKeyID)
+				o.log.Infof("Attempting to delete AccessKey:%s\n", deleteKeyID)
 				_, err = o.awsClient.DeleteAccessKey(&iam.DeleteAccessKeyInput{UserName: awsSdk.String(iamUser), AccessKeyId: awsSdk.String(deleteKeyID)})
 				if err != nil {
-					o.log.Error(o.ctx, "Error attempting to delete IAM user:'%s' accesskey:'%s'. Err:'%s'\n", iamUser, deleteKeyID, err)
+					o.log.Errorf("Error attempting to delete IAM user:'%s' accesskey:'%s'. Err:'%s'\n", iamUser, deleteKeyID, err)
 					return err
 				} else {
-					o.log.Info(o.ctx, "Delete AccessKey:'%s', Success\n", deleteKeyID)
+					o.log.Infof("Delete AccessKey:'%s', Success\n", deleteKeyID)
 					deleteSuccess = true
 				}
 			} else {
-				o.log.Warn(o.ctx, "IAM user:'%s', AccessKey:'%s', not found in iam.ListAccessKeysOutput\n", iamUser, deleteKeyID)
+				o.log.Warnf("IAM user:'%s', AccessKey:'%s', not found in iam.ListAccessKeysOutput\n", iamUser, deleteKeyID)
 				return fmt.Errorf("failed to find provided AccessKey:'%s' in iam.ListAccessKeysOutput", deleteKeyID)
 			}
 		}
@@ -1619,11 +1616,11 @@ func (o *rotateCredOptions) checkOsdManagedUsername() (string, error) {
 	if osdManagedAdminUsername == "" {
 		osdManagedAdminUsername = common.OSDManagedAdminIAM + "-" + o.accountIDSuffixLabel
 	}
-	o.log.Debug(o.ctx, "Check if AWS user '%s' exists\n", osdManagedAdminUsername)
+	o.log.Debugf("Check if AWS user '%s' exists\n", osdManagedAdminUsername)
 	checkUser, err := o.awsClient.GetUser(&iam.GetUserInput{UserName: awsSdk.String(osdManagedAdminUsername)})
 	var nse *iamTypes.NoSuchEntityException
 	if (err != nil && errors.As(err, &nse)) || checkUser == nil {
-		o.log.Info(o.ctx, "User Not Found: '%s', trying user:'%s' instead...\n", osdManagedAdminUsername, common.OSDManagedAdminIAM)
+		o.log.Infof("User Not Found: '%s', trying user:'%s' instead...\n", osdManagedAdminUsername, common.OSDManagedAdminIAM)
 		osdManagedAdminUsername = common.OSDManagedAdminIAM
 		checkUser, err := o.awsClient.GetUser(&iam.GetUserInput{UserName: awsSdk.String(osdManagedAdminUsername)})
 		if err != nil {
@@ -1658,34 +1655,34 @@ func (o *rotateCredOptions) cliPrintOsdManagedAdminCreds() error {
 
 // Intended to save a failed syncSet in yaml format so a user can review and/or apply it from the CLI
 func (o *rotateCredOptions) saveSyncSetYaml(syncSet *hiveapiv1.SyncSet) error {
-	o.log.Warn(o.ctx, "Attempting to save syncSet yaml to file, ns:'%s', name:'%s'\n", syncSet.Namespace, syncSet.Name)
-	scheme := runtime.NewScheme()
+	o.log.Warnf("Attempting to save syncSet yaml to file, ns:'%s', name:'%s'\n", syncSet.Namespace, syncSet.Name)
+	scheme := k8sruntime.NewScheme()
 	err := hiveapiv1.AddToScheme(scheme)
 	if err != nil {
-		o.log.Warn(o.ctx, "Error adding hiveapiv1 to schema:'%s'\n", err)
+		o.log.Warnf("Error adding hiveapiv1 to schema:'%s'\n", err)
 		return err
 	}
 	s := k8json.NewYAMLSerializer(k8json.DefaultMetaFactory, scheme, scheme)
 	if s == nil {
 		err := fmt.Errorf("err saving syncSet to yaml. Failed to create k8 serializer")
-		o.log.Warn(o.ctx, "%v", err)
+		o.log.Warnf("%v", err)
 		return err
 	}
 	saveFile, err := os.CreateTemp(os.TempDir(), string(awsSyncSetName))
 	if err != nil {
-		o.log.Warn(o.ctx, "Error creating tmp file to save '%s' syncSet", syncSet.Name)
+		o.log.Warnf("Error creating tmp file to save '%s' syncSet", syncSet.Name)
 		return err
 	}
 	if saveFile == nil {
 		err := fmt.Errorf("got nil tmp file attempting to save syncset: '%s'", syncSet.Name)
-		o.log.Warn(o.ctx, "%v", err)
+		o.log.Warnf("%v", err)
 		return err
 	}
 	defer saveFile.Close()
 	//Write to tmp file, return path
 	err = s.Encode(syncSet, saveFile)
 	if err != nil {
-		o.log.Warn(o.ctx, "Error saving syncSet:'%s'. Err:'%v'", syncSet.Name, err)
+		o.log.Warnf("Error saving syncSet:'%s'. Err:'%v'", syncSet.Name, err)
 		return err
 	}
 	fmt.Printf("!! Saved syncSet yaml to: '%s'. Please review, and apply manually if needed. Delete this file after use!\n", saveFile.Name())
@@ -1701,21 +1698,21 @@ func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 	if err != nil {
 		return err
 	}
-	o.log.Info(o.ctx, "Using osdManagedAdminUsername: '%s' \n", osdManagedAdminUsername)
+	o.log.Infof("Using osdManagedAdminUsername: '%s' \n", osdManagedAdminUsername)
 	// Check for max keys before attempting to create, use user provided input to delete a key if needed...
 	err = o.checkAccessKeysMaxDelete(osdManagedAdminUsername, common.AWSAccountNamespace, o.secretName, "")
 	if err != nil {
 		return err
 	}
 
-	o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
-	o.log.Debug(o.ctx, "Creating new access key for '%s'\n", osdManagedAdminUsername)
-	o.log.Debug(o.ctx, "----------------------------------------------------------------------\n")
+	o.log.Debugf("----------------------------------------------------------------------\n")
+	o.log.Debugf("Creating new access key for '%s'\n", osdManagedAdminUsername)
+	o.log.Debugf("----------------------------------------------------------------------\n")
 
-	o.log.Info(o.ctx, "Creating new access key...\n")
+	o.log.Infof("Creating new access key...\n")
 	createAccessKeyOutput, err := o.awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{UserName: awsSdk.String(osdManagedAdminUsername)})
 	if err != nil {
-		o.log.Warn(o.ctx, "Failed to create access key for user:'%s'\n", osdManagedAdminUsername)
+		o.log.Warnf("Failed to create access key for user:'%s'\n", osdManagedAdminUsername)
 		return err
 	}
 
@@ -1729,31 +1726,31 @@ func (o *rotateCredOptions) doRotateManagedAdminAWSCreds() error {
 
 	// Update existing osdManagedAdmin secret
 	// UpdateSecret() includes a check for existing secret
-	o.log.Info(o.ctx, "Updating osdManagedAdmin secret:'%s.%s' with new AWS cred values...\n", common.AWSAccountNamespace, o.secretName)
+	o.log.Infof("Updating osdManagedAdmin secret:'%s.%s' with new AWS cred values...\n", common.AWSAccountNamespace, o.secretName)
 	err = common.UpdateSecret(o.hiveKubeClient, o.secretName, common.AWSAccountNamespace, newOsdManagedAdminSecretData)
 	if err != nil {
-		o.log.Warn(o.ctx, "Error updating '%s.%s' secret with new creds. Err:'%s\n", common.AWSAccountNamespace, o.secretName, err)
+		o.log.Warnf("Error updating '%s.%s' secret with new creds. Err:'%s\n", common.AWSAccountNamespace, o.secretName, err)
 		return err
 	}
 
 	// Update secret in ClusterDeployment's namespace
-	o.log.Info(o.ctx, "Updating ClusterDeployment secret:'%s.aws' with new AWS cred values...\n", o.account.Spec.ClaimLinkNamespace)
+	o.log.Infof("Updating ClusterDeployment secret:'%s.aws' with new AWS cred values...\n", o.account.Spec.ClaimLinkNamespace)
 	err = common.UpdateSecret(o.hiveKubeClient, "aws", o.account.Spec.ClaimLinkNamespace, newOsdManagedAdminSecretData)
 	if err != nil {
-		o.log.Warn(o.ctx, "Error updating '%s.%s' secret with new creds. Err:'%s\n", o.account.Spec.ClaimLinkNamespace, "aws", err)
+		o.log.Warnf("Error updating '%s.%s' secret with new creds. Err:'%s\n", o.account.Spec.ClaimLinkNamespace, "aws", err)
 		return err
 	}
 
-	o.log.Debug(o.ctx, "---------------------------------------------------------\n")
-	o.log.Info(o.ctx, "AWS creds updated on hive.\n")
-	o.log.Debug(o.ctx, "---------------------------------------------------------\n")
+	o.log.Debugf("---------------------------------------------------------\n")
+	o.log.Infof("AWS creds updated on hive.\n")
+	o.log.Debugf("---------------------------------------------------------\n")
 
-	o.log.Info(o.ctx, "Begin syncset ops to sync to cluster....\n")
+	o.log.Infof("Begin syncset ops to sync to cluster....\n")
 	err = o.doSyncSetInteractive()
 	if err != nil {
 		return err
 	}
-	o.log.Info(o.ctx, "Successfully rotated secrets for user:'%s'\n", osdManagedAdminUsername)
+	o.log.Infof("Successfully rotated secrets for user:'%s'\n", osdManagedAdminUsername)
 	return nil
 }
 
@@ -1771,7 +1768,7 @@ func (o *rotateCredOptions) doSyncSetInteractive() error {
 		if syncErr == nil {
 			break
 		} else {
-			o.log.Error(o.ctx, "Error during SyncSet '%s', err: '%s'", awsSyncSetName, syncErr)
+			o.log.Errorf("Error during SyncSet '%s', err: '%s'", awsSyncSetName, syncErr)
 			doRetry := false
 			if retry_cnt < max_retries {
 				fmt.Printf("Error applying Syncset:'%s'. Hive cluserID:'%s'\n", awsSyncSetName, o.hiveCluster.ID())
@@ -1781,7 +1778,7 @@ func (o *rotateCredOptions) doSyncSetInteractive() error {
 			if !doRetry {
 				fmt.Println("Exiting without syncset retry")
 				if syncSet != nil {
-					o.log.Debug(o.ctx, "Attempting to save syncset to tmp file...")
+					o.log.Debugf("Attempting to save syncset to tmp file...")
 					o.saveSyncSetYaml(syncSet)
 				}
 				return syncErr
@@ -1790,7 +1787,7 @@ func (o *rotateCredOptions) doSyncSetInteractive() error {
 		}
 	}
 	if syncErr != nil {
-		o.log.Error(o.ctx, "Exceeded max syncset retry attempts:%d", max_retries)
+		o.log.Errorf("Exceeded max syncset retry attempts:%d", max_retries)
 	}
 	return syncErr
 }
@@ -1817,15 +1814,15 @@ func (o *rotateCredOptions) getClusterDeploymentName() (string, error) {
 	}
 	err := o.hiveKubeClient.List(o.ctx, clusterDeployments, listOpts...)
 	if err != nil {
-		o.log.Error(o.ctx, "Error fetching clusterDeployments:'%v", err)
+		o.log.Errorf("Error fetching clusterDeployments:'%v", err)
 		return "", err
 	}
 	if len(clusterDeployments.Items) <= 0 {
-		o.log.Error(o.ctx, "empty clusterDeployments list in response")
+		o.log.Errorf("empty clusterDeployments list in response")
 		return "", fmt.Errorf("failed to retreive cluster deployments")
 	}
 	cdName := clusterDeployments.Items[0].ObjectMeta.Name
-	o.log.Debug(o.ctx, "Got cluster deployment name:'%s'\n", cdName)
+	o.log.Debugf("Got cluster deployment name:'%s'\n", cdName)
 	if len(cdName) <= 0 {
 		return "", fmt.Errorf("failed to retrieve cluster deployment name for syncset")
 	}
@@ -1835,7 +1832,7 @@ func (o *rotateCredOptions) getClusterDeploymentName() (string, error) {
 
 func (o *rotateCredOptions) getAWSSyncSetRequestObj() (*hiveapiv1.SyncSet, error) {
 
-	o.log.Debug(o.ctx, "Fetching cluster deployments list from hive...\n")
+	o.log.Debugf("Fetching cluster deployments list from hive...\n")
 	cdName, err := o.getClusterDeploymentName()
 	if err != nil {
 		return nil, err
@@ -1871,8 +1868,8 @@ func (o *rotateCredOptions) getAWSSyncSetRequestObj() (*hiveapiv1.SyncSet, error
 }
 
 func (o *rotateCredOptions) doAWSSyncSetRequest() (*hiveapiv1.SyncSet, error) {
-	o.log.Info(o.ctx, "Creating syncset:'%s.%s', to deploy the updated creds to the cluster for CCO...\n", o.account.Spec.ClaimLinkNamespace, awsSyncSetName)
-	o.log.Debug(o.ctx, "Syncing AWS creds down to cluster.")
+	o.log.Infof("Creating syncset:'%s.%s', to deploy the updated creds to the cluster for CCO...\n", o.account.Spec.ClaimLinkNamespace, awsSyncSetName)
+	o.log.Debugf("Syncing AWS creds down to cluster.")
 	syncSet, err := o.getAWSSyncSetRequestObj()
 	if err != nil {
 		return nil, err
@@ -1918,18 +1915,18 @@ func (o *rotateCredOptions) doAWSSyncSetRequest() (*hiveapiv1.SyncSet, error) {
 		for _, status := range foundStatus.Status.SyncSets {
 			if status.Name == awsSyncSetName {
 				if status.FirstSuccessTime != nil {
-					o.log.Debug(o.ctx, "Syncset '%s' first success time set, elapsed:'%s'\n", awsSyncSetName, elapsed)
+					o.log.Debugf("Syncset '%s' first success time set, elapsed:'%s'\n", awsSyncSetName, elapsed)
 					isSSSynced = true
 					break
 				}
 				if status.FailureMessage != "" {
-					o.log.Info(o.ctx, "Found SyncSet:'%s' current status failureMessage:'%s'\n", awsSyncSetName, status.FailureMessage)
+					o.log.Infof("Found SyncSet:'%s' current status failureMessage:'%s'\n", awsSyncSetName, status.FailureMessage)
 				}
 			}
 		}
 
 		if isSSSynced {
-			o.log.Info(o.ctx, "\nSync '%s' completed. Elapsed:'%s'\n", awsSyncSetName, time.Since(start))
+			o.log.Infof("\nSync '%s' completed. Elapsed:'%s'\n", awsSyncSetName, time.Since(start))
 			break
 		}
 
@@ -1941,10 +1938,10 @@ func (o *rotateCredOptions) doAWSSyncSetRequest() (*hiveapiv1.SyncSet, error) {
 		return syncSet, fmt.Errorf("syncset failed to sync after elapsed:'%s'. Please verify manually", elapsed)
 	}
 
-	o.log.Debug(o.ctx, "Clean up the SS on hive...\n")
+	o.log.Debugf("Clean up the SS on hive...\n")
 	err = o.hiveKubeClient.Delete(o.ctx, syncSet)
 	if err != nil {
-		o.log.Warn(o.ctx, "Error deleting syncset:'%s.%s' on hive: '%s'\n", syncSet.Namespace, syncSet.Name, err)
+		o.log.Warnf("Error deleting syncset:'%s.%s' on hive: '%s'\n", syncSet.Namespace, syncSet.Name, err)
 		return syncSet, err
 	}
 	return syncSet, nil
@@ -1971,9 +1968,9 @@ func (o *rotateCredOptions) doRotateCcsCreds() error {
 	const userName string = "osdCcsAdmin"
 	const secretName string = "byoc"
 
-	o.log.Debug(o.ctx, "----------------------------------------------------------------------------\n")
-	o.log.Info(o.ctx, "ccs cli flag was set. Attempting to update '%s' user creds...\n", userName)
-	o.log.Debug(o.ctx, "----------------------------------------------------------------------------\n")
+	o.log.Debugf("----------------------------------------------------------------------------\n")
+	o.log.Infof("ccs cli flag was set. Attempting to update '%s' user creds...\n", userName)
+	o.log.Debugf("----------------------------------------------------------------------------\n")
 	// Only update if the Account CR is actually CCS
 	if o.isCCS && o.account.Spec.BYOC {
 
@@ -1988,25 +1985,25 @@ func (o *rotateCredOptions) doRotateCcsCreds() error {
 		if err != nil {
 			return err
 		}
-		o.log.Info(o.ctx, "Created new AccessKey for user:'%s'", userName)
+		o.log.Infof("Created new AccessKey for user:'%s'", userName)
 		newOsdCcsAdminSecretData := map[string][]byte{
 			"aws_user_name":         []byte(*createAccessKeyOutputCCS.AccessKey.UserName),
 			"aws_access_key_id":     []byte(*createAccessKeyOutputCCS.AccessKey.AccessKeyId),
 			"aws_secret_access_key": []byte(*createAccessKeyOutputCCS.AccessKey.SecretAccessKey),
 		}
-		o.log.Debug(o.ctx, "Created '%s' creds: UserName:'%s', AccessKey:'%s'\n", userName, *createAccessKeyOutputCCS.AccessKey.UserName, *createAccessKeyOutputCCS.AccessKey.AccessKeyId)
-		o.log.Debug(o.ctx, "Updating '%s.%s' secret with new creds...\n", o.account.Spec.ClaimLinkNamespace, secretName)
+		o.log.Debugf("Created '%s' creds: UserName:'%s', AccessKey:'%s'\n", userName, *createAccessKeyOutputCCS.AccessKey.UserName, *createAccessKeyOutputCCS.AccessKey.AccessKeyId)
+		o.log.Debugf("Updating '%s.%s' secret with new creds...\n", o.account.Spec.ClaimLinkNamespace, secretName)
 		err = common.UpdateSecret(o.hiveKubeClient, secretName, o.account.Spec.ClaimLinkNamespace, newOsdCcsAdminSecretData)
 		if err != nil {
-			o.log.Warn(o.ctx, "Error updating '%s.%s' secret with new creds. Err:'%s\n", o.account.Spec.ClaimLinkNamespace, secretName, err)
+			o.log.Warnf("Error updating '%s.%s' secret with new creds. Err:'%s\n", o.account.Spec.ClaimLinkNamespace, secretName, err)
 			return err
 		}
-		o.log.Debug(o.ctx, "Successfully updated secrets for '%s'\n", userName)
+		o.log.Debugf("Successfully updated secrets for '%s'\n", userName)
 	} else {
 		// This is a secondary check, and should have also been performed early on.
 		// before any intrusive ops are attempted to avoid confusing the end user as
 		// to what ops will-be/have-been completed
-		o.log.Warn(o.ctx, "account:'%s' is not BYOC/CCS, skipping osdCcsAdmin credential rotation", o.accountID)
+		o.log.Warnf("account:'%s' is not BYOC/CCS, skipping osdCcsAdmin credential rotation", o.accountID)
 		return nil
 	}
 	return nil
