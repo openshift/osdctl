@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"os"
 
-	accountsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
-	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
+	accountsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/pkg/printer"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/pflag"
 )
 
