@@ -3,6 +3,7 @@ package promote
 import (
 	"fmt"
 
+	"github.com/openshift/osdctl/cmd/promote/dynatrace"
 	"github.com/openshift/osdctl/cmd/promote/pko"
 	"github.com/openshift/osdctl/cmd/promote/saas"
 	"github.com/spf13/cobra"
@@ -19,6 +20,7 @@ func NewCmdPromote() *cobra.Command {
 
 	promoteCmd.AddCommand(saas.NewCmdSaas())
 	promoteCmd.AddCommand(pko.NewCmdPKO())
+	promoteCmd.AddCommand(dynatrace.NewCmdDynatrace())
 
 	return promoteCmd
 }

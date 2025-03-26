@@ -2,11 +2,12 @@ package jira
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/andygrunwald/go-jira"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"strings"
 )
 
 const (
@@ -54,7 +55,7 @@ osdctl jira quick-task "Update command to take new flag" --add-to-sprint
 		}
 		boardId := viper.GetInt(BoardIdLabel)
 
-		jiraClient, err := utils.GetJiraClient()
+		jiraClient, err := utils.GetJiraClient("")
 		if err != nil {
 			return fmt.Errorf("failed to get Jira client: %w", err)
 		}
