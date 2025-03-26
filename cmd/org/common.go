@@ -7,7 +7,6 @@ import (
 
 	accountsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	"github.com/openshift/osdctl/pkg/utils"
-
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	"github.com/openshift/osdctl/cmd/common"

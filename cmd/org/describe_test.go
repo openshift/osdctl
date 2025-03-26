@@ -2,6 +2,7 @@ package org
 
 import (
 	"testing"
+
 	"github.com/openshift/osdctl/pkg/utils"
 )
 
@@ -23,12 +24,12 @@ func TestDescribeOrg(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	name := "Kurt Vonnegut Appreciation Society"
 	if org.Name != name {
 		t.Errorf("Expected %s to equal %s", org.Name, name)
 	}
-	
+
 	id := "abc.xyz"
 	if org.ID != id {
 		t.Errorf("Expected %s to equal %s", org.ID, id)
@@ -40,15 +41,15 @@ func TestGetDescribeOrgRequest(t *testing.T) {
 	if err != nil {
 		t.Skip("Skipping test: unable to create OCM connection")
 	}
-	
+
 	orgID := "abc.xyz"
 	expectedPath := organizationsAPIPath + "/" + orgID
-	
+
 	req, err := getDescribeOrgRequest(ocmClient, orgID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	if req.GetPath() != expectedPath {
 		t.Errorf("%s does not equal %s", req.GetPath(), expectedPath)
 	}
