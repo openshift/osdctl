@@ -127,4 +127,3 @@ func printCustomers(items []Customer) {
 		table.Flush()
 	}
 }
-

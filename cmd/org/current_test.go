@@ -1,9 +1,11 @@
 package org
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
-	"github.com/openshift/osdctl/pkg/utils"
+	sdk "github.com/openshift-online/ocm-sdk-go"
 )
 
 var userData = `
@@ -47,10 +49,28 @@ func TestGetCurrentOrg(t *testing.T) {
 }
 
 func TestGetOrgRequest(t *testing.T) {
-	ocmClient, err := utils.CreateConnection()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if r.URL.Path == tokenPath {
+			w.Write([]byte(`{"access_token": "test-token"}`))
+			return
+		}
+		w.Write([]byte(userData))
+	}))
+	defer server.Close()
+
+	ocmClient, err := sdk.NewConnectionBuilder().
+		URL(server.URL).
+		TokenURL(server.URL+tokenPath).
+		Insecure(true).
+		Client(clientID, clientSecret).
+		Build()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to build connection: %v", err)
 	}
+	defer ocmClient.Close()
+
 	req, err := getOrgRequest(ocmClient)
 	if err != nil {
 		t.Fatal(err)
