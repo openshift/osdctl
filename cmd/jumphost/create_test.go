@@ -252,8 +252,7 @@ func TestAssembleNextSteps(t *testing.T) {
 			jumphost: &jumphostConfig{
 				ec2PublicIp: "1.2.3.4",
 			},
-			// this doesn't seems correct, but as per code we expect ssh-i, I guess it has to be ssh -i
-			expected: "ssh-i ${private_key} ec2-user@1.2.3.4",
+			expected: "ssh -i ${private_key} ec2-user@1.2.3.4",
 		},
 		{
 			name:     "missing_public_ip",
