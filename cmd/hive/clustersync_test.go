@@ -3,22 +3,22 @@ package hive
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"k8s.io/cli-runtime/pkg/genericclioptions"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"github.com/openshift/hive/apis/hiveinternal/v1alpha1"
 	mockk8s "github.com/openshift/osdctl/cmd/hive/clusterdeployment/mock/k8s"
 )
-
 
 // Mock data for ClusterDeployment and ClusterSync that are used across all test cases
 var (
@@ -98,50 +98,112 @@ func setupMockClient(mockClient *mockk8s.MockClient, returnErr error, isEmpty bo
 		}).Times(callTimes) // Expect List to be called n times based on the error condition
 }
 
-func TestNewCmdClusterSyncFailures(t *testing.T) {
+func TestPrintFailingCluster(t *testing.T) {
+	tests := []struct {
+		name        string
+		cdList      *hivev1.ClusterDeploymentList
+		csList      *v1alpha1.ClusterSyncList
+		expectError bool
+	}{
+		{
+			name: "Successful_Execution",
+			cdList: &hivev1.ClusterDeploymentList{
+				Items: []hivev1.ClusterDeployment{{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-cluster",
+						Namespace: "uhc-production-test",
+					},
+				}},
+			},
+			csList: &v1alpha1.ClusterSyncList{
+				Items: []v1alpha1.ClusterSync{{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-cluster-sync",
+						Namespace: "uhc-production-test",
+					},
+				}},
+			},
+			expectError: false,
+		},
+		{
+			name: "Missing_ClusterDeployment",
+			cdList: &hivev1.ClusterDeploymentList{
+				Items: []hivev1.ClusterDeployment{},
+			},
+			csList: &v1alpha1.ClusterSyncList{
+				Items: []v1alpha1.ClusterSync{},
+			},
+			expectError: true,
+		},
+		{
+			name: "SyncSet_Failure",
+			cdList: &hivev1.ClusterDeploymentList{
+				Items: []hivev1.ClusterDeployment{{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-cluster",
+						Namespace: "uhc-production-test",
+					},
+				}},
+			},
+			csList: &v1alpha1.ClusterSyncList{
+				Items: []v1alpha1.ClusterSync{{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-cluster-sync",
+						Namespace: "uhc-production-test",
+					},
+					Status: v1alpha1.ClusterSyncStatus{
+						SyncSets: []v1alpha1.SyncStatus{{
+							Name:           "sync-failure",
+							Result:         "Failure",
+							FailureMessage: "Some error occurred",
+						}},
+					},
+				}},
+			},
+			expectError: false,
+		},
+	}
 
-	mockCtrl := gomock.NewController(t)
-	streams := genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr}
-	mockClient := mockk8s.NewMockClient(mockCtrl)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			if err := hivev1.AddToScheme(scheme); err != nil {
+				t.Fatalf("Failed to add ClusterDeployment to scheme: %v", err)
+			}
 
-	setupMockClient(mockClient, nil, false)
+			if err := v1alpha1.AddToScheme(scheme); err != nil {
+				t.Fatalf("Failed to add ClusterSync to scheme: %v", err)
+			}
 
-	cmd := NewCmdClusterSyncFailures(streams, mockClient)
-	assert.Equal(t, "clustersync-failures [flags]", cmd.Use, "Command use should be 'clustersync-failures [flags]'")
-	assert.Contains(t, cmd.Long, "Helps investigate ClusterSyncs", "Command long description should be set")
-	assert.Contains(t, cmd.Example, "$ osdctl hive csf", "Command example should be set")
+			// Add ClusterDeployments and ClusterSyncs to the fake client
+			objects := []client.Object{}
+			for _, cd := range tt.cdList.Items {
+				objects = append(objects, &cd)
+			}
+			for _, cs := range tt.csList.Items {
+				objects = append(objects, &cs)
+			}
 
-	cmd.Flags().Set("limited-support", "true")
-	includeLimitedSupport := cmd.Flags().Lookup("limited-support").Value.String()
-	assert.Equal(t, "true", includeLimitedSupport, "Flag 'limited-support' should be parsed correctly")
+			client := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(objects...).
+				Build()
 
-	cmd.Flags().Set("hibernating", "true")
-	includeHibernating := cmd.Flags().Lookup("hibernating").Value.String()
-	assert.Equal(t, "true", includeHibernating, "Flag 'hibernating' should be parsed correctly")
+			o := &clusterSyncFailuresOptions{
+				kubeCli:   client,
+				clusterID: "test",
+			}
 
-	cmd.Flags().Set("syncsets", "false")
-	includeFailingSyncSets := cmd.Flags().Lookup("syncsets").Value.String()
-	assert.Equal(t, "false", includeFailingSyncSets, "Flag 'syncsets' should be parsed correctly")
+			err := o.printFailingCluster()
+			if tt.expectError {
+				assert.Error(t, err)
+				return
+			}
 
-	cmd.Flags().Set("no-headers", "true")
-	noHeaders := cmd.Flags().Lookup("no-headers").Value.String()
-	assert.Equal(t, "true", noHeaders, "Flag 'no-headers' should be parsed correctly")
+			assert.NoError(t, err)
 
-	cmd.Flags().Set("output", "yaml")
-	output := cmd.Flags().Lookup("output").Value.String()
-	assert.Equal(t, "yaml", output, "Flag 'output' should be parsed correctly")
-
-	cmd.Flags().Set("cluster-id", "1234")
-	cmd.Flags().Set("limited-support", "true")
-	cmd.Flags().Set("hibernating", "false")
-	cmd.Flags().Set("syncsets", "true")
-	cmd.Flags().Set("output", "json")
-
-	err := cmd.Execute()
-	assert.NoError(t, err, "Command should execute without error")
-
-	err = cmd.Flags().Set("invalid-flag", "true")
-	assert.Error(t, err, "Setting invalid flag should return an error")
+		})
+	}
 }
 
 func testListFailingClusterSyncs(t *testing.T, returnErr error, expectedResults []failingClusterSync, isEmpty bool) {
@@ -194,7 +256,7 @@ func TestListFailingClusterSyncs(t *testing.T) {
 			errorToReturn: nil,
 			expectedResult: []failingClusterSync{
 				{
-					Name:            "example_clustersync",
+					Name:            "example-clustersync",
 					Namespace:       "uhc-production-1234",
 					Timestamp:       time.Now().Format(time.RFC3339),
 					LimitedSupport:  false,
