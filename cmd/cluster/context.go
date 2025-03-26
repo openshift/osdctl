@@ -3,6 +3,7 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"sort"
@@ -28,7 +29,6 @@ import (
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 const (
@@ -110,14 +110,17 @@ func newCmdContext() *cobra.Command {
 		Short:             "Shows the context of a specified cluster",
 		Args:              cobra.ExactArgs(1),
 		DisableAutoGenTag: true,
-		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(ops.complete(cmd, args))
-			cmdutil.CheckErr(ops.run())
+		RunE: func(cmd *cobra.Command, args []string) error {
+			err := ops.setup(args)
+			if err != nil {
+				return err
+			}
+
+			return ops.run()
 		},
 	}
 
 	contextCmd.Flags().StringVarP(&ops.output, "output", "o", "long", "Valid formats are ['long', 'short', 'json']. Output is set to 'long' by default")
-	contextCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Cluster ID")
 	contextCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", "", "AWS Profile")
 	contextCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 	contextCmd.Flags().BoolVar(&ops.full, "full", false, "Run full suite of checks.")
@@ -134,11 +137,7 @@ func newContextOptions() *contextOptions {
 	return &contextOptions{}
 }
 
-func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
-	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, "Provide exactly one cluster ID")
-	}
-
+func (o *contextOptions) setup(args []string) error {
 	if o.days < 1 {
 		return fmt.Errorf("cannot have a days value lower than 1")
 	}
@@ -186,7 +185,7 @@ func (o *contextOptions) complete(cmd *cobra.Command, args []string) error {
 }
 
 func (o *contextOptions) run() error {
-	var printFunc func(*contextData)
+	var printFunc func(*contextData, io.Writer)
 	switch o.output {
 	case shortOutputConfigValue:
 		printFunc = o.printShortOutput
@@ -211,19 +210,19 @@ func (o *contextOptions) run() error {
 		}
 	}
 
-	printFunc(currentData)
+	printFunc(currentData, os.Stdout)
 
 	return nil
 }
 
-func (o *contextOptions) printLongOutput(data *contextData) {
-	data.printClusterHeader()
+func (o *contextOptions) printLongOutput(data *contextData, w io.Writer) {
+	data.printClusterHeader(w)
 
-	fmt.Println(strings.TrimSpace(data.Description))
+	fmt.Fprintln(w, strings.TrimSpace(data.Description))
 	fmt.Println()
 	utils.PrintLimitedSupportReasons(data.LimitedSupportReasons)
 	fmt.Println()
-	printJIRASupportExceptions(data.SupportExceptions)
+	printJIRASupportExceptions(data.SupportExceptions, w)
 	fmt.Println()
 	utils.PrintServiceLogs(data.ServiceLogs, o.verbose, o.days)
 	fmt.Println()
@@ -233,26 +232,26 @@ func (o *contextOptions) printLongOutput(data *contextData) {
 	fmt.Println()
 
 	if o.full {
-		printHistoricalPDAlertSummary(data.HistoricalAlerts, data.pdServiceID, o.days)
+		printHistoricalPDAlertSummary(data.HistoricalAlerts, data.pdServiceID, o.days, w)
 		fmt.Println()
 
-		printCloudTrailLogs(data.CloudtrailEvents)
+		printCloudTrailLogs(data.CloudtrailEvents, w)
 		fmt.Println()
 	}
 
 	// Print other helpful links
-	o.printOtherLinks(data)
+	o.printOtherLinks(data, w)
 	fmt.Println()
 
 	// Print Dynatrace URL
-	printDynatraceResources(data)
+	printDynatraceResources(data, w)
 
 	// Print User Banned Details
-	printUserBannedStatus(data)
+	printUserBannedStatus(data, w)
 }
 
-func (o *contextOptions) printShortOutput(data *contextData) {
-	data.printClusterHeader()
+func (o *contextOptions) printShortOutput(data *contextData, w io.Writer) {
+	data.printClusterHeader(w)
 
 	highAlertCount := 0
 	lowAlertCount := 0
@@ -284,7 +283,7 @@ func (o *contextOptions) printShortOutput(data *contextData) {
 		}
 	}
 
-	table := printer.NewTablePrinter(os.Stdout, 20, 1, 2, ' ')
+	table := printer.NewTablePrinter(w, 20, 1, 2, ' ')
 	table.AddRow([]string{
 		"Version",
 		"Supported?",
@@ -303,18 +302,18 @@ func (o *contextOptions) printShortOutput(data *contextData) {
 	})
 
 	if err := table.Flush(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error printing Short Output: %v\n", err)
+		fmt.Fprintf(w, "Error printing Short Output: %v\n", err)
 	}
 }
 
-func (o *contextOptions) printJsonOutput(data *contextData) {
+func (o *contextOptions) printJsonOutput(data *contextData, w io.Writer) {
 	jsonOut, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Can't marshal results to json: %v\n", err)
 		return
 	}
 
-	fmt.Println(string(jsonOut))
+	fmt.Fprintln(w, string(jsonOut))
 }
 
 // generateContextData Creates a contextData struct that contains all the
@@ -405,7 +404,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	GetJiraIssues := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Jira Issues").End()
-		data.JiraIssues, err = utils.GetJiraIssuesForCluster(o.clusterID, o.externalClusterID)
+		data.JiraIssues, err = utils.GetJiraIssuesForCluster(o.clusterID, o.externalClusterID, o.jiratoken)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("error while getting the open jira tickets: %v", err))
 		}
@@ -414,7 +413,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	GetSupportExceptions := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Support Exceptions").End()
-		data.SupportExceptions, err = utils.GetJiraSupportExceptionsForOrg(o.organizationID)
+		data.SupportExceptions, err = utils.GetJiraSupportExceptionsForOrg(o.organizationID, o.jiratoken)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("error while getting support exceptions: %v", err))
 		}
@@ -581,19 +580,19 @@ func GetCloudTrailLogsForCluster(awsProfile string, clusterID string, maxPages i
 	return filteredEvents, nil
 }
 
-func printHistoricalPDAlertSummary(incidentCounters map[string][]*pagerduty.IncidentOccurrenceTracker, serviceIDs []string, sinceDays int) {
+func printHistoricalPDAlertSummary(incidentCounters map[string][]*pagerduty.IncidentOccurrenceTracker, serviceIDs []string, sinceDays int, w io.Writer) {
 	var name string = "PagerDuty Historical Alerts"
-	fmt.Println(delimiter + name)
+	fmt.Fprintln(w, delimiter+name)
 
 	for _, serviceID := range serviceIDs {
 
 		if len(incidentCounters[serviceID]) == 0 {
-			fmt.Println("Service: https://redhat.pagerduty.com/service-directory/" + serviceID + ": None")
+			fmt.Fprintln(w, "Service: https://redhat.pagerduty.com/service-directory/"+serviceID+": None")
 			continue
 		}
 
-		fmt.Println("Service: https://redhat.pagerduty.com/service-directory/" + serviceID + ":")
-		table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+		fmt.Fprintln(w, "Service: https://redhat.pagerduty.com/service-directory/"+serviceID+":")
+		table := printer.NewTablePrinter(w, 20, 1, 3, ' ')
 		table.AddRow([]string{"Type", "Count", "Last Occurrence"})
 		totalIncidents := 0
 		for _, incident := range incidentCounters[serviceID] {
@@ -604,30 +603,30 @@ func printHistoricalPDAlertSummary(incidentCounters map[string][]*pagerduty.Inci
 		// Add empty row for readability
 		table.AddRow([]string{})
 		if err := table.Flush(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error printing %s: %v\n", name, err)
+			fmt.Fprintf(w, "Error printing %s: %v\n", name, err)
 		}
 
-		fmt.Println("\tTotal number of incidents [", totalIncidents, "] in [", sinceDays, "] days")
+		fmt.Fprintln(w, "\tTotal number of incidents [", totalIncidents, "] in [", sinceDays, "] days")
 	}
 }
 
-func printJIRASupportExceptions(issues []jira.Issue) {
+func printJIRASupportExceptions(issues []jira.Issue, w io.Writer) {
 	var name string = "Support Exceptions"
-	fmt.Println(delimiter + name)
+	fmt.Fprintln(w, delimiter+name)
 
 	for _, i := range issues {
-		fmt.Printf("[%s](%s/%s): %+v [Status: %s]\n", i.Key, i.Fields.Type.Name, i.Fields.Priority.Name, i.Fields.Summary, i.Fields.Status.Name)
-		fmt.Printf("- Link: %s/browse/%s\n\n", JiraBaseURL, i.Key)
+		fmt.Fprintf(w, "[%s](%s/%s): %+v [Status: %s]\n", i.Key, i.Fields.Type.Name, i.Fields.Priority.Name, i.Fields.Summary, i.Fields.Status.Name)
+		fmt.Fprintf(w, "- Link: %s/browse/%s\n\n", JiraBaseURL, i.Key)
 	}
 
 	if len(issues) == 0 {
-		fmt.Println("None")
+		fmt.Fprintln(w, "None")
 	}
 }
 
-func (o *contextOptions) printOtherLinks(data *contextData) {
+func (o *contextOptions) printOtherLinks(data *contextData, w io.Writer) {
 	var name string = "External resources"
-	fmt.Println(delimiter + name)
+	fmt.Fprintln(w, delimiter+name)
 
 	links := map[string]string{
 		"OHSS Cards":        fmt.Sprintf("%s/issues/?jql=project%%20%%3D%%20OHSS%%20and%%20(%%22Cluster%%20ID%%22%%20~%%20%%20%%22%s%%22%%20OR%%20%%22Cluster%%20ID%%22%%20~%%20%%22%s%%22)", JiraBaseURL, o.clusterID, o.externalClusterID),
@@ -648,13 +647,13 @@ func (o *contextOptions) printOtherLinks(data *contextData) {
 	}
 	sort.Strings(keys)
 
-	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+	table := printer.NewTablePrinter(w, 20, 1, 3, ' ')
 	for _, link := range keys {
 		table.AddRow([]string{link, strings.TrimSpace(links[link])})
 	}
 
 	if err := table.Flush(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error printing %s: %v\n", name, err)
+		fmt.Fprintf(w, "Error printing %s: %v\n", name, err)
 	}
 }
 
@@ -681,16 +680,16 @@ func (o *contextOptions) buildSplunkURL(data *contextData) string {
 	}
 }
 
-func printCloudTrailLogs(events []*types.Event) {
+func printCloudTrailLogs(events []*types.Event, w io.Writer) {
 	var name string = "Potentially interesting CloudTrail events"
-	fmt.Println(delimiter + name)
+	fmt.Fprintln(w, delimiter+name)
 
 	if events == nil {
-		fmt.Println("None")
+		fmt.Fprintln(w, "None")
 		return
 	}
 
-	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+	table := printer.NewTablePrinter(w, 20, 1, 3, ' ')
 	table.AddRow([]string{"EventId", "EventName", "Username", "EventTime"})
 	for _, event := range events {
 		if event.Username == nil {
@@ -702,7 +701,7 @@ func printCloudTrailLogs(events []*types.Event) {
 	// Add empty row for readability
 	table.AddRow([]string{})
 	if err := table.Flush(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error printing %s: %v\n", name, err)
+		fmt.Fprintf(w, "Error printing %s: %v\n", name, err)
 	}
 }
 
@@ -727,9 +726,9 @@ func skippableEvent(eventName string) bool {
 	return false
 }
 
-func printDynatraceResources(data *contextData) {
+func printDynatraceResources(data *contextData, w io.Writer) {
 	var name string = "Dynatrace Details"
-	fmt.Println(delimiter + name)
+	fmt.Fprintln(w, delimiter+name)
 
 	links := map[string]string{
 		"Dynatrace Tenant URL": data.DyntraceEnvURL,
@@ -743,11 +742,11 @@ func printDynatraceResources(data *contextData) {
 	}
 	sort.Strings(keys)
 
-	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+	table := printer.NewTablePrinter(w, 20, 1, 3, ' ')
 	for _, link := range keys {
 		url := strings.TrimSpace(links[link])
 		if url == dynatrace.ErrUnsupportedCluster.Error() {
-			fmt.Println(dynatrace.ErrUnsupportedCluster.Error())
+			fmt.Fprintln(w, dynatrace.ErrUnsupportedCluster.Error())
 			break
 		} else if url != "" {
 			table.AddRow([]string{link, url})
@@ -755,28 +754,28 @@ func printDynatraceResources(data *contextData) {
 	}
 
 	if err := table.Flush(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error printing %s: %v\n", name, err)
+		fmt.Fprintf(w, "Error printing %s: %v\n", name, err)
 	}
 }
 
-func printUserBannedStatus(data *contextData) {
+func printUserBannedStatus(data *contextData, w io.Writer) {
 	var name string = "User Ban Details"
-	fmt.Println("\n" + delimiter + name)
+	fmt.Fprintln(w, "\n"+delimiter+name)
 	if data.UserBanned {
-		fmt.Println("User is banned")
-		fmt.Printf("Ban code = %v\n", data.BanCode)
-		fmt.Printf("Ban description = %v\n", data.BanDescription)
+		fmt.Fprintln(w, "User is banned")
+		fmt.Fprintf(w, "Ban code = %v\n", data.BanCode)
+		fmt.Fprintf(w, "Ban description = %v\n", data.BanDescription)
 		if data.BanCode == BanCodeExportControlCompliance {
-			fmt.Println("User banned due to export control compliance.\nPlease follow the steps detailed here: https://github.com/openshift/ops-sop/blob/master/v4/alerts/UpgradeConfigSyncFailureOver4HrSRE.md#user-banneddisabled-due-to-export-control-compliance .")
+			fmt.Fprintln(w, "User banned due to export control compliance.\nPlease follow the steps detailed here: https://github.com/openshift/ops-sop/blob/master/v4/alerts/UpgradeConfigSyncFailureOver4HrSRE.md#user-banneddisabled-due-to-export-control-compliance .")
 		}
 	} else {
-		fmt.Println("User is not banned")
+		fmt.Fprintln(w, "User is not banned")
 	}
 }
 
-func (data *contextData) printClusterHeader() {
+func (data *contextData) printClusterHeader(w io.Writer) {
 	clusterHeader := fmt.Sprintf("%s -- %s", data.ClusterName, data.ClusterID)
-	fmt.Println(strings.Repeat("=", len(clusterHeader)))
-	fmt.Println(clusterHeader)
-	fmt.Println(strings.Repeat("=", len(clusterHeader)))
+	fmt.Fprintln(w, strings.Repeat("=", len(clusterHeader)))
+	fmt.Fprintln(w, clusterHeader)
+	fmt.Fprintln(w, strings.Repeat("=", len(clusterHeader)))
 }
