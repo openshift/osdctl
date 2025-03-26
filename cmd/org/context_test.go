@@ -276,7 +276,7 @@ func TestContext_Success(t *testing.T) {
 
 	mockJiraIssues := []jira.Issue{}
 
-	getJiraIssuesForClusterFunc = func(_, _ string) ([]jira.Issue, error) {
+	getJiraIssuesForClusterFunc = func(_, _, _ string) ([]jira.Issue, error) {
 		return mockJiraIssues, nil
 	}
 
