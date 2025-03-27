@@ -13,6 +13,7 @@ import (
 
 	clustersmgmtv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/k8s"
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -361,85 +362,81 @@ func generateKubeconfigSecretObjectForTesting(name, namespace, key, serverURL st
 	return secret, kubeconfig
 }
 
-func TestClusterAccessOptions_getKubeConfigSecret(t *testing.T) {
-	serverURL := "https://api.test-cluster.fakedomain.devshift.org:6443"
-	secretName := fmt.Sprintf("test-osdctl-access-cluster-%s-%d-secret-%s", time.Now().Format("20060102-150405-"), time.Now().Nanosecond()/1000000, "test-createJumpPod")
-	secretNS := "uhc-production-testclusterns"
-	secret, _ := generateKubeconfigSecretObjectForTesting(secretName, secretNS, "kubeconfig", serverURL)
-
+func TestGetKubeConfigSecret(t *testing.T) {
 	tests := []struct {
-		Name          string
-		Namespace     corev1.Namespace
-		SecretList    []corev1.Secret
-		ExpectedError bool
-		ExpectedName  string
+		name           string
+		secretList     []corev1.Secret
+		namespaceName  string
+		expectedSecret corev1.Secret
+		expectedErr    error
 	}{
 		{
-			Name: "Successfully_retrieve_kubeconfig_secret",
-			Namespace: corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: secretNS,
+			name: "Success_Secret _Found",
+			secretList: []corev1.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "kubeconfig-secret",
+						Namespace: "test-namespace",
+						Labels:    map[string]string{"hive.openshift.io/secret-type": "kubeconfig"},
+					},
 				},
 			},
-			SecretList:    []corev1.Secret{secret},
-			ExpectedError: true,
-			ExpectedName:  "",
+			namespaceName: "test-namespace",
+			expectedSecret: corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "kubeconfig-secret",
+					Namespace:       "test-namespace",
+					Labels:          map[string]string{"hive.openshift.io/secret-type": "kubeconfig"},
+					ResourceVersion: "999",
+				},
+			},
+			expectedErr: nil,
 		},
 		{
-			Name: "No_kubeconfig_secret_found",
-			Namespace: corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-namespace",
-				},
-			},
-			SecretList:    []corev1.Secret{},
-			ExpectedError: true,
-			ExpectedName:  "",
-		},
-		{
-			Name: "Error_during_List_operation",
-			Namespace: corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-namespace",
-				},
-			},
-			SecretList:    nil, // Simulate error in listing
-			ExpectedError: true,
-			ExpectedName:  "",
+			name:           "Error_No_Secret_Found",
+			secretList:     nil,
+			namespaceName:  "test-namespace",
+			expectedSecret: corev1.Secret{},
+			expectedErr:    fmt.Errorf("Kubeconfig secret not found in namespace 'test-namespace'"),
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.Name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			objs := []runtime.Object{}
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   tt.namespaceName,
+					Labels: map[string]string{"hive.openshift.io/secret-type": "kubeconfig"},
+				},
+			}
+			objs = append(objs, &ns)
+
+			for _, secret := range tt.secretList {
+				objs = append(objs, &secret)
+			}
 
 			scheme := runtime.NewScheme()
-			err := corev1.AddToScheme(scheme)
-			if err != nil {
-				t.Fatalf("Failed to add corev1 to scheme: %v", err)
+			_ = corev1.AddToScheme(scheme) 
+			fakeClient := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...))
+
+			c := &clusterAccessOptions{
+				kubeCli: fakeClient,
 			}
 
-			client := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(scheme))
-			streams := genericclioptions.IOStreams{In: genericclioptions.NewTestIOStreamsDiscard().In, Out: os.Stdout, ErrOut: os.Stderr}
-			access := newClusterAccessOptions(client, streams)
-
-			secret, err := access.getKubeConfigSecret(test.Namespace)
-
-			// If error is expected, check if an error occurred
-			if test.ExpectedError {
-				if err == nil {
-					t.Errorf("Expected an error but got none")
-				}
-				if secret.Name != test.ExpectedName {
-					t.Errorf("Expected an empty secret, but got: %s", secret.Name)
-				}
-				return
+			nsObj := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: tt.namespaceName,
+				},
 			}
-			// If no error expected, ensure the correct secret is returned
-			if err != nil {
-				t.Errorf("Expected no error, but got: %v", err)
-			}
-			if secret.Name != test.ExpectedName {
-				t.Errorf("Expected secret '%s', but got: %s", test.ExpectedName, secret.Name)
+
+			secret, err := c.getKubeConfigSecret(nsObj)
+
+			if tt.expectedErr != nil {
+				assert.EqualError(t, err, tt.expectedErr.Error())
+			} else {
+				assert.Equal(t, tt.expectedSecret, secret)
 			}
 		})
 	}
