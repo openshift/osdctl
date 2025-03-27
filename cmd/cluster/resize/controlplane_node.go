@@ -536,6 +536,6 @@ func promptGenerateResizeSL(clusterID string, newMachineType string) error {
 		return fmt.Errorf("failed to send service log: %v", err)
 	}
 
-	fmt.Println("Service log sent successfully. The resize is in progress, and this command will now exit. Any issues will be reported via PagerDuty.")
+	fmt.Println(`Service log sent successfully. The resize is in progress, and this command will now exit. Any issues will be reported via PagerDuty. Use "watch -d 'oc get machines -n openshift-machine-api -l machine.openshift.io/cluster-api-machine-role=master && oc get nodes -l node-role.kubernetes.io/control-plane'" to keep track of the status of the controlplane resize.`)
 	return nil
 }
