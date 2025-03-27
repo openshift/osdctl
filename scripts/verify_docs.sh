@@ -5,12 +5,13 @@ echo "Verifying documentation..."
 
 make generate-docs
 
-if git diff --name-only | grep -q "\.md$"; then
-   echo "ERROR: Documentation is out of date"
+# Check for changes only in the docs folder for .md files
+if git diff --name-only | grep -q "^docs/.*\.md$"; then
+   echo "ERROR: Documentation in the 'docs' folder is out of date"
    echo "Run 'make generate-docs' locally and commit the changes"
-   git diff -- '*.md'
+   git diff -- 'docs/*.md'
    exit 1
 fi
 
-echo "Documentation is up to date"
+echo "Documentation in the 'docs' folder is up to date"
 exit 0

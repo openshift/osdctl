@@ -15,7 +15,7 @@ import (
 const (
 	DefaultCmdPath = "./cmd"
 	DefaultDocsDir = "./docs"
-	CommandsMdFile = "osdctl_commands.md"
+	CommandsMdFile = "./docs/README.md"
 )
 
 type Options struct {
