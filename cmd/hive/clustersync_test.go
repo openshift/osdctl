@@ -20,92 +20,6 @@ import (
 	mockk8s "github.com/openshift/osdctl/cmd/hive/clusterdeployment/mock/k8s"
 )
 
-// Private function to get the mock data for ClusterDeployment and ClusterSync
-func getMockData(isEmpty bool) (hivev1.ClusterDeploymentList, v1alpha1.ClusterSyncList) {
-	cdList := hivev1.ClusterDeploymentList{
-		Items: []hivev1.ClusterDeployment{
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "example-cluster",
-					Namespace: "uhc-production-1234",
-				},
-				Status: hivev1.ClusterDeploymentStatus{
-					Conditions: []hivev1.ClusterDeploymentCondition{
-						{
-							Type:   "Hibernating",
-							Status: corev1.ConditionTrue,
-						},
-					},
-				},
-			},
-		},
-	}
-
-	csList := v1alpha1.ClusterSyncList{
-		Items: []v1alpha1.ClusterSync{
-			{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "example-clustersync",
-					Namespace: "uhc-production-1234",
-				},
-				Status: v1alpha1.ClusterSyncStatus{
-					Conditions: []v1alpha1.ClusterSyncCondition{
-						{
-							Type:               "Ready",
-							Status:             corev1.ConditionFalse,
-							Reason:             "Failure",
-							LastTransitionTime: metav1.Time{Time: time.Now()},
-						},
-					},
-					SyncSets: []v1alpha1.SyncStatus{
-						{
-							Name:           "syncset1",
-							Result:         "Failure",
-							FailureMessage: "Failed to sync syncset1",
-						},
-					},
-					SelectorSyncSets: []v1alpha1.SyncStatus{
-						{
-							Name:           "selectorsyncset1",
-							Result:         "Failure",
-							FailureMessage: "Failed to sync selectorsyncset1",
-						},
-					},
-				},
-			},
-		},
-	}
-
-	if isEmpty {
-		csList = v1alpha1.ClusterSyncList{} // Return empty ClusterSyncList for the empty case
-	}
-	return cdList, csList
-}
-
-// Central function to mock the List method and set expectations
-func setupMockClient(mockClient *mockk8s.MockClient, returnErr error, isEmpty bool) {
-	callTimes := 1
-	if returnErr == nil {
-		callTimes = 2 // We expect two calls only if there's no error
-	}
-	cdList, csList := getMockData(isEmpty)
-
-	mockClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
-			switch v := list.(type) {
-			case *hivev1.ClusterDeploymentList:
-				*v = cdList
-			case *v1alpha1.ClusterSyncList:
-				if isEmpty {
-					*v = v1alpha1.ClusterSyncList{} // Return empty ClusterSyncList for the empty case
-				} else {
-					*v = csList // Assuming csList is populated normally
-				}
-			}
-			return returnErr
-		}).Times(callTimes) // Expect List to be called n times based on the error condition
-}
-
 func TestPrintFailingCluster(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -214,46 +128,7 @@ func TestPrintFailingCluster(t *testing.T) {
 	}
 }
 
-func setupFailingClusterSyncsTestData(t *testing.T, returnErr error, isEmpty bool) {
-	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
-
-	mockClient := mockk8s.NewMockClient(mockCtrl)
-
-	setupMockClient(mockClient, returnErr, isEmpty)
-
-	options := &clusterSyncFailuresOptions{
-		kubeCli: mockClient,
-	}
-
-	result, err := options.listFailingClusterSyncs()
-
-	if returnErr != nil {
-		assert.Error(t, err)
-		assert.Nil(t, result)
-	} else {
-		assert.NoError(t, err)
-		if isEmpty {
-			// If isEmpty is true, the result should be an empty slice
-			assert.Len(t, result, 0)
-		} else {
-			assert.NotNil(t, result)
-			assert.Len(t, result, 1) // Since we expect only one result
-			assert.Contains(t, result[0].ErrorMessage, "Failed to sync syncset1")
-			assert.Contains(t, result[0].ErrorMessage, "Failed to sync selectorsyncset1")
-
-			// Verifying that multiple failing sync sets are concatenated correctly
-			assert.Equal(t, "selectorsyncset1 syncset1 ", result[0].FailingSyncSets)
-
-			// Verifying the processing of the "Hibernating" status
-			assert.True(t, result[0].Hibernating)
-			assert.False(t, result[0].LimitedSupport)
-		}
-	}
-}
-
 func TestListFailingClusterSyncs(t *testing.T) {
-
 	testCases := []struct {
 		name           string
 		errorToReturn  error
@@ -292,7 +167,114 @@ func TestListFailingClusterSyncs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			setupFailingClusterSyncsTestData(t, tc.errorToReturn, tc.isEmpty)
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			mockClient := mockk8s.NewMockClient(mockCtrl)
+
+			// Setup mock data and mock client behavior directly
+			cdList := hivev1.ClusterDeploymentList{
+				Items: []hivev1.ClusterDeployment{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "example-cluster",
+							Namespace: "uhc-production-1234",
+						},
+						Status: hivev1.ClusterDeploymentStatus{
+							Conditions: []hivev1.ClusterDeploymentCondition{
+								{
+									Type:   "Hibernating",
+									Status: corev1.ConditionTrue,
+								},
+							},
+						},
+					},
+				},
+			}
+
+			csList := v1alpha1.ClusterSyncList{
+				Items: []v1alpha1.ClusterSync{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "example-clustersync",
+							Namespace: "uhc-production-1234",
+						},
+						Status: v1alpha1.ClusterSyncStatus{
+							Conditions: []v1alpha1.ClusterSyncCondition{
+								{
+									Type:               "Ready",
+									Status:             corev1.ConditionFalse,
+									Reason:             "Failure",
+									LastTransitionTime: metav1.Time{Time: time.Now()},
+								},
+							},
+							SyncSets: []v1alpha1.SyncStatus{
+								{
+									Name:           "syncset1",
+									Result:         "Failure",
+									FailureMessage: "Failed to sync syncset1",
+								},
+							},
+							SelectorSyncSets: []v1alpha1.SyncStatus{
+								{
+									Name:           "selectorsyncset1",
+									Result:         "Failure",
+									FailureMessage: "Failed to sync selectorsyncset1",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			if tc.isEmpty {
+				csList = v1alpha1.ClusterSyncList{} // Return empty ClusterSyncList for the empty case
+			}
+
+			callTimes := 1
+			if tc.errorToReturn == nil {
+				callTimes = 2 // We expect two calls only if there's no error
+			}
+
+			// Setting up mock client expectations directly
+			mockClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+					switch v := list.(type) {
+					case *hivev1.ClusterDeploymentList:
+						*v = cdList
+					case *v1alpha1.ClusterSyncList:
+						*v = csList
+					}
+					return tc.errorToReturn
+				}).Times(callTimes) // Expect List to be called n times based on the error condition
+
+			
+			options := &clusterSyncFailuresOptions{
+				kubeCli: mockClient,
+			}
+
+			result, err := options.listFailingClusterSyncs()
+
+			if tc.errorToReturn != nil {
+				assert.Error(t, err)
+				assert.Nil(t, result)
+			} else {
+				assert.NoError(t, err)
+				if tc.isEmpty {
+					// If isEmpty is true, the result should be an empty slice
+					assert.Len(t, result, 0)
+				} else {
+					assert.NotNil(t, result)
+					assert.Len(t, result, 1) // Since we expect only one result
+					assert.Contains(t, result[0].ErrorMessage, "Failed to sync syncset1")
+					assert.Contains(t, result[0].ErrorMessage, "Failed to sync selectorsyncset1")
+
+					assert.Equal(t, "selectorsyncset1 syncset1 ", result[0].FailingSyncSets)
+
+					assert.True(t, result[0].Hibernating)
+					assert.False(t, result[0].LimitedSupport)
+				}
+			}
 		})
 	}
 }
