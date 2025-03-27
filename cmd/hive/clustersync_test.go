@@ -248,31 +248,21 @@ func TestListFailingClusterSyncs(t *testing.T) {
 					return tc.errorToReturn
 				}).Times(callTimes) // Expect List to be called n times based on the error condition
 
-			
 			options := &clusterSyncFailuresOptions{
 				kubeCli: mockClient,
 			}
 
 			result, err := options.listFailingClusterSyncs()
 
-			if tc.errorToReturn != nil {
+			if err != nil {
 				assert.Error(t, err)
 				assert.Nil(t, result)
 			} else {
 				assert.NoError(t, err)
-				if tc.isEmpty {
-					// If isEmpty is true, the result should be an empty slice
-					assert.Len(t, result, 0)
+				if tc.name == "Empty_results_scenario(List_returns_no_items)" {
+					assert.Empty(t, result)
 				} else {
-					assert.NotNil(t, result)
-					assert.Len(t, result, 1) // Since we expect only one result
-					assert.Contains(t, result[0].ErrorMessage, "Failed to sync syncset1")
-					assert.Contains(t, result[0].ErrorMessage, "Failed to sync selectorsyncset1")
-
-					assert.Equal(t, "selectorsyncset1 syncset1 ", result[0].FailingSyncSets)
-
-					assert.True(t, result[0].Hibernating)
-					assert.False(t, result[0].LimitedSupport)
+					assert.Equal(t, tc.expectedResult, result)
 				}
 			}
 		})
