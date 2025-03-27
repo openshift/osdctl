@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"io"
 
 	bplogin "github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
 	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
@@ -12,6 +13,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 // UpdateSecret updates a specified k8s secret with the provided data
@@ -57,6 +60,10 @@ func GetKubeConfigAndClient(clusterID string, elevationReasons ...string) (clien
 	}
 	if err != nil {
 		return nil, nil, nil, err
+	}
+	// To avoid warnings/backtrace, if k8s controller-runtime logger is not yet set, do it now...
+	if !log.Log.Enabled() {
+		log.SetLogger(zap.New(zap.WriteTo(io.Discard)))
 	}
 	// create the clientset
 	clientset, err := kubernetes.NewForConfig(kubeconfig)
