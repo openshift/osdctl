@@ -407,8 +407,7 @@ func TestGetKubeConfigSecret(t *testing.T) {
 			objs := []runtime.Object{}
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:   tt.namespaceName,
-					Labels: map[string]string{"hive.openshift.io/secret-type": "kubeconfig"},
+					Name: tt.namespaceName,
 				},
 			}
 			objs = append(objs, &ns)
@@ -418,7 +417,7 @@ func TestGetKubeConfigSecret(t *testing.T) {
 			}
 
 			scheme := runtime.NewScheme()
-			_ = corev1.AddToScheme(scheme) 
+			_ = corev1.AddToScheme(scheme)
 			fakeClient := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...))
 
 			c := &clusterAccessOptions{
