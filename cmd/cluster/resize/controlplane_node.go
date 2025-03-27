@@ -50,8 +50,8 @@ type controlPlane struct {
 	reason string
 }
 
-// This command requires to previously be logged in via `ocm login`
-func NewCmdResizeControlPlane() *cobra.Command {
+// newCmdResizeControlPlane creates a new cobra command for resizing control plane nodes
+func newCmdResizeControlPlane() *cobra.Command {
 	ops := &controlPlane{}
 	resizeControlPlaneNodeCmd := &cobra.Command{
 		Use:   "control-plane",
@@ -74,7 +74,7 @@ func NewCmdResizeControlPlane() *cobra.Command {
 	}
 	resizeControlPlaneNodeCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "The internal ID of the cluster to perform actions on")
 	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.newMachineType, "machine-type", "", "The target AWS machine type to resize to (e.g. m5.2xlarge)")
-	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
 	resizeControlPlaneNodeCmd.MarkFlagRequired("cluster-id")
 	resizeControlPlaneNodeCmd.MarkFlagRequired("machine-type")
 	resizeControlPlaneNodeCmd.MarkFlagRequired("reason")
@@ -83,7 +83,8 @@ func NewCmdResizeControlPlane() *cobra.Command {
 }
 
 func (o *controlPlane) New() error {
-	if o.cluster.Hypershift().Enabled() {
+	// Check if cluster is nil before accessing Hypershift (potential nil dereference)
+	if o.cluster != nil && o.cluster.Hypershift().Enabled() {
 		return errors.New("this command should not be used for HCP clusters")
 	}
 
@@ -144,50 +145,6 @@ const (
 	Cancel                          = 4
 )
 
-func retryCancelDialog(procedure string) (optionsDialogResponse, error) {
-	fmt.Printf("Do you want to retry %s or cancel this command? (retry/cancel):\n", procedure)
-
-	reader := bufio.NewReader(os.Stdin)
-
-	responseBytes, _, err := reader.ReadLine()
-	if err != nil {
-		return Undefined, fmt.Errorf("reader.ReadLine() resulted in an error: %s", err)
-	}
-
-	response := strings.ToUpper(string(responseBytes))
-
-	switch response {
-	case "RETRY":
-		return Retry, nil
-	case "CANCEL":
-		return Cancel, nil
-	default:
-		fmt.Println("Invalid response, expected 'retry' or 'cancel' (case-insensitive).")
-		return retryCancelDialog(procedure)
-	}
-}
-
-func withRetryCancelOption(fn func() error, procedure string) (err error) {
-	err = fn()
-	if err == nil {
-		return nil
-	}
-	dialogResponse, err := retryCancelDialog(procedure)
-	if err != nil {
-		return err
-	}
-
-	switch dialogResponse {
-	case Retry:
-		return withRetryCancelOption(fn, procedure)
-	case Cancel:
-		return errors.New("exiting")
-	default:
-		// This would be a programming error
-		return errors.New("unhandled enumerator in withRetryCancelOption")
-	}
-}
-
 func retrySkipCancelDialog(procedure string) (optionsDialogResponse, error) {
 	fmt.Printf("Do you want to retry %[1]s, skip %[1]s or cancel this command? (retry/skip/cancel):\n", procedure)
 
@@ -213,8 +170,8 @@ func retrySkipCancelDialog(procedure string) (optionsDialogResponse, error) {
 	}
 }
 
-func withRetrySkipCancelOption(fn func() error, procedure string) (err error) {
-	err = fn()
+func withRetrySkipCancelOption(fn func() error, procedure string) error {
+	err := fn()
 	if err == nil {
 		return nil
 	}
@@ -229,17 +186,17 @@ func withRetrySkipCancelOption(fn func() error, procedure string) (err error) {
 		return withRetrySkipCancelOption(fn, procedure)
 	case Skip:
 		fmt.Printf("Skipping %s...\n", procedure)
+		return nil
 	case Cancel:
 		return errors.New("exiting")
 	default:
 		// This would be a programming error
 		return errors.New("unhandled enumerator in withRetrySkipCancelOption")
 	}
-	return nil
 }
 
 func retrySkipForceCancelDialog(procedure string) (optionsDialogResponse, error) {
-	fmt.Printf("Do you want to retry %s, skip %s, force %s or cancel this command? (retry/skip/force/cancel):\n", procedure, procedure, procedure)
+	fmt.Printf("Do you want to retry %s, skip %s, force %s or cancel this command? (retry/skip/force/cancel):\n", procedure)
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -280,7 +237,6 @@ func (o *controlPlane) forceDrainNode(nodeID string, reason string) error {
 func (o *controlPlane) drainNode(nodeID string, reason string) error {
 	printer.PrintlnGreen("Draining node", nodeID)
 
-	// TODO: replace subprocess call with API call
 	err := bpelevate.RunElevate([]string{
 		fmt.Sprintf("%s - Elevate required to drain node for resizecontroleplanenode", reason),
 		"adm drain --ignore-daemonsets --delete-emptydir-data", nodeID,
@@ -299,11 +255,9 @@ func (o *controlPlane) drainNode(nodeID string, reason string) error {
 			return o.drainNode(nodeID, reason)
 		case Skip:
 			fmt.Println("Skipping node drain")
+			return nil
 		case Force:
-			err = withRetrySkipCancelOption(func() error { return o.forceDrainNode(nodeID, reason) }, "force draining")
-			if err != nil {
-				return err
-			}
+			return withRetrySkipCancelOption(func() error { return o.forceDrainNode(nodeID, reason) }, "force draining")
 		case Cancel:
 			return errors.New("exiting")
 		}
@@ -336,7 +290,10 @@ func stopNode(ctx context.Context, awsClient resizeControlPlaneNodeAWSClient, no
 func modifyInstanceAttribute(ctx context.Context, awsClient resizeControlPlaneNodeAWSClient, nodeID string, newMachineType string) error {
 	printer.PrintlnGreen("Modifying machine type of instance:", nodeID, "to", newMachineType)
 
-	modifyInstanceAttributeInput := &ec2.ModifyInstanceAttributeInput{InstanceId: &nodeID, InstanceType: &types.AttributeValue{Value: &newMachineType}}
+	modifyInstanceAttributeInput := &ec2.ModifyInstanceAttributeInput{
+		InstanceId:   &nodeID,
+		InstanceType: &types.AttributeValue{Value: &newMachineType},
+	}
 
 	_, err := awsClient.ModifyInstanceAttribute(ctx, modifyInstanceAttributeInput)
 	if err != nil {
@@ -369,19 +326,15 @@ func startNode(ctx context.Context, awsClient resizeControlPlaneNodeAWSClient, n
 
 func uncordonNode(nodeID string) error {
 	printer.PrintlnGreen("Uncordoning node", nodeID)
-	// TODO: replace subprocess call with API call
 	cmd := fmt.Sprintf("oc adm uncordon %s", nodeID)
 	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 
 	if err != nil {
-		fmt.Printf("Failed to uncordon node: %s", strings.TrimSpace(string(output)))
-		return err
+		return fmt.Errorf("failed to uncordon node: %s", strings.TrimSpace(string(output)))
 	}
 	return nil
 }
 
-// Start and stop calls require the internal AWS instance ID
-// Machinetype patch requires the tag "Name"
 func getNodeAwsInstanceData(ctx context.Context, node string, awsClient resizeControlPlaneNodeAWSClient) (string, string, error) {
 	params := &ec2.DescribeInstancesInput{
 		Filters: []types.Filter{
@@ -396,13 +349,18 @@ func getNodeAwsInstanceData(ctx context.Context, node string, awsClient resizeCo
 		return "", "", err
 	}
 
-	awsInstanceID := *(ret.Reservations[0].Instances[0].InstanceId)
+	if len(ret.Reservations) == 0 || len(ret.Reservations[0].Instances) == 0 {
+		return "", "", errors.New("no instances found for the given node")
+	}
+
+	awsInstanceID := *ret.Reservations[0].Instances[0].InstanceId
 
 	var machineName string
 	tags := ret.Reservations[0].Instances[0].Tags
 	for _, t := range tags {
 		if *t.Key == "Name" {
 			machineName = *t.Value
+			break
 		}
 	}
 
@@ -422,7 +380,7 @@ func (o *controlPlane) patchMachineType(machine string, machineType string, reas
 		`-n openshift-machine-api patch machine`, machine, `--patch "{\"spec\":{\"providerSpec\":{\"value\":{\"instanceType\":\"` + machineType + `\"}}}}" --type merge`,
 	})
 	if err != nil {
-		return fmt.Errorf("Could not patch machine type:\n%s", err)
+		return fmt.Errorf("could not patch machine type:\n%s", err)
 	}
 	return nil
 }
@@ -435,7 +393,6 @@ type resizeControlPlaneNodeAWSClient interface {
 }
 
 // run performs a control plane resize leveraging control plane machine sets
-// https://docs.openshift.com/container-platform/latest/machine_management/control_plane_machine_management/cpmso-about.html
 func (o *controlPlane) run(ctx context.Context) error {
 	cpms := &machinev1.ControlPlaneMachineSet{}
 	if err := o.client.Get(ctx, client.ObjectKey{Namespace: cpmsNamespace, Name: cpmsName}, cpms); err != nil {
@@ -443,7 +400,7 @@ func (o *controlPlane) run(ctx context.Context) error {
 	}
 
 	if cpms.Spec.State != machinev1.ControlPlaneMachineSetStateActive {
-		return fmt.Errorf("control plane machine set is unexpectedly in %s state, must be %s - check for service logs, support exceptions, ask for a second opinion.", cpms.Spec.State, machinev1.ControlPlaneMachineSetStateActive)
+		return fmt.Errorf("control plane machine set is unexpectedly in %s state, must be %s - check for service logs, support exceptions, ask for a second opinion", cpms.Spec.State, machinev1.ControlPlaneMachineSetStateActive)
 	}
 
 	patch := client.MergeFrom(cpms.DeepCopy())
@@ -473,7 +430,7 @@ func (o *controlPlane) run(ctx context.Context) error {
 		gcpSpec.MachineType = o.newMachineType
 		rawBytes, err = json.Marshal(gcpSpec)
 		if err != nil {
-			return fmt.Errorf("error marshalling awsSpec: %v", err)
+			return fmt.Errorf("error marshalling gcpSpec: %v", err)
 		}
 	default:
 		return fmt.Errorf("cloud provider not supported: %s, only AWS and GCP are supported", o.cluster.CloudProvider().ID())
@@ -484,7 +441,6 @@ func (o *controlPlane) run(ctx context.Context) error {
 		return errors.New("aborting control plane resize")
 	}
 
-	// Patch the ControlPlaneMachineSet
 	cpms.Spec.Template.OpenShiftMachineV1Beta1Machine.Spec.ProviderSpec.Value = &runtime.RawExtension{Raw: rawBytes}
 	if err := o.clientAdmin.Patch(ctx, cpms, patch); err != nil {
 		return fmt.Errorf("failed patching control plane machine set: %v", err)
@@ -492,7 +448,6 @@ func (o *controlPlane) run(ctx context.Context) error {
 
 	log.Println("Control plane machine set patched successfully. The resize process has been initiated and will complete asynchronously.")
 
-	// Prompt and send service log immediately
 	return promptGenerateResizeSL(o.clusterID, o.newMachineType)
 }
 
@@ -504,17 +459,19 @@ func promptGenerateResizeSL(clusterID string, newMachineType string) error {
 
 	var jiraID string
 	fmt.Print("Please enter the JIRA ID that corresponds to this resize: ")
-	_, _ = fmt.Scanln(&jiraID)
+	_, err := fmt.Scanln(&jiraID)
+	if err != nil {
+		log.Printf("Error reading JIRA ID: %v, proceeding with empty value", err)
+	}
 
-	// Use a bufio Scanner since the fmt package cannot read in more than one word
 	var justification string
 	fmt.Print("Please enter a justification for the resize: ")
 	scanner := bufio.NewScanner(os.Stdin)
 	if scanner.Scan() {
 		justification = scanner.Text()
-	} else {
+	} else if err := scanner.Err(); err != nil {
 		errText := "failed to read justification text, send service log manually"
-		_, _ = fmt.Fprintf(os.Stderr, errText)
+		_, _ = fmt.Fprintf(os.Stderr, "%s: %v\n", errText, err)
 		return errors.New(errText)
 	}
 
