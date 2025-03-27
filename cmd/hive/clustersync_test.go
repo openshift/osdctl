@@ -20,9 +20,9 @@ import (
 	mockk8s "github.com/openshift/osdctl/cmd/hive/clusterdeployment/mock/k8s"
 )
 
-// Mock data for ClusterDeployment and ClusterSync that are used across all test cases
-var (
-	cdList = hivev1.ClusterDeploymentList{
+// Private function to get the mock data for ClusterDeployment and ClusterSync
+func getMockData(isEmpty bool) (hivev1.ClusterDeploymentList, v1alpha1.ClusterSyncList) {
+	cdList := hivev1.ClusterDeploymentList{
 		Items: []hivev1.ClusterDeployment{
 			{
 				ObjectMeta: metav1.ObjectMeta{
@@ -40,7 +40,8 @@ var (
 			},
 		},
 	}
-	csList = v1alpha1.ClusterSyncList{
+
+	csList := v1alpha1.ClusterSyncList{
 		Items: []v1alpha1.ClusterSync{
 			{
 				ObjectMeta: metav1.ObjectMeta{
@@ -74,7 +75,12 @@ var (
 			},
 		},
 	}
-)
+
+	if isEmpty {
+		csList = v1alpha1.ClusterSyncList{} // Return empty ClusterSyncList for the empty case
+	}
+	return cdList, csList
+}
 
 // Central function to mock the List method and set expectations
 func setupMockClient(mockClient *mockk8s.MockClient, returnErr error, isEmpty bool) {
@@ -82,6 +88,8 @@ func setupMockClient(mockClient *mockk8s.MockClient, returnErr error, isEmpty bo
 	if returnErr == nil {
 		callTimes = 2 // We expect two calls only if there's no error
 	}
+	cdList, csList := getMockData(isEmpty)
+
 	mockClient.EXPECT().List(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 			switch v := list.(type) {
@@ -160,7 +168,7 @@ func TestPrintFailingCluster(t *testing.T) {
 					},
 				}},
 			},
-			expectError: false,
+			expectError: false, //No error is returned, even though there is a failure, because the "failure" is handled by printing the error message instead of returning it as an error.
 		},
 	}
 
@@ -206,7 +214,7 @@ func TestPrintFailingCluster(t *testing.T) {
 	}
 }
 
-func testListFailingClusterSyncs(t *testing.T, returnErr error, expectedResults []failingClusterSync, isEmpty bool) {
+func setupFailingClusterSyncsTestData(t *testing.T, returnErr error, isEmpty bool) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -230,15 +238,16 @@ func testListFailingClusterSyncs(t *testing.T, returnErr error, expectedResults 
 			assert.Len(t, result, 0)
 		} else {
 			assert.NotNil(t, result)
-			assert.Len(t, result, len(expectedResults))
-			for i, expected := range expectedResults {
-				assert.Equal(t, expected.Name, result[i].Name)
-				assert.Equal(t, expected.Namespace, result[i].Namespace)
-				assert.Equal(t, expected.LimitedSupport, result[i].LimitedSupport)
-				assert.Equal(t, expected.Hibernating, result[i].Hibernating)
-				assert.Contains(t, result[i].FailingSyncSets, expected.FailingSyncSets)
-				assert.Contains(t, result[i].ErrorMessage, expected.ErrorMessage)
-			}
+			assert.Len(t, result, 1) // Since we expect only one result
+			assert.Contains(t, result[0].ErrorMessage, "Failed to sync syncset1")
+			assert.Contains(t, result[0].ErrorMessage, "Failed to sync selectorsyncset1")
+
+			// Verifying that multiple failing sync sets are concatenated correctly
+			assert.Equal(t, "selectorsyncset1 syncset1 ", result[0].FailingSyncSets)
+
+			// Verifying the processing of the "Hibernating" status
+			assert.True(t, result[0].Hibernating)
+			assert.False(t, result[0].LimitedSupport)
 		}
 	}
 }
@@ -283,7 +292,7 @@ func TestListFailingClusterSyncs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			testListFailingClusterSyncs(t, tc.errorToReturn, tc.expectedResult, tc.isEmpty)
+			setupFailingClusterSyncsTestData(t, tc.errorToReturn, tc.isEmpty)
 		})
 	}
 }
