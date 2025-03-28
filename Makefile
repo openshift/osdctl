@@ -24,6 +24,18 @@ ARCH := $(shell go env GOARCH)
 download-goreleaser:
 	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser@v1.21.2
 
+#Update documentation as a part of every release
+
+.PHONY: generate-docs
+generate-docs:
+	@go run utils/docgen/main.go --cmd-path=./cmd --docs-dir=./docs
+	
+#Verify documents using PROW as a part of every PR raised for osdctl
+
+.PHONY: verify-docs
+verify-docs:
+	./scripts/verify-docs.sh
+
 # CI build containers don't include goreleaser by default,
 # so they need to get it first, and then run the build
 .PHONY: ci-build
@@ -63,3 +75,5 @@ test:
 
 lint:
 	golangci-lint run
+
+setup: install-hooks
