@@ -84,7 +84,7 @@ func newCmdResizeControlPlane() *cobra.Command {
 }
 
 func (o *controlPlane) New() error {
-	if o.cluster != nil && o.cluster.Hypershift().Enabled() { // Added nil check to avoid panic
+	if o.cluster != nil && o.cluster.Hypershift().Enabled() {
 		return errors.New("this command should not be used for HCP clusters")
 	}
 
@@ -492,7 +492,6 @@ func (o *controlPlane) run(ctx context.Context) error {
 
 	log.Println("Control plane machine set patched successfully. The resize is now in progress and will complete asynchronously. This command will exit after sending a service log, and any issues will be reported via PagerDuty.")
 
-	// Prompt and send service log immediately
 	return promptGenerateResizeSL(o.clusterID, o.newMachineType)
 }
 
@@ -536,6 +535,9 @@ func promptGenerateResizeSL(clusterID string, newMachineType string) error {
 		return fmt.Errorf("failed to send service log: %v", err)
 	}
 
-	fmt.Println(`Service log sent successfully. The resize is in progress, and this command will now exit. Any issues will be reported via PagerDuty. Use "watch -d 'oc get machines -n openshift-machine-api -l machine.openshift.io/cluster-api-machine-role=master && oc get nodes -l node-role.kubernetes.io/control-plane'" to keep track of the status of the controlplane resize.`)
+	fmt.Println("Service log sent successfully. Use the following command to track progress of the resize:")
+	fmt.Println()
+	fmt.Println(`watch -d 'oc get machines -n openshift-machine-api -l machine.openshift.io/cluster-api-machine-role=master && oc get nodes -l node-role.kubernetes.io/control-plane'`)
+
 	return nil
 }
