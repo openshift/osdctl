@@ -3,14 +3,18 @@ package common
 import (
 	"context"
 	"fmt"
+	"io"
 
 	bplogin "github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
 	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
+	"github.com/openshift/osdctl/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 // UpdateSecret updates a specified k8s secret with the provided data
@@ -35,18 +39,31 @@ func UpdateSecret(kubeClient client.Client, secretName string, secretNamespace s
 
 // If some elevationReasons are provided, then the config will be elevated with user backplane-cluster-admin
 func GetKubeConfigAndClient(clusterID string, elevationReasons ...string) (client.Client, *rest.Config, *kubernetes.Clientset, error) {
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to create ocm client: %w", err)
+	}
+	cluster, err := utils.GetCluster(ocmClient, clusterID)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to retrieve cluster: %w", err)
+	}
+
 	bp, err := bpconfig.GetBackplaneConfiguration()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
 	}
 	var kubeconfig *rest.Config
 	if len(elevationReasons) == 0 {
-		kubeconfig, err = bplogin.GetRestConfig(bp, clusterID)
+		kubeconfig, err = bplogin.GetRestConfig(bp, cluster.ID())
 	} else {
-		kubeconfig, err = bplogin.GetRestConfigAsUser(bp, clusterID, "backplane-cluster-admin", elevationReasons...)
+		kubeconfig, err = bplogin.GetRestConfigAsUser(bp, cluster.ID(), "backplane-cluster-admin", elevationReasons...)
 	}
 	if err != nil {
 		return nil, nil, nil, err
+	}
+	// To avoid warnings/backtrace, if k8s controller-runtime logger is not yet set, do it now...
+	if !log.Log.Enabled() {
+		log.SetLogger(zap.New(zap.WriteTo(io.Discard)))
 	}
 	// create the clientset
 	clientset, err := kubernetes.NewForConfig(kubeconfig)
