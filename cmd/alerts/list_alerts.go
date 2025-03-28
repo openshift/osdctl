@@ -21,16 +21,17 @@ type alertCmd struct {
 func NewCmdListAlerts() *cobra.Command {
 	alertCmd := &alertCmd{}
 	newCmd := &cobra.Command{
-		Use:               "list <cluster-id> --level [warning, critical, firing, pending, all]",
-		Short:             "List all alerts or based on severity",
-		Long:              `Checks the alerts for the cluster and print the list based on severity`,
-		Args:              cobra.ExactArgs(1),
+		Use:   "list --cluster-id <cluster-id> --level [warning, critical, firing, pending, all]",
+		Short: "List all alerts or based on severity",
+		Long:  `Checks the alerts for the cluster and print the list based on severity`,
+
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			alertCmd.clusterID = args[0]
 			ListAlerts(alertCmd)
 		},
 	}
+	newCmd.Flags().StringVar(&alertCmd.clusterID, "cluster-id", "", "Provide the internal ID of the cluster")
+	_ = newCmd.MarkFlagRequired("cluster-id")
 
 	newCmd.Flags().StringVarP(&alertCmd.alertLevel, "level", "l", "all", "Alert level [warning, critical, firing, pending, all]")
 	newCmd.Flags().StringVar(&alertCmd.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")

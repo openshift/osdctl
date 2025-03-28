@@ -40,7 +40,7 @@ func newCmdHealth() *cobra.Command {
 	}
 
 	healthCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
-	healthCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Cluster ID")
+	healthCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Internal Cluster ID")
 	healthCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", "", "AWS Profile")
 	healthCmd.MarkFlagRequired("cluster-id")
 	return healthCmd
