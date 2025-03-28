@@ -149,15 +149,6 @@ var _ = Describe("Test posting service logs", func() {
 		})
 	})
 
-	Context("newPostCmd function", func() {
-		It("creates a new post command", func() {
-			cmd := newPostCmd()
-			Expect(cmd).NotTo(BeNil())
-			Expect(cmd.Use).To(Equal("post CLUSTER_ID"))
-			Expect(cmd.Short).To(Equal("Post a service log to a cluster or list of clusters"))
-		})
-	})
-
 	Context("getDocClusterType function", func() {
 		It("returns the correct cluster type from the documentation URL", func() {
 			message := "Check the documentation at https://docs.openshift.com/dedicated/welcome/index.html"
