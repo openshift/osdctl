@@ -195,7 +195,7 @@ func Test_printContext(t *testing.T) {
 	}
 }
 
-func TestContext_Success(t *testing.T) {
+func TestContextSuccess(t *testing.T) {
 	// Save original function pointers to restore after test
 	origGetCluster := getClusterFunc
 	origGetLimitedSupport := getClusterLimitedSupportFunc
