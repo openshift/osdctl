@@ -24,7 +24,7 @@ const (
 	integrationURL             = "https://api.integration.openshift.com"
 	productionGovURL           = "https://api-admin.openshiftusgov.com"
 	integrationGovURL          = "https://api-admin.int.openshiftusgov.com"
-	stageGovURL                = "https://api-admin.stage.openshiftusgov.com"
+	stagingGovURL                = "https://api-admin.stage.openshiftusgov.com"
 	HypershiftClusterTypeLabel = "ext-hypershift.openshift.io/cluster-type"
 	DynatraceTenantKeyLabel    = "sre-capabilities.dtp.tenant"
 )
