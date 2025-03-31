@@ -48,8 +48,9 @@ var urlAliases = map[string]string{
 	"integrationgov":  integrationGovURL,
 	"intgov":          integrationGovURL,
 	integrationGovURL: integrationGovURL,
-	"stagegov":        stageGovURL,
-	stageGovURL:       stageGovURL,
+	"staginggov":      stagingGovURL,
+	"stagegov":        stagingGovURL,
+	stagingGovURL:     stagingGovURL,
 }
 
 // Config describes the OCM client configuration
