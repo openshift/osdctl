@@ -174,7 +174,7 @@ func printContextJson(w io.Writer, clusterInfos []ClusterInfo) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal json response: %w", err)
 	}
-	_, err = fmt.Fprintln(w, string(bytes)) 
+	_, err = fmt.Fprintln(w, string(bytes))
 	return err
 }
 
