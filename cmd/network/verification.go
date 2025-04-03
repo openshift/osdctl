@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/openshift/osd-network-verifier/pkg/probes/curl"
-	"github.com/openshift/osd-network-verifier/pkg/probes/legacy"
 	"log"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/openshift/osd-network-verifier/pkg/probes/curl"
+	"github.com/openshift/osd-network-verifier/pkg/probes/legacy"
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
@@ -247,7 +248,7 @@ func (e *EgressVerification) Run(ctx context.Context) {
 			failures++
 			postCmd := generateServiceLog(out, e.ClusterId)
 			blockedUrl := strings.Join(postCmd.TemplateParams, ",")
-			if strings.Contains(blockedUrl, "deadmanssnitch") || strings.Contains(blockedUrl, "pagerduty") {
+			if (strings.Contains(blockedUrl, "deadmanssnitch") || strings.Contains(blockedUrl, "pagerduty")) && e.cluster.State() == "ready" {
 				fmt.Println("PagerDuty and/or DMS outgoing traffic is blocked, resulting in a loss of observability. As a result, Red Hat can no longer guarantee SLAs and the cluster should be put in limited support")
 				pCmd := lsupport.Post{Template: LimitedSupportTemplate}
 				if err := pCmd.Run(e.ClusterId); err != nil {
