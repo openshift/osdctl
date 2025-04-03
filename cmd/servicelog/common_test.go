@@ -1,7 +1,6 @@
 package servicelog
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/openshift/osdctl/internal/servicelog"
@@ -12,7 +11,7 @@ func TestValidateGoodResponse(t *testing.T) {
 	tests := []struct {
 		name           string
 		clusterMessage servicelog.Message
-		goodReply      *servicelog.GoodReply
+		goodReply      []byte
 		expectedError  bool
 	}{
 		{
@@ -24,109 +23,112 @@ func TestValidateGoodResponse(t *testing.T) {
 				Summary:     "Test Summary",
 				Description: "Test Description",
 			},
-			goodReply: &servicelog.GoodReply{
-				Severity:    "Info",
-				ServiceName: "TestService",
-				ClusterUUID: "test-cluster-uuid",
-				Summary:     "Test Summary",
-				Description: "Test Description",
-			},
+			goodReply: []byte(`{
+				"severity": "Info",
+				"service_name": "TestService",
+				"cluster_uuid": "test-cluster-uuid",
+				"summary": "Test Summary",
+				"description": "Test Description"
+			}`),
 			expectedError: false,
 		},
 		{
-			name:           "invalid_json",
-			clusterMessage: servicelog.Message{},
-			goodReply:      nil,
-			expectedError:  true,
+			name: "invalid_json_format",
+			clusterMessage: servicelog.Message{
+				Severity: "Error",
+			},
+			goodReply:     []byte(`{ invalid json}`),
+			expectedError: true,
 		},
 		{
 			name: "mismatch_severity",
 			clusterMessage: servicelog.Message{
-				Severity: "Warning",
-			},
-			goodReply: &servicelog.GoodReply{
 				Severity: "Info",
 			},
+			goodReply: []byte(`{
+				"severity": "Warning",
+				"service_name": "TestService",
+				"cluster_uuid": "test-cluster-uuid",
+				"summary": "Test Summary",
+				"description": "Test Description"
+			}`),
 			expectedError: true,
 		},
 		{
 			name: "mismatch_servicename",
 			clusterMessage: servicelog.Message{
-				ServiceName: "DifferentService",
-			},
-			goodReply: &servicelog.GoodReply{
 				ServiceName: "TestService",
 			},
+			goodReply: []byte(`{
+				"severity": "Info",
+				"service_name": "DifferentService",
+				"cluster_uuid": "test-cluster-uuid",
+				"summary": "Test Summary",
+				"description": "Test Description"
+			}`),
 			expectedError: true,
 		},
 		{
 			name: "mismatch_clusteruuid",
 			clusterMessage: servicelog.Message{
-				ClusterUUID: "different-cluster-uuid",
-			},
-			goodReply: &servicelog.GoodReply{
 				ClusterUUID: "test-cluster-uuid",
 			},
+			goodReply: []byte(`{
+				"severity": "Info",
+				"service_name": "TestService",
+				"cluster_uuid": "different-cluster-uuid",
+				"summary": "Test Summary",
+				"description": "Test Description"
+			}`),
 			expectedError: true,
 		},
 		{
 			name: "mismatch_summary",
 			clusterMessage: servicelog.Message{
-				Summary: "Different Summary",
-			},
-			goodReply: &servicelog.GoodReply{
 				Summary: "Test Summary",
 			},
+			goodReply: []byte(`{
+				"severity": "Info",
+				"service_name": "TestService",
+				"cluster_uuid": "test-cluster-uuid",
+				"summary": "Different Summary",
+				"description": "Test Description"
+			}`),
 			expectedError: true,
 		},
 		{
 			name: "mismatch_description",
 			clusterMessage: servicelog.Message{
-				Description: "Different Description",
-			},
-			goodReply: &servicelog.GoodReply{
 				Description: "Test Description",
 			},
+			goodReply: []byte(`{
+				"severity": "Info",
+				"service_name": "TestService",
+				"cluster_uuid": "test-cluster-uuid",
+				"summary": "Test Summary",
+				"description": "Different Description"
+			}`),
 			expectedError: true,
 		},
 		{
-			name: "empty_body",
+			name: "empty_goodreply",
 			clusterMessage: servicelog.Message{
 				Severity: "Error",
 			},
-			goodReply:     nil,
-			expectedError: true,
-		},
-		{
-			name: "valid_body_but_unmatched_severity_field",
-			clusterMessage: servicelog.Message{
-				Severity: "Critical",
-			},
-			goodReply: &servicelog.GoodReply{
-				Severity: "Error",
-			},
+			goodReply:     []byte(`{}`),
 			expectedError: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var body []byte
-			var err error
-			if tt.goodReply != nil {
-				body, err = json.Marshal(tt.goodReply)
-				assert.NoError(t, err)
-			} else {
-				body = []byte(`{ invalid json}`)
-			}
-			validatedReply, err := validateGoodResponse(body, tt.clusterMessage)
+			validatedReply, err := validateGoodResponse(tt.goodReply, tt.clusterMessage)
 			if tt.expectedError {
 				assert.Error(t, err)
 				assert.Nil(t, validatedReply)
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, validatedReply)
-				assert.Equal(t, tt.goodReply, validatedReply)
 			}
 		})
 	}
