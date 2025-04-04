@@ -9,7 +9,6 @@ import (
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
@@ -17,7 +16,6 @@ type statusOptions struct {
 	output    string
 	verbose   bool
 	clusterID string
-
 	genericclioptions.IOStreams
 	GlobalOptions *globalflags.GlobalOptions
 }
@@ -26,15 +24,18 @@ type statusOptions struct {
 func newCmdstatus(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	ops := newStatusOptions(streams, globalOpts)
 	statusCmd := &cobra.Command{
-		Use:               "status",
+		Use:               "status --cluster-id <cluster-identifier>",
 		Short:             "Shows the support status of a specified cluster",
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd, args))
 			cmdutil.CheckErr(ops.run())
 		},
 	}
+
+	statusCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "Cluster ID for which to get support status")
+	statusCmd.MarkFlagRequired("cluster-id")
 	statusCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 
 	return statusCmd
@@ -48,13 +49,8 @@ func newStatusOptions(streams genericclioptions.IOStreams, globalOpts *globalfla
 }
 
 func (o *statusOptions) complete(cmd *cobra.Command, args []string) error {
-	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, "Provide exactly one cluster ID")
-	}
 
-	o.clusterID = args[0]
 	o.output = o.GlobalOptions.Output
-
 	return nil
 }
 
@@ -77,10 +73,12 @@ func (o *statusOptions) run() error {
 			clusterLimitedSupportReason.Details(),
 		})
 	}
+
 	// No reasons found, cluster is fully supported
 	if limitedSupportOverridden {
 		fmt.Printf("No limited support reasons found or all reasons are overridden, the cluster is fully supported\n")
 	}
+
 	// Add empty row for readability
 	table.AddRow([]string{})
 	err = table.Flush()

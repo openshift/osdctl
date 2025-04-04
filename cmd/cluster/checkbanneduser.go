@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"fmt"
+
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -10,15 +11,21 @@ import (
 const BanCodeExportControlCompliance = "export_control_compliance"
 
 func newCmdCheckBannedUser() *cobra.Command {
-	return &cobra.Command{
-		Use:               "check-banned-user [CLUSTER_ID]",
+	clusterID := ""
+	cmd := &cobra.Command{
+		Use:               "check-banned-user --cluster-id <cluster-identifier>",
 		Short:             "Checks if the cluster owner is a banned user.",
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(CheckBannedUser(args[0]))
+			cmdutil.CheckErr(CheckBannedUser(clusterID))
 		},
 	}
+
+	cmd.Flags().StringVarP(&clusterID, "cluster-id", "c", "", "Provide internal ID of the cluster")
+	cmd.MarkFlagRequired("cluster-id")
+
+	return cmd
 }
 
 func CheckBannedUser(clusterID string) error {
@@ -37,11 +44,9 @@ func CheckBannedUser(clusterID string) error {
 	if err != nil {
 		return err
 	}
-
 	if status := subscription.Status(); status != "Active" {
 		return fmt.Errorf("Expecting status 'Active' found %v\n", status)
 	}
-
 	fmt.Printf("Account %v - %v - %v\n", subscription.SupportLevel(), subscription.Creator().HREF(), subscription.Status())
 
 	fmt.Print("Finding account owner: ")
@@ -57,7 +62,6 @@ func CheckBannedUser(clusterID string) error {
 	lastUpdate := creator.UpdatedAt()
 
 	fmt.Printf("%v\n-------------------\nLast Update : %v\n", userEmail, lastUpdate)
-
 	if userBanned {
 		fmt.Println("User is banned")
 		fmt.Printf("Ban code = %v\n", userBanCode)
@@ -66,7 +70,6 @@ func CheckBannedUser(clusterID string) error {
 			fmt.Println("User banned due to export control compliance.\nPlease follow the steps detailed here: https://github.com/openshift/ops-sop/blob/master/v4/alerts/UpgradeConfigSyncFailureOver4HrSRE.md#user-banneddisabled-due-to-export-control-compliance .")
 			return nil
 		}
-
 		return nil
 	}
 	fmt.Println("User allowed")

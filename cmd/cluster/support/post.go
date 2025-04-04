@@ -45,6 +45,7 @@ type Post struct {
 	Resolution       string
 	Evidence         string
 	cluster          *cmv1.Cluster
+	ClusterID        string
 }
 
 type TemplateFile struct {
@@ -63,22 +64,22 @@ func newCmdpost() *cobra.Command {
 	p := &Post{}
 
 	postCmd := &cobra.Command{
-		Use:   "post CLUSTER_ID",
+		Use:   "post --cluster-id <cluster-identifier>",
 		Short: "Send limited support reason to a given cluster",
 		Long: `Sends limited support reason to a given cluster, along with an internal service log detailing why the cluster was placed into limited support.
 The caller will be prompted to continue before sending the limited support reason.`,
 		Example: `# Post a limited support reason for a cluster misconfiguration
-osdctl cluster support post 1a2B3c4DefghIjkLMNOpQrSTUV5 --misconfiguration cluster --problem="The cluster has a second failing ingress controller, which is not supported and can cause issues with SLA." \
+osdctl cluster support post --cluster-id=1a2B3c4DefghIjkLMNOpQrSTUV5 --misconfiguration cluster --problem="The cluster has a second failing ingress controller, which is not supported and can cause issues with SLA." \
 --resolution="Remove the additional ingress controller 'my-custom-ingresscontroller'. 'oc get ingresscontroller -n openshift-ingress-operator' should yield only 'default'" \
 --evidence="See OHSS-1234"
 
 Will result in the following limited-support text sent to the customer:
 The cluster has a second failing ingress controller, which is not supported and can cause issues with SLA. Remove the additional ingress controller 'my-custom-ingresscontroller'. 'oc get ingresscontroller -n openshift-ingress-operator' should yield only 'default'.
 `,
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := p.Run(args[0]); err != nil {
+			if err := p.Run(p.ClusterID); err != nil {
 				return fmt.Errorf("error posting limited support reason: %w", err)
 			}
 			return nil
@@ -86,12 +87,17 @@ The cluster has a second failing ingress controller, which is not supported and 
 	}
 
 	// Define required flags
+	postCmd.Flags().StringVarP(&p.ClusterID, "cluster-id", "c", "", "Intenal Cluster ID (required)")
 	postCmd.Flags().StringVarP(&p.Template, "template", "t", "", "Message template file or URL")
 	postCmd.Flags().StringArrayVarP(&p.TemplateParams, "param", "p", p.TemplateParams, "Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.")
 	postCmd.Flags().Var(&p.Misconfiguration, MisconfigurationFlag, "The type of misconfiguration responsible for the cluster being placed into limited support. Valid values are `cloud` or `cluster`.")
 	postCmd.Flags().StringVar(&p.Problem, ProblemFlag, "", "Complete sentence(s) describing the problem responsible for the cluster being placed into limited support. Will form the limited support message with the contents of --resolution appended")
 	postCmd.Flags().StringVar(&p.Resolution, ResolutionFlag, "", "Complete sentence(s) describing the steps for the customer to take to resolve the issue and move out of limited support. Will form the limited support message with the contents of --problem prepended")
 	postCmd.Flags().StringVar(&p.Evidence, EvidenceFlag, "", "(optional) The reasoning that led to the decision to place the cluster in limited support. Can also be a link to a Jira case. Used for internal service log only.")
+
+	// Mark cluster-id as required
+	postCmd.MarkFlagRequired("cluster-id")
+
 	return postCmd
 }
 
