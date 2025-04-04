@@ -18,6 +18,7 @@ import (
 type HCPCluster struct {
 	name                  string
 	internalID            string
+	externalID            string
 	managementClusterID   string
 	klusterletNS          string
 	hostedNS              string
@@ -86,6 +87,7 @@ func FetchClusterDetails(clusterKey string) (hcpCluster HCPCluster, error error)
 
 	hcpCluster.DynatraceURL = url
 	hcpCluster.internalID = cluster.ID()
+	hcpCluster.externalID = cluster.ExternalID()
 	hcpCluster.managementClusterID = mgmtCluster.ID()
 	hcpCluster.name = cluster.Name()
 	hcpCluster.managementClusterName = mgmtCluster.Name()

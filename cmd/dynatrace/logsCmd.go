@@ -174,7 +174,7 @@ func main(clusterID string) error {
 		return nil
 	}
 
-	accessToken, err := getAccessToken()
+	accessToken, err := getStorageAccessToken()
 	if err != nil {
 		return fmt.Errorf("failed to acquire access token %v", err)
 	}
