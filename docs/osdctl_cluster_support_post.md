@@ -8,14 +8,14 @@ Sends limited support reason to a given cluster, along with an internal service 
 The caller will be prompted to continue before sending the limited support reason.
 
 ```
-osdctl cluster support post CLUSTER_ID [flags]
+osdctl cluster support post --cluster-id <cluster-identifier> [flags]
 ```
 
 ### Examples
 
 ```
 # Post a limited support reason for a cluster misconfiguration
-osdctl cluster support post 1a2B3c4DefghIjkLMNOpQrSTUV5 --misconfiguration cluster --problem="The cluster has a second failing ingress controller, which is not supported and can cause issues with SLA." \
+osdctl cluster support post --cluster-id=1a2B3c4DefghIjkLMNOpQrSTUV5 --misconfiguration cluster --problem="The cluster has a second failing ingress controller, which is not supported and can cause issues with SLA." \
 --resolution="Remove the additional ingress controller 'my-custom-ingresscontroller'. 'oc get ingresscontroller -n openshift-ingress-operator' should yield only 'default'" \
 --evidence="See OHSS-1234"
 
@@ -27,6 +27,7 @@ The cluster has a second failing ingress controller, which is not supported and 
 ### Options
 
 ```
+  -c, --cluster-id string        Intenal Cluster ID (required)
       --evidence string          (optional) The reasoning that led to the decision to place the cluster in limited support. Can also be a link to a Jira case. Used for internal service log only.
   -h, --help                     help for post
       --misconfiguration cloud   The type of misconfiguration responsible for the cluster being placed into limited support. Valid values are cloud or `cluster`.

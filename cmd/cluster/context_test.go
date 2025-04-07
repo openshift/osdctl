@@ -32,11 +32,15 @@ func TestNewCmdContext(t *testing.T) {
 	cmd := newCmdContext()
 
 	assert.NotNil(t, cmd)
-	assert.Equal(t, "context", cmd.Use)
+	assert.Equal(t, "context --cluster-id <cluster-identifier>", cmd.Use)
 	assert.Equal(t, "Shows the context of a specified cluster", cmd.Short)
-	err := cmd.Args(cmd, []string{"cluster-id"})
+
+	// Test with valid arguments
+	err := cmd.ValidateArgs([]string{"cluster-id"})
 	assert.NoError(t, err)
-	err = cmd.Args(cmd, []string{})
+
+	// Test with no arguments
+	err = cmd.ValidateArgs([]string{})
 	assert.Error(t, err)
 
 	flags := cmd.Flags()
@@ -54,7 +58,6 @@ func TestNewCmdContext(t *testing.T) {
 	pages, _ := cmd.Flags().GetInt("pages")
 	assert.Equal(t, 40, pages)
 }
-
 func TestNewContextOptions(t *testing.T) {
 	opts := newContextOptions()
 	assert.NotNil(t, opts)

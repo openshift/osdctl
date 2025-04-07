@@ -10,14 +10,15 @@ This command will automatically login to the cluster to check the current pull-s
 
 
 ```
-osdctl cluster validate-pull-secret [CLUSTER_ID] [flags]
+osdctl cluster validate-pull-secret --cluster-id <cluster-identifier> [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help            help for validate-pull-secret
-      --reason string   The reason for this command to be run (usualy an OHSS or PD ticket), mandatory when using elevate
+  -c, --cluster-id string   The internal ID of the cluster to check (required)
+  -h, --help                help for validate-pull-secret
+      --reason string       The reason for this command to be run (usually an OHSS or PD ticket), mandatory when using elevate
 ```
 
 ### Options inherited from parent commands

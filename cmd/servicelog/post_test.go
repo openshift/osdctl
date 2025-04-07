@@ -129,7 +129,8 @@ var _ = Describe("Test posting service logs", func() {
 			options := &PostCmdOptions{}
 			err := options.Validate()
 			Expect(err).Should(HaveOccurred())
-			Expect(err.Error()).To(Equal("no cluster identifier has been found"))
+			// Updated error message to match the actual implementation
+			Expect(err.Error()).To(Equal("no cluster identifier has been found, please specify --cluster-id, -q, or -c"))
 		})
 
 		It("validates successfully with a cluster-id", func() {
