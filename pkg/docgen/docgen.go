@@ -9,6 +9,7 @@ import (
 	"github.com/openshift/osdctl/cmd"
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
+	"github.com/spf13/pflag"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
@@ -38,6 +39,43 @@ func NewDefaultOptions() *Options {
 	}
 }
 
+func sanitizeCommandHelpText(cmd *cobra.Command) {
+	if cmd.Example != "" {
+		cmd.Example = sanitizePathsInText(cmd.Example)
+	}
+	if cmd.Long != "" {
+		cmd.Long = sanitizePathsInText(cmd.Long)
+	}
+	if cmd.Short != "" {
+		cmd.Short = sanitizePathsInText(cmd.Short)
+	}
+
+	cmd.Flags().VisitAll(func(flag *pflag.Flag) {
+		if flag.Usage != "" {
+			flag.Usage = sanitizePathsInText(flag.Usage)
+		}
+	})
+
+	for _, subCmd := range cmd.Commands() {
+		sanitizeCommandHelpText(subCmd)
+	}
+}
+
+func sanitizePathsInText(text string) string {
+	if home := os.Getenv("HOME"); home != "" {
+		text = strings.ReplaceAll(text, home, "$HOME")
+	}
+
+	if pwd, err := os.Getwd(); err == nil && pwd != "" {
+		text = strings.ReplaceAll(text, pwd, "$PWD")
+	}
+
+	text = strings.ReplaceAll(text, "/var/lib/", "$SYSTEM_LIB/")
+	text = strings.ReplaceAll(text, "/usr/local/", "$USR_LOCAL/")
+
+	return text
+}
+
 func generateCommandsMarkdown(rootCmd *cobra.Command) error {
 	filename := CommandsMdFile
 	f, err := os.Create(filename)
@@ -54,11 +92,8 @@ func generateCommandsMarkdown(rootCmd *cobra.Command) error {
 		if !cmd.IsAvailableCommand() || cmd.IsAdditionalHelpTopicCommand() {
 			return
 		}
-
-		indent := strings.Repeat("  ", depth)
-
+		indent := strings.Repeat(" ", depth)
 		fmt.Fprintf(f, "%s- `%s` - %s\n", indent, cmd.Use, cmd.Short)
-
 		for _, subcmd := range cmd.Commands() {
 			writeCommands(subcmd, depth+1)
 		}
@@ -84,7 +119,6 @@ func generateCommandsMarkdown(rootCmd *cobra.Command) error {
 		}
 
 		fmt.Fprintf(f, "### %s\n\n", cmdPath)
-
 		if cmd.Long != "" {
 			fmt.Fprintf(f, "%s\n\n", cmd.Long)
 		} else if cmd.Short != "" {
@@ -103,7 +137,6 @@ func generateCommandsMarkdown(rootCmd *cobra.Command) error {
 	}
 
 	writeCommandDetails(rootCmd, "")
-
 	return nil
 }
 
@@ -124,6 +157,8 @@ func GenerateDocs(opts *Options) error {
 
 	rootCmd := cmd.NewCmdRoot(opts.IOStreams)
 
+	sanitizeCommandHelpText(rootCmd)
+
 	if err := doc.GenMarkdownTree(rootCmd, opts.DocsDir); err != nil {
 		return fmt.Errorf("generating command documentation: %w", err)
 	}
@@ -134,7 +169,6 @@ func GenerateDocs(opts *Options) error {
 
 	opts.Logger.Printf("✅ Documentation successfully generated in %s", opts.DocsDir)
 	opts.Logger.Printf("✅ Commands overview generated in %s", CommandsMdFile)
-
 	return nil
 }
 
@@ -151,7 +185,6 @@ func Command() *cobra.Command {
 
 	cmd.Flags().StringVar(&opts.CmdPath, "cmd-path", opts.CmdPath, "Path to the cmd directory")
 	cmd.Flags().StringVar(&opts.DocsDir, "docs-dir", opts.DocsDir, "Path to the docs output directory")
-
 	return cmd
 }
 

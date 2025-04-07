@@ -3,124 +3,125 @@
 ## Command Overview
 
 - `aao` - AWS Account Operator Debugging Utilities
-  - `pool` - Get the status of the AWS Account Operator AccountPool
+ - `pool` - Get the status of the AWS Account Operator AccountPool
 - `account` - AWS Account related utilities
-  - `clean-velero-snapshots` - Cleans up S3 buckets whose name start with managed-velero
-  - `cli` - Generate temporary AWS CLI credentials on demand
-  - `console` - Generate an AWS console URL on the fly
-  - `generate-secret <IAM User name>` - Generates IAM credentials secret
-  - `get` - Get resources
-    - `account` - Get AWS Account CR
-    - `account-claim` - Get AWS Account Claim CR
-    - `aws-account` - Get AWS Account ID
-    - `legal-entity` - Get AWS Account Legal Entity
-    - `secrets` - Get AWS Account CR related secrets
-  - `list` - List resources
-    - `account` - List AWS Account CR
-    - `account-claim` - List AWS Account Claim CR
-  - `mgmt` - AWS Account Management
-    - `assign` - Assign account to user
-    - `iam` - Creates an IAM user in a given AWS account and prints out the credentials
-    - `list` - List out accounts for username
-    - `unassign` - Unassign account to user
-  - `reset <account name>` - Reset AWS Account CR
-  - `rotate-secret <aws-account-cr-name>` - Rotate IAM credentials secret
-  - `servicequotas` - Interact with AWS service-quotas
-    - `describe` - Describe AWS service-quotas
-  - `set <account name>` - Set AWS Account CR status
-  - `verify-secrets [<account name>]` - Verify AWS Account CR IAM User credentials
+ - `clean-velero-snapshots` - Cleans up S3 buckets whose name start with managed-velero
+ - `cli` - Generate temporary AWS CLI credentials on demand
+ - `console` - Generate an AWS console URL on the fly
+ - `generate-secret <IAM User name>` - Generates IAM credentials secret
+ - `get` - Get resources
+  - `account` - Get AWS Account CR
+  - `account-claim` - Get AWS Account Claim CR
+  - `aws-account` - Get AWS Account ID
+  - `legal-entity` - Get AWS Account Legal Entity
+  - `secrets` - Get AWS Account CR related secrets
+ - `list` - List resources
+  - `account` - List AWS Account CR
+  - `account-claim` - List AWS Account Claim CR
+ - `mgmt` - AWS Account Management
+  - `assign` - Assign account to user
+  - `iam` - Creates an IAM user in a given AWS account and prints out the credentials
+  - `list` - List out accounts for username
+  - `unassign` - Unassign account to user
+ - `reset <account name>` - Reset AWS Account CR
+ - `rotate-secret <aws-account-cr-name>` - Rotate IAM credentials secret
+ - `servicequotas` - Interact with AWS service-quotas
+  - `describe` - Describe AWS service-quotas
+ - `set <account name>` - Set AWS Account CR status
+ - `verify-secrets [<account name>]` - Verify AWS Account CR IAM User credentials
 - `alert` - List alerts
-  - `list --cluster-id <cluster-id> --level [warning, critical, firing, pending, all]` - List all alerts or based on severity
-  - `silence` - add, expire and list silence associated with alerts
-    - `add --cluster-id <cluster-identifier> [--all --duration --comment | --alertname --duration --comment]` - Add new silence for alert
-    - `expire [--cluster-id <cluster-identifier>] [--all | --silence-id <silence-id>]` - Expire Silence for alert
-    - `list --cluster-id <cluster-identifier>` - List all silences
-    - `org <org-id> [--all --duration --comment | --alertname --duration --comment]` - Add new silence for alert for org
+ - `list --cluster-id <cluster-id> --level [warning, critical, firing, pending, all]` - List all alerts or based on severity
+ - `silence` - add, expire and list silence associated with alerts
+  - `add --cluster-id <cluster-identifier> [--all --duration --comment | --alertname --duration --comment]` - Add new silence for alert
+  - `expire [--cluster-id <cluster-identifier>] [--all | --silence-id <silence-id>]` - Expire Silence for alert
+  - `list --cluster-id <cluster-identifier>` - List all silences
+  - `org <org-id> [--all --duration --comment | --alertname --duration --comment]` - Add new silence for alert for org
 - `cloudtrail` - AWS CloudTrail related utilities
-  - `permission-denied-events` - Prints cloudtrail permission-denied events to console.
-  - `write-events` - Prints cloudtrail write events to console with optional filtering
+ - `permission-denied-events` - Prints cloudtrail permission-denied events to console.
+ - `write-events` - Prints cloudtrail write events to console with optional filtering
 - `cluster` - Provides information for a specified cluster
-  - `break-glass --cluster-id <cluster-identifier>` - Emergency access to a cluster
-    - `cleanup --cluster-id <cluster-identifier>` - Drop emergency access to a cluster
-  - `check-banned-user --cluster-id <cluster-identifier>` - Checks if the cluster owner is a banned user.
-  - `context --cluster-id <cluster-identifier>` - Shows the context of a specified cluster
-  - `cpd` - Runs diagnostic for a Cluster Provisioning Delay (CPD)
-  - `detach-stuck-volume --cluster-id <cluster-identifier>` - Detach openshift-monitoring namespace's volume from a cluster forcefully
-  - `etcd-health-check --cluster-id <cluster-id> --reason <reason for escalation>` - Checks the etcd components and member health
-  - `etcd-member-replace --cluster-id <cluster-identifier>` - Replaces an unhealthy etcd node
-  - `from-infra-id` - Get cluster ID and external ID from a given infrastructure ID commonly used by Splunk
-  - `health` - Describes health of cluster nodes and provides other cluster vitals.
-  - `hypershift-info` - Pull information about AWS objects from the cluster, the management cluster and the privatelink cluster
-  - `logging-check --cluster-id <cluster-identifier>` - Shows the logging support status of a specified cluster
-  - `orgId --cluster-id <cluster-identifier` - Get the OCM org ID for a given cluster
-  - `owner` - List the clusters owned by the user (can be specified to any user, not only yourself)
-  - `resize` - resize control-plane/infra nodes
-    - `control-plane` - Resize an OSD/ROSA cluster's control plane nodes
-    - `infra` - Resize an OSD/ROSA cluster's infra nodes
-  - `resync` - Force a resync of a cluster from Hive
-  - `sre-operators` - SRE operator related utilities
-    - `describe` - Describe SRE operators
-    - `list` - List the current and latest version of SRE operators
-  - `ssh` - utilities for accessing cluster via ssh
-    - `key --reason $reason [--cluster-id $CLUSTER_ID]` - Retrieve a cluster's SSH key from Hive
-  - `support` - Cluster Support
-    - `delete --cluster-id <cluster-identifier>` - Delete specified limited support reason for a given cluster
-    - `post --cluster-id <cluster-identifier>` - Send limited support reason to a given cluster
-    - `status --cluster-id <cluster-identifier>` - Shows the support status of a specified cluster
-  - `transfer-owner` - Transfer cluster ownership to a new user (to be done by Region Lead)
-  - `validate-pull-secret --cluster-id <cluster-identifier>` - Checks if the pull secret email matches the owner email
-  - `validate-pull-secret-ext [CLUSTER_ID]` - Extended checks to confirm pull-secret data is synced with current OCM data
+ - `break-glass --cluster-id <cluster-identifier>` - Emergency access to a cluster
+  - `cleanup --cluster-id <cluster-identifier>` - Drop emergency access to a cluster
+ - `check-banned-user --cluster-id <cluster-identifier>` - Checks if the cluster owner is a banned user.
+ - `context --cluster-id <cluster-identifier>` - Shows the context of a specified cluster
+ - `cpd` - Runs diagnostic for a Cluster Provisioning Delay (CPD)
+ - `detach-stuck-volume --cluster-id <cluster-identifier>` - Detach openshift-monitoring namespace's volume from a cluster forcefully
+ - `etcd-health-check --cluster-id <cluster-id> --reason <reason for escalation>` - Checks the etcd components and member health
+ - `etcd-member-replace --cluster-id <cluster-identifier>` - Replaces an unhealthy etcd node
+ - `from-infra-id` - Get cluster ID and external ID from a given infrastructure ID commonly used by Splunk
+ - `health` - Describes health of cluster nodes and provides other cluster vitals.
+ - `hypershift-info` - Pull information about AWS objects from the cluster, the management cluster and the privatelink cluster
+ - `logging-check --cluster-id <cluster-identifier>` - Shows the logging support status of a specified cluster
+ - `orgId --cluster-id <cluster-identifier` - Get the OCM org ID for a given cluster
+ - `owner` - List the clusters owned by the user (can be specified to any user, not only yourself)
+ - `resize` - resize control-plane/infra nodes
+  - `control-plane` - Resize an OSD/ROSA cluster's control plane nodes
+  - `infra` - Resize an OSD/ROSA cluster's infra nodes
+ - `resync` - Force a resync of a cluster from Hive
+ - `sre-operators` - SRE operator related utilities
+  - `describe` - Describe SRE operators
+  - `list` - List the current and latest version of SRE operators
+ - `ssh` - utilities for accessing cluster via ssh
+  - `key --reason $reason [--cluster-id $CLUSTER_ID]` - Retrieve a cluster's SSH key from Hive
+ - `support` - Cluster Support
+  - `delete --cluster-id <cluster-identifier>` - Delete specified limited support reason for a given cluster
+  - `post --cluster-id <cluster-identifier>` - Send limited support reason to a given cluster
+  - `status --cluster-id <cluster-identifier>` - Shows the support status of a specified cluster
+ - `transfer-owner` - Transfer cluster ownership to a new user (to be done by Region Lead)
+ - `validate-pull-secret --cluster-id <cluster-identifier>` - Checks if the pull secret email matches the owner email
+ - `validate-pull-secret-ext [CLUSTER_ID]` - Extended checks to confirm pull-secret data is synced with current OCM data
 - `cost` - Cost Management related utilities
-  - `create` - Create a cost category for the given OU
-  - `get` - Get total cost of a given OU
-  - `list` - List the cost of each Account/OU under given OU
-  - `reconcile` - Checks if there's a cost category for every OU. If an OU is missing a cost category, creates the cost category
+ - `create` - Create a cost category for the given OU
+ - `get` - Get total cost of a given OU
+ - `list` - List the cost of each Account/OU under given OU
+ - `reconcile` - Checks if there's a cost category for every OU. If an OU is missing a cost category, creates the cost category
 - `dynatrace` - Dynatrace related utilities
-  - `gather-logs --cluster-id <cluster-identifier>` - Gather all Pod logs and Application event from HCP
-  - `logs --cluster-id <cluster-identifier>` - Fetch logs from Dynatrace
-  - `url --cluster-id <cluster-identifier>` - Get the Dynatrace Tenant URL for a given MC or HCP cluster
+ - `dashboard --cluster-id CLUSTER_ID` - Get the Dyntrace Cluster Overview Dashboard for a given MC or HCP cluster
+ - `gather-logs --cluster-id <cluster-identifier>` - Gather all Pod logs and Application event from HCP
+ - `logs --cluster-id <cluster-identifier>` - Fetch logs from Dynatrace
+ - `url --cluster-id <cluster-identifier>` - Get the Dynatrace Tenant URL for a given MC or HCP cluster
 - `env [flags] [env-alias]` - Create an environment to interact with a cluster
 - `hcp` - 
-  - `must-gather --cluster-id <cluster-identifier>` - Create a must-gather for HCP cluster
+ - `must-gather --cluster-id <cluster-identifier>` - Create a must-gather for HCP cluster
 - `hive` - hive related utilities
-  - `clusterdeployment` - cluster deployment related utilities
-    - `list` - List cluster deployment crs
-    - `listresources` - List all resources on a hive cluster related to a given cluster
-  - `clustersync-failures [flags]` - List clustersync failures
+ - `clusterdeployment` - cluster deployment related utilities
+  - `list` - List cluster deployment crs
+  - `listresources` - List all resources on a hive cluster related to a given cluster
+ - `clustersync-failures [flags]` - List clustersync failures
 - `iampermissions` - STS/WIF utilities
-  - `diff` - Diff iam permissions for cluster operators between two versions
-  - `get` - Get OCP CredentialsRequests
-  - `save` - Save iam permissions for use in mcc
+ - `diff` - Diff iam permissions for cluster operators between two versions
+ - `get` - Get OCP CredentialsRequests
+ - `save` - Save iam permissions for use in mcc
 - `jira` - Provides a set of commands for interacting with Jira
-  - `quick-task <title>` - creates a new ticket with the given name
+ - `quick-task <title>` - creates a new ticket with the given name
 - `jumphost` - 
-  - `create` - Create a jumphost for emergency SSH access to a cluster's VMs
-  - `delete` - Delete a jumphost created by `osdctl jumphost create`
+ - `create` - Create a jumphost for emergency SSH access to a cluster's VMs
+ - `delete` - Delete a jumphost created by `osdctl jumphost create`
 - `mc` - 
-  - `list` - List ROSA HCP Management Clusters
+ - `list` - List ROSA HCP Management Clusters
 - `network` - network related utilities
-  - `packet-capture` - Start packet capture
-  - `verify-egress` - Verify an AWS OSD/ROSA cluster can reach all required external URLs necessary for full support.
+ - `packet-capture` - Start packet capture
+ - `verify-egress` - Verify an AWS OSD/ROSA cluster can reach all required external URLs necessary for full support.
 - `org` - Provides information for a specified organization
-  - `aws-accounts` - get organization AWS Accounts
-  - `clusters` - get all active organization clusters
-  - `context orgId` - fetches information about the given organization
-  - `current` - gets current organization
-  - `customers` - get paying/non-paying organizations
-  - `describe` - describe organization
-  - `get` - get organization by users
-  - `labels` - get organization labels
-  - `users` - get organization users
+ - `aws-accounts` - get organization AWS Accounts
+ - `clusters` - get all active organization clusters
+ - `context orgId` - fetches information about the given organization
+ - `current` - gets current organization
+ - `customers` - get paying/non-paying organizations
+ - `describe` - describe organization
+ - `get` - get organization by users
+ - `labels` - get organization labels
+ - `users` - get organization users
 - `promote` - Utilities to promote services/operators
-  - `dynatrace` - Utilities to promote dynatrace
-  - `package` - Utilities to promote package-operator services
-  - `saas` - Utilities to promote SaaS services/operators
+ - `dynatrace` - Utilities to promote dynatrace
+ - `package` - Utilities to promote package-operator services
+ - `saas` - Utilities to promote SaaS services/operators
 - `servicelog` - OCM/Hive Service log
-  - `list --cluster-id <cluster-identifier> [flags] [options]` - Get service logs for a given cluster identifier.
-  - `post --cluster-id <cluster-identifier>` - Post a service log to a cluster or list of clusters
+ - `list --cluster-id <cluster-identifier> [flags] [options]` - Get service logs for a given cluster identifier.
+ - `post --cluster-id <cluster-identifier>` - Post a service log to a cluster or list of clusters
 - `setup` - Setup the configuration
 - `swarm` - Provides a set of commands for swarming activity
-  - `secondary` - List unassigned JIRA issues based on criteria
+ - `secondary` - List unassigned JIRA issues based on criteria
 - `upgrade` - Upgrade osdctl
 - `version` - Display the version
 
@@ -2222,6 +2223,32 @@ osdctl dynatrace [flags]
   -S, --skip-version-check               skip checking to see if this is the most recent release
 ```
 
+### osdctl dynatrace dashboard
+
+Get the Dyntrace Cluster Overview Dashboard for a given MC or HCP cluster
+
+```
+osdctl dynatrace dashboard --cluster-id CLUSTER_ID [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+      --cluster-id string                Provide the id of the cluster
+      --context string                   The name of the kubeconfig context to use
+      --dash string                      Name of the dashboard you wish to find (default "Central ROSA HCP Dashboard")
+  -h, --help                             help for dashboard
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+```
+
 ### osdctl dynatrace gather-logs
 
 Gathers pods logs and evnets of a given HCP from Dynatrace.
@@ -3290,12 +3317,12 @@ osdctl promote dynatrace [flags]
 #### Flags
 
 ```
-      --appInterfaceDir pwd              location of app-interfache checkout. Falls back to pwd and /home/strinaga/git/app-interface
+      --appInterfaceDir pwd              location of app-interfache checkout. Falls back to pwd and $HOME/git/app-interface
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
   -c, --component string                 Dynatrace component getting promoted
       --context string                   The name of the kubeconfig context to use
-      --dynatraceConfigDir pwd           location of dynatrace-config checkout. Falls back to pwd and /home/strinaga/git/dynatrace-config
+      --dynatraceConfigDir pwd           location of dynatrace-config checkout. Falls back to pwd and $HOME/git/dynatrace-config
   -g, --gitHash string                   Git hash of the SaaS service/operator commit getting promoted
   -h, --help                             help for dynatrace
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -3321,7 +3348,7 @@ osdctl promote package [flags]
 #### Flags
 
 ```
-      --appInterfaceDir pwd              location of app-interfache checkout. Falls back to pwd and /home/strinaga/git/app-interface
+      --appInterfaceDir pwd              location of app-interfache checkout. Falls back to pwd and $HOME/git/app-interface
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
       --context string                   The name of the kubeconfig context to use
@@ -3349,7 +3376,7 @@ osdctl promote saas [flags]
 #### Flags
 
 ```
-      --appInterfaceDir pwd              location of app-interfache checkout. Falls back to pwd and /home/strinaga/git/app-interface
+      --appInterfaceDir pwd              location of app-interfache checkout. Falls back to pwd and $HOME/git/app-interface
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
       --context string                   The name of the kubeconfig context to use
