@@ -1,11 +1,17 @@
-## osdctl dynatrace
+## osdctl dynatrace dashboard
 
-Dynatrace related utilities
+Get the Dyntrace Cluster Overview Dashboard for a given MC or HCP cluster
+
+```
+osdctl dynatrace dashboard --cluster-id CLUSTER_ID [flags]
+```
 
 ### Options
 
 ```
-  -h, --help   help for dynatrace
+      --cluster-id string   Provide the id of the cluster
+      --dash string         Name of the dashboard you wish to find (default "Central ROSA HCP Dashboard")
+  -h, --help                help for dashboard
 ```
 
 ### Options inherited from parent commands
@@ -25,9 +31,5 @@ Dynatrace related utilities
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
-* [osdctl dynatrace dashboard](osdctl_dynatrace_dashboard.md)	 - Get the Dyntrace Cluster Overview Dashboard for a given MC or HCP cluster
-* [osdctl dynatrace gather-logs](osdctl_dynatrace_gather-logs.md)	 - Gather all Pod logs and Application event from HCP
-* [osdctl dynatrace logs](osdctl_dynatrace_logs.md)	 - Fetch logs from Dynatrace
-* [osdctl dynatrace url](osdctl_dynatrace_url.md)	 - Get the Dynatrace Tenant URL for a given MC or HCP cluster
+* [osdctl dynatrace](osdctl_dynatrace.md)	 - Dynatrace related utilities
 

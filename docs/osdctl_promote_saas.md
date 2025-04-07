@@ -22,14 +22,14 @@ osdctl promote saas [flags]
 ### Options
 
 ```
-      --appInterfaceDir pwd   location of app-interfache checkout. Falls back to pwd and /home/strinaga/git/app-interface
-  -g, --gitHash string        Git hash of the SaaS service/operator commit getting promoted
-      --hcp                   HCP service/operator getting promoted
-  -h, --help                  help for saas
-  -l, --list                  List all SaaS services/operators
-  -n, --namespaceRef string   SaaS target namespace reference name
-      --osd                   OSD service/operator getting promoted
-      --serviceName string    SaaS service/operator getting promoted
+      --appInterfaceDir string   location of app-interface checkout. Falls back to current working directory
+  -g, --gitHash string           Git hash of the SaaS service/operator commit getting promoted
+      --hcp                      HCP service/operator getting promoted
+  -h, --help                     help for saas
+  -l, --list                     List all SaaS services/operators
+  -n, --namespaceRef string      SaaS target namespace reference name
+      --osd                      OSD service/operator getting promoted
+      --serviceName string       SaaS service/operator getting promoted
 ```
 
 ### Options inherited from parent commands
