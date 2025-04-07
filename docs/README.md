@@ -3595,3 +3595,4 @@ osdctl version [flags]
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
   -S, --skip-version-check               skip checking to see if this is the most recent release
 ```
+

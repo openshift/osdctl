@@ -42,3 +42,4 @@ osdctl promote package [flags]
 ### SEE ALSO
 
 * [osdctl promote](osdctl_promote.md)	 - Utilities to promote services/operators
+
