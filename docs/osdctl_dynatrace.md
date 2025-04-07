@@ -28,5 +28,5 @@ Dynatrace related utilities
 * [osdctl](osdctl.md)	 - OSD CLI
 * [osdctl dynatrace gather-logs](osdctl_dynatrace_gather-logs.md)	 - Gather all Pod logs and Application event from HCP
 * [osdctl dynatrace logs](osdctl_dynatrace_logs.md)	 - Fetch logs from Dynatrace
-* [osdctl dynatrace url](osdctl_dynatrace_url.md)	 - Get the Dyntrace Tenant URL for a given MC or HCP cluster
+* [osdctl dynatrace url](osdctl_dynatrace_url.md)	 - Get the Dynatrace Tenant URL for a given MC or HCP cluster
 

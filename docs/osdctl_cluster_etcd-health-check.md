@@ -7,14 +7,15 @@ Checks the etcd components and member health
 Checks etcd component health status for member replacement
 
 ```
-osdctl cluster etcd-health-check <cluster-id> --reason <reason for escalation> [flags]
+osdctl cluster etcd-health-check --cluster-id <cluster-id> --reason <reason for escalation> [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help            help for etcd-health-check
-      --reason string   Specify a reason for privilege escalation
+      --cluster-id string   Provide the internal Cluster ID or name to perform health check on
+  -h, --help                help for etcd-health-check
+      --reason string       Specify a reason for privilege escalation
 ```
 
 ### Options inherited from parent commands

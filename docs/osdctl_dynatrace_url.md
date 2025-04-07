@@ -1,15 +1,16 @@
 ## osdctl dynatrace url
 
-Get the Dyntrace Tenant URL for a given MC or HCP cluster
+Get the Dynatrace Tenant URL for a given MC or HCP cluster
 
 ```
-osdctl dynatrace url CLUSTER_ID [flags]
+osdctl dynatrace url --cluster-id <cluster-identifier> [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for url
+      --cluster-id string   ID of the cluster
+  -h, --help                help for url
 ```
 
 ### Options inherited from parent commands

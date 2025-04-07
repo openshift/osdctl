@@ -1,16 +1,40 @@
-## osdctl cluster orgId
+## osdctl cluster validate-pull-secret-ext
 
-Get the OCM org ID for a given cluster
+Extended checks to confirm pull-secret data is synced with current OCM data
+
+### Synopsis
+
+
+	Attempts to validate if a cluster's pull-secret auth values are in sync with the account's email, 
+	registry_credential, and access token data stored in OCM.  
+	If this is being executed against a cluster which is not owned by the current OCM account, 
+	Region Lead permissions are required to view and validate the OCM AccessToken. 
+
 
 ```
-osdctl cluster orgId --cluster-id <cluster-identifier [flags]
+osdctl cluster validate-pull-secret-ext [CLUSTER_ID] [flags]
+```
+
+### Examples
+
+```
+
+	# Compare OCM Access-Token, OCM Registry-Credentials, and OCM Account Email against cluster's pull secret
+	osdctl cluster validate-pull-secret-ext ${CLUSTER_ID} --reason "OSD-XYZ"
+
+	# Exclude Access-Token, and Registry-Credential checks...
+	osdctl cluster validate-pull-secret-ext ${CLUSTER_ID} --reason "OSD-XYZ" --skip-access-token --skip-registry-creds
+
 ```
 
 ### Options
 
 ```
-  -c, --cluster-id string   The internal ID of the cluster to check (required)
-  -h, --help                help for orgId
+  -h, --help                  help for validate-pull-secret-ext
+  -l, --log-level string      debug, info, warn, error. (default=info) (default "info")
+      --reason string         Mandatory reason for this command to be run (usually includes an OHSS or PD ticket)
+      --skip-access-token     Exclude OCM AccessToken checks against cluster secret
+      --skip-registry-creds   Exclude OCM Registry Credentials checks against cluster secret
 ```
 
 ### Options inherited from parent commands

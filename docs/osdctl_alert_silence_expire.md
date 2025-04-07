@@ -7,13 +7,14 @@ Expire Silence for alert
 expire all silence or based on silenceid
 
 ```
-osdctl alert silence expire <cluster-id> [--all | --silence-id <silence-id>] [flags]
+osdctl alert silence expire [--cluster-id <cluster-identifier>] [--all | --silence-id <silence-id>] [flags]
 ```
 
 ### Options
 
 ```
   -a, --all                  clear all silences
+      --cluster-id string    Provide the internal ID of the cluster
   -h, --help                 help for expire
       --reason string        The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
       --silence-id strings   silence id (comma-separated)

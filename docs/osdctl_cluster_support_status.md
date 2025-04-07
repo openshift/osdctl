@@ -3,14 +3,15 @@
 Shows the support status of a specified cluster
 
 ```
-osdctl cluster support status [flags]
+osdctl cluster support status --cluster-id <cluster-identifier> [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help      help for status
-      --verbose   Verbose output
+  -c, --cluster-id string   Cluster ID for which to get support status
+  -h, --help                help for status
+      --verbose             Verbose output
 ```
 
 ### Options inherited from parent commands
