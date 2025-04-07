@@ -22,7 +22,7 @@ osdctl promote saas [flags]
 ### Options
 
 ```
-      --appInterfaceDir pwd   location of app-interfache checkout. Falls back to pwd and /home/slamba/git/app-interface
+      --appInterfaceDir pwd   location of app-interfache checkout. Falls back to pwd and /home/strinaga/git/app-interface
   -g, --gitHash string        Git hash of the SaaS service/operator commit getting promoted
       --hcp                   HCP service/operator getting promoted
   -h, --help                  help for saas
@@ -50,4 +50,3 @@ osdctl promote saas [flags]
 ### SEE ALSO
 
 * [osdctl promote](osdctl_promote.md)	 - Utilities to promote services/operators
-

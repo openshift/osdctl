@@ -17,7 +17,7 @@ osdctl promote package [flags]
 ### Options
 
 ```
-      --appInterfaceDir pwd   location of app-interfache checkout. Falls back to pwd and /home/slamba/git/app-interface
+      --appInterfaceDir pwd   location of app-interfache checkout. Falls back to pwd and /home/strinaga/git/app-interface
       --hcp                   The service being promoted conforms to the HyperShift progressive delivery definition
   -h, --help                  help for package
   -n, --serviceName string    Service getting promoted
@@ -42,4 +42,3 @@ osdctl promote package [flags]
 ### SEE ALSO
 
 * [osdctl promote](osdctl_promote.md)	 - Utilities to promote services/operators
-
