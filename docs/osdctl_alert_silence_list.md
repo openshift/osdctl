@@ -7,14 +7,15 @@ List all silences
 print the list of silences
 
 ```
-osdctl alert silence list <cluster-id> [flags]
+osdctl alert silence list --cluster-id <cluster-identifier> [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help            help for list
-      --reason string   The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
+      --cluster-id string   Provide the internal ID of the cluster
+  -h, --help                help for list
+      --reason string       The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
 ```
 
 ### Options inherited from parent commands

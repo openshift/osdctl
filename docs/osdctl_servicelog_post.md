@@ -9,7 +9,7 @@ Post a service log to a cluster or list of clusters
   Docs: https://docs.openshift.com/rosa/logging/sd-accessing-the-service-logs.html
 
 ```
-osdctl servicelog post CLUSTER_ID [flags]
+osdctl servicelog post --cluster-id <cluster-identifier> [flags]
 ```
 
 ### Examples
@@ -17,16 +17,16 @@ osdctl servicelog post CLUSTER_ID [flags]
 ```
 
   # Post a service log to a single cluster via a local file
-  osdctl servicelog post ${CLUSTER_ID} -t ~/path/to/file.json
+  osdctl servicelog post --cluster-id ${CLUSTER_ID} -t ~/path/to/file.json
 
   # Post a service log to a single cluster via a remote URL, providing a parameter
-  osdctl servicelog post ${CLUSTER_ID} -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/incident_resolved.json -p ALERT_NAME="alert"
+  osdctl servicelog post --cluster-id ${CLUSTER_ID} -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/incident_resolved.json -p ALERT_NAME="alert"
 
   # Post an internal-only service log message
-  osdctl servicelog post ${CLUSTER_ID} -i -p "MESSAGE=This is an internal message"
+  osdctl servicelog post --cluster-id ${CLUSTER_ID} -i -p "MESSAGE=This is an internal message"
 
   # Post a short external message
-  osdctl servicelog post ${CLUSTER_ID} -r "summary=External Message" -r "description=This is an external message" -r internal_only=False
+  osdctl servicelog post --cluster-id ${CLUSTER_ID} -r "summary=External Message" -r "description=This is an external message" -r internal_only=False
 
   # Post a service log to a group of clusters, determined by an OCM query
   ocm list cluster -p search="cloud_provider.id is 'gcp' and managed='true' and state is 'ready'"
@@ -37,6 +37,7 @@ osdctl servicelog post CLUSTER_ID [flags]
 ### Options
 
 ```
+  -C, --cluster-id string        Internal ID of the cluster to post the service log to
   -c, --clusters-file string     Read a list of clusters to post the servicelog to. the format of the file is: {"clusters":["$CLUSTERID"]}
   -d, --dry-run                  Dry-run - print the service log about to be sent but don't send it.
   -h, --help                     help for post

@@ -3,14 +3,15 @@
 Detach openshift-monitoring namespace's volume from a cluster forcefully
 
 ```
-osdctl cluster detach-stuck-volume [flags]
+osdctl cluster detach-stuck-volume --cluster-id <cluster-identifier> [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help            help for detach-stuck-volume
-      --reason string   The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
+      --cluster-id string   Provide internal ID of the cluster
+  -h, --help                help for detach-stuck-volume
+      --reason string       The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)
 ```
 
 ### Options inherited from parent commands

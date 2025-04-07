@@ -11,7 +11,7 @@ Gathers pods logs and evnets of a given HCP from Dynatrace.
 		
 
 ```
-osdctl dynatrace gather-logs <cluster-id> [flags]
+osdctl dynatrace gather-logs --cluster-id <cluster-identifier> [flags]
 ```
 
 ### Examples
@@ -19,17 +19,18 @@ osdctl dynatrace gather-logs <cluster-id> [flags]
 ```
 
   # Gather logs for a HCP cluster with cluster id hcp-cluster-id-123
-  osdctl dt gather-logs hcp-cluster-id-123
+  osdctl dt gather-logs --cluster-id hcp-cluster-id-123
 ```
 
 ### Options
 
 ```
-      --dest-dir string   Destination directory for the logs dump, defaults to the local directory.
-  -h, --help              help for gather-logs
-      --since int         Number of hours (integer) since which to pull logs and events (default 10)
-      --sort string       Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc' (default "asc")
-      --tail int          Last 'n' logs and events to fetch. By default it will pull everything
+      --cluster-id string   Internal ID of the HCP cluster to gather logs from (required)
+      --dest-dir string     Destination directory for the logs dump, defaults to the local directory.
+  -h, --help                help for gather-logs
+      --since int           Number of hours (integer) since which to pull logs and events (default 10)
+      --sort string         Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc' (default "asc")
+      --tail int            Last 'n' logs and events to fetch. By default it will pull everything
 ```
 
 ### Options inherited from parent commands

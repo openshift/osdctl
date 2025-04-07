@@ -3,13 +3,14 @@
 Get the OCM org ID for a given cluster
 
 ```
-osdctl cluster orgId CLUSTER_ID [flags]
+osdctl cluster orgId --cluster-id <cluster-identifier [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for orgId
+  -c, --cluster-id string   The internal ID of the cluster to check (required)
+  -h, --help                help for orgId
 ```
 
 ### Options inherited from parent commands

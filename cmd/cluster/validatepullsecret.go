@@ -26,20 +26,26 @@ type validatePullSecretOptions struct {
 func newCmdValidatePullSecret() *cobra.Command {
 	ops := newValidatePullSecretOptions()
 	validatePullSecretCmd := &cobra.Command{
-		Use:   "validate-pull-secret [CLUSTER_ID]",
+		Use:   "validate-pull-secret --cluster-id <cluster-identifier>",
 		Short: "Checks if the pull secret email matches the owner email",
 		Long: `Checks if the pull secret email matches the owner email.
 
 This command will automatically login to the cluster to check the current pull-secret defined in 'openshift-config/pull-secret'
 `,
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			ops.clusterID = args[0]
 			cmdutil.CheckErr(ops.run())
 		},
 	}
-	validatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command to be run (usualy an OHSS or PD ticket), mandatory when using elevate")
+
+	// Add cluster-id flag
+	validatePullSecretCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "The internal ID of the cluster to check (required)")
+	if err := validatePullSecretCmd.MarkFlagRequired("cluster-id"); err != nil {
+		fmt.Printf("Error marking cluster-id flag as required: %v\n", err)
+	}
+
+	validatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command to be run (usually an OHSS or PD ticket), mandatory when using elevate")
 	_ = validatePullSecretCmd.MarkFlagRequired("reason")
 	return validatePullSecretCmd
 }
