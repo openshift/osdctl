@@ -61,7 +61,7 @@ func NewCmdHCPMustGather() *cobra.Command {
 }
 
 func (g *GatherLogsOpts) GatherLogs(clusterID string) (error error) {
-	accessToken, err := getAccessToken()
+	accessToken, err := getStorageAccessToken()
 	if err != nil {
 		return fmt.Errorf("failed to acquire access token %v", err)
 	}
