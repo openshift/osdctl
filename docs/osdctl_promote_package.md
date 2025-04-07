@@ -10,14 +10,14 @@ osdctl promote package [flags]
 
 ```
 
-		# Promote a package-operator service
-		osdctl promote package --serviceName <serviceName> --gitHash <git-hash>
+ # Promote a package-operator service
+ osdctl promote package --serviceName <serviceName> --gitHash <git-hash>
 ```
 
 ### Options
 
 ```
-      --appInterfaceDir pwd   location of app-interfache checkout. Falls back to pwd and $HOME/git/app-interface
+      --appInterfaceDir pwd   location of app-interface checkout. Falls back to pwd
       --hcp                   The service being promoted conforms to the HyperShift progressive delivery definition
   -h, --help                  help for package
   -n, --serviceName string    Service getting promoted

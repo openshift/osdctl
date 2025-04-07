@@ -106,10 +106,10 @@ func NewCmdDynatrace() *cobra.Command {
 	promoteDynatraceCmd.Flags().BoolVarP(&ops.list, "list", "l", false, "List all SaaS services/operators")
 	promoteDynatraceCmd.Flags().StringVarP(&ops.component, "component", "c", "", "Dynatrace component getting promoted")
 	promoteDynatraceCmd.Flags().StringVarP(&ops.gitHash, "gitHash", "g", "", "Git hash of the SaaS service/operator commit getting promoted")
-	promoteDynatraceCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "appInterfaceDir", "", "", "location of app-interfache checkout. Falls back to `pwd` and "+DefaultAppInterfaceDirectory())
+	promoteDynatraceCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "appInterfaceDir", "", "", "location of app-interface checkout. Falls back to `pwd`")
 	promoteDynatraceCmd.Flags().BoolVarP(&ops.terraform, "terraform", "t", false, "deploy dynatrace-config terraform job")
 	promoteDynatraceCmd.Flags().StringVarP(&ops.module, "module", "m", "", "module to promote")
-	promoteDynatraceCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "dynatraceConfigDir", "", "", "location of dynatrace-config checkout. Falls back to `pwd` and "+DefaultDynatraceconfigDir())
+	promoteDynatraceCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "dynatraceConfigDir", "", "", "location of dynatrace-config checkout. Falls back to `pwd'")
 
 	return promoteDynatraceCmd
 }
