@@ -22,7 +22,7 @@ OS := $(shell go env GOOS | sed 's/[a-z]/\U&/')
 ARCH := $(shell go env GOARCH)
 .PHONY: download-goreleaser
 download-goreleaser:
-	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser@v1.21.2
+	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser/v2@v2.6.1 # TODO: bump once we move to Go 1.24
 
 #Update documentation as a part of every release
 
