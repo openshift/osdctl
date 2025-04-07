@@ -26,9 +26,9 @@ osdctl promote dynatrace [flags]
 ### Options
 
 ```
-      --appInterfaceDir pwd         location of app-interface checkout. Falls back to pwd
+      --appInterfaceDir string      location of app-interface checkout. Falls back to current working directory
   -c, --component string            Dynatrace component getting promoted
-      --dynatraceConfigDir string   location of dynatrace-config checkout. Falls back to `pwd'
+      --dynatraceConfigDir string   location of dynatrace-config checkout. Falls back to current working directory
   -g, --gitHash string              Git hash of the SaaS service/operator commit getting promoted
   -h, --help                        help for dynatrace
   -l, --list                        List all SaaS services/operators

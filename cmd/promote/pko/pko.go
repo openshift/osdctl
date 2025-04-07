@@ -34,7 +34,7 @@ func NewCmdPKO() *cobra.Command {
 
 	pkoCmd.Flags().StringVarP(&ops.serviceName, "serviceName", "n", "", "Service getting promoted")
 	pkoCmd.Flags().StringVarP(&ops.packageTag, "tag", "t", "", "Package tag being promoted to")
-	pkoCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "appInterfaceDir", "", "", "location of app-interface checkout. Falls back to `pwd`")
+	pkoCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "appInterfaceDir", "", "", "location of app-interface checkout. Falls back to current working directory")
 	pkoCmd.Flags().BoolVar(&ops.hcp, "hcp", false, "The service being promoted conforms to the HyperShift progressive delivery definition")
 
 	return pkoCmd

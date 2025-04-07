@@ -17,11 +17,11 @@ osdctl promote package [flags]
 ### Options
 
 ```
-      --appInterfaceDir pwd   location of app-interface checkout. Falls back to pwd
-      --hcp                   The service being promoted conforms to the HyperShift progressive delivery definition
-  -h, --help                  help for package
-  -n, --serviceName string    Service getting promoted
-  -t, --tag string            Package tag being promoted to
+      --appInterfaceDir string   location of app-interface checkout. Falls back to current working directory
+      --hcp                      The service being promoted conforms to the HyperShift progressive delivery definition
+  -h, --help                     help for package
+  -n, --serviceName string       Service getting promoted
+  -t, --tag string               Package tag being promoted to
 ```
 
 ### Options inherited from parent commands

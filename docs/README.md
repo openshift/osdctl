@@ -3317,12 +3317,12 @@ osdctl promote dynatrace [flags]
 #### Flags
 
 ```
-      --appInterfaceDir pwd              location of app-interface checkout. Falls back to pwd
+      --appInterfaceDir string           location of app-interface checkout. Falls back to current working directory
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
   -c, --component string                 Dynatrace component getting promoted
       --context string                   The name of the kubeconfig context to use
-      --dynatraceConfigDir string        location of dynatrace-config checkout. Falls back to `pwd'
+      --dynatraceConfigDir string        location of dynatrace-config checkout. Falls back to current working directory
   -g, --gitHash string                   Git hash of the SaaS service/operator commit getting promoted
   -h, --help                             help for dynatrace
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -3348,7 +3348,7 @@ osdctl promote package [flags]
 #### Flags
 
 ```
-      --appInterfaceDir pwd              location of app-interface checkout. Falls back to pwd
+      --appInterfaceDir string           location of app-interface checkout. Falls back to current working directory
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
       --context string                   The name of the kubeconfig context to use
@@ -3376,7 +3376,7 @@ osdctl promote saas [flags]
 #### Flags
 
 ```
-      --appInterfaceDir pwd              location of app-interface checkout. Falls back to pwd
+      --appInterfaceDir string           location of app-interface checkout. Falls back to current working directory
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
       --context string                   The name of the kubeconfig context to use
