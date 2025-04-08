@@ -51,38 +51,44 @@ func (capture *LogCapture) Write(p []byte) (n int, err error) {
 }
 
 type etcdHealthCheckOptions struct {
-	reason string
+	reason    string
+	clusterID string
 }
 
 func newCmdEtcdHealthCheck() *cobra.Command {
 	opts := etcdHealthCheckOptions{}
 	cmd := &cobra.Command{
-		Use:               "etcd-health-check <cluster-id> --reason <reason for escalation>",
+		Use:               "etcd-health-check --cluster-id <cluster-id> --reason <reason for escalation>",
 		Short:             "Checks the etcd components and member health",
 		Long:              `Checks etcd component health status for member replacement`,
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(EtcdHealthCheck(args[0], opts))
+			cmdutil.CheckErr(EtcdHealthCheck(opts))
 		},
 	}
 
+	cmd.Flags().StringVar(&opts.clusterID, "cluster-id", "", "Provide the internal Cluster ID or name to perform health check on")
 	cmd.Flags().StringVar(&opts.reason, "reason", "", "Specify a reason for privilege escalation")
-	err := cmd.MarkFlagRequired("reason")
+
+	err := cmd.MarkFlagRequired("cluster-id")
+
+	err = cmd.MarkFlagRequired("reason")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "WARNING: failed to mark flag '--reason' as required: %v", err)
 	}
+
 	return cmd
 }
 
-func EtcdHealthCheck(clusterId string, opts etcdHealthCheckOptions) error {
+func EtcdHealthCheck(opts etcdHealthCheckOptions) error {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Fatal("error : ", err)
 		}
 	}()
 
-	kubeCli, kconfig, clientset, err := common.GetKubeConfigAndClient(clusterId, opts.reason)
+	kubeCli, kconfig, clientset, err := common.GetKubeConfigAndClient(opts.clusterID, opts.reason)
 	if err != nil {
 		return err
 	}
@@ -112,7 +118,7 @@ func EtcdHealthCheck(clusterId string, opts etcdHealthCheckOptions) error {
 	}
 
 	if unhealthyMember != "" {
-		fmt.Printf("[INFO] %s is unhealthy.\nRun \"osdctl cluster etcd-member-replace %s --node %s\" to replace the member \n", unhealthyMember, clusterId, unhealthyMember)
+		fmt.Printf("[INFO] %s is unhealthy.\nRun \"osdctl cluster etcd-member-replace --cluster-id %s --node %s\" to replace the member \n", unhealthyMember, opts.clusterID, unhealthyMember)
 	}
 	return nil
 }

@@ -1,3 +1,4 @@
+version: 2
 project_name: osdctl
 builds:
   - env:
@@ -35,7 +36,7 @@ checksum:
   algorithm: sha256
 
 snapshot:
-  name_template: "{{ .Tag }}-next"
+  version_template: "{{ .Tag }}-next"
 
 changelog:
   sort: asc
