@@ -48,44 +48,47 @@ var (
 	jumpPodPollTimeout  = 5 * time.Minute
 )
 
-// NewCmdCluster implements the 'cluster access' subcommand
+// NewCmdAccess implements the 'break-glass' subcommand
 func NewCmdAccess(streams genericclioptions.IOStreams, client *k8s.LazyClient) *cobra.Command {
 	ops := newClusterAccessOptions(client, streams)
 	accessCmd := &cobra.Command{
-		Use:               "break-glass <cluster identifier>",
+		Use:               "break-glass --cluster-id <cluster-identifier>",
 		Short:             "Emergency access to a cluster",
 		Long:              "Obtain emergency credentials to access the given cluster. You must be logged into the cluster's hive shard",
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(accessCmdComplete(cmd, args))
-			cmdutil.CheckErr(ops.Run(cmd, args))
+			cmdutil.CheckErr(accessCmdComplete(cmd))
+			cmdutil.CheckErr(ops.Run(cmd))
 		},
 	}
 	accessCmd.AddCommand(newCmdCleanup(client, streams))
 	accessCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	accessCmd.Flags().StringVar(&ops.clusterID, "cluster-id", "", "Provide the internal ID of the cluster")
 	_ = accessCmd.MarkFlagRequired("reason")
+	_ = accessCmd.MarkFlagRequired("cluster-id")
 
 	return accessCmd
 }
 
-// clusterCmdComplete verifies the command's invocation, returning an error if the usage is invalid
-func accessCmdComplete(cmd *cobra.Command, args []string) error {
-	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, "Exactly one cluster identifier was expected")
-	}
-	return osdctlutil.IsValidClusterKey(args[0])
+// accessCmdComplete verifies the command's invocation, returning an error if the usage is invalid
+func accessCmdComplete(cmd *cobra.Command) error {
+
+	clusterID := cmd.Flag("cluster-id").Value.String()
+
+	return osdctlutil.IsValidClusterKey(clusterID)
 }
 
 // clusterAccessOptions contains the objects and information required to access a cluster
 type clusterAccessOptions struct {
-	reason string
+	reason    string
+	clusterID string
 
 	genericclioptions.IOStreams
 	kubeCli *k8s.LazyClient
 }
 
-// newAccessOptions creates a clusterAccessOptions object
+// newClusterAccessOptions creates a clusterAccessOptions object
 func newClusterAccessOptions(client *k8s.LazyClient, streams genericclioptions.IOStreams) clusterAccessOptions {
 	a := clusterAccessOptions{
 		IOStreams: streams,
@@ -110,15 +113,15 @@ func (c *clusterAccessOptions) Errorln(msg string) {
 }
 
 // Readln reads a single line of user input using the clusterAccessOptions' IOStreams. User input is returned with all
-// procceeding and following whitespace trimmed
+// proceeding and following whitespace trimmed
 func (c *clusterAccessOptions) Readln() (string, error) {
 	in, err := osdctlutil.StreamRead(c.IOStreams, '\n')
 	return strings.TrimSpace(in), err
 }
 
-// Run executes the 'cluster' access subcommand
-func (c *clusterAccessOptions) Run(cmd *cobra.Command, args []string) error {
-	clusterIdentifier := args[0] // This action requires elevation
+// Run executes the 'break-glass' access subcommand
+func (c *clusterAccessOptions) Run(cmd *cobra.Command) error {
+	clusterIdentifier := c.clusterID
 
 	c.kubeCli.Impersonate("backplane-cluster-admin", c.reason, fmt.Sprintf("Elevation required to break-glass on %s cluster", clusterIdentifier))
 
@@ -216,7 +219,7 @@ func (c *clusterAccessOptions) createLocalKubeconfigAccess(cluster *clustersmgmt
 		}
 
 		c.Println(fmt.Sprintf("File has been written to '%s' for manual use", kubeconfigFilePath))
-		return fmt.Errorf("Could not parse cluster's kubeconfig Secret")
+		return fmt.Errorf("could not parse cluster's kubeconfig Secret")
 	}
 
 	// Determine if cluster utilizes a Private API
@@ -354,11 +357,10 @@ func (c *clusterAccessOptions) getKubeConfigSecret(ns corev1.Namespace) (corev1.
 	}
 
 	if len(secretList.Items) == 0 {
-		return corev1.Secret{}, fmt.Errorf("Kubeconfig secret not found in namespace '%s'", ns.Name)
+		return corev1.Secret{}, fmt.Errorf("kubeconfig secret not found in namespace '%s'", ns.Name)
 	}
 
 	// Just return the first item in list
-	// TODO: What do if we have >1 secret?
 	return secretList.Items[0], nil
 }
 
@@ -417,7 +419,7 @@ func (c *clusterAccessOptions) createJumpPod(kubeconfigSecret corev1.Secret, clu
 	return deploy, err
 }
 
-// waitForPod polls until the given pod is ready
+// waitForJumpPod polls until the given pod is ready
 func (c *clusterAccessOptions) waitForJumpPod(pod corev1.Pod, interval time.Duration, timeout time.Duration) error {
 	key := types.NamespacedName{
 		Name:      pod.Name,
