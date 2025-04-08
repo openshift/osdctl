@@ -15,9 +15,9 @@ type diffOptions struct {
 	BaseVersion   string
 	TargetVersion string
 	Cloud         policies.CloudSpec
-	downloadFunc func(string, policies.CloudSpec) (string, error)
-	execFunc     func(string, ...string) *exec.Cmd
-	outputWriter io.Writer
+	downloadFunc  func(string, policies.CloudSpec) (string, error)
+	execFunc      func(string, ...string) *exec.Cmd
+	outputWriter  io.Writer
 }
 
 const (
@@ -27,9 +27,9 @@ const (
 
 func newCmdDiff() *cobra.Command {
 	ops := &diffOptions{
-		downloadFunc: policies.DownloadCredentialRequests, 
-		execFunc:     exec.Command,                        
-		outputWriter: os.Stdout,                          
+		downloadFunc: policies.DownloadCredentialRequests,
+		execFunc:     exec.Command,
+		outputWriter: os.Stdout,
 	}
 
 	policyCmd := &cobra.Command{

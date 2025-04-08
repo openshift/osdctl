@@ -19,14 +19,14 @@ type saveOptions struct {
 	ReleaseVersion string
 	Cloud          policies.CloudSpec
 	Force          bool
-	DownloadCRs   func(string, policies.CloudSpec) (string, error)
-	ParseCRsInDir func(string) ([]*cco.CredentialsRequest, error)
-	AWSConverter  func(*cco.CredentialsRequest) (*policies.PolicyDocument, error)
-	GCPConverter  func(*cco.CredentialsRequest) (*policies.ServiceAccount, error)
-	MkdirAll      func(string, os.FileMode) error
-	Stat          func(string) (os.FileInfo, error)
-	WriteFile     func(string, []byte, os.FileMode) error
-	Print         func(format string, a ...interface{}) (n int, err error)
+	DownloadCRs    func(string, policies.CloudSpec) (string, error)
+	ParseCRsInDir  func(string) ([]*cco.CredentialsRequest, error)
+	AWSConverter   func(*cco.CredentialsRequest) (*policies.PolicyDocument, error)
+	GCPConverter   func(*cco.CredentialsRequest) (*policies.ServiceAccount, error)
+	MkdirAll       func(string, os.FileMode) error
+	Stat           func(string) (os.FileInfo, error)
+	WriteFile      func(string, []byte, os.FileMode) error
+	Print          func(format string, a ...interface{}) (n int, err error)
 }
 
 type saveCmdBuilder struct{}

@@ -13,8 +13,8 @@ import (
 type getOptions struct {
 	ReleaseVersion string
 	Cloud          policies.CloudSpec
-	downloadFunc func(string, policies.CloudSpec) (string, error)
-	outputWriter io.Writer
+	downloadFunc   func(string, policies.CloudSpec) (string, error)
+	outputWriter   io.Writer
 }
 
 func newCmdGet() *cobra.Command {
