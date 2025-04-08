@@ -14,15 +14,11 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// saveOptions holds flags and injected dependencies for testability
-// Behavior remains unchanged in production.
 type saveOptions struct {
 	OutFolder      string
 	ReleaseVersion string
 	Cloud          policies.CloudSpec
 	Force          bool
-
-	// Dependencies for testability
 	DownloadCRs   func(string, policies.CloudSpec) (string, error)
 	ParseCRsInDir func(string) ([]*cco.CredentialsRequest, error)
 	AWSConverter  func(*cco.CredentialsRequest) (*policies.PolicyDocument, error)
@@ -33,7 +29,6 @@ type saveOptions struct {
 	Print         func(format string, a ...interface{}) (n int, err error)
 }
 
-// newCmdSave creates the save command with default dependencies injected
 type saveCmdBuilder struct{}
 
 func newCmdSave() *cobra.Command {
@@ -69,26 +64,21 @@ func newCmdSave() *cobra.Command {
 	return saveCmd
 }
 
-// run executes the save logic using injected dependencies
 func (o *saveOptions) run() error {
-	// create output directory
 	if err := o.MkdirAll(o.OutFolder, 0755); err != nil {
 		return err
 	}
 
-	// download credential requests directory
 	dir, err := o.DownloadCRs(o.ReleaseVersion, o.Cloud)
 	if err != nil {
 		return err
 	}
 
-	// parse credentials requests
 	crs, err := o.ParseCRsInDir(dir)
 	if err != nil {
 		return err
 	}
 
-	// prepare file contents
 	files := make(map[string][]byte)
 	switch o.Cloud {
 	case policies.AWS:
@@ -126,7 +116,6 @@ func (o *saveOptions) run() error {
 		}
 	}
 
-	// write files
 	for path, content := range files {
 		_, err := o.Stat(path)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {

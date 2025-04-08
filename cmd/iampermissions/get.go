@@ -13,8 +13,6 @@ import (
 type getOptions struct {
 	ReleaseVersion string
 	Cloud          policies.CloudSpec
-
-	// Injected for testability
 	downloadFunc func(string, policies.CloudSpec) (string, error)
 	outputWriter io.Writer
 }

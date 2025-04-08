@@ -12,10 +12,8 @@ import (
 )
 
 func TestSaveOptions_Run_Success_AWS(t *testing.T) {
-	// Capture printed output
 	var printed []string
 
-	// Fake credential request
 	cr := &cco.CredentialsRequest{ObjectMeta: metav1.ObjectMeta{Name: "test-cr"}}
 
 	opts := &saveOptions{
@@ -37,12 +35,10 @@ func TestSaveOptions_Run_Success_AWS(t *testing.T) {
 
 		AWSConverter: func(req *cco.CredentialsRequest) (*policies.PolicyDocument, error) {
 			assert.Equal(t, cr, req)
-			// Return a minimal PolicyDocument
 			return &policies.PolicyDocument{Version: "1.0"}, nil
 		},
 
 		GCPConverter: func(req *cco.CredentialsRequest) (*policies.ServiceAccount, error) {
-			// Should not be called in AWS test
 			t.Fatalf("GCPConverter called for AWS test")
 			return nil, nil
 		},
@@ -53,14 +49,12 @@ func TestSaveOptions_Run_Success_AWS(t *testing.T) {
 		},
 
 		Stat: func(path string) (os.FileInfo, error) {
-			// Always treat as non-existent
 			return nil, os.ErrNotExist
 		},
 
 		WriteFile: func(name string, data []byte, perm os.FileMode) error {
 			assert.Equal(t, "out/test-cr.json", name)
 			assert.Equal(t, os.FileMode(0600), perm)
-			// Data should be valid JSON
 			assert.Contains(t, string(data), "Version")
 			return nil
 		},
@@ -74,7 +68,6 @@ func TestSaveOptions_Run_Success_AWS(t *testing.T) {
 	err := opts.run()
 	assert.NoError(t, err)
 
-	// Verify print messages
 	assert.Contains(t, printed, "Writing out/test-cr.json\n")
 }
 
