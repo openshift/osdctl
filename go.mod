@@ -29,6 +29,7 @@ require (
 	github.com/coreos/go-semver v0.3.1
 	github.com/deckarep/golang-set v1.8.0
 	github.com/fatih/color v1.18.0
+	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/go-github/v63 v63.0.0
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/hcl/v2 v2.23.0
@@ -118,6 +119,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chai2010/gettext-go v1.0.3 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/creack/pty v1.1.20 // indirect
 	github.com/danieljoos/wincred v1.2.2 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -235,6 +237,7 @@ require (
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tdewolff/minify/v2 v2.21.3 // indirect
 	github.com/tdewolff/parse/v2 v2.7.20 // indirect
