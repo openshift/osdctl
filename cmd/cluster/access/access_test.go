@@ -371,7 +371,7 @@ func TestGetKubeConfigSecret(t *testing.T) {
 		expectedErr    error
 	}{
 		{
-			name: "Success_Secret _Found",
+			name: "Success_Secret_Found",
 			secretList: []corev1.Secret{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -397,7 +397,7 @@ func TestGetKubeConfigSecret(t *testing.T) {
 			secretList:     nil,
 			namespaceName:  "test-namespace",
 			expectedSecret: corev1.Secret{},
-			expectedErr:    fmt.Errorf("Kubeconfig secret not found in namespace 'test-namespace'"),
+			expectedErr:    fmt.Errorf("kubeconfig secret not found in namespace 'test-namespace'"),
 		},
 	}
 
