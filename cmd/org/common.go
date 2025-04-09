@@ -25,8 +25,8 @@ const (
 )
 
 var (
-	awsProfile        string = ""
-	output            string = ""
+	awsProfile string = ""
+	output     string = ""
 )
 
 type Organization struct {

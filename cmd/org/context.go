@@ -13,8 +13,8 @@ import (
 
 	pd "github.com/PagerDuty/go-pagerduty"
 	"github.com/andygrunwald/go-jira"
-	accountsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	sdk "github.com/openshift-online/ocm-sdk-go"
+	accountsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"github.com/openshift/osdctl/cmd/servicelog"
@@ -69,9 +69,9 @@ func NewDefaultContextFetcher() *DefaultContextFetcher {
 
 func ContextCmd(fetcher ContextFetcher) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "context orgId",
-		Short:   "fetches information about the given organization",
-		Long:    `Fetches information about the given organization. This data is presented as a table where each row includes the name, version, ID, cloud provider, and plan for the cluster. Rows will also include the number of recent service logs, active PD Alerts, Jira Issues, and limited support status for that specific cluster.`,
+		Use:   "context orgId",
+		Short: "fetches information about the given organization",
+		Long:  `Fetches information about the given organization. This data is presented as a table where each row includes the name, version, ID, cloud provider, and plan for the cluster. Rows will also include the number of recent service logs, active PD Alerts, Jira Issues, and limited support status for that specific cluster.`,
 		Example: `# Get context data for a cluster
 osdctl org context 1a2B3c4DefghIjkLMNOpQrSTUV5
 
