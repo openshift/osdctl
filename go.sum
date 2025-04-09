@@ -544,8 +544,8 @@ github.com/openshift/hive/apis v0.0.0-20250206153200-5a34ea42e678 h1:oPNt/o9il5M
 github.com/openshift/hive/apis v0.0.0-20250206153200-5a34ea42e678/go.mod h1:vfgOsNigipl8aM05Jy9WG+eR9wfeZQNEN4pTD9wsrtM=
 github.com/openshift/hypershift/api v0.0.0-20250208145556-2753dcc8cfb7 h1:535PgO4fBROL+cLcWJFH8aNyGPts9UgR42CV+N/pxGc=
 github.com/openshift/hypershift/api v0.0.0-20250208145556-2753dcc8cfb7/go.mod h1:fQFj8aH3buOKqmhMQ5igRVOT7iQdduxRE9H1LM/BiY0=
-github.com/openshift/osd-network-verifier v1.2.2 h1:A2RavUEM/bFGpxH848+pYAPMIIoVxJpx3Xm7BSmTvys=
-github.com/openshift/osd-network-verifier v1.2.2/go.mod h1:X3dVNkC91NYTf2kTXUS/PeRTNvfS97WbvIqPIDP083M=
+github.com/openshift/osd-network-verifier v1.2.3 h1:MW+u2LR8M5AWzQ2t/RsS7JWycBAleUgT480AMO4VMu4=
+github.com/openshift/osd-network-verifier v1.2.3/go.mod h1:X3dVNkC91NYTf2kTXUS/PeRTNvfS97WbvIqPIDP083M=
 github.com/pelletier/go-toml/v2 v2.2.3 h1:YmeHyLY8mFWbdkNWwpr+qIL2bEqT0o95WSdkNHvL12M=
 github.com/pelletier/go-toml/v2 v2.2.3/go.mod h1:MfCQTFTvCcUyyvvwm1+G6H/jORL20Xlb6rzQu9GuUkc=
 github.com/perimeterx/marshmallow v1.1.5 h1:a2LALqQ1BlHM8PZblsDdidgv1mWi1DgC2UmX50IvK2s=
