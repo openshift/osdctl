@@ -13,6 +13,7 @@ import (
 
 	pd "github.com/PagerDuty/go-pagerduty"
 	"github.com/andygrunwald/go-jira"
+	accountsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
@@ -25,23 +26,195 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const (
-	ServiceLogDaysSince = 30
-)
+const ServiceLogDaysSince = 30
 
-var (
-	getClusterFunc                            = utils.GetCluster
-	getClusterLimitedSupportFunc              = utils.GetClusterLimitedSupportReasons
-	getServiceLogsSinceFunc                   = servicelog.GetServiceLogsSince
-	getJiraIssuesForClusterFunc               = utils.GetJiraIssuesForCluster
-	searchAllSubscriptionsByOrgFunc           = SearchAllSubscriptionsByOrg
-	createConnectionFunc                      = connectionFactory
-	addPDAlertsFunc                           = addPDAlerts
-	addLimitedSupportReasonsFunc              = addLimitedSupportReasons
-	addServiceLogsFunc                        = addServiceLogs
-	addJiraIssuesFunc                         = addJiraIssues
-	defaultOutput                   io.Writer = os.Stderr
-)
+var contextCmd = ContextCmd(NewDefaultContextFetcher())
+
+type ContextFetcher interface {
+	FetchContext(orgID string, output io.Writer) ([]ClusterInfo, error)
+}
+
+type DefaultContextFetcher struct {
+	CreateOCMClient     func() (*sdk.Connection, error)
+	SearchSubscriptions func(orgID string, status string, managedOnly bool) ([]*accountsv1.Subscription, error)
+	GetCluster          func(*sdk.Connection, string) (*cmv1.Cluster, error)
+	GetLimitedSupport   func(*sdk.Connection, string) ([]*cmv1.LimitedSupportReason, error)
+	GetServiceLogs      func(string, time.Time, bool, bool) ([]*v1.LogEntry, error)
+	GetJiraIssues       func(clusterID, externalID, filter string) ([]jira.Issue, error)
+	NewPDClient         func(baseDomain string) (PDClient, error)
+}
+
+type PDClient interface {
+	GetPDServiceIDs() ([]string, error)
+	GetFiringAlertsForCluster([]string) (map[string][]pd.Incident, error)
+}
+
+func NewDefaultContextFetcher() *DefaultContextFetcher {
+	return &DefaultContextFetcher{
+		CreateOCMClient:     utils.CreateConnection,
+		SearchSubscriptions: SearchAllSubscriptionsByOrg,
+		GetCluster:          utils.GetCluster,
+		GetLimitedSupport:   utils.GetClusterLimitedSupportReasons,
+		GetServiceLogs:      servicelog.GetServiceLogsSince,
+		GetJiraIssues:       utils.GetJiraIssuesForCluster,
+		NewPDClient: func(baseDomain string) (PDClient, error) {
+			return pdProvider.NewClient().
+				WithBaseDomain(baseDomain).
+				WithUserToken(viper.GetString(pdProvider.PagerDutyUserTokenConfigKey)).
+				WithOauthToken(viper.GetString(pdProvider.PagerDutyOauthTokenConfigKey)).
+				Init()
+		},
+	}
+}
+
+func ContextCmd(fetcher ContextFetcher) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "context orgId",
+		Short:   "fetches information about the given organization",
+		Long:    `Fetches information about the given organization. This data is presented as a table where each row includes the name, version, ID, cloud provider, and plan for the cluster. Rows will also include the number of recent service logs, active PD Alerts, Jira Issues, and limited support status for that specific cluster.`,
+		Example: `# Get context data for a cluster
+osdctl org context 1a2B3c4DefghIjkLMNOpQrSTUV5
+
+# Get context data in JSON format
+osdctl org context 1a2B3c4DefghIjkLMNOpQrSTUV5 -o json`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			outputFormat, err := cmd.Flags().GetString("output")
+			if err != nil {
+				return fmt.Errorf("error reading flag 'output': %w", err)
+			}
+			if outputFormat != "" && outputFormat != "json" {
+				return errors.New("unsupported output format, only 'json' is accepted")
+			}
+
+			// Progress goes to stderr, JSON to stdout
+			progressWriter := os.Stderr
+
+			clusterInfos, err := fetcher.FetchContext(args[0], progressWriter)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error fetching org context: %v\n", err)
+			}
+			if len(clusterInfos) == 0 {
+				fmt.Println("Org has no clusters")
+				return nil
+			}
+
+			if outputFormat == "json" {
+				return printContextJson(os.Stdout, clusterInfos)
+			}
+			return printContext(clusterInfos)
+		},
+	}
+	cmd.Flags().StringP("output", "o", "", "output format for the results. only supported value currently is 'json'")
+	return cmd
+}
+
+func (f *DefaultContextFetcher) FetchContext(orgID string, output io.Writer) ([]ClusterInfo, error) {
+	subscriptions, err := f.SearchSubscriptions(orgID, StatusActive, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch cluster subscriptions for org with ID %s: %w", orgID, err)
+	}
+	total := len(subscriptions)
+	if total == 0 {
+		return nil, nil
+	}
+
+	ocmClient, err := f.CreateOCMClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OCM client: %w", err)
+	}
+	defer ocmClient.Close()
+
+	var (
+		results []ClusterInfo
+		mutex   sync.Mutex
+		count   int
+	)
+	eg, _ := errgroup.WithContext(context.Background())
+
+	fmt.Fprintf(output, "Fetching data for %v clusters in org %v...\n", total, orgID)
+	fmt.Fprintf(output, "Fetched data for 0 of %v clusters...\n", total)
+
+	for _, sub := range subscriptions {
+		sub := sub
+		eg.Go(func() error {
+			cluster, err := f.GetCluster(ocmClient, sub.ClusterID())
+			if err != nil {
+				return fmt.Errorf("failed to get cluster %s: %w", sub.ClusterID(), err)
+			}
+
+			ci := ClusterInfo{
+				Name:          cluster.Name(),
+				Version:       cluster.Version().RawID(),
+				ID:            cluster.ID(),
+				CloudProvider: sub.CloudProviderID(),
+				Plan:          sub.Plan().ID(),
+			}
+			if metrics, ok := sub.GetMetrics(); ok {
+				ci.NodeCount = metrics[0].Nodes().Total()
+			}
+
+			dataEg, _ := errgroup.WithContext(context.Background())
+			// Limited support reasons
+			dataEg.Go(func() error {
+				ci.LimitedSupportReasons, err = f.GetLimitedSupport(ocmClient, ci.ID)
+				if err != nil {
+					return fmt.Errorf("failed to fetch limited support reasons for cluster %v: %w", ci.ID, err)
+				}
+				return nil
+			})
+			// Service logs
+			dataEg.Go(func() error {
+				ci.ServiceLogs, err = f.GetServiceLogs(ci.ID, time.Now().AddDate(0, 0, -ServiceLogDaysSince), false, false)
+				if err != nil {
+					return fmt.Errorf("failed to fetch service logs for cluster %v: %w", ci.ID, err)
+				}
+				return nil
+			})
+			// Jira issues
+			dataEg.Go(func() error {
+				ci.JiraIssues, err = f.GetJiraIssues(ci.ID, cluster.ExternalID(), "")
+				if err != nil {
+					return fmt.Errorf("failed to fetch Jira issues for cluster %v: %v", ci.ID, err)
+				}
+				return nil
+			})
+			// PagerDuty alerts
+			dataEg.Go(func() error {
+				pdClient, err := f.NewPDClient(cluster.DNS().BaseDomain())
+				if err != nil {
+					return fmt.Errorf("failed to build PD client")
+				}
+				serviceIDs, err := pdClient.GetPDServiceIDs()
+				if err != nil {
+					return fmt.Errorf("failed to get PD ServiceID for cluster %v: %v", ci.ID, err)
+				}
+				ci.PdAlerts, err = pdClient.GetFiringAlertsForCluster(serviceIDs)
+				if err != nil {
+					return fmt.Errorf("failed to get PD Alerts for cluster %v: %v", ci.ID, err)
+				}
+				return nil
+			})
+			if err := dataEg.Wait(); err != nil {
+				return err
+			}
+
+			mutex.Lock()
+			count++
+			fmt.Fprintf(output, "\033[1A\033[K")
+			fmt.Fprintf(output, "Fetched data for %v of %v clusters...\n", count, total)
+			results = append(results, ci)
+			mutex.Unlock()
+
+			return nil
+		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		return results, fmt.Errorf("failed to get context data: %w", err)
+	}
+	return results, nil
+}
 
 type ClusterInfo struct {
 	Name                  string
@@ -69,108 +242,30 @@ type clusterInfoView struct {
 	OHSS        int     `json:"ohssTickets"`
 }
 
-var contextCmd = &cobra.Command{
-	Use:   "context orgId",
-	Short: "fetches information about the given organization",
-	Long: `Fetches information about the given organization. This data is presented as a table where each row includes the name, version, ID, cloud provider, and plan for the cluster.
-Rows will also include the number of recent service logs, active PD Alerts, Jira Issues, and limited support status for that specific cluster.`,
-	Example: `# Get context data for a cluster
-osdctl org context 1a2B3c4DefghIjkLMNOpQrSTUV5
-
-#Get context data for cluster in json format
-osdctl org context 1a2B3c4DefghIjkLMNOpQrSTUV5 -o json`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		outputFormat, err := cmd.Flags().GetString("output")
-		if err != nil {
-			return fmt.Errorf("error reading flag 'json': %w", err)
-		}
-		if outputFormat != "" && outputFormat != "json" {
-			return errors.New("unsupported output format, only 'json' is accepted")
-		}
-
-		clusterInfos, err := Context(args[0])
-		if err != nil {
-			// report error, but don't return: we should make a best-effort attempt at printing whatever we did retrieve
-			fmt.Fprintf(os.Stderr, "error fetching org context: %v\n", err)
-		}
-		if len(clusterInfos) == 0 {
-			fmt.Println("Org has no clusters")
-			return nil
-		}
-
-		if outputFormat == "json" {
-			return printContextJson(os.Stdout, clusterInfos)
-		}
-
-		return printContext(clusterInfos)
-	},
-}
-
-func init() {
-	contextCmd.Flags().StringP("output", "o", "", "output format for the results. only supported value currently is 'json'")
-
-	// Ensure all function variables are properly initialized
-	if getClusterFunc == nil {
-		getClusterFunc = utils.GetCluster
-	}
-	if getClusterLimitedSupportFunc == nil {
-		getClusterLimitedSupportFunc = utils.GetClusterLimitedSupportReasons
-	}
-	if getServiceLogsSinceFunc == nil {
-		getServiceLogsSinceFunc = servicelog.GetServiceLogsSince
-	}
-	if getJiraIssuesForClusterFunc == nil {
-		getJiraIssuesForClusterFunc = utils.GetJiraIssuesForCluster
-	}
-	if searchAllSubscriptionsByOrgFunc == nil {
-		searchAllSubscriptionsByOrgFunc = SearchAllSubscriptionsByOrg
-	}
-	if createConnectionFunc == nil {
-		createConnectionFunc = connectionFactory
-	}
-	if addPDAlertsFunc == nil {
-		addPDAlertsFunc = addPDAlerts
-	}
-	if addLimitedSupportReasonsFunc == nil {
-		addLimitedSupportReasonsFunc = addLimitedSupportReasons
-	}
-	if addServiceLogsFunc == nil {
-		addServiceLogsFunc = addServiceLogs
-	}
-	if addJiraIssuesFunc == nil {
-		addJiraIssuesFunc = addJiraIssues
-	}
-}
-
 func printContextJson(w io.Writer, clusterInfos []ClusterInfo) error {
-	clusterInfoViews := make([]clusterInfoView, 0, len(clusterInfos))
-	for _, clusterInfo := range clusterInfos {
-		plan := clusterInfo.Plan
+	views := make([]clusterInfoView, 0, len(clusterInfos))
+	for _, ci := range clusterInfos {
+		plan := ci.Plan
 		if plan == "MOA" {
 			plan = "ROSA"
 		}
 		if plan == "MOA-HostedControlPlane" {
 			plan = "HCP"
 		}
-
-		view := clusterInfoView{
-			DisplayName: clusterInfo.Name,
-			ClusterId:   clusterInfo.ID,
-			Version:     clusterInfo.Version,
-			Status:      getSupportStatusDisplayText(clusterInfo.LimitedSupportReasons),
-			Provider:    clusterInfo.CloudProvider,
+		views = append(views, clusterInfoView{
+			DisplayName: ci.Name,
+			ClusterId:   ci.ID,
+			Version:     ci.Version,
+			Status:      getSupportStatusDisplayText(ci.LimitedSupportReasons),
+			Provider:    ci.CloudProvider,
 			Plan:        plan,
-			NodeCount:   clusterInfo.NodeCount,
-			RecentSLs:   len(clusterInfo.ServiceLogs),
-			ActivePDs:   len(clusterInfo.PdAlerts),
-			OHSS:        len(clusterInfo.JiraIssues),
-		}
-
-		clusterInfoViews = append(clusterInfoViews, view)
+			NodeCount:   ci.NodeCount,
+			RecentSLs:   len(ci.ServiceLogs),
+			ActivePDs:   len(ci.PdAlerts),
+			OHSS:        len(ci.JiraIssues),
+		})
 	}
-
-	bytes, err := json.MarshalIndent(clusterInfoViews, "", "  ")
+	bytes, err := json.MarshalIndent(views, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal json response: %w", err)
 	}
@@ -181,25 +276,23 @@ func printContextJson(w io.Writer, clusterInfos []ClusterInfo) error {
 func printContext(clusterInfos []ClusterInfo) error {
 	table := printer.NewTablePrinter(os.Stdout, 0, 1, 3, ' ')
 	table.AddRow([]string{"DISPLAY NAME", "CLUSTER ID", "VERSION", "STATUS", "PROVIDER", "PLAN", "NODE COUNT", "RECENT SLs", "ACTIVE PDs", "OHSS TICKETS"})
-
-	for _, clusterInfo := range clusterInfos {
-		recentSLs := len(clusterInfo.ServiceLogs)
-		activePDs := len(clusterInfo.PdAlerts)
-		ohss := len(clusterInfo.JiraIssues)
+	for _, ci := range clusterInfos {
+		recentSLs := len(ci.ServiceLogs)
+		activePDs := len(ci.PdAlerts)
+		ohss := len(ci.JiraIssues)
 		table.AddRow([]string{
-			clusterInfo.Name,
-			clusterInfo.ID,
-			clusterInfo.Version,
-			getSupportStatusDisplayText(clusterInfo.LimitedSupportReasons),
-			clusterInfo.CloudProvider,
-			getPlanDisplayText(clusterInfo.Plan),
-			fmt.Sprintf("%v", clusterInfo.NodeCount),
+			ci.Name,
+			ci.ID,
+			ci.Version,
+			getSupportStatusDisplayText(ci.LimitedSupportReasons),
+			ci.CloudProvider,
+			getPlanDisplayText(ci.Plan),
+			fmt.Sprintf("%v", ci.NodeCount),
 			strconv.Itoa(recentSLs),
 			strconv.Itoa(activePDs),
 			strconv.Itoa(ohss),
 		})
 	}
-
 	table.AddRow([]string{})
 	if err := table.Flush(); err != nil {
 		return fmt.Errorf("error writing data to console: %w", err)
@@ -207,8 +300,8 @@ func printContext(clusterInfos []ClusterInfo) error {
 	return nil
 }
 
-func getSupportStatusDisplayText(limitedSupportReasons []*cmv1.LimitedSupportReason) string {
-	if len(limitedSupportReasons) > 0 {
+func getSupportStatusDisplayText(reasons []*cmv1.LimitedSupportReason) string {
+	if len(reasons) > 0 {
 		return "Limited Support"
 	}
 	return "Fully Supported"
@@ -222,155 +315,4 @@ func getPlanDisplayText(plan string) string {
 		return "HCP"
 	}
 	return plan
-}
-
-func Context(orgId string) ([]ClusterInfo, error) {
-	return contextInternal(orgId, defaultOutput)
-}
-
-func contextInternal(orgId string, output io.Writer) ([]ClusterInfo, error) {
-	clusterSubscriptions, err := searchAllSubscriptionsByOrgFunc(orgId, StatusActive, true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch cluster subscriptions for org with ID %s: %w", orgId, err)
-	}
-
-	clusterSubscriptionsCount := len(clusterSubscriptions)
-	if clusterSubscriptionsCount == 0 {
-		return nil, nil
-	}
-
-	ocmClient, err := createConnectionFunc()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create OCM client: %w", err)
-	}
-	defer ocmClient.Close()
-
-	orgClustersInfo := make([]ClusterInfo, 0, clusterSubscriptionsCount)
-
-	eg, ctx := errgroup.WithContext(context.Background())
-	var mutex sync.Mutex
-	count := 0
-
-	// Print these to stderr so the actual results can be piped to different parsers without worrying about these lines
-	_, _ = fmt.Fprintf(output, "Fetching data for %v clusters in org %v...\n", clusterSubscriptionsCount, orgId)
-	_, _ = fmt.Fprintf(output, "Fetched data for 0 of %v clusters...\n", clusterSubscriptionsCount)
-
-	for _, subscription := range clusterSubscriptions {
-		sub := subscription
-		eg.Go(func() error {
-			defer ctx.Done()
-			clusterId := sub.ClusterID()
-			cluster, getClusterErr := getClusterFunc(ocmClient, clusterId)
-			if getClusterErr != nil {
-				return fmt.Errorf("failed to get cluster %s: %w", clusterId, getClusterErr)
-			}
-
-			clusterInfo := ClusterInfo{
-				Name:          cluster.Name(),
-				Version:       cluster.Version().RawID(),
-				ID:            cluster.ID(),
-				CloudProvider: sub.CloudProviderID(),
-				Plan:          sub.Plan().ID(),
-			}
-
-			if metrics, ok := sub.GetMetrics(); ok {
-				clusterInfo.NodeCount = metrics[0].Nodes().Total()
-			}
-
-			dataErrs, dataCtx := errgroup.WithContext(context.Background())
-			dataErrs.Go(func() error {
-				defer dataCtx.Done()
-				ci := &clusterInfo
-				return addLimitedSupportReasonsFunc(ci, ocmClient)
-			})
-
-			dataErrs.Go(func() error {
-				defer dataCtx.Done()
-				ci := &clusterInfo
-				return addServiceLogsFunc(ci)
-			})
-
-			dataErrs.Go(func() error {
-				defer dataCtx.Done()
-				ci := &clusterInfo
-				externalId := cluster.ExternalID()
-				return addJiraIssuesFunc(ci, externalId)
-			})
-
-			dataErrs.Go(func() error {
-				defer dataCtx.Done()
-				ci := &clusterInfo
-				baseDomain := cluster.DNS().BaseDomain()
-				return addPDAlertsFunc(ci, baseDomain)
-			})
-
-			if errs := dataErrs.Wait(); errs != nil {
-				return errs
-			}
-
-			mutex.Lock()
-			_, _ = fmt.Fprintf(output, "\033[1A\033[K")
-			count++
-			_, _ = fmt.Fprintf(output, "Fetched data for %v of %v clusters...\n", count, clusterSubscriptionsCount)
-			orgClustersInfo = append(orgClustersInfo, clusterInfo)
-			mutex.Unlock()
-
-			return nil
-		})
-	}
-
-	if err := eg.Wait(); err != nil {
-		return orgClustersInfo, fmt.Errorf("failed to get context data: %w", err)
-	}
-	return orgClustersInfo, nil
-}
-
-func addLimitedSupportReasons(clusterInfo *ClusterInfo, ocmClient *sdk.Connection) error {
-	var limitedSupportReasonsErr error
-	clusterInfo.LimitedSupportReasons, limitedSupportReasonsErr = getClusterLimitedSupportFunc(ocmClient, clusterInfo.ID)
-	if limitedSupportReasonsErr != nil {
-		return fmt.Errorf("failed to fetch limited support reasons for cluster %v: %w", clusterInfo.ID, limitedSupportReasonsErr)
-	}
-	return nil
-}
-
-func addServiceLogs(clusterInfo *ClusterInfo) error {
-	var err error
-	timeToCheckSvcLogs := time.Now().AddDate(0, 0, -ServiceLogDaysSince)
-	clusterInfo.ServiceLogs, err = getServiceLogsSinceFunc(clusterInfo.ID, timeToCheckSvcLogs, false, false)
-	if err != nil {
-		return fmt.Errorf("failed to fetch service logs for cluster %v: %w", clusterInfo.ID, err)
-	}
-	return nil
-}
-
-func addJiraIssues(clusterInfo *ClusterInfo, externalId string) error {
-	var jiraIssuesErr error
-	clusterInfo.JiraIssues, jiraIssuesErr = utils.GetJiraIssuesForCluster(clusterInfo.ID, externalId, "")
-	if jiraIssuesErr != nil {
-		return fmt.Errorf("failed to fetch Jira issues for cluster %v: %v", clusterInfo.ID, jiraIssuesErr)
-	}
-	return nil
-}
-
-func addPDAlerts(clusterInfo *ClusterInfo, baseDomain string) error {
-	pdClient, err := pdProvider.NewClient().
-		WithBaseDomain(baseDomain).
-		WithUserToken(viper.GetString(pdProvider.PagerDutyUserTokenConfigKey)).
-		WithOauthToken(viper.GetString(pdProvider.PagerDutyOauthTokenConfigKey)).
-		Init()
-	if err != nil {
-		return fmt.Errorf("failed to build PD client")
-	}
-	pdServiceIds, pdServiceIdsErr := pdClient.GetPDServiceIDs()
-	if pdServiceIdsErr != nil {
-		return fmt.Errorf("failed to get PD ServiceID for cluster %v: %v", clusterInfo.ID, pdServiceIdsErr)
-	} else {
-		var pdAlertsErr error
-		clusterInfo.PdAlerts, pdAlertsErr = pdClient.GetFiringAlertsForCluster(pdServiceIds)
-		if pdAlertsErr != nil {
-			return fmt.Errorf("failed to get PD Alerts for cluster %v: %v", clusterInfo.ID, pdAlertsErr)
-		}
-	}
-	return nil
 }
