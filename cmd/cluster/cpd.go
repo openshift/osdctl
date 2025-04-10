@@ -9,9 +9,7 @@ import (
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/backplane-cli/pkg/ocm"
 
-	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/openshift/osdctl/cmd/network"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
@@ -56,7 +54,7 @@ func newCmdCpd() *cobra.Command {
 			cmdutil.CheckErr(ops.run())
 		},
 	}
-	cpdCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", ops.clusterID, "The internal/external (OCM) Cluster ID")
+	cpdCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", ops.clusterID, "The internal (OCM) Cluster ID")
 	cpdCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", ops.awsProfile, "AWS profile name")
 
 	return cpdCmd
@@ -95,38 +93,44 @@ func (o *cpdOptions) run() error {
 		return fmt.Errorf("this command doesn't support GCP yet. Needs manual investigation:\nocm backplane cloud console -b %s", o.clusterID)
 	}
 
-	if isolated, err := isIsolatedBackplaneAccess(cluster, ocmClient); err != nil {
-		return fmt.Errorf("unable to determine which backplane flow this cluster is using: %w.\nNeeds manual investigation:\nocm backplane cloud console -b %s", err, o.clusterID)
-	} else if isolated {
-		return fmt.Errorf("this command doesn't support the isolated backplane flow yet. Needs manual investigation:\nocm backplane cloud console -b %s", o.clusterID)
-	} else {
-		fmt.Println("Generating AWS credentials for cluster")
-		// Get AWS credentials for the cluster
-		awsClient, err := osdCloud.GenerateAWSClientForCluster(o.awsProfile, o.clusterID)
-		if err != nil {
-			fmt.Println("PLEASE CONFIRM YOUR CREDENTIALS ARE CORRECT. If you're absolutely sure they are, send this Service Log https://github.com/openshift/managed-notifications/blob/master/osd/aws/ROSA_AWS_invalid_permissions.json")
-			fmt.Println(err)
-			return err
-		}
+	awsv2cfg, err := osdCloud.CreateAWSV2Config(ocmClient, cluster)
+	if err != nil {
+		return fmt.Errorf("failed to build aws client config: %w\nManual investigation required", err)
+	}
+	creds, err := awsv2cfg.Credentials.Retrieve(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to retrieve aws credentials: %w\nManual investigation required", err)
+	}
+	awsClient, err := aws.NewAwsClientWithInput(&aws.ClientInput{
+		AccessKeyID:     creds.AccessKeyID,
+		SecretAccessKey: creds.SecretAccessKey,
+		SessionToken:    creds.SessionToken,
+		Region:          cluster.Region().ID(),
+	})
+	if err != nil {
+		fmt.Println("PLEASE CONFIRM YOUR CREDENTIALS ARE CORRECT. If you're absolutely sure they are, send this Service Log https://github.com/openshift/managed-notifications/blob/master/osd/aws/ROSA_AWS_invalid_permissions.json")
+		fmt.Println(err)
+		return err
+	}
 
-		// If the cluster is BYOVPC, check the route tables
-		// This check is copied from ocm-cli
-		if cluster.AWS().SubnetIDs() != nil && len(cluster.AWS().SubnetIDs()) > 0 {
-			fmt.Println("Checking BYOVPC to ensure subnets have valid routing")
-			for _, subnet := range cluster.AWS().SubnetIDs() {
-				isValid, err := isSubnetRouteValid(awsClient, subnet)
-				if err != nil {
-					return err
-				}
-				if !isValid {
-					return fmt.Errorf("subnet %s does not have a default route to 0.0.0.0/0\n Run the following to send a SerivceLog:\n osdctl servicelog post %s -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/aws/InstallFailed_NoRouteToInternet.json", subnet, o.clusterID)
-				}
+	// If the cluster is BYOVPC, check the route tables
+	// This check is copied from ocm-cli
+	if cluster.AWS().SubnetIDs() != nil && len(cluster.AWS().SubnetIDs()) > 0 {
+		fmt.Println("Checking BYOVPC to ensure subnets have valid routing")
+		for _, subnet := range cluster.AWS().SubnetIDs() {
+			fmt.Printf("subnet: %v\n", subnet)
+			isValid, err := isSubnetRouteValid(awsClient, subnet)
+			if err != nil {
+				return err
 			}
-			fmt.Printf("Attempting to run: osdctl network verify-egress --cluster-id %s\n", o.clusterID)
-			ev := &network.EgressVerification{ClusterId: o.clusterID}
-			ev.Run(context.TODO())
-			return nil
+			if !isValid {
+				return fmt.Errorf("subnet %s does not have a default route to 0.0.0.0/0\n Run the following to send a SerivceLog:\n osdctl servicelog post %s -t https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/aws/InstallFailed_NoRouteToInternet.json", subnet, o.clusterID)
+			}
 		}
+		fmt.Printf("Attempting to run: osdctl network verify-egress --cluster-id %s\n", o.clusterID)
+		ev := &network.EgressVerification{ClusterId: o.clusterID}
+		ev.Run(context.Background())
+		return nil
 	}
 
 	fmt.Println("Next step: check the AWS resources manually, run ocm backplane cloud console")
@@ -135,45 +139,13 @@ func (o *cpdOptions) run() error {
 }
 
 func isSubnetRouteValid(awsClient aws.Client, subnetID string) (bool, error) {
-	var routeTable string
-
-	// Try and find a Route Table associated with the given subnet
-	describeRouteTablesOutput, err := awsClient.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
-		Filters: []types.Filter{
-			{
-				Name:   awsSdk.String("association.subnet-id"),
-				Values: []string{subnetID},
-			},
-		},
-	})
+	routeTable, err := utils.FindRouteTableForSubnet(awsClient, subnetID)
 	if err != nil {
-		return false, fmt.Errorf("failed to describe route tables associated to subnet %s: %w", subnetID, err)
-	}
-
-	// If there are no associated RouteTables, then the subnet uses the default RoutTable for the VPC
-	if len(describeRouteTablesOutput.RouteTables) == 0 {
-		// Get the VPC ID for the subnet
-		describeSubnetOutput, err := awsClient.DescribeSubnets(&ec2.DescribeSubnetsInput{
-			SubnetIds: []string{subnetID},
-		})
-		if err != nil {
-			return false, err
-		}
-		if len(describeSubnetOutput.Subnets) == 0 {
-			return false, fmt.Errorf("no subnets returned for subnet id %v", subnetID)
-		}
-
-		vpcID := *describeSubnetOutput.Subnets[0].VpcId
-
-		// Set the route table to the default for the VPC
-		routeTable, err = utils.FindRouteTableForSubnet(awsClient, vpcID)
-		if err != nil {
-			return false, err
-		}
+		return false, fmt.Errorf("failed to find routetable for subnet: %w", err)
 	}
 
 	// Check that the RouteTable for the subnet has a default route to 0.0.0.0/0
-	describeRouteTablesOutput, err = awsClient.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
+	describeRouteTablesOutput, err := awsClient.DescribeRouteTables(&ec2.DescribeRouteTablesInput{
 		RouteTableIds: []string{routeTable},
 	})
 	if err != nil {

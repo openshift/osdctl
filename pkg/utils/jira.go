@@ -16,29 +16,26 @@ const (
 // GetJiraClient creates a jira client that connects to
 // https://issues.redhat.com. To work, the jiraToken needs to be set in the
 // config
-func GetJiraClient() (*jira.Client, error) {
-	var jiratoken string
-
-	if !viper.IsSet(JiraTokenConfigKey) {
-		jiratoken = viper.GetString(JiraTokenConfigKey)
-	}
-
-	if os.Getenv("JIRA_API_TOKEN") != "" {
-		jiratoken = os.Getenv("JIRA_API_TOKEN")
-	}
-
+func GetJiraClient(jiratoken string) (*jira.Client, error) {
 	if jiratoken == "" {
-		return nil, fmt.Errorf("JIRA token is not defined.")
+		if viper.IsSet(JiraTokenConfigKey) {
+			jiratoken = viper.GetString(JiraTokenConfigKey)
+		}
+		if os.Getenv("JIRA_API_TOKEN") != "" {
+			jiratoken = os.Getenv("JIRA_API_TOKEN")
+		}
+		if jiratoken == "" {
+			return nil, fmt.Errorf("JIRA token is not defined")
+		}
 	}
-
 	tp := jira.PATAuthTransport{
 		Token: jiratoken,
 	}
 	return jira.NewClient(tp.Client(), JiraBaseURL)
 }
 
-func GetJiraIssuesForCluster(clusterID string, externalClusterID string) ([]jira.Issue, error) {
-	jiraClient, err := GetJiraClient()
+func GetJiraIssuesForCluster(clusterID string, externalClusterID string, jiratoken string) ([]jira.Issue, error) {
+	jiraClient, err := GetJiraClient(jiratoken)
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to jira: %v", err)
 	}
@@ -59,8 +56,8 @@ func GetJiraIssuesForCluster(clusterID string, externalClusterID string) ([]jira
 	return issues, nil
 }
 
-func GetJiraSupportExceptionsForOrg(organizationID string) ([]jira.Issue, error) {
-	jiraClient, err := GetJiraClient()
+func GetJiraSupportExceptionsForOrg(organizationID string, jiratoken string) ([]jira.Issue, error) {
+	jiraClient, err := GetJiraClient(jiratoken)
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to jira: %v", err)
 	}
