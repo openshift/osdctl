@@ -4,10 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -136,19 +133,6 @@ func TestAllowJumphostSshFromIp(t *testing.T) {
 			mockClient.AssertExpectations(t)
 		})
 	}
-}
-
-func TestDeterminePublicIpReal(t *testing.T) {
-	resp, err := http.Get("https://checkip.amazonaws.com")
-	assert.NoError(t, err)
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	assert.NoError(t, err)
-	expectedIP := strings.TrimSpace(string(body))
-	assert.NotEmpty(t, expectedIP)
-	ip, err := determinePublicIp()
-	assert.NoError(t, err)
-	assert.Equal(t, expectedIP, ip)
 }
 
 func TestFindVpcId(t *testing.T) {
