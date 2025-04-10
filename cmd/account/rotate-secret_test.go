@@ -34,12 +34,12 @@ func TestRotateSecretOptions_Complete(t *testing.T) {
 			expectedProfile: "custom",
 		},
 		{
-			name:            "default_profile_used",
+			name:            "default_profile_not_used",
 			args:            []string{"another-cr"},
 			flags:           map[string]string{"reason": "PD-789"},
 			expectedErr:     false,
 			expectedName:    "another-cr",
-			expectedProfile: "default",
+			expectedProfile: "",
 		},
 		{
 			name:           "invalid_admin_username",
