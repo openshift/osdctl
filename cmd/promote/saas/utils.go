@@ -81,7 +81,7 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	prefix := "saas-"
 	operatorName := strings.TrimPrefix(serviceName, prefix)
 	commitMessage := fmt.Sprintf("Promote %s to %s\n\nMonitor rollout status here https://inscope.corp.redhat.com/catalog/default/component/%s/rollout\n\n", serviceName, promotionGitHash, operatorName)
-	commitMessage += fmt.Sprintf("See %s/compare/%s...%s for contents of the promotion. clog:\n%s", serviceRepo, currentGitHash, promotionGitHash, commitLog)
+	commitMessage += fmt.Sprintf("See %s/compare/%s...%s for contents of the promotion. clog:\n\n%s", serviceRepo, currentGitHash, promotionGitHash, commitLog)
 	err = appInterface.CommitSaasFile(saasDir, commitMessage)
 	if err != nil {
 		return fmt.Errorf("failed to commit changes to app-interface: %w", err)
