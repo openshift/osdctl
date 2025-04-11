@@ -18,7 +18,7 @@ func TestGetBaseDir(t *testing.T) {
 		expectBaseDir func(t *testing.T, dir string, baseDir string)
 	}{
 		{
-			name: "valid git directory",
+			name: "valid_git_directory",
 			setup: func(t *testing.T) string {
 				tmpDir := t.TempDir()
 				assert.NoError(t, exec.Command("git", "-C", tmpDir, "init").Run())
@@ -35,7 +35,7 @@ func TestGetBaseDir(t *testing.T) {
 			},
 		},
 		{
-			name: "not a git directory",
+			name: "not_a_git_directory",
 			setup: func(t *testing.T) string {
 				tmpDir := t.TempDir()
 				assert.NoError(t, os.Chdir(tmpDir))
@@ -53,19 +53,15 @@ func TestGetBaseDir(t *testing.T) {
 			BaseDir = ""
 			baseDirErr = nil
 			baseDirOnce = sync.Once{}
-
 			oldDir, _ := os.Getwd()
 			defer os.Chdir(oldDir)
-
 			dir := tt.setup(t)
 			baseDir, err := getBaseDir()
-
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 			}
-
 			tt.expectBaseDir(t, dir, baseDir)
 		})
 	}
@@ -78,28 +74,25 @@ func TestCheckBehindMaster(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name: "on master and up to date",
+			name: "on_master_and_up_to_date",
 			setup: func(t *testing.T) string {
 				upstream := t.TempDir()
 				assert.NoError(t, exec.Command("git", "-C", upstream, "init", "--bare").Run())
-
 				local := t.TempDir()
 				assert.NoError(t, exec.Command("git", "clone", upstream, local).Run())
 				assert.NoError(t, exec.Command("git", "-C", local, "checkout", "-b", "master").Run())
-
 				testFile := filepath.Join(local, "README.md")
 				assert.NoError(t, os.WriteFile(testFile, []byte("test"), 0644))
 				assert.NoError(t, exec.Command("git", "-C", local, "add", ".").Run())
 				assert.NoError(t, exec.Command("git", "-C", local, "commit", "-m", "init commit").Run())
 				assert.NoError(t, exec.Command("git", "-C", local, "push", "-u", "origin", "master").Run())
 				assert.NoError(t, exec.Command("git", "-C", local, "remote", "add", "upstream", upstream).Run())
-
 				return local
 			},
 			expectError: false,
 		},
 		{
-			name: "not on master branch",
+			name: "not_on_master_branch",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
 				exec.Command("git", "-C", dir, "init").Run()
@@ -109,7 +102,7 @@ func TestCheckBehindMaster(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name: "no upstream configured",
+			name: "no_upstream_configured",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
 				exec.Command("git", "-C", dir, "init").Run()

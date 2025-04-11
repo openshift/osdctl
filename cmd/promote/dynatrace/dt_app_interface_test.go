@@ -46,11 +46,8 @@ func TestCommitSaasFile(t *testing.T) {
 			setup: func(t *testing.T) (AppInterface, string) {
 				tmpDir := t.TempDir()
 				_ = exec.Command("git", "init", tmpDir).Run()
-
-				// Set dummy git user config to avoid commit failure
 				_ = exec.Command("git", "-C", tmpDir, "config", "user.email", "test@example.com").Run()
 				_ = exec.Command("git", "-C", tmpDir, "config", "user.name", "Test User").Run()
-
 				file := filepath.Join(tmpDir, "saas.yaml")
 				_ = os.WriteFile(file, []byte("content"), 0644)
 				return AppInterface{GitDirectory: tmpDir}, file
@@ -64,7 +61,6 @@ func TestCommitSaasFile(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			app, file := tc.setup(t)
 			err := app.CommitSaasFile(file, tc.commitMessage)
-
 			if tc.wantErr {
 				assert.Error(t, err)
 				assert.ErrorContains(t, err, tc.expectedErr)
@@ -94,11 +90,9 @@ func TestUpdatePackageTag(t *testing.T) {
 				assert.NoError(t, exec.Command("git", "-C", tmpDir, "add", ".").Run())
 				assert.NoError(t, exec.Command("git", "-C", tmpDir, "commit", "-m", "initial commit").Run())
 				assert.NoError(t, exec.Command("git", "-C", tmpDir, "checkout", "-b", "master").Run())
-
 				saasFile := filepath.Join(tmpDir, "test.yaml")
 				err := os.WriteFile(saasFile, []byte("tag: old123"), 0644)
 				assert.NoError(t, err)
-
 				return AppInterface{GitDirectory: tmpDir}, saasFile
 			},
 			oldTag:      "old123",
@@ -123,7 +117,6 @@ func TestUpdatePackageTag(t *testing.T) {
 				assert.NoError(t, exec.Command("git", "-C", tmpDir, "add", ".").Run())
 				assert.NoError(t, exec.Command("git", "-C", tmpDir, "commit", "-m", "initial commit").Run())
 				assert.NoError(t, exec.Command("git", "-C", tmpDir, "checkout", "-b", "master").Run())
-
 				return AppInterface{GitDirectory: tmpDir}, filepath.Join(tmpDir, "nonexistent.yaml")
 			},
 			oldTag:      "old123",
@@ -142,11 +135,9 @@ func TestUpdatePackageTag(t *testing.T) {
 				assert.NoError(t, exec.Command("git", "-C", tmpDir, "add", ".").Run())
 				assert.NoError(t, exec.Command("git", "-C", tmpDir, "commit", "-m", "initial commit").Run())
 				assert.NoError(t, exec.Command("git", "-C", tmpDir, "checkout", "-b", "master").Run())
-
 				saasFile := filepath.Join(tmpDir, "test.yaml")
 				err := os.WriteFile(saasFile, []byte("tag: somethingelse"), 0644)
 				assert.NoError(t, err)
-
 				return AppInterface{GitDirectory: tmpDir}, saasFile
 			},
 			oldTag:      "old123",
@@ -165,7 +156,6 @@ func TestUpdatePackageTag(t *testing.T) {
 				tmpDir := t.TempDir()
 				saasFile := filepath.Join(tmpDir, "test.yaml")
 				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0644)
-				// no git init here to simulate failure
 				return AppInterface{GitDirectory: tmpDir}, saasFile
 			},
 			oldTag:      "old123",
@@ -179,14 +169,12 @@ func TestUpdatePackageTag(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			app, filePath := tc.setup(t)
 			err := app.UpdatePackageTag(filePath, tc.oldTag, tc.newTag, "feature-branch")
-
 			if tc.expectedErr != "" {
 				assert.Error(t, err)
 				assert.ErrorContains(t, err, tc.expectedErr)
 			} else {
 				assert.NoError(t, err)
 			}
-
 			tc.verify(t, filePath)
 		})
 	}
@@ -280,7 +268,6 @@ func TestUpdateAppInterface(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			app, filePath := tc.setup(t)
 			err := app.UpdateAppInterface(tc.serviceName, filePath, tc.currentGitHash, tc.promotionGitHash, tc.branchName)
-
 			if tc.expectedErr != "" {
 				assert.Error(t, err)
 				assert.ErrorContains(t, err, tc.expectedErr)
@@ -337,7 +324,6 @@ resourceTemplates:
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			hash, repo, path, err := GetCurrentGitHashFromAppInterface([]byte(tc.yamlContent), tc.serviceName)
-
 			if tc.wantErrSubstr != "" {
 				assert.Error(t, err)
 				assert.ErrorContains(t, err, tc.wantErrSubstr)
@@ -356,7 +342,7 @@ func TestCheckAppInterfaceCheckout(t *testing.T) {
 		setupDir      func(t *testing.T) string
 		expectedError string
 	}{
-		"valid app-interface remote": {
+		"valid_app-interface_remote": {
 			setupDir: func(t *testing.T) string {
 				dir := t.TempDir()
 				assert.NoError(t, exec.Command("git", "-C", dir, "init").Run())
@@ -364,7 +350,7 @@ func TestCheckAppInterfaceCheckout(t *testing.T) {
 				return dir
 			},
 		},
-		"non app-interface remote": {
+		"non_app-interface_remote": {
 			setupDir: func(t *testing.T) string {
 				dir := t.TempDir()
 				assert.NoError(t, exec.Command("git", "-C", dir, "init").Run())
@@ -373,7 +359,7 @@ func TestCheckAppInterfaceCheckout(t *testing.T) {
 			},
 			expectedError: "not running in checkout of app-interface",
 		},
-		"non-git directory": {
+		"non-git_directory": {
 			setupDir: func(t *testing.T) string {
 				return t.TempDir() // not initializing git
 			},
@@ -385,7 +371,6 @@ func TestCheckAppInterfaceCheckout(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			dir := tc.setupDir(t)
 			err := checkAppInterfaceCheckout(dir)
-
 			if tc.expectedError != "" {
 				assert.Error(t, err)
 				assert.ErrorContains(t, err, tc.expectedError)

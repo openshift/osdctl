@@ -130,10 +130,8 @@ func TestGeModulesNames(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ModulesSlice = nil
 			ModulesFilesMap = make(map[string]string)
-
 			baseDir, subDir := tc.setup(t)
 			result, err := GeModulesNames(baseDir, subDir)
-
 			if tc.expectError {
 				assert.Error(t, err)
 			} else {
