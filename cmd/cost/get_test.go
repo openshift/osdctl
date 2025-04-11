@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Overrideable time function for mocking time.Now
 var mockNowFunc = time.Now
 
 func TestGetTimePeriod(t *testing.T) {
@@ -28,13 +27,48 @@ func TestGetTimePeriod(t *testing.T) {
 		expectedStart string
 		expectedEnd   string
 	}{
-		{"Default", "", "2024-04-01", "2025-04-10"},
-		{"LM", "LM", "2025-03-01", "2025-04-01"},
-		{"MTD", "MTD", "2025-04-01", "2025-04-10"},
-		{"YTD", "YTD", "2025-01-01", "2025-04-10"},
-		{"3M", "3M", "2025-01-10", "2025-04-10"},
-		{"6M", "6M", "2024-10-10", "2025-04-10"},
-		{"1Y", "1Y", "2024-04-10", "2025-04-10"},
+		{
+			name:          "Default",
+			timePtr:       "",
+			expectedStart: time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02"),
+			expectedEnd:   refTime.AddDate(0, 0, 1).Format("2006-01-02"),
+		},
+		{
+			name:          "LM",
+			timePtr:       "LM",
+			expectedStart: time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02"),
+			expectedEnd:   time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02"),
+		},
+		{
+			name:          "MTD",
+			timePtr:       "MTD",
+			expectedStart: time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02"),
+			expectedEnd:   refTime.AddDate(0, 0, 1).Format("2006-01-02"),
+		},
+		{
+			name:          "YTD",
+			timePtr:       "YTD",
+			expectedStart: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02"),
+			expectedEnd:   refTime.AddDate(0, 0, 1).Format("2006-01-02"),
+		},
+		{
+			name:          "3M",
+			timePtr:       "3M",
+			expectedStart: refTime.AddDate(0, -3, 1).Format("2006-01-02"),
+			expectedEnd:   refTime.AddDate(0, 0, 1).Format("2006-01-02"),
+		},
+		{
+			name:          "6M",
+			timePtr:       "6M",
+			expectedStart: refTime.AddDate(0, -6, 1).Format("2006-01-02"),
+			expectedEnd:   refTime.AddDate(0, 0, 1).Format("2006-01-02"),
+		},
+		{
+			name:          "1Y",
+			timePtr:       "1Y",
+			expectedStart: refTime.AddDate(-1, 0, 1).Format("2006-01-02"),
+			expectedEnd:   refTime.AddDate(0, 0, 1).Format("2006-01-02"),
+		},
 	}
 
 	for _, tc := range tests {
@@ -56,7 +90,6 @@ func Test_printCostGet(t *testing.T) {
 		Name: aws.String("Dev-Ou"),
 	}
 
-	// CASE 1: CSV Output
 	t.Run("CSV output", func(t *testing.T) {
 		r, w, _ := os.Pipe()
 		originalStdout := os.Stdout
@@ -78,7 +111,6 @@ func Test_printCostGet(t *testing.T) {
 		g.Expect(buf.String()).To(gomega.Equal(expected))
 	})
 
-	// CASE 2: Recursive output
 	t.Run("Recursive output", func(t *testing.T) {
 		r, w, _ := os.Pipe()
 		originalStdout := os.Stdout
@@ -103,7 +135,6 @@ func Test_printCostGet(t *testing.T) {
 		g.Expect(output).To(gomega.ContainSubstring("Cost: 123.45"))
 	})
 
-	// CASE 3: JSON Output
 	t.Run("JSON output", func(t *testing.T) {
 		r, w, _ := os.Pipe()
 		originalStdout := os.Stdout
@@ -122,13 +153,11 @@ func Test_printCostGet(t *testing.T) {
 		io.Copy(&buf, r)
 
 		output := buf.String()
-		// Validate JSON output matches exact lowercase struct tags
 		g.Expect(output).To(gomega.ContainSubstring(`"ouid": "ou-1234"`))
 		g.Expect(output).To(gomega.ContainSubstring(`"ouname": "Dev-Ou"`))
 		g.Expect(output).To(gomega.ContainSubstring(`"costUSD": "123.45"`))
 	})
 
-	// CASE 4: YAML Output
 	t.Run("YAML output", func(t *testing.T) {
 		r, w, _ := os.Pipe()
 		originalStdout := os.Stdout
@@ -151,5 +180,4 @@ func Test_printCostGet(t *testing.T) {
 		g.Expect(output).To(gomega.ContainSubstring("ouname: Dev-Ou"))
 		g.Expect(output).To(gomega.ContainSubstring("costUSD: \"123.45\""))
 	})
-
 }

@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"os"
-	"sort"
 	"testing"
 
-	//"github.com/aws/aws-sdk-go-v2/service/organizations/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 
@@ -17,7 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/organizations"
 	"github.com/aws/aws-sdk-go-v2/service/organizations/types"
 	"github.com/onsi/gomega"
-	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/provider/aws/mock"
 	"go.uber.org/mock/gomock"
 )
@@ -32,13 +29,13 @@ func TestPrintCostList(t *testing.T) {
 		isChild   bool
 		expected  string
 		expectErr bool
-		isJSON    bool // New flag to check if output is JSON
+		isJSON    bool
 	}{
 		{
 			name:    "Successful JSON Output",
 			cost:    decimal.NewFromFloat(100.50),
 			unit:    "USD",
-			ou:      &types.OrganizationalUnit{Id: stringToStringptr("ou-123"), Name: stringToStringptr("TestOU")},
+			ou:      &types.OrganizationalUnit{Id: stringToStringPtr("ou-123"), Name: stringToStringPtr("TestOU")},
 			ops:     &listOptions{csv: false, output: "json"},
 			isChild: true,
 			expected: `{
@@ -53,7 +50,7 @@ func TestPrintCostList(t *testing.T) {
 			name:      "Successful CSV Output",
 			cost:      decimal.NewFromFloat(200.75),
 			unit:      "USD",
-			ou:        &types.OrganizationalUnit{Id: stringToStringptr("ou-456"), Name: stringToStringptr("Finance")},
+			ou:        &types.OrganizationalUnit{Id: stringToStringPtr("ou-456"), Name: stringToStringPtr("Finance")},
 			ops:       &listOptions{csv: true},
 			isChild:   true,
 			expected:  "ou-456,Finance,200.75,USD\n",
@@ -77,13 +74,13 @@ func TestPrintCostList(t *testing.T) {
 			if tt.isJSON {
 				assert.JSONEq(t, tt.expected, output)
 			} else {
-				assert.Equal(t, tt.expected, output) // Correct assertion for CSV
+				assert.Equal(t, tt.expected, output)
 			}
 		})
 	}
 }
 
-func stringToStringptr(s string) *string {
+func stringToStringPtr(s string) *string {
 	return &s
 }
 
@@ -138,6 +135,7 @@ func TestGetSum(t *testing.T) {
 		})
 	}
 }
+
 func TestListCostsUnderOU(t *testing.T) {
 	g := gomega.NewGomegaWithT(t)
 
@@ -146,7 +144,6 @@ func TestListCostsUnderOU(t *testing.T) {
 		defer mockCtrl.Finish()
 		mockAWS := mock.NewMockClient(mockCtrl)
 
-		// Recursive mocking of ListOrganizationalUnitsForParent
 		mockAWS.EXPECT().ListOrganizationalUnitsForParent(gomock.Any()).Return(
 			&organizations.ListOrganizationalUnitsForParentOutput{
 				OrganizationalUnits: []types.OrganizationalUnit{
@@ -155,13 +152,11 @@ func TestListCostsUnderOU(t *testing.T) {
 				},
 			}, nil).Times(1)
 
-		// No more child OUs
 		mockAWS.EXPECT().ListOrganizationalUnitsForParent(gomock.Any()).Return(
 			&organizations.ListOrganizationalUnitsForParentOutput{
 				OrganizationalUnits: []types.OrganizationalUnit{},
 			}, nil).AnyTimes()
 
-		// Accounts under OUs
 		mockAWS.EXPECT().ListAccountsForParent(gomock.Any()).Return(
 			&organizations.ListAccountsForParentOutput{
 				Accounts: []types.Account{
@@ -170,7 +165,6 @@ func TestListCostsUnderOU(t *testing.T) {
 				},
 			}, nil).AnyTimes()
 
-		// Cost response
 		mockAWS.EXPECT().GetCostAndUsage(gomock.Any()).Return(
 			&costexplorer.GetCostAndUsageOutput{
 				ResultsByTime: []types2.ResultByTime{
@@ -208,7 +202,6 @@ func TestListCostsUnderOU(t *testing.T) {
 		defer mockCtrl.Finish()
 		mockAWS := mock.NewMockClient(mockCtrl)
 
-		// Fail immediately
 		mockAWS.EXPECT().ListOrganizationalUnitsForParent(gomock.Any()).Return(nil, errors.New("ListOU error")).AnyTimes()
 
 		options := &listOptions{
@@ -231,13 +224,11 @@ func TestListCostsUnderOU(t *testing.T) {
 		defer mockCtrl.Finish()
 		mockAWS := mock.NewMockClient(mockCtrl)
 
-		// Return no child OUs
 		mockAWS.EXPECT().ListOrganizationalUnitsForParent(gomock.Any()).Return(
 			&organizations.ListOrganizationalUnitsForParentOutput{
 				OrganizationalUnits: []types.OrganizationalUnit{},
 			}, nil).AnyTimes()
 
-		// Fail account listing
 		mockAWS.EXPECT().ListAccountsForParent(gomock.Any()).Return(nil, errors.New("ListAccounts error")).AnyTimes()
 
 		options := &listOptions{
@@ -260,13 +251,11 @@ func TestListCostsUnderOU(t *testing.T) {
 		defer mockCtrl.Finish()
 		mockAWS := mock.NewMockClient(mockCtrl)
 
-		// No child OUs
 		mockAWS.EXPECT().ListOrganizationalUnitsForParent(gomock.Any()).Return(
 			&organizations.ListOrganizationalUnitsForParentOutput{
 				OrganizationalUnits: []types.OrganizationalUnit{},
 			}, nil).AnyTimes()
 
-		// Return dummy accounts
 		mockAWS.EXPECT().ListAccountsForParent(gomock.Any()).Return(
 			&organizations.ListAccountsForParentOutput{
 				Accounts: []types.Account{
@@ -274,7 +263,6 @@ func TestListCostsUnderOU(t *testing.T) {
 				},
 			}, nil).AnyTimes()
 
-		// Cost fetch fails
 		mockAWS.EXPECT().GetCostAndUsage(gomock.Any()).Return(nil, errors.New("CostUsage error")).AnyTimes()
 
 		options := &listOptions{
@@ -293,168 +281,181 @@ func TestListCostsUnderOU(t *testing.T) {
 	})
 }
 
-func getCostTestVersion(
-	o *OUCost,
-	mockAccounts func(*types.OrganizationalUnit, awsprovider.Client) ([]*string, error),
-	mockCost func(account *string, unit *string, awsClient awsprovider.Client, cost *decimal.Decimal) error,
-	awsClient awsprovider.Client,
-) error {
-	accounts, err := mockAccounts(o.OU, awsClient)
-	if err != nil {
-		return err
-	}
-
-	for _, account := range accounts {
-		accCost := AccountCost{
-			AccountID: *account,
-			Unit:      "",
-			Cost:      decimal.Zero,
-		}
-		err = mockCost(account, &accCost.Unit, awsClient, &accCost.Cost)
-		if err != nil {
-			return err
-		}
-		o.Costs = append(o.Costs, accCost)
-	}
-
-	sort.Slice(o.Costs, func(i, j int) bool {
-		return o.Costs[j].Cost.LessThan(o.Costs[i].Cost)
-	})
-
-	return nil
-}
-
 func TestGetCost(t *testing.T) {
 	g := gomega.NewWithT(t)
-	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
 
-	mockAWS := mock.NewMockClient(mockCtrl)
+	t.Run("success case with 2 accounts", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
+		mockAWS := mock.NewMockClient(mockCtrl)
 
-	t.Run("success case", func(t *testing.T) {
-		o := &OUCost{
-			OU: &types.OrganizationalUnit{Id: aws.String("ou-abc")},
+		mockAWS.EXPECT().ListOrganizationalUnitsForParent(gomock.Any()).Return(
+			&organizations.ListOrganizationalUnitsForParentOutput{}, nil).AnyTimes()
+
+		mockAWS.EXPECT().ListAccountsForParent(gomock.Any()).Return(
+			&organizations.ListAccountsForParentOutput{
+				Accounts: []types.Account{
+					{Id: aws.String("111111111111")},
+					{Id: aws.String("222222222222")},
+				},
+			}, nil).AnyTimes()
+
+		mockAWS.EXPECT().GetCostAndUsage(gomock.Any()).Return(
+			&costexplorer.GetCostAndUsageOutput{
+				ResultsByTime: []types2.ResultByTime{
+					{
+						TimePeriod: &types2.DateInterval{
+							Start: aws.String("2025-01-01"),
+							End:   aws.String("2025-01-31"),
+						},
+						Total: map[string]types2.MetricValue{
+							"NetUnblendedCost": {
+								Amount: aws.String("100.00"),
+								Unit:   aws.String("USD"),
+							},
+						},
+					},
+				},
+			}, nil).Times(2)
+
+		ouCost := &OUCost{
+			OU: &types.OrganizationalUnit{
+				Id:   aws.String("ou-root"),
+				Name: aws.String("RootOU"),
+			},
 			options: &listOptions{
 				start: "2025-01-01",
 				end:   "2025-01-31",
-				time:  "monthly",
 			},
 		}
 
-		mockAccounts := func(_ *types.OrganizationalUnit, _ awsprovider.Client) ([]*string, error) {
-			return []*string{aws.String("111"), aws.String("222")}, nil
-		}
-
-		mockCost := func(account *string, unit *string, _ awsprovider.Client, cost *decimal.Decimal) error {
-			if *account == "111" {
-				*unit = "USD"
-				*cost = decimal.NewFromFloat(120.00)
-			} else {
-				*unit = "USD"
-				*cost = decimal.NewFromFloat(80.00)
-			}
-			return nil
-		}
-
-		err := getCostTestVersion(o, mockAccounts, mockCost, mockAWS)
+		err := ouCost.getCost(mockAWS)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
-		g.Expect(o.Costs).To(gomega.HaveLen(2))
-		g.Expect(o.Costs[0].AccountID).To(gomega.Equal("111")) // Sorted by descending cost
-		g.Expect(o.Costs[1].AccountID).To(gomega.Equal("222"))
+		g.Expect(ouCost.Costs).To(gomega.HaveLen(2))
+		for _, c := range ouCost.Costs {
+			g.Expect(c.Cost.InexactFloat64()).To(gomega.Equal(100.0))
+			g.Expect(c.AccountID).To(gomega.BeElementOf("111111111111", "222222222222"))
+		}
 	})
 
-	t.Run("error from getAccountsRecursive", func(t *testing.T) {
-		o := &OUCost{
-			OU: &types.OrganizationalUnit{Id: aws.String("ou-err")},
+	t.Run("error: ListOrganizationalUnitsForParent fails", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
+		mockAWS := mock.NewMockClient(mockCtrl)
+
+		mockAWS.EXPECT().ListOrganizationalUnitsForParent(gomock.Any()).Return(nil, errors.New("OU list error"))
+
+		ouCost := &OUCost{
+			OU: &types.OrganizationalUnit{Id: aws.String("ou-root")},
 			options: &listOptions{
-				start: "2025-01-01",
-				end:   "2025-01-31",
-				time:  "monthly",
+				start: "2025-01-01", end: "2025-01-31",
 			},
 		}
 
-		mockAccounts := func(_ *types.OrganizationalUnit, _ awsprovider.Client) ([]*string, error) {
-			return nil, errors.New("mock account fetch error")
-		}
-
-		mockCost := func(account *string, unit *string, _ awsprovider.Client, cost *decimal.Decimal) error {
-			return nil
-		}
-
-		err := getCostTestVersion(o, mockAccounts, mockCost, mockAWS)
+		err := ouCost.getCost(mockAWS)
 		g.Expect(err).To(gomega.HaveOccurred())
-		g.Expect(err.Error()).To(gomega.ContainSubstring("mock account fetch error"))
+		g.Expect(err.Error()).To(gomega.ContainSubstring("OU list error"))
 	})
 
-	t.Run("error from getAccountCost", func(t *testing.T) {
-		o := &OUCost{
-			OU: &types.OrganizationalUnit{Id: aws.String("ou-cost")},
+	t.Run("error: ListAccountsForParent fails", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
+		mockAWS := mock.NewMockClient(mockCtrl)
+
+		mockAWS.EXPECT().ListOrganizationalUnitsForParent(gomock.Any()).Return(
+			&organizations.ListOrganizationalUnitsForParentOutput{}, nil)
+
+		mockAWS.EXPECT().ListAccountsForParent(gomock.Any()).Return(nil, errors.New("account list error"))
+
+		ouCost := &OUCost{
+			OU: &types.OrganizationalUnit{Id: aws.String("ou-root")},
 			options: &listOptions{
-				start: "2025-01-01",
-				end:   "2025-01-31",
-				time:  "monthly",
+				start: "2025-01-01", end: "2025-01-31",
 			},
 		}
 
-		mockAccounts := func(_ *types.OrganizationalUnit, _ awsprovider.Client) ([]*string, error) {
-			return []*string{aws.String("999")}, nil
-		}
-
-		mockCost := func(account *string, unit *string, _ awsprovider.Client, cost *decimal.Decimal) error {
-			return errors.New("mock cost error")
-		}
-
-		err := getCostTestVersion(o, mockAccounts, mockCost, mockAWS)
+		err := ouCost.getCost(mockAWS)
 		g.Expect(err).To(gomega.HaveOccurred())
-		g.Expect(err.Error()).To(gomega.ContainSubstring("mock cost error"))
+		g.Expect(err.Error()).To(gomega.ContainSubstring("account list error"))
 	})
 
-	t.Run("empty account list", func(t *testing.T) {
-		o := &OUCost{
-			OU: &types.OrganizationalUnit{Id: aws.String("ou-empty")},
+	t.Run("error: GetCostAndUsage fails for account", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
+		mockAWS := mock.NewMockClient(mockCtrl)
+
+		mockAWS.EXPECT().ListOrganizationalUnitsForParent(gomock.Any()).Return(
+			&organizations.ListOrganizationalUnitsForParentOutput{}, nil)
+
+		mockAWS.EXPECT().ListAccountsForParent(gomock.Any()).Return(
+			&organizations.ListAccountsForParentOutput{
+				Accounts: []types.Account{{Id: aws.String("111111111111")}},
+			}, nil)
+
+		mockAWS.EXPECT().GetCostAndUsage(gomock.Any()).Return(nil, errors.New("cost fetch error"))
+
+		ouCost := &OUCost{
+			OU: &types.OrganizationalUnit{Id: aws.String("ou-root")},
 			options: &listOptions{
-				start: "2025-01-01",
-				end:   "2025-01-31",
-				time:  "monthly",
+				start: "2025-01-01", end: "2025-01-31",
 			},
 		}
 
-		mockAccounts := func(_ *types.OrganizationalUnit, _ awsprovider.Client) ([]*string, error) {
-			return []*string{}, nil
-		}
-
-		mockCost := func(account *string, unit *string, _ awsprovider.Client, cost *decimal.Decimal) error {
-			return nil
-		}
-
-		err := getCostTestVersion(o, mockAccounts, mockCost, mockAWS)
-		g.Expect(err).ToNot(gomega.HaveOccurred())
-		g.Expect(o.Costs).To(gomega.HaveLen(0))
+		err := ouCost.getCost(mockAWS)
+		g.Expect(err).To(gomega.HaveOccurred())
+		g.Expect(err.Error()).To(gomega.ContainSubstring("cost fetch error"))
 	})
 
-	t.Run("account with zero cost", func(t *testing.T) {
-		o := &OUCost{
-			OU: &types.OrganizationalUnit{Id: aws.String("ou-zero")},
+	t.Run("partial cost success: one account fails", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
+		mockAWS := mock.NewMockClient(mockCtrl)
+
+		mockAWS.EXPECT().ListOrganizationalUnitsForParent(gomock.Any()).Return(
+			&organizations.ListOrganizationalUnitsForParentOutput{}, nil)
+
+		mockAWS.EXPECT().ListAccountsForParent(gomock.Any()).Return(
+			&organizations.ListAccountsForParentOutput{
+				Accounts: []types.Account{
+					{Id: aws.String("111111111111")},
+					{Id: aws.String("222222222222")},
+				},
+			}, nil)
+
+		mockAWS.EXPECT().GetCostAndUsage(gomock.Any()).DoAndReturn(
+			func(input *costexplorer.GetCostAndUsageInput) (*costexplorer.GetCostAndUsageOutput, error) {
+				if input.Filter.Dimensions.Values[0] == "111111111111" {
+					return &costexplorer.GetCostAndUsageOutput{
+						ResultsByTime: []types2.ResultByTime{
+							{
+								TimePeriod: &types2.DateInterval{
+									Start: aws.String("2025-01-01"),
+									End:   aws.String("2025-01-31"),
+								},
+								Total: map[string]types2.MetricValue{
+									"NetUnblendedCost": {
+										Amount: aws.String("50.00"),
+										Unit:   aws.String("USD"),
+									},
+								},
+							},
+						},
+					}, nil
+				}
+				return nil, errors.New("cost fetch error for 222")
+			}).Times(2)
+
+		ouCost := &OUCost{
+			OU: &types.OrganizationalUnit{Id: aws.String("ou-root")},
 			options: &listOptions{
-				start: "2025-01-01",
-				end:   "2025-01-31",
-				time:  "monthly",
+				start: "2025-01-01", end: "2025-01-31",
 			},
 		}
 
-		mockAccounts := func(_ *types.OrganizationalUnit, _ awsprovider.Client) ([]*string, error) {
-			return []*string{aws.String("000")}, nil
-		}
-
-		mockCost := func(account *string, unit *string, _ awsprovider.Client, cost *decimal.Decimal) error {
-			*unit = "USD"
-			*cost = decimal.Zero
-			return nil
-		}
-
-		err := getCostTestVersion(o, mockAccounts, mockCost, mockAWS)
-		g.Expect(err).ToNot(gomega.HaveOccurred())
-		g.Expect(o.Costs).To(gomega.HaveLen(1))
-		g.Expect(o.Costs[0].Cost.IsZero()).To(gomega.BeTrue())
+		err := ouCost.getCost(mockAWS)
+		g.Expect(err).To(gomega.HaveOccurred())
+		g.Expect(ouCost.Costs).To(gomega.HaveLen(1))
+		g.Expect(ouCost.Costs[0].AccountID).To(gomega.Equal("111111111111"))
+		g.Expect(ouCost.Costs[0].Cost.InexactFloat64()).To(gomega.Equal(50.0))
 	})
 }
