@@ -1,12 +1,14 @@
 package org
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
-	accountsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
-
 	"github.com/aws/aws-sdk-go-v2/service/organizations"
+	accountsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -30,8 +32,7 @@ Retrieving all clusters for a given organizational unit regardless of status:
 osdctl org clusters 123456789AbcDEfGHiJklMnopQR --all
 
 Retrieving all active clusters for a given AWS profile:
-osdctl org clusters --aws-profile my-aws-profile --aws-account-id 123456789
-`,
+osdctl org clusters --aws-profile my-aws-profile --aws-account-id 123456789`,
 		Args:          cobra.MaximumNArgs(1),
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -47,7 +48,10 @@ osdctl org clusters --aws-profile my-aws-profile --aws-account-id 123456789
 
 			clusters, err := SearchSubscriptions(orgId, status)
 			cmdutil.CheckErr(err)
-			printClusters(clusters)
+
+			out, err := formatClustersOutput(clusters)
+			cmdutil.CheckErr(err)
+			os.Stdout.Write(out)
 		},
 	}
 )
@@ -85,13 +89,11 @@ func init() {
 
 func SearchSubscriptions(orgId string, status string) ([]*accountsv1.Subscription, error) {
 	if orgId == "" && !isAWSProfileSearch() {
-		return nil, fmt.Errorf("specify either org-id or --aws-profile,--aws-account-id arguments")
+		return nil, errors.New("specify either org-id or --aws-profile,--aws-account-id arguments")
 	}
-
 	if orgId != "" && isAWSProfileSearch() {
-		return nil, fmt.Errorf("specify either an org id argument or --aws-profile, --aws-account-id arguments")
+		return nil, errors.New("specify either an org id argument or --aws-profile, --aws-account-id arguments")
 	}
-
 	if isAWSProfileSearch() {
 		orgIdFromAws, err := getOrganizationIdFromAWSProfile()
 		if err != nil {
@@ -99,7 +101,6 @@ func SearchSubscriptions(orgId string, status string) ([]*accountsv1.Subscriptio
 		}
 		orgId = *orgIdFromAws
 	}
-
 	clusterSubscriptions, err := SearchAllSubscriptionsByOrg(orgId, status, false)
 	if err != nil {
 		return nil, err
@@ -132,38 +133,41 @@ func getOrganizationIdFromAWSProfile() (*string, error) {
 	return result.OrganizationalUnit.Id, nil
 }
 
-func printClusters(items []*accountsv1.Subscription) {
+func formatClustersOutput(items []*accountsv1.Subscription) ([]byte, error) {
 	if IsJsonOutput() {
-		subscriptions := make([]map[string]string, 0, len(items))
+		subs := make([]map[string]string, 0, len(items))
 		for _, item := range items {
-			subscription := map[string]string{
+			subs = append(subs, map[string]string{
 				"cluster_id":   item.ClusterID(),
 				"external_id":  item.ExternalClusterID(),
 				"display_name": item.DisplayName(),
 				"status":       item.Status(),
-			}
-			subscriptions = append(subscriptions, subscription)
-		}
-		PrintJson(subscriptions)
-	} else {
-		table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
-		table.AddRow([]string{"DISPLAY NAME", "INTERNAL CLUSTER ID", "EXTERNAL CLUSTER ID", "STATUS"})
-
-		for _, subscription := range items {
-			table.AddRow([]string{
-				subscription.DisplayName(),
-				subscription.ClusterID(),
-				subscription.ExternalClusterID(),
-				subscription.Status(),
 			})
 		}
-
+		return json.MarshalIndent(subs, "", "  ")
+	} else {
+		var buf bytes.Buffer
+		table := printer.NewTablePrinter(&buf, 20, 1, 3, ' ')
+		table.AddRow([]string{"DISPLAY NAME", "INTERNAL CLUSTER ID", "EXTERNAL CLUSTER ID", "STATUS"})
+		for _, s := range items {
+			table.AddRow([]string{s.DisplayName(), s.ClusterID(), s.ExternalClusterID(), s.Status()})
+		}
 		table.AddRow([]string{})
 		table.Flush()
+		return buf.Bytes(), nil
 	}
-
 }
 
+func printClusters(items []*accountsv1.Subscription) {
+	out, err := formatClustersOutput(items)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error formatting clusters output: %v\n", err)
+		return
+	}
+	os.Stdout.Write(out)
+}
+
+// isAWSProfileSearch indicates if AWS profile flags are set.
 func isAWSProfileSearch() bool {
 	return awsProfile != "" && awsAccountID != ""
 }
