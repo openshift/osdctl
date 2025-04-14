@@ -1,6 +1,7 @@
 package hive
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -22,10 +24,11 @@ import (
 
 func TestPrintFailingCluster(t *testing.T) {
 	tests := []struct {
-		name        string
-		cdList      *hivev1.ClusterDeploymentList
-		csList      *v1alpha1.ClusterSyncList
-		expectError bool
+		name            string
+		cdList          *hivev1.ClusterDeploymentList
+		csList          *v1alpha1.ClusterSyncList
+		expectError     bool
+		expectedOutputs []string
 	}{
 		{
 			name: "Successful_Execution",
@@ -45,7 +48,8 @@ func TestPrintFailingCluster(t *testing.T) {
 					},
 				}},
 			},
-			expectError: false,
+			expectError:     false,
+			expectedOutputs: []string{"Cluster Name:", "test-cluster"},
 		},
 		{
 			name: "Missing_ClusterDeployment",
@@ -83,6 +87,10 @@ func TestPrintFailingCluster(t *testing.T) {
 				}},
 			},
 			expectError: false, //No error is returned, even though there is a failure, because the "failure" is handled by printing the error message instead of returning it as an error.
+			expectedOutputs: []string{
+				"Cluster Name: test-cluster",
+				"Name: sync-failure",
+			},
 		},
 	}
 
@@ -111,9 +119,17 @@ func TestPrintFailingCluster(t *testing.T) {
 				WithObjects(objects...).
 				Build()
 
+			// Create a buffer to capture stdout
+			stdout := &bytes.Buffer{}
+
 			o := &clusterSyncFailuresOptions{
 				kubeCli:   client,
 				clusterID: "test",
+				IOStreams: genericclioptions.IOStreams{
+					Out:    stdout,
+					ErrOut: stdout,
+					In:     nil,
+				},
 			}
 
 			err := o.printFailingCluster()
@@ -123,6 +139,12 @@ func TestPrintFailingCluster(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
+
+			// Check printed output
+			output := stdout.String()
+			for _, expected := range tt.expectedOutputs {
+				assert.Contains(t, output, expected, "Expected output to contain %q", expected)
+			}
 
 		})
 	}
