@@ -2,6 +2,7 @@ package cost
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -12,55 +13,116 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var mockNowFunc = time.Now
-
 func TestGetTimePeriod(t *testing.T) {
 	refTime := time.Now()
-	mockNowFunc = func() time.Time { return refTime }
+	defaultStart := fmt.Sprintf("%d-%02d-01", refTime.Year()-1, refTime.Month())
+	defaultEnd := refTime.Format("2006-01-02")
+	prevMonth := refTime.AddDate(0, -1, 0)
+	var expected3MStart string
+	if refTime.Month() > 3 {
+		expected3MStart = refTime.AddDate(0, -3, 0).Format("2006-01-02")
+	} else {
+		expected3MStart = refTime.AddDate(-1, 9, 0).Format("2006-01-02")
+	}
+	monthNum, _ := strconv.Atoi(refTime.Format("01"))
+	var expected6MStart string
+	if monthNum > 6 {
+		expected6MStart = refTime.AddDate(0, -6, 0).Format("2006-01-02")
+	} else {
+		expected6MStart = refTime.AddDate(-1, 6, 0).Format("2006-01-02")
+	}
 
 	tests := []struct {
 		name          string
 		timePtr       string
 		expectedStart string
 		expectedEnd   string
+		expectDefault bool
 	}{
 		{
-			name:          "Default",
+			name:          "Default empty input",
 			timePtr:       "",
-			expectedStart: fmt.Sprintf("%d-%02d-%02d", refTime.Year()-1, refTime.Month(), 01),
-			expectedEnd:   fmt.Sprintf("%d-%02d-%02d", refTime.Year(), refTime.Month(), refTime.Day()),
+			expectedStart: defaultStart,
+			expectedEnd:   defaultEnd,
 		},
 		{
-			name:          "LM",
+			name:          "Last Month (LM)",
 			timePtr:       "LM",
-			expectedStart: fmt.Sprintf("%d-%02d-%02d", refTime.Year(), refTime.Month()-1, 01),
-			expectedEnd:   fmt.Sprintf("%d-%02d-%02d", refTime.Year(), refTime.Month(), 01),
+			expectedStart: fmt.Sprintf("%d-%02d-01", prevMonth.Year(), prevMonth.Month()),
+			expectedEnd:   fmt.Sprintf("%d-%02d-01", refTime.Year(), refTime.Month()),
 		},
 		{
-			name:          "MTD",
+			name:          "Month to date (MTD)",
 			timePtr:       "MTD",
-			expectedStart: fmt.Sprintf("%d-%02d-%02d", refTime.Year(), refTime.Month(), 01),
-			expectedEnd:   fmt.Sprintf("%d-%02d-%02d", refTime.Year(), refTime.Month(), refTime.Day()),
+			expectedStart: fmt.Sprintf("%d-%02d-01", refTime.Year(), refTime.Month()),
+			expectedEnd:   refTime.Format("2006-01-02"),
 		},
 		{
-			name:          "YTD",
+			name:          "Year to date (YTD)",
 			timePtr:       "YTD",
-			expectedStart: fmt.Sprintf("%d-%02d-%02d", refTime.Year(), 01, 01),
-			expectedEnd:   fmt.Sprintf("%d-%02d-%02d", refTime.Year(), refTime.Month(), refTime.Day()),
+			expectedStart: fmt.Sprintf("%d-01-01", refTime.Year()),
+			expectedEnd:   refTime.Format("2006-01-02"),
 		},
 		{
-			name:          "1Y",
+			name:          "Last 1 year (1Y)",
 			timePtr:       "1Y",
 			expectedStart: refTime.AddDate(-1, 0, 0).Format("2006-01-02"),
-			expectedEnd:   fmt.Sprintf("%d-%02d-%02d", refTime.Year(), refTime.Month(), refTime.Day()),
+			expectedEnd:   refTime.Format("2006-01-02"),
+		},
+		{
+			name:          "Last 3 months (3M)",
+			timePtr:       "3M",
+			expectedStart: expected3MStart,
+			expectedEnd:   refTime.Format("2006-01-02"),
+		},
+		{
+			name:          "Last 6 months (6M)",
+			timePtr:       "6M",
+			expectedStart: expected6MStart,
+			expectedEnd:   refTime.Format("2006-01-02"),
+		},
+		{
+			name:          "Lowercase mtd",
+			timePtr:       "mtd",
+			expectedStart: defaultStart,
+			expectedEnd:   defaultEnd,
+			expectDefault: true,
+		},
+		{
+			name:          "Mixed case yTd",
+			timePtr:       "yTd",
+			expectedStart: defaultStart,
+			expectedEnd:   defaultEnd,
+			expectDefault: true,
+		},
+
+		{
+			name:          "Invalid string",
+			timePtr:       "asdfadsfdd",
+			expectedStart: defaultStart,
+			expectedEnd:   defaultEnd,
+			expectDefault: true,
+		},
+		{
+			name:          "Unsupported relative range (3Y)",
+			timePtr:       "3Y",
+			expectedStart: defaultStart,
+			expectedEnd:   defaultEnd,
+			expectDefault: true,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			start, end := getTimePeriod(&tc.timePtr)
-			require.Equal(t, tc.expectedStart, start)
-			require.Equal(t, tc.expectedEnd, end)
+
+			if tc.expectDefault {
+				require.Equal(t, defaultStart, start, "should fallback to default start")
+				require.Equal(t, defaultEnd, end, "should fallback to default end")
+			} else {
+				require.Equal(t, tc.expectedStart, start)
+				require.Equal(t, tc.expectedEnd, end)
+			}
 		})
 	}
 }
