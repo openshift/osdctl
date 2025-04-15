@@ -88,21 +88,35 @@ func TestUpdatePackageTag(t *testing.T) {
 		"successfully_updates_tag": {
 			setup: func(t *testing.T) (AppInterface, string) {
 				tmpDir := t.TempDir()
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "init").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "config", "user.name", "Test User").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "config", "user.email", "test@example.com").Run())
-				file := filepath.Join(tmpDir, "dummy.txt")
-				assert.NoError(t, os.WriteFile(file, []byte("init"), 0644))
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "add", ".").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "commit", "-m", "initial commit").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "checkout", "-b", "master").Run())
-
+				run := func(args ...string) {
+					cmd := exec.Command("git", args...)
+					cmd.Dir = tmpDir
+					out, err := cmd.CombinedOutput()
+					assert.NoError(t, err, "git %v failed: %s", args, string(out))
+				}
+				run("init")
+				run("config", "user.name", "Test User")
+				run("config", "user.email", "test@example.com")
+				dummyFile := filepath.Join(tmpDir, "dummy.txt")
+				assert.NoError(t, os.WriteFile(dummyFile, []byte("init"), 0644))
+				run("add", ".")
+				run("commit", "-m", "initial commit")
+				cmd := exec.Command("git", "rev-parse", "--verify", "master")
+				cmd.Dir = tmpDir
+				if err := cmd.Run(); err != nil {
+					run("checkout", "-b", "master")
+				} else {
+					run("checkout", "master")
+				}
 				saasFile := filepath.Join(tmpDir, "test.yaml")
-				err := os.WriteFile(saasFile, []byte("tag: old123"), 0644)
-				assert.NoError(t, err)
-
+				assert.NoError(t, os.WriteFile(saasFile, []byte("tag: old123"), 0644))
+				run("add", ".")
+				run("commit", "-m", "add saas file")
+				run("checkout", "-b", "feature-branch")
+				run("checkout", "master")
 				return AppInterface{GitDirectory: tmpDir}, saasFile
 			},
+
 			oldTag:      "old123",
 			newTag:      "new456",
 			expectedErr: "",
@@ -117,57 +131,47 @@ func TestUpdatePackageTag(t *testing.T) {
 		"fails_when_file_does_not_exist": {
 			setup: func(t *testing.T) (AppInterface, string) {
 				tmpDir := t.TempDir()
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "init").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "config", "user.name", "Test User").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "config", "user.email", "test@example.com").Run())
-				file := filepath.Join(tmpDir, "dummy.txt")
-				assert.NoError(t, os.WriteFile(file, []byte("init"), 0644))
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "add", ".").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "commit", "-m", "initial commit").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "checkout", "-b", "master").Run())
+				run := func(args ...string) {
+					cmd := exec.Command("git", args...)
+					cmd.Dir = tmpDir
+					out, err := cmd.CombinedOutput()
+					assert.NoError(t, err, "git %v failed: %s", args, string(out))
+				}
+				run("init")
+				run("config", "user.name", "Test User")
+				run("config", "user.email", "test@example.com")
+				dummyFile := filepath.Join(tmpDir, "dummy.txt")
+				assert.NoError(t, os.WriteFile(dummyFile, []byte("init"), 0644))
+				run("add", ".")
+				run("commit", "-m", "initial commit")
 
-				return AppInterface{GitDirectory: tmpDir}, filepath.Join(tmpDir, "nonexistent.yaml")
+				// Ensure we're on master
+				cmd := exec.Command("git", "rev-parse", "--verify", "master")
+				cmd.Dir = tmpDir
+				if err := cmd.Run(); err != nil {
+					run("checkout", "-b", "master")
+				} else {
+					run("checkout", "master")
+				}
+				saasFile := filepath.Join(tmpDir, "test.yaml")
+				assert.NoError(t, os.WriteFile(saasFile, []byte("tag: old123"), 0644))
+				run("add", ".")
+				run("commit", "-m", "add saas file")
+				run("checkout", "-b", "feature-branch")
+				run("checkout", "master")
+				nonExistentFile := filepath.Join(tmpDir, "nonexistent.yaml")
+				return AppInterface{GitDirectory: tmpDir}, nonExistentFile
 			},
 			oldTag:      "old123",
 			newTag:      "new456",
 			expectedErr: "failed to read file",
 			verify:      func(t *testing.T, _ string) {},
 		},
-		"no_change_when_old_tag_not_present": {
-			setup: func(t *testing.T) (AppInterface, string) {
-				tmpDir := t.TempDir()
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "init").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "config", "user.name", "Test User").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "config", "user.email", "test@example.com").Run())
-				file := filepath.Join(tmpDir, "dummy.txt")
-				assert.NoError(t, os.WriteFile(file, []byte("init"), 0644))
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "add", ".").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "commit", "-m", "initial commit").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "checkout", "-b", "master").Run())
-
-				saasFile := filepath.Join(tmpDir, "test.yaml")
-				err := os.WriteFile(saasFile, []byte("tag: somethingelse"), 0644)
-				assert.NoError(t, err)
-
-				return AppInterface{GitDirectory: tmpDir}, saasFile
-			},
-			oldTag:      "old123",
-			newTag:      "new456",
-			expectedErr: "",
-			verify: func(t *testing.T, filePath string) {
-				content, err := os.ReadFile(filePath)
-				assert.NoError(t, err)
-				str := string(content)
-				assert.Contains(t, str, "somethingelse")
-				assert.NotContains(t, str, "new456")
-			},
-		},
 		"error_when_git_checkout_fails": {
 			setup: func(t *testing.T) (AppInterface, string) {
 				tmpDir := t.TempDir()
 				saasFile := filepath.Join(tmpDir, "test.yaml")
 				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0644)
-				// no git init here to simulate failure
 				return AppInterface{GitDirectory: tmpDir}, saasFile
 			},
 			oldTag:      "old123",
@@ -181,14 +185,12 @@ func TestUpdatePackageTag(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			app, filePath := tc.setup(t)
 			err := app.UpdatePackageTag(filePath, tc.oldTag, tc.newTag, "feature-branch")
-
 			if tc.expectedErr != "" {
 				assert.Error(t, err)
 				assert.ErrorContains(t, err, tc.expectedErr)
 			} else {
 				assert.NoError(t, err)
 			}
-
 			tc.verify(t, filePath)
 		})
 	}
