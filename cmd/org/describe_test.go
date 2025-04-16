@@ -12,15 +12,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-
 func TestDescribeOrg(t *testing.T) {
-	var (
-		testToken, _ = jwt.New(jwt.SigningMethodHS256).SignedString([]byte("test-secret"))
-		clientID     = "fake-id"
-		clientSecret = "fake-secret"
-		tokenPath    = "/fake-path/token"
-	)
-	
+
+	testToken, _ := jwt.New(jwt.SigningMethodHS256).SignedString([]byte("test-secret"))
+	clientID := "fake-id"
+	clientSecret := "fake-secret"
+	tokenPath := "/fake-path/token"
+
 	tokenResponse := map[string]interface{}{
 		"access_token": testToken,
 		"token_type":   "Bearer",
