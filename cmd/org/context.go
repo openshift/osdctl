@@ -49,6 +49,32 @@ type PDClient interface {
 	GetFiringAlertsForCluster([]string) (map[string][]pd.Incident, error)
 }
 
+type ClusterInfo struct {
+	Name                  string
+	Version               string
+	ID                    string
+	CloudProvider         string
+	Plan                  string
+	NodeCount             float64
+	ServiceLogs           []*v1.LogEntry
+	PdAlerts              map[string][]pd.Incident
+	JiraIssues            []jira.Issue
+	LimitedSupportReasons []*cmv1.LimitedSupportReason
+}
+
+type clusterInfoView struct {
+	DisplayName string  `json:"displayName"`
+	ClusterId   string  `json:"clusterId"`
+	Version     string  `json:"version"`
+	Status      string  `json:"status"`
+	Provider    string  `json:"provider"`
+	Plan        string  `json:"plan"`
+	NodeCount   float64 `json:"nodeCount"`
+	RecentSLs   int     `json:"recentSLs"`
+	ActivePDs   int     `json:"activePDs"`
+	OHSS        int     `json:"ohssTickets"`
+}
+
 func NewDefaultContextFetcher() *DefaultContextFetcher {
 	return &DefaultContextFetcher{
 		CreateOCMClient:     utils.CreateConnection,
@@ -214,32 +240,6 @@ func (f *DefaultContextFetcher) FetchContext(orgID string, output io.Writer) ([]
 		return results, fmt.Errorf("failed to get context data: %w", err)
 	}
 	return results, nil
-}
-
-type ClusterInfo struct {
-	Name                  string
-	Version               string
-	ID                    string
-	CloudProvider         string
-	Plan                  string
-	NodeCount             float64
-	ServiceLogs           []*v1.LogEntry
-	PdAlerts              map[string][]pd.Incident
-	JiraIssues            []jira.Issue
-	LimitedSupportReasons []*cmv1.LimitedSupportReason
-}
-
-type clusterInfoView struct {
-	DisplayName string  `json:"displayName"`
-	ClusterId   string  `json:"clusterId"`
-	Version     string  `json:"version"`
-	Status      string  `json:"status"`
-	Provider    string  `json:"provider"`
-	Plan        string  `json:"plan"`
-	NodeCount   float64 `json:"nodeCount"`
-	RecentSLs   int     `json:"recentSLs"`
-	ActivePDs   int     `json:"activePDs"`
-	OHSS        int     `json:"ohssTickets"`
 }
 
 func printContextJson(w io.Writer, clusterInfos []ClusterInfo) error {
