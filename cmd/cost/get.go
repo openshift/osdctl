@@ -124,12 +124,12 @@ func (o *getOptions) run() error {
 		}
 	}
 
-	p, err := o.printCostGet(cost, unit, o, OU)
+	print, err := o.printCostGet(cost, unit, o, OU)
 	if err != nil {
 		log.Println("Error calling printCostGet(): ", err.Error())
 		return err
 	}
-	log.Println(p)
+	log.Println(print)
 	return nil
 }
 
