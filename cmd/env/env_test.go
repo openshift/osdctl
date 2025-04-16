@@ -35,7 +35,6 @@ func TestPrintKubeConfigExport(t *testing.T) {
 				Path: tt.envPath,
 			}
 
-			// Capture stdout
 			var buf bytes.Buffer
 			oldStdout := os.Stdout
 			r, w, _ := os.Pipe()
@@ -43,7 +42,6 @@ func TestPrintKubeConfigExport(t *testing.T) {
 
 			env.PrintKubeConfigExport()
 
-			// Restore stdout
 			w.Close()
 			os.Stdout = oldStdout
 			io.Copy(&buf, r)
@@ -241,7 +239,6 @@ func TestGenerateLoginCommandIndividualClusterPanic(t *testing.T) {
 	env := &OcEnv{
 		Options: &Options{
 			Username: "testuser",
-			// No URL set - should panic
 		},
 	}
 
@@ -298,15 +295,12 @@ func TestSetup(t *testing.T) {
 
 			env.Setup()
 
-			// Verify environment directory exists
 			_, err := os.Stat(fullPath)
 			assert.NoError(t, err)
 
-			// Verify bin directory exists
 			_, err = os.Stat(filepath.Join(fullPath, "bin"))
 			assert.NoError(t, err)
 
-			// Verify environment files exist
 			_, err = os.Stat(filepath.Join(fullPath, ".ocenv"))
 			assert.NoError(t, err)
 			_, err = os.Stat(filepath.Join(fullPath, ".zshenv"))
@@ -422,20 +416,17 @@ func TestCreateBins(t *testing.T) {
 				Options: tt.options,
 			}
 
-			// Create bin directory
 			binPath := filepath.Join(testPath, "bin")
 			err = os.MkdirAll(binPath, 0755)
 			assert.NoError(t, err)
 
 			env.createBins()
 
-			// Verify expected files exist
 			for _, file := range tt.expectedFiles {
 				path := filepath.Join(binPath, file)
 				_, err := os.Stat(path)
 				assert.NoError(t, err, "File should exist: %s", file)
 
-				// Verify file permissions
 				info, err := os.Stat(path)
 				assert.NoError(t, err)
 				assert.Equal(t, os.FileMode(0700), info.Mode()&0777)
@@ -451,7 +442,6 @@ func TestCreateKubeconfig(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Create a temporary kubeconfig file
 	kubeconfigContent := []byte("test-kubeconfig-content")
 	kubeconfigPath := filepath.Join(tmpDir, "test-kubeconfig")
 	err = os.WriteFile(kubeconfigPath, kubeconfigContent, 0600)
@@ -503,12 +493,10 @@ func TestCreateKubeconfig(t *testing.T) {
 			if tt.expectedExists {
 				assert.NoError(t, err)
 
-				// Verify content
 				content, err := os.ReadFile(kubeconfigPath)
 				assert.NoError(t, err)
 				assert.Equal(t, kubeconfigContent, content)
 
-				// Verify permissions
 				info, err := os.Stat(kubeconfigPath)
 				assert.NoError(t, err)
 				assert.Equal(t, os.FileMode(0600), info.Mode()&0777)
@@ -539,7 +527,7 @@ func TestKillChildren(t *testing.T) {
 		},
 		{
 			name:    "Valid PID in file",
-			content: "1\n", // Using PID 1 which is init process and won't be killed
+			content: "1\n", 
 		},
 	}
 
@@ -558,7 +546,6 @@ func TestKillChildren(t *testing.T) {
 				Path: testPath,
 			}
 
-			// Capture stdout to prevent test output pollution
 			oldStdout := os.Stdout
 			oldStderr := os.Stderr
 			r, w, _ := os.Pipe()
@@ -567,13 +554,11 @@ func TestKillChildren(t *testing.T) {
 
 			env.killChildren()
 
-			// Restore stdout
 			w.Close()
 			os.Stdout = oldStdout
 			os.Stderr = oldStderr
 			io.Copy(io.Discard, r)
 
-			// Verify .killpids file is removed if it existed
 			_, err = os.Stat(filepath.Join(testPath, ".killpds"))
 			assert.True(t, os.IsNotExist(err))
 		})
@@ -630,16 +615,13 @@ func TestEnsureEnvVariables(t *testing.T) {
 
 			env.ensureEnvVariables()
 
-			// Read .ocenv file
 			content, err := os.ReadFile(filepath.Join(testPath, ".ocenv"))
 			assert.NoError(t, err)
 
-			// Verify each expected variable is present
 			for _, expectedVar := range tt.expectedVars {
 				assert.True(t, strings.Contains(string(content), expectedVar), "Expected variable %s not found", expectedVar)
 			}
 
-			// Verify .zshenv exists and contains source command
 			zshenvContent, err := os.ReadFile(filepath.Join(testPath, ".zshenv"))
 			assert.NoError(t, err)
 			assert.Contains(t, string(zshenvContent), "source .ocenv")
@@ -648,45 +630,38 @@ func TestEnsureEnvVariables(t *testing.T) {
 }
 
 func TestStart(t *testing.T) {
-	// Step 1: Create temporary directory for OcEnv.Path
 	tmpDir := t.TempDir()
 
-	// Step 2: Create a mock .ocenv file with fake env vars
 	ocenvPath := filepath.Join(tmpDir, ".ocenv")
 	envContent := "FOO=bar\nBAR=baz\n"
 	if err := os.WriteFile(ocenvPath, []byte(envContent), 0644); err != nil {
 		t.Fatalf("failed to write .ocenv: %v", err)
 	}
 
-	// Step 3: Create a mock shell script that just exits (acts as dummy shell)
 	shellScript := filepath.Join(tmpDir, "fake-shell.sh")
 	scriptContent := "#!/bin/sh\necho 'Mock shell running'\nexit 0\n"
 	if err := os.WriteFile(shellScript, []byte(scriptContent), 0755); err != nil {
 		t.Fatalf("failed to write mock shell script: %v", err)
 	}
 
-	// Step 4: Set SHELL env var to mock shell
 	t.Setenv("SHELL", shellScript)
 
-	// Step 5: Capture stdout
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	// Step 6: Set up OcEnv and run Start()
 	env := &OcEnv{
 		Options: &Options{Alias: "test"},
 		Path:    tmpDir,
 	}
-	// optionally stub killChildren with a real no-op
-	env.killChildren() // Call the existing killChildren method
+
+	env.killChildren() 
 
 	go func() {
 		env.Start()
 		w.Close()
 	}()
 
-	// Step 7: Read and verify output
 	var buf bytes.Buffer
 	io.Copy(&buf, r)
 	os.Stdout = oldStdout
