@@ -124,11 +124,12 @@ func (o *getOptions) run() error {
 		}
 	}
 
-	err = o.printCostGet(cost, unit, o, OU)
+	p, err := o.printCostGet(cost, unit, o, OU)
 	if err != nil {
 		log.Println("Error calling printCostGet(): ", err.Error())
 		return err
 	}
+	log.Println(p)
 	return nil
 }
 
@@ -364,27 +365,26 @@ func getTimePeriod(timePtr *string) (string, string) {
 	return start, end
 }
 
-func (o *getOptions) printCostGet(cost decimal.Decimal, unit string, ops *getOptions, OU *organizationTypes.OrganizationalUnit) error {
+func (o *getOptions) printCostGet(cost decimal.Decimal, unit string, ops *getOptions, OU *organizationTypes.OrganizationalUnit) (string, error) {
 
 	resp := getCostResponse{
 		OuId:    *OU.Id,
 		OuName:  *OU.Name,
 		CostUSD: cost,
 	}
-
+	var response string
 	if ops.csv { //If csv option specified, print result in csv
-		fmt.Printf("\n%s,%s,%s\n\n", *OU.Name, cost.StringFixed(2), unit)
-		return nil
+		response = fmt.Sprintf("\n%s,%s,%s\n\n", *OU.Name, cost.StringFixed(2), unit)
+		return response, nil
+
 	}
 	if ops.recursive {
-		fmt.Println("Cost of all accounts under OU:")
+		response = "Cost of all accounts under OU:"
 	}
-
 	err := outputflag.PrintResponse(o.output, resp)
 	if err != nil {
-		fmt.Println("Error calling PrintResponse(): ", err.Error())
-		return err
+		return "", err
 	}
 
-	return nil
+	return response, nil
 }

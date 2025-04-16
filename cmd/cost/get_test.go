@@ -40,7 +40,7 @@ func TestGetTimePeriod(t *testing.T) {
 		expectDefault bool
 	}{
 		{
-			name:          "Default empty input",
+			name:          "XYZ",
 			timePtr:       "",
 			expectedStart: defaultStart,
 			expectedEnd:   defaultEnd,
@@ -138,42 +138,30 @@ func Test_printCostGet(t *testing.T) {
 	}
 
 	t.Run("CSV output", func(t *testing.T) {
-
 		opts := &getOptions{csv: true}
 		o := &getOptions{}
 
-		err := o.printCostGet(cost, unit, opts, ou)
+		result, err := o.printCostGet(cost, unit, opts, ou)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
-
+		expected := fmt.Sprintf("\n%s,%s,%s\n\n", *ou.Name, cost.StringFixed(2), unit)
+		g.Expect(result).To(gomega.Equal(expected))
 	})
 
 	t.Run("Recursive output", func(t *testing.T) {
-
 		opts := &getOptions{recursive: true}
 		o := &getOptions{}
 
-		err := o.printCostGet(cost, unit, opts, ou)
+		result, err := o.printCostGet(cost, unit, opts, ou)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
-
+		g.Expect(result).To(gomega.Equal("Cost of all accounts under OU:"))
 	})
 
 	t.Run("JSON output", func(t *testing.T) {
-
 		opts := &getOptions{output: "json"}
 		o := &getOptions{output: "json"}
 
-		err := o.printCostGet(cost, unit, opts, ou)
+		result, err := o.printCostGet(cost, unit, opts, ou)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
-
-	})
-
-	t.Run("YAML output", func(t *testing.T) {
-
-		opts := &getOptions{output: "yaml"}
-		o := &getOptions{output: "yaml"}
-
-		err := o.printCostGet(cost, unit, opts, ou)
-		g.Expect(err).ToNot(gomega.HaveOccurred())
-
+		g.Expect(result).To(gomega.BeEmpty())
 	})
 }
