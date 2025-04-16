@@ -13,10 +13,7 @@ import (
 )
 
 func TestPromotePackage_Success(t *testing.T) {
-	// Setup temp Git directory
 	tmpDir := t.TempDir()
-
-	// Init git repo
 	cmds := [][]string{
 		{"git", "init"},
 		{"git", "config", "user.email", "test@example.com"},
@@ -27,8 +24,6 @@ func TestPromotePackage_Success(t *testing.T) {
 		cmd.Dir = tmpDir
 		require.NoError(t, cmd.Run())
 	}
-
-	// Create SAAS file
 	saasDir := filepath.Join(tmpDir, "data/services/osd-operators/cicd/saas")
 	require.NoError(t, os.MkdirAll(saasDir, 0755))
 	saasFilePath := filepath.Join(saasDir, "saas-test.yaml")
@@ -57,17 +52,13 @@ resourceTemplates:
 	saas.ServicesFilesMap = map[string]string{}
 	err := PromotePackage(appInterface, "test", "new456", false)
 	require.NoError(t, err)
-
 	updatedContent, err := os.ReadFile(filepath.Join(saasDir, "saas-test.yaml"))
 	require.NoError(t, err)
-
 	assert.Contains(t, string(updatedContent), "new456")
 }
 
 func TestPromotePackage_ServiceNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
-
-	// Init git repo
 	cmds := [][]string{
 		{"git", "init"},
 		{"git", "config", "user.email", "test@example.com"},
@@ -93,7 +84,6 @@ resourceTemplates:
           PACKAGE_TAG: old123
 `
 	require.NoError(t, os.WriteFile(saasFilePath, []byte(content), 0644))
-
 	cmd := exec.Command("git", "add", ".")
 	cmd.Dir = tmpDir
 	require.NoError(t, cmd.Run())
@@ -111,8 +101,6 @@ resourceTemplates:
 
 func TestPromotePackage_InvalidYamlSyntax(t *testing.T) {
 	tmpDir := t.TempDir()
-
-	// Init git repo
 	cmds := [][]string{
 		{"git", "init"},
 		{"git", "config", "user.email", "test@example.com"},
@@ -139,8 +127,6 @@ resourceTemplates:
       - invalid_yaml_entry_here: [unclosed
 `
 	require.NoError(t, os.WriteFile(saasFilePath, []byte(badYaml), 0644))
-
-	// Git add/commit
 	cmd := exec.Command("git", "add", ".")
 	cmd.Dir = tmpDir
 	require.NoError(t, cmd.Run())
@@ -151,7 +137,6 @@ resourceTemplates:
 	appInterface := git.AppInterface{GitDirectory: tmpDir}
 	saas.ServicesSlice = nil
 	saas.ServicesFilesMap = map[string]string{}
-
 	err := PromotePackage(appInterface, "broken", "new456", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "yaml")

@@ -398,7 +398,6 @@ resourceTemplates:
 			wantRepo:      "https://github.com/test-org/obs-repo.git",
 			wantErrSubstr: "",
 		},
-		// New tests added:
 		"successfully_extracts_hash_for_rhobs_rules_and_dashboards": {
 			yamlContent: `
 name: rhobs-rules-and-dashboards-production
@@ -441,7 +440,6 @@ resourceTemplates:
 			wantRepo:      "https://github.com/test-org/backplane.git",
 			wantErrSubstr: "",
 		},
-		// Covering the specific logic for backplanep match
 		"successfully_extracts_hash_when_namespace_ref_contains_backplanep": {
 			yamlContent: `
 name: saas-backplane-api
@@ -505,7 +503,7 @@ func TestCheckAppInterfaceCheckout(t *testing.T) {
 		},
 		"non-git directory": {
 			setupDir: func(t *testing.T) string {
-				return t.TempDir() // not initializing git
+				return t.TempDir()
 			},
 			expectedError: "error executing 'git remote -v'",
 		},
@@ -573,12 +571,9 @@ resourceTemplates: []
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			saasFilePath := filepath.Join(tmpDir, "saas.yaml")
-
 			err := os.WriteFile(saasFilePath, []byte(tt.yamlData), 0644)
 			require.NoError(t, err)
-
 			actual, err := GetCurrentPackageTagFromAppInterface(saasFilePath)
-
 			if tt.expectError {
 				require.Error(t, err)
 				require.True(t, strings.Contains(err.Error(), tt.errorSubstr), "unexpected error: %v", err)
