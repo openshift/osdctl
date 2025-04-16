@@ -3,6 +3,7 @@ package org
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
@@ -17,7 +18,7 @@ var (
 		Short:         "describe organization",
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
-		Run: func(_ *cobra.Command, args []string) {
+		Run: func(cmd *cobra.Command, args []string) {
 			ocmClient, err := utils.CreateConnection()
 			if err != nil {
 				cmdutil.CheckErr(err)
@@ -27,51 +28,61 @@ var (
 					cmdutil.CheckErr(fmt.Errorf("cannot close the ocmClient (possible memory leak): %q", err))
 				}
 			}()
-
-			if err := checkOrgId(args); err != nil {
-				cmdutil.CheckErr(err)
-			}
-
-			req, err := getDescribeOrgRequest(ocmClient, args[0])
-			if err != nil {
-				cmdutil.CheckErr(err)
-			}
-
-			resp, err := sendRequest(req)
-			if err != nil {
-				cmdutil.CheckErr(fmt.Errorf("invalid input: %q", err))
-			}
-
-			org, err := describeOrg(resp.Bytes())
-			if err != nil {
-				cmdutil.CheckErr(err)
-			}
-
-			printOrg(*org)
+			cmdutil.CheckErr(checkOrgId(args))
+			cmdutil.CheckErr(describeOrg(cmd, args[0], ocmClient))
 		},
 	}
 )
 
 func init() {
 	flags := describeCmd.Flags()
+
 	AddOutputFlag(flags)
 }
 
-func describeOrg(data []byte) (*Organization, error) {
+func describeOrg(cmd *cobra.Command, orgID string, ocmClient *sdk.Connection) error {
+
+	response, err := sendRequest(createDescribeRequest(ocmClient, orgID))
+	if err != nil {
+		return fmt.Errorf("invalid input: %q", err)
+	}
+
 	org := Organization{}
-	err := json.Unmarshal(data, &org)
+	if err := json.Unmarshal(response.Bytes(), &org); err != nil {
+		return fmt.Errorf("failed to parse organization data: %v", err)
+	}
+
+	printOrg(org)
+
+	return nil
+}
+
+func sendDescribeOrgRequest(orgID string) (*sdk.Response, error) {
+	// Create OCM client to talk
+	ocmClient, err := utils.CreateConnection()
 	if err != nil {
 		return nil, err
 	}
-	return &org, nil
+	defer func() {
+		if err := ocmClient.Close(); err != nil {
+			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
+		}
+	}()
+
+	// Now get the matching orgs
+	return sendRequest(createDescribeRequest(ocmClient, orgID))
 }
 
-func getDescribeOrgRequest(ocmClient *sdk.Connection, orgID string) (*sdk.Request, error) {
-	req := ocmClient.Get()
+func createDescribeRequest(ocmClient *sdk.Connection, orgID string) *sdk.Request {
+	// Create and populate the request:
+	request := ocmClient.Get()
 	apiPath := organizationsAPIPath + "/" + orgID
-	err := arguments.ApplyPathArg(req, apiPath)
+
+	err := arguments.ApplyPathArg(request, apiPath)
+
 	if err != nil {
-		return nil, fmt.Errorf("can't parse API path '%s': %v\n", apiPath, err)
+		log.Fatalf("Can't parse API path '%s': %v\n", apiPath, err)
 	}
-	return req, nil
+
+	return request
 }

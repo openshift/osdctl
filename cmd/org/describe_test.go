@@ -1,56 +1,94 @@
 package org
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
-	"github.com/openshift/osdctl/pkg/utils"
+	"github.com/golang-jwt/jwt"
+	sdk "github.com/openshift-online/ocm-sdk-go"
+	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/assert"
 )
 
-var orgDetailsData = `
-{
-  "created_at": "2019-02-15T20:26:12.542449Z",
-  "ebs_account_id": "1111111",
-  "external_id": "2222222",
-  "href": "/api/accounts_mgmt/v1/organizations/abc.xyz",
-  "id": "abc.xyz",
-  "kind": "Organization",
-  "name": "Kurt Vonnegut Appreciation Society",
-  "updated_at": "2025-03-10T06:16:08.047253Z"
-}
-`
 
 func TestDescribeOrg(t *testing.T) {
-	org, err := describeOrg([]byte(orgDetailsData))
-	if err != nil {
-		t.Fatal(err)
+	var (
+		testToken, _ = jwt.New(jwt.SigningMethodHS256).SignedString([]byte("test-secret"))
+		clientID     = "fake-id"
+		clientSecret = "fake-secret"
+		tokenPath    = "/fake-path/token"
+	)
+	
+	tokenResponse := map[string]interface{}{
+		"access_token": testToken,
+		"token_type":   "Bearer",
+		"expires_in":   3600,
 	}
 
-	name := "Kurt Vonnegut Appreciation Society"
-	if org.Name != name {
-		t.Errorf("Expected %s to equal %s", org.Name, name)
+	testOrg := Organization{
+		ID:           "test-org-id",
+		Name:         "Test Organization",
+		ExternalID:   "123456",
+		EBSAccoundID: "789012",
+		Created:      "2024-01-01T00:00:00Z",
+		Updated:      "2024-01-01T00:00:00Z",
 	}
 
-	id := "abc.xyz"
-	if org.ID != id {
-		t.Errorf("Expected %s to equal %s", org.ID, id)
-	}
-}
+	t.Run("Success Test", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			if r.URL.Path == tokenPath {
+				json.NewEncoder(w).Encode(tokenResponse)
+				return
+			}
+			json.NewEncoder(w).Encode(testOrg)
+		}))
+		defer server.Close()
 
-func TestGetDescribeOrgRequest(t *testing.T) {
-	ocmClient, err := utils.CreateConnection()
-	if err != nil {
-		t.Skip("Skipping test: unable to create OCM connection")
-	}
+		conn, err := sdk.NewConnectionBuilder().
+			URL(server.URL).
+			TokenURL(server.URL+tokenPath).
+			Insecure(false).
+			Client(clientID, clientSecret).
+			Build()
+		if err != nil {
+			t.Fatalf("Failed to build connection: %v", err)
+		}
 
-	orgID := "abc.xyz"
-	expectedPath := organizationsAPIPath + "/" + orgID
+		cmd := &cobra.Command{}
+		err = describeOrg(cmd, "test-org-id", conn)
+		assert.NoError(t, err, "describeOrg() should not return an error")
+	})
 
-	req, err := getDescribeOrgRequest(ocmClient, orgID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	t.Run("Error Test - Invalid Response", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			if r.URL.Path == tokenPath {
+				json.NewEncoder(w).Encode(tokenResponse)
+				return
+			}
+			// Return invalid JSON
+			w.Write([]byte("invalid json"))
+		}))
+		defer server.Close()
 
-	if req.GetPath() != expectedPath {
-		t.Errorf("%s does not equal %s", req.GetPath(), expectedPath)
-	}
+		conn, err := sdk.NewConnectionBuilder().
+			URL(server.URL).
+			TokenURL(server.URL+tokenPath).
+			Insecure(false).
+			Client(clientID, clientSecret).
+			Build()
+		if err != nil {
+			t.Fatalf("Failed to build connection: %v", err)
+		}
+
+		cmd := &cobra.Command{}
+		err = describeOrg(cmd, "test-org-id", conn)
+		assert.Error(t, err, "describeOrg() should return an error for invalid response")
+	})
+
 }

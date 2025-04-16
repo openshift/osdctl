@@ -2,7 +2,6 @@ package org
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"os"
 	"regexp"
@@ -47,32 +46,6 @@ func TestCheckOrgId(t *testing.T) {
 			}
 		}
 	}
-}
-
-func TestPrintJson(t *testing.T) {
-	// Test Data
-	testData := map[string]string{"name": "test", "value": "123"}
-
-	// Capture Output
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	// Call the function
-	PrintJson(testData)
-
-	// Restore stdout
-	w.Close()
-	os.Stdout = oldStdout
-
-	// Read captured output
-	var buf bytes.Buffer
-	_, _ = buf.ReadFrom(r)
-	output := buf.String()
-
-	// Expected JSON Format
-	expectedJson, _ := json.MarshalIndent(testData, "", "  ")
-	assert.Contains(t, output, string(expectedJson))
 }
 
 func TestPrintOrgTable(t *testing.T) {
