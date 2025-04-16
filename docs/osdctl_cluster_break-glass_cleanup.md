@@ -10,14 +10,15 @@ when dropping access for PrivateLink clusters). For non-PrivateLink clusters, th
 environment variable is unset, if applicable.
 
 ```
-osdctl cluster break-glass cleanup <cluster identifier> [flags]
+osdctl cluster break-glass cleanup --cluster-id <cluster-identifier> [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help            help for cleanup
-      --reason string   [Mandatory for PrivateLink clusters] The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
+      --cluster-id string   [Mandatory] Provide the Internal ID of the cluster
+  -h, --help                help for cleanup
+      --reason string       [Mandatory for PrivateLink clusters] The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
 ```
 
 ### Options inherited from parent commands

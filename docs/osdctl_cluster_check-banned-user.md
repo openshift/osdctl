@@ -3,13 +3,14 @@
 Checks if the cluster owner is a banned user.
 
 ```
-osdctl cluster check-banned-user [CLUSTER_ID] [flags]
+osdctl cluster check-banned-user --cluster-id <cluster-identifier> [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for check-banned-user
+  -c, --cluster-id string   Provide internal ID of the cluster
+  -h, --help                help for check-banned-user
 ```
 
 ### Options inherited from parent commands

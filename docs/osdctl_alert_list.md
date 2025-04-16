@@ -7,15 +7,16 @@ List all alerts or based on severity
 Checks the alerts for the cluster and print the list based on severity
 
 ```
-osdctl alert list <cluster-id> --level [warning, critical, firing, pending, all] [flags]
+osdctl alert list --cluster-id <cluster-id> --level [warning, critical, firing, pending, all] [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help            help for list
-  -l, --level string    Alert level [warning, critical, firing, pending, all] (default "all")
-      --reason string   The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
+      --cluster-id string   Provide the internal ID of the cluster
+  -h, --help                help for list
+  -l, --level string        Alert level [warning, critical, firing, pending, all] (default "all")
+      --reason string       The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
 ```
 
 ### Options inherited from parent commands

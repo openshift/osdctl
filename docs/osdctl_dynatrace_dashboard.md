@@ -1,32 +1,17 @@
-## osdctl servicelog list
+## osdctl dynatrace dashboard
 
-Get service logs for a given cluster identifier.
-
-### Synopsis
-
-Get service logs for a given cluster identifier.
-
-# To return just service logs created by SREs
-osdctl servicelog list --cluster-id=my-cluster-id
-
-# To return all service logs, including those by automated systems
-osdctl servicelog list --cluster-id=my-cluster-id --all-messages
-
-# To return all service logs, as well as internal service logs
-osdctl servicelog list --cluster-id=my-cluster-id --all-messages --internal
-
+Get the Dyntrace Cluster Overview Dashboard for a given MC or HCP cluster
 
 ```
-osdctl servicelog list --cluster-id <cluster-identifier> [flags] [options]
+osdctl dynatrace dashboard --cluster-id CLUSTER_ID [flags]
 ```
 
 ### Options
 
 ```
-  -A, --all-messages        Toggle if we should see all of the messages or only SRE-P specific ones
-      --cluster-id string   Internal Cluster identifier (required)
-  -h, --help                help for list
-  -i, --internal            Toggle if we should see internal messages
+      --cluster-id string   Provide the id of the cluster
+      --dash string         Name of the dashboard you wish to find (default "Central ROSA HCP Dashboard")
+  -h, --help                help for dashboard
 ```
 
 ### Options inherited from parent commands
@@ -46,5 +31,5 @@ osdctl servicelog list --cluster-id <cluster-identifier> [flags] [options]
 
 ### SEE ALSO
 
-* [osdctl servicelog](osdctl_servicelog.md)	 - OCM/Hive Service log
+* [osdctl dynatrace](osdctl_dynatrace.md)	 - Dynatrace related utilities
 

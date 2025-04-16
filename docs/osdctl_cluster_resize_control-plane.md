@@ -4,10 +4,11 @@ Resize an OSD/ROSA cluster's control plane nodes
 
 ### Synopsis
 
-Resize an OSD/ROSA cluster's' control plane nodes
+Resize an OSD/ROSA cluster's control plane nodes
 
   Requires previous login to the api server via "ocm backplane login".
-  The user will be prompted to send a service log after the resize is complete.
+  The user will be prompted to send a service log after initiating the resize. The resize process runs asynchronously,
+  and this command exits immediately after sending the service log. Any issues with the resize will be reported via PagerDuty.
 
 ```
 osdctl cluster resize control-plane [flags]
@@ -27,7 +28,7 @@ osdctl cluster resize control-plane [flags]
   -c, --cluster-id string     The internal ID of the cluster to perform actions on
   -h, --help                  help for control-plane
       --machine-type string   The target AWS machine type to resize to (e.g. m5.2xlarge)
-      --reason string         The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
+      --reason string         The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)
 ```
 
 ### Options inherited from parent commands
