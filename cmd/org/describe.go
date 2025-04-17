@@ -19,8 +19,17 @@ var (
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
+			ocmClient, err := utils.CreateConnection()
+			if err != nil {
+				cmdutil.CheckErr(err)
+			}
+			defer func() {
+				if err := ocmClient.Close(); err != nil {
+					cmdutil.CheckErr(fmt.Errorf("cannot close the ocmClient (possible memory leak): %q", err))
+				}
+			}()
 			cmdutil.CheckErr(checkOrgId(args))
-			cmdutil.CheckErr(describeOrg(cmd, args[0]))
+			cmdutil.CheckErr(describeOrg(cmd, args[0], ocmClient))
 		},
 	}
 )
@@ -31,15 +40,17 @@ func init() {
 	AddOutputFlag(flags)
 }
 
-func describeOrg(cmd *cobra.Command, orgID string) error {
+func describeOrg(cmd *cobra.Command, orgID string, ocmClient *sdk.Connection) error {
 
-	response, err := sendDescribeOrgRequest(orgID)
+	response, err := sendRequest(createDescribeRequest(ocmClient, orgID))
 	if err != nil {
 		return fmt.Errorf("invalid input: %q", err)
 	}
 
 	org := Organization{}
-	json.Unmarshal(response.Bytes(), &org)
+	if err := json.Unmarshal(response.Bytes(), &org); err != nil {
+		return fmt.Errorf("failed to parse organization data: %v", err)
+	}
 
 	printOrg(org)
 
