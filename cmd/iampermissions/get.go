@@ -2,6 +2,9 @@ package iampermissions
 
 import (
 	"fmt"
+	"io"
+	"os"
+
 	"github.com/openshift/osdctl/pkg/policies"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -10,10 +13,18 @@ import (
 type getOptions struct {
 	ReleaseVersion string
 	Cloud          policies.CloudSpec
+
+	// Injected for testability
+	downloadFunc func(string, policies.CloudSpec) (string, error)
+	outputWriter io.Writer
 }
 
 func newCmdGet() *cobra.Command {
-	ops := &getOptions{}
+	ops := &getOptions{
+		downloadFunc: policies.DownloadCredentialRequests,
+		outputWriter: os.Stdout,
+	}
+
 	policyCmd := &cobra.Command{
 		Use:               "get",
 		Short:             "Get OCP CredentialsRequests",
@@ -32,13 +43,13 @@ func newCmdGet() *cobra.Command {
 }
 
 func (o *getOptions) run() error {
-	directory, err := policies.DownloadCredentialRequests(o.ReleaseVersion, o.Cloud)
+	directory, err := o.downloadFunc(o.ReleaseVersion, o.Cloud)
 	if err != nil {
 		return err
 	}
 
-	output := "OCP CredentialsRequests for " + o.Cloud.String() + " have been saved in " + directory + " directory"
-	fmt.Println(output)
+	output := fmt.Sprintf("OCP CredentialsRequests for %s have been saved in %s directory", o.Cloud.String(), directory)
+	fmt.Fprintln(o.outputWriter, output)
 
 	return nil
 }
