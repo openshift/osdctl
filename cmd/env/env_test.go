@@ -527,7 +527,7 @@ func TestKillChildren(t *testing.T) {
 		},
 		{
 			name:    "Valid PID in file",
-			content: "1\n", 
+			content: "1\n",
 		},
 	}
 
@@ -655,7 +655,7 @@ func TestStart(t *testing.T) {
 		Path:    tmpDir,
 	}
 
-	env.killChildren() 
+	env.killChildren()
 
 	go func() {
 		env.Start()
