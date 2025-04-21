@@ -217,6 +217,7 @@ require (
 	github.com/nxadm/tail v1.4.11 // indirect
 	github.com/oasdiff/yaml v0.0.0-20241214135536-5f7845c759c8 // indirect
 	github.com/oasdiff/yaml3 v0.0.0-20241214160948-977117996672 // indirect
+	github.com/openshift-online/ocm-common v0.0.22 // indirect
 	github.com/openshift/backplane-api v0.0.0-20241127094828-0f66644ff53d // indirect
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
