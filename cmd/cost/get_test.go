@@ -127,7 +127,7 @@ func TestGetTimePeriod(t *testing.T) {
 	}
 }
 
-func Test_printCostGet(t *testing.T) {
+func Test_getCostOutput(t *testing.T) {
 	g := gomega.NewWithT(t)
 
 	cost := decimal.NewFromFloat(123.45)
@@ -141,7 +141,7 @@ func Test_printCostGet(t *testing.T) {
 		opts := &getOptions{csv: true}
 		o := &getOptions{}
 
-		result, err := o.printCostGet(cost, unit, opts, ou)
+		result, err := o.getCostOutput(cost, unit, opts, ou)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
 		expected := fmt.Sprintf("\n%s,%s,%s\n\n", *ou.Name, cost.StringFixed(2), unit)
 		g.Expect(result).To(gomega.Equal(expected))
@@ -151,7 +151,7 @@ func Test_printCostGet(t *testing.T) {
 		opts := &getOptions{recursive: true}
 		o := &getOptions{}
 
-		result, err := o.printCostGet(cost, unit, opts, ou)
+		result, err := o.getCostOutput(cost, unit, opts, ou)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
 		g.Expect(result).To(gomega.Equal("Cost of all accounts under OU:"))
 	})
@@ -160,7 +160,7 @@ func Test_printCostGet(t *testing.T) {
 		opts := &getOptions{output: "json"}
 		o := &getOptions{output: "json"}
 
-		result, err := o.printCostGet(cost, unit, opts, ou)
+		result, err := o.getCostOutput(cost, unit, opts, ou)
 		g.Expect(err).ToNot(gomega.HaveOccurred())
 		g.Expect(result).To(gomega.BeEmpty())
 	})

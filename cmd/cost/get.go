@@ -124,7 +124,7 @@ func (o *getOptions) run() error {
 		}
 	}
 
-	print, err := o.printCostGet(cost, unit, o, OU)
+	print, err := o.getCostOutput(cost, unit, o, OU)
 	if err != nil {
 		log.Println("Error calling printCostGet(): ", err.Error())
 		return err
@@ -365,7 +365,7 @@ func getTimePeriod(timePtr *string) (string, string) {
 	return start, end
 }
 
-func (o *getOptions) printCostGet(cost decimal.Decimal, unit string, ops *getOptions, OU *organizationTypes.OrganizationalUnit) (string, error) {
+func (o *getOptions) getCostOutput(cost decimal.Decimal, unit string, ops *getOptions, OU *organizationTypes.OrganizationalUnit) (string, error) {
 
 	resp := getCostResponse{
 		OuId:    *OU.Id,
