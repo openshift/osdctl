@@ -49,18 +49,18 @@ type Post struct {
 }
 
 type TemplateFile struct {
-	Severity       string             `json:"severity"`
-	Summary        string             `json:"summary"`
-	Log_type       string             `json:"log_type"`
-	Details        string             `json:"details"`
-	Detection_type cmv1.DetectionType `json:"detection_type"`
+	Severity      string             `json:"severity"`
+	Summary       string             `json:"summary"`
+	LogType       string             `json:"log_type"`
+	Details       string             `json:"details"`
+	DetectionType cmv1.DetectionType `json:"detection_type"`
 }
 
 var (
 	userParameterNames, userParameterValues []string
 )
 
-func newCmdpost() *cobra.Command {
+func newCmdPost() *cobra.Command {
 	p := &Post{}
 
 	postCmd := &cobra.Command{
@@ -69,7 +69,7 @@ func newCmdpost() *cobra.Command {
 		Long: `Sends limited support reason to a given cluster, along with an internal service log detailing why the cluster was placed into limited support.
 The caller will be prompted to continue before sending the limited support reason.`,
 		Example: `# Post a limited support reason for a cluster misconfiguration
-osdctl cluster support post --cluster-id=1a2B3c4DefghIjkLMNOpQrSTUV5 --misconfiguration cluster --problem="The cluster has a second failing ingress controller, which is not supported and can cause issues with SLA." \
+osdctl cluster support post --cluster-id=1a2B3c4DefghIjkLMNOpQrSTUV5 --misconfiguration=cluster --problem="The cluster has a second failing ingress controller, which is not supported and can cause issues with SLA." \
 --resolution="Remove the additional ingress controller 'my-custom-ingresscontroller'. 'oc get ingresscontroller -n openshift-ingress-operator' should yield only 'default'" \
 --evidence="See OHSS-1234"
 
@@ -79,15 +79,12 @@ The cluster has a second failing ingress controller, which is not supported and 
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := p.Run(p.ClusterID); err != nil {
-				return fmt.Errorf("error posting limited support reason: %w", err)
-			}
-			return nil
+			return p.Run(p.ClusterID)
 		},
 	}
 
 	// Define required flags
-	postCmd.Flags().StringVarP(&p.ClusterID, "cluster-id", "c", "", "Intenal Cluster ID (required)")
+	postCmd.Flags().StringVarP(&p.ClusterID, "cluster-id", "c", "", "Internal Cluster ID (required)")
 	postCmd.Flags().StringVarP(&p.Template, "template", "t", "", "Message template file or URL")
 	postCmd.Flags().StringArrayVarP(&p.TemplateParams, "param", "p", p.TemplateParams, "Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.")
 	postCmd.Flags().Var(&p.Misconfiguration, MisconfigurationFlag, "The type of misconfiguration responsible for the cluster being placed into limited support. Valid values are `cloud` or `cluster`.")
@@ -95,16 +92,9 @@ The cluster has a second failing ingress controller, which is not supported and 
 	postCmd.Flags().StringVar(&p.Resolution, ResolutionFlag, "", "Complete sentence(s) describing the steps for the customer to take to resolve the issue and move out of limited support. Will form the limited support message with the contents of --problem prepended")
 	postCmd.Flags().StringVar(&p.Evidence, EvidenceFlag, "", "(optional) The reasoning that led to the decision to place the cluster in limited support. Can also be a link to a Jira case. Used for internal service log only.")
 
-	// Mark cluster-id as required
-	postCmd.MarkFlagRequired("cluster-id")
+	_ = postCmd.MarkFlagRequired("cluster-id")
 
 	return postCmd
-}
-
-func (p *Post) Init() error {
-	userParameterNames = []string{}
-	userParameterValues = []string{}
-	return nil
 }
 
 func (p *Post) setup() error {
@@ -125,14 +115,14 @@ func validateResolutionString(res string) error {
 func (p *Post) check() error {
 	if p.Template != "" {
 		if p.Problem != "" || p.Resolution != "" || p.Misconfiguration != "" || p.Evidence != "" {
-			return fmt.Errorf("\nIf Template flag is present, --problem, --resolution, --misconfiguration and --evidence flags cannot be used")
+			return fmt.Errorf("\nIf --template flag is used, --problem, --resolution, --misconfiguration and --evidence flags cannot be used")
 		}
 	} else {
+		if p.Problem == "" || p.Resolution == "" || p.Misconfiguration == "" {
+			return fmt.Errorf("\nIn the absence of --template flag, --problem, --resolution and --misconfiguration flags are mandatory")
+		}
 		if err := validateResolutionString(p.Resolution); err != nil {
 			return err
-		}
-		if p.Problem == "" || p.Resolution == "" || p.Misconfiguration == "" {
-			return fmt.Errorf("\nIn the absence of Template -t flag, --problem, --resolution and --misconfiguration flags are mandatory")
 		}
 		if err := p.setup(); err != nil {
 			return err
@@ -142,9 +132,8 @@ func (p *Post) check() error {
 }
 
 func (p *Post) Run(clusterID string) error {
-	if err := p.Init(); err != nil {
-		return err
-	}
+	userParameterNames = []string{}
+	userParameterValues = []string{}
 
 	if err := p.check(); err != nil {
 		return err
@@ -237,17 +226,17 @@ See: https://source.redhat.com/groups/public/sre/wiki/defining_limited_support_p
 		if subscription, ok := p.cluster.GetSubscription(); ok {
 			subscriptionId = subscription.ID()
 		}
-		log, err := p.buildInternalServiceLog(postLimitedSupportResponse.Body().ID(), subscriptionId)
+		internalServiceLog, err := p.buildInternalServiceLog(postLimitedSupportResponse.Body().ID(), subscriptionId)
 		if err != nil {
 			return err
 		}
 
 		fmt.Printf("Sending the following internal service log to %s:\n", clusterID)
-		if err = printInternalServiceLog(log); err != nil {
+		if err = printInternalServiceLog(internalServiceLog); err != nil {
 			return fmt.Errorf("failed to print internal service log template: %w", err)
 		}
 
-		postServiceLogResponse, err := sendInternalServiceLogPostRequest(connection, log)
+		postServiceLogResponse, err := sendInternalServiceLogPostRequest(connection, internalServiceLog)
 		if err != nil {
 			return fmt.Errorf("failed to post internal service log: %w", err)
 		}
@@ -276,7 +265,10 @@ func (p *Post) buildLimitedSupport() (*cmv1.LimitedSupportReason, error) {
 }
 
 func (p *Post) buildLimitedSupportTemplate() (*cmv1.LimitedSupportReason, error) {
-	t := p.readTemplate() // parse the given JSON template provided via '-t' flag
+	t, err := p.readTemplate()
+	if err != nil {
+		return nil, fmt.Errorf("error parsing template: %w", err)
+	}
 
 	p.parseUserParameters() // parse all the '-p' user flags
 	// For every '-p' flag, replace its related placeholder in the template
@@ -285,7 +277,7 @@ func (p *Post) buildLimitedSupportTemplate() (*cmv1.LimitedSupportReason, error)
 	}
 	p.checkLeftovers(t)
 
-	limitedSupportBuilder := cmv1.NewLimitedSupportReason().Summary(t.Summary).Details(t.Details).DetectionType(t.Detection_type)
+	limitedSupportBuilder := cmv1.NewLimitedSupportReason().Summary(t.Summary).Details(t.Details).DetectionType(t.DetectionType)
 	limitedSupport, err := limitedSupportBuilder.Build()
 
 	if err != nil {
@@ -311,20 +303,19 @@ func (p *Post) parseUserParameters() {
 	}
 }
 
-func (p *Post) readTemplate() *TemplateFile {
-	if p.Template == "" {
-		log.Fatalf("Template file is not provided. Use '-t' to fix this.")
-	} else {
-		templateObj, err := p.accessFile(p.Template)
-		if err != nil { //check the presence of this URL or file and also if this can be accessed
-			log.Fatal(err)
-		}
-
-		var t1 TemplateFile
-		json.Unmarshal(templateObj, &t1)
-		return &t1
+func (p *Post) readTemplate() (*TemplateFile, error) {
+	templateObj, err := p.accessFile(p.Template)
+	if err != nil { //check the presence of this URL or file and also if this can be accessed
+		return nil, err
 	}
-	return nil
+
+	var template TemplateFile
+	err = json.Unmarshal(templateObj, &template)
+	if err != nil {
+		return nil, err
+	}
+
+	return &template, nil
 }
 
 // accessFile returns the contents of a local file or url, and any errors encountered
