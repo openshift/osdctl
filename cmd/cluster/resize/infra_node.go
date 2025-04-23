@@ -146,7 +146,7 @@ func (r *Infra) New() error {
 	}
 
 	supportedInstanceTypes := []string{"r5.4xlarge", "r5.8xlarge", "r5.12xlarge", "r5.16xlarge", "r5.24xlarge"}
-	if !slices.Contains(supportedInstanceTypes, r.instanceType) {
+	if r.instanceType != "" && !slices.Contains(supportedInstanceTypes, r.instanceType) {
 		return fmt.Errorf("instance type %s not supported for infra nodes", r.instanceType)
 	}
 
