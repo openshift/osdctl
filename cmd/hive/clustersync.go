@@ -192,11 +192,12 @@ func (o *clusterSyncFailuresOptions) printFailingCluster() error {
 		}
 	}
 
-	fmt.Println("Cluster Name:", clusterDeployment.ObjectMeta.Name)
-	fmt.Println(strings.Repeat("-", 40))
-	fmt.Println("Status:")
-	fmt.Printf("  Limited Support: %v\n", isInLimitedSupport)
-	fmt.Printf("  Hibernating: %v\n", isHibernating)
+	// Use IOStreams.Out to capture output instead of fmt.Println
+	fmt.Fprintf(o.IOStreams.Out, "Cluster Name: %s\n", clusterDeployment.ObjectMeta.Name)
+	fmt.Fprintln(o.IOStreams.Out, strings.Repeat("-", 40))
+	fmt.Fprintln(o.IOStreams.Out, "Status:")
+	fmt.Fprintf(o.IOStreams.Out, "  Limited Support: %v\n", isInLimitedSupport)
+	fmt.Fprintf(o.IOStreams.Out, "  Hibernating: %v\n", isHibernating)
 
 	selectorSyncSetFailures := ""
 	for _, sss := range clusterSync.Status.SelectorSyncSets {
@@ -210,7 +211,7 @@ func (o *clusterSyncFailuresOptions) printFailingCluster() error {
 	}
 
 	if selectorSyncSetFailures != "" {
-		fmt.Printf("\nSelectorSyncSet Failures:\n%s", selectorSyncSetFailures)
+		fmt.Fprintf(o.IOStreams.Out, "\nSelectorSyncSet Failures:\n%s", selectorSyncSetFailures)
 	}
 
 	syncSetFailures := ""
@@ -225,14 +226,14 @@ func (o *clusterSyncFailuresOptions) printFailingCluster() error {
 	}
 
 	if syncSetFailures != "" {
-		fmt.Printf("\nSyncSet Failures:\n%s", syncSetFailures)
+		fmt.Fprintf(o.IOStreams.Out, "\nSyncSet Failures:\n%s", syncSetFailures)
 	}
 
 	if selectorSyncSetFailures == "" && syncSetFailures == "" {
-		fmt.Printf("\n\nNo failures\n\n")
+		fmt.Fprintln(o.IOStreams.Out, "\n\nNo failures")
 	}
 
-	fmt.Println(strings.Repeat("-", 40))
+	fmt.Fprintln(o.IOStreams.Out, strings.Repeat("-", 40))
 	return nil
 }
 

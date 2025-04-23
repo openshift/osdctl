@@ -18,29 +18,25 @@ type listSilenceCmd struct {
 func NewCmdListSilence() *cobra.Command {
 	listSilenceCmd := &listSilenceCmd{}
 	cmd := &cobra.Command{
-		Use:               "list <cluster-id>",
+		Use:               "list --cluster-id <cluster-identifier>",
 		Short:             "List all silences",
 		Long:              `print the list of silences`,
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			listSilenceCmd.clusterID = args[0]
 			ListSilence(listSilenceCmd)
 		},
 	}
-
+	cmd.Flags().StringVar(&listSilenceCmd.clusterID, "cluster-id", "", "Provide the internal ID of the cluster")
 	cmd.Flags().StringVar(&listSilenceCmd.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	_ = cmd.MarkFlagRequired("cluster-id")
 	_ = cmd.MarkFlagRequired("reason")
-
 	return cmd
 }
 
 func ListSilence(cmd *listSilenceCmd) {
-
 	var silences []utils.Silence
-
 	silenceCmd := []string{"amtool", "silence", "--alertmanager.url", utils.LocalHostUrl, "-o", "json"}
-
 	elevationReasons := []string{
 		cmd.reason,
 		"Clear alertmanager silence for a cluster via osdctl",
@@ -76,14 +72,15 @@ func ListSilence(cmd *listSilenceCmd) {
 func printSilence(silence utils.Silence) {
 	id, matchers, status, created, starts, end, comment := silence.ID, silence.Matchers, silence.Status, silence.CreatedBy, silence.StartsAt, silence.EndsAt, silence.Comment
 	fmt.Println("-------------------------------------------")
+	fmt.Printf("SilenceID: %s\n", id)
+	fmt.Printf("Status: %s\n", status.State)
+	fmt.Printf("Created By: %s\n", created)
+	fmt.Printf("Starts At: %s\n", starts)
+	fmt.Printf("Ends At: %s\n", end)
+	fmt.Printf("Comment: %s\n", comment)
+	fmt.Println("Matchers:")
 	for _, matcher := range matchers {
-		fmt.Printf("SilenceID:	%s\n", id)
-		fmt.Printf("Status:		%s\n", status.State)
-		fmt.Printf("Created By:	%s\n", created)
-		fmt.Printf("Starts At:	%s\n", starts)
-		fmt.Printf("Ends At:	%s\n", end)
-		fmt.Printf("Comment:	%s\n", comment)
-		fmt.Printf("AlertName:	%s\n", matcher.Value)
+		fmt.Printf("  %s: %s\n", matcher.Name, matcher.Value)
 	}
-	fmt.Println("---------------------------------------------")
+	fmt.Println("-------------------------------------------")
 }

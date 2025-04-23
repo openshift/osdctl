@@ -22,13 +22,14 @@ type GatherLogsOpts struct {
 	Tail      int
 	SortOrder string
 	DestDir   string
+	ClusterID string
 }
 
 func NewCmdHCPMustGather() *cobra.Command {
 	g := &GatherLogsOpts{}
 
 	hcpMgCmd := &cobra.Command{
-		Use:     "gather-logs <cluster-id>",
+		Use:     "gather-logs --cluster-id <cluster-identifier>",
 		Aliases: []string{"gl"},
 		Short:   "Gather all Pod logs and Application event from HCP",
 		Long: `Gathers pods logs and evnets of a given HCP from Dynatrace.
@@ -38,11 +39,11 @@ func NewCmdHCPMustGather() *cobra.Command {
 		`,
 		Example: `
   # Gather logs for a HCP cluster with cluster id hcp-cluster-id-123
-  osdctl dt gather-logs hcp-cluster-id-123`,
-		Args:              cobra.ExactArgs(1),
+  osdctl dt gather-logs --cluster-id hcp-cluster-id-123`,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			err := g.GatherLogs(args[0])
+
+			err := g.GatherLogs(g.ClusterID)
 			if err != nil {
 				cmdutil.CheckErr(err)
 			}
@@ -53,12 +54,14 @@ func NewCmdHCPMustGather() *cobra.Command {
 	hcpMgCmd.Flags().IntVar(&g.Tail, "tail", 0, "Last 'n' logs and events to fetch. By default it will pull everything")
 	hcpMgCmd.Flags().StringVar(&g.SortOrder, "sort", "asc", "Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'")
 	hcpMgCmd.Flags().StringVar(&g.DestDir, "dest-dir", "", "Destination directory for the logs dump, defaults to the local directory.")
+	hcpMgCmd.Flags().StringVar(&g.ClusterID, "cluster-id", "", "Internal ID of the HCP cluster to gather logs from (required)")
+	hcpMgCmd.MarkFlagRequired("cluster-id")
 
 	return hcpMgCmd
 }
 
 func (g *GatherLogsOpts) GatherLogs(clusterID string) (error error) {
-	accessToken, err := getAccessToken()
+	accessToken, err := getStorageAccessToken()
 	if err != nil {
 		return fmt.Errorf("failed to acquire access token %v", err)
 	}

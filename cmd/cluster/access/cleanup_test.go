@@ -99,9 +99,13 @@ func TestCleanupAccessOptions_dropPrivateLinkAccess(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed '%s': to add corev1 to scheme: %v", test.Name, err)
 		}
+
 		client := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...))
 		streams := genericclioptions.IOStreams{In: strings.NewReader("y\n"), Out: os.Stdout, ErrOut: os.Stderr}
 		cleanupAccess := newCleanupAccessOptions(client, streams)
+
+		// Set the required "reason" flag for PrivateLink clusters
+		cleanupAccess.reason = "testing-reason"
 
 		cluster := generateClusterObjectForTesting("fake-cluster", clusterid, true, false)
 
@@ -123,6 +127,7 @@ func TestCleanupAccessOptions_dropPrivateLinkAccess(t *testing.T) {
 		if len(podsAfter.Items) != len(test.ExpectedPodsAfter) {
 			t.Errorf("Failed '%s': unexpected number of pods remain after test: expected %d, got %d", test.Name, len(test.ExpectedPodsAfter), len(podsAfter.Items))
 		}
+
 		for _, pod := range podsAfter.Items {
 			if !slices.Contains(test.ExpectedPodsAfter, pod.Name) {
 				t.Errorf("Failed '%s': unexpected pod remains after test: %s", test.Name, pod.Name)
