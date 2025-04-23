@@ -1968,6 +1968,7 @@ osdctl cluster transfer-owner [flags]
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
       --new-owner string                 The new owners username to transfer the cluster to
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --pull-secret-only                 Update cluster pull secret from current OCM AccessToken data without ownership transfer
       --reason string                    The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server

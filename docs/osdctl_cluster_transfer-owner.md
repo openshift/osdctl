@@ -6,6 +6,18 @@ Transfer cluster ownership to a new user (to be done by Region Lead)
 osdctl cluster transfer-owner [flags]
 ```
 
+### Examples
+
+```
+
+  # Transfer ownership
+  osdctl cluster transfer-owner --new-owner "new_OCM_userName" --cluster-id 1kfmyclusteristhebesteverp8m --reason "transfer ownership per jira-id"
+
+  # Update pull secret without transfering ownership
+  osdctl cluster transfer-owner --pull-secret-only --cluster-id 1kfmyclusteristhebesteverp8m --reason "update pull secret per jira-id" 
+
+```
+
 ### Options
 
 ```
@@ -13,6 +25,7 @@ osdctl cluster transfer-owner [flags]
   -d, --dry-run             Dry-run - show all changes but do not apply them
   -h, --help                help for transfer-owner
       --new-owner string    The new owners username to transfer the cluster to
+      --pull-secret-only    Update cluster pull secret from current OCM AccessToken data without ownership transfer
       --reason string       The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
 ```
 
