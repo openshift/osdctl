@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -142,6 +143,11 @@ func (r *Infra) New() error {
 	hc, err := k8s.New(hive.ID(), client.Options{Scheme: scheme})
 	if err != nil {
 		return err
+	}
+
+	supportedInstanceTypes := []string{"r5.4xlarge", "r5.8xlarge", "r5.12xlarge", "r5.16xlarge", "r5.24xlarge"}
+	if !slices.Contains(supportedInstanceTypes, r.instanceType) {
+		return fmt.Errorf("instance type %s not supported for infra nodes", r.instanceType)
 	}
 
 	hac, err := k8s.NewAsBackplaneClusterAdmin(hive.ID(), client.Options{Scheme: scheme}, []string{

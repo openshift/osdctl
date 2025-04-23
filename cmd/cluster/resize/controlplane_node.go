@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -92,6 +93,11 @@ func (o *controlPlane) New() error {
 	err := utils.IsValidClusterKey(o.clusterID)
 	if err != nil {
 		return err
+	}
+
+	supportedInstanceTypes := []string{"m5.4xlarge", "m5.8xlarge", "m5.12xlarge", "m5.16xlarge", "m5.24xlarge"}
+	if !slices.Contains(supportedInstanceTypes, o.newMachineType) {
+		return fmt.Errorf("instance type %s is not supported for control-plane nodes", o.newMachineType)
 	}
 
 	connection, err := utils.CreateConnection()
