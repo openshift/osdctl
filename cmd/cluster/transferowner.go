@@ -302,24 +302,6 @@ func rolloutTelemeterClientPods(clientset *kubernetes.Clientset, namespace, sele
 	fmt.Printf("Pods in namespace %s with label selector '%s' have been deleted.\n", namespace, selector)
 	return nil
 }
-func getPullSecretTokenAuth(registryID string, secret *corev1.Secret) (*amv1.AccessTokenAuth, error) {
-	if len(registryID) <= 0 {
-		return nil, fmt.Errorf("error: registryID empty in getPullSecretToken()")
-	}
-	dockerConfigJsonBytes, found := secret.Data[".dockerconfigjson"]
-	if !found {
-		return nil, fmt.Errorf("secret missing '.dockerconfigjson'?")
-	}
-	dockerConfigJson, err := amv1.UnmarshalAccessToken(dockerConfigJsonBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse secret, err: %w", err)
-	}
-	registryAuth, found := dockerConfigJson.Auths()[registryID]
-	if !found {
-		return nil, fmt.Errorf("error: registry '%s not found in pull_secret.auths", registryID)
-	}
-	return registryAuth, nil
-}
 
 func comparePullSecretAuths(pullSecret *corev1.Secret, expectedAuths map[string]*amv1.AccessTokenAuth) error {
 	var errString strings.Builder
