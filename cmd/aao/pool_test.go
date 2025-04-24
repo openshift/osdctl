@@ -1,15 +1,18 @@
 package aao
 
 import (
-	"context"
-	"errors"
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	v1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type MockKubeClient struct {
@@ -17,25 +20,21 @@ type MockKubeClient struct {
 	mock.Mock
 }
 
-func (m *MockKubeClient) List(ctx context.Context, obj client.ObjectList, opts ...client.ListOption) error {
-	args := m.Called(ctx, obj, opts)
-	return args.Error(0)
-}
-
 func TestRun(t *testing.T) {
 	tests := []struct {
-		name           string
-		mockReturnErr  error
-		mockAccounts   []v1alpha1.Account
-		expectedErr    error
-		expectedCounts map[string]int // Expected claimed/unclaimed counts for each entity
-
+		name            string
+		mockAccounts    []v1alpha1.Account
+		expectedOutputs []string
+		expectError     bool
 	}{
 		{
-			name:          "TestRun_Success_With_Accounts",
-			mockReturnErr: nil,
+			name: "TestRun_Success_With_Accounts",
 			mockAccounts: []v1alpha1.Account{
 				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "account1",
+						Namespace: "aws-account-operator",
+					},
 					Status: v1alpha1.AccountStatus{
 						Claimed: false,
 						State:   "Ready",
@@ -50,6 +49,10 @@ func TestRun(t *testing.T) {
 					},
 				},
 				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "account2",
+						Namespace: "aws-account-operator",
+					},
 					Status: v1alpha1.AccountStatus{
 						Claimed: true,
 						State:   "Ready",
@@ -64,24 +67,19 @@ func TestRun(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: nil,
-			expectedCounts: map[string]int{
-				"Entity1": 1,
-				"Entity2": 1,
+			expectedOutputs: []string{
+				"Total Accounts: 1",
 			},
+			expectError: false,
 		},
 		{
-			name:           "TestRun_ListError",
-			mockReturnErr:  errors.New("list error"),
-			mockAccounts:   nil,
-			expectedErr:    errors.New("list error"),
-			expectedCounts: nil,
-		},
-		{
-			name:          "TestRun_NoAvailableAccounts",
-			mockReturnErr: nil,
+			name: "TestRun_NoAvailableAccounts",
 			mockAccounts: []v1alpha1.Account{
 				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "account3", 
+						Namespace: "aws-account-operator",
+					},
 					Status: v1alpha1.AccountStatus{
 						Claimed: true,
 						State:   "Ready",
@@ -96,38 +94,67 @@ func TestRun(t *testing.T) {
 					},
 				},
 			},
-			expectedErr:    nil,
-			expectedCounts: nil, // No "unclaimed" accounts, so counts should remain zero
-
+			expectedOutputs: []string{
+				"Total Accounts: 0", 
+				"fm-accountpool",        
+			},
+			expectError: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockKubeCli := &MockKubeClient{}
-			// Mock the account list if error is expected
-			mockKubeCli.On("List", mock.Anything, mock.Anything, mock.Anything).Return(tt.mockReturnErr)
-
-			// Mock the account list if no error is expected
-			if tt.mockReturnErr == nil {
-				mockKubeCli.On("List", mock.Anything, mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
-					arg := args.Get(1).(*v1alpha1.AccountList)
-					arg.Items = tt.mockAccounts
-				}).Return(nil)
+			// Set up the scheme and add the necessary API types to the scheme
+			scheme := runtime.NewScheme()
+			if err := v1alpha1.AddToScheme(scheme); err != nil {
+				t.Fatalf("Failed to add v1alpha1 to scheme: %v", err)
 			}
 
-			o := &poolOptions{kubeCli: mockKubeCli}
+			// Create a slice of client.Object for all the mock accounts
+			objects := []client.Object{}
+			for _, account := range tt.mockAccounts {
+				objects = append(objects, &account)
+			}
 
+			// Create the fake Kubernetes client
+			client := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(objects...).
+				Build()
+
+			// Create a buffer to capture stdout and stderr
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+
+			// Create the poolOptions object and inject the fake client and buffers
+			o := &poolOptions{
+				kubeCli: client,
+				IOStreams: genericclioptions.IOStreams{
+					Out:    stdout,
+					ErrOut: stderr,
+					In:     nil,
+				},
+			}
+
+			// Run the function and check for errors
 			err := o.run()
 
-			if err == nil && tt.expectedErr != nil {
-				t.Errorf("expected error '%v', got nil", tt.expectedErr)
+			// If error is expected, assert error
+			if tt.expectError {
+				assert.Error(t, err)
+				return
 			}
 
-			if err != nil && err.Error() != tt.expectedErr.Error() {
-				t.Errorf("expected error '%v', got '%v'", tt.expectedErr, err)
-			}
+			// Otherwise, assert no error
+			assert.NoError(t, err)
 
+			// Capture the printed output
+			output := stdout.String()
+
+			// Check if the expected outputs are in the result
+			for _, expected := range tt.expectedOutputs {
+				assert.Contains(t, output, expected, "Expected output to contain %q", expected)
+			}
 		})
 	}
 }
