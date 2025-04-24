@@ -184,7 +184,7 @@ func TestPostCheck(t *testing.T) {
 				Evidence:         "log.txt",
 			},
 			expectError:    true,
-			errorSubstring: "Template flag is present",
+			errorSubstring: "--template flag is used",
 		},
 		{
 			name: "No_template_resolution_ends_with_'.'_should_error",
