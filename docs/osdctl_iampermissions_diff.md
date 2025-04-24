@@ -1,6 +1,6 @@
 ## osdctl iampermissions diff
 
-Diff iam permissions for cluster operators between two versions
+Diff IAM permissions for cluster operators between two versions
 
 ```
 osdctl iampermissions diff [flags]
