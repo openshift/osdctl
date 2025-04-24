@@ -38,8 +38,8 @@ import (
 const (
 	CheckSyncMaxAttempts = 24
 
-	SL_TRANSFER_INITIATED = "https://github.com/openshift/managed-notifications/raw/refs/heads/master/osd/clustertransfer_starting.json"
-	SL_TRANSFER_COMPLETE  = "https://github.com/openshift/managed-notifications/raw/refs/heads/master/osd/clustertransfer_completed.json"
+	SL_TRANSFER_INITIATED = "https://raw.githubusercontent.com/openshift/managed-notifications/refs/heads/master/osd/clustertransfer_starting.json"
+	SL_TRANSFER_COMPLETE  = "https://raw.githubusercontent.com/openshift/managed-notifications/refs/heads/master/osd/clustertransfer_completed.json"
 )
 
 // transferOwnerOptions defines the struct for running transferOwner command
