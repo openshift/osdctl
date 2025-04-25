@@ -69,6 +69,7 @@ func TestRun(t *testing.T) {
 			},
 			expectedOutputs: []string{
 				"Total Accounts: 1",
+				"Entity2",
 			},
 			expectError: false,
 		},
