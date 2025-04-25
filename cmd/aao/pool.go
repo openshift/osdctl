@@ -98,9 +98,6 @@ func (o *poolOptions) run() error {
 	fmt.Fprintln(o.IOStreams.Out, "========================================================================================================================")
 	printSortedCount(getSortedCount(fmMap, 10), o.IOStreams.Out)
 
-	fmt.Fprintln(o.IOStreams.Out, "Default Map:", defaultMap)
-	fmt.Fprintln(o.IOStreams.Out, "FM Map:", fmMap)
-
 	return nil
 }
 
