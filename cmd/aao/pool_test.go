@@ -77,7 +77,7 @@ func TestRun(t *testing.T) {
 			mockAccounts: []v1alpha1.Account{
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "account3", 
+						Name:      "account3",
 						Namespace: "aws-account-operator",
 					},
 					Status: v1alpha1.AccountStatus{
@@ -95,8 +95,8 @@ func TestRun(t *testing.T) {
 				},
 			},
 			expectedOutputs: []string{
-				"Total Accounts: 0", 
-				"fm-accountpool",        
+				"Total Accounts: 0",
+				"fm-accountpool",
 			},
 			expectError: false,
 		},
