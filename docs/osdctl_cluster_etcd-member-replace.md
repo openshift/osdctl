@@ -7,15 +7,16 @@ Replaces an unhealthy etcd node
 Replaces an unhealthy ectd node using the member id provided
 
 ```
-osdctl cluster etcd-member-replace <cluster-id> [flags]
+osdctl cluster etcd-member-replace --cluster-id <cluster-identifier> [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help            help for etcd-member-replace
-      --node string     Node ID (required)
-      --reason string   The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
+      --cluster-id string   Provide internal Cluster ID
+  -h, --help                help for etcd-member-replace
+      --node string         Node ID (required)
+      --reason string       The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)
 ```
 
 ### Options inherited from parent commands

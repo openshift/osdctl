@@ -265,7 +265,7 @@ func (j *jumphostConfig) assembleNextSteps() string {
 		return fmt.Sprintf("ssh -i %s ec2-user@%s", j.keyFilepath, j.ec2PublicIp)
 	}
 
-	return fmt.Sprintf("ssh-i ${private_key} ec2-user@%s", j.ec2PublicIp)
+	return fmt.Sprintf("ssh -i ${private_key} ec2-user@%s", j.ec2PublicIp)
 }
 
 // findVpcId returns the AWS VPC ID of a provided jumphostConfig.

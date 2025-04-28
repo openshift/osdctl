@@ -9,7 +9,7 @@ osdctl cluster health [flags]
 ### Options
 
 ```
-  -C, --cluster-id string   Cluster ID
+  -C, --cluster-id string   Internal Cluster ID
   -h, --help                help for health
   -p, --profile string      AWS Profile
       --verbose             Verbose output

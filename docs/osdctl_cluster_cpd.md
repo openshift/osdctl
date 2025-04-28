@@ -30,7 +30,7 @@ osdctl cluster cpd [flags]
 ### Options
 
 ```
-  -C, --cluster-id string   The internal/external (OCM) Cluster ID
+  -C, --cluster-id string   The internal (OCM) Cluster ID
   -h, --help                help for cpd
   -p, --profile string      AWS profile name
 ```
