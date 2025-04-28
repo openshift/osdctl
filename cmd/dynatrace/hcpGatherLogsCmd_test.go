@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -15,13 +16,13 @@ func TestSetupGatherDir(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name:        "Valid directory creation",
+			name:        "valid_directory_creation",
 			destBaseDir: t.TempDir(),
 			dirName:     "test-logs",
 			expectError: false,
 		},
 		{
-			name:        "Invalid base directory",
+			name:        "invalid_base_directory",
 			destBaseDir: "/invalid/path",
 			dirName:     "test-logs",
 			expectError: true,
@@ -44,12 +45,19 @@ func TestSetupGatherDir(t *testing.T) {
 				return
 			}
 
+			expectedDirPath := filepath.Join(tt.destBaseDir, fmt.Sprintf("hcp-logs-dump-%s", tt.dirName))
+
+			if logsDir != expectedDirPath {
+				t.Errorf("expected directory path %s but got %s for test: %s", expectedDirPath, logsDir, tt.name)
+			}
+
 			if _, err := os.Stat(logsDir); os.IsNotExist(err) {
 				t.Errorf("expected directory %s to be created but it does not exist for test: %s", logsDir, tt.name)
 			}
 		})
 	}
 }
+
 func TestAddDir(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -58,19 +66,19 @@ func TestAddDir(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name:        "Valid directory and files creation",
+			name:        "valid_directory_and_files_creation",
 			dirs:        []string{t.TempDir(), "test-add-dir"},
 			filePaths:   []string{"file1.txt", "file2.log"},
 			expectError: false,
 		},
 		{
-			name:        "Invalid base directory",
+			name:        "invalid_base_directory",
 			dirs:        []string{"/invalid/path", "test-add-dir"},
 			filePaths:   []string{"file1.txt", "file2.log"},
 			expectError: true,
 		},
 		{
-			name:        "No files to create",
+			name:        "no_files_to_create",
 			dirs:        []string{t.TempDir(), "test-empty-files"},
 			filePaths:   []string{},
 			expectError: false,
@@ -106,6 +114,7 @@ func TestAddDir(t *testing.T) {
 		})
 	}
 }
+
 func TestGetPodQuery(t *testing.T) {
 	tests := []struct {
 		pod         string
@@ -148,18 +157,16 @@ func TestGetPodQuery(t *testing.T) {
 			namespace:   "test-namespace",
 			since:       24,
 			tail:        100,
-			sortOrder:   "invalid", // Invalid sort order
+			sortOrder:   "invalid",
 			srcCluster:  "cluster1",
-			expectError: true, // Expected error for invalid sort order
+			expectError: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%s-%s", tt.pod, tt.namespace), func(t *testing.T) {
-			// Call the function
 			query, err := getPodQuery(tt.pod, tt.namespace, tt.since, tt.tail, tt.sortOrder, tt.srcCluster)
 
-			// Check for expected error
 			if tt.expectError && err == nil {
 				t.Errorf("expected error but got none for test: %s-%s", tt.pod, tt.namespace)
 				return
@@ -170,16 +177,23 @@ func TestGetPodQuery(t *testing.T) {
 				return
 			}
 
-			// Build the final query
 			finalQuery := query.Build()
 
-			// Ensure query is non-empty
+			if !strings.Contains(finalQuery, tt.pod) {
+				t.Errorf("expected query to contain pod %s but it does not for test: %s-%s", tt.pod, tt.pod, tt.namespace)
+			}
+
+			if !strings.Contains(finalQuery, tt.namespace) {
+				t.Errorf("expected query to contain namespace %s but it does not for test: %s-%s", tt.namespace, tt.pod, tt.namespace)
+			}
+
 			if finalQuery == "" {
 				t.Errorf("expected non-empty query but got an empty query for test: %s-%s", tt.pod, tt.namespace)
 			}
 		})
 	}
 }
+
 func TestGetEventQuery(t *testing.T) {
 	tests := []struct {
 		event       string
@@ -222,18 +236,16 @@ func TestGetEventQuery(t *testing.T) {
 			namespace:   "test-namespace",
 			since:       24,
 			tail:        100,
-			sortOrder:   "invalid", // Invalid sort order
+			sortOrder:   "invalid",
 			srcCluster:  "cluster1",
-			expectError: true, // Expected error for invalid sort order
+			expectError: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%s-%s", tt.event, tt.namespace), func(t *testing.T) {
-			// Call the function
 			query, err := getEventQuery(tt.event, tt.namespace, tt.since, tt.tail, tt.sortOrder, tt.srcCluster)
 
-			// Check for expected error
 			if tt.expectError && err == nil {
 				t.Errorf("expected error but got none for test: %s-%s", tt.event, tt.namespace)
 				return
@@ -244,10 +256,16 @@ func TestGetEventQuery(t *testing.T) {
 				return
 			}
 
-			// Build the final query
 			finalQuery := query.Build()
 
-			// Ensure query is non-empty
+			if !strings.Contains(finalQuery, tt.event) {
+				t.Errorf("expected query to contain event %s but it does not for test: %s-%s", tt.event, tt.event, tt.namespace)
+			}
+
+			if !strings.Contains(finalQuery, tt.namespace) {
+				t.Errorf("expected query to contain namespace %s but it does not for test: %s-%s", tt.namespace, tt.event, tt.namespace)
+			}
+
 			if finalQuery == "" {
 				t.Errorf("expected non-empty query but got an empty query for test: %s-%s", tt.event, tt.namespace)
 			}
