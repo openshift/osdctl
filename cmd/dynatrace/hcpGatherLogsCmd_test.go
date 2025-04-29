@@ -101,6 +101,11 @@ func TestAddDir(t *testing.T) {
 				return
 			}
 
+			expectedDirPath := filepath.Join(tt.dirs...)
+			if dirPath != expectedDirPath {
+				t.Errorf("expected dirPath %s, but got %s for test: %s", expectedDirPath, dirPath, tt.name)
+			}
+
 			if _, err := os.Stat(dirPath); os.IsNotExist(err) {
 				t.Errorf("expected directory %s to be created but it does not exist for test: %s", dirPath, tt.name)
 			}
