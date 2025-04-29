@@ -105,10 +105,10 @@ func TestGetSearchQuery(t *testing.T) {
 }
 
 func TestSearchOrgs(t *testing.T) {
-	testToken, _  = jwt.New(jwt.SigningMethodHS256).SignedString([]byte("test-secret"))
-	clientID      = "fake-id"
-	clientSecret  = "fake-secret"
-	tokenPath     = "/fake-path/token"
+	testToken, _ = jwt.New(jwt.SigningMethodHS256).SignedString([]byte("test-secret"))
+	clientID = "fake-id"
+	clientSecret = "fake-secret"
+	tokenPath = "/fake-path/token"
 	tokenResponse := map[string]interface{}{
 		"access_token": testToken,
 		"token_type":   "Bearer",
