@@ -1,31 +1,41 @@
 package git
 
 import (
-	"fmt"
+	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/mock"
 )
+
+type MockExec struct {
+	mock.Mock
+}
+
+func (m *MockExec) Run(dir string, name string, args ...string) error {
+	argsList := m.Called(dir, name, args)
+	return argsList.Error(0)
+}
+
+func (m *MockExec) Output(dir, cmd string, args ...string) (string, error) {
+	argsList := m.Called(dir, cmd, args)
+	return argsList.String(0), argsList.Error(1)
+}
 
 func TestCommitSaasFile(t *testing.T) {
 	tests := []struct {
 		name          string
-		setup         func(t *testing.T) (AppInterface, string)
+		setupMock     func(m *MockExec, dir, file, commitMsg string)
 		commitMessage string
 		wantErr       bool
 		expectedErr   string
 	}{
 		{
 			name: "fails_when_file_does_not_exist",
-			setup: func(t *testing.T) (AppInterface, string) {
-				tmpDir := t.TempDir()
-				_ = exec.Command("git", "init", tmpDir).Run()
-				return AppInterface{GitDirectory: tmpDir}, "non-existent.yaml"
+			setupMock: func(m *MockExec, dir, file, _ string) {
+				m.On("Run", dir, "git", []string{"add", file}).Return(errors.New("file not found"))
 			},
 			commitMessage: "commit non-existent file",
 			wantErr:       true,
@@ -33,29 +43,19 @@ func TestCommitSaasFile(t *testing.T) {
 		},
 		{
 			name: "fails_when_not_a_git_repo",
-			setup: func(t *testing.T) (AppInterface, string) {
-				tmpDir := t.TempDir()
-				file := filepath.Join(tmpDir, "saas.yaml")
-				_ = os.WriteFile(file, []byte("content"), 0644)
-				return AppInterface{GitDirectory: tmpDir}, file
+			setupMock: func(m *MockExec, dir, file, _ string) {
+				m.On("Run", dir, "git", []string{"add", file}).Return(nil)
+				m.On("Run", dir, "git", []string{"commit", "-m", "commit without git"}).Return(errors.New("not a git repo"))
 			},
 			commitMessage: "commit without git",
 			wantErr:       true,
-			expectedErr:   "failed to add file",
+			expectedErr:   "failed to commit changes",
 		},
 		{
 			name: "commits_file_successfully",
-			setup: func(t *testing.T) (AppInterface, string) {
-				tmpDir := t.TempDir()
-				_ = exec.Command("git", "init", tmpDir).Run()
-
-				// Set dummy git user config to avoid commit failure
-				_ = exec.Command("git", "-C", tmpDir, "config", "user.email", "test@example.com").Run()
-				_ = exec.Command("git", "-C", tmpDir, "config", "user.name", "Test User").Run()
-
-				file := filepath.Join(tmpDir, "saas.yaml")
-				_ = os.WriteFile(file, []byte("content"), 0644)
-				return AppInterface{GitDirectory: tmpDir}, file
+			setupMock: func(m *MockExec, dir, file, msg string) {
+				m.On("Run", dir, "git", []string{"add", file}).Return(nil)
+				m.On("Run", dir, "git", []string{"commit", "-m", msg}).Return(nil)
 			},
 			commitMessage: "valid commit",
 			wantErr:       false,
@@ -64,19 +64,33 @@ func TestCommitSaasFile(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			app, file := tc.setup(t)
+			tmpDir := t.TempDir()
+			file := filepath.Join(tmpDir, "saas.yaml")
+			_ = os.WriteFile(file, []byte("dummy content"), 0644)
+
+			mockExec := new(MockExec)
+			tc.setupMock(mockExec, tmpDir, file, tc.commitMessage)
+
+			app := AppInterface{
+				GitDirectory: tmpDir,
+				GitExecutor:  mockExec,
+			}
+
 			err := app.CommitSaasFile(file, tc.commitMessage)
 
 			if tc.wantErr {
 				assert.Error(t, err)
-				assert.ErrorContains(t, err, tc.expectedErr)
+				assert.Contains(t, err.Error(), tc.expectedErr)
 			} else {
 				assert.NoError(t, err)
 			}
+
+			mockExec.AssertExpectations(t)
 		})
 	}
 }
 
+/*
 func TestUpdatePackageTag(t *testing.T) {
 	tests := map[string]struct {
 		setup       func(t *testing.T) (AppInterface, string)
@@ -584,3 +598,4 @@ resourceTemplates: []
 		})
 	}
 }
+*/

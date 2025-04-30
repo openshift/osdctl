@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/openshift/osdctl/cmd/promote/git"
+	"github.com/openshift/osdctl/cmd/promote/iexec"
 	"github.com/openshift/osdctl/cmd/promote/saas"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -84,6 +85,9 @@ func PromotePackage(appInterface git.AppInterface, serviceName string, packageTa
 		return err
 	}
 	commitMessage := fmt.Sprintf("Promote %s package to %s", serviceName, packageTag)
+
+	// ovverriding appInterface.GitExecuter to iexec.Exec{}
+	appInterface.GitExecutor = iexec.Exec{}
 	err = appInterface.CommitSaasFile(saasFile, commitMessage)
 	if err != nil {
 		return err
