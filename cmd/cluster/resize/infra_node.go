@@ -102,6 +102,10 @@ func newCmdResizeInfra() *cobra.Command {
 }
 
 func (r *Infra) New() error {
+	if err := validateInstanceSize(r.instanceType, "infra"); err != nil {
+		return err
+	}
+
 	scheme := runtime.NewScheme()
 
 	// Register machinev1beta1 for Machines
@@ -115,10 +119,6 @@ func (r *Infra) New() error {
 	}
 
 	if err := corev1.AddToScheme(scheme); err != nil {
-		return err
-	}
-
-	if err := validateInstanceSize(r.instanceType, "infra"); err != nil {
 		return err
 	}
 
