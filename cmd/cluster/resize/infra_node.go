@@ -118,6 +118,10 @@ func (r *Infra) New() error {
 		return err
 	}
 
+	if err := validateInstanceSize(r.instanceType, "infra"); err != nil {
+		return err
+	}
+
 	ocmClient, err := utils.CreateConnection()
 	if err != nil {
 		return err
@@ -143,11 +147,6 @@ func (r *Infra) New() error {
 	hc, err := k8s.New(hive.ID(), client.Options{Scheme: scheme})
 	if err != nil {
 		return err
-	}
-
-	supportedInstanceTypes := []string{"r5.4xlarge", "r5.8xlarge", "r5.12xlarge", "r5.16xlarge", "r5.24xlarge"}
-	if r.instanceType != "" && !slices.Contains(supportedInstanceTypes, r.instanceType) {
-		return fmt.Errorf("instance type %s not supported for infra nodes", r.instanceType)
 	}
 
 	hac, err := k8s.NewAsBackplaneClusterAdmin(hive.ID(), client.Options{Scheme: scheme}, []string{
@@ -647,6 +646,15 @@ func (r *Infra) nodesMatchExpectedCount(ctx context.Context, labelSelector label
 	}
 
 	return false, nil
+}
+
+// validateInstanceSize accepts a string for the requested new instance type and returns an error
+// if the instance type is invalid
+func validateInstanceSize(newInstanceSize string, nodeType string) error {
+	if !slices.Contains(supportedInstanceTypes[nodeType], newInstanceSize) {
+		return fmt.Errorf("instance type %s not supported for %s nodes", newInstanceSize, nodeType)
+	}
+	return nil
 }
 
 // having an error when being in a retry loop, should not be handled as an error, and we should just display it and continue
