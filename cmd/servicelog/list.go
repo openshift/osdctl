@@ -18,37 +18,42 @@ const (
 	AllMessagesShortFlag = "A"
 	InternalFlag         = "internal"
 	InternalShortFlag    = "i"
+	ListclusterIDFlag    = "cluster-id"
 )
 
 type listCmdOptions struct {
 	allMessages bool
 	internal    bool
+	clusterID   string
 }
 
 func newListCmd() *cobra.Command {
 	opts := &listCmdOptions{}
 	cmd := &cobra.Command{
-		Use: "list [flags] [options] cluster-identifier",
+		Use: "list --cluster-id <cluster-identifier> [flags] [options]",
 		Long: `Get service logs for a given cluster identifier.
 
 # To return just service logs created by SREs
-osdctl servicelog list
+osdctl servicelog list --cluster-id=my-cluster-id
 
 # To return all service logs, including those by automated systems
-osdctl servicelog list --all-messages
+osdctl servicelog list --cluster-id=my-cluster-id --all-messages
 
 # To return all service logs, as well as internal service logs
-osdctl servicelog list --all-messages --internal
+osdctl servicelog list --cluster-id=my-cluster-id --all-messages --internal
 `,
 		Short: "Get service logs for a given cluster identifier.",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return listServiceLogs(args[0], opts)
+
+			return listServiceLogs(opts.clusterID, opts)
 		},
 	}
 
-	cmd.Flags().BoolP("all-messages", "A", opts.allMessages, "Toggle if we should see all of the messages or only SRE-P specific ones")
-	cmd.Flags().BoolP("internal", "i", opts.internal, "Toggle if we should see internal messages")
+	cmd.Flags().BoolP(AllMessagesFlag, AllMessagesShortFlag, opts.allMessages, "Toggle if we should see all of the messages or only SRE-P specific ones")
+	cmd.Flags().BoolP(InternalFlag, InternalShortFlag, opts.internal, "Toggle if we should see internal messages")
+	cmd.Flags().StringVar(&opts.clusterID, ListclusterIDFlag, "", "Internal Cluster identifier (required)")
+	cmd.MarkFlagRequired(ListclusterIDFlag)
 
 	return cmd
 }

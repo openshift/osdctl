@@ -8,12 +8,13 @@ This command aggregates AWS objects from the cluster, management cluster and pri
 It attempts to render the relationships as graphviz if that output format is chosen or will simply print the output as tables.
 
 ```
-osdctl cluster hypershift-info CLUSTERID [flags]
+osdctl cluster hypershift-info [flags]
 ```
 
 ### Options
 
 ```
+  -c, --cluster-id string           Provide internal ID of the cluster
   -h, --help                        help for hypershift-info
   -o, --output string               output format ['table', 'graphviz'] (default "graphviz")
   -l, --privatelinkaccount string   Privatelink account ID

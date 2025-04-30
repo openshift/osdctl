@@ -46,4 +46,5 @@ Provides information for a specified cluster
 * [osdctl cluster support](osdctl_cluster_support.md)	 - Cluster Support
 * [osdctl cluster transfer-owner](osdctl_cluster_transfer-owner.md)	 - Transfer cluster ownership to a new user (to be done by Region Lead)
 * [osdctl cluster validate-pull-secret](osdctl_cluster_validate-pull-secret.md)	 - Checks if the pull secret email matches the owner email
+* [osdctl cluster validate-pull-secret-ext](osdctl_cluster_validate-pull-secret-ext.md)	 - Extended checks to confirm pull-secret data is synced with current OCM data
 

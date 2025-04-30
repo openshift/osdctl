@@ -32,19 +32,21 @@ func TestNewCmdContext(t *testing.T) {
 	cmd := newCmdContext()
 
 	assert.NotNil(t, cmd)
-	assert.Equal(t, "context", cmd.Use)
+	// Update expectations to match flag-based usage instead of positional arguments
+	assert.Equal(t, "context --cluster-id <cluster-identifier>", cmd.Use)
 	assert.Equal(t, "Shows the context of a specified cluster", cmd.Short)
-	err := cmd.Args(cmd, []string{"cluster-id"})
-	assert.NoError(t, err)
-	err = cmd.Args(cmd, []string{})
-	assert.Error(t, err)
+
+	// Since the command doesn't take arguments anymore, we shouldn't test ValidateArgs
+	// Instead, we should check if the required flags are properly defined
 
 	flags := cmd.Flags()
+	assert.NotNil(t, flags.Lookup("cluster-id"), "Command should have a cluster-id flag")
 	assert.NotNil(t, flags.Lookup("output"))
 	assert.NotNil(t, flags.Lookup("profile"))
 	assert.NotNil(t, flags.Lookup("days"))
 	assert.NotNil(t, flags.Lookup("pages"))
 
+	// Check default values
 	output, _ := cmd.Flags().GetString("output")
 	assert.Equal(t, "long", output)
 
@@ -53,11 +55,6 @@ func TestNewCmdContext(t *testing.T) {
 
 	pages, _ := cmd.Flags().GetInt("pages")
 	assert.Equal(t, 40, pages)
-}
-
-func TestNewContextOptions(t *testing.T) {
-	opts := newContextOptions()
-	assert.NotNil(t, opts)
 }
 
 func TestPrintClusterHeader(t *testing.T) {

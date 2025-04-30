@@ -3,14 +3,15 @@
 Shows the logging support status of a specified cluster
 
 ```
-osdctl cluster logging-check [flags]
+osdctl cluster logging-check --cluster-id <cluster-identifier> [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help      help for logging-check
-      --verbose   Verbose output
+  -c, --cluster-id string   The internal ID of the cluster to check (required)
+  -h, --help                help for logging-check
+      --verbose             Verbose output
 ```
 
 ### Options inherited from parent commands
