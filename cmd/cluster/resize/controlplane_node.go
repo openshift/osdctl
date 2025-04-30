@@ -24,9 +24,7 @@ import (
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -42,7 +40,7 @@ type controlPlane struct {
 	newMachineType string
 	cluster        *cmv1.Cluster
 
-	// clientAdmin is a K8s client to cluster
+	// client is a K8s client to cluster
 	client client.Client
 
 	// clientAdmin is a K8s client to cluster impersonating backplane-cluster-admin
@@ -58,10 +56,11 @@ func newCmdResizeControlPlane() *cobra.Command {
 	resizeControlPlaneNodeCmd := &cobra.Command{
 		Use:   "control-plane",
 		Short: "Resize an OSD/ROSA cluster's control plane nodes",
-		Long: `Resize an OSD/ROSA cluster's' control plane nodes
+		Long: `Resize an OSD/ROSA cluster's control plane nodes
 
   Requires previous login to the api server via "ocm backplane login".
-  The user will be prompted to send a service log after the resize is complete.`,
+  The user will be prompted to send a service log after initiating the resize. The resize process runs asynchronously,
+  and this command exits immediately after sending the service log. Any issues with the resize will be reported via PagerDuty.`,
 		Example: `
   # Resize all control plane instances to m5.4xlarge using control plane machine sets
   osdctl cluster resize control-plane -c "${CLUSTER_ID}" --machine-type m5.4xlarge --reason "${OHSS}"`,
@@ -76,7 +75,7 @@ func newCmdResizeControlPlane() *cobra.Command {
 	}
 	resizeControlPlaneNodeCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "The internal ID of the cluster to perform actions on")
 	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.newMachineType, "machine-type", "", "The target AWS machine type to resize to (e.g. m5.2xlarge)")
-	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
 	resizeControlPlaneNodeCmd.MarkFlagRequired("cluster-id")
 	resizeControlPlaneNodeCmd.MarkFlagRequired("machine-type")
 	resizeControlPlaneNodeCmd.MarkFlagRequired("reason")
@@ -89,7 +88,7 @@ func (o *controlPlane) New() error {
 		return err
 	}
 
-	if o.cluster.Hypershift().Enabled() {
+	if o.cluster != nil && o.cluster.Hypershift().Enabled() {
 		return errors.New("this command should not be used for HCP clusters")
 	}
 
@@ -189,7 +188,6 @@ func withRetryCancelOption(fn func() error, procedure string) (err error) {
 	case Cancel:
 		return errors.New("exiting")
 	default:
-		// This would be a programming error
 		return errors.New("unhandled enumerator in withRetryCancelOption")
 	}
 }
@@ -217,7 +215,6 @@ func retrySkipCancelDialog(procedure string) (optionsDialogResponse, error) {
 		fmt.Println("Invalid response, expected 'retry', 'skip' or 'cancel' (case-insensitive).")
 		return retrySkipCancelDialog(procedure)
 	}
-
 }
 
 func withRetrySkipCancelOption(fn func() error, procedure string) (err error) {
@@ -239,7 +236,6 @@ func withRetrySkipCancelOption(fn func() error, procedure string) (err error) {
 	case Cancel:
 		return errors.New("exiting")
 	default:
-		// This would be a programming error
 		return errors.New("unhandled enumerator in withRetrySkipCancelOption")
 	}
 	return nil
@@ -287,7 +283,6 @@ func (o *controlPlane) forceDrainNode(nodeID string, reason string) error {
 func (o *controlPlane) drainNode(nodeID string, reason string) error {
 	printer.PrintlnGreen("Draining node", nodeID)
 
-	// TODO: replace subprocess call with API call
 	err := bpelevate.RunElevate([]string{
 		fmt.Sprintf("%s - Elevate required to drain node for resizecontroleplanenode", reason),
 		"adm drain --ignore-daemonsets --delete-emptydir-data", nodeID,
@@ -376,7 +371,6 @@ func startNode(ctx context.Context, awsClient resizeControlPlaneNodeAWSClient, n
 
 func uncordonNode(nodeID string) error {
 	printer.PrintlnGreen("Uncordoning node", nodeID)
-	// TODO: replace subprocess call with API call
 	cmd := fmt.Sprintf("oc adm uncordon %s", nodeID)
 	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
 
@@ -387,8 +381,6 @@ func uncordonNode(nodeID string) error {
 	return nil
 }
 
-// Start and stop calls require the internal AWS instance ID
-// Machinetype patch requires the tag "Name"
 func getNodeAwsInstanceData(ctx context.Context, node string, awsClient resizeControlPlaneNodeAWSClient) (string, string, error) {
 	params := &ec2.DescribeInstancesInput{
 		Filters: []types.Filter{
@@ -403,13 +395,18 @@ func getNodeAwsInstanceData(ctx context.Context, node string, awsClient resizeCo
 		return "", "", err
 	}
 
-	awsInstanceID := *(ret.Reservations[0].Instances[0].InstanceId)
+	if len(ret.Reservations) == 0 || len(ret.Reservations[0].Instances) == 0 {
+		return "", "", errors.New("no instances found for the given node")
+	}
+
+	awsInstanceID := *ret.Reservations[0].Instances[0].InstanceId
 
 	var machineName string
 	tags := ret.Reservations[0].Instances[0].Tags
 	for _, t := range tags {
 		if *t.Key == "Name" {
 			machineName = *t.Value
+			break
 		}
 	}
 
@@ -429,7 +426,7 @@ func (o *controlPlane) patchMachineType(machine string, machineType string, reas
 		`-n openshift-machine-api patch machine`, machine, `--patch "{\"spec\":{\"providerSpec\":{\"value\":{\"instanceType\":\"` + machineType + `\"}}}}" --type merge`,
 	})
 	if err != nil {
-		return fmt.Errorf("Could not patch machine type:\n%s", err)
+		return fmt.Errorf("could not patch machine type:\n%s", err)
 	}
 	return nil
 }
@@ -450,7 +447,7 @@ func (o *controlPlane) run(ctx context.Context) error {
 	}
 
 	if cpms.Spec.State != machinev1.ControlPlaneMachineSetStateActive {
-		return fmt.Errorf("control plane machine set is unexpectedly in %s state, must be %s - check for service logs, support exceptions, ask for a second opinion.", cpms.Spec.State, machinev1.ControlPlaneMachineSetStateActive)
+		return fmt.Errorf("control plane machine set is unexpectedly in %s state, must be %s - check for service logs, support exceptions, ask for a second opinion", cpms.Spec.State, machinev1.ControlPlaneMachineSetStateActive)
 	}
 
 	patch := client.MergeFrom(cpms.DeepCopy())
@@ -480,71 +477,51 @@ func (o *controlPlane) run(ctx context.Context) error {
 		gcpSpec.MachineType = o.newMachineType
 		rawBytes, err = json.Marshal(gcpSpec)
 		if err != nil {
-			return fmt.Errorf("error marshalling awsSpec: %v", err)
+			return fmt.Errorf("error marshalling gcpSpec: %v", err)
 		}
 	default:
 		return fmt.Errorf("cloud provider not supported: %s, only AWS and GCP are supported", o.cluster.CloudProvider().ID())
 	}
 
-	log.Printf("Resizing control plane nodes for cluster: %s/%s to %s using control plane machine sets", o.cluster.Name(), o.cluster.ID(), o.newMachineType)
+	log.Printf("Initiating control plane node resize for cluster %s/%s to %s using control plane machine sets. This process runs asynchronously.", o.cluster.Name(), o.cluster.ID(), o.newMachineType)
 	if !utils.ConfirmPrompt() {
 		return errors.New("aborting control plane resize")
 	}
 
+	// Patch the ControlPlaneMachineSet
 	cpms.Spec.Template.OpenShiftMachineV1Beta1Machine.Spec.ProviderSpec.Value = &runtime.RawExtension{Raw: rawBytes}
 	if err := o.clientAdmin.Patch(ctx, cpms, patch); err != nil {
 		return fmt.Errorf("failed patching control plane machine set: %v", err)
 	}
 
-	// Wait infinitely
-	log.Println("Waiting for control plane resize to complete - this normally takes around 30 minutes per machine/90 minutes total")
-	log.Println("If this command terminates before completing, please remember to send a service log manually")
-	log.Printf("osdctl servicelog post %s -t %s -p INSTANCE_TYPE=%s -p JIRA_ID=${JIRA_ID} -p JUSTIFICATION=${JUSTIFICATION}", o.clusterID, resizeControlPlaneServiceLogTemplate, o.newMachineType)
-	if err := wait.PollUntilContextCancel(ctx, 3*time.Minute, false, func(ctx context.Context) (bool, error) {
-		cpms := &machinev1.ControlPlaneMachineSet{}
-		if err := o.client.Get(ctx, client.ObjectKey{Namespace: cpmsNamespace, Name: cpmsName}, cpms); err != nil {
-			log.Printf("error retrieving control plane machine set: %v, continuing to wait", err)
-			return false, nil
-		}
-
-		progressingCondition := meta.FindStatusCondition(cpms.Status.Conditions, "Progressing")
-		if progressingCondition == nil {
-			log.Printf("error retrieving the `Progressing` status condition on control plane machine set, continuing to wait")
-			return false, nil
-		}
-
-		if progressingCondition.Status == "True" {
-			log.Printf("control plane machine set is still progressing with reason %s and message %s, continuing to wait", progressingCondition.Reason, progressingCondition.Message)
-			return false, nil
-		} else {
-			return true, nil
-		}
-	}); err != nil {
-		return err
-	}
+	log.Println("Control plane machine set patched successfully. The resize is now in progress and will complete asynchronously. This command will exit after sending a service log, and any issues will be reported via PagerDuty.")
 
 	return promptGenerateResizeSL(o.clusterID, o.newMachineType)
 }
 
 func promptGenerateResizeSL(clusterID string, newMachineType string) error {
-	fmt.Println("Generating service log - only do this after all nodes have been resized.")
+	fmt.Println("The resize operation is in progress and will complete asynchronously. A service log will now be sent to document this action. Any issues with the resize will be reported via PagerDuty.")
+	fmt.Println("Would you like to proceed with sending the service log?")
 	if !utils.ConfirmPrompt() {
+		fmt.Println("Service log not sent. The resize is still in progress, and this command will now exit. Monitor PagerDuty for any issues.")
 		return nil
 	}
 
 	var jiraID string
 	fmt.Print("Please enter the JIRA ID that corresponds to this resize: ")
-	_, _ = fmt.Scanln(&jiraID)
+	_, err := fmt.Scanln(&jiraID)
+	if err != nil {
+		log.Printf("Error reading JIRA ID: %v, proceeding with empty value", err)
+	}
 
-	// Use a bufio Scanner since the fmt package cannot read in more than one word
 	var justification string
 	fmt.Print("Please enter a justification for the resize: ")
 	scanner := bufio.NewScanner(os.Stdin)
 	if scanner.Scan() {
 		justification = scanner.Text()
-	} else {
+	} else if err := scanner.Err(); err != nil {
 		errText := "failed to read justification text, send service log manually"
-		_, _ = fmt.Fprintf(os.Stderr, errText)
+		_, _ = fmt.Fprintf(os.Stderr, "%s: %v\n", errText, err)
 		return errors.New(errText)
 	}
 
@@ -558,5 +535,13 @@ func promptGenerateResizeSL(clusterID string, newMachineType string) error {
 		ClusterId: clusterID,
 	}
 
-	return postCmd.Run()
+	if err := postCmd.Run(); err != nil {
+		return fmt.Errorf("failed to send service log: %v", err)
+	}
+
+	fmt.Println("Service log sent successfully. Use the following command to track progress of the resize:")
+	fmt.Println()
+	fmt.Println(`watch -d 'oc get machines -n openshift-machine-api -l machine.openshift.io/cluster-api-machine-role=master && oc get nodes -l node-role.kubernetes.io/control-plane'`)
+
+	return nil
 }
