@@ -23,7 +23,6 @@ func TestBuildJQL(t *testing.T) {
 	}
 
 	jql := buildJQL()
-
 	for _, expected := range expectedJQLContains {
 		if !strings.Contains(jql, expected) {
 			t.Errorf("JQL query does not contain expected segment: %s", expected)
