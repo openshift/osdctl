@@ -1,0 +1,14 @@
+[
+  {
+    "cluster_id": "cid-1",
+    "display_name": "cluster-1",
+    "external_id": "ext-1",
+    "status": "Active"
+  },
+  {
+    "cluster_id": "cid-2",
+    "display_name": "cluster-2",
+    "external_id": "ext-2",
+    "status": "Inactive"
+  }
+]
