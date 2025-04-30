@@ -5,69 +5,65 @@ import (
 	"testing"
 )
 
-func strPtr(s string) *string {
+func str_ptr(s string) *string {
 	return &s
 }
 
 func TestExtractUserDetails(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
-		name        string
-		input       *string
-		expectError bool
-		errorSubstr string
+		test_name    string
+		input        *string
+		expect_error bool
+		error_substr string
 	}{
 		{
-			name:        "nil input",
-			input:       nil,
-			expectError: true,
-			errorSubstr: "cannot parse a nil input",
+			test_name:    "nil_input",
+			input:        nil,
+			expect_error: true,
+			error_substr: "cannot parse a nil input",
 		},
 		{
-			name:        "empty input",
-			input:       strPtr(""),
-			expectError: true,
-			errorSubstr: "cannot parse a nil input",
+			test_name:    "empty_input",
+			input:        str_ptr(""),
+			expect_error: true,
+			error_substr: "cannot parse a nil input",
 		},
 		{
-			name:        "malformed JSON",
-			input:       strPtr("{ invalid json "),
-			expectError: true,
-			errorSubstr: "could not marshal event.CloudTrailEvent",
+			test_name:    "malformed_json",
+			input:        str_ptr("{ invalid json "),
+			expect_error: true,
+			error_substr: "could not marshal event.CloudTrailEvent",
 		},
 		{
-			name:        "unsupported version",
-			input:       strPtr(`{"eventVersion": "1.6"}`),
-			expectError: true,
-			errorSubstr: "unexpected event version",
+			test_name:    "unsupported_version",
+			input:        str_ptr(`{"eventVersion": "1.6"}`),
+			expect_error: true,
+			error_substr: "unexpected event version",
 		},
 		{
-			name:        "invalid version format",
-			input:       strPtr(`{"eventVersion": "abc.def"}`),
-			expectError: true,
-			errorSubstr: "failed to parse CloudTrail event version",
+			test_name:    "invalid_version_format",
+			input:        str_ptr(`{"eventVersion": "abc.def"}`),
+			expect_error: true,
+			error_substr: "failed to parse CloudTrail event version",
 		},
 		{
-			name:        "valid input with supported version",
-			input:       strPtr(validEventJSON),
-			expectError: false,
+			test_name:    "valid_input_with_supported_version",
+			input:        str_ptr(valid_event_json),
+			expect_error: false,
 		},
 	}
 
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	for _, test_case := range tests {
+		test_case := test_case
+		t.Run(test_case.test_name, func(t *testing.T) {
+			result, err := ExtractUserDetails(test_case.input)
 
-			result, err := ExtractUserDetails(tt.input)
-
-			if tt.expectError {
+			if test_case.expect_error {
 				if err == nil {
 					t.Fatalf("expected error, got nil")
 				}
-				if !strings.Contains(err.Error(), tt.errorSubstr) {
-					t.Errorf("expected error to contain %q, got: %v", tt.errorSubstr, err)
+				if !strings.Contains(err.Error(), test_case.error_substr) {
+					t.Errorf("expected error to contain %q, got: %v", test_case.error_substr, err)
 				}
 				return
 			}
@@ -95,7 +91,7 @@ func TestExtractUserDetails(t *testing.T) {
 	}
 }
 
-const validEventJSON = `{
+const valid_event_json = `{
 	"eventVersion": "1.8",
 	"userIdentity": {
 		"accountId": "123456789012",
