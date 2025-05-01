@@ -1,32 +1,28 @@
 package pkg
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
 
-const validEventJSON = `{
-	"eventVersion": "1.8",
-	"userIdentity": {
-		"accountId": "123456789012",
-		"sessionContext": {
-			"sessionIssuer": {
-				"type": "Role",
-				"userName": "testUser",
-				"arn": "arn:aws:iam::123456789012:role/testRole"
-			}
-		}
-	},
-	"awsRegion": "us-east-1",
-	"eventID": "abcd-1234",
-	"errorCode": "AccessDenied"
-}`
+// Utility to read file content from testdata
+func readFixture(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read test fixture file: %v", err)
+	}
+	return string(data)
+}
 
 func strPtr(s string) *string {
 	return &s
 }
 
 func TestExtractUserDetails(t *testing.T) {
+	validEventJSON := readFixture(t, "testdata/valid_event.json")
+
 	tests := []struct {
 		testName    string
 		input       *string
@@ -43,7 +39,6 @@ func TestExtractUserDetails(t *testing.T) {
 			testName:    "empty_string_input",
 			input:       strPtr(""),
 			expectError: true,
-			// Empty string is treated the same as nil in the logic
 			errorSubstr: "cannot parse a nil input",
 		},
 		{
@@ -72,9 +67,6 @@ func TestExtractUserDetails(t *testing.T) {
 	}
 
 	for _, testCase := range tests {
-		// Copy loop variable to avoid closure capture in subtest
-		testCase := testCase
-
 		t.Run(testCase.testName, func(t *testing.T) {
 			result, err := ExtractUserDetails(testCase.input)
 
