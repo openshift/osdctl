@@ -11,6 +11,7 @@ import (
 type IExec interface {
 	Run(dir string, name string, args ...string) error
 	Output(dir, cmd string, args ...string) (string, error)
+	CombinedOutput(dir, cmd string, args ...string) (string, error)
 }
 
 type Exec struct {
@@ -27,6 +28,13 @@ func (e Exec) Run(dir string, name string, args ...string) error {
 }
 
 func (e Exec) Output(dir, cmd string, args ...string) (string, error) {
+	command := exec.Command(cmd, args...)
+	command.Dir = dir
+	out, err := command.Output()
+	return string(out), err
+}
+
+func (e Exec) CombinedOutput(dir, cmd string, args ...string) (string, error) {
 	command := exec.Command(cmd, args...)
 	command.Dir = dir
 	out, err := command.CombinedOutput()

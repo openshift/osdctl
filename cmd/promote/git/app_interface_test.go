@@ -6,12 +6,14 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/openshift/osdctl/cmd/promote/iexec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
 type MockExec struct {
 	mock.Mock
+	iexec.IExec
 }
 
 func (m *MockExec) Run(dir string, name string, args ...string) error {

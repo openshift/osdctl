@@ -29,6 +29,8 @@ func NewCmdPKO() *cobra.Command {
 
 			cmdutil.CheckErr(ops.ValidatePKOOptions())
 			appInterface := git.BootstrapOsdCtlForAppInterfaceAndServicePromotions(ops.appInterfaceCheckoutDir)
+			// ovverriding appInterface.GitExecuter to iexec.Exec{}
+			appInterface.GitExecutor = iexec.Exec{}
 			cmdutil.CheckErr(PromotePackage(appInterface, ops.serviceName, ops.packageTag, ops.hcp))
 		},
 	}
