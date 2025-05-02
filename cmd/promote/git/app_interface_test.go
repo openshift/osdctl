@@ -93,511 +93,643 @@ func TestCommitSaasFile(t *testing.T) {
 }
 
 /*
-func TestUpdatePackageTag(t *testing.T) {
-	tests := map[string]struct {
-		setup       func(t *testing.T) (AppInterface, string)
-		oldTag      string
-		newTag      string
-		expectedErr string
-		verify      func(t *testing.T, filePath string)
-	}{
-		"successfully_updates_tag": {
-			setup: func(t *testing.T) (AppInterface, string) {
-				tmpDir := t.TempDir()
-				run := func(args ...string) {
-					cmd := exec.Command("git", args...)
+	func TestUpdatePackageTag(t *testing.T) {
+		tests := map[string]struct {
+			setup       func(t *testing.T) (AppInterface, string)
+			oldTag      string
+			newTag      string
+			expectedErr string
+			verify      func(t *testing.T, filePath string)
+		}{
+			"successfully_updates_tag": {
+				setup: func(t *testing.T) (AppInterface, string) {
+					tmpDir := t.TempDir()
+					run := func(args ...string) {
+						cmd := exec.Command("git", args...)
+						cmd.Dir = tmpDir
+						out, err := cmd.CombinedOutput()
+						assert.NoError(t, err, "git %v failed: %s", args, string(out))
+					}
+					run("init")
+					run("config", "user.name", "Test User")
+					run("config", "user.email", "test@example.com")
+					dummyFile := filepath.Join(tmpDir, "dummy.txt")
+					assert.NoError(t, os.WriteFile(dummyFile, []byte("init"), 0644))
+					run("add", ".")
+					run("commit", "-m", "initial commit")
+					cmd := exec.Command("git", "rev-parse", "--verify", "master")
 					cmd.Dir = tmpDir
-					out, err := cmd.CombinedOutput()
-					assert.NoError(t, err, "git %v failed: %s", args, string(out))
-				}
-				run("init")
-				run("config", "user.name", "Test User")
-				run("config", "user.email", "test@example.com")
-				dummyFile := filepath.Join(tmpDir, "dummy.txt")
-				assert.NoError(t, os.WriteFile(dummyFile, []byte("init"), 0644))
-				run("add", ".")
-				run("commit", "-m", "initial commit")
-				cmd := exec.Command("git", "rev-parse", "--verify", "master")
-				cmd.Dir = tmpDir
-				if err := cmd.Run(); err != nil {
-					run("checkout", "-b", "master")
-				} else {
+					if err := cmd.Run(); err != nil {
+						run("checkout", "-b", "master")
+					} else {
+						run("checkout", "master")
+					}
+					saasFile := filepath.Join(tmpDir, "test.yaml")
+					assert.NoError(t, os.WriteFile(saasFile, []byte("tag: old123"), 0644))
+					run("add", ".")
+					run("commit", "-m", "add saas file")
+					run("checkout", "-b", "feature-branch")
 					run("checkout", "master")
-				}
-				saasFile := filepath.Join(tmpDir, "test.yaml")
-				assert.NoError(t, os.WriteFile(saasFile, []byte("tag: old123"), 0644))
-				run("add", ".")
-				run("commit", "-m", "add saas file")
-				run("checkout", "-b", "feature-branch")
-				run("checkout", "master")
-				return AppInterface{GitDirectory: tmpDir}, saasFile
-			},
+					return AppInterface{GitDirectory: tmpDir}, saasFile
+				},
 
-			oldTag:      "old123",
-			newTag:      "new456",
-			expectedErr: "",
-			verify: func(t *testing.T, filePath string) {
-				content, err := os.ReadFile(filePath)
-				assert.NoError(t, err)
-				str := string(content)
-				assert.Contains(t, str, "new456")
-				assert.NotContains(t, str, "old123")
+				oldTag:      "old123",
+				newTag:      "new456",
+				expectedErr: "",
+				verify: func(t *testing.T, filePath string) {
+					content, err := os.ReadFile(filePath)
+					assert.NoError(t, err)
+					str := string(content)
+					assert.Contains(t, str, "new456")
+					assert.NotContains(t, str, "old123")
+				},
 			},
-		},
-		"fails_when_file_does_not_exist": {
-			setup: func(t *testing.T) (AppInterface, string) {
-				tmpDir := t.TempDir()
-				run := func(args ...string) {
-					cmd := exec.Command("git", args...)
+			"fails_when_file_does_not_exist": {
+				setup: func(t *testing.T) (AppInterface, string) {
+					tmpDir := t.TempDir()
+					run := func(args ...string) {
+						cmd := exec.Command("git", args...)
+						cmd.Dir = tmpDir
+						out, err := cmd.CombinedOutput()
+						assert.NoError(t, err, "git %v failed: %s", args, string(out))
+					}
+					run("init")
+					run("config", "user.name", "Test User")
+					run("config", "user.email", "test@example.com")
+					dummyFile := filepath.Join(tmpDir, "dummy.txt")
+					assert.NoError(t, os.WriteFile(dummyFile, []byte("init"), 0644))
+					run("add", ".")
+					run("commit", "-m", "initial commit")
+
+					// Ensure we're on master
+					cmd := exec.Command("git", "rev-parse", "--verify", "master")
 					cmd.Dir = tmpDir
-					out, err := cmd.CombinedOutput()
-					assert.NoError(t, err, "git %v failed: %s", args, string(out))
-				}
-				run("init")
-				run("config", "user.name", "Test User")
-				run("config", "user.email", "test@example.com")
-				dummyFile := filepath.Join(tmpDir, "dummy.txt")
-				assert.NoError(t, os.WriteFile(dummyFile, []byte("init"), 0644))
-				run("add", ".")
-				run("commit", "-m", "initial commit")
-
-				// Ensure we're on master
-				cmd := exec.Command("git", "rev-parse", "--verify", "master")
-				cmd.Dir = tmpDir
-				if err := cmd.Run(); err != nil {
-					run("checkout", "-b", "master")
-				} else {
+					if err := cmd.Run(); err != nil {
+						run("checkout", "-b", "master")
+					} else {
+						run("checkout", "master")
+					}
+					saasFile := filepath.Join(tmpDir, "test.yaml")
+					assert.NoError(t, os.WriteFile(saasFile, []byte("tag: old123"), 0644))
+					run("add", ".")
+					run("commit", "-m", "add saas file")
+					run("checkout", "-b", "feature-branch")
 					run("checkout", "master")
+					nonExistentFile := filepath.Join(tmpDir, "nonexistent.yaml")
+					return AppInterface{GitDirectory: tmpDir}, nonExistentFile
+				},
+				oldTag:      "old123",
+				newTag:      "new456",
+				expectedErr: "failed to read file",
+				verify:      func(t *testing.T, _ string) {},
+			},
+			"error_when_git_checkout_fails": {
+				setup: func(t *testing.T) (AppInterface, string) {
+					tmpDir := t.TempDir()
+					saasFile := filepath.Join(tmpDir, "test.yaml")
+					_ = os.WriteFile(saasFile, []byte("tag: old123"), 0644)
+					return AppInterface{GitDirectory: tmpDir}, saasFile
+				},
+				oldTag:      "old123",
+				newTag:      "new456",
+				expectedErr: "failed to checkout master branch",
+				verify:      func(t *testing.T, _ string) {},
+			},
+		}
+
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				app, filePath := tc.setup(t)
+				err := app.UpdatePackageTag(filePath, tc.oldTag, tc.newTag, "feature-branch")
+				if tc.expectedErr != "" {
+					assert.Error(t, err)
+					assert.ErrorContains(t, err, tc.expectedErr)
+				} else {
+					assert.NoError(t, err)
 				}
-				saasFile := filepath.Join(tmpDir, "test.yaml")
-				assert.NoError(t, os.WriteFile(saasFile, []byte("tag: old123"), 0644))
-				run("add", ".")
-				run("commit", "-m", "add saas file")
-				run("checkout", "-b", "feature-branch")
-				run("checkout", "master")
-				nonExistentFile := filepath.Join(tmpDir, "nonexistent.yaml")
-				return AppInterface{GitDirectory: tmpDir}, nonExistentFile
-			},
-			oldTag:      "old123",
-			newTag:      "new456",
-			expectedErr: "failed to read file",
-			verify:      func(t *testing.T, _ string) {},
-		},
-		"error_when_git_checkout_fails": {
-			setup: func(t *testing.T) (AppInterface, string) {
-				tmpDir := t.TempDir()
-				saasFile := filepath.Join(tmpDir, "test.yaml")
-				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0644)
-				return AppInterface{GitDirectory: tmpDir}, saasFile
-			},
-			oldTag:      "old123",
-			newTag:      "new456",
-			expectedErr: "failed to checkout master branch",
-			verify:      func(t *testing.T, _ string) {},
-		},
+				tc.verify(t, filePath)
+			})
+		}
 	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			app, filePath := tc.setup(t)
-			err := app.UpdatePackageTag(filePath, tc.oldTag, tc.newTag, "feature-branch")
-			if tc.expectedErr != "" {
-				assert.Error(t, err)
-				assert.ErrorContains(t, err, tc.expectedErr)
-			} else {
-				assert.NoError(t, err)
-			}
-			tc.verify(t, filePath)
-		})
+	func TestUpdateAppInterface(t *testing.T) {
+		tests := map[string]struct {
+			setup            func(t *testing.T) (AppInterface, string)
+			serviceName      string
+			currentGitHash   string
+			promotionGitHash string
+			branchName       string
+			expectedErr      string
+			verify           func(t *testing.T, filePath string)
+		}{
+			"successfully_updates_hash": {
+				setup: func(t *testing.T) (AppInterface, string) {
+					tmpDir := t.TempDir()
+					saasFilePath := filepath.Join(tmpDir, "test.yaml")
+					content := fmt.Sprintf("ref: %s\n", "abc123")
+					_ = os.WriteFile(saasFilePath, []byte(content), 0644)
+					assert.NoError(t, exec.Command("git", "-C", tmpDir, "init").Run())
+					assert.NoError(t, exec.Command("git", "-C", tmpDir, "config", "user.name", "Test User").Run())
+					assert.NoError(t, exec.Command("git", "-C", tmpDir, "config", "user.email", "test@example.com").Run())
+					assert.NoError(t, exec.Command("git", "-C", tmpDir, "add", ".").Run())
+					assert.NoError(t, exec.Command("git", "-C", tmpDir, "commit", "-m", "initial commit").Run())
+					assert.NoError(t, exec.Command("git", "-C", tmpDir, "branch", "-m", "master").Run())
+					return AppInterface{GitDirectory: tmpDir}, saasFilePath
+				},
+				serviceName:      "test-component",
+				currentGitHash:   "abc123",
+				promotionGitHash: "def456",
+				branchName:       "feature-branch",
+				expectedErr:      "",
+				verify: func(t *testing.T, filePath string) {
+					updatedContent, readErr := os.ReadFile(filePath)
+					assert.NoError(t, readErr)
+					assert.Contains(t, string(updatedContent), "def456")
+					assert.NotContains(t, string(updatedContent), "abc123")
+				},
+			},
+			"fails_when_git_checkout_fails": {
+				setup: func(t *testing.T) (AppInterface, string) {
+					tmpDir := t.TempDir()
+					saasFile := filepath.Join(tmpDir, "test.yaml")
+					_ = os.WriteFile(saasFile, []byte("sha: abcdef"), 0644)
+					return AppInterface{GitDirectory: tmpDir}, saasFile
+				},
+				serviceName:      "test-service",
+				currentGitHash:   "abcdef",
+				promotionGitHash: "123456",
+				branchName:       "feature-fail-checkout",
+				expectedErr:      "failed to checkout master branch",
+				verify:           func(t *testing.T, _ string) {},
+			},
+			"fails_when_file_does_not_exist": {
+				setup: func(t *testing.T) (AppInterface, string) {
+					tmpDir := t.TempDir()
+					assert.NoError(t, exec.Command("git", "-C", tmpDir, "init").Run())
+					assert.NoError(t, exec.Command("git", "-C", tmpDir, "config", "user.name", "Test User").Run())
+					assert.NoError(t, exec.Command("git", "-C", tmpDir, "config", "user.email", "test@example.com").Run())
+					file := filepath.Join(tmpDir, "dummy.txt")
+					assert.NoError(t, os.WriteFile(file, []byte("init"), 0644))
+					assert.NoError(t, exec.Command("git", "-C", tmpDir, "add", ".").Run())
+					assert.NoError(t, exec.Command("git", "-C", tmpDir, "commit", "-m", "initial commit").Run())
+					assert.NoError(t, exec.Command("git", "-C", tmpDir, "branch", "-m", "master").Run())
+					return AppInterface{GitDirectory: tmpDir}, filepath.Join(tmpDir, "nonexistent.yaml")
+				},
+				serviceName:      "test-service",
+				currentGitHash:   "abcdef",
+				promotionGitHash: "123456",
+				branchName:       "feature-fail-read",
+				expectedErr:      "failed to read file",
+				verify:           func(t *testing.T, _ string) {},
+			},
+			"fails_when_git_directory_does_not_exist": {
+				setup: func(t *testing.T) (AppInterface, string) {
+					nonExistentDir := filepath.Join(os.TempDir(), "nonexistent-dir")
+					return AppInterface{GitDirectory: nonExistentDir}, filepath.Join(nonExistentDir, "test.yaml")
+				},
+				serviceName:      "test-service",
+				currentGitHash:   "abcdef",
+				promotionGitHash: "123456",
+				branchName:       "feature-no-dir",
+				expectedErr:      "failed to checkout master branch",
+				verify:           func(t *testing.T, _ string) {},
+			},
+		}
+
+		for name, tc := range tests {
+			t.Run(name, func(t *testing.T) {
+				app, filePath := tc.setup(t)
+				err := app.UpdateAppInterface(tc.serviceName, filePath, tc.currentGitHash, tc.promotionGitHash, tc.branchName)
+
+				if tc.expectedErr != "" {
+					assert.Error(t, err)
+					assert.ErrorContains(t, err, tc.expectedErr)
+				} else {
+					assert.NoError(t, err)
+				}
+
+				tc.verify(t, filePath)
+			})
+		}
 	}
-}
 
-func TestUpdateAppInterface(t *testing.T) {
-	tests := map[string]struct {
-		setup            func(t *testing.T) (AppInterface, string)
-		serviceName      string
-		currentGitHash   string
-		promotionGitHash string
-		branchName       string
-		expectedErr      string
-		verify           func(t *testing.T, filePath string)
-	}{
-		"successfully_updates_hash": {
-			setup: func(t *testing.T) (AppInterface, string) {
-				tmpDir := t.TempDir()
-				saasFilePath := filepath.Join(tmpDir, "test.yaml")
-				content := fmt.Sprintf("ref: %s\n", "abc123")
-				_ = os.WriteFile(saasFilePath, []byte(content), 0644)
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "init").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "config", "user.name", "Test User").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "config", "user.email", "test@example.com").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "add", ".").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "commit", "-m", "initial commit").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "branch", "-m", "master").Run())
-				return AppInterface{GitDirectory: tmpDir}, saasFilePath
-			},
-			serviceName:      "test-component",
-			currentGitHash:   "abc123",
-			promotionGitHash: "def456",
-			branchName:       "feature-branch",
-			expectedErr:      "",
-			verify: func(t *testing.T, filePath string) {
-				updatedContent, readErr := os.ReadFile(filePath)
-				assert.NoError(t, readErr)
-				assert.Contains(t, string(updatedContent), "def456")
-				assert.NotContains(t, string(updatedContent), "abc123")
-			},
-		},
-		"fails_when_git_checkout_fails": {
-			setup: func(t *testing.T) (AppInterface, string) {
-				tmpDir := t.TempDir()
-				saasFile := filepath.Join(tmpDir, "test.yaml")
-				_ = os.WriteFile(saasFile, []byte("sha: abcdef"), 0644)
-				return AppInterface{GitDirectory: tmpDir}, saasFile
-			},
-			serviceName:      "test-service",
-			currentGitHash:   "abcdef",
-			promotionGitHash: "123456",
-			branchName:       "feature-fail-checkout",
-			expectedErr:      "failed to checkout master branch",
-			verify:           func(t *testing.T, _ string) {},
-		},
-		"fails_when_file_does_not_exist": {
-			setup: func(t *testing.T) (AppInterface, string) {
-				tmpDir := t.TempDir()
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "init").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "config", "user.name", "Test User").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "config", "user.email", "test@example.com").Run())
-				file := filepath.Join(tmpDir, "dummy.txt")
-				assert.NoError(t, os.WriteFile(file, []byte("init"), 0644))
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "add", ".").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "commit", "-m", "initial commit").Run())
-				assert.NoError(t, exec.Command("git", "-C", tmpDir, "branch", "-m", "master").Run())
-				return AppInterface{GitDirectory: tmpDir}, filepath.Join(tmpDir, "nonexistent.yaml")
-			},
-			serviceName:      "test-service",
-			currentGitHash:   "abcdef",
-			promotionGitHash: "123456",
-			branchName:       "feature-fail-read",
-			expectedErr:      "failed to read file",
-			verify:           func(t *testing.T, _ string) {},
-		},
-		"fails_when_git_directory_does_not_exist": {
-			setup: func(t *testing.T) (AppInterface, string) {
-				nonExistentDir := filepath.Join(os.TempDir(), "nonexistent-dir")
-				return AppInterface{GitDirectory: nonExistentDir}, filepath.Join(nonExistentDir, "test.yaml")
-			},
-			serviceName:      "test-service",
-			currentGitHash:   "abcdef",
-			promotionGitHash: "123456",
-			branchName:       "feature-no-dir",
-			expectedErr:      "failed to checkout master branch",
-			verify:           func(t *testing.T, _ string) {},
-		},
-	}
+	func TestGetCurrentGitHashFromAppInterface(t *testing.T) {
+		tests := map[string]struct {
+			yamlContent   string
+			serviceName   string
+			namespaceRef  string
+			wantHash      string
+			wantRepo      string
+			wantErrSubstr string
+		}{
+			"successfully_extracts_git_hash_repo_path": {
+				yamlContent: `
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			app, filePath := tc.setup(t)
-			err := app.UpdateAppInterface(tc.serviceName, filePath, tc.currentGitHash, tc.promotionGitHash, tc.branchName)
-
-			if tc.expectedErr != "" {
-				assert.Error(t, err)
-				assert.ErrorContains(t, err, tc.expectedErr)
-			} else {
-				assert.NoError(t, err)
-			}
-
-			tc.verify(t, filePath)
-		})
-	}
-}
-
-func TestGetCurrentGitHashFromAppInterface(t *testing.T) {
-	tests := map[string]struct {
-		yamlContent   string
-		serviceName   string
-		namespaceRef  string
-		wantHash      string
-		wantRepo      string
-		wantErrSubstr string
-	}{
-		"successfully_extracts_git_hash_repo_path": {
-			yamlContent: `
 resourceTemplates:
   - name: app-interface
     url: https://github.com/test-org/test-repo.git
     path: some/path/to/file
     targets:
-      - namespace:
-          $ref: /services/test/namespace/hivep.yml
-        ref: abc123
-        name: production-hivep`,
-			serviceName:   "test-service",
-			namespaceRef:  "",
-			wantHash:      "abc123",
-			wantRepo:      "https://github.com/test-org/test-repo.git",
-			wantErrSubstr: "",
-		},
-		"fails_when_repo_is_missing": {
-			yamlContent: `
+  - namespace:
+    $ref: /services/test/namespace/hivep.yml
+    ref: abc123
+    name: production-hivep`,
+    serviceName:   "test-service",
+    namespaceRef:  "",
+    wantHash:      "abc123",
+    wantRepo:      "https://github.com/test-org/test-repo.git",
+    wantErrSubstr: "",
+    },
+    "fails_when_repo_is_missing": {
+    yamlContent: `
+
 resourceTemplates:
   - name: app-interface
     targets:
-      - namespace:
-          $ref: /services/test/namespace/hivep.yml
-        ref: def456
-        name: production-hivep`,
-			serviceName:   "test-service",
-			namespaceRef:  "",
-			wantErrSubstr: "service repo not found",
-		},
-		"successfully_extracts_hash_with_namespaceRef": {
-			yamlContent: `
-resourceTemplates:
-  - name: app-interface
-    url: https://github.com/test-org/test-repo.git
-    targets:
-      - namespace:
-          $ref: /services/special/namespace/custom-namespace.yml
-        ref: specialhash
-        name: production-special`,
-			serviceName:   "test-service",
-			namespaceRef:  "custom-namespace.yml",
-			wantHash:      "specialhash",
-			wantRepo:      "https://github.com/test-org/test-repo.git",
-			wantErrSubstr: "",
-		},
-		"fails_when_no_target_matches_namespaceRef": {
-			yamlContent: `
+  - namespace:
+    $ref: /services/test/namespace/hivep.yml
+    ref: def456
+    name: production-hivep`,
+    serviceName:   "test-service",
+    namespaceRef:  "",
+    wantErrSubstr: "service repo not found",
+    },
+    "successfully_extracts_hash_with_namespaceRef": {
+    yamlContent: `
+
 resourceTemplates:
   - name: app-interface
     url: https://github.com/test-org/test-repo.git
     targets:
-      - namespace:
-          $ref: /services/other/namespace/another.yml
-        ref: somehash
-        name: production-other`,
-			serviceName:   "test-service",
-			namespaceRef:  "nonexistent-namespace.yml",
-			wantErrSubstr: "production namespace not found",
-		},
-		"successfully_extracts_hash_when_namespaceRef_matches_for_db": {
-			yamlContent: `
+  - namespace:
+    $ref: /services/special/namespace/custom-namespace.yml
+    ref: specialhash
+    name: production-special`,
+    serviceName:   "test-service",
+    namespaceRef:  "custom-namespace.yml",
+    wantHash:      "specialhash",
+    wantRepo:      "https://github.com/test-org/test-repo.git",
+    wantErrSubstr: "",
+    },
+    "fails_when_no_target_matches_namespaceRef": {
+    yamlContent: `
+
+resourceTemplates:
+  - name: app-interface
+    url: https://github.com/test-org/test-repo.git
+    targets:
+  - namespace:
+    $ref: /services/other/namespace/another.yml
+    ref: somehash
+    name: production-other`,
+    serviceName:   "test-service",
+    namespaceRef:  "nonexistent-namespace.yml",
+    wantErrSubstr: "production namespace not found",
+    },
+    "successfully_extracts_hash_when_namespaceRef_matches_for_db": {
+    yamlContent: `
+
 name: saas-configuration-anomaly-detection-db
 resourceTemplates:
   - name: app-interface
     url: https://github.com/test-org/db-repo.git
     targets:
-      - namespace:
-          $ref: /services/production/namespace/app-sre-observability-production-int.yml
-        ref: hash321`,
-			serviceName:   "saas-configuration-anomaly-detection-db",
-			namespaceRef:  "",
-			wantHash:      "hash321",
-			wantRepo:      "https://github.com/test-org/db-repo.git",
-			wantErrSubstr: "",
-		},
-		"successfully_extracts_git_hash_for_configuration_anomaly_detection": {
-			yamlContent: `
+  - namespace:
+    $ref: /services/production/namespace/app-sre-observability-production-int.yml
+    ref: hash321`,
+    serviceName:   "saas-configuration-anomaly-detection-db",
+    namespaceRef:  "",
+    wantHash:      "hash321",
+    wantRepo:      "https://github.com/test-org/db-repo.git",
+    wantErrSubstr: "",
+    },
+    "successfully_extracts_git_hash_for_configuration_anomaly_detection": {
+    yamlContent: `
+
 name: saas-configuration-anomaly-detection-service
 resourceTemplates:
   - name: app-interface
     url: https://github.com/test-org/obs-repo.git
     targets:
-      - namespace:
-          $ref: configuration-anomaly-detection-production
-        ref: hash999`,
-			serviceName:   "saas-configuration-anomaly-detection-service",
-			namespaceRef:  "",
-			wantHash:      "hash999",
-			wantRepo:      "https://github.com/test-org/obs-repo.git",
-			wantErrSubstr: "",
-		},
-		"successfully_extracts_hash_for_rhobs_rules_and_dashboards": {
-			yamlContent: `
+  - namespace:
+    $ref: configuration-anomaly-detection-production
+    ref: hash999`,
+    serviceName:   "saas-configuration-anomaly-detection-service",
+    namespaceRef:  "",
+    wantHash:      "hash999",
+    wantRepo:      "https://github.com/test-org/obs-repo.git",
+    wantErrSubstr: "",
+    },
+    "successfully_extracts_hash_for_rhobs_rules_and_dashboards": {
+    yamlContent: `
+
 name: rhobs-rules-and-dashboards-production
 resourceTemplates:
   - name: app-interface
     url: https://github.com/org/rhobs-rules.git
     targets:
-      - namespace:
-          $ref: /services/prod/namespace/rhobs-production.yml
-        ref: rhobs789
-        name: production
-      - namespace:
-          $ref: /services/prod/namespace/staging.yml
-        ref: rhobs012
-        name: staging`,
-			serviceName:   "rhobs-rules-and-dashboards-production",
-			namespaceRef:  "",
-			wantHash:      "rhobs789",
-			wantRepo:      "https://github.com/org/rhobs-rules.git",
-			wantErrSubstr: "",
-		},
-		"successfully_extracts_hash_for_saas_backplane_api": {
-			yamlContent: `
+  - namespace:
+    $ref: /services/prod/namespace/rhobs-production.yml
+    ref: rhobs789
+    name: production
+  - namespace:
+    $ref: /services/prod/namespace/staging.yml
+    ref: rhobs012
+    name: staging`,
+    serviceName:   "rhobs-rules-and-dashboards-production",
+    namespaceRef:  "",
+    wantHash:      "rhobs789",
+    wantRepo:      "https://github.com/org/rhobs-rules.git",
+    wantErrSubstr: "",
+    },
+    "successfully_extracts_hash_for_saas_backplane_api": {
+    yamlContent: `
+
 name: saas-backplane-api
 resourceTemplates:
   - name: app-interface
     url: https://github.com/test-org/backplane.git
     targets:
-      - namespace:
-          $ref: /services/prod/namespace/backplanep-production.yml
-        ref: backplane123
-        name: production
-      - namespace:
-          $ref: /services/prod/namespace/backplanep-staging.yml
-        ref: backplane456
-        name: staging`,
-			serviceName:   "saas-backplane-api",
-			namespaceRef:  "backplanep",
-			wantHash:      "backplane123",
-			wantRepo:      "https://github.com/test-org/backplane.git",
-			wantErrSubstr: "",
-		},
-		"successfully_extracts_hash_when_namespace_ref_contains_backplanep": {
-			yamlContent: `
+  - namespace:
+    $ref: /services/prod/namespace/backplanep-production.yml
+    ref: backplane123
+    name: production
+  - namespace:
+    $ref: /services/prod/namespace/backplanep-staging.yml
+    ref: backplane456
+    name: staging`,
+    serviceName:   "saas-backplane-api",
+    namespaceRef:  "backplanep",
+    wantHash:      "backplane123",
+    wantRepo:      "https://github.com/test-org/backplane.git",
+    wantErrSubstr: "",
+    },
+    "successfully_extracts_hash_when_namespace_ref_contains_backplanep": {
+    yamlContent: `
+
 name: saas-backplane-api
 resourceTemplates:
+
   - name: app-interface
     url: https://github.com/test-org/backplane.git
     targets:
-      - namespace:
-          $ref: /services/prod/namespace/backplanep-production.yml
-        ref: backplane123
-        name: production
-      - namespace:
-          $ref: /services/prod/namespace/othernamespace.yml
-        ref: otherhash
-        name: staging`,
-			serviceName:   "saas-backplane-api",
-			namespaceRef:  "backplanep",
-			wantHash:      "backplane123",
-			wantRepo:      "https://github.com/test-org/backplane.git",
-			wantErrSubstr: "",
-		},
-	}
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			hash, repo, err := GetCurrentGitHashFromAppInterface([]byte(tc.yamlContent), tc.serviceName, tc.namespaceRef)
+  - namespace:
+    $ref: /services/prod/namespace/backplanep-production.yml
+    ref: backplane123
+    name: production
 
-			if tc.wantErrSubstr != "" {
-				assert.Error(t, err)
-				assert.ErrorContains(t, err, tc.wantErrSubstr)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tc.wantHash, hash)
-				assert.Equal(t, tc.wantRepo, repo)
-			}
-		})
-	}
-}
+  - namespace:
+    $ref: /services/prod/namespace/othernamespace.yml
+    ref: otherhash
+    name: staging`,
+    serviceName:   "saas-backplane-api",
+    namespaceRef:  "backplanep",
+    wantHash:      "backplane123",
+    wantRepo:      "https://github.com/test-org/backplane.git",
+    wantErrSubstr: "",
+    },
+    }
 
-func TestCheckAppInterfaceCheckout(t *testing.T) {
-	tests := map[string]struct {
-		setupDir      func(t *testing.T) string
-		expectedError string
-	}{
-		"valid app-interface remote": {
-			setupDir: func(t *testing.T) string {
-				dir := t.TempDir()
-				assert.NoError(t, exec.Command("git", "-C", dir, "init").Run())
-				assert.NoError(t, exec.Command("git", "-C", dir, "remote", "add", "origin", "git@gitlab.cee.redhat.com/app-interface.git").Run())
-				return dir
-			},
-		},
-		"non app-interface remote": {
-			setupDir: func(t *testing.T) string {
-				dir := t.TempDir()
-				assert.NoError(t, exec.Command("git", "-C", dir, "init").Run())
-				assert.NoError(t, exec.Command("git", "-C", dir, "remote", "add", "origin", "git@github.com/test/repo.git").Run())
-				return dir
-			},
-			expectedError: "not running in checkout of app-interface",
-		},
-		"non-git directory": {
-			setupDir: func(t *testing.T) string {
-				return t.TempDir()
-			},
-			expectedError: "error executing 'git remote -v'",
-		},
-	}
+    for name, tc := range tests {
+    t.Run(name, func(t *testing.T) {
+    hash, repo, err := GetCurrentGitHashFromAppInterface([]byte(tc.yamlContent), tc.serviceName, tc.namespaceRef)
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			dir := tc.setupDir(t)
-			err := checkAppInterfaceCheckout(dir)
+    if tc.wantErrSubstr != "" {
+    assert.Error(t, err)
+    assert.ErrorContains(t, err, tc.wantErrSubstr)
+    } else {
+    assert.NoError(t, err)
+    assert.Equal(t, tc.wantHash, hash)
+    assert.Equal(t, tc.wantRepo, repo)
+    }
+    })
+    }
+    }
 
-			if tc.expectedError != "" {
-				assert.Error(t, err)
-				assert.ErrorContains(t, err, tc.expectedError)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
+    func TestCheckAppInterfaceCheckout(t *testing.T) {
+    tests := map[string]struct {
+    setupDir      func(t *testing.T) string
+    expectedError string
+    }{
+    "valid app-interface remote": {
+    setupDir: func(t *testing.T) string {
+    dir := t.TempDir()
+    assert.NoError(t, exec.Command("git", "-C", dir, "init").Run())
+    assert.NoError(t, exec.Command("git", "-C", dir, "remote", "add", "origin", "git@gitlab.cee.redhat.com/app-interface.git").Run())
+    return dir
+    },
+    },
+    "non app-interface remote": {
+    setupDir: func(t *testing.T) string {
+    dir := t.TempDir()
+    assert.NoError(t, exec.Command("git", "-C", dir, "init").Run())
+    assert.NoError(t, exec.Command("git", "-C", dir, "remote", "add", "origin", "git@github.com/test/repo.git").Run())
+    return dir
+    },
+    expectedError: "not running in checkout of app-interface",
+    },
+    "non-git directory": {
+    setupDir: func(t *testing.T) string {
+    return t.TempDir()
+    },
+    expectedError: "error executing 'git remote -v'",
+    },
+    }
 
-func TestGetCurrentPackageTagFromAppInterface(t *testing.T) {
-	tests := []struct {
-		name        string
-		yamlData    string
-		expected    string
-		expectError bool
-		errorSubstr string
-	}{
-		{
-			name: "valid service with matching hivep ref",
-			yamlData: `
+    for name, tc := range tests {
+    t.Run(name, func(t *testing.T) {
+    dir := tc.setupDir(t)
+    err := checkAppInterfaceCheckout(dir)
+
+    if tc.expectedError != "" {
+    assert.Error(t, err)
+    assert.ErrorContains(t, err, tc.expectedError)
+    } else {
+    assert.NoError(t, err)
+    }
+    })
+    }
+    }
+
+    func TestGetCurrentPackageTagFromAppInterface(t *testing.T) {
+    tests := []struct {
+    name        string
+    yamlData    string
+    expected    string
+    expectError bool
+    errorSubstr string
+    }{
+    {
+    name: "valid service with matching hivep ref",
+    yamlData: `
+
 name: my-service
 resourceTemplates:
-- name: my-service-package-template
-  targets:
+  - name: my-service-package-template
+    targets:
   - namespace:
-      $ref: /services/hivep/production/some-ns
+    $ref: /services/hivep/production/some-ns
     parameters:
-      PACKAGE_TAG: v1.2.3
+    PACKAGE_TAG: v1.2.3
+
 `,
-			expected:    "v1.2.3",
-			expectError: false,
-		},
-		{
-			name: "service with configuration-anomaly-detection name",
-			yamlData: `
+
+		expected:    "v1.2.3",
+		expectError: false,
+	},
+	{
+		name: "service with configuration-anomaly-detection name",
+		yamlData: `
+
 name: configuration-anomaly-detection-service
 resourceTemplates: []
 `,
-			expectError: true,
-			errorSubstr: "cannot promote package for configuration-anomaly-detection",
-		},
-		{
-			name: "service with rhobs-rules-and-dashboards name",
-			yamlData: `
+
+		expectError: true,
+		errorSubstr: "cannot promote package for configuration-anomaly-detection",
+	},
+	{
+		name: "service with rhobs-rules-and-dashboards name",
+		yamlData: `
+
 name: rhobs-rules-and-dashboards-main
 resourceTemplates: []
 `,
-			expectError: true,
-			errorSubstr: "cannot promote package for rhobs-rules-and-dashboards",
+
+				expectError: true,
+				errorSubstr: "cannot promote package for rhobs-rules-and-dashboards",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				tmpDir := t.TempDir()
+				saasFilePath := filepath.Join(tmpDir, "saas.yaml")
+				err := os.WriteFile(saasFilePath, []byte(tt.yamlData), 0644)
+				require.NoError(t, err)
+				actual, err := GetCurrentPackageTagFromAppInterface(saasFilePath)
+				if tt.expectError {
+					require.Error(t, err)
+					require.True(t, strings.Contains(err.Error(), tt.errorSubstr), "unexpected error: %v", err)
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, tt.expected, actual)
+				}
+			})
+		}
+	}
+*/
+func TestUpdatePackageTag(t *testing.T) {
+	type testCase struct {
+		name         string
+		setup        func(t *testing.T) (AppInterface, string)
+		expectedErr  string
+		expectedFile string
+	}
+
+	tests := []testCase{
+		{
+			name: "successfully_updates_tag_in_file",
+			setup: func(t *testing.T) (AppInterface, string) {
+				mockExec := new(MockExec)
+				tmpDir := t.TempDir()
+				saasFile := filepath.Join(tmpDir, "test.yaml")
+
+				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0644)
+
+				mockExec.On("Run", tmpDir, "git", []string{"checkout", "master"}).Return(nil).Once()
+				mockExec.On("Run", tmpDir, "git", []string{"branch", "-D", "feature-branch"}).Return(errors.New("branch does not exist")).Once()
+
+				return AppInterface{
+					GitDirectory: tmpDir,
+					GitExecutor:  mockExec,
+				}, saasFile
+			},
+			expectedErr:  "",
+			expectedFile: "tag: new456",
+		},
+		{
+			name: "fails_git_checkout",
+			setup: func(t *testing.T) (AppInterface, string) {
+				mockExec := new(MockExec)
+				tmpDir := t.TempDir()
+				saasFile := filepath.Join(tmpDir, "test.yaml")
+
+				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0644)
+
+				mockExec.On("Run", tmpDir, "git", []string{"checkout", "master"}).Return(errors.New("checkout failed")).Once()
+
+				return AppInterface{
+					GitDirectory: tmpDir,
+					GitExecutor:  mockExec,
+				}, saasFile
+			},
+			expectedErr:  "failed to checkout master branch",
+			expectedFile: "tag: old123",
+		},
+		{
+			name: "fails_reading_file",
+			setup: func(t *testing.T) (AppInterface, string) {
+				mockExec := new(MockExec)
+				tmpDir := t.TempDir()
+				saasFile := filepath.Join(tmpDir, "nonexistent.yaml")
+
+				mockExec.On("Run", tmpDir, "git", []string{"checkout", "master"}).Return(nil).Once()
+				mockExec.On("Run", tmpDir, "git", []string{"branch", "-D", "feature-branch"}).Return(nil).Once()
+
+				return AppInterface{
+					GitDirectory: tmpDir,
+					GitExecutor:  mockExec,
+				}, saasFile
+			},
+			expectedErr:  "failed to read file",
+			expectedFile: "",
+		},
+		{
+			name: "fails_writing_file",
+			setup: func(t *testing.T) (AppInterface, string) {
+				mockExec := new(MockExec)
+				tmpDir := t.TempDir()
+				saasFile := filepath.Join(tmpDir, "readonly.yaml")
+
+				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0400)
+
+				mockExec.On("Run", tmpDir, "git", []string{"checkout", "master"}).Return(nil).Once()
+				mockExec.On("Run", tmpDir, "git", []string{"branch", "-D", "feature-branch"}).Return(nil).Once()
+
+				return AppInterface{
+					GitDirectory: tmpDir,
+					GitExecutor:  mockExec,
+				}, saasFile
+			},
+			expectedErr:  "failed to write to file",
+			expectedFile: "tag: old123",
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := t.TempDir()
-			saasFilePath := filepath.Join(tmpDir, "saas.yaml")
-			err := os.WriteFile(saasFilePath, []byte(tt.yamlData), 0644)
-			require.NoError(t, err)
-			actual, err := GetCurrentPackageTagFromAppInterface(saasFilePath)
-			if tt.expectError {
-				require.Error(t, err)
-				require.True(t, strings.Contains(err.Error(), tt.errorSubstr), "unexpected error: %v", err)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			app, saasFile := tc.setup(t)
+
+			err := app.UpdatePackageTag(saasFile, "old123", "new456", "feature-branch")
+
+			if tc.expectedErr != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedErr)
 			} else {
-				require.NoError(t, err)
-				require.Equal(t, tt.expected, actual)
+				assert.NoError(t, err)
+			}
+
+			if tc.expectedFile != "" {
+				data, readErr := os.ReadFile(saasFile)
+				assert.NoError(t, readErr)
+				assert.Equal(t, tc.expectedFile, string(data))
+			}
+
+			if mockExec, ok := app.GitExecutor.(*MockExec); ok {
+				mockExec.AssertExpectations(t)
 			}
 		})
 	}
 }
-*/
