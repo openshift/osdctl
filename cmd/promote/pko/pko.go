@@ -87,9 +87,6 @@ func PromotePackage(appInterface git.AppInterface, serviceName string, packageTa
 		return err
 	}
 	commitMessage := fmt.Sprintf("Promote %s package to %s", serviceName, packageTag)
-
-	// ovverriding appInterface.GitExecuter to iexec.Exec{}
-	appInterface.GitExecutor = iexec.Exec{}
 	err = appInterface.CommitSaasFile(saasFile, commitMessage)
 	if err != nil {
 		return err
