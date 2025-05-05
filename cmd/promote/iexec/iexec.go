@@ -29,6 +29,7 @@ func (e Exec) Run(dir string, name string, args ...string) error {
 
 func (e Exec) Output(dir, cmd string, args ...string) (string, error) {
 	command := exec.Command(cmd, args...)
+	// if dir is "" then use the current directory as per https://pkg.go.dev/os/exec#Cmd.Dir
 	command.Dir = dir
 	out, err := command.Output()
 	return string(out), err
