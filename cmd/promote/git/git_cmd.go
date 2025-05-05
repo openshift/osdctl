@@ -14,10 +14,9 @@ var (
 )
 
 // getBaseDir returns the base directory of the git repository, this can only be called once per process
-func getBaseDir() (string, error) {
+func getBaseDir(exec iexec.IExec) (string, error) {
 	baseDirOnce.Do(func() {
-		exec := iexec.Exec{}
-		baseDirOutput, err := exec.Output("git", "rev-parse", "--show-toplevel")
+		baseDirOutput, err := exec.Output("", "git", "rev-parse", "--show-toplevel")
 		if err != nil {
 			baseDirErr = err
 			return

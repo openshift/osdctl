@@ -88,7 +88,7 @@ func BootstrapOsdCtlForAppInterfaceAndServicePromotions(appInterfaceCheckoutDir 
 		return a
 	}
 
-	dir, err := getBaseDir()
+	dir, err := getBaseDir(iexec.Exec{})
 	if err == nil {
 		a.GitDirectory = dir
 		err = a.checkAppInterfaceCheckout()
