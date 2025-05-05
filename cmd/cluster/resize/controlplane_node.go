@@ -84,6 +84,10 @@ func newCmdResizeControlPlane() *cobra.Command {
 }
 
 func (o *controlPlane) New() error {
+	if err := validateInstanceSize(o.newMachineType, "controlplane"); err != nil {
+		return err
+	}
+
 	if o.cluster != nil && o.cluster.Hypershift().Enabled() {
 		return errors.New("this command should not be used for HCP clusters")
 	}
