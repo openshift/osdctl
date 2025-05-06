@@ -602,7 +602,7 @@ func (r *Infra) terminateCloudInstances(ctx context.Context, nodeList *corev1.No
 			if err != nil {
 				return err
 			}
-			
+
 			cfg.Region = r.cluster.Region().ID()
 			awsClient := ec2.NewFromConfig(cfg)
 			_, err = awsClient.TerminateInstances(ctx, &ec2.TerminateInstancesInput{
