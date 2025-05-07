@@ -3111,8 +3111,7 @@ osdctl org clusters [flags]
 
 ### osdctl org context
 
-Fetches information about the given organization. This data is presented as a table where each row includes the name, version, ID, cloud provider, and plan for the cluster.
-Rows will also include the number of recent service logs, active PD Alerts, Jira Issues, and limited support status for that specific cluster.
+Fetches information about the given organization. This data is presented as a table where each row includes the name, version, ID, cloud provider, and plan for the cluster. Rows will also include the number of recent service logs, active PD Alerts, Jira Issues, and limited support status for that specific cluster.
 
 ```
 osdctl org context orgId [flags]
