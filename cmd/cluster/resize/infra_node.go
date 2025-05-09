@@ -499,6 +499,8 @@ func (r *Infra) embiggenMachinePool(mp *hivev1.MachinePool) (*hivev1.MachinePool
 		// GCP
 		"custom-4-32768-ext": "custom-8-65536-ext",
 		"custom-8-65536-ext": "custom-16-131072-ext",
+		"n2-highmem-4":       "n2-highmem-8",
+		"n2-highmem-8":       "n2-highmem-16",
 	}
 
 	newMp := &hivev1.MachinePool{}
