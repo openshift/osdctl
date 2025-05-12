@@ -15,16 +15,13 @@ var _ = ginkgo.Describe("Dynatrace Utilities", func() {
 	var mockAppInterface AppInterface
 
 	ginkgo.BeforeEach(func() {
-		// Here you can initialize the mock AppInterface (if needed)
 		mockAppInterface = AppInterface{
 			GitDirectory: "/mock/base/dir",
 		}
 	})
 
 	ginkgo.Describe("GetServiceNames", func() {
-		var (
-			mockDirs = []string{"dir1", "dir2"}
-		)
+		var mockDirs = []string{"dir1", "dir2"}
 
 		ginkgo.It("should return a list of service names", func() {
 			services, err := GetServiceNames(mockAppInterface, mockDirs...)
@@ -74,12 +71,39 @@ var _ = ginkgo.Describe("Dynatrace Utilities", func() {
 
 		ginkgo.It("should return an error if file path does not contain .yaml", func() {
 			ServicesFilesMap = map[string]string{
-				"service1": "/mock/path/service1.txt", // Not a .yaml file
+				"service1": "/mock/path/service1.txt",
 			}
 
 			_, err := GetSaasDir("service1")
 			gomega.Expect(err).To(gomega.HaveOccurred())
 			gomega.Expect(err.Error()).To(gomega.Equal("saas directory for service service1 not found"))
+		})
+	})
+
+	ginkgo.Describe("ValidateModuleName", func() {
+		ginkgo.BeforeEach(func() {
+			ModulesSlice = []string{"module1", "module2"}
+		})
+
+		ginkgo.It("should validate and return the module name if it exists", func() {
+			module, err := ValidateModuleName("module1")
+			gomega.Expect(err).ToNot(gomega.HaveOccurred())
+			gomega.Expect(module).To(gomega.Equal("module1"))
+		})
+
+		ginkgo.It("should return an error if module name does not exist", func() {
+			_, err := ValidateModuleName("nonexistent-module")
+			gomega.Expect(err).To(gomega.HaveOccurred())
+			gomega.Expect(err.Error()).To(gomega.Equal("service nonexistent-module not found"))
+		})
+	})
+
+	ginkgo.Describe("GetProductionDir", func() {
+		ginkgo.It("should return the correct production directory path", func() {
+			baseDir := "/mock/base/dir"
+			expected := filepath.Join(baseDir, ProductionDir)
+			actual := GetProductionDir(baseDir)
+			gomega.Expect(actual).To(gomega.Equal(expected))
 		})
 	})
 

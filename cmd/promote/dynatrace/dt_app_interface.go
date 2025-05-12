@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/openshift/osdctl/cmd/promote/iexec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -28,6 +28,7 @@ type Service struct {
 
 type AppInterface struct {
 	GitDirectory string
+	GitExecutor  iexec.IExec
 }
 
 func DefaultAppInterfaceDirectory() string {
@@ -36,19 +37,22 @@ func DefaultAppInterfaceDirectory() string {
 
 func BootstrapOsdCtlForAppInterfaceAndServicePromotions(appInterfaceCheckoutDir string) AppInterface {
 	a := AppInterface{}
+	a.GitExecutor = iexec.Exec{}
 	if appInterfaceCheckoutDir != "" {
 		a.GitDirectory = appInterfaceCheckoutDir
-		err := checkAppInterfaceCheckout(a.GitDirectory)
+		a.GitExecutor = iexec.Exec{}
+		err := a.checkAppInterfaceCheckout()
 		if err != nil {
 			log.Fatalf("Provided directory %s is not an AppInterface directory: %v", a.GitDirectory, err)
 		}
 		return a
 	}
 
-	dir, err := getBaseDir()
+	dir, err := getBaseDir(a.GitExecutor)
 	if err == nil {
 		a.GitDirectory = dir
-		err = checkAppInterfaceCheckout(a.GitDirectory)
+		a.GitExecutor = iexec.Exec{}
+		err = a.checkAppInterfaceCheckout()
 		if err == nil {
 			return a
 		}
@@ -56,7 +60,7 @@ func BootstrapOsdCtlForAppInterfaceAndServicePromotions(appInterfaceCheckoutDir 
 
 	log.Printf("Not running in AppInterface directory: %v - Trying %s next\n", err, DefaultAppInterfaceDirectory())
 	a.GitDirectory = DefaultAppInterfaceDirectory()
-	err = checkAppInterfaceCheckout(a.GitDirectory)
+	err = a.checkAppInterfaceCheckout()
 	if err != nil {
 		log.Fatalf("%s is not an AppInterface directory: %v", DefaultAppInterfaceDirectory(), err)
 	}
@@ -66,10 +70,8 @@ func BootstrapOsdCtlForAppInterfaceAndServicePromotions(appInterfaceCheckoutDir 
 }
 
 // checkAppInterfaceCheckout checks if the script is running in the checkout of app-interface
-func checkAppInterfaceCheckout(directory string) error {
-	cmd := exec.Command("git", "remote", "-v")
-	cmd.Dir = directory
-	output, err := cmd.CombinedOutput()
+func (a AppInterface) checkAppInterfaceCheckout() error {
+	output, err := a.GitExecutor.Output(a.GitDirectory, "git", "remote", "-v")
 	if err != nil {
 		return fmt.Errorf("error executing 'git remote -v': %v", err)
 	}
@@ -122,37 +124,26 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string) 
 }
 
 func (a AppInterface) UpdateAppInterface(component, saasFile, currentGitHash, promotionGitHash, branchName string) error {
-	cmd := exec.Command("git", "checkout", "master")
-	cmd.Dir = a.GitDirectory
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed to checkout master branch: %v", err)
+	if err := a.GitExecutor.Run(a.GitDirectory, "git", "checkout", "master"); err != nil {
+		return fmt.Errorf("failed to checkout master: branch %v", err)
 	}
 
-	cmd = exec.Command("git", "branch", "-D", branchName)
-	cmd.Dir = a.GitDirectory
-	err = cmd.Run()
-	if err != nil {
+	if err := a.GitExecutor.Run(a.GitDirectory, "git", "branch", "-D", branchName); err != nil {
 		fmt.Printf("failed to cleanup branch %s: %v, continuing to create it.\n", branchName, err)
 	}
 
-	cmd = exec.Command("git", "checkout", "-b", branchName, "master")
-	cmd.Dir = a.GitDirectory
-	err = cmd.Run()
-	if err != nil {
+	if err := a.GitExecutor.Run(a.GitDirectory, "git", "checkout", "-b", branchName, "master"); err != nil {
 		return fmt.Errorf("failed to create branch %s: %v, does it already exist? If so, please delete it with `git branch -D %s` first", branchName, err, branchName)
 	}
 
 	// Update the hash in the SAAS file
-
 	fileContent, err := os.ReadFile(saasFile)
 	if err != nil {
 		return fmt.Errorf("failed to read file %s: %v", saasFile, err)
 	}
-	var newContent string
 
 	// Replace the hash in the file content
-	newContent = strings.ReplaceAll(string(fileContent), currentGitHash, promotionGitHash)
+	newContent := strings.ReplaceAll(string(fileContent), currentGitHash, promotionGitHash)
 
 	err = os.WriteFile(saasFile, []byte(newContent), 0644)
 	if err != nil {
@@ -163,20 +154,13 @@ func (a AppInterface) UpdateAppInterface(component, saasFile, currentGitHash, pr
 }
 
 func (a AppInterface) UpdatePackageTag(saasFile, oldTag, promotionTag, branchName string) error {
-	cmd := exec.Command("git", "checkout", "master")
-	cmd.Dir = a.GitDirectory
-	err := cmd.Run()
-	if err != nil {
+	if err := a.GitExecutor.Run(a.GitDirectory, "git", "checkout", "master"); err != nil {
 		return fmt.Errorf("failed to checkout master branch: %v", err)
 	}
 
-	cmd = exec.Command("git", "branch", "-D", branchName)
-	cmd.Dir = a.GitDirectory
-	err = cmd.Run()
-	if err != nil {
+	if err := a.GitExecutor.Run(a.GitDirectory, "git", "branch", "-D", branchName); err != nil {
 		fmt.Printf("failed to cleanup branch %s: %v, continuing to create it.\n", branchName, err)
 	}
-
 	// Update the hash in the SAAS file
 	fileContent, err := os.ReadFile(saasFile)
 	if err != nil {
@@ -195,17 +179,10 @@ func (a AppInterface) UpdatePackageTag(saasFile, oldTag, promotionTag, branchNam
 
 func (a AppInterface) CommitSaasFile(saasFile, commitMessage string) error {
 	// Commit the change
-	cmd := exec.Command("git", "add", saasFile)
-	cmd.Dir = a.GitDirectory
-	err := cmd.Run()
-	if err != nil {
+	if err := a.GitExecutor.Run(a.GitDirectory, "git", "add", saasFile); err != nil {
 		return fmt.Errorf("failed to add file %s: %v", saasFile, err)
 	}
-
-	cmd = exec.Command("git", "commit", "-m", commitMessage)
-	cmd.Dir = a.GitDirectory
-	err = cmd.Run()
-	if err != nil {
+	if err := a.GitExecutor.Run(a.GitDirectory, "git", "commit", "-m", commitMessage); err != nil {
 		return fmt.Errorf("failed to commit changes: %v", err)
 	}
 
