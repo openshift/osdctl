@@ -89,7 +89,7 @@
     - `listresources` - List all resources on a hive cluster related to a given cluster
   - `clustersync-failures [flags]` - List clustersync failures
 - `iampermissions` - STS/WIF utilities
-  - `diff` - Diff iam permissions for cluster operators between two versions
+  - `diff` - Diff IAM permissions for cluster operators between two versions
   - `get` - Get OCP CredentialsRequests
   - `save` - Save iam permissions for use in mcc
 - `jira` - Provides a set of commands for interacting with Jira
@@ -1903,7 +1903,7 @@ osdctl cluster support post --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-  -c, --cluster-id string                Intenal Cluster ID (required)
+  -c, --cluster-id string                Internal Cluster ID (required)
       --context string                   The name of the kubeconfig context to use
       --evidence string                  (optional) The reasoning that led to the decision to place the cluster in limited support. Can also be a link to a Jira case. Used for internal service log only.
   -h, --help                             help for post
@@ -2615,7 +2615,7 @@ osdctl iampermissions [flags]
 
 ### osdctl iampermissions diff
 
-Diff iam permissions for cluster operators between two versions
+Diff IAM permissions for cluster operators between two versions
 
 ```
 osdctl iampermissions diff [flags]
@@ -3111,8 +3111,7 @@ osdctl org clusters [flags]
 
 ### osdctl org context
 
-Fetches information about the given organization. This data is presented as a table where each row includes the name, version, ID, cloud provider, and plan for the cluster.
-Rows will also include the number of recent service logs, active PD Alerts, Jira Issues, and limited support status for that specific cluster.
+Fetches information about the given organization. This data is presented as a table where each row includes the name, version, ID, cloud provider, and plan for the cluster. Rows will also include the number of recent service logs, active PD Alerts, Jira Issues, and limited support status for that specific cluster.
 
 ```
 osdctl org context orgId [flags]

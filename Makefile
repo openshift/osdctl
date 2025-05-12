@@ -75,5 +75,3 @@ test:
 
 lint:
 	golangci-lint run
-
-setup: install-hooks

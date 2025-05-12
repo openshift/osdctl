@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"strings"
+
+	"github.com/openshift/osdctl/cmd/promote/iexec"
 )
 
-func CheckoutAndCompareGitHash(gitURL, gitHash, currentGitHash string) (string, string, error) {
+func CheckoutAndCompareGitHash(gitexecuter iexec.IExec, gitURL, gitHash, currentGitHash string) (string, string, error) {
 	tempDir, err := ioutil.TempDir("", "")
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create temporary directory: %v", err)
@@ -20,12 +21,10 @@ func CheckoutAndCompareGitHash(gitURL, gitHash, currentGitHash string) (string, 
 		return "", "", fmt.Errorf("failed to change directory to temporary directory: %v", err)
 	}
 
-	cmd := exec.Command("git", "clone", gitURL, "source-dir")
-	err = cmd.Run()
+	err = gitexecuter.Run(tempDir, "git", "clone", gitURL, "source-dir")
 	if err != nil {
 		return "", "", fmt.Errorf("failed to clone git repository: %v", err)
 	}
-
 	err = os.Chdir("source-dir")
 	if err != nil {
 		return "", "", fmt.Errorf("failed to change directory to source-dir: %v", err)
@@ -33,8 +32,7 @@ func CheckoutAndCompareGitHash(gitURL, gitHash, currentGitHash string) (string, 
 
 	if gitHash == "" {
 		fmt.Printf("No git hash provided. Using HEAD.\n")
-		cmd = exec.Command("git", "rev-parse", "HEAD")
-		output, err := cmd.Output()
+		output, err := gitexecuter.Output("git", "rev-parse", "HEAD")
 		if err != nil {
 			return "", "", fmt.Errorf("failed to get git hash: %v", err)
 		}
@@ -45,8 +43,7 @@ func CheckoutAndCompareGitHash(gitURL, gitHash, currentGitHash string) (string, 
 	if currentGitHash == gitHash {
 		return "", "", fmt.Errorf("git hash %s is already at HEAD", gitHash)
 	} else {
-		cmd := exec.Command("git", "log", "--no-merges", fmt.Sprintf("%s..%s", currentGitHash, gitHash))
-		commitLog, err := cmd.Output()
+		commitLog, err := gitexecuter.Output("git", "log", "--no-merges", fmt.Sprintf("%s..%s", currentGitHash, gitHash))
 		if err != nil {
 			return "", "", err
 		}

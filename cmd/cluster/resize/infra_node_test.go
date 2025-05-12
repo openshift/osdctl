@@ -105,6 +105,60 @@ func TestResize_embiggenMachinePool(t *testing.T) {
 	}
 }
 
+func TestValidateInstanceSize(t *testing.T) {
+	tests := []struct {
+		instanceSize string
+		nodeType     string
+		expectErr    bool
+	}{
+		{
+			instanceSize: "r5.2xlarge",
+			nodeType:     "infra",
+			expectErr:    true,
+		},
+		{
+			instanceSize: "m5.4xlarge",
+			nodeType:     "infra",
+			expectErr:    true,
+		},
+		{
+			instanceSize: "r5.4xlarge",
+			nodeType:     "infra",
+			expectErr:    false,
+		},
+		{
+			instanceSize: "m5.2xlarge",
+			nodeType:     "controlplane",
+			expectErr:    true,
+		},
+		{
+			instanceSize: "r5.4xlarge",
+			nodeType:     "controlplane",
+			expectErr:    true,
+		},
+		{
+			instanceSize: "m5.4xlarge",
+			nodeType:     "controlplane",
+			expectErr:    false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.instanceSize, func(t *testing.T) {
+			actual := validateInstanceSize(test.instanceSize, test.nodeType)
+			if actual != nil {
+				if !test.expectErr {
+					t.Errorf("expected no err, got %v", actual)
+				}
+			} else {
+				if test.expectErr {
+					t.Error("expected err, got nil")
+				}
+			}
+		})
+	}
+}
+
 func TestConvertProviderIDtoInstanceID(t *testing.T) {
 	tests := []struct {
 		providerID string

@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/openshift/osdctl/cmd/promote/git"
+	"github.com/openshift/osdctl/cmd/promote/iexec"
 	"github.com/spf13/cobra"
 )
 
@@ -38,7 +39,7 @@ func NewCmdSaas() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			ops.validateSaasFlow()
 			appInterface := git.BootstrapOsdCtlForAppInterfaceAndServicePromotions(ops.appInterfaceCheckoutDir)
-
+			appInterface.GitExecutor = iexec.Exec{}
 			if ops.list {
 				if ops.serviceName != "" || ops.gitHash != "" || ops.osd || ops.hcp {
 					fmt.Printf("Error: --list cannot be used with any other flags\n\n")

@@ -1,4 +1,4 @@
-FROM registry.ci.openshift.org/openshift/release:golang-1.21
+FROM registry.ci.openshift.org/openshift/release:golang-1.23
 
 WORKDIR /src
 COPY . .

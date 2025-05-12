@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -101,6 +102,10 @@ func newCmdResizeInfra() *cobra.Command {
 }
 
 func (r *Infra) New() error {
+	if err := validateInstanceSize(r.instanceType, "infra"); err != nil {
+		return err
+	}
+
 	scheme := runtime.NewScheme()
 
 	// Register machinev1beta1 for Machines
@@ -494,6 +499,8 @@ func (r *Infra) embiggenMachinePool(mp *hivev1.MachinePool) (*hivev1.MachinePool
 		// GCP
 		"custom-4-32768-ext": "custom-8-65536-ext",
 		"custom-8-65536-ext": "custom-16-131072-ext",
+		"n2-highmem-4":       "n2-highmem-8",
+		"n2-highmem-8":       "n2-highmem-16",
 	}
 
 	newMp := &hivev1.MachinePool{}
@@ -641,6 +648,15 @@ func (r *Infra) nodesMatchExpectedCount(ctx context.Context, labelSelector label
 	}
 
 	return false, nil
+}
+
+// validateInstanceSize accepts a string for the requested new instance type and returns an error
+// if the instance type is invalid
+func validateInstanceSize(newInstanceSize string, nodeType string) error {
+	if !slices.Contains(supportedInstanceTypes[nodeType], newInstanceSize) {
+		return fmt.Errorf("instance type %s not supported for %s nodes", newInstanceSize, nodeType)
+	}
+	return nil
 }
 
 // having an error when being in a retry loop, should not be handled as an error, and we should just display it and continue
