@@ -39,7 +39,7 @@ require (
 	github.com/openshift-online/ocm-sdk-go v0.1.465
 	github.com/openshift/api v0.0.0-20250207102212-9e59a77ed2e0
 	github.com/openshift/aws-account-operator/api v0.0.0-20250205151445-6455c35fc4ae
-	github.com/openshift/backplane-cli v0.1.44
+	github.com/openshift/backplane-cli v0.1.45
 	github.com/openshift/cloud-credential-operator v0.0.0-20250120201329-db5f2531a5b4
 	github.com/openshift/gcp-project-operator v0.0.0-20241024143818-ec4eabd35aba
 	github.com/openshift/hive/apis v0.0.0-20250206153200-5a34ea42e678
@@ -106,7 +106,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.5.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.12.15 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.18.13 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssm v1.58.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.59.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.25.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.30.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
