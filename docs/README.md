@@ -3443,7 +3443,7 @@ osdctl servicelog list --cluster-id <cluster-identifier> [flags] [options]
   -A, --all-messages                     Toggle if we should see all of the messages or only SRE-P specific ones
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                Internal Cluster identifier (required)
+  -C, --cluster-id string                Internal Cluster identifier (required)
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for list
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
