@@ -278,7 +278,7 @@ func (a AppInterface) UpdateAppInterface(serviceName, saasFile, currentGitHash, 
 		newContent = strings.ReplaceAll(string(fileContent), currentGitHash, promotionGitHash)
 	}
 
-	err = os.WriteFile(saasFile, []byte(newContent), 0644)
+	err = os.WriteFile(saasFile, []byte(newContent), 0600)
 	if err != nil {
 		return fmt.Errorf("failed to write to file %s: %v", saasFile, err)
 	}
@@ -305,7 +305,7 @@ func (a AppInterface) UpdatePackageTag(saasFile, oldTag, promotionTag, branchNam
 	// Replace the hash in the file content
 	newContent := strings.ReplaceAll(string(fileContent), oldTag, promotionTag)
 
-	err = os.WriteFile(saasFile, []byte(newContent), 0644)
+	err = os.WriteFile(saasFile, []byte(newContent), 0600)
 	if err != nil {
 		return fmt.Errorf("failed to write to file %s: %v", saasFile, err)
 	}

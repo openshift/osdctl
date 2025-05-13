@@ -16,20 +16,20 @@ const (
 	ProdJumproleConfigKey   = "prod_jumprole_account_id"
 	AwsProxy                = "aws_proxy"
 	StageJumproleConfigKey  = "stage_jumprole_account_id"
-	PdUserToken             = "pd_user_token"
+	PdUserToken             = "pd_user_token" // #nosec G101
 	JiraToken               = "jira_token"
 	DtVaultPath             = "dt_vault_path"
 	VaultAddress            = "vault_address"
 	CloudTrailCmdLists      = "cloudtrail_cmd_lists"
 	GitLabToken             = "gitlab_access"
-	JiraTokenRegex          = "^[A-Z0-9]{7}$"
-	PdTokenRegex            = "^[a-zA-Z0-9+_-]{20}$"
+	JiraTokenRegex          = "^[A-Z0-9]{7}$"        // #nosec G101
+	PdTokenRegex            = "^[a-zA-Z0-9+_-]{20}$" // #nosec G101
 	AwsAccountRegex         = "^[0-9]{12}$"
 	AWSProxyRegex           = `^http:\/\/[a-zA-Z0-9.-]+(:\d+)?$`
 	VaultURLRegex           = `^https:\/\/[a-zA-Z0-9.-]+\/?$`
 	DtVaultPathRegex        = `^[a-zA-Z0-9\-/]+$`
 	CloudTrailCmdListsRegex = `^\s*-\s+.*$`
-	GitLabTokenRegex        = `^[a-zA-Z0-9]{20}$`
+	GitLabTokenRegex        = `^[a-zA-Z0-9]{20}$` // #nosec G101
 )
 
 // NewCmdSetup implements the setup command

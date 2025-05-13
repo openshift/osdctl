@@ -58,14 +58,14 @@ func newCmdSave() *cobra.Command {
 	saveCmd.Flags().StringVarP(&op.ReleaseVersion, "release-version", "r", "", "ocp version for which the policies should be downloaded")
 	saveCmd.Flags().BoolVarP(&op.Force, "force", "f", false, "Overwrite existing files")
 
-	saveCmd.MarkFlagRequired("dir")
-	saveCmd.MarkFlagRequired("release-version")
+	_ = saveCmd.MarkFlagRequired("dir")
+	_ = saveCmd.MarkFlagRequired("release-version")
 
 	return saveCmd
 }
 
 func (o *saveOptions) run() error {
-	if err := o.MkdirAll(o.OutFolder, 0755); err != nil {
+	if err := o.MkdirAll(o.OutFolder, 0750); err != nil {
 		return err
 	}
 
@@ -126,7 +126,7 @@ func (o *saveOptions) run() error {
 			continue
 		}
 
-		o.Print("Writing %s\n", path)
+		_, _ = o.Print("Writing %s\n", path)
 		if err := o.WriteFile(path, content, 0600); err != nil {
 			return err
 		}

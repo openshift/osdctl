@@ -308,7 +308,11 @@ func (o *rotateSecretOptions) run() error {
 	}
 
 	fmt.Printf("Watching Cluster Sync Status for deployment...")
-	hiveinternalv1alpha1.AddToScheme(o.kubeCli.Scheme())
+	err = hiveinternalv1alpha1.AddToScheme(o.kubeCli.Scheme())
+	if err != nil {
+		return err
+	}
+
 	searchStatus := &hiveinternalv1alpha1.ClusterSync{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cdName,

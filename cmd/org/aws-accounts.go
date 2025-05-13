@@ -85,7 +85,10 @@ func printAccounts(children *organizations.ListChildrenOutput) {
 		}
 
 		table.AddRow([]string{})
-		table.Flush()
+		err := table.Flush()
+		if err != nil {
+			panic(err)
+		}
 	}
 
 }
