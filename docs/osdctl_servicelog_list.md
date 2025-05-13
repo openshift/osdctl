@@ -24,7 +24,7 @@ osdctl servicelog list --cluster-id <cluster-identifier> [flags] [options]
 
 ```
   -A, --all-messages        Toggle if we should see all of the messages or only SRE-P specific ones
-      --cluster-id string   Internal Cluster identifier (required)
+  -C, --cluster-id string   Internal Cluster identifier (required)
   -h, --help                help for list
   -i, --internal            Toggle if we should see internal messages
 ```
