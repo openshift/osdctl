@@ -34,7 +34,7 @@ const (
 	twentyMinuteTimeout                   = 20 * time.Minute
 	twentySecondIncrement                 = 20 * time.Second
 	resizedInfraNodeServiceLogTemplate    = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_resized.json"
-	GCPresizedInfraNodeServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/gcp/GCP_infranode_resized_auto.json"
+	resizedInfraNodeServiceLogTemplateGCP = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/gcp/GCP_infranode_resized_auto.json"
 	infraNodeLabel                        = "node-role.kubernetes.io/infra"
 	temporaryInfraNodeLabel               = "osdctl.openshift.io/infra-resize-temporary-machinepool"
 )
@@ -93,31 +93,30 @@ func newCmdResizeInfra() *cobra.Command {
 	infraResizeCmd.Flags().StringVar(&r.justification, "justification", "", "The justification behind resize")
 	infraResizeCmd.Flags().StringVar(&r.ohss, "ohss", "", "OHSS ticket tracking this infra node resize")
 
-	infraResizeCmd.MarkFlagRequired("cluster-id")
-	infraResizeCmd.MarkFlagRequired("justification")
-	infraResizeCmd.MarkFlagRequired("reason")
-	infraResizeCmd.MarkFlagRequired("ohss")
+	_ = infraResizeCmd.MarkFlagRequired("cluster-id")
+	_ = infraResizeCmd.MarkFlagRequired("justification")
+	_ = infraResizeCmd.MarkFlagRequired("reason")
+	_ = infraResizeCmd.MarkFlagRequired("ohss")
 
 	return infraResizeCmd
 }
 
 func (r *Infra) New() error {
-	if err := validateInstanceSize(r.instanceType, "infra"); err != nil {
-		return err
+	// Only validate the instanceType value if one is provided, otherwise we rely on embiggenMachinePool to provide the size
+	if r.instanceType != "" {
+		if err := validateInstanceSize(r.instanceType, "infra"); err != nil {
+			return err
+		}
 	}
 
 	scheme := runtime.NewScheme()
 
-	// Register machinev1beta1 for Machines
 	if err := machinev1beta1.Install(scheme); err != nil {
 		return err
 	}
-
-	// Register hivev1 for MachinePools
 	if err := hivev1.AddToScheme(scheme); err != nil {
 		return err
 	}
-
 	if err := corev1.AddToScheme(scheme); err != nil {
 		return err
 	}
@@ -479,7 +478,6 @@ func (r *Infra) getInfraMachinePool(ctx context.Context) (*hivev1.MachinePool, e
 	}
 
 	for _, mp := range mpList.Items {
-		mp := mp
 		if mp.Spec.Name == "infra" {
 			log.Printf("found machinepool %s", mp.Name)
 			return &mp, nil
@@ -562,7 +560,7 @@ func generateServiceLog(mp *hivev1.MachinePool, instanceType, justification, clu
 		}
 	} else if mp.Spec.Platform.GCP != nil {
 		return servicelog.PostCmdOptions{
-			Template:       GCPresizedInfraNodeServiceLogTemplate,
+			Template:       resizedInfraNodeServiceLogTemplateGCP,
 			ClusterId:      clusterId,
 			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType), fmt.Sprintf("JUSTIFICATION=%s", justification)},
 		}
@@ -659,17 +657,6 @@ func validateInstanceSize(newInstanceSize string, nodeType string) error {
 	return nil
 }
 
-// having an error when being in a retry loop, should not be handled as an error, and we should just display it and continue
-// in case we have a function that return a bool status and an error, we can use following helper
-// f being a function returning (bool, error), replace
-//
-//	return f(...)
-//
-// by
-//
-//	return skipError(wrapResult(f(...)), "message to context the error")
-//
-// and then the return will always have error set to nil, but a continuing message will be displayed in case of error
 type result struct {
 	condition bool
 	err       error
