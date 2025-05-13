@@ -9,7 +9,7 @@ import (
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/xanzy/go-gitlab"
+	gitlab "gitlab.com/gitlab-org/api/client-go"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -91,12 +91,18 @@ func (ctx *sreOperatorsDescribeOptions) printText(output []sreOperatorDetails) e
 	for _, op := range output {
 		p.AddRow([]string{"", ""})
 		p.AddRow([]string{"Operator Name:", op.basic.Name})
-		if op.basic.Current != op.basic.Expected {
+		if op.basic.Current == "" || op.basic.Expected == "" {
+			p.AddRow([]string{"Current Version:", op.basic.Current})
+		} else if op.basic.Current != op.basic.Expected {
 			p.AddRow([]string{"Current Version:", Red + Bold + op.basic.Current + " (outdated)" + RestoreColor})
 		} else {
 			p.AddRow([]string{"Current Version:", op.basic.Current})
 		}
-		p.AddRow([]string{"Expected Version:", op.basic.Expected})
+		if op.basic.Expected == "" {
+			p.AddRow([]string{"Expected Version:", Red + Bold + "not found - Gitlab token may be missing or expired" + RestoreColor})
+		} else {
+			p.AddRow([]string{"Expected Version:", op.basic.Expected})
+		}
 		p.AddRow([]string{"", ""})
 		p.AddRow([]string{"Current Version Commit:", op.basic.CurrentCommit})
 		p.AddRow([]string{"Expected Version Commit:", op.basic.ExpectedCommit})

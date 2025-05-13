@@ -53,8 +53,8 @@ require (
 	github.com/spf13/pflag v1.0.6
 	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.10.0
-	github.com/xanzy/go-gitlab v0.115.0
 	github.com/zclconf/go-cty v1.13.0
+	gitlab.com/gitlab-org/api/client-go v0.128.0
 	go.uber.org/mock v0.5.0
 	golang.org/x/oauth2 v0.26.0
 	golang.org/x/sync v0.12.0
