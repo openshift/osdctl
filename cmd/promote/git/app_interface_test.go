@@ -71,7 +71,7 @@ func TestCommitSaasFile(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			file := filepath.Join(tmpDir, "saas.yaml")
-			_ = os.WriteFile(file, []byte("dummy content"), 0644)
+			_ = os.WriteFile(file, []byte("dummy content"), 0600)
 
 			mockExec := new(MockExec)
 			tc.setupMock(mockExec, tmpDir, file, tc.commitMessage)
@@ -332,7 +332,7 @@ resourceTemplates: []
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			saasFilePath := filepath.Join(tmpDir, "saas.yaml")
-			err := os.WriteFile(saasFilePath, []byte(tt.yamlData), 0644)
+			err := os.WriteFile(saasFilePath, []byte(tt.yamlData), 0600)
 			require.NoError(t, err)
 
 			actual, err := GetCurrentPackageTagFromAppInterface(saasFilePath)
@@ -364,7 +364,7 @@ func TestUpdatePackageTag(t *testing.T) {
 				tmpDir := t.TempDir()
 				saasFile := filepath.Join(tmpDir, "test.yaml")
 
-				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0644)
+				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0600)
 
 				mockExec.On("Run", tmpDir, "git", []string{"checkout", "master"}).Return(nil).Once()
 				mockExec.On("Run", tmpDir, "git", []string{"branch", "-D", "feature-branch"}).Return(errors.New("branch does not exist")).Once()
@@ -384,7 +384,7 @@ func TestUpdatePackageTag(t *testing.T) {
 				tmpDir := t.TempDir()
 				saasFile := filepath.Join(tmpDir, "test.yaml")
 
-				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0644)
+				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0600)
 
 				mockExec.On("Run", tmpDir, "git", []string{"checkout", "master"}).Return(errors.New("checkout failed")).Once()
 
@@ -490,7 +490,7 @@ resourceTemplates:
       - name: "target-canary"
         ref: "currentGitHash"
 `
-				if err := os.WriteFile(saas_file, []byte(yaml_content), 0644); err != nil {
+				if err := os.WriteFile(saas_file, []byte(yaml_content), 0600); err != nil {
 					t.Fatalf("failed to write saas file: %v", err)
 				}
 
@@ -525,7 +525,7 @@ resourceTemplates:
       - name: "target-prod"
         ref: "currentGitHash"
 `
-				if err := os.WriteFile(saas_file, []byte(yaml_content), 0644); err != nil {
+				if err := os.WriteFile(saas_file, []byte(yaml_content), 0600); err != nil {
 					t.Fatalf("failed to write saas file: %v", err)
 				}
 

@@ -78,9 +78,9 @@ func newCmdCreateJumphost() *cobra.Command {
 		},
 	}
 
-	// create.Flags().StringVarP(&clusterId, "cluster-id", "c", "", "OCM internal/external cluster id trying to access via a jumphost")
 	create.Flags().StringVar(&subnetId, "subnet-id", "", "public subnet id to create a jumphost in")
-	create.MarkFlagRequired("subnet-id")
+
+	_ = create.MarkFlagRequired("subnet-id")
 
 	return create
 }

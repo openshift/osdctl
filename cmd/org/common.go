@@ -73,7 +73,7 @@ func printOrg(org Organization) {
 		table.AddRow([]string{"Updated:", org.Updated})
 
 		table.AddRow([]string{})
-		table.Flush()
+		_ = table.Flush()
 	}
 }
 

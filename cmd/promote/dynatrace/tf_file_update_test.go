@@ -22,7 +22,7 @@ var _ = Describe("Dynatrace", func() {
 		Expect(err).NotTo(HaveOccurred())
 		testFilePath = filepath.Join(tempDir, "test.hcl")
 		content := `module "example" { source = "old_value" }`
-		_ = os.WriteFile(testFilePath, []byte(content), 0644)
+		_ = os.WriteFile(testFilePath, []byte(content), 0600)
 	})
 
 	AfterEach(func() {
@@ -33,7 +33,7 @@ var _ = Describe("Dynatrace", func() {
 	Describe("Open", func() {
 		BeforeEach(func() {
 			content := `module "example" { source = "old_value" }`
-			_ = os.WriteFile(testFilePath, []byte(content), 0644)
+			_ = os.WriteFile(testFilePath, []byte(content), 0600)
 		})
 
 		It("should open an existing HCL file successfully", func() {
@@ -90,7 +90,7 @@ var _ = Describe("Dynatrace", func() {
 
 		It("should return an error if the file cannot be written", func() {
 			file := hclwrite.NewEmptyFile()
-			_ = os.Mkdir("output.hcl", 0755) // Create a directory instead of a file
+			_ = os.Mkdir("output.hcl", 0750) // Create a directory instead of a file
 			err := dynatrace.Save("output.hcl", file)
 			Expect(err).To(HaveOccurred())
 			_ = os.Remove("output.hcl")

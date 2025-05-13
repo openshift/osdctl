@@ -332,7 +332,6 @@ var (
 	ErrAwsAccountLimitExceeded = fmt.Errorf("ErrAwsAccountLimitExceeded")
 	ErrEmailAlreadyExist       = fmt.Errorf("ErrEmailAlreadyExist")
 	ErrAwsInternalFailure      = fmt.Errorf("ErrAwsInternalFailure")
-	ErrAwsTooManyRequests      = fmt.Errorf("ErrAwsTooManyRequests")
 	ErrAwsFailedCreateAccount  = fmt.Errorf("ErrAwsFailedCreateAccount")
 )
 
