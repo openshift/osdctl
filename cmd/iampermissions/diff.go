@@ -45,8 +45,8 @@ func newCmdDiff() *cobra.Command {
 
 	policyCmd.Flags().StringVarP(&ops.BaseVersion, baseVersionFlagName, "b", "", "")
 	policyCmd.Flags().StringVarP(&ops.TargetVersion, targetVersionFlagName, "t", "", "")
-	policyCmd.MarkFlagRequired(baseVersionFlagName)
-	policyCmd.MarkFlagRequired(targetVersionFlagName)
+	_ = policyCmd.MarkFlagRequired(baseVersionFlagName)
+	_ = policyCmd.MarkFlagRequired(targetVersionFlagName)
 
 	return policyCmd
 }

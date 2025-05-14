@@ -379,7 +379,10 @@ func (i *infoOptions) getAWSSessions(clusters *infoClusters) (*hypershiftAWSClie
 	customerConfig, err := osdCloud.CreateAWSV2Config(ocmClient, clusters.customerCluster)
 	// We have to overwrite the fact that backplane just mangled our configuration.
 	// TODO: Do not use the global configuration instead (https://issues.redhat.com/browse/OSD-19773)
-	osdctlConfig.EnsureConfigFile()
+	err = osdctlConfig.EnsureConfigFile()
+	if err != nil {
+		return nil, err
+	}
 	if err != nil {
 		return nil, err
 	}

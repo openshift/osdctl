@@ -1,17 +1,40 @@
+version: "2"
 run:
-  # Our CI expects a vendor directory, hence we have to use -mod=readonly here as well.
-  modules-download-mode: readonly
-
-issues:
-  # on default, golangci-lint excludes gosec. Hence, we have to
-  # explicitly disable the exclude-use-default: https://github.com/golangci/golangci-lint/issues/1504
-  exclude-use-default: false
-
-# individual linter configs go here
-linters-settings:
-
-# default linters are enabled `golangci-lint help linters`
+  concurrency: 10
 linters:
-  disable-all: true
+  default: none
   enable:
+    - errcheck
     - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - unused
+  settings:
+    misspell:
+      extra-words:
+        - typo: openshit
+          correction: OpenShift
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party/
+      - builtin/
+      - examples/
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new-from-rev: 8d912e328ca7d7a640fc1c39d3fd9e365b6d5bf7
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party/
+      - builtin/
+      - examples/

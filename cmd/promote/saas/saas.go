@@ -2,8 +2,6 @@ package saas
 
 import (
 	"fmt"
-	"os"
-
 	"github.com/openshift/osdctl/cmd/promote/git"
 	"github.com/openshift/osdctl/cmd/promote/iexec"
 	"github.com/spf13/cobra"
@@ -36,33 +34,31 @@ func NewCmdSaas() *cobra.Command {
 		osdctl promote saas --serviceName <service-name> --gitHash <git-hash> --osd
 		or
 		osdctl promote saas --serviceName <service-name> --gitHash <git-hash> --hcp`,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			ops.validateSaasFlow()
 			appInterface := git.BootstrapOsdCtlForAppInterfaceAndServicePromotions(ops.appInterfaceCheckoutDir)
 			appInterface.GitExecutor = iexec.Exec{}
 			if ops.list {
 				if ops.serviceName != "" || ops.gitHash != "" || ops.osd || ops.hcp {
 					fmt.Printf("Error: --list cannot be used with any other flags\n\n")
-					cmd.Help()
-					os.Exit(1)
+
+					return cmd.Help()
 				}
-				listServiceNames(appInterface)
-				os.Exit(0)
+				return listServiceNames(appInterface)
 			}
 
 			if !(ops.osd || ops.hcp) && ops.serviceName != "" {
 				fmt.Printf("Error: --serviceName cannot be used without either --osd or --hcp\n\n")
-				cmd.Help()
-				os.Exit(1)
+
+				return cmd.Help()
 			}
 
 			err := servicePromotion(appInterface, ops.serviceName, ops.gitHash, ops.namespaceRef, ops.osd, ops.hcp)
 			if err != nil {
 				fmt.Printf("Error while promoting service: %v\n", err)
-				os.Exit(1)
 			}
 
-			os.Exit(0)
+			return nil
 		},
 	}
 

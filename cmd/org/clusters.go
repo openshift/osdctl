@@ -35,7 +35,7 @@ Retrieving all active clusters for a given AWS profile:
 osdctl org clusters --aws-profile my-aws-profile --aws-account-id 123456789`,
 		Args:          cobra.MaximumNArgs(1),
 		SilenceErrors: true,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			orgId := ""
 			if len(args) > 0 {
 				orgId = args[0]
@@ -51,13 +51,14 @@ osdctl org clusters --aws-profile my-aws-profile --aws-account-id 123456789`,
 
 			out, err := formatClustersOutput(clusters)
 			cmdutil.CheckErr(err)
-			os.Stdout.Write(out)
+
+			_, err = os.Stdout.Write(out)
+			return err
 		},
 	}
 )
 
 func init() {
-	// define flags
 	flags := clustersCmd.Flags()
 
 	flags.BoolVarP(
@@ -153,18 +154,12 @@ func formatClustersOutput(items []*accountsv1.Subscription) ([]byte, error) {
 			table.AddRow([]string{s.DisplayName(), s.ClusterID(), s.ExternalClusterID(), s.Status()})
 		}
 		table.AddRow([]string{})
-		table.Flush()
+		err := table.Flush()
+		if err != nil {
+			return nil, err
+		}
 		return buf.Bytes(), nil
 	}
-}
-
-func printClusters(items []*accountsv1.Subscription) {
-	out, err := formatClustersOutput(items)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error formatting clusters output: %v\n", err)
-		return
-	}
-	os.Stdout.Write(out)
 }
 
 // isAWSProfileSearch indicates if AWS profile flags are set.

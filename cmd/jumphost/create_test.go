@@ -302,7 +302,7 @@ func TestCreateKeyPair(t *testing.T) {
 				data, err := os.ReadFile(j.keyFilepath)
 				assert.NoError(t, err, "should be able to read the key file")
 				assert.Equal(t, tt.expectedKey, string(data), "private key should match")
-				os.Remove(j.keyFilepath) // Cleanup
+				_ = os.Remove(j.keyFilepath) // Cleanup
 			} else {
 				assert.Empty(t, j.keyFilepath, "key file path should be empty on failure")
 			}
