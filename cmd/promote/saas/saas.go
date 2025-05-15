@@ -36,8 +36,7 @@ func NewCmdSaas() *cobra.Command {
 		osdctl promote saas --serviceName <service-name> --gitHash <git-hash> --hcp`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ops.validateSaasFlow()
-			appInterface := git.BootstrapOsdCtlForAppInterfaceAndServicePromotions(ops.appInterfaceCheckoutDir)
-			appInterface.GitExecutor = iexec.Exec{}
+			appInterface := git.BootstrapOsdCtlForAppInterfaceAndServicePromotions(ops.appInterfaceCheckoutDir, iexec.Exec{})
 			if ops.list {
 				if ops.serviceName != "" || ops.gitHash != "" || ops.osd || ops.hcp {
 					fmt.Printf("Error: --list cannot be used with any other flags\n\n")

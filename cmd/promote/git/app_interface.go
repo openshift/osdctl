@@ -77,8 +77,9 @@ func DefaultAppInterfaceDirectory() string {
 	return filepath.Join(os.Getenv("HOME"), "git", "app-interface")
 }
 
-func BootstrapOsdCtlForAppInterfaceAndServicePromotions(appInterfaceCheckoutDir string) AppInterface {
+func BootstrapOsdCtlForAppInterfaceAndServicePromotions(appInterfaceCheckoutDir string, gitExecutor iexec.Exec) AppInterface {
 	a := AppInterface{}
+	a.GitExecutor = gitExecutor
 	if appInterfaceCheckoutDir != "" {
 		a.GitDirectory = appInterfaceCheckoutDir
 		err := a.checkAppInterfaceCheckout()
@@ -109,19 +110,18 @@ func BootstrapOsdCtlForAppInterfaceAndServicePromotions(appInterfaceCheckoutDir 
 }
 
 // checkAppInterfaceCheckout checks if the script is running in the checkout of app-interface
-func (a AppInterface) checkAppInterfaceCheckout() error {
+func (a *AppInterface) checkAppInterfaceCheckout() error {
 	output, err := a.GitExecutor.Output(a.GitDirectory, "git", "remote", "-v")
 	if err != nil {
 		return fmt.Errorf("error executing 'git remote -v': %v", err)
 	}
 
-	outputString := string(output)
+	outputString := output
 
 	// Check if the output contains the app-interface repository URL
 	if !strings.Contains(outputString, "gitlab.cee.redhat.com") && !strings.Contains(outputString, "app-interface") {
 		return fmt.Errorf("not running in checkout of app-interface")
 	}
-	//fmt.Println("Running in checkout of app-interface.")
 
 	return nil
 }
@@ -247,7 +247,7 @@ func GetCurrentPackageTagFromAppInterface(saasFile string) (string, error) {
 	return currentPackageTag, nil
 }
 
-func (a AppInterface) UpdateAppInterface(serviceName, saasFile, currentGitHash, promotionGitHash, branchName string) error {
+func (a *AppInterface) UpdateAppInterface(_, saasFile, currentGitHash, promotionGitHash, branchName string) error {
 
 	if err := a.GitExecutor.Run(a.GitDirectory, "git", "checkout", "master"); err != nil {
 		return fmt.Errorf("failed to checkout master: branch %v", err)
@@ -286,7 +286,7 @@ func (a AppInterface) UpdateAppInterface(serviceName, saasFile, currentGitHash, 
 	return nil
 }
 
-func (a AppInterface) UpdatePackageTag(saasFile, oldTag, promotionTag, branchName string) error {
+func (a *AppInterface) UpdatePackageTag(saasFile, oldTag, promotionTag, branchName string) error {
 
 	if err := a.GitExecutor.Run(a.GitDirectory, "git", "checkout", "master"); err != nil {
 		return fmt.Errorf("failed to checkout master branch: %v", err)
@@ -312,7 +312,7 @@ func (a AppInterface) UpdatePackageTag(saasFile, oldTag, promotionTag, branchNam
 	return nil
 }
 
-func (a AppInterface) CommitSaasFile(saasFile, commitMessage string) error {
+func (a *AppInterface) CommitSaasFile(saasFile, commitMessage string) error {
 	// Commit the change
 	if err := a.GitExecutor.Run(a.GitDirectory, "git", "add", saasFile); err != nil {
 		return fmt.Errorf("failed to add file %s: %v", saasFile, err)
