@@ -3,13 +3,11 @@ package dynatrace
 import (
 	"fmt"
 	"os"
-
+	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/openshift/osdctl/cmd/promote/iexec"
 )
 
 const (
@@ -71,7 +69,7 @@ func servicePromotion(appInterface AppInterface, component, gitHash string) erro
 
 	fmt.Printf("Current Git Hash: %v\nGit Repo: %v\nComponent path: %v\n", currentGitHash, serviceRepo, serviceFullPath)
 
-	promotionGitHash, commitLog, err := CheckoutAndCompareGitHash(appInterface, serviceRepo, gitHash, currentGitHash, strings.TrimPrefix(serviceFullPath, "/"))
+	promotionGitHash, commitLog, err := CheckoutAndCompareGitHash(serviceRepo, gitHash, currentGitHash, strings.TrimPrefix(serviceFullPath, "/"))
 	if err != nil {
 		return fmt.Errorf("failed to checkout and compare git hash: %v", err)
 	} else if promotionGitHash == "" {
@@ -258,9 +256,10 @@ func GetProductionDir(baseDir string) string {
 }
 
 func getLatestGitHash(basedir, module string) (string, error) {
-	exec := iexec.Exec{}
+
 	moduleFilePath := filepath.Join(basedir, moduleDir, module)
-	output, err := exec.Output("", "git", "rev-list", "-n", "1", "HEAD", "--", moduleFilePath)
+	cmd := exec.Command("git", "rev-list", "-n", "1", "HEAD", "--", moduleFilePath)
+	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get git hash: %v", err)
 	}

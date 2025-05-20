@@ -4,34 +4,30 @@ import (
 	"fmt"
 	"log"
 	"os"
-
+	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"github.com/openshift/osdctl/cmd/promote/iexec"
 )
 
 type DynatraceConfig struct {
 	GitDirectory string
-	GitExecutor  iexec.IExec
 }
 
 func DynatraceConfigPromotion(dynatraceConfigCheckoutDir string) DynatraceConfig {
 	a := DynatraceConfig{}
-	a.GitExecutor = iexec.Exec{}
 	if dynatraceConfigCheckoutDir != "" {
 		a.GitDirectory = dynatraceConfigCheckoutDir
-		err := a.checkDynatraceConfigCheckout()
+		err := checkDynatraceConfigCheckout(a.GitDirectory)
 		if err != nil {
 			log.Fatalf("Provided directory %s is not an dynatrace-config directory: %v", a.GitDirectory, err)
 		}
 		return a
 	}
 
-	dir, err := getBaseDir(a.GitExecutor)
+	dir, err := getBaseDir()
 	if err == nil {
 		a.GitDirectory = dir
-		err = a.checkDynatraceConfigCheckout()
+		err = checkDynatraceConfigCheckout(a.GitDirectory)
 		if err == nil {
 			return a
 		}
@@ -39,7 +35,7 @@ func DynatraceConfigPromotion(dynatraceConfigCheckoutDir string) DynatraceConfig
 
 	log.Printf("Not running in Dynatrace Config directory: %v - Trying %s next\n", err, DefaultDynatraceconfigDir())
 	a.GitDirectory = DefaultDynatraceconfigDir()
-	err = a.checkDynatraceConfigCheckout()
+	err = checkDynatraceConfigCheckout(a.GitDirectory)
 	if err != nil {
 		log.Fatalf("%s is not an Dynatrace Config directory: %v", DefaultDynatraceconfigDir(), err)
 	}
@@ -52,8 +48,10 @@ func DefaultDynatraceconfigDir() string {
 	return filepath.Join(os.Getenv("HOME"), "git", "dynatrace-config")
 }
 
-func (a DynatraceConfig) checkDynatraceConfigCheckout() error {
-	output, err := a.GitExecutor.CombinedOutput(a.GitDirectory, "git", "remote", "-v")
+func checkDynatraceConfigCheckout(directory string) error {
+	cmd := exec.Command("git", "remote", "-v")
+	cmd.Dir = directory
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("error executing 'git remote -v': %v", err)
 	}
@@ -70,17 +68,23 @@ func (a DynatraceConfig) checkDynatraceConfigCheckout() error {
 }
 
 func (a DynatraceConfig) UpdateDynatraceConfig(component, promotionGitHash, branchName string) error {
-	err := a.GitExecutor.Run(a.GitDirectory, "git", "checkout", "main")
+	cmd := exec.Command("git", "checkout", "main")
+	cmd.Dir = a.GitDirectory
+	err := cmd.Run()
 	if err != nil {
 		return fmt.Errorf("failed to checkout master branch: %v", err)
 	}
 
-	err = a.GitExecutor.Run(a.GitDirectory, "git", "branch", "-D", branchName)
+	cmd = exec.Command("git", "branch", "-D", branchName)
+	cmd.Dir = a.GitDirectory
+	err = cmd.Run()
 	if err != nil {
 		fmt.Printf("failed to cleanup branch %s: %v, continuing to create it.\n", branchName, err)
 	}
 
-	err = a.GitExecutor.Run(a.GitDirectory, "git", "checkout", "-b", branchName, "main")
+	cmd = exec.Command("git", "checkout", "-b", branchName, "main")
+	cmd.Dir = a.GitDirectory
+	err = cmd.Run()
 	if err != nil {
 		return fmt.Errorf("failed to create branch %s: %v, does it already exist? If so, please delete it with `git branch -D %s` first", branchName, err, branchName)
 	}
@@ -90,12 +94,16 @@ func (a DynatraceConfig) UpdateDynatraceConfig(component, promotionGitHash, bran
 
 func (a DynatraceConfig) commitFiles(commitMessage string) error {
 	// Commit the change
-	err := a.GitExecutor.Run(a.GitDirectory, "git", "add", ".")
+	cmd := exec.Command("git", "add", ".")
+	cmd.Dir = a.GitDirectory
+	err := cmd.Run()
 	if err != nil {
 		return fmt.Errorf("failed to add file : %v", err)
 	}
 
-	err = a.GitExecutor.Run(a.GitDirectory, "git", "commit", "-m", commitMessage)
+	cmd = exec.Command("git", "commit", "-m", commitMessage)
+	cmd.Dir = a.GitDirectory
+	err = cmd.Run()
 	if err != nil {
 		return fmt.Errorf("failed to commit changes: %v", err)
 	}

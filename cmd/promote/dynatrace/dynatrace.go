@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/openshift/osdctl/cmd/promote/iexec"
 	"github.com/spf13/cobra"
 )
 
@@ -77,7 +76,7 @@ func NewCmdDynatrace() *cobra.Command {
 
 				ops.validateSaasFlow()
 				appInterface := BootstrapOsdCtlForAppInterfaceAndServicePromotions(ops.appInterfaceCheckoutDir)
-				appInterface.GitExecutor = iexec.Exec{}
+
 				if ops.list {
 					if ops.component != "" || ops.gitHash != "" {
 						fmt.Printf("Error: --list cannot be used with any other flags\n\n")

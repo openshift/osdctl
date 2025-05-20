@@ -1,8 +1,6 @@
 package dynatrace_test
 
 import (
-	"path/filepath"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/openshift/osdctl/cmd/promote/dynatrace"
@@ -14,24 +12,20 @@ import (
 
 var _ = Describe("Dynatrace", func() {
 	var testFilePath string
-	var tempDir string
 
 	BeforeEach(func() {
-		var err error
-		tempDir, err = os.MkdirTemp("", "dynatrace-test-")
-		Expect(err).NotTo(HaveOccurred())
-		testFilePath = filepath.Join(tempDir, "test.hcl")
+		testFilePath = "test.hcl"
 		content := `module "example" { source = "old_value" }`
 		_ = os.WriteFile(testFilePath, []byte(content), 0600)
 	})
 
 	AfterEach(func() {
 		_ = os.Remove(testFilePath)
-		_ = os.RemoveAll(tempDir)
 	})
 
 	Describe("Open", func() {
 		BeforeEach(func() {
+			testFilePath = "test.hcl"
 			content := `module "example" { source = "old_value" }`
 			_ = os.WriteFile(testFilePath, []byte(content), 0600)
 		})
@@ -73,19 +67,13 @@ var _ = Describe("Dynatrace", func() {
 	})
 
 	Describe("Save", func() {
-		Describe("Save", func() {
-			It("should save the file successfully", func() {
-				tempDir, err := os.MkdirTemp("", "dynatrace-test-")
-				Expect(err).NotTo(HaveOccurred())
-				savePath := filepath.Join(tempDir, "output.hcl")
-				file := hclwrite.NewEmptyFile()
-				err = dynatrace.Save(savePath, file)
-				Expect(err).To(BeNil())
-				_, err = os.Stat(savePath)
-				Expect(err).NotTo(HaveOccurred())
-				_ = os.Remove(savePath)
-				_ = os.RemoveAll(tempDir)
-			})
+		It("should save the file successfully", func() {
+			file := hclwrite.NewEmptyFile()
+			err := dynatrace.Save("output.hcl", file)
+			Expect(err).To(BeNil())
+			_, err = os.Stat("output.hcl")
+			Expect(err).NotTo(HaveOccurred())
+			_ = os.Remove("output.hcl")
 		})
 
 		It("should return an error if the file cannot be written", func() {
