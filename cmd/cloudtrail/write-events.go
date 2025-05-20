@@ -21,6 +21,8 @@ import (
 var DefaultRegion = "us-east-1"
 
 // LookupEventsOptions struct for holding options for event lookup
+
+// writeEventOption containers, ClusterID, StartTime, URL, Raw, Data, Printall
 type writeEventsOptions struct {
 	ClusterID string
 	StartTime string
@@ -30,6 +32,12 @@ type writeEventsOptions struct {
 }
 
 // RawEventDetails struct represents the structure of an AWS raw event
+
+/*
+Contains of:
+  - Event Version
+  - User Identity -> (which is also a class)
+*/
 type RawEventDetails struct {
 	EventVersion string `json:"eventVersion"`
 	UserIdentity struct {
@@ -55,12 +63,12 @@ func newCmdWriteEvents() *cobra.Command {
 			return ops.run()
 		},
 	}
-	listEventsCmd.Flags().StringVarP(&ops.ClusterID, "cluster-id", "C", "", "Cluster ID")
+	listEventsCmd.Flags().StringVarP(&ops.ClusterID, "id-cluster", "C", "", "Cluster ID")
 	listEventsCmd.Flags().StringVarP(&ops.StartTime, "since", "", "1h", "Specifies that only events that occur within the specified time are returned.Defaults to 1h.Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\".")
 	listEventsCmd.Flags().BoolVarP(&ops.PrintUrl, "url", "u", false, "Generates Url link to cloud console cloudtrail event")
 	listEventsCmd.Flags().BoolVarP(&ops.PrintRaw, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
 	listEventsCmd.Flags().BoolVarP(&ops.PrintAll, "all", "A", false, "Prints all cloudtrail write events without filtering")
-	_ = listEventsCmd.MarkFlagRequired("cluster-id")
+	listEventsCmd.MarkFlagRequired("id-cluster")
 	return listEventsCmd
 }
 
@@ -96,6 +104,7 @@ func isIgnoredEvent(event types.Event, mergedRegex string) (bool, error) {
 	return true, nil
 }
 
+// ErrorChecking all key in the struct
 func (o *writeEventsOptions) run() error {
 
 	err := utils.IsValidClusterKey(o.ClusterID)
