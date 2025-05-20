@@ -16,6 +16,8 @@ import (
 var DefaultRegion = "us-east-1"
 
 // LookupEventsOptions struct for holding options for event lookup
+
+// writeEventOption containers, ClusterID, StartTime, URL, Raw, Data, Printall
 type writeEventsOptions struct {
 	ClusterID   string
 	StartTime   string
