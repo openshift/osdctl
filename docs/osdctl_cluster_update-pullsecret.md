@@ -21,7 +21,7 @@ osdctl cluster update-pullsecret [flags]
   -C, --cluster-id string   The Internal Cluster ID/External Cluster ID/ Cluster Name
   -d, --dry-run             Dry-run - show all changes but do not apply them
   -h, --help                help for update-pullsecret
-      --reason string       The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
+      --reason string       The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)
 ```
 
 ### Options inherited from parent commands
