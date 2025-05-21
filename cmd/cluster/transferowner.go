@@ -701,12 +701,6 @@ func (o *transferOwnerOptions) run() error {
 		}
 	}
 
-	// Rollout the ocmAgent pods
-	err = rolloutPods(targetClientSet, "openshift-ocm-agent-operator", "app=ocm-agent")
-	if err != nil {
-		return fmt.Errorf("failed to roll out OCM Agent pods in namespace 'openshift-ocm-agent-operator' with label selector 'app=ocm-agent': %w", err)
-	}
-
 	err = verifyClusterPullSecret(targetClientSet, string(pullSecret))
 	if err != nil {
 		return fmt.Errorf("error verifying cluster pull secret: %w", err)
@@ -809,6 +803,14 @@ func (o *transferOwnerOptions) run() error {
 			return fmt.Errorf("request failed with status: %d, '%w'", response.Status(), err)
 		}
 		fmt.Print("Re-registered cluster\n")
+	}
+
+	// Rollout the ocmAgent pods for non HCP clusters
+	if !o.hypershift {
+		err = rolloutPods(targetClientSet, "openshift-ocm-agent-operator", "app=ocm-agent")
+		if err != nil {
+			return fmt.Errorf("failed to roll out OCM Agent pods in namespace 'openshift-ocm-agent-operator' with label selector 'app=ocm-agent': %w", err)
+		}
 	}
 
 	err = validateTransfer(ocm, subscription.ClusterID(), newOwnerOrganizationId)
