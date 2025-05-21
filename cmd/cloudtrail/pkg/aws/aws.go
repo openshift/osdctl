@@ -77,7 +77,50 @@ func Whoami(stsClient sts.Client) (accountArn string, accountId string, err erro
 
 // getWriteEvents retrieves cloudtrail events since the specified time
 // using the provided cloudtrail client and starttime from since flag.
-func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool) ([]types.Event, error) {
+func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool, userName string) ([]types.Event, error) {
+
+	alllookupEvents := []types.Event{}
+	input := cloudtrail.LookupEventsInput{
+		StartTime: &startTime,
+		EndTime:   aws.Time(time.Now()),
+	}
+
+	if writeOnly {
+		input.LookupAttributes = []types.LookupAttribute{
+			{AttributeKey: "ReadOnly",
+				AttributeValue: aws.String("false")},
+		}
+	}
+
+	if writeOnly && userName != "" {
+		input.LookupAttributes = []types.LookupAttribute{
+			{AttributeKey: "Username",
+				AttributeValue: aws.String(userName)},
+		}
+		if len(input.LookupAttributes) == 0 {
+			return nil, fmt.Errorf("no events found for user %s", userName)
+		}
+	}
+	paginator := cloudtrail.NewLookupEventsPaginator(cloudtailClient, &input, func(c *cloudtrail.LookupEventsPaginatorOptions) {})
+	for paginator.HasMorePages() {
+
+		lookupOutput, err := paginator.NextPage(context.TODO())
+		if err != nil {
+			return nil, fmt.Errorf("[WARNING] paginator error: \n%w", err)
+		}
+		alllookupEvents = append(alllookupEvents, lookupOutput.Events...)
+
+		input.NextToken = lookupOutput.NextToken
+		if lookupOutput.NextToken == nil {
+			break
+		}
+
+	}
+
+	return alllookupEvents, nil
+}
+
+func GetEventsP(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool) ([]types.Event, error) {
 
 	alllookupEvents := []types.Event{}
 	input := cloudtrail.LookupEventsInput{
