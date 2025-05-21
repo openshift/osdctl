@@ -8,7 +8,7 @@ import (
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 )
 
-const updatePullSecretCmdExample = `
+const updatePullSecCmdExample = `
   # Update Pull Secret's OCM access token data
   osdctl cluster update-pullsecret --cluster-id 1kfmyclusteristhebesteverp8m --reason "Update PullSecret per pd or jira-id"
 `
@@ -19,7 +19,7 @@ func newCmdUpdatePullSecret(streams genericclioptions.IOStreams, globalOpts *glo
 		Use:               "update-pullsecret",
 		Short:             "Update cluster pullsecret with current OCM accessToken data(to be done by Region Lead)",
 		Args:              cobra.NoArgs,
-		Example:           updatePullSecretCmdExample,
+		Example:           updatePullSecCmdExample,
 		DisableAutoGenTag: true,
 		PreRun:            func(cmd *cobra.Command, args []string) { cmdutil.CheckErr(ops.preRun()) },
 		Run: func(cmd *cobra.Command, args []string) {
@@ -29,7 +29,7 @@ func newCmdUpdatePullSecret(streams genericclioptions.IOStreams, globalOpts *glo
 	// can we get cluster-id from some context maybe?
 	updatePullSecretCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "The Internal Cluster ID/External Cluster ID/ Cluster Name")
 	updatePullSecretCmd.Flags().BoolVarP(&ops.dryrun, "dry-run", "d", false, "Dry-run - show all changes but do not apply them")
-	updatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	updatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
 
 	_ = updatePullSecretCmd.MarkFlagRequired("cluster-id")
 	_ = updatePullSecretCmd.MarkFlagRequired("reason")
