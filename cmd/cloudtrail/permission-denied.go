@@ -126,7 +126,11 @@ func (p *permissionDeniedEventsOptions) run() error {
 	fmt.Printf("[INFO] Checking Permission Denied History since %v for AWS Account %v as %v \n", startTime, accountId, arn)
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
+<<<<<<< HEAD
 	lookupOutput, err := GetEvents(cloudTrailclient, startTime, time.Now().UTC(), false)
+=======
+	lookupOutput, err := ctAws.GetEventsP(cloudTrailclient, startTime, false)
+>>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
 	if err != nil {
 		return err
 	}
@@ -156,7 +160,11 @@ func (p *permissionDeniedEventsOptions) run() error {
 			HTTPClient:  cfg.HTTPClient,
 		})
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Permission Denied Event History from %v Region...", defaultConfig.Region)
+<<<<<<< HEAD
 		lookupOutput, err := GetEvents(defaultCloudtrailClient, startTime, time.Now().UTC(), false)
+=======
+		lookupOutput, err := ctAws.GetEventsP(defaultCloudtrailClient, startTime, false)
+>>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
 		if err != nil {
 			return err
 		}

@@ -19,6 +19,7 @@ var DefaultRegion = "us-east-1"
 
 // writeEventOption containers, ClusterID, StartTime, URL, Raw, Data, Printall
 type writeEventsOptions struct {
+<<<<<<< HEAD
 	ClusterID   string
 	StartTime   string
 	EndTime     string
@@ -26,6 +27,15 @@ type writeEventsOptions struct {
 	PrintUrl    bool
 	PrintRaw    bool
 	PrintFormat []string
+=======
+	ClusterID string
+	StartTime string
+	PrintUrl  bool
+	PrintRaw  bool
+	PrintAll  bool
+
+	Username string
+>>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
 }
 
 const (
@@ -65,6 +75,7 @@ func newCmdWriteEvents() *cobra.Command {
 		},
 	}
 	listEventsCmd.Flags().StringVarP(&ops.ClusterID, "cluster-id", "C", "", "Cluster ID")
+<<<<<<< HEAD
 	listEventsCmd.Flags().StringVarP(&ops.StartTime, "after", "", "", "Specifies all events that occur after the specified time. Format \"YY-MM-DD,hh:mm:ss\".")
 	listEventsCmd.Flags().StringVarP(&ops.EndTime, "until", "", "", "Specifies all events that occur before the specified time. Format \"YY-MM-DD,hh:mm:ss\".")
 	listEventsCmd.Flags().StringVarP(&ops.Duration, "since", "", "1h", "Specifies that only events that occur within the specified time are returned. Defaults to 1h. Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\", \"d\", \"w\".")
@@ -75,6 +86,14 @@ func newCmdWriteEvents() *cobra.Command {
 	listEventsCmd.Flags().StringSliceVarP(&fil.Include, "include", "I", nil, "Filter events by inclusion. (i.e. \"-I username=, -I event=, -I resource-name=, -I resource-type=, -I arn=\")")
 	listEventsCmd.Flags().StringSliceVarP(&fil.Exclude, "exclude", "E", nil, "Filter events by exclusion. (i.e. \"-E username=, -E event=, -E resource-name=, -E resource-type=, -E arn=\")")
 
+=======
+	listEventsCmd.Flags().StringVarP(&ops.StartTime, "since", "", "1h", "Specifies that only events that occur within the specified time are returned.Defaults to 1h.Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\".")
+	listEventsCmd.Flags().BoolVarP(&ops.PrintUrl, "url", "u", false, "Generates Url link to cloud console cloudtrail event")
+	listEventsCmd.Flags().BoolVarP(&ops.PrintRaw, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
+	listEventsCmd.Flags().BoolVarP(&ops.PrintAll, "all", "A", false, "Prints all cloudtrail write events without filtering")
+
+	listEventsCmd.Flags().StringVarP(&ops.Username, "username", "U", "", "Filter events by username")
+>>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
 }
@@ -121,6 +140,17 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 		return err
 	}
 
+<<<<<<< HEAD
+=======
+	//Username
+
+	UserName, err := utils.IsValidUserName(o.Username)
+	if err != nil {
+		return err
+	}
+
+	//StartTime
+>>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
 	DefaultRegion := "us-east-1"
 
 	arn, accountId, err := Whoami(*sts.NewFromConfig(cfg))
@@ -128,11 +158,28 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 		return err
 	}
 
+<<<<<<< HEAD
 	fmt.Printf("[INFO] Checking write event history since %v until %v for AWS Account %v as %v \n", startTime, endTime, accountId, arn)
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
 
 	queriedEvents, err := GetEvents(cloudTrailclient, startTime, endTime, true)
+=======
+	// FilterAndPrintEvents fetches events and filters them based on a regex string.
+	// It then prints the filtered events.
+
+	arn, accountId, err := ctAws.Whoami(*sts.NewFromConfig(cfg))
+	if err != nil {
+		return err
+	}
+
+	//CMD Line Prints
+	fmt.Printf("[INFO] Checking write event history since %v for AWS Account %v as %v \n", startTime, accountId, arn)
+	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
+	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
+
+	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, UserName)
+>>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
 	if err != nil {
 		return err
 	}
@@ -164,6 +211,10 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 
 		queriedEvents, err := GetEvents(defaultCloudtrailClient, startTime, endTime, true)
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
+<<<<<<< HEAD
+=======
+		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, UserName)
+>>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
 		if err != nil {
 			return err
 		}
