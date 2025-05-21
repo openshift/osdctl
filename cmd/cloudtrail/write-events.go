@@ -144,9 +144,14 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 =======
 	//Username
 
-	UserName, err := utils.IsValidUserName(o.Username)
-	if err != nil {
-		return err
+	//UserName, err := utils.IsValidUserName(o.Username)
+	//if err != nil {
+	//		return err/
+	//	}
+
+	UserName := o.Username
+	if UserName == "" {
+		fmt.Println("[INFO] No username provided. Fetching all events.")
 	}
 
 	//StartTime
