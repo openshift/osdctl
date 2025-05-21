@@ -512,12 +512,12 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("Could not get subscription id")
 	}
 
-	oldOwnerAccount, err := utils.GetAccount(ocm, o.oldOwnerName) // subscription.GetCreator()
+	oldOwnerAccount, err := utils.GetAccount(ocm, o.oldOwnerName)
 	if !ok {
 		return fmt.Errorf("could not get current owner's account, ask the user to log into http://console.redhat.com/ and try again: %w", err)
 	}
 
-	oldOwnerOrganization, ok := oldOwnerAccount.GetOrganization() // subscription.GetOrganizationID()
+	oldOwnerOrganization, ok := oldOwnerAccount.GetOrganization()
 	if !ok {
 		return fmt.Errorf("current owner has no organization")
 	}
