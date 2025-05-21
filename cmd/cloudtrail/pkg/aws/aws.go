@@ -92,15 +92,19 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnl
 		}
 	}
 
-	if writeOnly && userName != "" {
-		input.LookupAttributes = []types.LookupAttribute{
-			{AttributeKey: "Username",
-				AttributeValue: aws.String(userName)},
+	fmt.Println("")
+	fmt.Printf("testing %v", input.LookupAttributes)
+	/*
+		if userName != "" {
+			input.LookupAttributes = append(input.LookupAttributes, types.LookupAttribute{
+				AttributeKey:   "Username",
+				AttributeValue: aws.String(userName),
+			})
 		}
-		if len(input.LookupAttributes) == 0 {
-			return nil, fmt.Errorf("no events found for user %s", userName)
-		}
-	}
+
+		fmt.Println("")
+		fmt.Printf("testing %v", input.LookupAttributes)
+	*/
 	paginator := cloudtrail.NewLookupEventsPaginator(cloudtailClient, &input, func(c *cloudtrail.LookupEventsPaginatorOptions) {})
 	for paginator.HasMorePages() {
 
@@ -115,6 +119,20 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnl
 			break
 		}
 
+	}
+
+	// If a username is provided, filter the results by username
+	if userName != "" {
+		filteredEvents := []types.Event{}
+		for _, event := range alllookupEvents {
+			if event.Username != nil && *event.Username == userName {
+				filteredEvents = append(filteredEvents, event)
+			}
+		}
+		if len(filteredEvents) == 0 {
+			fmt.Printf("\nNo events found for user %s", userName)
+		}
+		alllookupEvents = filteredEvents
 	}
 
 	return alllookupEvents, nil
