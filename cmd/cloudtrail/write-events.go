@@ -29,6 +29,8 @@ type writeEventsOptions struct {
 	PrintUrl  bool
 	PrintRaw  bool
 	PrintAll  bool
+
+	Username string
 }
 
 // RawEventDetails struct represents the structure of an AWS raw event
@@ -63,12 +65,14 @@ func newCmdWriteEvents() *cobra.Command {
 			return ops.run()
 		},
 	}
-	listEventsCmd.Flags().StringVarP(&ops.ClusterID, "id-cluster", "C", "", "Cluster ID")
+	listEventsCmd.Flags().StringVarP(&ops.ClusterID, "cluster-id", "C", "", "Cluster ID")
 	listEventsCmd.Flags().StringVarP(&ops.StartTime, "since", "", "1h", "Specifies that only events that occur within the specified time are returned.Defaults to 1h.Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\".")
 	listEventsCmd.Flags().BoolVarP(&ops.PrintUrl, "url", "u", false, "Generates Url link to cloud console cloudtrail event")
 	listEventsCmd.Flags().BoolVarP(&ops.PrintRaw, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
 	listEventsCmd.Flags().BoolVarP(&ops.PrintAll, "all", "A", false, "Prints all cloudtrail write events without filtering")
-	listEventsCmd.MarkFlagRequired("id-cluster")
+
+	listEventsCmd.Flags().StringVarP(&ops.Username, "username", "U", "", "Filter events by username")
+	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
 }
 
@@ -142,6 +146,15 @@ func (o *writeEventsOptions) run() error {
 	if err != nil {
 		return err
 	}
+
+	//Username
+
+	UserName, err := utils.IsValidUserName(o.Username)
+	if err != nil {
+		return err
+	}
+
+	//StartTime
 	DefaultRegion := "us-east-1"
 	startTime, err := ctUtil.ParseDurationToUTC(o.StartTime)
 	if err != nil {
@@ -155,10 +168,13 @@ func (o *writeEventsOptions) run() error {
 	if err != nil {
 		return err
 	}
+
+	//CMD Line Prints
 	fmt.Printf("[INFO] Checking write event history since %v for AWS Account %v as %v \n", startTime, accountId, arn)
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
-	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true)
+
+	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, UserName)
 	if err != nil {
 		return err
 	}
@@ -189,7 +205,7 @@ func (o *writeEventsOptions) run() error {
 			HTTPClient:  cfg.HTTPClient,
 		})
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
-		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true)
+		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, UserName)
 		if err != nil {
 			return err
 		}
