@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -66,9 +67,6 @@ var green *color.Color
 const transferOwnerCmdExample = `
   # Transfer ownership
   osdctl cluster transfer-owner --new-owner "new_OCM_userName" --cluster-id 1kfmyclusteristhebesteverp8m --reason "transfer ownership per jira-id"
-
-  # Update pull secret without transfering ownership
-  osdctl cluster transfer-owner --pull-secret-only --cluster-id 1kfmyclusteristhebesteverp8m --reason "update pull secret per jira-id" 
 `
 
 func newCmdTransferOwner(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
@@ -93,10 +91,8 @@ func newCmdTransferOwner(streams genericclioptions.IOStreams, globalOpts *global
 
 	_ = transferOwnerCmd.MarkFlagRequired("cluster-id")
 	_ = transferOwnerCmd.MarkFlagRequired("reason")
-	transferOwnerCmd.MarkFlagsOneRequired("new-owner", "pull-secret-only")
-	// Avoid user errors, typos, etc.. Dont allow 'new-owner' to be provided when rotating 'pull-secret-only'
-	transferOwnerCmd.MarkFlagsMutuallyExclusive("new-owner", "pull-secret-only")
-
+	_ = transferOwnerCmd.Flags().MarkHidden("pull-secret-only")
+	transferOwnerCmd.MarkFlagRequired("new-owner")
 	return transferOwnerCmd
 }
 
@@ -304,30 +300,26 @@ func rolloutTelemeterClientPods(clientset *kubernetes.Clientset, namespace, sele
 }
 
 func comparePullSecretAuths(pullSecret *corev1.Secret, expectedAuths map[string]*amv1.AccessTokenAuth) error {
-	var errString strings.Builder
+	var err error = nil
 	blue.Println("\nComparing pull-secret to expected auth sections...")
 	for akey, auth := range expectedAuths {
 		// Find the matching auth entry for this registry name in the cluster pull_secret data...
 		psTokenAuth, err := getPullSecretTokenAuth(akey, pullSecret)
 		if err != nil {
-			errString.WriteString(fmt.Sprintf("Failed to fetch expected auth['%s'] from cluster pull-secret, err:'%s'.\n", akey, err))
+			err = errors.Join(err, fmt.Errorf("Failed to fetch expected auth['%s'] from cluster pull-secret, err:'%s'.\n", akey, err))
 		}
 		if auth.Auth() != psTokenAuth.Auth() {
-			errString.WriteString(fmt.Sprintf("Expected auth['%s'] does not match authToken found in cluster pull-secret.\n", akey))
+			err = errors.Join(err, fmt.Errorf("Expected auth['%s'] does not match authToken found in cluster pull-secret.\n", akey))
 		} else {
 			green.Printf("Auth '%s' - tokens match\n", akey)
 		}
 		if auth.Email() != psTokenAuth.Email() {
-			errString.WriteString(fmt.Sprintf("Expected auth['%s'] does not match email found in cluster pull-secret.\n", akey))
+			err = errors.Join(err, fmt.Errorf("Expected auth['%s'] does not match email found in cluster pull-secret.\n", akey))
 		} else {
 			green.Printf("Auth '%s' - emails match\n", akey)
 		}
 	}
-	if errString.Len() <= 0 {
-		return nil
-	} else {
-		return fmt.Errorf("%s", errString.String())
-	}
+	return err
 }
 
 func verifyClusterPullSecret(clientset *kubernetes.Clientset, expectedPullSecret string, expectedAuths map[string]*amv1.AccessTokenAuth) error {
@@ -336,8 +328,6 @@ func verifyClusterPullSecret(clientset *kubernetes.Clientset, expectedPullSecret
 	if err != nil {
 		return fmt.Errorf("failed to get pull secret: %w", err)
 	}
-
-	// Print the actual pull secret data
 	pullSecretData, ok := pullSecret.Data[".dockerconfigjson"]
 	if !ok {
 		return fmt.Errorf("pull secret data not found in the secret")
@@ -345,42 +335,45 @@ func verifyClusterPullSecret(clientset *kubernetes.Clientset, expectedPullSecret
 	err = comparePullSecretAuths(pullSecret, expectedAuths)
 	if err != nil {
 		red.Printf("\nFound mis-matching auth values during compare. Please review:\n%s", err)
-		fmt.Printf("Would you like to continue?")
+		fmt.Print("Would you like to continue?")
 		if !utils.ConfirmPrompt() {
 			return fmt.Errorf("operation aborted by the user")
 		}
 	} else {
-		//fmt.Printf("\nComparison shows subset of Auths from OCM AuthToken have matching tokens + emails in cluster pull-secret. PASS\n")
 		green.Println("\nComparison shows subset of Auths from OCM AuthToken have matching tokens + emails in cluster pull-secret. PASS")
 	}
+	// This step was in the original utlity so leaving the option to print data to terminal here,
+	// but making it optional and prompting the user instead.  The new programatic
+	// comparisons per comparePullSecretAuths() may negate the need for a visual inspection in most cases...
+	fmt.Print("(Optional. WARNING: This will print sensitive data to the terminal) Would you like to print pull secret content to screen for additional visual comparison?")
+	if utils.ConfirmPrompt() {
+		// Print the actual pull secret data
+		blue.Println("Actual Cluster Pull Secret:")
+		fmt.Println(string(pullSecretData))
 
-	blue.Println("Actual Cluster Pull Secret:")
-	fmt.Println(string(pullSecretData))
+		// Print the expected pull secret
+		blue.Println("\nExpected Auths from OCM AccessToken expected to be present in Pull Secret (note this can be a subset):")
+		fmt.Println(expectedPullSecret)
 
-	// Print the expected pull secret
-	blue.Println("\nExpected Auths from OCM AccessToken expected to be present in Pull Secret (note this can be a subset):")
-	fmt.Println(expectedPullSecret)
+		// TODO: Consider confirming that the email and token values of the 'subset' of Auths
+		// contained in the OCM AccessToken actually matches email/token values in the cluster's
+		// openshift-config/pull-secret. Provide any descrepencies to the user here before
+		// prompting to visually evaluate.
+		//
+		// Ask the user to confirm if the actual pull secret matches their expectation
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("\nDoes the actual pull secret match your expectation? (yes/no): ")
+		response, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read user input: %w", err)
+		}
+		response = strings.ToLower(strings.TrimSpace(response))
+		if response != "yes" {
+			return fmt.Errorf("operation aborted by the user")
+		}
 
-	// TODO: Consider confirming that the email and token values of the 'subset' of Auths
-	// contained in the OCM AccessToken actually matches email/token values in the cluster's
-	// openshift-config/pull-secret. Provide any descrepencies to the user here before
-	// prompting to visually evaluate.
-	//
-	// Ask the user to confirm if the actual pull secret matches their expectation
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("\nDoes the actual pull secret match your expectation? (yes/no): ")
-	response, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read user input: %w", err)
+		green.Println("Pull secret verification (by user) successful.")
 	}
-
-	response = strings.ToLower(strings.TrimSpace(response))
-	if response != "yes" {
-		return fmt.Errorf("operation aborted by the user")
-	}
-
-	green.Println("Pull secret verification (by user) successful.")
-
 	return nil
 }
 

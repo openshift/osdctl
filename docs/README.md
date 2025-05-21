@@ -68,6 +68,7 @@
     - `post --cluster-id <cluster-identifier>` - Send limited support reason to a given cluster
     - `status --cluster-id <cluster-identifier>` - Shows the support status of a specified cluster
   - `transfer-owner` - Transfer cluster ownership to a new user (to be done by Region Lead)
+  - `update-pullsecret` - Update cluster pullsecret with current OCM accessToken data(to be done by Region Lead)
   - `validate-pull-secret --cluster-id <cluster-identifier>` - Checks if the pull secret email matches the owner email
   - `validate-pull-secret-ext [CLUSTER_ID]` - Extended checks to confirm pull-secret data is synced with current OCM data
 - `cost` - Cost Management related utilities
@@ -1968,7 +1969,33 @@ osdctl cluster transfer-owner [flags]
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
       --new-owner string                 The new owners username to transfer the cluster to
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
-      --pull-secret-only                 Update cluster pull secret from current OCM AccessToken data without ownership transfer
+      --reason string                    The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+```
+
+### osdctl cluster update-pullsecret
+
+Update cluster pullsecret with current OCM accessToken data(to be done by Region Lead)
+
+```
+osdctl cluster update-pullsecret [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+  -C, --cluster-id string                The Internal Cluster ID/External Cluster ID/ Cluster Name
+      --context string                   The name of the kubeconfig context to use
+  -d, --dry-run                          Dry-run - show all changes but do not apply them
+  -h, --help                             help for update-pullsecret
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --reason string                    The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
