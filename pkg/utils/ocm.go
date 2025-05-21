@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/google/uuid"
 	sdk "github.com/openshift-online/ocm-sdk-go"
+	amsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 
 	ocmConfig "github.com/openshift-online/ocm-common/pkg/ocm/config"
@@ -88,22 +89,33 @@ func GetClusters(ocmClient *sdk.Connection, clusterIds []string) []*cmv1.Cluster
 }
 
 func GetOrgfromClusterID(ocmClient *sdk.Connection, cluster cmv1.Cluster) (string, error) {
-	subID, ok := cluster.Subscription().GetID()
-	if !ok {
-		return "", fmt.Errorf("failed getting sub id")
-	}
-
-	resp, err := ocmClient.AccountsMgmt().V1().Subscriptions().List().Search(fmt.Sprintf("id like '%s'", subID)).Size(1).Send()
+	sub, err := GetSubFromClusterID(ocmClient, cluster)
 	if err != nil {
 		return "", err
 	}
 
-	respSlice := resp.Items().Slice()
-	if len(respSlice) > 1 {
-		return "", fmt.Errorf("expected only 1 org to be returned")
+	return sub.OrganizationID(), nil
+}
+
+func GetSubFromClusterID(ocmClient *sdk.Connection, cluster cmv1.Cluster) (*amsv1.Subscription, error) {
+	subID, ok := cluster.Subscription().GetID()
+	if !ok {
+		return nil, fmt.Errorf("failed getting sub id")
 	}
 
-	return respSlice[0].OrganizationID(), nil
+	resp, err := ocmClient.AccountsMgmt().V1().Subscriptions().List().Search(fmt.Sprintf("id like '%s'", subID)).Size(1).Send()
+	if err != nil {
+		return nil, err
+	}
+
+	respSlice := resp.Items().Slice()
+	if len(respSlice) > 1 {
+		return nil, fmt.Errorf("expected only 1 sub to be returned")
+	} else if len(respSlice) == 0 {
+		return nil, fmt.Errorf("subscription not found")
+	}
+
+	return respSlice[0], nil
 }
 
 // ApplyFilters retrieves clusters in OCM which match the filters given

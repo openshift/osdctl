@@ -37,6 +37,7 @@ const (
 	PagerDutyTokenRegistrationUrl = "https://martindstone.github.io/PDOAuth/"                                                              // #nosec G101
 	ClassicSplunkURL              = "https://osdsecuritylogs.splunkcloud.com/en-US/app/search/search?q=search%%20index%%3D%%22%s%%22%%20clusterid%%3D%%22%s%%22\n\n"
 	HCPSplunkURL                  = "https://osdsecuritylogs.splunkcloud.com/en-US/app/search/search?q=search%%20index%%3D%%22%s%%22%%20annotations.managed.openshift.io%%2Fhosted-cluster-id%%3Docm-%s-%s-%s\n\n"
+	SGPSplunkURL                  = "https://osd-ase1.splunkcloud.com/en-US/app/search/search?q=search%%20index%%3D%%22%s%%22%%20annotations.managed.openshift.io%%2Fhosted-cluster-id%%3Docm-%s-%s-%s\n\n"
 	shortOutputConfigValue        = "short"
 	longOutputConfigValue         = "long"
 	jsonOutputConfigValue         = "json"
@@ -61,6 +62,7 @@ type contextOptions struct {
 	awsProfile        string
 	jiratoken         string
 	team_ids          []string
+	regionID          string
 }
 
 type contextData struct {
@@ -71,6 +73,9 @@ type contextData struct {
 
 	// Current OCM environment (e.g., "production" or "stage")
 	OCMEnv string
+
+	// RegionID (used for region-locked clusters)
+	RegionID string
 
 	// Dynatrace Environment URL and Logs URL
 	DyntraceEnvURL  string
@@ -179,13 +184,13 @@ func (o *contextOptions) setup() error {
 		o.oauthtoken = viper.GetString(pagerduty.PagerDutyOauthTokenConfigKey)
 	}
 
-	orgID, err := utils.GetOrgfromClusterID(ocmClient, *o.cluster)
+	sub, err := utils.GetSubFromClusterID(ocmClient, *o.cluster)
 	if err != nil {
-		fmt.Printf("Failed to get Org ID for cluster ID %s - err: %q", o.clusterID, err)
-		o.organizationID = ""
-	} else {
-		o.organizationID = orgID
+		fmt.Printf("Failed to get Subscription for cluster %s - err: %q", o.clusterID, err)
 	}
+
+	o.organizationID = sub.OrganizationID()
+	o.regionID = sub.RhRegionID()
 
 	return nil
 }
@@ -665,15 +670,14 @@ func (o *contextOptions) printOtherLinks(data *contextData, w io.Writer) {
 
 func (o *contextOptions) buildSplunkURL(data *contextData) string {
 	// Determine the relevant Splunk URL
+	// at the time of this writing, the only region we will support in the near future will be the ap-southeast-1
+	// region. Additionally, region-based clusters will ONLY be supported for HCP. Therefore, if we see a region
+	// at all, we can assume that it's ap-southeast-1 and use that URL.
+	if o.regionID != "" {
+		return buildHCPSplunkURL(SGPSplunkURL, data.OCMEnv, o.cluster)
+	}
 	if o.cluster.Hypershift().Enabled() {
-		switch data.OCMEnv {
-		case "production":
-			return fmt.Sprintf(HCPSplunkURL, "openshift_managed_hypershift_audit", "production", o.cluster.ID(), o.cluster.Name())
-		case "stage":
-			return fmt.Sprintf(HCPSplunkURL, "openshift_managed_hypershift_audit_stage", "staging", o.cluster.ID(), o.cluster.Name())
-		default:
-			return ""
-		}
+		return buildHCPSplunkURL(HCPSplunkURL, data.OCMEnv, o.cluster)
 	} else {
 		switch data.OCMEnv {
 		case "production":
@@ -683,6 +687,17 @@ func (o *contextOptions) buildSplunkURL(data *contextData) string {
 		default:
 			return ""
 		}
+	}
+}
+
+func buildHCPSplunkURL(baseURL string, environment string, cluster *cmv1.Cluster) string {
+	switch environment {
+	case "production":
+		return fmt.Sprintf(baseURL, "openshift_managed_hypershift_audit", "production", cluster.ID(), cluster.Name())
+	case "stage":
+		return fmt.Sprintf(baseURL, "openshift_managed_hypershift_audit_stage", "staging", cluster.ID(), cluster.Name())
+	default:
+		return ""
 	}
 }
 
