@@ -34,12 +34,18 @@ type writeEventsOptions struct {
 	PrintRaw  bool
 	PrintAll  bool
 
+<<<<<<< HEAD
 	Username string
 <<<<<<< HEAD
 >>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
 =======
 	Event    string
 >>>>>>> 89db7dc (ADD: Events Filter)
+=======
+	Username  string
+	Event     string
+	ArnSource string
+>>>>>>> 63c835c (ADD: Resource Name and Type to PrintEvents)
 }
 
 const (
@@ -101,7 +107,11 @@ func newCmdWriteEvents() *cobra.Command {
 >>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
 =======
 	listEventsCmd.Flags().StringVarP(&ops.Event, "event", "E", "", "Filter by event name")
+<<<<<<< HEAD
 >>>>>>> 89db7dc (ADD: Events Filter)
+=======
+	listEventsCmd.Flags().StringVarP(&ops.ArnSource, "arn", "a", "", "Filter by arn")
+>>>>>>> 63c835c (ADD: Resource Name and Type to PrintEvents)
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
 }
@@ -183,13 +193,23 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 =======
 	username := o.Username
 	if username == "" {
+<<<<<<< HEAD
 >>>>>>> 89db7dc (ADD: Events Filter)
 		fmt.Println("[INFO] No username provided. Fetching all events.")
+=======
+		fmt.Println("[INFO] No username provided.")
+>>>>>>> 63c835c (ADD: Resource Name and Type to PrintEvents)
 	}
 
 	event := o.Event
 	if event == "" {
-		fmt.Println("[INFO] No event name provided. Fetching all events.")
+		fmt.Println("[INFO] No event name provided.")
+	}
+
+	arnSource := o.ArnSource
+	fmt.Println(arnSource)
+	if arnSource == "" {
+		fmt.Println("[INFO] Arn not provided.")
 	}
 
 	//StartTime
@@ -222,11 +242,15 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, UserName)
 >>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
 =======
 	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, username, event)
 >>>>>>> 89db7dc (ADD: Events Filter)
+=======
+	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, username, event, arnSource)
+>>>>>>> 63c835c (ADD: Resource Name and Type to PrintEvents)
 	if err != nil {
 		return err
 	}
@@ -260,12 +284,16 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, UserName)
 >>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
 =======
 		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, username, event)
 >>>>>>> 89db7dc (ADD: Events Filter)
+=======
+		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, username, event, arnSource)
+>>>>>>> 63c835c (ADD: Resource Name and Type to PrintEvents)
 		if err != nil {
 			return err
 		}
