@@ -30,9 +30,11 @@ type writeEventsOptions struct {
 	PrintRaw  bool
 	PrintAll  bool
 
-	Username  string
-	Event     string
-	ArnSource string
+	Username     string
+	Event        string
+	ResourceName string
+	ResourceType string
+	//ArnSource string
 }
 
 // RawEventDetails struct represents the structure of an AWS raw event
@@ -75,7 +77,9 @@ func newCmdWriteEvents() *cobra.Command {
 
 	listEventsCmd.Flags().StringVarP(&ops.Username, "username", "U", "", "Filter events by username")
 	listEventsCmd.Flags().StringVarP(&ops.Event, "event", "E", "", "Filter by event name")
-	listEventsCmd.Flags().StringVarP(&ops.ArnSource, "arn", "a", "", "Filter by arn")
+	listEventsCmd.Flags().StringVarP(&ops.ResourceName, "resource-name", "", "", "Filter by resource name")
+	listEventsCmd.Flags().StringVarP(&ops.ResourceName, "resource-type", "t", "", "Filter by resource type")
+	//listEventsCmd.Flags().StringVarP(&ops.ArnSource, "arn", "a", "", "Filter by arn")
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
 }
@@ -165,12 +169,22 @@ func (o *writeEventsOptions) run() error {
 		fmt.Println("[INFO] No event name provided.")
 	}
 
-	arnSource := o.ArnSource
-	fmt.Println(arnSource)
-	if arnSource == "" {
-		fmt.Println("[INFO] Arn not provided.")
+	resourceName := o.ResourceName
+	if resourceName == "" {
+		fmt.Println("[INFO] No resource name provided.")
 	}
 
+	resourceType := o.ResourceType
+	if resourceType == "" {
+		fmt.Println("[INFO] No resource type provided.")
+	}
+	/*
+		arnSource := o.ArnSource
+		fmt.Println(arnSource)
+		if arnSource == "" {
+			fmt.Println("[INFO] Arn not provided.")
+		}
+	*/
 	//StartTime
 	DefaultRegion := "us-east-1"
 	startTime, err := ctUtil.ParseDurationToUTC(o.StartTime)
@@ -191,7 +205,7 @@ func (o *writeEventsOptions) run() error {
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
 
-	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, username, event, arnSource)
+	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, username, event, resourceName, resourceType)
 	if err != nil {
 		return err
 	}
@@ -222,7 +236,7 @@ func (o *writeEventsOptions) run() error {
 			HTTPClient:  cfg.HTTPClient,
 		})
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
-		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, username, event, arnSource)
+		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, username, event, resourceName, resourceType)
 		if err != nil {
 			return err
 		}
