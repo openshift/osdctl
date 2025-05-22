@@ -78,7 +78,7 @@ func Whoami(stsClient sts.Client) (accountArn string, accountId string, err erro
 
 // getWriteEvents retrieves cloudtrail events since the specified time
 // using the provided cloudtrail client and starttime from since flag.
-func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool, userName string, event string, arn string) ([]types.Event, error) {
+func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool, userName string, event string, resourceName string, resourceType string) ([]types.Event, error) {
 
 	alllookupEvents := []types.Event{}
 	input := cloudtrail.LookupEventsInput{
@@ -165,18 +165,37 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnl
 		alllookupEvents = filteredEvents
 	}
 
-	if arn != "" {
+	if resourceName != "" {
 		filteredEvents := []types.Event{}
-		for _, events := range alllookupEvents {
-			if events.EventSource != nil && *events.EventSource == arn {
-				filteredEvents = append(filteredEvents, events)
+		for _, event := range alllookupEvents {
+			for _, resource := range event.Resources {
+				if resource.ResourceName != nil && *resource.ResourceName == resourceName {
+					filteredEvents = append(filteredEvents, event)
+					break // Stop checking other resources for this event
+				}
 			}
 		}
+
 		if len(filteredEvents) == 0 {
-			fmt.Printf("\nNo events found for %s", arn)
+			fmt.Printf("\nNo events found for resource name %s\n", resourceName)
 		}
+
 		alllookupEvents = filteredEvents
 	}
+	/*
+		if arn != "" {
+			filteredEvents := []types.Event{}
+			for _, events := range alllookupEvents {
+				if events.EventSource != nil && *events.EventSource == arn {
+					filteredEvents = append(filteredEvents, events)
+				}
+			}
+			if len(filteredEvents) == 0 {
+				fmt.Printf("\nNo events found for %s", arn)
+			}
+			alllookupEvents = filteredEvents
+		}
+	*/
 	/*
 		for _, event := range alllookupEvents {
 			fmt.Printf("EventName: %s, EventSource: %s, Username: %s\n",

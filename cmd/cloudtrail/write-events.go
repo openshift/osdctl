@@ -35,6 +35,7 @@ type writeEventsOptions struct {
 	PrintAll  bool
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 	Username string
 <<<<<<< HEAD
 >>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
@@ -46,6 +47,13 @@ type writeEventsOptions struct {
 	Event     string
 	ArnSource string
 >>>>>>> 63c835c (ADD: Resource Name and Type to PrintEvents)
+=======
+	Username     string
+	Event        string
+	ResourceName string
+	ResourceType string
+	//ArnSource string
+>>>>>>> ed01b0b (ADD: Resource Type Filters)
 }
 
 const (
@@ -108,10 +116,16 @@ func newCmdWriteEvents() *cobra.Command {
 =======
 	listEventsCmd.Flags().StringVarP(&ops.Event, "event", "E", "", "Filter by event name")
 <<<<<<< HEAD
+<<<<<<< HEAD
 >>>>>>> 89db7dc (ADD: Events Filter)
 =======
 	listEventsCmd.Flags().StringVarP(&ops.ArnSource, "arn", "a", "", "Filter by arn")
 >>>>>>> 63c835c (ADD: Resource Name and Type to PrintEvents)
+=======
+	listEventsCmd.Flags().StringVarP(&ops.ResourceName, "resource-name", "", "", "Filter by resource name")
+	listEventsCmd.Flags().StringVarP(&ops.ResourceName, "resource-type", "t", "", "Filter by resource type")
+	//listEventsCmd.Flags().StringVarP(&ops.ArnSource, "arn", "a", "", "Filter by arn")
+>>>>>>> ed01b0b (ADD: Resource Type Filters)
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
 }
@@ -206,12 +220,22 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 		fmt.Println("[INFO] No event name provided.")
 	}
 
-	arnSource := o.ArnSource
-	fmt.Println(arnSource)
-	if arnSource == "" {
-		fmt.Println("[INFO] Arn not provided.")
+	resourceName := o.ResourceName
+	if resourceName == "" {
+		fmt.Println("[INFO] No resource name provided.")
 	}
 
+	resourceType := o.ResourceType
+	if resourceType == "" {
+		fmt.Println("[INFO] No resource type provided.")
+	}
+	/*
+		arnSource := o.ArnSource
+		fmt.Println(arnSource)
+		if arnSource == "" {
+			fmt.Println("[INFO] Arn not provided.")
+		}
+	*/
 	//StartTime
 >>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
 	DefaultRegion := "us-east-1"
@@ -243,6 +267,7 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, UserName)
 >>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
 =======
@@ -251,6 +276,9 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 =======
 	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, username, event, arnSource)
 >>>>>>> 63c835c (ADD: Resource Name and Type to PrintEvents)
+=======
+	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, username, event, resourceName, resourceType)
+>>>>>>> ed01b0b (ADD: Resource Type Filters)
 	if err != nil {
 		return err
 	}
@@ -285,6 +313,7 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, UserName)
 >>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
@@ -294,6 +323,9 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 =======
 		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, username, event, arnSource)
 >>>>>>> 63c835c (ADD: Resource Name and Type to PrintEvents)
+=======
+		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, username, event, resourceName, resourceType)
+>>>>>>> ed01b0b (ADD: Resource Type Filters)
 		if err != nil {
 			return err
 		}
