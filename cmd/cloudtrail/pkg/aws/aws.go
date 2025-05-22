@@ -77,7 +77,7 @@ func Whoami(stsClient sts.Client) (accountArn string, accountId string, err erro
 
 // getWriteEvents retrieves cloudtrail events since the specified time
 // using the provided cloudtrail client and starttime from since flag.
-func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool, userName string, event string) ([]types.Event, error) {
+func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool, userName string, event string, arn string) ([]types.Event, error) {
 
 	alllookupEvents := []types.Event{}
 	input := cloudtrail.LookupEventsInput{
@@ -120,6 +120,22 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnl
 		}
 
 	}
+	/*
+		for _, event := range alllookupEvents {
+			fmt.Printf("EventName: %s, EventSource: %s, Username: %s\n",
+				aws.ToString(event.EventName),
+				aws.ToString(event.EventSource),
+				aws.ToString(event.Username),
+			)
+			fmt.Println("Resources:")
+			for _, resource := range event.Resources {
+				fmt.Printf("  ResourceName: %s, ResourceType: %s\n",
+					aws.ToString(resource.ResourceName),
+					aws.ToString(resource.ResourceType),
+				)
+			}
+		}
+	*/
 
 	// If a username is provided, filter the results by username
 	if userName != "" {
@@ -147,6 +163,34 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnl
 		}
 		alllookupEvents = filteredEvents
 	}
+
+	if arn != "" {
+		filteredEvents := []types.Event{}
+		for _, events := range alllookupEvents {
+			if events.EventSource != nil && *events.EventSource == arn {
+				filteredEvents = append(filteredEvents, events)
+			}
+		}
+		if len(filteredEvents) == 0 {
+			fmt.Printf("\nNo events found for %s", arn)
+		}
+		alllookupEvents = filteredEvents
+	}
+	/*
+		for _, event := range alllookupEvents {
+			fmt.Printf("EventName: %s, EventSource: %s, Username: %s\n",
+				aws.ToString(event.EventName),
+				aws.ToString(event.EventSource),
+				aws.ToString(event.Username),
+			)
+			fmt.Println("Resources:")
+			for _, resource := range event.Resources {
+				fmt.Printf("  ResourceName: %s, ResourceType: %s\n",
+					aws.ToString(resource.ResourceName),
+					aws.ToString(resource.ResourceType),
+				)
+			}
+		}*/
 
 	return alllookupEvents, nil
 }

@@ -30,8 +30,9 @@ type writeEventsOptions struct {
 	PrintRaw  bool
 	PrintAll  bool
 
-	Username string
-	Event    string
+	Username  string
+	Event     string
+	ArnSource string
 }
 
 // RawEventDetails struct represents the structure of an AWS raw event
@@ -74,6 +75,7 @@ func newCmdWriteEvents() *cobra.Command {
 
 	listEventsCmd.Flags().StringVarP(&ops.Username, "username", "U", "", "Filter events by username")
 	listEventsCmd.Flags().StringVarP(&ops.Event, "event", "E", "", "Filter by event name")
+	listEventsCmd.Flags().StringVarP(&ops.ArnSource, "arn", "a", "", "Filter by arn")
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
 }
@@ -155,12 +157,18 @@ func (o *writeEventsOptions) run() error {
 
 	username := o.Username
 	if username == "" {
-		fmt.Println("[INFO] No username provided. Fetching all events.")
+		fmt.Println("[INFO] No username provided.")
 	}
 
 	event := o.Event
 	if event == "" {
-		fmt.Println("[INFO] No event name provided. Fetching all events.")
+		fmt.Println("[INFO] No event name provided.")
+	}
+
+	arnSource := o.ArnSource
+	fmt.Println(arnSource)
+	if arnSource == "" {
+		fmt.Println("[INFO] Arn not provided.")
 	}
 
 	//StartTime
@@ -183,7 +191,7 @@ func (o *writeEventsOptions) run() error {
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
 
-	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, username, event)
+	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, username, event, arnSource)
 	if err != nil {
 		return err
 	}
@@ -214,7 +222,7 @@ func (o *writeEventsOptions) run() error {
 			HTTPClient:  cfg.HTTPClient,
 		})
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
-		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, username, event)
+		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, username, event, arnSource)
 		if err != nil {
 			return err
 		}
