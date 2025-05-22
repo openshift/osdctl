@@ -81,6 +81,9 @@ func newCmdWriteEvents() *cobra.Command {
 
 func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 
+	// Checking for valid cluster
+	// Connection to cluster is successful
+	// Check is cluster is AWS
 	err := utils.IsValidClusterKey(o.ClusterID)
 	if err != nil {
 		return err
