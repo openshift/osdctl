@@ -115,11 +115,9 @@ func (g *GatherLogsOpts) GatherLogs(clusterID string) (error error) {
 			return err
 		}
 
-		if gatherNS != "" {
-			err = g.dumpRestartedPodLogs(pods, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, accessToken)
-			if err != nil {
-				return err
-			}
+		err = g.dumpRestartedPodLogs(pods, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, accessToken)
+		if err != nil {
+			return err
 		}
 
 	}
