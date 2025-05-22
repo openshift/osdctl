@@ -35,6 +35,8 @@ import (
 
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/utils"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 const (
@@ -53,6 +55,7 @@ type transferOwnerOptions struct {
 	dryrun           bool
 	hypershift       bool
 	doPullSecretOnly bool
+	opDescription    string
 	cluster          *cmv1.Cluster
 
 	genericclioptions.IOStreams
@@ -116,6 +119,11 @@ func (o *transferOwnerOptions) preRun() error {
 	red = color.New(color.FgHiRed, color.BgBlack)
 	green = color.New(color.FgHiGreen, color.BgBlack)
 	blue = color.New(color.FgHiBlue, color.BgBlack)
+	if o.doPullSecretOnly {
+		o.opDescription = "update pull-secret"
+	} else {
+		o.opDescription = "transfer ownership"
+	}
 	return nil
 }
 
@@ -138,6 +146,11 @@ func generateServiceLog(params serviceLogParameters, template string) servicelog
 
 func updatePullSecret(conn *sdk.Connection, kubeCli client.Client, clientset *kubernetes.Clientset, clusterID string, pullsecret []byte) error {
 	currentEnv := utils.GetCurrentOCMEnv(conn)
+	if currentEnv == "stage" {
+		// stage hive cluster namespaces are prefixed 'uhc-staging' although the ocm url is currently using 'stage'
+		// This may be better as a loop over all the namespaces looking for a clusterid match instead?
+		currentEnv = "staging"
+	}
 	secretName := "pull"
 	hiveNamespace := "uhc-" + currentEnv + "-" + clusterID
 
@@ -147,7 +160,7 @@ func updatePullSecret(conn *sdk.Connection, kubeCli client.Client, clientset *ku
 	}
 
 	if len(clusterDeployments.Items) == 0 {
-		return fmt.Errorf("failed to retreive cluster deployments")
+		return fmt.Errorf("error, found '0' cluster deployments in hive namespace:'%s'", hiveNamespace)
 	}
 	cdName := clusterDeployments.Items[0].ObjectMeta.Name
 
@@ -342,7 +355,9 @@ func verifyClusterPullSecret(clientset *kubernetes.Clientset, expectedPullSecret
 	// This step was in the original utlity so leaving the option to print data to terminal here,
 	// but making it optional and prompting the user instead.  The new programatic
 	// comparisons per comparePullSecretAuths() may negate the need for a visual inspection in most cases...
-	fmt.Print("(Optional. WARNING: This will print sensitive data to the terminal) Would you like to print pull secret content to screen for additional visual comparison?")
+	red.Print("\nWARNING: This will print sensitive data to the terminal!\n")
+	fmt.Print("Would you like to print pull secret content to screen for additional visual comparison?\n")
+	fmt.Print("Choose 'N' to skip, 'Y' to display secret. ")
 	if utils.ConfirmPrompt() {
 		// Print the actual pull secret data
 		blue.Println("Actual Cluster Pull Secret:")
@@ -370,6 +385,8 @@ func verifyClusterPullSecret(clientset *kubernetes.Clientset, expectedPullSecret
 		}
 
 		green.Println("Pull secret verification (by user) successful.")
+	} else {
+		fmt.Println("(Skipping display)")
 	}
 	return nil
 }
@@ -516,6 +533,8 @@ func (o *transferOwnerOptions) run() error {
 	// Create an OCM client to talk to the cluster API
 	// the user has to be logged in (e.g. 'ocm login')
 	var err error
+	// To avoid warnings/backtrace, if k8s controller-runtime logger is not yet set, do it now...
+	log.SetLogger(zap.New(zap.WriteTo(os.Stderr)))
 	ocm, err := utils.CreateConnection()
 	if err != nil {
 		return fmt.Errorf("failed to create OCM client: %w", err)
@@ -571,7 +590,7 @@ func (o *transferOwnerOptions) run() error {
 
 	// Find and setup all resources that are needed
 	if o.hypershift {
-		fmt.Println("Given cluster is HCP, start to proceed the HCP owner transfer")
+		fmt.Printf("Given cluster is HCP, start to proceed for an HCP '%s' \n", o.opDescription)
 		mgmtCluster, err = utils.GetManagementCluster(o.clusterID)
 		svcCluster, err = utils.GetServiceCluster(o.clusterID)
 		if err != nil {
@@ -579,7 +598,7 @@ func (o *transferOwnerOptions) run() error {
 		}
 		masterCluster = svcCluster
 	} else {
-		fmt.Println("Given cluster is OSD/ROSA classic, start to proceed the classic owner transfer")
+		fmt.Printf("Given cluster is OSD/ROSA classic, start to proceed for a classic '%s'\n", o.opDescription)
 		hiveCluster, err = utils.GetHiveCluster(o.clusterID)
 		if err != nil {
 			return err
@@ -593,10 +612,10 @@ func (o *transferOwnerOptions) run() error {
 	if o.doPullSecretOnly {
 		elevationReasons = append(elevationReasons, "Updating pull secret using osdctl")
 	} else {
-		elevationReasons = append(elevationReasons, fmt.Sprintf("Updating pull secret using osdctl to tranfert owner to %s", o.newOwnerName))
+		elevationReasons = append(elevationReasons, fmt.Sprintf("Updating pull secret using osdctl to tranfer owner to %s", o.newOwnerName))
 	}
 	// Gather all required information
-	fmt.Println("Gathering all required information for the cluster transfer...")
+	fmt.Printf("Gathering all required information for the cluster '%s'...\n", o.opDescription)
 	cluster, err = utils.GetCluster(ocm, o.clusterID)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster information for cluster with ID %s: %w", o.clusterID, err)
@@ -751,6 +770,7 @@ func (o *transferOwnerOptions) run() error {
 
 	// Send internal SL to cluster with additional details in case we
 	// need them later. This prevents leaking PII to customers.
+	fmt.Print("\nPlease review the following'Internal' ServiceLog. (Choose 'Y' to send, or 'N' to skip sending this SL...)\n")
 	if o.doPullSecretOnly {
 		postCmd = servicelog.PostCmdOptions{
 			ClusterId: slParams.ClusterID,
@@ -759,14 +779,12 @@ func (o *transferOwnerOptions) run() error {
 			},
 			InternalOnly: true,
 		}
-		fmt.Println("Internal SL Being Sent")
 		if err := postCmd.Run(); err != nil {
 			fmt.Println("Failed to POST internal service log. Please manually send a service log to persist details of the customer transfer before proceeding:")
 			fmt.Printf("osdctl servicelog post -i -p MESSAGE=\"Pull-secret update. UserName:'%s', OwnerID:'%s'.\" %s \n", slParams.OldOwnerID, slParams.OldOwnerName, slParams.ClusterID)
 		}
 	} else {
 		postCmd = generateInternalServiceLog(slParams)
-		fmt.Println("Internal SL Being Sent")
 		if err := postCmd.Run(); err != nil {
 			fmt.Println("Failed to POST internal service log. Please manually send a service log to persist details of the customer transfer before proceeding:")
 			fmt.Printf("osdctl servicelog post -i -p MESSAGE=\"From user '%s' in Red Hat account %s => user '%s' in Red Hat account %s.\" %s \n", slParams.OldOwnerName, slParams.OldOwnerID, slParams.NewOwnerName, slParams.NewOwnerID, slParams.ClusterID)
@@ -824,32 +842,41 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("failed to marshal pull secret data: %w", err)
 	}
 
-	//Attempt to pretty print the json for easier user initial review...
-	prettySecret, err := json.MarshalIndent(map[string]map[string]map[string]string{
-		"auths": authsMap,
-	}, "", " ")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error Marshalling data for pretty print. Err:'%v'", err)
+	// This step was in the original utlity so leaving the option to print data to terminal here,
+	// but making it optional and prompting the user instead.  The new programatic
+	// comparisons per comparePullSecretAuths() may negate the need for a visual inspection in most cases...
+	red.Print("\nWARNING: This will print sensitive data to the terminal!\n")
+	fmt.Print("Would you like to print pull secret content to screen for visual review?\nDisplay pullsecret data (choose 'N' to skip, 'Y' to display)? ")
+	if utils.ConfirmPrompt() {
+		//Attempt to pretty print the json for easier user initial review...
+		prettySecret, err := json.MarshalIndent(map[string]map[string]map[string]string{
+			"auths": authsMap,
+		}, "", " ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error Marshalling data for pretty print. Err:'%v'", err)
+		} else {
+			blue.Println("Pull Secret data(Indented)...")
+			blue.Printf("\n%s\n", prettySecret)
+		}
+
+		// Print the pull secret in it's actual form for user to confirm (ie no go, json, formatting errors, etc)
+		green.Print("\nPlease review Pull Secret data to be used for update(after formatting):\n")
+		fmt.Println(string(pullSecret))
+
+		// Ask the user if they would like to continue
+		var continueConfirmation string
+		fmt.Print("\nDo you want to continue? (yes/no): ")
+		_, err = fmt.Scanln(&continueConfirmation)
+		if err != nil {
+			return fmt.Errorf("failed to read user input: %w", err)
+		}
+
+		// Check the user's response
+		if continueConfirmation != "yes" {
+			return fmt.Errorf("operation aborted by the user")
+		}
 	} else {
-		blue.Println("Pull Secret data(Indented)...")
-		blue.Printf("\n%s\n", prettySecret)
-	}
-
-	// Print the pull secret in it's actual form for user to confirm (ie no go, json, formatting errors, etc)
-	green.Print("\nPlease review Pull Secret data to be used for update(after formatting):\n")
-	fmt.Println(string(pullSecret))
-
-	// Ask the user if they would like to continue
-	var continueConfirmation string
-	fmt.Print("\nDo you want to continue? (yes/no): ")
-	_, err = fmt.Scanln(&continueConfirmation)
-	if err != nil {
-		return fmt.Errorf("failed to read user input: %w", err)
-	}
-
-	// Check the user's response
-	if continueConfirmation != "yes" {
-		return fmt.Errorf("operation aborted by the user")
+		fmt.Println("(Skipping display)")
 	}
 
 	if o.hypershift {
@@ -858,7 +885,7 @@ func (o *transferOwnerOptions) run() error {
 			return fmt.Errorf("failed to update pull secret for service cluster with ID %s: %w", o.clusterID, err)
 		}
 	} else {
-		err = updatePullSecret(ocm, masterKubeCli, masterKubeClientSet, o.clusterID, pullSecret)
+		err = updatePullSecret(ocm, masterKubeCli, masterKubeClientSet, o.cluster.ID(), pullSecret)
 		if err != nil {
 			return fmt.Errorf("failed to update pull secret for Hive cluster with ID %s: %w", o.clusterID, err)
 		}
@@ -907,8 +934,9 @@ func (o *transferOwnerOptions) run() error {
 
 	// Transfer ownership specific operations...
 
-	fmt.Printf("Transfer cluster: \t\t'%v' (%v)\n", externalClusterID, cluster.Name())
+	fmt.Printf("\nTransfer cluster: \t\t'%v' (%v)\n", externalClusterID, cluster.Name())
 	fmt.Printf("from user \t\t\t'%v' to '%v'\n", oldOwnerAccount.ID(), accountID)
+	fmt.Print("Is the above correct? Proceed with transfer? ")
 	if !utils.ConfirmPrompt() {
 		return nil
 	}
