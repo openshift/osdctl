@@ -31,6 +31,7 @@ type writeEventsOptions struct {
 	PrintAll  bool
 
 	Username string
+	Event    string
 }
 
 // RawEventDetails struct represents the structure of an AWS raw event
@@ -72,6 +73,7 @@ func newCmdWriteEvents() *cobra.Command {
 	listEventsCmd.Flags().BoolVarP(&ops.PrintAll, "all", "A", false, "Prints all cloudtrail write events without filtering")
 
 	listEventsCmd.Flags().StringVarP(&ops.Username, "username", "U", "", "Filter events by username")
+	listEventsCmd.Flags().StringVarP(&ops.Event, "event", "E", "", "Filter by event name")
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
 }
@@ -111,6 +113,9 @@ func isIgnoredEvent(event types.Event, mergedRegex string) (bool, error) {
 // ErrorChecking all key in the struct
 func (o *writeEventsOptions) run() error {
 
+	// Checking for valid cluster
+	// Connection to cluster is successful
+	// Check is cluster is AWS
 	err := utils.IsValidClusterKey(o.ClusterID)
 	if err != nil {
 		return err
@@ -138,6 +143,7 @@ func (o *writeEventsOptions) run() error {
 
 	}
 
+	// Ask Zakaria / Research myself
 	mergedRegex := ctUtil.MergeRegex(Ignore)
 	if o.PrintAll {
 		mergedRegex = ""
@@ -147,16 +153,14 @@ func (o *writeEventsOptions) run() error {
 		return err
 	}
 
-	//Username
-
-	//UserName, err := utils.IsValidUserName(o.Username)
-	//if err != nil {
-	//		return err/
-	//	}
-
-	UserName := o.Username
-	if UserName == "" {
+	username := o.Username
+	if username == "" {
 		fmt.Println("[INFO] No username provided. Fetching all events.")
+	}
+
+	event := o.Event
+	if event == "" {
+		fmt.Println("[INFO] No event name provided. Fetching all events.")
 	}
 
 	//StartTime
@@ -179,7 +183,7 @@ func (o *writeEventsOptions) run() error {
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
 
-	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, UserName)
+	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, username, event)
 	if err != nil {
 		return err
 	}
@@ -210,7 +214,7 @@ func (o *writeEventsOptions) run() error {
 			HTTPClient:  cfg.HTTPClient,
 		})
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
-		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, UserName)
+		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, username, event)
 		if err != nil {
 			return err
 		}
