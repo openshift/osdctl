@@ -123,7 +123,7 @@ func newCmdWriteEvents() *cobra.Command {
 >>>>>>> 63c835c (ADD: Resource Name and Type to PrintEvents)
 =======
 	listEventsCmd.Flags().StringVarP(&ops.ResourceName, "resource-name", "", "", "Filter by resource name")
-	listEventsCmd.Flags().StringVarP(&ops.ResourceName, "resource-type", "t", "", "Filter by resource type")
+	listEventsCmd.Flags().StringVarP(&ops.ResourceType, "resource-type", "t", "", "Filter by resource type")
 	//listEventsCmd.Flags().StringVarP(&ops.ArnSource, "arn", "a", "", "Filter by arn")
 >>>>>>> ed01b0b (ADD: Resource Type Filters)
 	listEventsCmd.MarkFlagRequired("cluster-id")
