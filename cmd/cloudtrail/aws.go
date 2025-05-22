@@ -78,7 +78,7 @@ func Whoami(stsClient sts.Client) (accountArn string, accountId string, err erro
 
 // getWriteEvents retrieves cloudtrail events since the specified time
 // using the provided cloudtrail client and starttime from since flag.
-func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool, userName string) ([]types.Event, error) {
+func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool, userName string, event string) ([]types.Event, error) {
 
 	alllookupEvents := []types.Event{}
 	input := cloudtrail.LookupEventsInput{
@@ -132,6 +132,19 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnl
 		}
 		if len(filteredEvents) == 0 {
 			fmt.Printf("\nNo events found for user %s", userName)
+		}
+		alllookupEvents = filteredEvents
+	}
+
+	if event != "" {
+		filteredEvents := []types.Event{}
+		for _, events := range alllookupEvents {
+			if events.EventName != nil && *events.EventName == event {
+				filteredEvents = append(filteredEvents, events)
+			}
+		}
+		if len(filteredEvents) == 0 {
+			fmt.Printf("\nNo events found for %s", event)
 		}
 		alllookupEvents = filteredEvents
 	}

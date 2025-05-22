@@ -35,7 +35,11 @@ type writeEventsOptions struct {
 	PrintAll  bool
 
 	Username string
+<<<<<<< HEAD
 >>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
+=======
+	Event    string
+>>>>>>> 89db7dc (ADD: Events Filter)
 }
 
 const (
@@ -93,13 +97,20 @@ func newCmdWriteEvents() *cobra.Command {
 	listEventsCmd.Flags().BoolVarP(&ops.PrintAll, "all", "A", false, "Prints all cloudtrail write events without filtering")
 
 	listEventsCmd.Flags().StringVarP(&ops.Username, "username", "U", "", "Filter events by username")
+<<<<<<< HEAD
 >>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
+=======
+	listEventsCmd.Flags().StringVarP(&ops.Event, "event", "E", "", "Filter by event name")
+>>>>>>> 89db7dc (ADD: Events Filter)
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
 }
 
 func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 
+	// Checking for valid cluster
+	// Connection to cluster is successful
+	// Check is cluster is AWS
 	err := utils.IsValidClusterKey(o.ClusterID)
 	if err != nil {
 		return err
@@ -135,11 +146,29 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 		return fmt.Errorf("[ERROR] this command is only available for AWS clusters")
 	}
 
+<<<<<<< HEAD
+=======
+	Ignore, err := envConfig.LoadCloudTrailConfig()
+	if err != nil {
+		return fmt.Errorf("[ERROR] error Loading cloudtrail configuration file: %w", err)
+	}
+	if len(Ignore) == 0 {
+		fmt.Println("\n[WARNING] No filter list detected! If you want intend to apply user filtering for the cloudtrail events, please add cloudtrail_cmd_lists to your osdctl configuration file.")
+
+	}
+
+	// Ask Zakaria / Research myself
+	mergedRegex := ctUtil.MergeRegex(Ignore)
+	if o.PrintAll {
+		mergedRegex = ""
+	}
+>>>>>>> 89db7dc (ADD: Events Filter)
 	cfg, err := osdCloud.CreateAWSV2Config(connection, cluster)
 	if err != nil {
 		return err
 	}
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 =======
 	//Username
@@ -151,7 +180,16 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 
 	UserName := o.Username
 	if UserName == "" {
+=======
+	username := o.Username
+	if username == "" {
+>>>>>>> 89db7dc (ADD: Events Filter)
 		fmt.Println("[INFO] No username provided. Fetching all events.")
+	}
+
+	event := o.Event
+	if event == "" {
+		fmt.Println("[INFO] No event name provided. Fetching all events.")
 	}
 
 	//StartTime
@@ -183,8 +221,12 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
 
+<<<<<<< HEAD
 	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, UserName)
 >>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
+=======
+	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, username, event)
+>>>>>>> 89db7dc (ADD: Events Filter)
 	if err != nil {
 		return err
 	}
@@ -217,9 +259,13 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 		queriedEvents, err := GetEvents(defaultCloudtrailClient, startTime, endTime, true)
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, UserName)
 >>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
+=======
+		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, username, event)
+>>>>>>> 89db7dc (ADD: Events Filter)
 		if err != nil {
 			return err
 		}
