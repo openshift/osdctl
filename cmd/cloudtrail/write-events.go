@@ -73,8 +73,16 @@ func newCmdWriteEvents() *cobra.Command {
 	listEventsCmd.Flags().BoolVarP(&ops.PrintRaw, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
 	listEventsCmd.Flags().StringSliceVarP(&ops.PrintFormat, "print-format", "", nil, "Prints all cloudtrail write events in selected format. Can specify (username, time, event, arn, resource-name, resource-type, arn). i.e --print-format username,time,event")
 
+<<<<<<< HEAD
 	listEventsCmd.Flags().StringSliceVarP(&fil.Include, "include", "I", nil, "Filter events by inclusion. (i.e. \"-I username=, -I event=, -I resource-name=, -I resource-type=, -I arn=\")")
 	listEventsCmd.Flags().StringSliceVarP(&fil.Exclude, "exclude", "E", nil, "Filter events by exclusion. (i.e. \"-E username=, -E event=, -E resource-name=, -E resource-type=, -E arn=\")")
+=======
+	listEventsCmd.Flags().StringVarP(&ops.Username, "username", "U", "", "Filter events by username")
+	listEventsCmd.Flags().StringVarP(&ops.Event, "event", "E", "", "Filter by event name")
+	listEventsCmd.Flags().StringVarP(&ops.ResourceName, "resource-name", "", "", "Filter by resource name")
+	listEventsCmd.Flags().StringVarP(&ops.ResourceType, "resource-type", "t", "", "Filter by resource type")
+	//listEventsCmd.Flags().StringVarP(&ops.ArnSource, "arn", "a", "", "Filter by arn")
+>>>>>>> af20bed (Update: Resource Type and Name)
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
 }
