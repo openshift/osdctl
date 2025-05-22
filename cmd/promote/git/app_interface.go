@@ -165,7 +165,7 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, 
 	} else if strings.Contains(service.Name, "rhobs-rules-and-dashboards") {
 		for _, resourceTemplate := range service.ResourceTemplates {
 			for _, target := range resourceTemplate.Targets {
-				if strings.Contains(service.Name, "production") {
+				if strings.Contains(target.Namespace["$ref"], "production") {
 					currentGitHash = target.Ref
 					break
 				}
