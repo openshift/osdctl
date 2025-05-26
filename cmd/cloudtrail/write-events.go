@@ -56,6 +56,7 @@ type writeEventsOptions struct {
 >>>>>>> ed01b0b (ADD: Resource Type Filters)
 }
 
+<<<<<<< HEAD
 const (
 	cloudtrailWriteEventsExample = `
     # Time range with user and include events where username=(john.doe or system) and event=(CreateBucket or AssumeRole); print custom format
@@ -78,6 +79,23 @@ const (
 	By default, the command filters out system and service account events using patterns 
 	from the osdctl configuration file. `
 )
+=======
+type RawEventDetails struct {
+	EventVersion string `json:"eventVersion"`
+	UserIdentity struct {
+		AccountId      string `json:"accountId"`
+		SessionContext struct {
+			SessionIssuer struct {
+				Type     string `json:"type"`
+				UserName string `json:"userName"`
+				Arn      string `json:"arn"`
+			} `json:"sessionIssuer"`
+		} `json:"sessionContext"`
+	} `json:"userIdentity"`
+	EventRegion string `json:"awsRegion"`
+	EventId     string `json:"eventID"`
+}
+>>>>>>> 2e9126e (REFACTOR: Refactored AWS.go Write-events.go)
 
 func newCmdWriteEvents() *cobra.Command {
 	ops := &writeEventsOptions{}
@@ -194,6 +212,7 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 	//Username
 
@@ -213,22 +232,21 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 =======
 		fmt.Println("[INFO] No username provided.")
 >>>>>>> 63c835c (ADD: Resource Name and Type to PrintEvents)
+=======
+	// Added
+	filters := make(map[string]string)
+	filters["username"] = o.Username
+	filters["event"] = o.Event
+	filters["resourceName"] = o.ResourceName
+	filters["resourceType"] = o.ResourceType
+
+	for k, v := range filters {
+		if v == "" {
+			fmt.Printf("[INFO] No %s provided. \n", k)
+		}
+>>>>>>> 2e9126e (REFACTOR: Refactored AWS.go Write-events.go)
 	}
 
-	event := o.Event
-	if event == "" {
-		fmt.Println("[INFO] No event name provided.")
-	}
-
-	resourceName := o.ResourceName
-	if resourceName == "" {
-		fmt.Println("[INFO] No resource name provided.")
-	}
-
-	resourceType := o.ResourceType
-	if resourceType == "" {
-		fmt.Println("[INFO] No resource type provided.")
-	}
 	/*
 		arnSource := o.ArnSource
 		fmt.Println(arnSource)
@@ -236,6 +254,7 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 			fmt.Println("[INFO] Arn not provided.")
 		}
 	*/
+
 	//StartTime
 >>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
 	DefaultRegion := "us-east-1"
@@ -268,6 +287,7 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, UserName)
 >>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
 =======
@@ -279,6 +299,9 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 =======
 	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, username, event, resourceName, resourceType)
 >>>>>>> ed01b0b (ADD: Resource Type Filters)
+=======
+	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, filters)
+>>>>>>> 2e9126e (REFACTOR: Refactored AWS.go Write-events.go)
 	if err != nil {
 		return err
 	}
@@ -314,6 +337,7 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, UserName)
 >>>>>>> 1cdcb16 (ADD: Username Filter for OSDCTL Write Events)
@@ -326,6 +350,9 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 =======
 		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, username, event, resourceName, resourceType)
 >>>>>>> ed01b0b (ADD: Resource Type Filters)
+=======
+		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, filters)
+>>>>>>> 2e9126e (REFACTOR: Refactored AWS.go Write-events.go)
 		if err != nil {
 			return err
 		}

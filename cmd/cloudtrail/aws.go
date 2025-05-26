@@ -78,7 +78,7 @@ func Whoami(stsClient sts.Client) (accountArn string, accountId string, err erro
 
 // getWriteEvents retrieves cloudtrail events since the specified time
 // using the provided cloudtrail client and starttime from since flag.
-func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool, userName string, event string, resourceName string, resourceType string) ([]types.Event, error) {
+func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool, filters map[string]string) ([]types.Event, error) {
 
 	alllookupEvents := []types.Event{}
 	input := cloudtrail.LookupEventsInput{
@@ -95,17 +95,6 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnl
 
 	fmt.Println("")
 	fmt.Printf("testing %v", input.LookupAttributes)
-	/*
-		if userName != "" {
-			input.LookupAttributes = append(input.LookupAttributes, types.LookupAttribute{
-				AttributeKey:   "Username",
-				AttributeValue: aws.String(userName),
-			})
-		}
-
-		fmt.Println("")
-		fmt.Printf("testing %v", input.LookupAttributes)
-	*/
 	paginator := cloudtrail.NewLookupEventsPaginator(cloudtailClient, &input, func(c *cloudtrail.LookupEventsPaginatorOptions) {})
 	for paginator.HasMorePages() {
 
@@ -121,115 +110,107 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnl
 		}
 
 	}
-	/*
-		for _, event := range alllookupEvents {
-			fmt.Printf("EventName: %s, EventSource: %s, Username: %s\n",
-				aws.ToString(event.EventName),
-				aws.ToString(event.EventSource),
-				aws.ToString(event.Username),
-			)
-			fmt.Println("Resources:")
-			for _, resource := range event.Resources {
-				fmt.Printf("  ResourceName: %s, ResourceType: %s\n",
-					aws.ToString(resource.ResourceName),
-					aws.ToString(resource.ResourceType),
-				)
-			}
-		}
-	*/
 
-	// If a username is provided, filter the results by username
-	if userName != "" {
-		filteredEvents := []types.Event{}
-		for _, event := range alllookupEvents {
-			if event.Username != nil && *event.Username == userName {
-				filteredEvents = append(filteredEvents, event)
-			}
-		}
-		if len(filteredEvents) == 0 {
-			fmt.Printf("\nNo events found for user %s", userName)
-		}
-		alllookupEvents = filteredEvents
-	}
-
-	if event != "" {
-		filteredEvents := []types.Event{}
-		for _, events := range alllookupEvents {
-			if events.EventName != nil && *events.EventName == event {
-				filteredEvents = append(filteredEvents, events)
-			}
-		}
-		if len(filteredEvents) == 0 {
-			fmt.Printf("\nNo events found for %s", event)
-		}
-		alllookupEvents = filteredEvents
-	}
-
-	if resourceName != "" {
-		filteredEvents := []types.Event{}
-		for _, event := range alllookupEvents {
-			for _, resource := range event.Resources {
-				if resource.ResourceName != nil && *resource.ResourceName == resourceName {
-					filteredEvents = append(filteredEvents, event)
-					break // Stop checking other resources for this event
+	for k, v := range filters {
+		if v != "" {
+			filteredEvents := []types.Event{}
+			for _, event := range alllookupEvents {
+				switch k {
+				case "username":
+					if event.Username != nil && *event.Username == v {
+						filteredEvents = append(filteredEvents, event)
+					}
+				case "event":
+					if event.EventName != nil && *event.EventName == v {
+						filteredEvents = append(filteredEvents, event)
+					}
+				case "resourceName":
+					for _, resource := range event.Resources {
+						if resource.ResourceName != nil && *resource.ResourceName == v {
+							filteredEvents = append(filteredEvents, event)
+							break // Stop checking other resources for this event
+						}
+					}
+				case "resourceType":
+					for _, resource := range event.Resources {
+						if resource.ResourceType != nil && *resource.ResourceType == v {
+							filteredEvents = append(filteredEvents, event)
+							break // Stop checking other resources for this event
+						}
+					}
 				}
 			}
+			if len(filteredEvents) == 0 {
+				fmt.Printf("\nNo events found for %s with value: %s", k, v)
+			}
+			alllookupEvents = filteredEvents
 		}
-
-		if len(filteredEvents) == 0 {
-			fmt.Printf("\nNo events found for resource name %s\n", resourceName)
-		}
-
-		alllookupEvents = filteredEvents
 	}
 
-	if resourceType != "" {
-		filteredEvents := []types.Event{}
-		for _, event := range alllookupEvents {
-			for _, resource := range event.Resources {
-				if resource.ResourceType != nil && *resource.ResourceType == resourceType {
+	/*
+		if userName != "" {
+			filteredEvents := []types.Event{}
+			for _, event := range alllookupEvents {
+				if event.Username != nil && *event.Username == userName {
 					filteredEvents = append(filteredEvents, event)
-					break // Stop checking other resources for this event
-
 				}
 			}
+			if len(filteredEvents) == 0 {
+				fmt.Printf("\nNo events found for user %s", userName)
+			}
+			alllookupEvents = filteredEvents
 		}
 
-		if len(filteredEvents) == 0 {
-			fmt.Printf("\nNo events found for resource type %s\n", resourceType)
-		}
-
-		alllookupEvents = filteredEvents
-	}
-	/*
-		if arn != "" {
+		if event != "" {
 			filteredEvents := []types.Event{}
 			for _, events := range alllookupEvents {
-				if events.EventSource != nil && *events.EventSource == arn {
+				if events.EventName != nil && *events.EventName == event {
 					filteredEvents = append(filteredEvents, events)
 				}
 			}
 			if len(filteredEvents) == 0 {
-				fmt.Printf("\nNo events found for %s", arn)
+				fmt.Printf("\nNo events found for %s", event)
 			}
 			alllookupEvents = filteredEvents
 		}
-	*/
-	/*
-		for _, event := range alllookupEvents {
-			fmt.Printf("EventName: %s, EventSource: %s, Username: %s\n",
-				aws.ToString(event.EventName),
-				aws.ToString(event.EventSource),
-				aws.ToString(event.Username),
-			)
-			fmt.Println("Resources:")
-			for _, resource := range event.Resources {
-				fmt.Printf("  ResourceName: %s, ResourceType: %s\n",
-					aws.ToString(resource.ResourceName),
-					aws.ToString(resource.ResourceType),
-				)
+
+		if resourceName != "" {
+			filteredEvents := []types.Event{}
+			for _, event := range alllookupEvents {
+				for _, resource := range event.Resources {
+					if resource.ResourceName != nil && *resource.ResourceName == resourceName {
+						filteredEvents = append(filteredEvents, event)
+						break // Stop checking other resources for this event
+					}
+				}
 			}
-		}*/
+
+			if len(filteredEvents) == 0 {
+				fmt.Printf("\nNo events found for resource name %s\n", resourceName)
+			}
+
+			alllookupEvents = filteredEvents
+		}
+
+		if resourceType != "" {
+			filteredEvents := []types.Event{}
+			for _, event := range alllookupEvents {
+				for _, resource := range event.Resources {
+					if resource.ResourceType != nil && *resource.ResourceType == resourceType {
+						filteredEvents = append(filteredEvents, event)
+						break // Stop checking other resources for this event
+
+					}
+				}
+			}
+
+			if len(filteredEvents) == 0 {
+				fmt.Printf("\nNo events found for resource type %s\n", resourceType)
+			}
+
+			alllookupEvents = filteredEvents
+		}
+	*/
 
 	return alllookupEvents, nil
 }
