@@ -28,6 +28,7 @@ type writeEventsOptions struct {
 	PrintFormat []string
 }
 
+<<<<<<< HEAD
 const (
 	cloudtrailWriteEventsExample = `
     # Time range with user and include events where username=(john.doe or system) and event=(CreateBucket or AssumeRole); print custom format
@@ -50,6 +51,23 @@ const (
 	By default, the command filters out system and service account events using patterns 
 	from the osdctl configuration file. `
 )
+=======
+type RawEventDetails struct {
+	EventVersion string `json:"eventVersion"`
+	UserIdentity struct {
+		AccountId      string `json:"accountId"`
+		SessionContext struct {
+			SessionIssuer struct {
+				Type     string `json:"type"`
+				UserName string `json:"userName"`
+				Arn      string `json:"arn"`
+			} `json:"sessionIssuer"`
+		} `json:"sessionContext"`
+	} `json:"userIdentity"`
+	EventRegion string `json:"awsRegion"`
+	EventId     string `json:"eventID"`
+}
+>>>>>>> 2e9126e (REFACTOR: Refactored AWS.go Write-events.go)
 
 func newCmdWriteEvents() *cobra.Command {
 	ops := &writeEventsOptions{}
@@ -132,6 +150,31 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 		return err
 	}
 
+<<<<<<< HEAD
+=======
+	// Added
+	filters := make(map[string]string)
+	filters["username"] = o.Username
+	filters["event"] = o.Event
+	filters["resourceName"] = o.ResourceName
+	filters["resourceType"] = o.ResourceType
+
+	for k, v := range filters {
+		if v == "" {
+			fmt.Printf("[INFO] No %s provided. \n", k)
+		}
+	}
+
+	/*
+		arnSource := o.ArnSource
+		fmt.Println(arnSource)
+		if arnSource == "" {
+			fmt.Println("[INFO] Arn not provided.")
+		}
+	*/
+
+	//StartTime
+>>>>>>> 2e9126e (REFACTOR: Refactored AWS.go Write-events.go)
 	DefaultRegion := "us-east-1"
 
 	arn, accountId, err := Whoami(*sts.NewFromConfig(cfg))
@@ -143,7 +186,11 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
 
+<<<<<<< HEAD
 	queriedEvents, err := GetEvents(cloudTrailclient, startTime, endTime, true)
+=======
+	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, filters)
+>>>>>>> 2e9126e (REFACTOR: Refactored AWS.go Write-events.go)
 	if err != nil {
 		return err
 	}
@@ -171,9 +218,14 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 			Credentials: cfg.Credentials,
 			HTTPClient:  cfg.HTTPClient,
 		})
+<<<<<<< HEAD
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region... \n", defaultConfig.Region)
 
 		queriedEvents, err := GetEvents(defaultCloudtrailClient, startTime, endTime, true)
+=======
+		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
+		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, filters)
+>>>>>>> 2e9126e (REFACTOR: Refactored AWS.go Write-events.go)
 		if err != nil {
 			return err
 		}
