@@ -34,6 +34,11 @@ type writeEventsOptions struct {
 	Event        string
 	ResourceName string
 	ResourceType string
+
+	ExcludeUsername     string
+	ExcludeEvent        string
+	ExcludeResourceName string
+	ExcludeResourceType string
 	//ArnSource string
 }
 
@@ -68,11 +73,17 @@ func newCmdWriteEvents() *cobra.Command {
 	listEventsCmd.Flags().BoolVarP(&ops.PrintRaw, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
 	listEventsCmd.Flags().BoolVarP(&ops.PrintAll, "all", "A", false, "Prints all cloudtrail write events without filtering")
 
+	// Inclusion Flags
 	listEventsCmd.Flags().StringVarP(&ops.Username, "username", "U", "", "Filter events by username")
 	listEventsCmd.Flags().StringVarP(&ops.Event, "event", "E", "", "Filter by event name")
 	listEventsCmd.Flags().StringVarP(&ops.ResourceName, "resource-name", "", "", "Filter by resource name")
 	listEventsCmd.Flags().StringVarP(&ops.ResourceType, "resource-type", "t", "", "Filter by resource type")
-	//listEventsCmd.Flags().StringVarP(&ops.ArnSource, "arn", "a", "", "Filter by arn")
+
+	// Exclusion Flags
+	listEventsCmd.Flags().StringVar(&ops.ExcludeUsername, "exclude-username", "", "Exclude events by username")
+	listEventsCmd.Flags().StringVar(&ops.ExcludeEvent, "exclude-event", "", "Exclude events by event name")
+	listEventsCmd.Flags().StringVar(&ops.ExcludeResourceName, "exclude-resource-name", "", "Exclude events by resource name")
+	listEventsCmd.Flags().StringVar(&ops.ExcludeResourceType, "exclude-resource-type", "", "Exclude events by resource type") //listEventsCmd.Flags().StringVarP(&ops.ArnSource, "arn", "a", "", "Filter by arn")
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
 }
@@ -158,20 +169,16 @@ func (o *writeEventsOptions) run() error {
 	filters["event"] = o.Event
 	filters["resourceName"] = o.ResourceName
 	filters["resourceType"] = o.ResourceType
+	filters["exclude-username"] = o.ExcludeUsername
+	filters["exclude-event"] = o.ExcludeEvent
+	filters["exclude-resourceName"] = o.ExcludeResourceName
+	filters["exclude-resourceType"] = o.ExcludeResourceType
 
 	for k, v := range filters {
 		if v == "" {
 			fmt.Printf("[INFO] No %s provided. \n", k)
 		}
 	}
-
-	/*
-		arnSource := o.ArnSource
-		fmt.Println(arnSource)
-		if arnSource == "" {
-			fmt.Println("[INFO] Arn not provided.")
-		}
-	*/
 
 	//StartTime
 	DefaultRegion := "us-east-1"
