@@ -28,7 +28,6 @@ type writeEventsOptions struct {
 	PrintFormat []string
 }
 
-<<<<<<< HEAD
 const (
 	cloudtrailWriteEventsExample = `
     # Time range with user and include events where username=(john.doe or system) and event=(CreateBucket or AssumeRole); print custom format
@@ -51,23 +50,6 @@ const (
 	By default, the command filters out system and service account events using patterns 
 	from the osdctl configuration file. `
 )
-=======
-type RawEventDetails struct {
-	EventVersion string `json:"eventVersion"`
-	UserIdentity struct {
-		AccountId      string `json:"accountId"`
-		SessionContext struct {
-			SessionIssuer struct {
-				Type     string `json:"type"`
-				UserName string `json:"userName"`
-				Arn      string `json:"arn"`
-			} `json:"sessionIssuer"`
-		} `json:"sessionContext"`
-	} `json:"userIdentity"`
-	EventRegion string `json:"awsRegion"`
-	EventId     string `json:"eventID"`
-}
->>>>>>> 2e9126e (REFACTOR: Refactored AWS.go Write-events.go)
 
 func newCmdWriteEvents() *cobra.Command {
 	ops := &writeEventsOptions{}
@@ -89,27 +71,16 @@ func newCmdWriteEvents() *cobra.Command {
 
 	listEventsCmd.Flags().BoolVarP(&ops.PrintUrl, "url", "u", false, "Generates Url link to cloud console cloudtrail event")
 	listEventsCmd.Flags().BoolVarP(&ops.PrintRaw, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
-	listEventsCmd.Flags().StringSliceVarP(&ops.PrintFormat, "print-format", "", nil, "Prints all cloudtrail write events in selected format. Can specify (username, time, event, arn, resource-name, resource-type, arn). i.e --print-format username,time,event")
 
-<<<<<<< HEAD
 	listEventsCmd.Flags().StringSliceVarP(&fil.Include, "include", "I", nil, "Filter events by inclusion. (i.e. \"-I username=, -I event=, -I resource-name=, -I resource-type=, -I arn=\")")
 	listEventsCmd.Flags().StringSliceVarP(&fil.Exclude, "exclude", "E", nil, "Filter events by exclusion. (i.e. \"-E username=, -E event=, -E resource-name=, -E resource-type=, -E arn=\")")
-=======
-	listEventsCmd.Flags().StringVarP(&ops.Username, "username", "U", "", "Filter events by username")
-	listEventsCmd.Flags().StringVarP(&ops.Event, "event", "E", "", "Filter by event name")
-	listEventsCmd.Flags().StringVarP(&ops.ResourceName, "resource-name", "", "", "Filter by resource name")
-	listEventsCmd.Flags().StringVarP(&ops.ResourceType, "resource-type", "t", "", "Filter by resource type")
-	//listEventsCmd.Flags().StringVarP(&ops.ArnSource, "arn", "a", "", "Filter by arn")
->>>>>>> af20bed (Update: Resource Type and Name)
+
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
 }
 
 func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 
-	// Checking for valid cluster
-	// Connection to cluster is successful
-	// Check is cluster is AWS
 	err := utils.IsValidClusterKey(o.ClusterID)
 	if err != nil {
 		return err
@@ -150,31 +121,6 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 		return err
 	}
 
-<<<<<<< HEAD
-=======
-	// Added
-	filters := make(map[string]string)
-	filters["username"] = o.Username
-	filters["event"] = o.Event
-	filters["resourceName"] = o.ResourceName
-	filters["resourceType"] = o.ResourceType
-
-	for k, v := range filters {
-		if v == "" {
-			fmt.Printf("[INFO] No %s provided. \n", k)
-		}
-	}
-
-	/*
-		arnSource := o.ArnSource
-		fmt.Println(arnSource)
-		if arnSource == "" {
-			fmt.Println("[INFO] Arn not provided.")
-		}
-	*/
-
-	//StartTime
->>>>>>> 2e9126e (REFACTOR: Refactored AWS.go Write-events.go)
 	DefaultRegion := "us-east-1"
 
 	arn, accountId, err := Whoami(*sts.NewFromConfig(cfg))
@@ -186,11 +132,7 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
 
-<<<<<<< HEAD
 	queriedEvents, err := GetEvents(cloudTrailclient, startTime, endTime, true)
-=======
-	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, filters)
->>>>>>> 2e9126e (REFACTOR: Refactored AWS.go Write-events.go)
 	if err != nil {
 		return err
 	}
@@ -218,14 +160,10 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 			Credentials: cfg.Credentials,
 			HTTPClient:  cfg.HTTPClient,
 		})
-<<<<<<< HEAD
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region... \n", defaultConfig.Region)
 
 		queriedEvents, err := GetEvents(defaultCloudtrailClient, startTime, endTime, true)
-=======
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
-		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, filters)
->>>>>>> 2e9126e (REFACTOR: Refactored AWS.go Write-events.go)
 		if err != nil {
 			return err
 		}
