@@ -109,43 +109,6 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnl
 		}
 
 	}
-
-	for k, v := range filters {
-		if v != "" {
-			filteredEvents := []types.Event{}
-			for _, event := range alllookupEvents {
-				switch k {
-				case "username":
-					if event.Username != nil && *event.Username == v {
-						filteredEvents = append(filteredEvents, event)
-					}
-				case "event":
-					if event.EventName != nil && *event.EventName == v {
-						filteredEvents = append(filteredEvents, event)
-					}
-				case "resourceName":
-					for _, resource := range event.Resources {
-						if resource.ResourceName != nil && *resource.ResourceName == v {
-							filteredEvents = append(filteredEvents, event)
-							break // Stop checking other resources for this event
-						}
-					}
-				case "resourceType":
-					for _, resource := range event.Resources {
-						if resource.ResourceType != nil && *resource.ResourceType == v {
-							filteredEvents = append(filteredEvents, event)
-							break // Stop checking other resources for this event
-						}
-					}
-				}
-			}
-			if len(filteredEvents) == 0 {
-				fmt.Printf("\nNo events found for %s with value: %s", k, v)
-			}
-			alllookupEvents = filteredEvents
-		}
-	}
-
 	/*
 		if userName != "" {
 			filteredEvents := []types.Event{}
@@ -211,7 +174,49 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnl
 		}
 	*/
 
+	alllookupEvents = Filters(filters, alllookupEvents)
+
 	return alllookupEvents, nil
+}
+
+func Filters(filters map[string]string, alllookupEvents []types.Event) (results []types.Event) {
+
+	for k, v := range filters {
+		if v != "" {
+			filteredEvents := []types.Event{}
+			for _, event := range alllookupEvents {
+				switch k {
+				case "username":
+					if event.Username != nil && *event.Username == v {
+						filteredEvents = append(filteredEvents, event)
+					}
+				case "event":
+					if event.EventName != nil && *event.EventName == v {
+						filteredEvents = append(filteredEvents, event)
+					}
+				case "resourceName":
+					for _, resource := range event.Resources {
+						if resource.ResourceName != nil && *resource.ResourceName == v {
+							filteredEvents = append(filteredEvents, event)
+							break // Stop checking other resources for this event
+						}
+					}
+				case "resourceType":
+					for _, resource := range event.Resources {
+						if resource.ResourceType != nil && *resource.ResourceType == v {
+							filteredEvents = append(filteredEvents, event)
+							break // Stop checking other resources for this event
+						}
+					}
+				}
+			}
+			if len(filteredEvents) == 0 {
+				fmt.Printf("\nNo events found for %s with value: %s", k, v)
+			}
+			alllookupEvents = filteredEvents
+		}
+	}
+	return alllookupEvents
 }
 
 func GetEventsP(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool) ([]types.Event, error) {
