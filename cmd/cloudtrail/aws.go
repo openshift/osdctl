@@ -215,6 +215,73 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnl
 	return alllookupEvents, nil
 }
 
+<<<<<<< HEAD:cmd/cloudtrail/aws.go
+=======
+// Applies filters to osdctl cloudtrail
+func Filters(filters map[string]string, alllookupEvents []types.Event) (results []types.Event) {
+
+	for k, v := range filters {
+		if v != "" {
+			filteredEvents := []types.Event{}
+			for _, event := range alllookupEvents {
+				switch k {
+				case "username":
+					if event.Username != nil && *event.Username == v {
+						filteredEvents = append(filteredEvents, event)
+					}
+				case "event":
+					if event.EventName != nil && *event.EventName == v {
+						filteredEvents = append(filteredEvents, event)
+					}
+				case "resourceName":
+					for _, resource := range event.Resources {
+						if resource.ResourceName != nil && *resource.ResourceName == v {
+							filteredEvents = append(filteredEvents, event)
+							break // Stop checking other resources for this event
+						}
+					}
+				case "resourceType":
+					for _, resource := range event.Resources {
+						if resource.ResourceType != nil && *resource.ResourceType == v {
+							filteredEvents = append(filteredEvents, event)
+							break // Stop checking other resources for this event
+						}
+					}
+				case "exclude-username":
+					if event.Username != nil && *event.Username != v {
+						filteredEvents = append(filteredEvents, event)
+					}
+				case "exclude-event":
+					if event.EventName != nil && *event.EventName != v {
+						filteredEvents = append(filteredEvents, event)
+					}
+				case "exclude-resourceName":
+					for _, resource := range event.Resources {
+						if resource.ResourceName != nil && *resource.ResourceName != v {
+							filteredEvents = append(filteredEvents, event)
+							break // Stop checking other resources for this event
+						}
+					}
+				case "exclude-resourceType":
+					for _, resource := range event.Resources {
+						if resource.ResourceType != nil && *resource.ResourceType != v {
+							filteredEvents = append(filteredEvents, event)
+							break // Stop checking other resources for this event
+						}
+					}
+				}
+			}
+			if len(filteredEvents) == 0 {
+				fmt.Printf("\nNo events found for %s with value: %s", k, v)
+				break
+			}
+			alllookupEvents = filteredEvents
+		}
+	}
+	return alllookupEvents
+}
+
+>>>>>>> e31b869 (ADD: Exclusion Filters):cmd/cloudtrail/pkg/aws/aws.go
 func GetEventsP(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool) ([]types.Event, error) {
 
 	alllookupEvents := []types.Event{}
