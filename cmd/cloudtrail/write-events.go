@@ -37,13 +37,6 @@ type writeEventsOptions struct {
 	//ArnSource string
 }
 
-// RawEventDetails struct represents the structure of an AWS raw event
-
-/*
-Contains of:
-  - Event Version
-  - User Identity -> (which is also a class)
-*/
 type RawEventDetails struct {
 	EventVersion string `json:"eventVersion"`
 	UserIdentity struct {
@@ -159,25 +152,19 @@ func (o *writeEventsOptions) run() error {
 		return err
 	}
 
-	username := o.Username
-	if username == "" {
-		fmt.Println("[INFO] No username provided.")
+	// Added
+	filters := make(map[string]string)
+	filters["username"] = o.Username
+	filters["event"] = o.Event
+	filters["resourceName"] = o.ResourceName
+	filters["resourceType"] = o.ResourceType
+
+	for k, v := range filters {
+		if v == "" {
+			fmt.Printf("[INFO] No %s provided. \n", k)
+		}
 	}
 
-	event := o.Event
-	if event == "" {
-		fmt.Println("[INFO] No event name provided.")
-	}
-
-	resourceName := o.ResourceName
-	if resourceName == "" {
-		fmt.Println("[INFO] No resource name provided.")
-	}
-
-	resourceType := o.ResourceType
-	if resourceType == "" {
-		fmt.Println("[INFO] No resource type provided.")
-	}
 	/*
 		arnSource := o.ArnSource
 		fmt.Println(arnSource)
@@ -185,6 +172,7 @@ func (o *writeEventsOptions) run() error {
 			fmt.Println("[INFO] Arn not provided.")
 		}
 	*/
+
 	//StartTime
 	DefaultRegion := "us-east-1"
 	startTime, err := ctUtil.ParseDurationToUTC(o.StartTime)
@@ -205,7 +193,7 @@ func (o *writeEventsOptions) run() error {
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
 
-	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, username, event, resourceName, resourceType)
+	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, filters)
 	if err != nil {
 		return err
 	}
@@ -236,7 +224,7 @@ func (o *writeEventsOptions) run() error {
 			HTTPClient:  cfg.HTTPClient,
 		})
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
-		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, username, event, resourceName, resourceType)
+		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, filters)
 		if err != nil {
 			return err
 		}
