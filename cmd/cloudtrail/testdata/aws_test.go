@@ -1,9 +1,11 @@
-package pkg
+package testdata
 
 import (
 	"os"
 	"strings"
 	"testing"
+
+	cloudtrail "github.com/openshift/osdctl/cmd/cloudtrail"
 )
 
 // Utility to read file content from testdata
@@ -21,7 +23,7 @@ func strPtr(s string) *string {
 }
 
 func TestExtractUserDetails(t *testing.T) {
-	validEventJSON := readFixture(t, "testdata/valid_event.json")
+	validEventJSON := readFixture(t, "valid_event.json")
 
 	tests := []struct {
 		testName    string
@@ -68,7 +70,7 @@ func TestExtractUserDetails(t *testing.T) {
 
 	for _, testCase := range tests {
 		t.Run(testCase.testName, func(t *testing.T) {
-			result, err := ExtractUserDetails(testCase.input)
+			result, err := cloudtrail.ExtractUserDetails(testCase.input)
 
 			if testCase.expectError {
 				if err == nil {
