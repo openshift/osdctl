@@ -77,7 +77,7 @@ func Whoami(stsClient sts.Client) (accountArn string, accountId string, err erro
 
 // getWriteEvents retrieves cloudtrail events since the specified time
 // using the provided cloudtrail client and starttime from since flag.
-func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool, filters map[string]string) ([]types.Event, error) {
+func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool, filters map[string][]string) ([]types.Event, error) {
 
 	alllookupEvents := []types.Event{}
 	input := cloudtrail.LookupEventsInput{
@@ -180,64 +180,93 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnl
 }
 
 // Applies filters to osdctl cloudtrail
-func Filters(filters map[string]string, alllookupEvents []types.Event) (results []types.Event) {
-
-	for k, v := range filters {
-		if v != "" {
+func Filters(filters map[string][]string, alllookupEvents []types.Event) (results []types.Event) {
+	unmatchedFilters := make(map[string][]string)
+	for key, values := range filters {
+		if len(values) > 0 {
 			filteredEvents := []types.Event{}
+			unmatched := make(map[string]bool)
+
+			// Used for tracking if values are matched
+			// If unmatch == true; then no values found
+			for _, v := range values {
+				unmatched[v] = true
+			}
 			for _, event := range alllookupEvents {
-				switch k {
-				case "username":
-					if event.Username != nil && *event.Username == v {
-						filteredEvents = append(filteredEvents, event)
-					}
-				case "event":
-					if event.EventName != nil && *event.EventName == v {
-						filteredEvents = append(filteredEvents, event)
-					}
-				case "resourceName":
-					for _, resource := range event.Resources {
-						if resource.ResourceName != nil && *resource.ResourceName == v {
-							filteredEvents = append(filteredEvents, event)
-							break // Stop checking other resources for this event
+				match := false
+				for _, v := range values {
+					switch key {
+					case "username":
+						if event.Username != nil && *event.Username == v {
+							match = true
+							unmatched[v] = false
 						}
-					}
-				case "resourceType":
-					for _, resource := range event.Resources {
-						if resource.ResourceType != nil && *resource.ResourceType == v {
-							filteredEvents = append(filteredEvents, event)
-							break // Stop checking other resources for this event
+					case "event":
+						if event.EventName != nil && *event.EventName == v {
+							match = true
+							unmatched[v] = false
 						}
-					}
-				case "exclude-username":
-					if event.Username != nil && *event.Username != v {
-						filteredEvents = append(filteredEvents, event)
-					}
-				case "exclude-event":
-					if event.EventName != nil && *event.EventName != v {
-						filteredEvents = append(filteredEvents, event)
-					}
-				case "exclude-resourceName":
-					for _, resource := range event.Resources {
-						if resource.ResourceName != nil && *resource.ResourceName != v {
-							filteredEvents = append(filteredEvents, event)
-							break // Stop checking other resources for this event
+					case "resourceName":
+						for _, resource := range event.Resources {
+							if resource.ResourceName != nil && *resource.ResourceName == v {
+								match = true
+								unmatched[v] = false
+								break // Stop checking other resources for this event
+							}
 						}
-					}
-				case "exclude-resourceType":
-					for _, resource := range event.Resources {
-						if resource.ResourceType != nil && *resource.ResourceType != v {
+					case "resourceType":
+						for _, resource := range event.Resources {
+							if resource.ResourceType != nil && *resource.ResourceType == v {
+								match = true
+								unmatched[v] = false
+								break // Stop checking other resources for this event
+							}
+						}
+					case "exclude-username":
+						if event.Username != nil && *event.Username != v {
 							filteredEvents = append(filteredEvents, event)
-							break // Stop checking other resources for this event
+						}
+					case "exclude-event":
+						if event.EventName != nil && *event.EventName != v {
+							filteredEvents = append(filteredEvents, event)
+						}
+					case "exclude-resourceName":
+						for _, resource := range event.Resources {
+							if resource.ResourceName != nil && *resource.ResourceName != v {
+								filteredEvents = append(filteredEvents, event)
+								break // Stop checking other resources for this event
+							}
+						}
+					case "exclude-resourceType":
+						for _, resource := range event.Resources {
+							if resource.ResourceType != nil && *resource.ResourceType != v {
+								filteredEvents = append(filteredEvents, event)
+								break // Stop checking other resources for this event
+							}
 						}
 					}
 				}
+				if match {
+					filteredEvents = append(filteredEvents, event)
+				}
+			}
+
+			for v, nonMatch := range unmatched {
+				if nonMatch {
+					unmatchedFilters[key] = append(unmatchedFilters[key], v)
+				}
 			}
 			if len(filteredEvents) == 0 {
-				fmt.Printf("\nNo events found for %s with value: %s", k, v)
+				fmt.Printf("\nNo events found for %s with value: %s", key, values)
 				break
 			}
 			alllookupEvents = filteredEvents
+		}
+	}
+
+	for key, values := range unmatchedFilters {
+		for _, value := range values {
+			fmt.Printf("No events found for %s with value: %s\n", key, value)
 		}
 	}
 	return alllookupEvents
