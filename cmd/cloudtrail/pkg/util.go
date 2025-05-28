@@ -68,16 +68,17 @@ func PrintEvents(filterEvents []types.Event, printUrl bool, printRaw bool) {
 			eventStringBuilder.WriteString(fmt.Sprintf(" | ARN: %v", sessionIssuer))
 		}
 
-		if filterEvents[i].Resources != nil {
-			for _, resource := range filterEvents[i].Resources {
-				if resource.ResourceName != nil {
-					eventStringBuilder.WriteString(fmt.Sprintf(" \n	Resource Name: %v,", *resource.ResourceName))
+		/*
+			if filterEvents[i].Resources != nil {
+				for _, resource := range filterEvents[i].Resources {
+					if resource.ResourceName != nil {
+						eventStringBuilder.WriteString(fmt.Sprintf(" \n	Resource Name: %v,", *resource.ResourceName))
+					}
+					if resource.ResourceType != nil {
+						eventStringBuilder.WriteString(fmt.Sprintf(" Resource Type: %v", *resource.ResourceType))
+					}
 				}
-				if resource.ResourceType != nil {
-					eventStringBuilder.WriteString(fmt.Sprintf(" Resource Type: %v", *resource.ResourceType))
-				}
-			}
-		}
+			}*/
 
 		if printUrl && filterEvents[i].CloudTrailEvent != nil {
 			if err == nil {
