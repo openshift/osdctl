@@ -222,25 +222,39 @@ func Filters(filters map[string][]string, alllookupEvents []types.Event) (result
 								break // Stop checking other resources for this event
 							}
 						}
+					case "arn":
+						rawEventDetails, err := ExtractUserDetails(event.CloudTrailEvent)
+						if err != nil {
+							fmt.Printf("[Error] Failed to extract event details: %v\n", err)
+							continue
+						}
+						if rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName == v {
+							match = true
+							unmatched[v] = false // Mark as matched
+						}
 					case "exclude-username":
 						if event.Username != nil && *event.Username != v {
-							filteredEvents = append(filteredEvents, event)
+							match = true
+							unmatched[v] = false
 						}
 					case "exclude-event":
 						if event.EventName != nil && *event.EventName != v {
-							filteredEvents = append(filteredEvents, event)
+							match = true
+							unmatched[v] = false
 						}
 					case "exclude-resourceName":
 						for _, resource := range event.Resources {
 							if resource.ResourceName != nil && *resource.ResourceName != v {
-								filteredEvents = append(filteredEvents, event)
+								match = true
+								unmatched[v] = false
 								break // Stop checking other resources for this event
 							}
 						}
 					case "exclude-resourceType":
 						for _, resource := range event.Resources {
 							if resource.ResourceType != nil && *resource.ResourceType != v {
-								filteredEvents = append(filteredEvents, event)
+								match = true
+								unmatched[v] = false
 								break // Stop checking other resources for this event
 							}
 						}
