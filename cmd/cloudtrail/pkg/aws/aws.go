@@ -14,6 +14,8 @@ import (
 )
 
 // RawEventDetails struct represents the structure of an AWS raw event
+
+// Test
 type RawEventDetails struct {
 	EventVersion string `json:"eventVersion"`
 	UserIdentity struct {
