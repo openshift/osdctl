@@ -38,8 +38,6 @@ func ApplyFilters(records []types.Event, filters ...Filter) ([]types.Event, erro
 	return filteredRecords, nil
 }
 
-// PrintEvents prints the details of each event in the provided slice of events.
-// It takes a slice of types.Event
 func PrintEvents(filterEvents []types.Event, printUrl bool, printRaw bool) {
 	var eventStringBuilder = strings.Builder{}
 
@@ -68,17 +66,16 @@ func PrintEvents(filterEvents []types.Event, printUrl bool, printRaw bool) {
 			eventStringBuilder.WriteString(fmt.Sprintf(" | ARN: %v", sessionIssuer))
 		}
 
-		/*
-			if filterEvents[i].Resources != nil {
-				for _, resource := range filterEvents[i].Resources {
-					if resource.ResourceName != nil {
-						eventStringBuilder.WriteString(fmt.Sprintf(" \n	Resource Name: %v,", *resource.ResourceName))
-					}
-					if resource.ResourceType != nil {
-						eventStringBuilder.WriteString(fmt.Sprintf(" Resource Type: %v", *resource.ResourceType))
-					}
+		if filterEvents[i].Resources != nil {
+			for _, resource := range filterEvents[i].Resources {
+				if resource.ResourceName != nil {
+					eventStringBuilder.WriteString(fmt.Sprintf(" | Resource Name: %v", *resource.ResourceName))
 				}
-			}*/
+				if resource.ResourceType != nil {
+					eventStringBuilder.WriteString(fmt.Sprintf(" Resource Type: %v ", *resource.ResourceType))
+				}
+			}
+		}
 
 		if printUrl && filterEvents[i].CloudTrailEvent != nil {
 			if err == nil {
