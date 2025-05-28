@@ -37,13 +37,15 @@ osdctl cloudtrail write-events [flags]
 
 ```
       --after string           Specifies all events that occur after the specified time. Format "YY-MM-DD,hh:mm:ss".
+      --cache                  Enable/Disable cache file for write-events (default true)
   -C, --cluster-id string      Cluster ID
   -E, --exclude strings        Filter events by exclusion. (i.e. "-E username=, -E event=, -E resource-name=, -E resource-type=, -E arn=")
   -h, --help                   help for write-events
   -I, --include strings        Filter events by inclusion. (i.e. "-I username=, -I event=, -I resource-name=, -I resource-type=, -I arn=")
-      --print-format strings   Prints all cloudtrail write events in selected format. Can specify (username, time, event, arn, resource-name, resource-type, arn). i.e --print-format username,time,event
+  -l, --log-level string       Options: "info", "debug", "warn", "error". (default=info) (default "info")
+      --print-fields strings   Prints all cloudtrail write events in selected format. Can specify (username, time, event, arn, resource-name, resource-type, arn). i.e --print-format username,time,event (default [event,time,username,arn])
   -r, --raw-event              Prints the cloudtrail events to the console in raw json format
-      --since string           Specifies that only events that occur within the specified time are returned. Defaults to 1h. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h", "d", "w". (default "1h")
+      --since string           Specifies that only events that occur within the specified time are returned. Defaults to 1h.Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". (default "1h")
       --until string           Specifies all events that occur before the specified time. Format "YY-MM-DD,hh:mm:ss".
   -u, --url                    Generates Url link to cloud console cloudtrail event
 ```

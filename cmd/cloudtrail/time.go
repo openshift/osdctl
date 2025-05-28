@@ -118,3 +118,104 @@ func ParseTimeAndValidate(timeStr string) (time.Time, error) {
 	}
 	return parsedTime.UTC(), nil
 }
+
+// Period struct is a struct that consist of the Start and End time for the Cache
+type Period struct {
+	StartTime time.Time
+	EndTime   time.Time
+}
+
+// Periods is a slice of Period structs.
+// It implements the sort.Interface so that a slice of Periods can be sorted by StartTime.
+type Periods []Period
+
+// Len returns the number of periods in the slice.
+func (p Periods) Len() int {
+	return len(p)
+}
+
+// Less reports whether the period at index i should sort before the period at index j.
+// Periods are sorted by their StartTime in ascending order.
+func (p Periods) Less(i, j int) bool {
+	return p[i].StartTime.Before(p[j].StartTime)
+}
+
+// Swap swaps the periods at indices i and j.
+func (p Periods) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
+
+// Overlap returns a boolean value under 2 conditions
+// Returns:
+//   - True; if p1 and p2 overlaps
+//   - True; if p1 and p2 is sequential (i.e +/-1s difference)
+//   - False; if there is no overlap between p1 and p2
+func (p1 *Period) Overlap(p2 Period) bool {
+	if !p1.EndTime.Before(p2.StartTime) && !p1.StartTime.After(p2.EndTime) {
+		return true
+	}
+
+	if p1.EndTime.Equal(p2.StartTime) || p1.EndTime.Add(time.Second).Equal(p2.StartTime) {
+		return true
+	}
+
+	if p2.EndTime.Equal(p1.StartTime) || p2.EndTime.Add(time.Second).Equal(p1.StartTime) {
+		return true
+	}
+
+	return false
+}
+
+// Merge checks to see if the period overlaps the new period.
+// If it overlaps it will merge the periods and return a new period.
+// Input parameter has to be sorted before the function is called
+func Merge(allPeriods []Period) []Period {
+	mergedPeriod := []Period{}
+
+	for _, period := range allPeriods {
+		if len(mergedPeriod) == 0 {
+			mergedPeriod = append(mergedPeriod, period)
+			continue
+		}
+		prev := &mergedPeriod[len(mergedPeriod)-1]
+		if prev.Overlap(period) {
+			if period.StartTime.Before(prev.StartTime) {
+				prev.StartTime = period.StartTime
+			}
+			if period.EndTime.After(prev.EndTime) {
+				prev.EndTime = period.EndTime
+			}
+		} else {
+			mergedPeriod = append(mergedPeriod, period)
+		}
+	}
+	return mergedPeriod
+}
+
+// Diff returns the missing time Period if there is an overlap
+// If req.start is before p.start; StartTime: req.StartTime, EndTime: p.StartTime - 1s
+// If req.end is after p.end; StartTime: p.EndTime, EndTime + 1: req.StartTime
+func (p *Period) Diff(req Period, nextPeriod *Period) []Period {
+	var result []Period
+	if !p.Overlap(req) {
+		return []Period{req}
+	}
+	if p.StartTime.Equal(req.StartTime) && p.EndTime.Equal(req.EndTime) {
+		return []Period{}
+	}
+	if req.StartTime.Before(p.StartTime) {
+		result = append(result, Period{StartTime: req.StartTime, EndTime: p.StartTime.Add(-time.Second)})
+	}
+
+	if req.EndTime.After(p.EndTime) {
+		remainingTime := Period{StartTime: p.EndTime.Add(time.Second), EndTime: req.EndTime}
+
+		if nextPeriod != nil && nextPeriod.Overlap(remainingTime) {
+			remainingTime.EndTime = nextPeriod.StartTime.Add(-time.Second)
+		}
+		if !remainingTime.StartTime.After(remainingTime.EndTime) {
+			result = append(result, remainingTime)
+		}
+	}
+	return result
+}

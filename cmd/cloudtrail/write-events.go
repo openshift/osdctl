@@ -1,23 +1,24 @@
 package cloudtrail
 
 import (
-	"context"
 	"fmt"
+	"sort"
 	"strings"
+	"time"
 
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
+	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
+	logrus "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-var DefaultRegion = "us-east-1"
+const DEFAULT_REGION = "us-east-1"
+
+var defaultFields = []string{"event", "time", "username", "arn"}
 
 // LookupEventsOptions struct for holding options for event lookup
-
-// writeEventOption containers, ClusterID, StartTime, URL, Raw, Data, Printall
 type writeEventsOptions struct {
 	ClusterID   string
 	StartTime   string
@@ -25,7 +26,15 @@ type writeEventsOptions struct {
 	Duration    string
 	PrintUrl    bool
 	PrintRaw    bool
-	PrintFormat []string
+	PrintFields []string
+	Cache       bool
+
+	awsAPI   *EventAPI
+	printer  *Printer
+	log      *logrus.Logger
+	logLevel string
+
+	missingPeriod []Period
 }
 
 const (
@@ -60,6 +69,7 @@ func newCmdWriteEvents() *cobra.Command {
 		Long:    cloudtrailWriteEventsDescription,
 		Example: cloudtrailWriteEventsExample,
 		Args:    cobra.NoArgs,
+		PreRunE: func(cmd *cobra.Command, args []string) error { return ops.preRun(*fil) },
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return ops.run(*fil)
 		},
@@ -67,44 +77,155 @@ func newCmdWriteEvents() *cobra.Command {
 	listEventsCmd.Flags().StringVarP(&ops.ClusterID, "cluster-id", "C", "", "Cluster ID")
 	listEventsCmd.Flags().StringVarP(&ops.StartTime, "after", "", "", "Specifies all events that occur after the specified time. Format \"YY-MM-DD,hh:mm:ss\".")
 	listEventsCmd.Flags().StringVarP(&ops.EndTime, "until", "", "", "Specifies all events that occur before the specified time. Format \"YY-MM-DD,hh:mm:ss\".")
-	listEventsCmd.Flags().StringVarP(&ops.Duration, "since", "", "1h", "Specifies that only events that occur within the specified time are returned. Defaults to 1h. Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\", \"d\", \"w\".")
+	listEventsCmd.Flags().StringVarP(&ops.Duration, "since", "", "1h", "Specifies that only events that occur within the specified time are returned. Defaults to 1h.Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\".")
+	listEventsCmd.Flags().StringVarP(&ops.logLevel, "log-level", "l", "info", "Options: \"info\", \"debug\", \"warn\", \"error\". (default=info)")
+	listEventsCmd.Flags().BoolVarP(&ops.Cache, "cache", "", true, "Enable/Disable cache file for write-events")
 
 	listEventsCmd.Flags().BoolVarP(&ops.PrintUrl, "url", "u", false, "Generates Url link to cloud console cloudtrail event")
 	listEventsCmd.Flags().BoolVarP(&ops.PrintRaw, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
+	listEventsCmd.Flags().StringSliceVarP(&ops.PrintFields, "print-fields", "", defaultFields, "Prints all cloudtrail write events in selected format. Can specify (username, time, event, arn, resource-name, resource-type, arn). i.e --print-format username,time,event")
 
 	listEventsCmd.Flags().StringSliceVarP(&fil.Include, "include", "I", nil, "Filter events by inclusion. (i.e. \"-I username=, -I event=, -I resource-name=, -I resource-type=, -I arn=\")")
 	listEventsCmd.Flags().StringSliceVarP(&fil.Exclude, "exclude", "E", nil, "Filter events by exclusion. (i.e. \"-E username=, -E event=, -E resource-name=, -E resource-type=, -E arn=\")")
-
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
 }
 
-func (o *writeEventsOptions) run(filters WriteEventFilters) error {
-
-	err := utils.IsValidClusterKey(o.ClusterID)
+func (o *writeEventsOptions) getPages(filters WriteEventFilters, region string, requestedPeriod Period) error {
+	cache, err := NewCache(o.log, o.ClusterID)
+	if err != nil {
+		return err
+	}
+	err = cache.EnsureFilenameExist()
 	if err != nil {
 		return err
 	}
 
+	err = cache.Read()
+	if err != nil {
+		return err
+	}
+
+	var fullCacheOverlap bool
+
+	if len(o.missingPeriod) == 0 {
+		o.missingPeriod, fullCacheOverlap = requestedPeriod.DiffMultiple(cache.Period)
+	}
+
+	cacheEvents := cache.FilterByPeriod(requestedPeriod)
+	cacheEvents = FilterByRegion(region, cacheEvents)
+
+	sort.Sort(sort.Reverse(Periods(o.missingPeriod)))
+
+	newCacheData := Cache{
+		Period: []Period{},
+		Event:  []types.Event{},
+	}
+
+	for i := 0; i < len(o.missingPeriod); i++ {
+		currentPeriod := o.missingPeriod[i]
+
+		if fullCacheOverlap {
+			o.log.Debugf("Retrieve all events from cache")
+			events := FilterEventsBefore(FilterEventsAfter(
+				cacheEvents, requestedPeriod.StartTime),
+				requestedPeriod.EndTime)
+			o.printer.PrintEvents(Filters(filters, events), o.PrintFields)
+			o.missingPeriod = []Period{}
+			break
+		}
+
+		if i == 0 && !requestedPeriod.EndTime.Equal(currentPeriod.EndTime) {
+			o.log.Debugf("Retrieving 1st Period Event in Cache \n")
+			cachedBefore := FilterEventsBefore(
+				FilterEventsAfter(cacheEvents, currentPeriod.EndTime),
+				requestedPeriod.EndTime,
+			)
+			o.printer.PrintEvents(Filters(filters, cachedBefore), o.PrintFields)
+		}
+
+		var missingEvents []types.Event
+		generator := o.awsAPI.GetEvents(o.ClusterID, currentPeriod)
+		for page := range generator {
+			o.log.Debug("\n Retrieving Pages \n")
+			if page.errors != nil {
+				o.log.Errorf("Error fetching events: %v", page.errors)
+				continue
+			}
+			missingEvents = append(missingEvents, page.AWSEvent...)
+		}
+
+		fetchedEvents := Filters(filters, missingEvents)
+		o.printer.PrintEvents(fetchedEvents, o.PrintFields)
+
+		// if startTimePeriod is out of range, create a period starting
+		// at the requested end time to establish the final boundary.
+		var startTimePeriod time.Time
+		if i < len(o.missingPeriod)-1 {
+			startTimePeriod = o.missingPeriod[i+1].EndTime.Add(time.Second)
+			currentPeriod.StartTime = currentPeriod.StartTime.Add(-time.Second)
+		} else {
+			startTimePeriod = requestedPeriod.StartTime
+		}
+
+		o.log.Debugf("\n Checking Cache %v, %v", startTimePeriod, currentPeriod.StartTime)
+
+		cachedBetween := FilterEventsBefore(FilterEventsAfter(
+			cacheEvents, startTimePeriod),
+			currentPeriod.StartTime,
+		)
+		o.printer.PrintEvents(Filters(filters, cachedBetween), o.PrintFields)
+
+		newCacheData.Period = append(newCacheData.Period, currentPeriod)
+		newCacheData.Event = append(newCacheData.Event, missingEvents...)
+	}
+
+	o.log.Debugf("Saving into Cache")
+	if err := cache.Save(newCacheData); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (o *writeEventsOptions) preRun(filters WriteEventFilters) error {
+	err := utils.IsValidClusterKey(o.ClusterID)
+	if err != nil {
+		return err
+	}
 	if err := ValidateFilters(filters.Include); err != nil {
 		return err
 	}
 	if err := ValidateFilters(filters.Exclude); err != nil {
 		return err
 	}
-
-	if err := ValidateFormat(o.PrintFormat); err != nil {
+	if err := ValidateFormat(o.PrintFields); err != nil {
 		return err
 	}
 
-	startTime, endTime, err := ParseStartEndTime(o.StartTime, o.EndTime, o.Duration)
+	log := logrus.New()
+	level, err := logrus.ParseLevel(o.logLevel)
 	if err != nil {
 		return err
 	}
 
+	log.SetLevel(level)
+	log.ReportCaller = false
+	log.Formatter = new(logrus.TextFormatter)
+	log.Formatter.(*logrus.TextFormatter).ForceColors = true
+	log.Formatter.(*logrus.TextFormatter).PadLevelText = false
+	log.Formatter.(*logrus.TextFormatter).DisableQuote = true
+	o.log = log
+
+	return nil
+
+}
+
+func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 	connection, err := utils.CreateConnection()
 	if err != nil {
-		return fmt.Errorf("unable to create connection to ocm: %w", err)
+		o.log.Error("unable to create connection to ocm: %w", err)
+		return err
 	}
 	defer connection.Close()
 
@@ -113,7 +234,8 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 		return err
 	}
 	if strings.ToUpper(cluster.CloudProvider().ID()) != "AWS" {
-		return fmt.Errorf("[ERROR] this command is only available for AWS clusters")
+		o.log.Error("this command is only available for AWS clusters")
+		return err
 	}
 
 	cfg, err := osdCloud.CreateAWSV2Config(connection, cluster)
@@ -121,56 +243,39 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 		return err
 	}
 
-	DefaultRegion := "us-east-1"
-
 	arn, accountId, err := Whoami(*sts.NewFromConfig(cfg))
 	if err != nil {
 		return err
 	}
-
-	fmt.Printf("[INFO] Checking write event history since %v until %v for AWS Account %v as %v \n", startTime, endTime, accountId, arn)
-	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
-	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
-
-	queriedEvents, err := GetEvents(cloudTrailclient, startTime, endTime, true)
+	startTime, endTime, err := ParseStartEndTime(o.StartTime, o.EndTime, o.Duration)
 	if err != nil {
 		return err
 	}
 
-	filteredEvents := Filters(filters, queriedEvents)
+	o.log.Infof("Checking write event history for AWS Account %v as %v from %v until %v from %v Region...\n", accountId, arn, startTime, endTime, cfg.Region)
 
-	if o.PrintFormat != nil {
-		PrintFormat(filteredEvents, o.PrintUrl, o.PrintRaw, o.PrintFormat)
-	} else {
-		PrintEvents(filteredEvents, o.PrintUrl, o.PrintRaw)
+	o.awsAPI = NewEventAPI(cfg, true, cfg.Region)
+	o.printer = NewPrinter(o.PrintUrl, o.PrintRaw)
+
+	requestedPeriod := Period{StartTime: startTime, EndTime: endTime}
+
+	err = o.getPages(filters, cfg.Region, requestedPeriod)
+	if err != nil {
+		return err
 	}
 
 	fmt.Println("")
+	if DEFAULT_REGION != cfg.Region {
 
-	if DefaultRegion != cfg.Region {
-		defaultConfig, err := config.LoadDefaultConfig(
-			context.Background(),
-			config.WithRegion(DefaultRegion))
+		o.log.Infof("Retrieving from %s...", DEFAULT_REGION)
+		defaultAwsAPI := NewEventAPI(cfg, true, DEFAULT_REGION)
+		o.awsAPI = defaultAwsAPI
+
+		err = o.getPages(filters, DEFAULT_REGION, requestedPeriod)
 		if err != nil {
 			return err
 		}
-
-		defaultCloudtrailClient := cloudtrail.New(cloudtrail.Options{
-			Region:      DefaultRegion,
-			Credentials: cfg.Credentials,
-			HTTPClient:  cfg.HTTPClient,
-		})
-		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region... \n", defaultConfig.Region)
-
-		queriedEvents, err := GetEvents(defaultCloudtrailClient, startTime, endTime, true)
-		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
-		if err != nil {
-			return err
-		}
-		filteredEvents = Filters(filters, queriedEvents)
-
-		PrintEvents(filteredEvents, o.PrintUrl, o.PrintRaw)
 	}
 
-	return err
+	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
+	"github.com/sirupsen/logrus"
 )
 
 // Filter is a function type that takes a CloudTrail event and returns a boolean indicating
@@ -52,13 +53,14 @@ func ApplyFilters(records []types.Event, filters ...Filter) ([]types.Event, erro
 
 // isIgnoredEvent filters out events based on the specified ignore list, which contains
 // regular expression patterns. It returns true if the event should be kept, and false if it should be filtered out.
-func IsIgnoredEvent(event types.Event, mergedRegex string) (bool, error) {
+func IsIgnoredEvent(event types.Event, mergedRegex string, log *logrus.Logger) (bool, error) {
 	if mergedRegex == "" {
 		return true, nil
 	}
 	raw, err := ExtractUserDetails(event.CloudTrailEvent)
 	if err != nil {
-		return true, fmt.Errorf("[ERROR] failed to extract raw CloudTrail event details: %w", err)
+		log.Error("[ERROR] failed to extract raw CloudTrail event details: %w", err)
+		return true, err
 	}
 	userArn := raw.UserIdentity.SessionContext.SessionIssuer.Arn
 	regexObj := regexp.MustCompile(mergedRegex)
@@ -141,7 +143,7 @@ func inclusionFilter(rawData []types.Event, inclusionFilters []string) []types.E
 		"arn": func(data types.Event, values []string) bool {
 			rawEventDetails, err := ExtractUserDetails(data.CloudTrailEvent)
 			if err != nil {
-				fmt.Printf("[Error] Failed to extract event details: %v\n", err)
+				fmt.Printf("failed to extract event details: %v\n", err)
 				return false
 			}
 			val := rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName
@@ -212,7 +214,7 @@ func exclusionFilter(rawData []types.Event, exclusionFilters []string) []types.E
 		"arn": func(data types.Event, values []string) bool {
 			rawEventDetails, err := ExtractUserDetails(data.CloudTrailEvent)
 			if err != nil {
-				fmt.Printf("[Error] Failed to extract event details: %v\n", err)
+				fmt.Printf("failed to extract event details: %v\n", err)
 				return false
 			}
 			val := rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName

@@ -1,32 +1,17 @@
 package cloudtrail
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 )
-
-/*
-	Whenever cloud tail command it used.
-
-	opts := store address of the struct
-	permissionDeniedCmd := runs every variable in the string array of *cobra.Command
-		if there are error will return error message
-		else:
-			return permissionDeniedCmd which is the result.
-
-	func isforbiddentevent used for non-priviledged/not useable commands/request
-*/
 
 type permissionDeniedEventsOptions struct {
 	ClusterID string
@@ -36,26 +21,15 @@ type permissionDeniedEventsOptions struct {
 }
 
 func newCmdPermissionDenied() *cobra.Command {
-	opts := &permissionDeniedEventsOptions{} //Stores address of struct into opts
+	opts := &permissionDeniedEventsOptions{}
 
 	permissionDeniedCmd := &cobra.Command{
 		Use:   "permission-denied-events",
 		Short: "Prints cloudtrail permission-denied events to console.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			//runs run() for errorchecking
 			return opts.run()
 		},
 	}
-
-	/*
-		Assign the flags
-		StringvarP accepts Shorthand letter for single -
-		 	pointer:*string, name:string, shorthand:string, value:string, usage:string
-		BoolVarP -> essentially the same thing
-		 	pointer:*string, name:string, shorthand:string, value:bool, usage:string
-
-		Default values are shown below if no modifications
-	*/
 	permissionDeniedCmd.Flags().StringVarP(&opts.ClusterID, "cluster-id", "C", "", "Cluster ID")
 	permissionDeniedCmd.Flags().StringVarP(&opts.StartTime, "since", "", "5m", "Specifies that only events that occur within the specified time are returned.Defaults to 5m. Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\".")
 	permissionDeniedCmd.Flags().BoolVarP(&opts.PrintUrl, "url", "u", false, "Generates Url link to cloud console cloudtrail event")
@@ -65,7 +39,6 @@ func newCmdPermissionDenied() *cobra.Command {
 }
 
 func isforbiddenEvent(event types.Event) (bool, error) {
-	// Checks if there exist a Client.UnauthorizedOperation and return error if true
 	permissionDeniedErrorRegexp := ".*Client.UnauthorizedOperation.*"
 
 	check, err := regexp.Compile(permissionDeniedErrorRegexp)
@@ -85,20 +58,17 @@ func isforbiddenEvent(event types.Event) (bool, error) {
 }
 func (p *permissionDeniedEventsOptions) run() error {
 
-	// check for valid cluster key
 	err := utils.IsValidClusterKey(p.ClusterID)
 	if err != nil {
 		return err
 	}
 
-	// check connection
 	connection, err := utils.CreateConnection()
 	if err != nil {
 		return fmt.Errorf("unable to create connection to ocm: %w", err)
 	}
 	defer connection.Close()
 
-	// See status of cluster
 	cluster, err := utils.GetClusterAnyStatus(connection, p.ClusterID)
 	if err != nil {
 		return err
@@ -108,7 +78,6 @@ func (p *permissionDeniedEventsOptions) run() error {
 		return fmt.Errorf("[ERROR] this command is only available for AWS clusters")
 	}
 
-	//cfg?
 	cfg, err := osdCloud.CreateAWSV2Config(connection, cluster)
 	if err != nil {
 		return err
@@ -123,44 +92,17 @@ func (p *permissionDeniedEventsOptions) run() error {
 	if err != nil {
 		return err
 	}
+
+	awsAPI := NewEventAPI(cfg, false, cfg.Region)
+	printer := NewPrinter(p.PrintUrl, p.PrintRaw)
+	requestTime := Period{StartTime: startTime, EndTime: time.Now().UTC()}
+	generator := awsAPI.GetEvents(p.ClusterID, requestTime)
+
 	fmt.Printf("[INFO] Checking Permission Denied History since %v for AWS Account %v as %v \n", startTime, accountId, arn)
-	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
-	lookupOutput, err := GetEvents(cloudTrailclient, startTime, time.Now().UTC(), false)
-	if err != nil {
-		return err
-	}
 
-	filteredEvents, err := ApplyFilters(lookupOutput,
-		func(event types.Event) (bool, error) {
-			return isforbiddenEvent(event)
-		},
-	)
-	if err != nil {
-		return err
-	}
-
-	PrintEvents(filteredEvents, p.PrintUrl, p.PrintRaw)
-
-	if DefaultRegion != cfg.Region {
-		defaultConfig, err := config.LoadDefaultConfig(
-			context.Background(),
-			config.WithRegion(DefaultRegion))
-		if err != nil {
-			return err
-		}
-		// ???
-		defaultCloudtrailClient := cloudtrail.New(cloudtrail.Options{
-			Region:      DefaultRegion,
-			Credentials: cfg.Credentials,
-			HTTPClient:  cfg.HTTPClient,
-		})
-		fmt.Printf("[INFO] Fetching Cloudtrail Global Permission Denied Event History from %v Region...", defaultConfig.Region)
-		lookupOutput, err := GetEvents(defaultCloudtrailClient, startTime, time.Now().UTC(), false)
-		if err != nil {
-			return err
-		}
-		filteredEvents, err := ApplyFilters(lookupOutput,
+	for page := range generator {
+		filteredEvents, err := ApplyFilters(page.AWSEvent,
 			func(event types.Event) (bool, error) {
 				return isforbiddenEvent(event)
 			},
@@ -168,7 +110,30 @@ func (p *permissionDeniedEventsOptions) run() error {
 		if err != nil {
 			return err
 		}
-		PrintEvents(filteredEvents, p.PrintUrl, p.PrintRaw)
+		if len(filteredEvents) > 0 {
+			printer.PrintEvents(filteredEvents, defaultFields)
+		}
+	}
+
+	if DEFAULT_REGION != cfg.Region {
+		defaultAwsAPI := NewEventAPI(cfg, true, DEFAULT_REGION)
+
+		fmt.Printf("[INFO] Fetching Cloudtrail Global Permission Denied Event History from %v Region...", DEFAULT_REGION)
+		generator := defaultAwsAPI.GetEvents(p.ClusterID, requestTime)
+
+		for page := range generator {
+			filteredEvents, err := ApplyFilters(page.AWSEvent,
+				func(event types.Event) (bool, error) {
+					return isforbiddenEvent(event)
+				},
+			)
+			if err != nil {
+				return err
+			}
+			if len(filteredEvents) > 0 {
+				printer.PrintEvents(filteredEvents, defaultFields)
+			}
+		}
 	}
 
 	return err
