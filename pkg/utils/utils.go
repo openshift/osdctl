@@ -35,10 +35,6 @@ func IsValidKey(clusterKey string) bool {
 	return clusterKeyRE.MatchString(clusterKey)
 }
 
-func IsValidUser(UserName string) bool {
-	return clusterKeyRE.MatchString(UserName)
-}
-
 func IsValidClusterKey(clusterKey string) (err error) {
 	if !IsValidKey(clusterKey) {
 		return fmt.Errorf(
@@ -48,17 +44,6 @@ func IsValidClusterKey(clusterKey string) (err error) {
 		)
 	}
 	return nil
-}
-
-func IsValidUserName(UserName string) (username string, err error) {
-	if !IsValidUser(UserName) {
-		return "", fmt.Errorf(
-			"User name, username or external username '%s' isn't valid: it "+
-				"must contain only letters, digits, dashes and underscores",
-			UserName,
-		)
-	}
-	return UserName, nil
 }
 
 func GetCurrentOCMEnv(connection *sdk.Connection) string {
