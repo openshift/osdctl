@@ -136,6 +136,12 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("Converted Filters:")
+	for key, value := range convertedFilters {
+		fmt.Printf("Key: %s, Value: %s\n", key, value)
+	}
+
+	queriedEvents, _ := ctAws.GetEvents(cloudTrailclient, startTime, true, convertedFilters)
 
 	filteredEvents := Filters(filters, queriedEvents)
 
