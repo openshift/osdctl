@@ -252,6 +252,7 @@ func (o *writeEventsOptions) run() error {
 
 		lookupOutput, _ := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, filters)
 
+		fmt.Println("Test")
 		filteredEvents, err := ctUtil.ApplyFilters(lookupOutput,
 			func(event types.Event) (bool, error) {
 				return isIgnoredEvent(event, mergedRegex)
