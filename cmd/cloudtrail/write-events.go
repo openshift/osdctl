@@ -19,7 +19,6 @@ var DefaultRegion = "us-east-1"
 
 // writeEventOption containers, ClusterID, StartTime, URL, Raw, Data, Printall
 type writeEventsOptions struct {
-<<<<<<< HEAD
 	ClusterID   string
 	StartTime   string
 	EndTime     string
@@ -27,24 +26,6 @@ type writeEventsOptions struct {
 	PrintUrl    bool
 	PrintRaw    bool
 	PrintFormat []string
-=======
-	ClusterID string
-	StartTime string
-	PrintUrl  bool
-	PrintRaw  bool
-	PrintAll  bool
-
-	Username     []string
-	Event        []string
-	ResourceName []string
-	ResourceType []string
-
-	ExcludeUsername     []string
-	ExcludeEvent        []string
-	ExcludeResourceName []string
-	ExcludeResourceType []string
-	ArnSource           []string
->>>>>>> dc30e1c (ADD: Filters with ARN)
 }
 
 const (
@@ -91,17 +72,8 @@ func newCmdWriteEvents() *cobra.Command {
 	listEventsCmd.Flags().BoolVarP(&ops.PrintUrl, "url", "u", false, "Generates Url link to cloud console cloudtrail event")
 	listEventsCmd.Flags().BoolVarP(&ops.PrintRaw, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
 
-<<<<<<< HEAD
 	listEventsCmd.Flags().StringSliceVarP(&fil.Include, "include", "I", nil, "Filter events by inclusion. (i.e. \"-I username=, -I event=, -I resource-name=, -I resource-type=, -I arn=\")")
 	listEventsCmd.Flags().StringSliceVarP(&fil.Exclude, "exclude", "E", nil, "Filter events by exclusion. (i.e. \"-E username=, -E event=, -E resource-name=, -E resource-type=, -E arn=\")")
-=======
-	// Inclusion Flags
-	listEventsCmd.Flags().StringSliceVarP(&ops.Username, "username", "U", nil, "Filter events by username")
-	listEventsCmd.Flags().StringSliceVarP(&ops.Event, "event", "E", nil, "Filter by event name")
-	listEventsCmd.Flags().StringSliceVarP(&ops.ResourceName, "resource-name", "", nil, "Filter by resource name")
-	listEventsCmd.Flags().StringSliceVarP(&ops.ResourceType, "resource-type", "t", nil, "Filter by resource type")
-	listEventsCmd.Flags().StringSliceVarP(&ops.ArnSource, "arn-source", "", nil, "Filter by arn")
->>>>>>> dc30e1c (ADD: Filters with ARN)
 
 	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
@@ -149,10 +121,6 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 		return err
 	}
 
-<<<<<<< HEAD
-=======
-	//StartTime
->>>>>>> dc30e1c (ADD: Filters with ARN)
 	DefaultRegion := "us-east-1"
 
 	arn, accountId, err := Whoami(*sts.NewFromConfig(cfg))
@@ -164,45 +132,10 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
 
-<<<<<<< HEAD
 	queriedEvents, err := GetEvents(cloudTrailclient, startTime, endTime, true)
 	if err != nil {
 		return err
-=======
-	/*
-		queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, filters)
-		if err != nil {
-			return err
-		}
-	*/
-
-	// Assign k,v to filters
-	filters := make(map[string][]string)
-	filters["username"] = o.Username
-	filters["event"] = o.Event
-	filters["resourceName"] = o.ResourceName
-	filters["resourceType"] = o.ResourceType
-	filters["exclude-username"] = o.ExcludeUsername
-	filters["exclude-event"] = o.ExcludeEvent
-	filters["exclude-resourceName"] = o.ExcludeResourceName
-	filters["exclude-resourceType"] = o.ExcludeResourceType
-	filters["arn"] = o.ArnSource // Add ARN filtering
-
-	//
-	for key, values := range filters {
-		var splitValues []string
-		for _, value := range values {
-			splitValues = append(splitValues, strings.Split(value, ",")...)
-		}
-		filters[key] = splitValues
->>>>>>> dc30e1c (ADD: Filters with ARN)
 	}
-	fmt.Println("Converted Filters:")
-	for key, value := range filters {
-		fmt.Printf("Key: %s, Value: %s\n", key, value)
-	}
-
-	queriedEvents, _ := ctAws.GetEvents(cloudTrailclient, startTime, true, filters)
 
 	filteredEvents := Filters(filters, queriedEvents)
 
@@ -231,23 +164,6 @@ func (o *writeEventsOptions) run(filters WriteEventFilters) error {
 
 		queriedEvents, err := GetEvents(defaultCloudtrailClient, startTime, endTime, true)
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
-<<<<<<< HEAD
-=======
-		/*
-			lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, filters)
-			if err != nil {
-				return err
-			}*/
-
-		lookupOutput, _ := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, filters)
-
-		fmt.Println("Test")
-		filteredEvents, err := ctUtil.ApplyFilters(lookupOutput,
-			func(event types.Event) (bool, error) {
-				return isIgnoredEvent(event, mergedRegex)
-			},
-		)
->>>>>>> dc30e1c (ADD: Filters with ARN)
 		if err != nil {
 			return err
 		}
