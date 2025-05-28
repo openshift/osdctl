@@ -39,7 +39,7 @@ type writeEventsOptions struct {
 	ExcludeEvent        []string
 	ExcludeResourceName []string
 	ExcludeResourceType []string
-	//ArnSource string
+	ArnSource           []string
 }
 
 type RawEventDetails struct {
@@ -78,6 +78,7 @@ func newCmdWriteEvents() *cobra.Command {
 	listEventsCmd.Flags().StringSliceVarP(&ops.Event, "event", "E", nil, "Filter by event name")
 	listEventsCmd.Flags().StringSliceVarP(&ops.ResourceName, "resource-name", "", nil, "Filter by resource name")
 	listEventsCmd.Flags().StringSliceVarP(&ops.ResourceType, "resource-type", "t", nil, "Filter by resource type")
+	listEventsCmd.Flags().StringSliceVarP(&ops.ArnSource, "arn-source", "", nil, "Filter by arn")
 
 	// Exclusion Flags
 	listEventsCmd.Flags().StringSliceVar(&ops.ExcludeUsername, "exclude-username", nil, "Exclude events by username")
@@ -163,23 +164,6 @@ func (o *writeEventsOptions) run() error {
 		return err
 	}
 
-	// Added
-	filters := make(map[string][]string)
-	filters["username"] = o.Username
-	filters["event"] = o.Event
-	filters["resourceName"] = o.ResourceName
-	filters["resourceType"] = o.ResourceType
-	filters["exclude-username"] = o.ExcludeUsername
-	filters["exclude-event"] = o.ExcludeEvent
-	filters["exclude-resourceName"] = o.ExcludeResourceName
-	filters["exclude-resourceType"] = o.ExcludeResourceType
-
-	for k, v := range filters {
-		if len(v) == 0 {
-			fmt.Printf("[INFO] No %s provided. \n", k)
-		}
-	}
-
 	//StartTime
 	DefaultRegion := "us-east-1"
 	startTime, err := ctUtil.ParseDurationToUTC(o.StartTime)
@@ -206,20 +190,33 @@ func (o *writeEventsOptions) run() error {
 			return err
 		}
 	*/
-	convertedFilters := make(map[string][]string)
+
+	// Assign k,v to filters
+	filters := make(map[string][]string)
+	filters["username"] = o.Username
+	filters["event"] = o.Event
+	filters["resourceName"] = o.ResourceName
+	filters["resourceType"] = o.ResourceType
+	filters["exclude-username"] = o.ExcludeUsername
+	filters["exclude-event"] = o.ExcludeEvent
+	filters["exclude-resourceName"] = o.ExcludeResourceName
+	filters["exclude-resourceType"] = o.ExcludeResourceType
+	filters["arn"] = o.ArnSource // Add ARN filtering
+
+	//
 	for key, values := range filters {
 		var splitValues []string
 		for _, value := range values {
 			splitValues = append(splitValues, strings.Split(value, ",")...)
 		}
-		convertedFilters[key] = splitValues
+		filters[key] = splitValues
 	}
 	fmt.Println("Converted Filters:")
-	for key, value := range convertedFilters {
+	for key, value := range filters {
 		fmt.Printf("Key: %s, Value: %s\n", key, value)
 	}
 
-	queriedEvents, _ := ctAws.GetEvents(cloudTrailclient, startTime, true, convertedFilters)
+	queriedEvents, _ := ctAws.GetEvents(cloudTrailclient, startTime, true, filters)
 
 	filteredEvents, err := ctUtil.ApplyFilters(queriedEvents,
 		func(event types.Event) (bool, error) {
@@ -253,7 +250,7 @@ func (o *writeEventsOptions) run() error {
 				return err
 			}*/
 
-		lookupOutput, _ := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, convertedFilters)
+		lookupOutput, _ := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, filters)
 
 		filteredEvents, err := ctUtil.ApplyFilters(lookupOutput,
 			func(event types.Event) (bool, error) {
