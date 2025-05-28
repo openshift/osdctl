@@ -111,72 +111,10 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnl
 		}
 
 	}
-	/*
-		if userName != "" {
-			filteredEvents := []types.Event{}
-			for _, event := range alllookupEvents {
-				if event.Username != nil && *event.Username == userName {
-					filteredEvents = append(filteredEvents, event)
-				}
-			}
-			if len(filteredEvents) == 0 {
-				fmt.Printf("\nNo events found for user %s", userName)
-			}
-			alllookupEvents = filteredEvents
-		}
 
-		if event != "" {
-			filteredEvents := []types.Event{}
-			for _, events := range alllookupEvents {
-				if events.EventName != nil && *events.EventName == event {
-					filteredEvents = append(filteredEvents, events)
-				}
-			}
-			if len(filteredEvents) == 0 {
-				fmt.Printf("\nNo events found for %s", event)
-			}
-			alllookupEvents = filteredEvents
-		}
-
-		if resourceName != "" {
-			filteredEvents := []types.Event{}
-			for _, event := range alllookupEvents {
-				for _, resource := range event.Resources {
-					if resource.ResourceName != nil && *resource.ResourceName == resourceName {
-						filteredEvents = append(filteredEvents, event)
-						break // Stop checking other resources for this event
-					}
-				}
-			}
-
-			if len(filteredEvents) == 0 {
-				fmt.Printf("\nNo events found for resource name %s\n", resourceName)
-			}
-
-			alllookupEvents = filteredEvents
-		}
-
-		if resourceType != "" {
-			filteredEvents := []types.Event{}
-			for _, event := range alllookupEvents {
-				for _, resource := range event.Resources {
-					if resource.ResourceType != nil && *resource.ResourceType == resourceType {
-						filteredEvents = append(filteredEvents, event)
-						break // Stop checking other resources for this event
-
-					}
-				}
-			}
-
-			if len(filteredEvents) == 0 {
-				fmt.Printf("\nNo events found for resource type %s\n", resourceType)
-			}
-
-			alllookupEvents = filteredEvents
-		}
-	*/
-
-	alllookupEvents = Filters(filters, alllookupEvents)
+	if filters != nil {
+		alllookupEvents = Filters(filters, alllookupEvents)
+	}
 
 	return alllookupEvents, nil
 }
@@ -288,6 +226,7 @@ func Filters(filters map[string][]string, alllookupEvents []types.Event) (result
 	return alllookupEvents
 }
 
+/*
 func GetEventsP(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool) ([]types.Event, error) {
 
 	alllookupEvents := []types.Event{}
@@ -321,3 +260,4 @@ func GetEventsP(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOn
 
 	return alllookupEvents, nil
 }
+*/

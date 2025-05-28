@@ -78,7 +78,7 @@ func newCmdWriteEvents() *cobra.Command {
 	listEventsCmd.Flags().StringSliceVarP(&ops.Event, "event", "E", nil, "Filter by event name")
 	listEventsCmd.Flags().StringSliceVarP(&ops.ResourceName, "resource-name", "", nil, "Filter by resource name")
 	listEventsCmd.Flags().StringSliceVarP(&ops.ResourceType, "resource-type", "t", nil, "Filter by resource type")
-	listEventsCmd.Flags().StringSliceVarP(&ops.ArnSource, "arn-source", "", nil, "Filter by arn")
+	listEventsCmd.Flags().StringSliceVarP(&ops.ArnSource, "arn", "", nil, "Filter by arn")
 
 	// Exclusion Flags
 	listEventsCmd.Flags().StringSliceVar(&ops.ExcludeUsername, "exclude-username", nil, "Exclude events by username")
@@ -154,7 +154,6 @@ func (o *writeEventsOptions) run() error {
 
 	}
 
-	// Ask Zakaria / Research myself
 	mergedRegex := ctUtil.MergeRegex(Ignore)
 	if o.PrintAll {
 		mergedRegex = ""
@@ -164,7 +163,6 @@ func (o *writeEventsOptions) run() error {
 		return err
 	}
 
-	//StartTime
 	DefaultRegion := "us-east-1"
 	startTime, err := ctUtil.ParseDurationToUTC(o.StartTime)
 	if err != nil {
@@ -183,14 +181,12 @@ func (o *writeEventsOptions) run() error {
 	fmt.Printf("[INFO] Checking write event history since %v for AWS Account %v as %v \n", startTime, accountId, arn)
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
-
 	/*
 		queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, filters)
 		if err != nil {
 			return err
 		}
 	*/
-
 	// Assign k,v to filters
 	filters := make(map[string][]string)
 	filters["username"] = o.Username
@@ -201,9 +197,8 @@ func (o *writeEventsOptions) run() error {
 	filters["exclude-event"] = o.ExcludeEvent
 	filters["exclude-resourceName"] = o.ExcludeResourceName
 	filters["exclude-resourceType"] = o.ExcludeResourceType
-	filters["arn"] = o.ArnSource // Add ARN filtering
+	filters["arn"] = o.ArnSource
 
-	//
 	for key, values := range filters {
 		var splitValues []string
 		for _, value := range values {
@@ -211,7 +206,8 @@ func (o *writeEventsOptions) run() error {
 		}
 		filters[key] = splitValues
 	}
-	fmt.Println("Converted Filters:")
+
+	fmt.Println("Filters Applied: ")
 	for key, value := range filters {
 		fmt.Printf("Key: %s, Value: %s\n", key, value)
 	}
