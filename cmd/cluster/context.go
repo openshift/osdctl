@@ -638,9 +638,12 @@ func printJIRASupportExceptions(issues []jira.Issue, w io.Writer) {
 func (o *contextOptions) printOtherLinks(data *contextData, w io.Writer) {
 	var name string = "External resources"
 	fmt.Fprintln(w, delimiter+name)
-
+	var ohssQueryURL = fmt.Sprintf("%[1]s/issues/?jql=project%%20%%3D%%22OpenShift%%20Hosted%%20SRE%%20Support%%22and%%20(%%22Cluster%%20ID%%22%%20~%%20%%20%%22%[2]s%%22OR%%22Cluster%%20ID%%22~%%22%[3]s%%22OR%%22description%%22~%%22%[2]s%%22OR%%22description%%22~%%22%[3]s%%22)",
+		JiraBaseURL,
+		o.clusterID,
+		o.externalClusterID)
 	links := map[string]string{
-		"OHSS Cards":        fmt.Sprintf("%s/issues/?jql=project%%20%%3D%%20OHSS%%20and%%20(%%22Cluster%%20ID%%22%%20~%%20%%20%%22%s%%22%%20OR%%20%%22Cluster%%20ID%%22%%20~%%20%%22%s%%22)", JiraBaseURL, o.clusterID, o.externalClusterID),
+		"OHSS Cards":        ohssQueryURL,
 		"CCX dashboard":     fmt.Sprintf("https://kraken.psi.redhat.com/clusters/%s", o.externalClusterID),
 		"Splunk Audit Logs": o.buildSplunkURL(data),
 	}
