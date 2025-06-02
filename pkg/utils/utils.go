@@ -8,10 +8,24 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/andygrunwald/go-jira"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	amv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+)
+
+type fieldQuery struct {
+	Field    string
+	Operator string
+	Value    string
+}
+
+const (
+	JiraHandoverAnnouncementProjectKey = "SRE Platform HandOver Announcements"
+	JiraBaseURL                        = "https://issues.redhat.com"
+	productCustomField                 = "customfield_12319040"
+	customerNameCustomField            = "customfield_12310160"
 )
 
 var clusterKeyRE = regexp.MustCompile(`^(\w|-)+$`)
@@ -300,4 +314,111 @@ func GetDependencyVersion(dependencyPath string) (string, error) {
 	}
 
 	return "", fmt.Errorf("unable to find version for %v", dependencyPath)
+}
+
+func determineClusterProduct(productID string, isHCP bool) (productName string) {
+	if productID == "rosa" && isHCP {
+		productName = "Red Hat OpenShift on AWS with Hosted Control Planes"
+	} else if productID == "rosa" {
+		productName = "Red Hat OpenShift on AWS"
+	} else if productID == "osd" {
+		productName = "OpenShift Dedicated"
+	}
+	return productName
+}
+func buildJQL(projectKey string, filters []fieldQuery) string {
+	var conditions []string
+	for _, q := range filters {
+		switch q.Operator {
+		case "~*":
+			values := strings.Split(q.Value, ",")
+			var orParts []string
+			for _, v := range values {
+				orParts = append(orParts,
+					fmt.Sprintf(`(project = "%s" AND "%s" ~ "%s")`, projectKey, q.Field, strings.TrimSpace(v)))
+			}
+			conditions = append(conditions, "("+strings.Join(orParts, " OR ")+")")
+
+		case "in":
+			conditions = append(conditions,
+				fmt.Sprintf(`(project = "%s" AND "%s" in (%s))`, projectKey, q.Field, q.Value),
+			)
+
+		default:
+			conditions = append(conditions,
+				fmt.Sprintf(`(project = "%s" AND "%s" %s "%s")`, projectKey, q.Field, q.Operator, q.Value),
+			)
+		}
+	}
+	return "(" + strings.Join(conditions, " OR ") + ") AND status != Closed ORDER BY created DESC"
+}
+
+func formatVersion(version string) string {
+	versionParts := strings.Split(version, ".")
+	versionPrefix := version
+	if len(versionParts) >= 2 {
+		versionPrefix = fmt.Sprintf("%s.%s", versionParts[0], versionParts[1])
+	}
+	return versionPrefix
+}
+
+func isValidMatch(i jira.Issue, orgName string, product string, version string) bool {
+	isIgnored := func(val string) bool {
+		val = strings.ToLower(strings.TrimSpace(val))
+		return val == "none" || val == "n/a" || val == "all" || val == ""
+	}
+
+	hasMatchingValue := func(items []interface{}, expected string) bool {
+		expected = strings.ToLower(strings.TrimSpace(expected))
+		for _, item := range items {
+			if m, ok := item.(map[string]interface{}); ok {
+				if val, ok := m["value"].(string); ok {
+					val = strings.ToLower(strings.TrimSpace(val))
+					if val == expected {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}
+
+	productRaw := i.Fields.Unknowns[productCustomField]
+	versionRaw := i.Fields.AffectsVersions
+	nameRaw := i.Fields.Unknowns[customerNameCustomField]
+
+	productMatch := false
+	if items, ok := productRaw.([]interface{}); ok {
+		productMatch = hasMatchingValue(items, product)
+	}
+	if !productMatch {
+		return false
+	}
+
+	versionMatch := false
+	clusterFormattedVersion := formatVersion(version)
+
+	for _, v := range versionRaw {
+		if v != nil {
+			vFormatted := formatVersion(v.Name)
+			if vFormatted == clusterFormattedVersion || isIgnored(v.Name) {
+				versionMatch = true
+				break
+			}
+		}
+	}
+
+	nameMatch := false
+	if nameStr, ok := nameRaw.(string); ok {
+		parts := strings.Split(nameStr, ";")
+		for _, part := range parts {
+			val := strings.TrimSpace(part)
+			if val == orgName || isIgnored(val) {
+				nameMatch = true
+				break
+			}
+		}
+	}
+
+	return versionMatch || (nameMatch && versionMatch)
 }

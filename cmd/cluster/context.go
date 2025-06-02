@@ -87,8 +87,9 @@ type contextData struct {
 	ServiceLogs []*v1.LogEntry
 
 	// Jira Cards
-	JiraIssues        []jira.Issue
-	SupportExceptions []jira.Issue
+	JiraIssues            []jira.Issue
+	HandoverAnnouncements []jira.Issue
+	SupportExceptions     []jira.Issue
 
 	// PD Alerts
 	pdServiceID      []string
@@ -230,6 +231,8 @@ func (o *contextOptions) printLongOutput(data *contextData, w io.Writer) {
 	data.printClusterHeader(w)
 
 	fmt.Fprintln(w, strings.TrimSpace(data.Description))
+	fmt.Println()
+	utils.PrintHandoverAnnouncements(data.HandoverAnnouncements)
 	fmt.Println()
 	utils.PrintLimitedSupportReasons(data.LimitedSupportReasons)
 	fmt.Println()
@@ -421,6 +424,21 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		}
 	}
 
+	GetHandoverAnnouncements := func() {
+		defer wg.Done()
+		defer utils.StartDelayTracker(o.verbose, "Handover Announcements").End()
+		org, err := utils.GetOrganization(ocmClient, o.clusterID)
+		if err != nil {
+			fmt.Printf("Failed to get Subscription for cluster %s - err: %q", o.clusterID, err)
+		}
+
+		productID := o.cluster.Product().ID()
+		data.HandoverAnnouncements, err = utils.GetRelatedHandoverAnnouncements(o.clusterID, o.externalClusterID, o.jiratoken, org.Name(), productID, o.cluster.Hypershift().Enabled(), o.cluster.Version().RawID())
+		if err != nil {
+			errors = append(errors, fmt.Errorf("error while getting the open jira tickets: %v", err))
+		}
+	}
+
 	GetSupportExceptions := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Support Exceptions").End()
@@ -488,6 +506,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		GetLimitedSupport,
 		GetServiceLogs,
 		GetJiraIssues,
+		GetHandoverAnnouncements,
 		GetSupportExceptions,
 		GetPagerDutyAlerts,
 		GetDynatraceDetails,
