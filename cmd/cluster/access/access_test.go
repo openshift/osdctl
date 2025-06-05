@@ -2,6 +2,7 @@ package access
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -90,8 +91,7 @@ func TestClusterAccessOptions_createLocalKubeconfigAccess(t *testing.T) {
 			// Setup Environment
 			updateEnvResponse := fmt.Sprintf("%s\n", test.UpdateEnvResp)
 			streams := genericclioptions.IOStreams{In: strings.NewReader(updateEnvResponse), Out: os.Stdout, ErrOut: os.Stderr}
-			client := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(runtime.NewScheme()))
-			access := newClusterAccessOptions(client, streams)
+			access := newClusterAccessOptions(streams)
 
 			// Generate test objects
 			cluster := generateClusterObjectForTesting("test-cluster", "test-cluster-id", false, test.PrivateAPI)
@@ -230,7 +230,7 @@ func TestClusterAccessOptions_createJumpPod(t *testing.T) {
 		}
 		client := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(scheme))
 		streams := genericclioptions.IOStreams{In: genericclioptions.NewTestIOStreamsDiscard().In, Out: os.Stdout, ErrOut: os.Stderr}
-		access := newClusterAccessOptions(client, streams)
+		access := newClusterAccessOptions(streams)
 
 		// Generate test objects
 		serverURL := "https://api.test-cluster.fakedomain.devshift.org:6443"
@@ -239,7 +239,7 @@ func TestClusterAccessOptions_createJumpPod(t *testing.T) {
 		secret, _ := generateKubeconfigSecretObjectForTesting(secretName, secretNS, "kubeconfig", serverURL)
 
 		// Run test
-		pod, err := access.createJumpPod(secret, "fake-cluster-uuid-123456")
+		pod, err := access.createJumpPod(context.TODO(), client, secret, "fake-cluster-uuid-123456")
 		if err != nil {
 			t.Errorf("Failed %s: error while creating pod: %v", test.Name, err)
 		}
@@ -420,9 +420,7 @@ func TestGetKubeConfigSecret(t *testing.T) {
 			_ = corev1.AddToScheme(scheme)
 			fakeClient := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...))
 
-			c := &clusterAccessOptions{
-				kubeCli: fakeClient,
-			}
+			c := &clusterAccessOptions{}
 
 			nsObj := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
@@ -430,7 +428,7 @@ func TestGetKubeConfigSecret(t *testing.T) {
 				},
 			}
 
-			secret, err := c.getKubeConfigSecret(nsObj)
+			secret, err := c.getKubeConfigSecret(fakeClient, nsObj)
 
 			if tt.expectedErr != nil {
 				assert.EqualError(t, err, tt.expectedErr.Error())
