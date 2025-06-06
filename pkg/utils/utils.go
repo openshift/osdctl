@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"runtime/debug"
 	"strings"
@@ -249,7 +250,7 @@ func GetRegistryCredentials(connection *sdk.Connection, accountId string) ([]*am
 }
 
 func ConfirmPrompt() bool {
-	fmt.Print("Continue? (y/N): ")
+	fmt.Fprint(os.Stderr, "Continue? (y/N): ")
 
 	var response = "n"
 	_, _ = fmt.Scanln(&response) // Erroneous input will be handled by the default case below
@@ -260,7 +261,7 @@ func ConfirmPrompt() bool {
 	case "n", "no":
 		return false
 	default:
-		fmt.Println("Invalid input. Expecting (y)es or (N)o")
+		fmt.Fprintln(os.Stderr, "Invalid input. Expecting (y)es or (N)o")
 		return ConfirmPrompt()
 	}
 }

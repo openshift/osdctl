@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
 	routev1 "github.com/openshift/api/route/v1"
@@ -15,7 +14,6 @@ import (
 	"github.com/spf13/viper"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/kubectl/pkg/util/slice"
 
 	"github.com/openshift/osdctl/cmd/aao"
 	"github.com/openshift/osdctl/cmd/account"
@@ -41,7 +39,7 @@ import (
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/provider/aws"
-	"github.com/openshift/osdctl/pkg/utils"
+	"github.com/openshift/osdctl/pkg/version_check"
 )
 
 func init() {
@@ -69,15 +67,10 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 			}
 			viper.Set(aws.NoProxyFlag, noAwsProxy)
 
-			skipVersionCheck, err := cmd.Flags().GetBool("skip-version-check")
+			err = version_check.Run(cmd)
 			if err != nil {
-				fmt.Println("flag --skip-version-check/-S undefined")
+				fmt.Fprintf(os.Stderr, "%s\n", err)
 				os.Exit(1)
-			}
-
-			// Checks the skipVersionCheck flag and the command being run to determine if the version check should run
-			if shouldRunVersionCheck(skipVersionCheck, cmd.Use) {
-				versionCheck()
 			}
 		},
 	}
@@ -127,39 +120,5 @@ func help(cmd *cobra.Command, _ []string) {
 	err := cmd.Help()
 	if err != nil {
 		fmt.Println("Error while printing help: ", err.Error())
-	}
-}
-
-// Checks if the version check should be run
-func shouldRunVersionCheck(skipVersionCheckFlag bool, commandName string) bool {
-
-	// If either are true, then the version check should NOT run, hence negation
-	return !(skipVersionCheckFlag || canCommandSkipVersionCheck(commandName))
-}
-
-func canCommandSkipVersionCheck(commandName string) bool {
-	// Checks if the specific command is in the allowlist
-	return slice.ContainsString(getSkipVersionCommands(), commandName, nil)
-}
-
-// Returns allowlist of commands that can skip version check
-func getSkipVersionCommands() []string {
-	return []string{"upgrade", "version"}
-}
-
-func versionCheck() {
-	latestVersion, err := utils.GetLatestVersion()
-	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "WARN: Unable to verify that osdctl is running under the latest released version. Error trying to reach GitHub:")
-		_, _ = fmt.Fprintln(os.Stderr, err)
-		_, _ = fmt.Fprintln(os.Stderr, "Please be aware that you are possibly running an outdated or unreleased version.")
-	}
-
-	if utils.Version != strings.TrimPrefix(latestVersion, "v") {
-		_, _ = fmt.Fprintf(os.Stderr, "WARN: The current version (%s) is different than the latest released version (%s). It is recommended that you update to the latest released version to ensure that no known bugs or issues are hit.\n", utils.Version, latestVersion)
-
-		if !utils.ConfirmPrompt() {
-			os.Exit(0)
-		}
 	}
 }
