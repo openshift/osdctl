@@ -14,6 +14,8 @@ import (
 )
 
 // RawEventDetails struct represents the structure of an AWS raw event
+
+// Test
 type RawEventDetails struct {
 	EventVersion string `json:"eventVersion"`
 	UserIdentity struct {
@@ -77,7 +79,155 @@ func Whoami(stsClient sts.Client) (accountArn string, accountId string, err erro
 
 // getWriteEvents retrieves cloudtrail events since the specified time
 // using the provided cloudtrail client and starttime from since flag.
-func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool) ([]types.Event, error) {
+func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool, filters map[string][]string) ([]types.Event, error) {
+
+	alllookupEvents := []types.Event{}
+	input := cloudtrail.LookupEventsInput{
+		StartTime: &startTime,
+		EndTime:   aws.Time(time.Now()),
+	}
+
+	if writeOnly {
+		input.LookupAttributes = []types.LookupAttribute{
+			{AttributeKey: "ReadOnly",
+				AttributeValue: aws.String("false")},
+		}
+	}
+
+	fmt.Println("")
+	fmt.Printf("testing %v", input.LookupAttributes)
+	paginator := cloudtrail.NewLookupEventsPaginator(cloudtailClient, &input, func(c *cloudtrail.LookupEventsPaginatorOptions) {})
+	for paginator.HasMorePages() {
+
+		lookupOutput, err := paginator.NextPage(context.TODO())
+		if err != nil {
+			return nil, fmt.Errorf("[WARNING] paginator error: \n%w", err)
+		}
+		alllookupEvents = append(alllookupEvents, lookupOutput.Events...)
+
+		input.NextToken = lookupOutput.NextToken
+		if lookupOutput.NextToken == nil {
+			break
+		}
+
+	}
+
+	if filters != nil {
+		alllookupEvents = Filters(filters, alllookupEvents)
+	}
+
+	return alllookupEvents, nil
+}
+
+// Applies filters to osdctl cloudtrail
+func Filters(filters map[string][]string, alllookupEvents []types.Event) (results []types.Event) {
+	unmatchedFilters := make(map[string][]string)
+	for key, values := range filters {
+		if len(values) > 0 {
+			filteredEvents := []types.Event{}
+			unmatched := make(map[string]bool)
+
+			// Used for tracking if values are matched
+			// If unmatch == true; then no values found
+			for _, v := range values {
+				unmatched[v] = true
+			}
+			for _, event := range alllookupEvents {
+				match := false
+				for _, v := range values {
+					switch key {
+					case "username":
+						if event.Username != nil && *event.Username == v {
+							match = true
+							unmatched[v] = false
+						}
+					case "event":
+						if event.EventName != nil && *event.EventName == v {
+							match = true
+							unmatched[v] = false
+						}
+					case "resourceName":
+						for _, resource := range event.Resources {
+							if resource.ResourceName != nil && *resource.ResourceName == v {
+								match = true
+								unmatched[v] = false
+								break // Stop checking other resources for this event
+							}
+						}
+					case "resourceType":
+						for _, resource := range event.Resources {
+							if resource.ResourceType != nil && *resource.ResourceType == v {
+								match = true
+								unmatched[v] = false
+								break // Stop checking other resources for this event
+							}
+						}
+					case "arn":
+						rawEventDetails, err := ExtractUserDetails(event.CloudTrailEvent)
+						if err != nil {
+							fmt.Printf("[Error] Failed to extract event details: %v\n", err)
+							continue
+						}
+						if rawEventDetails.UserIdentity.SessionContext.SessionIssuer.UserName == v {
+							match = true
+							unmatched[v] = false // Mark as matched
+						}
+					case "exclude-username":
+						if event.Username != nil && *event.Username != v {
+							match = true
+							unmatched[v] = false
+						}
+					case "exclude-event":
+						if event.EventName != nil && *event.EventName != v {
+							match = true
+							unmatched[v] = false
+						}
+					case "exclude-resourceName":
+						for _, resource := range event.Resources {
+							if resource.ResourceName != nil && *resource.ResourceName != v {
+								match = true
+								unmatched[v] = false
+								break // Stop checking other resources for this event
+							}
+						}
+					case "exclude-resourceType":
+						for _, resource := range event.Resources {
+							if resource.ResourceType != nil && *resource.ResourceType != v {
+								match = true
+								unmatched[v] = false
+								break // Stop checking other resources for this event
+							}
+						}
+					}
+				}
+				if match {
+					filteredEvents = append(filteredEvents, event)
+				}
+			}
+
+			for v, nonMatch := range unmatched {
+				if nonMatch {
+					unmatchedFilters[key] = append(unmatchedFilters[key], v)
+				}
+			}
+			if len(filteredEvents) == 0 {
+				fmt.Printf("\nNo events found for %s with value: %s", key, values)
+				break
+			}
+			alllookupEvents = filteredEvents
+		}
+	}
+
+	for key, values := range unmatchedFilters {
+		for _, value := range values {
+			fmt.Printf("No events found for %s with value: %s\n", key, value)
+		}
+	}
+	return alllookupEvents
+}
+
+/*
+func GetEventsP(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool) ([]types.Event, error) {
 
 	alllookupEvents := []types.Event{}
 	input := cloudtrail.LookupEventsInput{
@@ -110,3 +260,4 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnl
 
 	return alllookupEvents, nil
 }
+*/

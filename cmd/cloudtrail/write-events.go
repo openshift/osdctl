@@ -21,15 +21,27 @@ import (
 var DefaultRegion = "us-east-1"
 
 // LookupEventsOptions struct for holding options for event lookup
+
+// writeEventOption containers, ClusterID, StartTime, URL, Raw, Data, Printall
 type writeEventsOptions struct {
 	ClusterID string
 	StartTime string
 	PrintUrl  bool
 	PrintRaw  bool
 	PrintAll  bool
+
+	Username     []string
+	Event        []string
+	ResourceName []string
+	ResourceType []string
+
+	ExcludeUsername     []string
+	ExcludeEvent        []string
+	ExcludeResourceName []string
+	ExcludeResourceType []string
+	ArnSource           []string
 }
 
-// RawEventDetails struct represents the structure of an AWS raw event
 type RawEventDetails struct {
 	EventVersion string `json:"eventVersion"`
 	UserIdentity struct {
@@ -60,7 +72,20 @@ func newCmdWriteEvents() *cobra.Command {
 	listEventsCmd.Flags().BoolVarP(&ops.PrintUrl, "url", "u", false, "Generates Url link to cloud console cloudtrail event")
 	listEventsCmd.Flags().BoolVarP(&ops.PrintRaw, "raw-event", "r", false, "Prints the cloudtrail events to the console in raw json format")
 	listEventsCmd.Flags().BoolVarP(&ops.PrintAll, "all", "A", false, "Prints all cloudtrail write events without filtering")
-	_ = listEventsCmd.MarkFlagRequired("cluster-id")
+
+	// Inclusion Flags
+	listEventsCmd.Flags().StringSliceVarP(&ops.Username, "username", "U", nil, "Filter events by username")
+	listEventsCmd.Flags().StringSliceVarP(&ops.Event, "event", "E", nil, "Filter by event name")
+	listEventsCmd.Flags().StringSliceVarP(&ops.ResourceName, "resource-name", "", nil, "Filter by resource name")
+	listEventsCmd.Flags().StringSliceVarP(&ops.ResourceType, "resource-type", "t", nil, "Filter by resource type")
+	listEventsCmd.Flags().StringSliceVarP(&ops.ArnSource, "arn", "", nil, "Filter by arn")
+
+	// Exclusion Flags
+	listEventsCmd.Flags().StringSliceVar(&ops.ExcludeUsername, "exclude-username", nil, "Exclude events by username")
+	listEventsCmd.Flags().StringSliceVar(&ops.ExcludeEvent, "exclude-event", nil, "Exclude events by event name")
+	listEventsCmd.Flags().StringSliceVar(&ops.ExcludeResourceName, "exclude-resource-name", nil, "Exclude events by resource name")
+	listEventsCmd.Flags().StringSliceVar(&ops.ExcludeResourceType, "exclude-resource-type", nil, "Exclude events by resource type")
+	listEventsCmd.MarkFlagRequired("cluster-id")
 	return listEventsCmd
 }
 
@@ -96,8 +121,12 @@ func isIgnoredEvent(event types.Event, mergedRegex string) (bool, error) {
 	return true, nil
 }
 
+// ErrorChecking all key in the struct
 func (o *writeEventsOptions) run() error {
 
+	// Checking for valid cluster
+	// Connection to cluster is successful
+	// Check is cluster is AWS
 	err := utils.IsValidClusterKey(o.ClusterID)
 	if err != nil {
 		return err
@@ -133,6 +162,7 @@ func (o *writeEventsOptions) run() error {
 	if err != nil {
 		return err
 	}
+
 	DefaultRegion := "us-east-1"
 	startTime, err := ctUtil.ParseDurationToUTC(o.StartTime)
 	if err != nil {
@@ -146,13 +176,43 @@ func (o *writeEventsOptions) run() error {
 	if err != nil {
 		return err
 	}
+
+	//CMD Line Prints
 	fmt.Printf("[INFO] Checking write event history since %v for AWS Account %v as %v \n", startTime, accountId, arn)
 	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
-	queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true)
-	if err != nil {
-		return err
+	/*
+		queriedEvents, err := ctAws.GetEvents(cloudTrailclient, startTime, true, filters)
+		if err != nil {
+			return err
+		}
+	*/
+	// Assign k,v to filters
+	filters := make(map[string][]string)
+	filters["username"] = o.Username
+	filters["event"] = o.Event
+	filters["resourceName"] = o.ResourceName
+	filters["resourceType"] = o.ResourceType
+	filters["exclude-username"] = o.ExcludeUsername
+	filters["exclude-event"] = o.ExcludeEvent
+	filters["exclude-resourceName"] = o.ExcludeResourceName
+	filters["exclude-resourceType"] = o.ExcludeResourceType
+	filters["arn"] = o.ArnSource
+
+	for key, values := range filters {
+		var splitValues []string
+		for _, value := range values {
+			splitValues = append(splitValues, strings.Split(value, ",")...)
+		}
+		filters[key] = splitValues
 	}
+
+	fmt.Println("Filters Applied: ")
+	for key, value := range filters {
+		fmt.Printf("Key: %s, Value: %s\n", key, value)
+	}
+
+	queriedEvents, _ := ctAws.GetEvents(cloudTrailclient, startTime, true, filters)
 
 	filteredEvents, err := ctUtil.ApplyFilters(queriedEvents,
 		func(event types.Event) (bool, error) {
@@ -180,10 +240,15 @@ func (o *writeEventsOptions) run() error {
 			HTTPClient:  cfg.HTTPClient,
 		})
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Event History from %v Region...", defaultConfig.Region)
-		lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true)
-		if err != nil {
-			return err
-		}
+		/*
+			lookupOutput, err := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, filters)
+			if err != nil {
+				return err
+			}*/
+
+		lookupOutput, _ := ctAws.GetEvents(defaultCloudtrailClient, startTime, true, filters)
+
+		fmt.Println("Test")
 		filteredEvents, err := ctUtil.ApplyFilters(lookupOutput,
 			func(event types.Event) (bool, error) {
 				return isIgnoredEvent(event, mergedRegex)
