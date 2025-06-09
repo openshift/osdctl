@@ -41,13 +41,14 @@ func GetJiraIssuesForCluster(clusterID string, externalClusterID string, jiratok
 	}
 
 	jql := fmt.Sprintf(
-		`(project = "OpenShift Hosted SRE Support" AND "Cluster ID" ~ "%s") 
-		OR (project = "OpenShift Hosted SRE Support" AND "Cluster ID" ~ "%s") 
+		`project = "OpenShift Hosted SRE Support" AND (
+		"Cluster ID" ~ "%[1]s" OR "Cluster ID" ~ "%[2]s" 
+		OR description ~ "%[1]s"
+		OR description ~ "%[2]s")
 		ORDER BY created DESC`,
 		externalClusterID,
 		clusterID,
 	)
-
 	issues, _, err := jiraClient.Issue.Search(jql, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search for jira issues: %w\n", err)

@@ -40,7 +40,6 @@ func BootstrapOsdCtlForAppInterfaceAndServicePromotions(appInterfaceCheckoutDir 
 	a.GitExecutor = iexec.Exec{}
 	if appInterfaceCheckoutDir != "" {
 		a.GitDirectory = appInterfaceCheckoutDir
-		a.GitExecutor = iexec.Exec{}
 		err := a.checkAppInterfaceCheckout()
 		if err != nil {
 			log.Fatalf("Provided directory %s is not an AppInterface directory: %v", a.GitDirectory, err)
@@ -51,7 +50,6 @@ func BootstrapOsdCtlForAppInterfaceAndServicePromotions(appInterfaceCheckoutDir 
 	dir, err := getBaseDir(a.GitExecutor)
 	if err == nil {
 		a.GitDirectory = dir
-		a.GitExecutor = iexec.Exec{}
 		err = a.checkAppInterfaceCheckout()
 		if err == nil {
 			return a

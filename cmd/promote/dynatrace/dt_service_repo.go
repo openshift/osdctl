@@ -43,7 +43,7 @@ func CheckoutAndCompareGitHash(appInterface AppInterface, gitURL, gitHash, curre
 	if currentGitHash == gitHash {
 		return "", "", fmt.Errorf("git hash %s is already at HEAD", gitHash)
 	} else {
-		commitLog, err := exec.Output("git", "log", "--no-merges", fmt.Sprintf("%s..%s", currentGitHash, gitHash))
+		commitLog, err := exec.Output("", "git", "log", "--no-merges", fmt.Sprintf("%s..%s", currentGitHash, gitHash))
 		if err != nil {
 			return "", "", err
 		}

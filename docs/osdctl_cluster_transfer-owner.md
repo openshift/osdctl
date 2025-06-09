@@ -21,7 +21,8 @@ osdctl cluster transfer-owner [flags]
   -C, --cluster-id string   The Internal Cluster ID/External Cluster ID/ Cluster Name
   -d, --dry-run             Dry-run - show all changes but do not apply them
   -h, --help                help for transfer-owner
-      --new-owner string    The new owners username to transfer the cluster to
+      --new-owner string    The new owner's username to transfer the cluster to
+      --old-owner string    The old owner's username to transfer the cluster from
       --reason string       The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
 ```
 
