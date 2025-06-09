@@ -58,7 +58,7 @@ type transferOwnerOptions struct {
 	oldOwnerName     string
 	newOwnerName     string
 	reason           string
-	dryrun           bool //TODO: This is misleading. Currently+historically dryrun still rotates the pull secret before exiting.
+	dryrun           bool
 	hypershift       bool
 	doPullSecretOnly bool
 	opDescription    string
@@ -94,7 +94,6 @@ func newCmdTransferOwner(streams genericclioptions.IOStreams, globalOpts *global
 	transferOwnerCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "The Internal Cluster ID/External Cluster ID/ Cluster Name")
 	transferOwnerCmd.Flags().StringVar(&ops.oldOwnerName, "old-owner", ops.oldOwnerName, "The old owner's username to transfer the cluster from")
 	transferOwnerCmd.Flags().StringVar(&ops.newOwnerName, "new-owner", ops.newOwnerName, "The new owner's username to transfer the cluster to")
-	//TODO: dryrun is misleading. Currently+historically dryrun still rotates the pull secret before exiting prior to transfer of ownership.
 	transferOwnerCmd.Flags().BoolVarP(&ops.dryrun, "dry-run", "d", false, "Dry-run - show all changes but do not apply them")
 	transferOwnerCmd.Flags().BoolVar(&ops.doPullSecretOnly, "pull-secret-only", false, "Update cluster pull secret from current OCM AccessToken data without ownership transfer")
 	transferOwnerCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
@@ -398,11 +397,6 @@ func verifyClusterPullSecret(clientset *kubernetes.Clientset, expectedPullSecret
 		blue.Println("\nExpected Auths from OCM AccessToken expected to be present in Pull Secret (note this can be a subset):")
 		fmt.Println(expectedPullSecret)
 
-		// TODO: Consider confirming that the email and token values of the 'subset' of Auths
-		// contained in the OCM AccessToken actually matches email/token values in the cluster's
-		// openshift-config/pull-secret. Provide any descrepencies to the user here before
-		// prompting to visually evaluate.
-		//
 		// Ask the user to confirm if the actual pull secret matches their expectation
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print("\nDoes the actual pull secret match your expectation? (yes/no): ")
