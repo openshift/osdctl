@@ -11,7 +11,7 @@ osdctl cluster transfer-owner [flags]
 ```
 
   # Transfer ownership
-  osdctl cluster transfer-owner --new-owner "new_OCM_userName" --cluster-id 1kfmyclusteristhebesteverp8m --reason "transfer ownership per jira-id"
+  osdctl cluster transfer-owner --new-owner "$NEW_ACCOUNT" --old-owner "$OLD_ACCOUNT" --cluster-id 1kfmyclusteristhebesteverp8m --reason "transfer ownership per jira-id"
 
 ```
 
