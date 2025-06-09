@@ -113,6 +113,10 @@ func (o *PostCmdOptions) Validate() error {
 	return nil
 }
 
+func (o *PostCmdOptions) SetDryRun(dryRun bool) {
+	o.isDryRun = dryRun
+}
+
 // CheckServiceLogsLastHour returns true if there were servicelogs sent in the past hour, otherwise false
 func CheckServiceLogsLastHour(clusterId string) bool {
 	timeStampToCompare := time.Now().Add(-time.Hour)
