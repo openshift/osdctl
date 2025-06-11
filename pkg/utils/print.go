@@ -99,6 +99,20 @@ func PrintJiraIssues(issues []jira.Issue) {
 	}
 }
 
+func PrintHandoverAnnouncements(issues []jira.Issue) {
+	var name = "Related Handover Announcements"
+	fmt.Println(delimiter + name)
+
+	for _, i := range issues {
+		fmt.Printf("[%s]: %+v\n", i.Key, i.Fields.Summary)
+		fmt.Printf("- Link: %s/browse/%s\n\n", JiraBaseURL, i.Key)
+	}
+
+	if len(issues) == 0 {
+		fmt.Println("None")
+	}
+}
+
 func PrintLimitedSupportReasons(limitedSupportReasons []*cmv1.LimitedSupportReason) {
 	var name = "Limited Support Status"
 	fmt.Println(delimiter + name)

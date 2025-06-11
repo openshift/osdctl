@@ -10,7 +10,6 @@ import (
 
 const (
 	JiraTokenConfigKey = "jira_token"
-	JiraBaseURL        = "https://issues.redhat.com"
 )
 
 // GetJiraClient creates a jira client that connects to
@@ -52,6 +51,49 @@ func GetJiraIssuesForCluster(clusterID string, externalClusterID string, jiratok
 	issues, _, err := jiraClient.Issue.Search(jql, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search for jira issues: %w\n", err)
+	}
+
+	return issues, nil
+}
+
+func GetRelatedHandoverAnnouncements(clusterID string, externalClusterID string, jiraToken string, orgName string, product string, isHCP bool, version string) ([]jira.Issue, error) {
+	jiraClient, err := GetJiraClient(jiraToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create project service: %v", err)
+	}
+
+	projectKey := JiraHandoverAnnouncementProjectKey
+	productName := determineClusterProduct(product, isHCP)
+	baseQueries := []fieldQuery{
+		{Field: "Cluster ID", Value: clusterID, Operator: "~"},
+		{Field: "Cluster ID", Value: externalClusterID, Operator: "~"},
+	}
+	jql := buildJQL(projectKey, baseQueries)
+	issues, _, err := jiraClient.Issue.Search(jql, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search for jira issues: %w", err)
+	}
+	extededQueries := []fieldQuery{
+		{Field: "Cluster ID", Value: "None,N/A,All", Operator: "~*"},
+		{Field: "Customer Name", Value: orgName, Operator: "~"},
+		{Field: "Products", Value: productName, Operator: "="},
+		{Field: "affectedVersion", Value: formatVersion(version), Operator: "~"},
+	}
+
+	jql = buildJQL(projectKey, extededQueries)
+	otherIssues, _, err := jiraClient.Issue.Search(jql, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search for jira issues: %w", err)
+	}
+	seenKeys := make(map[string]bool)
+	for _, i := range issues {
+		seenKeys[i.Key] = true
+	}
+	for _, i := range otherIssues {
+		if isValidMatch(i, orgName, productName, version) && !seenKeys[i.Key] {
+			issues = append(issues, i)
+			seenKeys[i.Key] = true
+		}
 	}
 
 	return issues, nil
