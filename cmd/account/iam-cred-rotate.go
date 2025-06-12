@@ -21,6 +21,7 @@ import (
 	iamTypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	stsTypes "github.com/aws/aws-sdk-go-v2/service/sts/types"
+	"github.com/labstack/gommon/log"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/backplane-cli/pkg/backplaneapi"
@@ -335,17 +336,20 @@ func (o *rotateCredOptions) run() error {
 	}
 
 	if o.describeKeysCli {
+		var errs error = nil
 		// Print AWS key info then exit
 		err = o.cliPrintOsdManagedAdminCreds()
 		if err != nil {
-			return err
+			o.log.Errorf("Error attempting to print osdManagedAdmin info, err:'%s'", err)
+			errs = errors.Join(errs, err)
 		}
 		err = o.cliPrintOsdCcsAdminCreds()
 		if err != nil {
-			return err
+			o.log.Errorf("Error attempting to print osdCcsAdmin info, err:'%s'", err)
+			errs = errors.Join(errs, err)
 		}
 		// Return here to avoid mixing rotate and describe commands
-		return nil
+		return errs
 	}
 
 	// Begin rotate specific operations...
@@ -1608,6 +1612,8 @@ func (o *rotateCredOptions) checkAccessKeysMaxDelete(iamUser string, nameSpace s
  * returns iam user name if found
  */
 func (o *rotateCredOptions) checkOsdManagedUsername() (string, error) {
+	var checkUser *iam.GetUserOutput = nil
+	var err error = nil
 	if o.awsClient == nil {
 		return "", fmt.Errorf("AWS client has not been created yet for doRotateAWSCreds()")
 	}
@@ -1617,12 +1623,15 @@ func (o *rotateCredOptions) checkOsdManagedUsername() (string, error) {
 		osdManagedAdminUsername = common.OSDManagedAdminIAM + "-" + o.accountIDSuffixLabel
 	}
 	o.log.Debugf("Check if AWS user '%s' exists\n", osdManagedAdminUsername)
-	checkUser, err := o.awsClient.GetUser(&iam.GetUserInput{UserName: awsSdk.String(osdManagedAdminUsername)})
+	checkUser, err = o.awsClient.GetUser(&iam.GetUserInput{UserName: awsSdk.String(osdManagedAdminUsername)})
 	var nse *iamTypes.NoSuchEntityException
-	if (err != nil && errors.As(err, &nse)) || checkUser == nil {
-		o.log.Infof("User Not Found: '%s', trying user:'%s' instead...\n", osdManagedAdminUsername, common.OSDManagedAdminIAM)
+	if (err != nil && (errors.As(err, &nse) || strings.Contains(err.Error(), "NoSuchEntity"))) || checkUser == nil {
+		o.log.Warnf("User Not Found: '%s', trying user:'%s' instead...\n", osdManagedAdminUsername, common.OSDManagedAdminIAM)
 		osdManagedAdminUsername = common.OSDManagedAdminIAM
-		checkUser, err := o.awsClient.GetUser(&iam.GetUserInput{UserName: awsSdk.String(osdManagedAdminUsername)})
+		checkUser, err = o.awsClient.GetUser(&iam.GetUserInput{UserName: awsSdk.String(osdManagedAdminUsername)})
+		if (err != nil && errors.As(err, &nse)) || checkUser == nil {
+			log.Warnf("Failed to find IAM osdManagedAdmin user, using UserName filters:'%s' or '%s'\n", osdManagedAdminUsername, common.OSDManagedAdminIAM)
+		}
 		if err != nil {
 			return "", err
 		}
