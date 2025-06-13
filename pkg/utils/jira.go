@@ -18,6 +18,7 @@ const (
 type JiraClientInterface interface {
 	SearchIssues(jql string) ([]jira.Issue, error)
 	CreateIssue(issue *jira.Issue) (*jira.Issue, error)
+	CreateVersion(version *jira.Version) (*jira.Version, error)
 	User() *jira.UserService
 	Issue() *jira.IssueService
 	Board() *jira.BoardService
@@ -39,6 +40,17 @@ func (j *jiraClientWrapper) SearchIssues(jql string) ([]jira.Issue, error) {
 func (j *jiraClientWrapper) CreateIssue(issue *jira.Issue) (*jira.Issue, error) {
 	created, _, err := j.client.Issue.Create(issue)
 	return created, err
+}
+
+func (j *jiraClientWrapper) CreateVersion(version *jira.Version) (*jira.Version, error) {
+	createdVersion, resp, err := j.client.Version.Create(version)
+	if err != nil {
+		if resp != nil && resp.StatusCode == 400 {
+			return &jira.Version{Name: version.Name}, nil
+		}
+		return nil, fmt.Errorf("failed to create version %q: %w", version.Name, err)
+	}
+	return createdVersion, nil
 }
 
 func (j *jiraClientWrapper) User() *jira.UserService {
@@ -114,7 +126,7 @@ func GetRelatedHandoverAnnouncements(clusterID, externalClusterID, jiraToken, or
 		{Field: "Cluster ID", Value: clusterID, Operator: "~"},
 		{Field: "Cluster ID", Value: externalClusterID, Operator: "~"},
 	}
-	jql := buildJQL(JiraHandoverAnnouncementProjectKey, baseQueries)
+	jql := buildJQL(JiraHandoverAnnouncementProjectName, baseQueries)
 	issues, err := client.SearchIssues(jql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search for jira issues: %w", err)
@@ -126,7 +138,7 @@ func GetRelatedHandoverAnnouncements(clusterID, externalClusterID, jiraToken, or
 		{Field: "Products", Value: productName, Operator: "="},
 		{Field: "affectedVersion", Value: formatVersion(version), Operator: "~"},
 	}
-	jql = buildJQL(JiraHandoverAnnouncementProjectKey, extendedQueries)
+	jql = buildJQL(JiraHandoverAnnouncementProjectName, extendedQueries)
 	otherIssues, err := client.SearchIssues(jql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search for jira issues: %w", err)

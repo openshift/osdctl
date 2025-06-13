@@ -63,6 +63,21 @@ func (mr *MockJiraClientInterfaceMockRecorder) CreateIssue(issue interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateIssue", reflect.TypeOf((*MockJiraClientInterface)(nil).CreateIssue), issue)
 }
 
+// CreateVersion mocks base method.
+func (m *MockJiraClientInterface) CreateVersion(version *jira.Version) (*jira.Version, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateVersion", version)
+	ret0, _ := ret[0].(*jira.Version)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateVersion indicates an expected call of CreateVersion.
+func (mr *MockJiraClientInterfaceMockRecorder) CreateVersion(version interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVersion", reflect.TypeOf((*MockJiraClientInterface)(nil).CreateVersion), version)
+}
+
 // Issue mocks base method.
 func (m *MockJiraClientInterface) Issue() *jira.IssueService {
 	m.ctrl.T.Helper()
