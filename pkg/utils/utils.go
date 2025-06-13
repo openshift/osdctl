@@ -22,10 +22,11 @@ type fieldQuery struct {
 }
 
 const (
-	JiraHandoverAnnouncementProjectKey = "SRE Platform HandOver Announcements"
-	JiraBaseURL                        = "https://issues.redhat.com"
-	productCustomField                 = "customfield_12319040"
-	customerNameCustomField            = "customfield_12310160"
+	JiraHandoverAnnouncementProjectName = "SRE Platform HandOver Announcements"
+	JiraBaseURL                         = "https://issues.redhat.com"
+	ProductCustomField                  = "customfield_12319040"
+	CustomerNameCustomField             = "customfield_12310160"
+	ClusterIDCustomField                = "customfield_12316349"
 )
 
 var clusterKeyRE = regexp.MustCompile(`^(\w|-)+$`)
@@ -383,9 +384,9 @@ func isValidMatch(i jira.Issue, orgName string, product string, version string) 
 		return false
 	}
 
-	productRaw := i.Fields.Unknowns[productCustomField]
+	productRaw := i.Fields.Unknowns[ProductCustomField]
 	versionRaw := i.Fields.AffectsVersions
-	nameRaw := i.Fields.Unknowns[customerNameCustomField]
+	nameRaw := i.Fields.Unknowns[CustomerNameCustomField]
 
 	productMatch := false
 	if items, ok := productRaw.([]interface{}); ok {
