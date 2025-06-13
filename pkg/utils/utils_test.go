@@ -139,10 +139,10 @@ func TestIsValidMatch(t *testing.T) {
 			Fields: &jira.IssueFields{
 				AffectsVersions: []*jira.AffectsVersion{{Name: versionName}},
 				Unknowns: map[string]interface{}{
-					productCustomField: []interface{}{
+					ProductCustomField: []interface{}{
 						map[string]interface{}{"value": productVal},
 					},
-					customerNameCustomField: customerName,
+					CustomerNameCustomField: customerName,
 				},
 			},
 		}
