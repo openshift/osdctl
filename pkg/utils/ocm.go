@@ -28,7 +28,7 @@ const (
 	integrationGovURL          = "https://api-admin.int.openshiftusgov.com"
 	stagingGovURL              = "https://api-admin.stage.openshiftusgov.com"
 	HypershiftClusterTypeLabel = "ext-hypershift.openshift.io/cluster-type"
-	DynatraceTenantKeyLabel    = "sre-capabilities.dtp.v2.tenant"
+	DynatraceTenantKeyLabel    = "dynatrace.regional-tenant"
 )
 
 var urlAliases = map[string]string{
