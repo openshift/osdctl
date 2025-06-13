@@ -12,10 +12,57 @@ const (
 	JiraTokenConfigKey = "jira_token"
 )
 
-// GetJiraClient creates a jira client that connects to
-// https://issues.redhat.com. To work, the jiraToken needs to be set in the
-// config
-func GetJiraClient(jiratoken string) (*jira.Client, error) {
+// JiraClientInterface defines the methods we use from go-jira
+//
+//go:generate mockgen -source=jira.go -destination=./mocks/jira_mock.go -package=utils
+type JiraClientInterface interface {
+	SearchIssues(jql string) ([]jira.Issue, error)
+	CreateIssue(issue *jira.Issue) (*jira.Issue, error)
+	User() *jira.UserService
+	Issue() *jira.IssueService
+	Board() *jira.BoardService
+	Sprint() *jira.SprintService
+}
+
+// jiraClientWrapper wraps the actual go-jira client
+type jiraClientWrapper struct {
+	client *jira.Client
+}
+
+// Full implementation of the interface
+
+func (j *jiraClientWrapper) SearchIssues(jql string) ([]jira.Issue, error) {
+	issues, _, err := j.client.Issue.Search(jql, nil)
+	return issues, err
+}
+
+func (j *jiraClientWrapper) CreateIssue(issue *jira.Issue) (*jira.Issue, error) {
+	created, _, err := j.client.Issue.Create(issue)
+	return created, err
+}
+
+func (j *jiraClientWrapper) User() *jira.UserService {
+	return j.client.User
+}
+
+func (j *jiraClientWrapper) Issue() *jira.IssueService {
+	return j.client.Issue
+}
+
+func (j *jiraClientWrapper) Board() *jira.BoardService {
+	return j.client.Board
+}
+
+func (j *jiraClientWrapper) Sprint() *jira.SprintService {
+	return j.client.Sprint
+}
+
+// Factory function
+var NewJiraClient = func(jiraToken string) (JiraClientInterface, error) {
+	return getJiraClient(jiraToken)
+}
+
+func getJiraClient(jiratoken string) (JiraClientInterface, error) {
 	if jiratoken == "" {
 		if viper.IsSet(JiraTokenConfigKey) {
 			jiratoken = viper.GetString(JiraTokenConfigKey)
@@ -27,18 +74,15 @@ func GetJiraClient(jiratoken string) (*jira.Client, error) {
 			return nil, fmt.Errorf("JIRA token is not defined")
 		}
 	}
-	tp := jira.PATAuthTransport{
-		Token: jiratoken,
+	tp := jira.PATAuthTransport{Token: jiratoken}
+	client, err := jira.NewClient(tp.Client(), JiraBaseURL)
+	if err != nil {
+		return nil, err
 	}
-	return jira.NewClient(tp.Client(), JiraBaseURL)
+	return &jiraClientWrapper{client: client}, nil
 }
 
-func GetJiraIssuesForCluster(clusterID string, externalClusterID string, jiratoken string) ([]jira.Issue, error) {
-	jiraClient, err := GetJiraClient(jiratoken)
-	if err != nil {
-		return nil, fmt.Errorf("error connecting to jira: %v", err)
-	}
-
+func GetJiraIssuesForClusterWithClient(jiraClient JiraClientInterface, clusterID, externalClusterID string) ([]jira.Issue, error) {
 	jql := fmt.Sprintf(
 		`project = "OpenShift Hosted SRE Support" AND (
 		"Cluster ID" ~ "%[1]s" OR "Cluster ID" ~ "%[2]s" 
@@ -48,43 +92,46 @@ func GetJiraIssuesForCluster(clusterID string, externalClusterID string, jiratok
 		externalClusterID,
 		clusterID,
 	)
-	issues, _, err := jiraClient.Issue.Search(jql, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to search for jira issues: %w\n", err)
-	}
-
-	return issues, nil
+	return jiraClient.SearchIssues(jql)
 }
 
-func GetRelatedHandoverAnnouncements(clusterID string, externalClusterID string, jiraToken string, orgName string, product string, isHCP bool, version string) ([]jira.Issue, error) {
-	jiraClient, err := GetJiraClient(jiraToken)
+func GetJiraIssuesForCluster(clusterID, externalClusterID, jiratoken string) ([]jira.Issue, error) {
+	client, err := NewJiraClient(jiratoken)
+	if err != nil {
+		return nil, fmt.Errorf("error connecting to jira: %v", err)
+	}
+	return GetJiraIssuesForClusterWithClient(client, clusterID, externalClusterID)
+}
+
+func GetRelatedHandoverAnnouncements(clusterID, externalClusterID, jiraToken, orgName, product string, isHCP bool, version string) ([]jira.Issue, error) {
+	client, err := NewJiraClient(jiraToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create project service: %v", err)
 	}
 
-	projectKey := JiraHandoverAnnouncementProjectKey
 	productName := determineClusterProduct(product, isHCP)
 	baseQueries := []fieldQuery{
 		{Field: "Cluster ID", Value: clusterID, Operator: "~"},
 		{Field: "Cluster ID", Value: externalClusterID, Operator: "~"},
 	}
-	jql := buildJQL(projectKey, baseQueries)
-	issues, _, err := jiraClient.Issue.Search(jql, nil)
+	jql := buildJQL(JiraHandoverAnnouncementProjectKey, baseQueries)
+	issues, err := client.SearchIssues(jql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search for jira issues: %w", err)
 	}
-	extededQueries := []fieldQuery{
+
+	extendedQueries := []fieldQuery{
 		{Field: "Cluster ID", Value: "None,N/A,All", Operator: "~*"},
 		{Field: "Customer Name", Value: orgName, Operator: "~"},
 		{Field: "Products", Value: productName, Operator: "="},
 		{Field: "affectedVersion", Value: formatVersion(version), Operator: "~"},
 	}
-
-	jql = buildJQL(projectKey, extededQueries)
-	otherIssues, _, err := jiraClient.Issue.Search(jql, nil)
+	jql = buildJQL(JiraHandoverAnnouncementProjectKey, extendedQueries)
+	otherIssues, err := client.SearchIssues(jql)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search for jira issues: %w", err)
 	}
+
 	seenKeys := make(map[string]bool)
 	for _, i := range issues {
 		seenKeys[i.Key] = true
@@ -95,38 +142,26 @@ func GetRelatedHandoverAnnouncements(clusterID string, externalClusterID string,
 			seenKeys[i.Key] = true
 		}
 	}
-
 	return issues, nil
 }
 
-func GetJiraSupportExceptionsForOrg(organizationID string, jiratoken string) ([]jira.Issue, error) {
-	jiraClient, err := GetJiraClient(jiratoken)
+func GetJiraSupportExceptionsForOrg(organizationID, jiratoken string) ([]jira.Issue, error) {
+	client, err := NewJiraClient(jiratoken)
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to jira: %v", err)
 	}
-
 	jql := fmt.Sprintf(
 		`project = "Support Exceptions" AND type = Story AND Status = Approved AND
 		 Resolution = Unresolved AND ("Customer Name" ~ "%[1]s" OR "Organization ID" ~ "%[1]s")`,
 		organizationID,
 	)
-
-	issues, _, err := jiraClient.Issue.Search(jql, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to search for jira issues %w", err)
-	}
-
-	return issues, nil
+	return client.SearchIssues(jql)
 }
 
 func CreateIssue(
-	service *jira.IssueService,
-	summary string,
-	description string,
-	ticketType string,
-	project string,
-	reporter *jira.User,
-	assignee *jira.User,
+	client JiraClientInterface,
+	summary, description, ticketType, project string,
+	reporter, assignee *jira.User,
 	labels []string,
 ) (*jira.Issue, error) {
 	issue := &jira.Issue{
@@ -140,11 +175,5 @@ func CreateIssue(
 			Labels:      labels,
 		},
 	}
-
-	createdIssue, _, err := service.Create(issue)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create issue: %w", err)
-	}
-
-	return createdIssue, nil
+	return client.CreateIssue(issue)
 }
