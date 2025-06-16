@@ -13,7 +13,19 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
-// RawEventDetails struct represents the structure of an AWS raw event
+type WriteEventFilters struct {
+	Username            []string
+	Event               []string
+	ResourceName        []string
+	ResourceType        []string
+	ArnSource           []string
+	ExcludeUsername     []string
+	ExcludeEvent        []string
+	ExcludeResourceName []string
+	ExcludeResourceType []string
+	ExcludeArnSource    []string
+}
+
 type RawEventDetails struct {
 	EventVersion string `json:"eventVersion"`
 	UserIdentity struct {
@@ -35,7 +47,6 @@ type QueryOptions struct {
 	StartTime time.Time
 }
 
-// Extracts Raw cloudtrailEvent Details
 func ExtractUserDetails(cloudTrailEvent *string) (*RawEventDetails, error) {
 	if cloudTrailEvent == nil || *cloudTrailEvent == "" {
 		return &RawEventDetails{}, fmt.Errorf("cannot parse a nil input")
@@ -59,7 +70,6 @@ func ExtractUserDetails(cloudTrailEvent *string) (*RawEventDetails, error) {
 	return &res, nil
 }
 
-// whoami retrieves caller identity information
 func Whoami(stsClient sts.Client) (accountArn string, accountId string, err error) {
 	ctx := context.TODO()
 	callerIdentityOutput, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
@@ -75,9 +85,7 @@ func Whoami(stsClient sts.Client) (accountArn string, accountId string, err erro
 	return userArn.String(), userArn.AccountID, nil
 }
 
-// getWriteEvents retrieves cloudtrail events since the specified time
-// using the provided cloudtrail client and starttime from since flag.
-func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool) ([]types.Event, error) {
+func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool, filters *WriteEventFilters) ([]types.Event, error) {
 
 	alllookupEvents := []types.Event{}
 	input := cloudtrail.LookupEventsInput{
@@ -106,6 +114,10 @@ func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnl
 			break
 		}
 
+	}
+
+	if filters != nil {
+		alllookupEvents = Filters(filters, alllookupEvents)
 	}
 
 	return alllookupEvents, nil
