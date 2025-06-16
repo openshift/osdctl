@@ -1,18 +1,27 @@
-## osdctl jira
+## osdctl jira create-handover-announcement
 
-Provides a set of commands for interacting with Jira
+Create a new Handover announcement for SREPHOA Project
+
+```
+osdctl jira create-handover-announcement [flags]
+```
 
 ### Options
 
 ```
-  -h, --help   help for jira
+      --cluster string       Cluster ID
+      --customer string      Customer name
+      --description string   Enter Description for the Announcment
+  -h, --help                 help for create-handover-announcement
+      --products string      Comma-separated list of products (e.g. 'Product A,Product B')
+      --summary string       Enter Summary/Title for the Announcment
+      --version string       Affects version
 ```
 
 ### Options inherited from parent commands
 
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
-      --cluster string                   The name of the kubeconfig cluster to use
       --context string                   The name of the kubeconfig context to use
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
@@ -25,7 +34,5 @@ Provides a set of commands for interacting with Jira
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
-* [osdctl jira create-handover-announcement](osdctl_jira_create-handover-announcement.md)	 - Create a new Handover announcement for SREPHOA Project
-* [osdctl jira quick-task](osdctl_jira_quick-task.md)	 - creates a new ticket with the given name
+* [osdctl jira](osdctl_jira.md)	 - Provides a set of commands for interacting with Jira
 
