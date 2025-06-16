@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/openshift/osdctl/cmd/promote/git"
+	"github.com/openshift/osdctl/cmd/promote/iexec"
 )
 
 const (
@@ -64,7 +65,7 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	}
 	fmt.Printf("Current Git Hash: %v\nGit Repo: %v\n\n", currentGitHash, serviceRepo)
 
-	promotionGitHash, commitLog, err := git.CheckoutAndCompareGitHash(serviceRepo, gitHash, currentGitHash)
+	promotionGitHash, commitLog, err := git.CheckoutAndCompareGitHash(appInterface.GitExecutor, serviceRepo, gitHash, currentGitHash)
 	if err != nil {
 		return fmt.Errorf("failed to checkout and compare git hash: %v", err)
 	} else if promotionGitHash == "" {
@@ -78,8 +79,13 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	if err != nil {
 		fmt.Printf("FAILURE: %v\n", err)
 	}
+	prefix := "saas-"
+	operatorName := strings.TrimPrefix(serviceName, prefix)
+	commitMessage := fmt.Sprintf("Promote %s to %s\n\nMonitor rollout status here https://inscope.corp.redhat.com/catalog/default/component/%s/rollout\n\n", serviceName, promotionGitHash, operatorName)
+	commitMessage += fmt.Sprintf("See %s/compare/%s...%s for contents of the promotion. clog:\n\n%s", serviceRepo, currentGitHash, promotionGitHash, commitLog)
 
-	commitMessage := fmt.Sprintf("Promote %s to %s\n\nSee %s/compare/%s...%s for contents of the promotion.\n clog:%s", serviceName, promotionGitHash, serviceRepo, currentGitHash, promotionGitHash, commitLog)
+	// ovverriding appInterface.GitExecuter to iexec.Exec{}
+	appInterface.GitExecutor = iexec.Exec{}
 	err = appInterface.CommitSaasFile(saasDir, commitMessage)
 	if err != nil {
 		return fmt.Errorf("failed to commit changes to app-interface: %w", err)

@@ -78,9 +78,9 @@ func newCmdCreateJumphost() *cobra.Command {
 		},
 	}
 
-	// create.Flags().StringVarP(&clusterId, "cluster-id", "c", "", "OCM internal/external cluster id trying to access via a jumphost")
 	create.Flags().StringVar(&subnetId, "subnet-id", "", "public subnet id to create a jumphost in")
-	create.MarkFlagRequired("subnet-id")
+
+	_ = create.MarkFlagRequired("subnet-id")
 
 	return create
 }
@@ -265,7 +265,7 @@ func (j *jumphostConfig) assembleNextSteps() string {
 		return fmt.Sprintf("ssh -i %s ec2-user@%s", j.keyFilepath, j.ec2PublicIp)
 	}
 
-	return fmt.Sprintf("ssh-i ${private_key} ec2-user@%s", j.ec2PublicIp)
+	return fmt.Sprintf("ssh -i ${private_key} ec2-user@%s", j.ec2PublicIp)
 }
 
 // findVpcId returns the AWS VPC ID of a provided jumphostConfig.

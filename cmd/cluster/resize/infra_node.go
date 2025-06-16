@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"strings"
 	"time"
 
@@ -33,7 +34,7 @@ const (
 	twentyMinuteTimeout                   = 20 * time.Minute
 	twentySecondIncrement                 = 20 * time.Second
 	resizedInfraNodeServiceLogTemplate    = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_resized.json"
-	GCPresizedInfraNodeServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/gcp/GCP_infranode_resized_auto.json"
+	resizedInfraNodeServiceLogTemplateGCP = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/gcp/GCP_infranode_resized_auto.json"
 	infraNodeLabel                        = "node-role.kubernetes.io/infra"
 	temporaryInfraNodeLabel               = "osdctl.openshift.io/infra-resize-temporary-machinepool"
 )
@@ -54,6 +55,9 @@ type Infra struct {
 
 	// reason to provide for resize
 	justification string
+
+	// OHSS ticket to reference in SL
+	ohss string
 }
 
 func newCmdResizeInfra() *cobra.Command {
@@ -87,27 +91,32 @@ func newCmdResizeInfra() *cobra.Command {
 	infraResizeCmd.Flags().StringVar(&r.instanceType, "instance-type", "", "(optional) Override for an AWS or GCP instance type to resize the infra nodes to, by default supported instance types are automatically selected.")
 	infraResizeCmd.Flags().StringVar(&r.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
 	infraResizeCmd.Flags().StringVar(&r.justification, "justification", "", "The justification behind resize")
+	infraResizeCmd.Flags().StringVar(&r.ohss, "ohss", "", "OHSS ticket tracking this infra node resize")
 
-	infraResizeCmd.MarkFlagRequired("cluster-id")
-	infraResizeCmd.MarkFlagRequired("justification")
-	infraResizeCmd.MarkFlagRequired("reason")
+	_ = infraResizeCmd.MarkFlagRequired("cluster-id")
+	_ = infraResizeCmd.MarkFlagRequired("justification")
+	_ = infraResizeCmd.MarkFlagRequired("reason")
+	_ = infraResizeCmd.MarkFlagRequired("ohss")
 
 	return infraResizeCmd
 }
 
 func (r *Infra) New() error {
+	// Only validate the instanceType value if one is provided, otherwise we rely on embiggenMachinePool to provide the size
+	if r.instanceType != "" {
+		if err := validateInstanceSize(r.instanceType, "infra"); err != nil {
+			return err
+		}
+	}
+
 	scheme := runtime.NewScheme()
 
-	// Register machinev1beta1 for Machines
 	if err := machinev1beta1.Install(scheme); err != nil {
 		return err
 	}
-
-	// Register hivev1 for MachinePools
 	if err := hivev1.AddToScheme(scheme); err != nil {
 		return err
 	}
-
 	if err := corev1.AddToScheme(scheme); err != nil {
 		return err
 	}
@@ -437,7 +446,7 @@ func (r *Infra) RunInfra(ctx context.Context) error {
 		}
 	}
 
-	postCmd := generateServiceLog(tempMp, r.instanceType, r.justification, r.clusterId)
+	postCmd := generateServiceLog(tempMp, r.instanceType, r.justification, r.clusterId, r.ohss)
 	if err := postCmd.Run(); err != nil {
 		fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
 		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
@@ -469,7 +478,6 @@ func (r *Infra) getInfraMachinePool(ctx context.Context) (*hivev1.MachinePool, e
 	}
 
 	for _, mp := range mpList.Items {
-		mp := mp
 		if mp.Spec.Name == "infra" {
 			log.Printf("found machinepool %s", mp.Name)
 			return &mp, nil
@@ -489,6 +497,8 @@ func (r *Infra) embiggenMachinePool(mp *hivev1.MachinePool) (*hivev1.MachinePool
 		// GCP
 		"custom-4-32768-ext": "custom-8-65536-ext",
 		"custom-8-65536-ext": "custom-16-131072-ext",
+		"n2-highmem-4":       "n2-highmem-8",
+		"n2-highmem-8":       "n2-highmem-16",
 	}
 
 	newMp := &hivev1.MachinePool{}
@@ -541,16 +551,16 @@ func getInstanceType(mp *hivev1.MachinePool) (string, error) {
 }
 
 // Adding change in serviceLog as per the cloud provider.
-func generateServiceLog(mp *hivev1.MachinePool, instanceType, justification, clusterId string) servicelog.PostCmdOptions {
+func generateServiceLog(mp *hivev1.MachinePool, instanceType, justification, clusterId, ohss string) servicelog.PostCmdOptions {
 	if mp.Spec.Platform.AWS != nil {
 		return servicelog.PostCmdOptions{
 			Template:       resizedInfraNodeServiceLogTemplate,
 			ClusterId:      clusterId,
-			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType), fmt.Sprintf("JUSTIFICATION=%s", justification)},
+			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType), fmt.Sprintf("JUSTIFICATION=%s", justification), fmt.Sprintf("JIRA_ID=%s", ohss)},
 		}
 	} else if mp.Spec.Platform.GCP != nil {
 		return servicelog.PostCmdOptions{
-			Template:       GCPresizedInfraNodeServiceLogTemplate,
+			Template:       resizedInfraNodeServiceLogTemplateGCP,
 			ClusterId:      clusterId,
 			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType), fmt.Sprintf("JUSTIFICATION=%s", justification)},
 		}
@@ -638,17 +648,15 @@ func (r *Infra) nodesMatchExpectedCount(ctx context.Context, labelSelector label
 	return false, nil
 }
 
-// having an error when being in a retry loop, should not be handled as an error, and we should just display it and continue
-// in case we have a function that return a bool status and an error, we can use following helper
-// f being a function returning (bool, error), replace
-//
-//	return f(...)
-//
-// by
-//
-//	return skipError(wrapResult(f(...)), "message to context the error")
-//
-// and then the return will always have error set to nil, but a continuing message will be displayed in case of error
+// validateInstanceSize accepts a string for the requested new instance type and returns an error
+// if the instance type is invalid
+func validateInstanceSize(newInstanceSize string, nodeType string) error {
+	if !slices.Contains(supportedInstanceTypes[nodeType], newInstanceSize) {
+		return fmt.Errorf("instance type %s not supported for %s nodes", newInstanceSize, nodeType)
+	}
+	return nil
+}
+
 type result struct {
 	condition bool
 	err       error

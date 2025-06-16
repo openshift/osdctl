@@ -35,6 +35,13 @@ make build
 
 Then you can find the `osdctl` binary file in the `./dist` subdirectory matching your architecture.
 
+### Update documentation after every release
+
+make generate-docs
+
+This will run the script to check for any changes made to the osdctl commands, if found the latest commands and usage will be updated in docs/README.md, to be run as a part of every PR.
+
+
 ### Download from release
 
 Release are available on Github

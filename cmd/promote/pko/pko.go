@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/openshift/osdctl/cmd/promote/git"
+	"github.com/openshift/osdctl/cmd/promote/iexec"
 	"github.com/openshift/osdctl/cmd/promote/saas"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -11,25 +12,32 @@ import (
 
 func NewCmdPKO() *cobra.Command {
 	ops := &pkoOptions{}
+
 	pkoCmd := &cobra.Command{
 		Use:               "package",
 		Short:             "Utilities to promote package-operator services",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Example: `
-		# Promote a package-operator service
-		osdctl promote package --serviceName <serviceName> --gitHash <git-hash>`,
+ # Promote a package-operator service
+ osdctl promote package --serviceName <serviceName> --gitHash <git-hash>`,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(ops.ValidatePKOOptions())
-			appInterface := git.BootstrapOsdCtlForAppInterfaceAndServicePromotions(ops.appInterfaceCheckoutDir)
+			// Set default directory if not provided
+			if ops.appInterfaceCheckoutDir == "" {
+				ops.appInterfaceCheckoutDir = git.DefaultAppInterfaceDirectory()
+			}
 
+			cmdutil.CheckErr(ops.ValidatePKOOptions())
+			appInterface := git.BootstrapOsdCtlForAppInterfaceAndServicePromotions(ops.appInterfaceCheckoutDir, iexec.Exec{})
 			cmdutil.CheckErr(PromotePackage(appInterface, ops.serviceName, ops.packageTag, ops.hcp))
 		},
 	}
+
 	pkoCmd.Flags().StringVarP(&ops.serviceName, "serviceName", "n", "", "Service getting promoted")
 	pkoCmd.Flags().StringVarP(&ops.packageTag, "tag", "t", "", "Package tag being promoted to")
-	pkoCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "appInterfaceDir", "", "", "location of app-interfache checkout. Falls back to `pwd` and "+git.DefaultAppInterfaceDirectory())
+	pkoCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "appInterfaceDir", "", "", "location of app-interface checkout. Falls back to current working directory")
 	pkoCmd.Flags().BoolVar(&ops.hcp, "hcp", false, "The service being promoted conforms to the HyperShift progressive delivery definition")
+
 	return pkoCmd
 }
 
@@ -56,32 +64,26 @@ func PromotePackage(appInterface git.AppInterface, serviceName string, packageTa
 	if err != nil {
 		return err
 	}
-
 	serviceName, err = saas.ValidateServiceName(services, serviceName)
 	if err != nil {
 		return err
 	}
-
 	saasFile, err := saas.GetSaasDir(serviceName, !hcp, hcp)
 	if err != nil {
 		return err
 	}
-
 	currentTag, err := git.GetCurrentPackageTagFromAppInterface(saasFile)
 	if err != nil {
 		return err
 	}
-
 	if currentTag == packageTag {
 		return fmt.Errorf("current hash is already at '%s'. Nothing to do", packageTag)
 	}
-
 	branchName := fmt.Sprintf("promote-%s-package-%s", serviceName, packageTag)
 	err = appInterface.UpdatePackageTag(saasFile, currentTag, packageTag, branchName)
 	if err != nil {
 		return err
 	}
-
 	commitMessage := fmt.Sprintf("Promote %s package to %s", serviceName, packageTag)
 	err = appInterface.CommitSaasFile(saasFile, commitMessage)
 	if err != nil {

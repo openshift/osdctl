@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	cco "github.com/openshift/cloud-credential-operator/pkg/apis/cloudcredential/v1"
 	"github.com/openshift/osdctl/pkg/policies"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -18,10 +19,29 @@ type saveOptions struct {
 	ReleaseVersion string
 	Cloud          policies.CloudSpec
 	Force          bool
+	DownloadCRs    func(string, policies.CloudSpec) (string, error)
+	ParseCRsInDir  func(string) ([]*cco.CredentialsRequest, error)
+	AWSConverter   func(*cco.CredentialsRequest) (*policies.PolicyDocument, error)
+	GCPConverter   func(*cco.CredentialsRequest) (*policies.ServiceAccount, error)
+	MkdirAll       func(string, os.FileMode) error
+	Stat           func(string) (os.FileInfo, error)
+	WriteFile      func(string, []byte, os.FileMode) error
+	Print          func(format string, a ...interface{}) (n int, err error)
 }
 
+type saveCmdBuilder struct{}
+
 func newCmdSave() *cobra.Command {
-	ops := &saveOptions{}
+	op := &saveOptions{
+		DownloadCRs:   policies.DownloadCredentialRequests,
+		ParseCRsInDir: policies.ParseCredentialsRequestsInDir,
+		AWSConverter:  policies.AWSCredentialsRequestToPolicyDocument,
+		GCPConverter:  policies.CredentialsRequestToWifServiceAccount,
+		MkdirAll:      os.MkdirAll,
+		Stat:          os.Stat,
+		WriteFile:     os.WriteFile,
+		Print:         fmt.Printf,
+	}
 
 	saveCmd := &cobra.Command{
 		Use:               "save",
@@ -29,91 +49,87 @@ func newCmdSave() *cobra.Command {
 		Args:              cobra.ExactArgs(0),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, _ []string) {
-			ops.Cloud = *cmd.Flag(cloudFlagName).Value.(*policies.CloudSpec)
-			cmdutil.CheckErr(ops.run())
+			op.Cloud = *cmd.Flag(cloudFlagName).Value.(*policies.CloudSpec)
+			cmdutil.CheckErr(op.run())
 		},
 	}
 
-	saveCmd.Flags().StringVarP(&ops.OutFolder, "dir", "d", "", "Folder where the policy files should be written")
-	saveCmd.Flags().StringVarP(&ops.ReleaseVersion, "release-version", "r", "", "ocp version for which the policies should be downloaded")
-	saveCmd.Flags().BoolVarP(&ops.Force, "force", "f", false, "Overwrite existing files")
+	saveCmd.Flags().StringVarP(&op.OutFolder, "dir", "d", "", "Folder where the policy files should be written")
+	saveCmd.Flags().StringVarP(&op.ReleaseVersion, "release-version", "r", "", "ocp version for which the policies should be downloaded")
+	saveCmd.Flags().BoolVarP(&op.Force, "force", "f", false, "Overwrite existing files")
 
-	saveCmd.MarkFlagRequired("out")
-	saveCmd.MarkFlagRequired("release-version")
+	_ = saveCmd.MarkFlagRequired("dir")
+	_ = saveCmd.MarkFlagRequired("release-version")
 
 	return saveCmd
 }
 
 func (o *saveOptions) run() error {
-	err := os.MkdirAll(o.OutFolder, 0755)
+	if err := o.MkdirAll(o.OutFolder, 0750); err != nil {
+		return err
+	}
+
+	dir, err := o.DownloadCRs(o.ReleaseVersion, o.Cloud)
 	if err != nil {
 		return err
 	}
 
-	directory, err := policies.DownloadCredentialRequests(o.ReleaseVersion, o.Cloud)
+	crs, err := o.ParseCRsInDir(dir)
 	if err != nil {
 		return err
 	}
 
-	allCredentialsRequests, err := policies.ParseCredentialsRequestsInDir(directory)
-	if err != nil {
-		return err
-	}
-
-	filesToCreate := map[string][]byte{}
-
-	if o.Cloud == policies.AWS {
-		for _, credReq := range allCredentialsRequests {
-			polDoc, err := policies.AWSCredentialsRequestToPolicyDocument(credReq)
+	files := make(map[string][]byte)
+	switch o.Cloud {
+	case policies.AWS:
+		for _, cr := range crs {
+			doc, err := o.AWSConverter(cr)
 			if err != nil {
-				return fmt.Errorf("Error parsing CredentialsRequest '%s': %w", credReq.Name, err)
+				return fmt.Errorf("error parsing CredentialsRequest '%s': %w", cr.Name, err)
 			}
 
-			filename := filepath.Join(o.OutFolder, fmt.Sprintf("%s.json", credReq.Name))
-			out, err := json.MarshalIndent(polDoc, "", "    ")
+			path := filepath.Join(o.OutFolder, fmt.Sprintf("%s.json", cr.Name))
+			out, err := json.MarshalIndent(doc, "", "    ")
 			if err != nil {
-				return fmt.Errorf("Coulnd't Marshal sts policy '%s': %w", credReq.Name, err)
+				return fmt.Errorf("couldn't marshal sts policy '%s': %w", cr.Name, err)
 			}
-
-			filesToCreate[filename] = out
+			files[path] = out
 		}
-	} else if o.Cloud == policies.GCP {
-		for _, credReq := range allCredentialsRequests {
-			sa, err := policies.CredentialsRequestToWifServiceAccount(credReq)
+
+	case policies.GCP:
+		for _, cr := range crs {
+			sa, err := o.GCPConverter(cr)
 			if err != nil {
-				return fmt.Errorf("Error parsing CredentialsRequest '%s': %w", credReq.Name, err)
+				return fmt.Errorf("error parsing CredentialsRequest '%s': %w", cr.Name, err)
 			}
 
-			filename := filepath.Join(o.OutFolder, fmt.Sprintf("%s.yaml", sa.Id))
-			outJSON, err := json.Marshal(sa)
+			path := filepath.Join(o.OutFolder, fmt.Sprintf("%s.yaml", sa.Id))
+			jsonData, err := json.Marshal(sa)
 			if err != nil {
-				return fmt.Errorf("Coulnd't Marshal wif ServiceAccount '%s': %w", sa.Id, err)
+				return fmt.Errorf("couldn't marshal wif ServiceAccount '%s': %w", sa.Id, err)
 			}
-			out, err := yaml.JSONToYAML(outJSON)
+			out, err := yaml.JSONToYAML(jsonData)
 			if err != nil {
-				return fmt.Errorf("Error Converting json to yaml: %w", err)
+				return fmt.Errorf("error converting json to yaml: %w", err)
 			}
-			filesToCreate[filename] = out
+			files[path] = out
 		}
 	}
 
-	for path, content := range filesToCreate {
-		_, err := os.Stat(path)
-
+	for path, content := range files {
+		_, err := o.Stat(path)
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
-
 		if err == nil && !o.Force {
-			fmt.Printf("Cowardly refusing to overwrite: '%s'. Append '--force' to overwrite existing files.\n", path)
+			o.Print("Cowardly refusing to overwrite: '%s'. Append '--force' to overwrite existing files.\n", path)
 			continue
 		}
 
-		fmt.Printf("Writing %s\n", path)
-		if err = os.WriteFile(path, content, 0600); err != nil {
+		_, _ = o.Print("Writing %s\n", path)
+		if err := o.WriteFile(path, content, 0600); err != nil {
 			return err
 		}
-
 	}
 
 	return nil

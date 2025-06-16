@@ -34,9 +34,9 @@ func newCmddelete(streams genericclioptions.IOStreams, globalOpts *globalflags.G
 
 	ops := newDeleteOptions(streams, globalOpts)
 	deleteCmd := &cobra.Command{
-		Use:               "delete CLUSTER_ID",
+		Use:               "delete --cluster-id <cluster-identifier>",
 		Short:             "Delete specified limited support reason for a given cluster",
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd, args))
@@ -45,10 +45,14 @@ func newCmddelete(streams genericclioptions.IOStreams, globalOpts *globalflags.G
 	}
 
 	// Defined required flags
+	deleteCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "Internal cluster ID (required)")
 	deleteCmd.Flags().BoolVar(&ops.removeAll, "all", false, "Remove all limited support reasons")
 	deleteCmd.Flags().StringVarP(&ops.limitedSupportReasonID, "limited-support-reason-id", "i", "", "Limited support reason ID")
 	deleteCmd.Flags().BoolVarP(&ops.isDryRun, "dry-run", "d", false, "Dry-run - print the limited support reason about to be sent but don't send it.")
 	deleteCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
+
+	// Mark cluster-id as required
+	_ = deleteCmd.MarkFlagRequired("cluster-id")
 
 	return deleteCmd
 }
@@ -63,15 +67,10 @@ func newDeleteOptions(streams genericclioptions.IOStreams, globalOpts *globalfla
 
 func (o *deleteOptions) complete(cmd *cobra.Command, args []string) error {
 
-	if len(args) != 1 {
-		return cmdutil.UsageErrorf(cmd, "Provide exactly one internal cluster ID")
-	}
-
 	if o.limitedSupportReasonID != "" && o.removeAll {
 		return cmdutil.UsageErrorf(cmd, "Cannot provide a reason ID with the `all` flag. Please provide one or the other.")
 	}
 
-	o.clusterID = args[0]
 	o.output = o.GlobalOptions.Output
 
 	return nil

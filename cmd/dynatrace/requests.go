@@ -13,9 +13,18 @@ import (
 )
 
 const (
-	authURL     string = "https://sso.dynatrace.com/sso/oauth2/token"
-	DTVaultPath string = "dt_vault_path"
-	VaultAddr   string = "vault_address"
+	VaultAddr string = "vault_address"
+
+	authURL string = "https://sso.dynatrace.com/sso/oauth2/token"
+
+	// Logs
+	DTStorageVaultPath string = "dt_vault_path"
+	DTStorageScopes    string = "storage:logs:read storage:events:read storage:buckets:read"
+
+	// Dashboards
+	DTDocumentVaultPath string = "dt_document_vault_path"
+	DTDocumentScopes    string = "document:documents:read"
+	DTDashboardType     string = "dashboard"
 )
 
 type DTRequestError struct {
@@ -76,40 +85,42 @@ func (rh *Requester) send() (string, error) {
 	return string(body), nil
 }
 
-func getVaultPath() (addr, path string, error error) {
+func getVaultPath(vaultPathKey string) (addr, path string, error error) {
 	if !viper.IsSet(VaultAddr) {
-		return "", "", fmt.Errorf("key %s is not set in config file", VaultAddr)
+		return "", "", fmt.Errorf("key '%s' is not set in config file", VaultAddr)
 	}
 	vaultAddr := viper.GetString(VaultAddr)
 
-	if !viper.IsSet(DTVaultPath) {
-		return "", "", fmt.Errorf("key %s is not set in config file", DTVaultPath)
+	if !viper.IsSet(vaultPathKey) {
+		return "", "", fmt.Errorf("key '%s' is not set in config file", vaultPathKey)
 	}
-	vaultPath := viper.GetString(DTVaultPath)
+	vaultPath := viper.GetString(vaultPathKey)
 
 	return vaultAddr, vaultPath, nil
 }
 
-func getAccessToken() (string, error) {
-	vaultAddr, vaultPath, err := getVaultPath()
+// getScopedAccessToken gets an access token using the vault path in the configuration key specified
+// It will request any scopes listed in the scopes string
+func getScopedAccessToken(configKey string, scopes string) (string, error) {
+	vaultAddr, vaultPath, err := getVaultPath(configKey)
 	if err != nil {
 		return "", err
 	}
 
 	err = setupVaultToken(vaultAddr)
 	if err != nil {
-		return "", err
+		return "", nil
 	}
 
-	clientID, clientSecret, err := getSecretFromVault(vaultAddr, vaultPath)
+	clientId, clientSecret, err := getSecretFromVault(vaultAddr, vaultPath)
 	if err != nil {
-		return "", err
+		return "", nil
 	}
 
 	reqData := url.Values{
 		"grant_type":    {"client_credentials"},
-		"scope":         {"storage:logs:read storage:events:read storage:buckets:read"},
-		"client_id":     {clientID},
+		"scope":         {scopes},
+		"client_id":     {clientId},
 		"client_secret": {clientSecret},
 	}.Encode()
 
@@ -142,6 +153,14 @@ func getAccessToken() (string, error) {
 	fmt.Println("Successfully authenticated with DynaTrace")
 
 	return token, nil
+}
+
+func getDocumentAccessToken() (string, error) {
+	return getScopedAccessToken(DTDocumentVaultPath, DTDocumentScopes)
+}
+
+func getStorageAccessToken() (string, error) {
+	return getScopedAccessToken(DTStorageVaultPath, DTStorageScopes)
 }
 
 type DTQueryPayload struct {
@@ -188,6 +207,16 @@ type DTExecuteToken struct {
 
 type DTExecuteResults struct {
 	Result []json.RawMessage `json:"records"`
+}
+
+type DTDocumentResult struct {
+	Documents []DTDocument `json:"documents"`
+}
+
+type DTDocument struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
 }
 
 func getDTQueryExecution(dtURL string, accessToken string, query string) (reqToken string, error error) {
@@ -294,6 +323,49 @@ func getDTPollResults(dtURL string, requestToken string, accessToken string) (re
 			return "", fmt.Errorf("query failed")
 		}
 	}
+}
+
+// getDocumentIDByNameAndType searches using the dynatrace document API using a filter that
+// checks for an exact match of both name and type. It will return the id of the document
+// found, unless it find zero or multiple in which case it will return an error
+func getDocumentIDByNameAndType(dtURL string, accessToken string, docName string, docType string) (string, error) {
+	dtDashFilter := "name == '" + docName + "' and type == '" + docType + "'"
+	parameters := url.Values{
+		"filter": {dtDashFilter},
+	}.Encode()
+
+	requester := Requester{
+		method: http.MethodGet,
+		url:    dtURL + "platform/document/v1/documents?" + parameters,
+		headers: map[string]string{
+			"Content-Type":  "application/json",
+			"Authorization": "Bearer " + accessToken,
+		},
+		successCode: http.StatusOK,
+	}
+
+	result, err := requester.send()
+	if err != nil {
+		return "", fmt.Errorf("could not search for dashboard: %w", err)
+	}
+
+	var dtDocResult DTDocumentResult
+	err = json.Unmarshal([]byte(result), &dtDocResult)
+	if err != nil {
+		return "", fmt.Errorf("response in incorrect format")
+	}
+
+	docCount := len(dtDocResult.Documents)
+	if docCount == 0 {
+		return "", fmt.Errorf("dashboard not found")
+	}
+	if docCount > 1 {
+		return "", fmt.Errorf("dashboard name was ambiguous, %d dashboards found", docCount)
+	}
+
+	dtDashboard := dtDocResult.Documents[0]
+
+	return dtDashboard.Id, nil
 }
 
 func getLogs(dtURL string, accessToken string, requestToken string, dumpWriter io.Writer) error {

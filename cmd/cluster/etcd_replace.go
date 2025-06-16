@@ -19,8 +19,9 @@ import (
 )
 
 type etcdOptions struct {
-	nodeId string
-	reason string
+	nodeId    string
+	reason    string
+	clusterID string
 }
 
 // Secrets List
@@ -40,24 +41,26 @@ const (
 func newCmdEtcdMemberReplacement() *cobra.Command {
 	opts := &etcdOptions{}
 	replaceCmd := &cobra.Command{
-		Use:               "etcd-member-replace <cluster-id>",
+		Use:               "etcd-member-replace --cluster-id <cluster-identifier>",
 		Short:             "Replaces an unhealthy etcd node",
 		Long:              `Replaces an unhealthy ectd node using the member id provided`,
-		Args:              cobra.ExactArgs(1),
+		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(opts.EtcdReplaceMember(args[0]))
+			cmdutil.CheckErr(opts.EtcdReplaceMember())
 		},
 	}
+	replaceCmd.Flags().StringVar(&opts.clusterID, "cluster-id", "", "Provide internal Cluster ID")
 	replaceCmd.Flags().StringVar(&opts.nodeId, "node", "", "Node ID (required)")
-	replaceCmd.Flags().StringVar(&opts.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
-	replaceCmd.MarkFlagRequired("node")
-	replaceCmd.MarkFlagRequired("reason")
+	replaceCmd.Flags().StringVar(&opts.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
+	_ = replaceCmd.MarkFlagRequired("cluster-id")
+	_ = replaceCmd.MarkFlagRequired("node")
+	_ = replaceCmd.MarkFlagRequired("reason")
 	return replaceCmd
 }
 
-func (opts *etcdOptions) EtcdReplaceMember(clusterId string) error {
-	kubeCli, kconfig, clientset, err := common.GetKubeConfigAndClient(clusterId, opts.reason, fmt.Sprintf("Replacing unhealthy etcd node %s using osdctl", opts.nodeId))
+func (opts *etcdOptions) EtcdReplaceMember() error {
+	kubeCli, kconfig, clientset, err := common.GetKubeConfigAndClient(opts.clusterID, opts.reason, fmt.Sprintf("Replacing unhealthy etcd node %s using osdctl", opts.nodeId))
 	if err != nil {
 		return err
 	}
@@ -154,8 +157,8 @@ func (opts *etcdOptions) removeEtcdMember(kconfig *rest.Config, clientset *kuber
 		return fmt.Errorf("operation cancelled by user")
 	}
 
-	remove_cmd := "etcdctl member remove " + memberId
-	output, err := Etcdctlhealth(kconfig, clientset, remove_cmd, pod)
+	removeCmd := "etcdctl member remove " + memberId
+	output, err := Etcdctlhealth(kconfig, clientset, removeCmd, pod)
 	if err != nil {
 		fmt.Println("[ERROR] Could not replace pod. Refer error below")
 		return err

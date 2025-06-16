@@ -2,6 +2,7 @@ package access
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,9 +13,8 @@ import (
 	"time"
 
 	clustersmgmtv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
-	"sigs.k8s.io/yaml"
-
 	"github.com/openshift/osdctl/pkg/k8s"
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -22,6 +22,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/yaml"
 )
 
 // TestClusterAccessOptions_createLocalKubeconfigAccess tests the clusterAccessOptions' createLocalKubeconfigAccess function
@@ -90,8 +91,7 @@ func TestClusterAccessOptions_createLocalKubeconfigAccess(t *testing.T) {
 			// Setup Environment
 			updateEnvResponse := fmt.Sprintf("%s\n", test.UpdateEnvResp)
 			streams := genericclioptions.IOStreams{In: strings.NewReader(updateEnvResponse), Out: os.Stdout, ErrOut: os.Stderr}
-			client := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(runtime.NewScheme()))
-			access := newClusterAccessOptions(client, streams)
+			access := newClusterAccessOptions(streams)
 
 			// Generate test objects
 			cluster := generateClusterObjectForTesting("test-cluster", "test-cluster-id", false, test.PrivateAPI)
@@ -230,7 +230,7 @@ func TestClusterAccessOptions_createJumpPod(t *testing.T) {
 		}
 		client := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(scheme))
 		streams := genericclioptions.IOStreams{In: genericclioptions.NewTestIOStreamsDiscard().In, Out: os.Stdout, ErrOut: os.Stderr}
-		access := newClusterAccessOptions(client, streams)
+		access := newClusterAccessOptions(streams)
 
 		// Generate test objects
 		serverURL := "https://api.test-cluster.fakedomain.devshift.org:6443"
@@ -239,7 +239,7 @@ func TestClusterAccessOptions_createJumpPod(t *testing.T) {
 		secret, _ := generateKubeconfigSecretObjectForTesting(secretName, secretNS, "kubeconfig", serverURL)
 
 		// Run test
-		pod, err := access.createJumpPod(secret, "fake-cluster-uuid-123456")
+		pod, err := access.createJumpPod(context.TODO(), client, secret, "fake-cluster-uuid-123456")
 		if err != nil {
 			t.Errorf("Failed %s: error while creating pod: %v", test.Name, err)
 		}
@@ -360,4 +360,81 @@ func generateKubeconfigSecretObjectForTesting(name, namespace, key, serverURL st
 		Data: map[string][]byte{key: rawKubeconfig},
 	}
 	return secret, kubeconfig
+}
+
+func TestGetKubeConfigSecret(t *testing.T) {
+	tests := []struct {
+		name           string
+		secretList     []corev1.Secret
+		namespaceName  string
+		expectedSecret corev1.Secret
+		expectedErr    error
+	}{
+		{
+			name: "Success_Secret_Found",
+			secretList: []corev1.Secret{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "kubeconfig-secret",
+						Namespace: "test-namespace",
+						Labels:    map[string]string{"hive.openshift.io/secret-type": "kubeconfig"},
+					},
+				},
+			},
+			namespaceName: "test-namespace",
+			expectedSecret: corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "kubeconfig-secret",
+					Namespace:       "test-namespace",
+					Labels:          map[string]string{"hive.openshift.io/secret-type": "kubeconfig"},
+					ResourceVersion: "999",
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name:           "Error_No_Secret_Found",
+			secretList:     nil,
+			namespaceName:  "test-namespace",
+			expectedSecret: corev1.Secret{},
+			expectedErr:    fmt.Errorf("kubeconfig secret not found in namespace 'test-namespace'"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			objs := []runtime.Object{}
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: tt.namespaceName,
+				},
+			}
+			objs = append(objs, &ns)
+
+			for _, secret := range tt.secretList {
+				objs = append(objs, &secret)
+			}
+
+			scheme := runtime.NewScheme()
+			_ = corev1.AddToScheme(scheme)
+			fakeClient := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...))
+
+			c := &clusterAccessOptions{}
+
+			nsObj := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: tt.namespaceName,
+				},
+			}
+
+			secret, err := c.getKubeConfigSecret(fakeClient, nsObj)
+
+			if tt.expectedErr != nil {
+				assert.EqualError(t, err, tt.expectedErr.Error())
+			} else {
+				assert.Equal(t, tt.expectedSecret, secret)
+			}
+		})
+	}
 }

@@ -2,11 +2,12 @@ package jira
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/andygrunwald/go-jira"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"strings"
 )
 
 const (
@@ -54,19 +55,19 @@ osdctl jira quick-task "Update command to take new flag" --add-to-sprint
 		}
 		boardId := viper.GetInt(BoardIdLabel)
 
-		jiraClient, err := utils.GetJiraClient()
+		jiraClient, err := utils.NewJiraClient("")
 		if err != nil {
 			return fmt.Errorf("failed to get Jira client: %w", err)
 		}
 
-		issue, err := CreateQuickTicket(jiraClient.User, jiraClient.Issue, args[0], teamLabel)
+		issue, err := CreateQuickTicket(jiraClient, args[0], teamLabel)
 		if err != nil {
 			return fmt.Errorf("error creating ticket: %w", err)
 		}
 		fmt.Printf("Successfully created ticket:\n%v/browse/%v\n", utils.JiraBaseURL, issue.Key)
 
 		if addToSprint {
-			err = addTicketToCurrentSprint(jiraClient.Board, jiraClient.Sprint, issue, boardId, teamName)
+			err = addTicketToCurrentSprint(jiraClient, issue, boardId, teamName)
 			if err != nil {
 				return fmt.Errorf("failed to add ticket to current sprint: %w", err)
 			}
@@ -77,24 +78,27 @@ osdctl jira quick-task "Update command to take new flag" --add-to-sprint
 }
 
 func init() {
-	quickTaskCmd.Flags().Bool("add-to-sprint", false, "whether or not to add the created Jira task to the SRE's current sprint.")
+	quickTaskCmd.Flags().Bool(AddToSprintFlag, false, "whether or not to add the created Jira task to the SRE's current sprint.")
 }
 
-func CreateQuickTicket(userService *jira.UserService, issueService *jira.IssueService, summary string, teamLabel string) (*jira.Issue, error) {
-	user, _, err := userService.GetSelf()
+func CreateQuickTicket(client utils.JiraClientInterface, summary string, teamLabel string) (*jira.Issue, error) {
+	user, _, err := client.User().GetSelf()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get jira user for self: %w", err)
 	}
 
-	issue, err := utils.CreateIssue(
-		issueService,
-		summary,
-		DefaultDescription,
-		DefaultTicketType,
-		DefaultProject,
-		user,
-		user,
-		[]string{teamLabel},
+	issue, err := client.CreateIssue(
+		&jira.Issue{
+			Fields: &jira.IssueFields{
+				Summary:     summary,
+				Description: DefaultDescription,
+				Type:        jira.IssueType{Name: DefaultTicketType},
+				Project:     jira.Project{Key: DefaultProject},
+				Reporter:    user,
+				Assignee:    user,
+				Labels:      []string{teamLabel},
+			},
+		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create issue: %w", err)
@@ -103,8 +107,8 @@ func CreateQuickTicket(userService *jira.UserService, issueService *jira.IssueSe
 	return issue, nil
 }
 
-func addTicketToCurrentSprint(boardService *jira.BoardService, sprintService *jira.SprintService, issue *jira.Issue, boardId int, teamName string) error {
-	sprints, _, err := boardService.GetAllSprintsWithOptions(boardId, &jira.GetAllSprintsOptions{State: SprintState})
+func addTicketToCurrentSprint(client utils.JiraClientInterface, issue *jira.Issue, boardId int, teamName string) error {
+	sprints, _, err := client.Board().GetAllSprintsWithOptions(boardId, &jira.GetAllSprintsOptions{State: SprintState})
 	if err != nil {
 		return fmt.Errorf("failed to get active sprints for board %v: %w", boardId, err)
 	}
@@ -117,7 +121,11 @@ func addTicketToCurrentSprint(boardService *jira.BoardService, sprintService *ji
 		}
 	}
 
-	_, err = sprintService.MoveIssuesToSprint(activeSprint.ID, []string{issue.ID})
+	if activeSprint.ID == 0 {
+		return fmt.Errorf("no active sprint found for team '%s'", teamName)
+	}
+
+	_, err = client.Sprint().MoveIssuesToSprint(activeSprint.ID, []string{issue.ID})
 	if err != nil {
 		return fmt.Errorf("issue %v was not moved to active sprint: %w", issue.Key, err)
 	}

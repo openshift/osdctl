@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/spf13/cobra"
@@ -22,13 +23,14 @@ type GatherLogsOpts struct {
 	Tail      int
 	SortOrder string
 	DestDir   string
+	ClusterID string
 }
 
 func NewCmdHCPMustGather() *cobra.Command {
 	g := &GatherLogsOpts{}
 
 	hcpMgCmd := &cobra.Command{
-		Use:     "gather-logs <cluster-id>",
+		Use:     "gather-logs --cluster-id <cluster-identifier>",
 		Aliases: []string{"gl"},
 		Short:   "Gather all Pod logs and Application event from HCP",
 		Long: `Gathers pods logs and evnets of a given HCP from Dynatrace.
@@ -38,11 +40,11 @@ func NewCmdHCPMustGather() *cobra.Command {
 		`,
 		Example: `
   # Gather logs for a HCP cluster with cluster id hcp-cluster-id-123
-  osdctl dt gather-logs hcp-cluster-id-123`,
-		Args:              cobra.ExactArgs(1),
+  osdctl dt gather-logs --cluster-id hcp-cluster-id-123`,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			err := g.GatherLogs(args[0])
+
+			err := g.GatherLogs(g.ClusterID)
 			if err != nil {
 				cmdutil.CheckErr(err)
 			}
@@ -53,12 +55,15 @@ func NewCmdHCPMustGather() *cobra.Command {
 	hcpMgCmd.Flags().IntVar(&g.Tail, "tail", 0, "Last 'n' logs and events to fetch. By default it will pull everything")
 	hcpMgCmd.Flags().StringVar(&g.SortOrder, "sort", "asc", "Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'")
 	hcpMgCmd.Flags().StringVar(&g.DestDir, "dest-dir", "", "Destination directory for the logs dump, defaults to the local directory.")
+	hcpMgCmd.Flags().StringVar(&g.ClusterID, "cluster-id", "", "Internal ID of the HCP cluster to gather logs from (required)")
+
+	_ = hcpMgCmd.MarkFlagRequired("cluster-id")
 
 	return hcpMgCmd
 }
 
 func (g *GatherLogsOpts) GatherLogs(clusterID string) (error error) {
-	accessToken, err := getAccessToken()
+	accessToken, err := getStorageAccessToken()
 	if err != nil {
 		return fmt.Errorf("failed to acquire access token %v", err)
 	}
@@ -110,6 +115,11 @@ func (g *GatherLogsOpts) GatherLogs(clusterID string) (error error) {
 			return err
 		}
 
+		err = g.dumpRestartedPodLogs(pods, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, accessToken)
+		if err != nil {
+			return err
+		}
+
 	}
 
 	return nil
@@ -138,15 +148,21 @@ func (g *GatherLogsOpts) dumpEvents(deploys *appsv1.DeploymentList, parentDir st
 		if err != nil {
 			return fmt.Errorf("failed to marshal YAML: %v", err)
 		}
-		f, err := os.OpenFile(deploymentYamlPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0655)
+		f, err := os.OpenFile(deploymentYamlPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
 			return err
 		}
-		f.Write(deploymentYaml)
-		f.Close()
+		_, err = f.Write(deploymentYaml)
+		if err != nil {
+			return err
+		}
+		err = f.Close()
+		if err != nil {
+			return err
+		}
 
 		eventsFilePath := filepath.Join(eventsDirPath, eventsFileName)
-		f, err = os.OpenFile(eventsFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0655)
+		f, err = os.OpenFile(eventsFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
 			return err
 		}
@@ -157,7 +173,7 @@ func (g *GatherLogsOpts) dumpEvents(deploys *appsv1.DeploymentList, parentDir st
 			continue
 		}
 		err = getEvents(DTURL, accessToken, eventsRequestToken, f)
-		f.Close()
+		_ = f.Close()
 		if err != nil {
 			log.Printf("failed to get logs, continuing: %v. Query: %v", err, eventQuery.finalQuery)
 			continue
@@ -190,15 +206,18 @@ func (g *GatherLogsOpts) dumpPodLogs(pods *corev1.PodList, parentDir string, tar
 		if err != nil {
 			return fmt.Errorf("failed to marshal YAML: %v", err)
 		}
-		f, err := os.OpenFile(podYamlFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0655)
+		f, err := os.OpenFile(podYamlFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
 			return err
 		}
-		f.Write(podYaml)
-		f.Close()
+		_, err = f.Write(podYaml)
+		if err != nil {
+			return err
+		}
+		_ = f.Close()
 
 		podLogsFilePath := filepath.Join(podDirPath, podLogFileName)
-		f, err = os.OpenFile(podLogsFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0655)
+		f, err = os.OpenFile(podLogsFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
 			return err
 		}
@@ -209,7 +228,7 @@ func (g *GatherLogsOpts) dumpPodLogs(pods *corev1.PodList, parentDir string, tar
 			continue
 		}
 		err = getLogs(DTURL, accessToken, podLogsRequestToken, f)
-		f.Close()
+		_ = f.Close()
 		if err != nil {
 			log.Printf("failed to get logs, continuing: %v. Query: %v", err, podLogsQuery.finalQuery)
 			continue
@@ -219,9 +238,48 @@ func (g *GatherLogsOpts) dumpPodLogs(pods *corev1.PodList, parentDir string, tar
 	return nil
 }
 
+func (g *GatherLogsOpts) dumpRestartedPodLogs(pods *corev1.PodList, parentDir string, targetNS string, managementClusterName string, DTURL string, accessToken string) error {
+	var podList []string
+	for _, p := range pods.Items {
+		podList = append(podList, p.Name)
+	}
+	fmt.Printf("Collecting Restarted Pod logs for %s\n", targetNS)
+
+	restartedPodLogsQuery, err := getRestartedPodQuery(podList, targetNS, g.Since, g.Tail, g.SortOrder, managementClusterName)
+	if err != nil {
+		return err
+	}
+	restartedPodLogsQuery.Build()
+
+	restartedPodLogFileName := "pods.log"
+	podDirPath, err := addDir([]string{parentDir, "restarted-pods"}, []string{restartedPodLogFileName})
+	if err != nil {
+		return err
+	}
+
+	restartedPodLogsFilePath := filepath.Join(podDirPath, restartedPodLogFileName)
+	f, err := os.OpenFile(restartedPodLogsFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0655)
+	if err != nil {
+		return err
+	}
+
+	podLogsRequestToken, err := getDTQueryExecution(DTURL, accessToken, restartedPodLogsQuery.finalQuery)
+	if err != nil {
+		log.Print("failed to get request token", err)
+
+	}
+	err = getLogs(DTURL, accessToken, podLogsRequestToken, f)
+	f.Close()
+	if err != nil {
+		log.Printf("failed to get restarted pod logs: %v. Query: %v", err, restartedPodLogsQuery.finalQuery)
+	}
+
+	return nil
+}
+
 func setupGatherDir(destBaseDir string, dirName string) (logsDir string, error error) {
 	dirPath := filepath.Join(destBaseDir, fmt.Sprintf("hcp-logs-dump-%s", dirName))
-	err := os.MkdirAll(dirPath, os.ModePerm)
+	err := os.MkdirAll(dirPath, 0750)
 	if err != nil {
 		return "", fmt.Errorf("failed to setup logs directory %v", err)
 	}
@@ -231,7 +289,7 @@ func setupGatherDir(destBaseDir string, dirName string) (logsDir string, error e
 
 func addDir(dirs []string, filePaths []string) (path string, error error) {
 	dirPath := filepath.Join(dirs...)
-	err := os.MkdirAll(dirPath, os.ModePerm)
+	err := os.MkdirAll(dirPath, 0750)
 	if err != nil {
 		return "", fmt.Errorf("failed to setup directory %v", err)
 	}
@@ -256,6 +314,38 @@ func getPodQuery(pod string, namespace string, since int, tail int, sortOrder st
 
 	if pod != "" {
 		q.Pods([]string{pod})
+	}
+
+	if sortOrder != "" {
+		q, err := q.Sort(sortOrder)
+		if err != nil {
+			return *q, err
+		}
+	}
+
+	if tail > 0 {
+		q.Limit(tail)
+	}
+
+	return q, nil
+}
+
+func getRestartedPodQuery(pods []string, namespace string, since int, tail int, sortOrder string, srcCluster string) (query DTQuery, error error) {
+	q := DTQuery{}
+	q.InitLogs(since).Cluster(srcCluster)
+
+	if namespace != "" {
+		q.Namespaces([]string{namespace})
+	}
+
+	if len(pods) > 0 {
+		q.Pods(pods)
+		for i := 0; i < len(q.fragments); i++ {
+			if strings.Contains(q.fragments[i], "k8s.pod.name") {
+				q.fragments[i] = strings.Replace(q.fragments[i], "and (", "and not (", 1)
+				break
+			}
+		}
 	}
 
 	if sortOrder != "" {
