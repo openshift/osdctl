@@ -70,6 +70,10 @@ func newRotateSecretOptions(streams genericclioptions.IOStreams, client *k8s.Laz
 	}
 }
 
+func getSessionNameFromUserId(userid string) string {
+	return strings.Replace(userid, ":", "-", 1)
+}
+
 func (o *rotateSecretOptions) complete(cmd *cobra.Command, args []string) error {
 
 	if len(args) != 1 {
@@ -77,10 +81,6 @@ func (o *rotateSecretOptions) complete(cmd *cobra.Command, args []string) error 
 	}
 
 	o.accountCRName = args[0]
-
-	if o.profile == "" {
-		o.profile = "default"
-	}
 
 	// The aws account timeout. The min the API supports is 15mins.
 	// 900 sec is 15min
@@ -131,6 +131,7 @@ func (o *rotateSecretOptions) run() error {
 	if err != nil {
 		return err
 	}
+	roleSessionName := getSessionNameFromUserId(*callerIdentityOutput.UserId)
 
 	var credentials *stsTypes.Credentials
 	// Need to role chain if the cluster is CCS
@@ -148,7 +149,7 @@ func (o *rotateSecretOptions) run() error {
 		}
 
 		// Assume the ARN
-		srepRoleCredentials, err := awsprovider.GetAssumeRoleCredentials(awsSetupClient, o.awsAccountTimeout, callerIdentityOutput.UserId, &SREAccessARN)
+		srepRoleCredentials, err := awsprovider.GetAssumeRoleCredentials(awsSetupClient, o.awsAccountTimeout, &roleSessionName, &SREAccessARN)
 		if err != nil {
 			return err
 		}
@@ -170,7 +171,7 @@ func (o *rotateSecretOptions) run() error {
 			return fmt.Errorf("jump Access ARN is missing from configmap")
 		}
 		// Assume the ARN
-		jumpRoleCreds, err := awsprovider.GetAssumeRoleCredentials(srepRoleClient, o.awsAccountTimeout, callerIdentityOutput.UserId, &JumpARN)
+		jumpRoleCreds, err := awsprovider.GetAssumeRoleCredentials(srepRoleClient, o.awsAccountTimeout, &roleSessionName, &JumpARN)
 		if err != nil {
 			return err
 		}
@@ -187,7 +188,7 @@ func (o *rotateSecretOptions) run() error {
 		// Role chain to assume ManagedOpenShift-Support-{uid}
 		roleArn := awsSdk.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, "ManagedOpenShift-Support-"+accountIDSuffixLabel))
 		credentials, err = awsprovider.GetAssumeRoleCredentials(jumpRoleClient, o.awsAccountTimeout,
-			callerIdentityOutput.UserId, roleArn)
+			&roleSessionName, roleArn)
 		if err != nil {
 			return err
 		}
@@ -196,7 +197,7 @@ func (o *rotateSecretOptions) run() error {
 		// Assume the OrganizationAdminAccess role
 		roleArn := awsSdk.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, awsv1alpha1.AccountOperatorIAMRole))
 		credentials, err = awsprovider.GetAssumeRoleCredentials(awsSetupClient, o.awsAccountTimeout,
-			callerIdentityOutput.UserId, roleArn)
+			&roleSessionName, roleArn)
 		if err != nil {
 			return err
 		}
@@ -307,7 +308,11 @@ func (o *rotateSecretOptions) run() error {
 	}
 
 	fmt.Printf("Watching Cluster Sync Status for deployment...")
-	hiveinternalv1alpha1.AddToScheme(o.kubeCli.Scheme())
+	err = hiveinternalv1alpha1.AddToScheme(o.kubeCli.Scheme())
+	if err != nil {
+		return err
+	}
+
 	searchStatus := &hiveinternalv1alpha1.ClusterSync{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cdName,

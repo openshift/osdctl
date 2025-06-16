@@ -96,7 +96,7 @@ func (g *GcpCluster) Login() error {
 
 func (g *GcpCluster) Close() {
 	if g.ComputeClient != nil {
-		g.ComputeClient.Close()
+		_ = g.ComputeClient.Close()
 	}
 }
 

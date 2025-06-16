@@ -21,8 +21,17 @@ var (
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
+			ocmClient, err := utils.CreateConnection()
+			if err != nil {
+				cmdutil.CheckErr(err)
+			}
+			defer func() {
+				if err := ocmClient.Close(); err != nil {
+					fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
+				}
+			}()
 			cmdutil.CheckErr(checkOrgId(args))
-			cmdutil.CheckErr(searchLabelsByOrg(cmd, args[0]))
+			cmdutil.CheckErr(searchLabelsByOrg(cmd, args[0], ocmClient))
 		},
 	}
 )
@@ -43,9 +52,9 @@ func init() {
 	AddOutputFlag(flags)
 }
 
-func searchLabelsByOrg(cmd *cobra.Command, orgID string) error {
+func searchLabelsByOrg(cmd *cobra.Command, orgID string, ocmClient *sdk.Connection) error {
 
-	response, err := getLabels(orgID)
+	response, err := sendRequest(createGetLabelsRequest(ocmClient, orgID))
 	if err != nil {
 		return fmt.Errorf("invalid input: %q", err)
 	}

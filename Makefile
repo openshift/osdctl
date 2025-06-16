@@ -24,14 +24,12 @@ ARCH := $(shell go env GOARCH)
 download-goreleaser:
 	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser/v2@v2.6.1 # TODO: bump once we move to Go 1.24
 
-#Update documentation as a part of every release
-
+# Update documentation as a part of every release
 .PHONY: generate-docs
 generate-docs:
 	@go run utils/docgen/main.go --cmd-path=./cmd --docs-dir=./docs
 	
-#Verify documents using PROW as a part of every PR raised for osdctl
-
+# Verify documents using PROW as a part of every PR raised for osdctl
 .PHONY: verify-docs
 verify-docs:
 	./scripts/verify-docs.sh
@@ -75,5 +73,3 @@ test:
 
 lint:
 	golangci-lint run
-
-setup: install-hooks

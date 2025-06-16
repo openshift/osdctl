@@ -4,8 +4,7 @@ fetches information about the given organization
 
 ### Synopsis
 
-Fetches information about the given organization. This data is presented as a table where each row includes the name, version, ID, cloud provider, and plan for the cluster.
-Rows will also include the number of recent service logs, active PD Alerts, Jira Issues, and limited support status for that specific cluster.
+Fetches information about the given organization. This data is presented as a table where each row includes the name, version, ID, cloud provider, and plan for the cluster. Rows will also include the number of recent service logs, active PD Alerts, Jira Issues, and limited support status for that specific cluster.
 
 ```
 osdctl org context orgId [flags]
@@ -17,7 +16,7 @@ osdctl org context orgId [flags]
 # Get context data for a cluster
 osdctl org context 1a2B3c4DefghIjkLMNOpQrSTUV5
 
-#Get context data for cluster in json format
+# Get context data in JSON format
 osdctl org context 1a2B3c4DefghIjkLMNOpQrSTUV5 -o json
 ```
 

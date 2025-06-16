@@ -46,6 +46,7 @@ const (
 type transferOwnerOptions struct {
 	output       string
 	clusterID    string
+	oldOwnerName string
 	newOwnerName string
 	reason       string
 	dryrun       bool
@@ -69,11 +70,13 @@ func newCmdTransferOwner(streams genericclioptions.IOStreams, globalOpts *global
 	}
 	// can we get cluster-id from some context maybe?
 	transferOwnerCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "The Internal Cluster ID/External Cluster ID/ Cluster Name")
-	transferOwnerCmd.Flags().StringVar(&ops.newOwnerName, "new-owner", ops.newOwnerName, "The new owners username to transfer the cluster to")
+	transferOwnerCmd.Flags().StringVar(&ops.oldOwnerName, "old-owner", ops.oldOwnerName, "The old owner's username to transfer the cluster from")
+	transferOwnerCmd.Flags().StringVar(&ops.newOwnerName, "new-owner", ops.newOwnerName, "The new owner's username to transfer the cluster to")
 	transferOwnerCmd.Flags().BoolVarP(&ops.dryrun, "dry-run", "d", false, "Dry-run - show all changes but do not apply them")
 	transferOwnerCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
 
 	_ = transferOwnerCmd.MarkFlagRequired("cluster-id")
+	_ = transferOwnerCmd.MarkFlagRequired("old-owner")
 	_ = transferOwnerCmd.MarkFlagRequired("new-owner")
 	_ = transferOwnerCmd.MarkFlagRequired("reason")
 
@@ -246,7 +249,7 @@ func awaitPullSecretSyncSet(hiveNamespace string, cdName string, kubeCli client.
 	return nil
 }
 
-func rolloutTelemeterClientPods(clientset *kubernetes.Clientset, namespace, selector string) error {
+func rolloutPods(clientset *kubernetes.Clientset, namespace, selector string) error {
 	// Delete pods with the specified label selector in the specified namespace.
 	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
 		LabelSelector: selector,
@@ -457,12 +460,6 @@ func (o *transferOwnerOptions) run() error {
 	o.cluster = cluster
 	o.clusterID = cluster.ID()
 
-	userDetails, err := ocm.AccountsMgmt().V1().Accounts().Account(o.newOwnerName).Get().Send()
-	userName, ok := userDetails.Body().GetUsername()
-	if !ok {
-		return fmt.Errorf("Failed to get username from new user id")
-	}
-
 	var mgmtCluster, svcCluster, hiveCluster, masterCluster *cmv1.Cluster
 
 	o.hypershift, err = utils.IsHostedCluster(o.clusterID)
@@ -515,42 +512,39 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("Could not get subscription id")
 	}
 
-	oldOwnerAccount, ok := subscription.GetCreator()
+	oldOwnerAccount, err := utils.GetAccount(ocm, o.oldOwnerName)
 	if !ok {
-		return fmt.Errorf("cluster has no owner account")
+		return fmt.Errorf("could not get current owner's account, ask the user to log into http://console.redhat.com/ and try again: %w", err)
 	}
 
-	oldOrganizationId, ok := subscription.GetOrganizationID()
+	oldOwnerOrganization, ok := oldOwnerAccount.GetOrganization()
 	if !ok {
-		return fmt.Errorf("old organization has no ID")
+		return fmt.Errorf("current owner has no organization")
 	}
 
-	// We have to get the organization from the ID because it's not nested
-	// under the subscription.GetCreator
-	oldOrganization, err := utils.GetOrganization(ocm, subscriptionID)
+	oldOrganizationId, ok := oldOwnerOrganization.GetID()
+	if !ok {
+		return fmt.Errorf("current owner's organization has no ID")
+	}
+
+	newOwnerAccount, err := utils.GetAccount(ocm, o.newOwnerName)
 	if err != nil {
-		fmt.Printf("Error: %s", err)
-		return fmt.Errorf("could not get current owner organization")
+		return fmt.Errorf("could not get new owner's account, ask the user to log into http://console.redhat.com/ and try again: %w", err)
 	}
 
-	newAccount, err := utils.GetAccount(ocm, o.newOwnerName)
-	if err != nil {
-		return fmt.Errorf("could not get new owners account: %w", err)
-	}
-
-	newOrganization, ok := newAccount.GetOrganization()
+	newOwnerOrganization, ok := newOwnerAccount.GetOrganization()
 	if !ok {
-		return fmt.Errorf("new account has no organization")
+		return fmt.Errorf("new owner has no organization")
 	}
 
-	newOrganizationId, ok := newOrganization.GetID()
+	newOwnerOrganizationId, ok := newOwnerOrganization.GetID()
 	if !ok {
-		return fmt.Errorf("new organization has no ID")
+		return fmt.Errorf("new owner's organization has no ID")
 	}
 
-	accountID, ok := newAccount.GetID()
+	newOwnerAccountID, ok := newOwnerAccount.GetID()
 	if !ok {
-		return fmt.Errorf("account has no id")
+		return fmt.Errorf("new owner's account has no id")
 	}
 
 	clusterConsole, ok := cluster.GetConsole()
@@ -583,28 +577,35 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("cannot get old owner username")
 	}
 
-	oldOrganizationEbsAccountID, ok := oldOrganization.GetEbsAccountID()
+	oldOwnerOrganizationEbsAccountID, ok := oldOwnerOrganization.GetEbsAccountID()
 	if !ok {
 		return fmt.Errorf("cannot get old org ebs id")
 	}
 
-	newOwnerUsername, ok := newAccount.GetUsername()
+	newOwnerUsername, ok := newOwnerAccount.GetUsername()
 	if !ok {
 		return fmt.Errorf("cannot get new owner username")
 	}
 
-	newOrganizationEbsAccountID, ok := newOrganization.GetEbsAccountID()
+	newOrganizationEbsAccountID, ok := newOwnerOrganization.GetEbsAccountID()
 	if !ok {
 		return fmt.Errorf("cannot get new org ebs id")
 	}
 
-	orgChanged := oldOrganizationId != newOrganizationId
+	// Confirm if the ownership transfer looks correct
+	fmt.Printf("Transfer cluster: \t\t'%v' (%v)\n", externalClusterID, cluster.Name())
+	fmt.Printf("from user \t\t\t'%v' ('%v') to '%v ('%v')'\n", oldOwnerAccount.ID(), oldOwnerUsername, newOwnerAccountID, newOwnerUsername)
+	if !utils.ConfirmPrompt() {
+		return nil
+	}
+
+	orgChanged := oldOrganizationId != newOwnerOrganizationId
 
 	// build common SL parameters struct
 	slParams := serviceLogParameters{
 		ClusterID:             o.clusterID,
 		OldOwnerName:          oldOwnerUsername,
-		OldOwnerID:            oldOrganizationEbsAccountID,
+		OldOwnerID:            oldOwnerOrganizationEbsAccountID,
 		NewOwnerName:          newOwnerUsername,
 		NewOwnerID:            newOrganizationEbsAccountID,
 		IsExternalOrgTransfer: orgChanged,
@@ -634,7 +635,7 @@ func (o *transferOwnerOptions) run() error {
 	}
 
 	// Fetch the pull secret with the given new username
-	response, err := ocm.AccountsMgmt().V1().AccessToken().Post().Impersonate(userName).Parameter("body", nil).Send()
+	response, err := ocm.AccountsMgmt().V1().AccessToken().Post().Impersonate(newOwnerUsername).Parameter("body", nil).Send()
 	if err != nil {
 		return fmt.Errorf("Can't send request: %w", err)
 	}
@@ -694,7 +695,7 @@ func (o *transferOwnerOptions) run() error {
 
 	// Rollout the telemeterClient pod for non HCP clusters
 	if !o.hypershift {
-		err = rolloutTelemeterClientPods(targetClientSet, "openshift-monitoring", "app.kubernetes.io/name=telemeter-client")
+		err = rolloutPods(targetClientSet, "openshift-monitoring", "app.kubernetes.io/name=telemeter-client")
 		if err != nil {
 			return fmt.Errorf("failed to roll out Telemeter Client pods in namespace 'openshift-monitoring' with label selector 'app.kubernetes.io/name=telemeter-client': %w", err)
 		}
@@ -705,12 +706,6 @@ func (o *transferOwnerOptions) run() error {
 		return fmt.Errorf("error verifying cluster pull secret: %w", err)
 	}
 
-	fmt.Printf("Transfer cluster: \t\t'%v' (%v)\n", externalClusterID, cluster.Name())
-	fmt.Printf("from user \t\t\t'%v' to '%v'\n", oldOwnerAccount.ID(), accountID)
-	if !utils.ConfirmPrompt() {
-		return nil
-	}
-
 	ok = validateOldOwner(oldOrganizationId, subscription, oldOwnerAccount)
 	if !ok {
 		fmt.Print("can't validate this is old owners cluster, this could be because of a previously failed run\n")
@@ -719,13 +714,13 @@ func (o *transferOwnerOptions) run() error {
 		}
 	}
 
-	subscriptionOrgPatch, err := amv1.NewSubscription().OrganizationID(newOrganizationId).Build()
+	subscriptionOrgPatch, err := amv1.NewSubscription().OrganizationID(newOwnerOrganizationId).Build()
 
 	if err != nil {
 		return fmt.Errorf("can't create subscription organization patch: %w", err)
 	}
 
-	subscriptionCreatorPatchRequest, err := createSubscriptionCreatorPatchRequest(ocm, subscriptionID, accountID)
+	subscriptionCreatorPatchRequest, err := createSubscriptionCreatorPatchRequest(ocm, subscriptionID, newOwnerAccountID)
 
 	if err != nil {
 		return fmt.Errorf("can't create subscription creator patch: %w", err)
@@ -733,7 +728,7 @@ func (o *transferOwnerOptions) run() error {
 
 	newRoleBinding, err := amv1.
 		NewRoleBinding().
-		AccountID(accountID).
+		AccountID(newOwnerAccountID).
 		SubscriptionID(subscriptionID).
 		Type("Subscription").
 		RoleID("ClusterOwner").
@@ -744,7 +739,7 @@ func (o *transferOwnerOptions) run() error {
 	}
 
 	if orgChanged {
-		fmt.Printf("with organization change from \t'%v' to '%v'\n", oldOrganizationId, newOrganizationId)
+		fmt.Printf("with organization change from \t'%v' to '%v'\n", oldOrganizationId, newOwnerOrganizationId)
 	}
 
 	if o.dryrun {
@@ -798,7 +793,7 @@ func (o *transferOwnerOptions) run() error {
 	// If the organization id has changed, re-register the cluster with CS with the new organization id
 	if orgChanged {
 
-		request, err := createNewRegisterClusterRequest(ocm, externalClusterID, subscriptionID, newOrganizationId, clusterURL, displayName)
+		request, err := createNewRegisterClusterRequest(ocm, externalClusterID, subscriptionID, newOwnerOrganizationId, clusterURL, displayName)
 		if err != nil {
 			return fmt.Errorf("can't create RegisterClusterRequest with CS, '%w'", err)
 		}
@@ -810,7 +805,15 @@ func (o *transferOwnerOptions) run() error {
 		fmt.Print("Re-registered cluster\n")
 	}
 
-	err = validateTransfer(ocm, subscription.ClusterID(), newOrganizationId)
+	// Rollout the ocmAgent pods for non HCP clusters
+	if !o.hypershift {
+		err = rolloutPods(targetClientSet, "openshift-ocm-agent-operator", "app=ocm-agent")
+		if err != nil {
+			return fmt.Errorf("failed to roll out OCM Agent pods in namespace 'openshift-ocm-agent-operator' with label selector 'app=ocm-agent': %w", err)
+		}
+	}
+
+	err = validateTransfer(ocm, subscription.ClusterID(), newOwnerOrganizationId)
 	if err != nil {
 		return fmt.Errorf("error while validating transfer %w", err)
 	}

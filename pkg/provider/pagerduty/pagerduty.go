@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	PagerDutyUserTokenConfigKey  = "pd_user_token"
-	PagerDutyOauthTokenConfigKey = "pd_oauth_token"
+	PagerDutyUserTokenConfigKey  = "pd_user_token"  // #nosec G101
+	PagerDutyOauthTokenConfigKey = "pd_oauth_token" // #nosec G101
 	PagerDutyTeamIDsKey          = "team_ids"
 )
 

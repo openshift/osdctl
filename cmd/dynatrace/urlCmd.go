@@ -25,7 +25,7 @@ func newCmdURL() *cobra.Command {
 	}
 
 	urlCmd.Flags().StringVar(&clusterID, "cluster-id", "", "ID of the cluster")
-	urlCmd.MarkFlagRequired("cluster-id")
+	_ = urlCmd.MarkFlagRequired("cluster-id")
 
 	return urlCmd
 }

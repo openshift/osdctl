@@ -354,7 +354,7 @@ func (a *AwsCluster) GetAllVirtualMachines(string) ([]VirtualMachine, error) {
 		}
 		for idx := range instances.Reservations {
 			for _, instance := range instances.Reservations[idx].Instances {
-				stringTags := make(map[string]string, 0)
+				stringTags := make(map[string]string)
 				var name string
 				size := instance.InstanceType
 				state := instance.State.Name

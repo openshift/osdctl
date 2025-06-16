@@ -17,7 +17,7 @@ var (
 	testToken, _  = jwt.New(jwt.SigningMethodHS256).SignedString([]byte("test-secret"))
 	clientID      = "fake-id"
 	clientSecret  = "fake-secret"
-	tokenPath     = "/fake-path/token"
+	tokenPath     = "/fake-path/token" // #nosec G101
 	testCustomers = []Customer{
 		{ID: "cust-1", OrganizationID: "org-1", SKU: "sku-1"},
 		{ID: "cust-2", OrganizationID: "org-2", SKU: "sku-2"},

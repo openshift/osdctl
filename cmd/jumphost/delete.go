@@ -69,7 +69,8 @@ func newCmdDeleteJumphost() *cobra.Command {
 	}
 
 	create.Flags().StringVar(&subnetId, "subnet-id", "", "subnet id to search for and delete a jumphost in")
-	create.MarkFlagRequired("subnet-id")
+
+	_ = create.MarkFlagRequired("subnet-id")
 
 	return create
 }

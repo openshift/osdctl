@@ -65,10 +65,10 @@ func TestPrintCostList(t *testing.T) {
 			r, w, _ := os.Pipe()
 			os.Stdout = w
 			printCostList(tt.cost, tt.unit, tt.ou, tt.ops, tt.isChild)
-			w.Close()
+			_ = w.Close()
 			os.Stdout = oldStdout
 			var buf bytes.Buffer
-			buf.ReadFrom(r)
+			_, _ = buf.ReadFrom(r)
 			output := buf.String()
 
 			if tt.isJSON {

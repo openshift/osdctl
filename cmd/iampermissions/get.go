@@ -37,7 +37,7 @@ func newCmdGet() *cobra.Command {
 	}
 
 	policyCmd.Flags().StringVarP(&ops.ReleaseVersion, "release-version", "r", "", "")
-	policyCmd.MarkFlagRequired("release-version")
+	_ = policyCmd.MarkFlagRequired("release-version")
 
 	return policyCmd
 }

@@ -1,4 +1,4 @@
 build_root_image:
-  name: release
+  name: boilerplate
   namespace: openshift
-  tag: golang-1.21
+  tag: image-v7.2.0

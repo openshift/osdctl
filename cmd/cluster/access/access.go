@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/kubernetes/scheme"
 	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	kclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -50,16 +51,16 @@ var (
 
 // NewCmdAccess implements the 'break-glass' subcommand
 func NewCmdAccess(streams genericclioptions.IOStreams, client *k8s.LazyClient) *cobra.Command {
-	ops := newClusterAccessOptions(client, streams)
+	ops := newClusterAccessOptions(streams)
 	accessCmd := &cobra.Command{
 		Use:               "break-glass --cluster-id <cluster-identifier>",
 		Short:             "Emergency access to a cluster",
 		Long:              "Obtain emergency credentials to access the given cluster. You must be logged into the cluster's hive shard",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
-		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(accessCmdComplete(cmd))
-			cmdutil.CheckErr(ops.Run(cmd))
+		Run: func(_ *cobra.Command, _ []string) {
+			cmdutil.CheckErr(ops.accessCmdComplete())
+			cmdutil.CheckErr(ops.Run(context.Background()))
 		},
 	}
 	accessCmd.AddCommand(newCmdCleanup(client, streams))
@@ -71,28 +72,18 @@ func NewCmdAccess(streams genericclioptions.IOStreams, client *k8s.LazyClient) *
 	return accessCmd
 }
 
-// accessCmdComplete verifies the command's invocation, returning an error if the usage is invalid
-func accessCmdComplete(cmd *cobra.Command) error {
-
-	clusterID := cmd.Flag("cluster-id").Value.String()
-
-	return osdctlutil.IsValidClusterKey(clusterID)
-}
-
 // clusterAccessOptions contains the objects and information required to access a cluster
 type clusterAccessOptions struct {
 	reason    string
 	clusterID string
 
 	genericclioptions.IOStreams
-	kubeCli *k8s.LazyClient
 }
 
 // newClusterAccessOptions creates a clusterAccessOptions object
-func newClusterAccessOptions(client *k8s.LazyClient, streams genericclioptions.IOStreams) clusterAccessOptions {
+func newClusterAccessOptions(streams genericclioptions.IOStreams) clusterAccessOptions {
 	a := clusterAccessOptions{
 		IOStreams: streams,
-		kubeCli:   client,
 	}
 	return a
 }
@@ -119,15 +110,28 @@ func (c *clusterAccessOptions) Readln() (string, error) {
 	return strings.TrimSpace(in), err
 }
 
+// accessCmdComplete verifies the command's invocation, returning an error if the usage is invalid
+func (c *clusterAccessOptions) accessCmdComplete() error {
+	return osdctlutil.IsValidClusterKey(c.clusterID)
+}
+
 // Run executes the 'break-glass' access subcommand
-func (c *clusterAccessOptions) Run(cmd *cobra.Command) error {
-	clusterIdentifier := c.clusterID
+func (c *clusterAccessOptions) Run(ctx context.Context) error {
+	// Login to hive shard
+	hive, err := osdctlutil.GetHiveCluster(c.clusterID)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve hive shard for %q: %w", c.clusterID, err)
+	}
 
-	c.kubeCli.Impersonate("backplane-cluster-admin", c.reason, fmt.Sprintf("Elevation required to break-glass on %s cluster", clusterIdentifier))
+	hiveClient, err := k8s.NewAsBackplaneClusterAdmin(hive.ID(), kclient.Options{Scheme: scheme.Scheme}, c.reason, fmt.Sprintf("Elevation required to break-glass on %q cluster", c.clusterID))
+	if err != nil {
+		return fmt.Errorf("failed to login to hive shard %q: %w", hive.Name(), err)
+	}
 
-	c.Println(fmt.Sprintf("Retrieving Kubeconfig for cluster '%s'", clusterIdentifier))
+	c.Println(fmt.Sprintf("Retrieving Kubeconfig for cluster '%s'", c.clusterID))
 
-	// Connect to ocm
+	// Connect to ocm and grab cluster definition: user-provided cluster identifier could be any one of name, internal ID, or UUID
+	// and we need to ensure we're only referring to cluster by internal-ID while interacting with hive
 	conn, err := osdctlutil.CreateConnection()
 	if err != nil {
 		return err
@@ -136,20 +140,20 @@ func (c *clusterAccessOptions) Run(cmd *cobra.Command) error {
 		cmdutil.CheckErr(conn.Close())
 	}()
 
-	cluster, err := osdctlutil.GetCluster(conn, clusterIdentifier)
+	cluster, err := osdctlutil.GetCluster(conn, c.clusterID)
 	if err != nil {
 		return err
 	}
 	c.Println(fmt.Sprintf("Internal Cluster ID: %s", cluster.ID()))
 
 	// Retrieve the kubeconfig secret from the cluster's namespace on hive
-	ns, err := getClusterNamespace(c.kubeCli, cluster.ID())
+	ns, err := getClusterNamespace(hiveClient, cluster.ID())
 	if err != nil {
 		return err
 	}
 	c.Println(fmt.Sprintf("Cluster namespace: %s", ns.Name))
 
-	kubeconfigSecret, err := c.getKubeConfigSecret(ns)
+	kubeconfigSecret, err := c.getKubeConfigSecret(hiveClient, ns)
 	if err != nil {
 		return err
 	}
@@ -161,7 +165,7 @@ func (c *clusterAccessOptions) Run(cmd *cobra.Command) error {
 	if cluster.AWS().PrivateLink() || isPscCluster {
 		c.Println("")
 		c.Println("Cluster is PrivateLink or Private Service Connect, and is only accessible via a jump pod on Hive")
-		return c.createJumpPodAccess(cluster, kubeconfigSecret)
+		return c.createJumpPodAccess(ctx, hiveClient, cluster, kubeconfigSecret)
 	}
 
 	// Otherwise, Cluster is not PrivateLink - save kubeconfig locally
@@ -171,10 +175,10 @@ func (c *clusterAccessOptions) Run(cmd *cobra.Command) error {
 }
 
 // createJumpPodAccess grants access to a cluster by creating a pod for users to exec into
-func (c *clusterAccessOptions) createJumpPodAccess(cluster *clustersmgmtv1.Cluster, kubeconfigSecret corev1.Secret) error {
+func (c *clusterAccessOptions) createJumpPodAccess(ctx context.Context, kubeCli kclient.Client, cluster *clustersmgmtv1.Cluster, kubeconfigSecret corev1.Secret) error {
 	c.Println("Attempting to spin up a pod to use for access")
 
-	pod, err := c.createJumpPod(kubeconfigSecret, cluster.ID())
+	pod, err := c.createJumpPod(ctx, kubeCli, kubeconfigSecret, cluster.ID())
 	if err != nil {
 		c.Errorln("Failed to create pod")
 		return err
@@ -183,7 +187,7 @@ func (c *clusterAccessOptions) createJumpPodAccess(cluster *clustersmgmtv1.Clust
 	c.Println(fmt.Sprintf("Jump pod created. Waiting for it to start"))
 	c.Println("")
 
-	err = c.waitForJumpPod(pod, jumpPodPollInterval, jumpPodPollTimeout)
+	err = waitForJumpPod(ctx, kubeCli, pod, jumpPodPollInterval, jumpPodPollTimeout)
 	if err != nil {
 		c.Errorln("Timed out waiting for pod to start.")
 		c.Println(fmt.Sprintf("You can check the status of the pod using\n\n    oc describe pods %s -n %s\n", pod.Name, pod.Namespace))
@@ -191,7 +195,7 @@ func (c *clusterAccessOptions) createJumpPodAccess(cluster *clustersmgmtv1.Clust
 	} else {
 		c.Println("Pod detected as running")
 	}
-	c.Println(fmt.Sprintf("Use \n\n    oc exec -it --as %s -n %s %s -- /bin/bash\n\nto run commands in the pod. All 'oc' commands run within the pod will be executed against the cluster '%s' (this can be verified by running `oc cluster-info` in the pod)", impersonateUser, pod.Namespace, pod.Name, cluster.Name()))
+	c.Println(fmt.Sprintf("Use \n\n    ocm backplane login %s --manager\n    oc exec -it --as %s -n %s %s -- /bin/bash\n\nto run commands in the pod. All 'oc' commands run within the pod will be executed against the cluster '%s' (this can be verified by running `oc cluster-info` in the pod)", cluster.ID(), impersonateUser, pod.Namespace, pod.Name, cluster.Name()))
 	return err
 }
 
@@ -344,14 +348,14 @@ func (c *clusterAccessOptions) createPrivateAPIAccess(rawKubeconfig []byte, kube
 }
 
 // getKubeConfigSecret returns the first secret in the given namespace which contains the "hive.openshift.io/secret-type: kubeconfig" label
-func (c *clusterAccessOptions) getKubeConfigSecret(ns corev1.Namespace) (corev1.Secret, error) {
+func (c *clusterAccessOptions) getKubeConfigSecret(kubeCli kclient.Client, ns corev1.Namespace) (corev1.Secret, error) {
 	secretList := corev1.SecretList{}
 	labelSelector := metav1.LabelSelector{MatchLabels: map[string]string{"hive.openshift.io/secret-type": "kubeconfig"}}
 	selector, err := metav1.LabelSelectorAsSelector(&labelSelector)
 	if err != nil {
 		return corev1.Secret{}, err
 	}
-	err = c.kubeCli.List(context.TODO(), &secretList, &kclient.ListOptions{Namespace: ns.Name, LabelSelector: selector})
+	err = kubeCli.List(context.TODO(), &secretList, &kclient.ListOptions{Namespace: ns.Name, LabelSelector: selector})
 	if err != nil {
 		return corev1.Secret{}, err
 	}
@@ -370,7 +374,7 @@ func saveAsLocalFile(data []byte, path string) error {
 }
 
 // createJumpPod creates a deployment on hive to access a PrivateLink cluster from.
-func (c *clusterAccessOptions) createJumpPod(kubeconfigSecret corev1.Secret, clusterid string) (corev1.Pod, error) {
+func (c *clusterAccessOptions) createJumpPod(ctx context.Context, kubeCli kclient.Client, kubeconfigSecret corev1.Secret, clusterid string) (corev1.Pod, error) {
 	name := fmt.Sprintf("jumphost-%s-%d", time.Now().Format("20060102-150405-"), (time.Now().Nanosecond() / 1000000))
 	ns := kubeconfigSecret.Namespace
 	label := map[string]string{jumpPodLabelKey: clusterid}
@@ -415,18 +419,18 @@ func (c *clusterAccessOptions) createJumpPod(kubeconfigSecret corev1.Secret, clu
 			},
 		},
 	}
-	err := c.kubeCli.Create(context.TODO(), &deploy)
+	err := kubeCli.Create(ctx, &deploy)
 	return deploy, err
 }
 
 // waitForJumpPod polls until the given pod is ready
-func (c *clusterAccessOptions) waitForJumpPod(pod corev1.Pod, interval time.Duration, timeout time.Duration) error {
+func waitForJumpPod(ctx context.Context, kubeCli kclient.Client, pod corev1.Pod, interval time.Duration, timeout time.Duration) error {
 	key := types.NamespacedName{
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
 	}
-	return wait.PollImmediate(interval, timeout, func() (done bool, err error) {
-		err = c.kubeCli.Get(context.TODO(), key, &pod)
+	return wait.PollUntilContextTimeout(ctx, interval, timeout, true, func(ctx context.Context) (done bool, err error) {
+		err = kubeCli.Get(ctx, key, &pod)
 		if kerr.IsNotFound(err) {
 			return false, nil
 		} else if err != nil {

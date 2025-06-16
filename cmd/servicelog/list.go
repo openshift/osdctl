@@ -13,14 +13,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	AllMessagesFlag      = "all-messages"
-	AllMessagesShortFlag = "A"
-	InternalFlag         = "internal"
-	InternalShortFlag    = "i"
-	ListclusterIDFlag    = "cluster-id"
-)
-
 type listCmdOptions struct {
 	allMessages bool
 	internal    bool
@@ -45,15 +37,14 @@ osdctl servicelog list --cluster-id=my-cluster-id --all-messages --internal
 		Short: "Get service logs for a given cluster identifier.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-
 			return listServiceLogs(opts.clusterID, opts)
 		},
 	}
 
-	cmd.Flags().BoolP(AllMessagesFlag, AllMessagesShortFlag, opts.allMessages, "Toggle if we should see all of the messages or only SRE-P specific ones")
-	cmd.Flags().BoolP(InternalFlag, InternalShortFlag, opts.internal, "Toggle if we should see internal messages")
-	cmd.Flags().StringVar(&opts.clusterID, ListclusterIDFlag, "", "Internal Cluster identifier (required)")
-	cmd.MarkFlagRequired(ListclusterIDFlag)
+	cmd.Flags().BoolVarP(&opts.allMessages, "all-messages", "A", false, "Toggle if we should see all of the messages or only SRE-P specific ones")
+	cmd.Flags().BoolVarP(&opts.internal, "internal", "i", false, "Toggle if we should see internal messages")
+	cmd.Flags().StringVarP(&opts.clusterID, "cluster-id", "C", "", "Internal Cluster identifier (required)")
+	_ = cmd.MarkFlagRequired("cluster-id")
 
 	return cmd
 }

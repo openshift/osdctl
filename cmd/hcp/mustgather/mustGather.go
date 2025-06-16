@@ -107,7 +107,10 @@ func (mg *mustGather) Run() error {
 	tarballName := fmt.Sprintf("cluster_dump_%s_%s.tar.gz", mg.clusterId, timestamp)
 	outputTarballTmp := fmt.Sprintf("%s/%s", baseDir, tarballName)
 	outputTarballPath := fmt.Sprintf("%s/%s", outputDir, tarballName)
-	os.MkdirAll(outputDir, os.ModePerm)
+	err = os.MkdirAll(outputDir, 0750)
+	if err != nil {
+		return err
+	}
 
 	// Prints with color :)
 	fmt.Printf("\033[1;34mCreating must-gather with targets '%s'. Output directory: '%s'\033[0m\n", mg.gatherTargets, outputDir)

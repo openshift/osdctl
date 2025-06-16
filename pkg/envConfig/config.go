@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
@@ -52,41 +51,19 @@ func LoadYaml(paramFilePath string) Config {
 	return config
 }
 
-func LoadPDConfig(paramFilePath string) PDConfig {
-	config := PDConfig{
-		MySubdomain: []Subdomain{},
-	}
-
-	configFilePath := os.Getenv("HOME") + paramFilePath
-	configFilePath = filepath.Clean(configFilePath)
-	if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
-		log.Println("Config does not exist")
-		return config
-	}
-
-	// ignore linter error: filepath has to be static
-	jsonFile, err := os.ReadFile(configFilePath) //#nosec G304 -- filepath cannot be constant
-	if err != nil {
-		log.Printf("Failed to read PagerDuty config json %s: %v ", configFilePath, err)
-	}
-
-	err = json.Unmarshal(jsonFile, &config)
-	if err != nil {
-		log.Fatalf("Failed to unmarshal PagerDuty config json %s: %v", configFilePath, err)
-	}
-	return config
-}
-
 // Loads ~/.config/osdctl
 func LoadCloudTrailConfig() ([]string, error) {
 	var configuration *CloudTrailConfig
-	osdctlConfig.EnsureConfigFile()
-	err := viper.Unmarshal(&configuration)
+	err := osdctlConfig.EnsureConfigFile()
+	if err != nil {
+		return nil, err
+	}
+
+	err = viper.Unmarshal(&configuration)
 	if err != nil {
 		log.Printf("[ERROR] Failed to unmarshal Cloudtrail config yaml %s %v", viper.ConfigFileUsed(), err)
 		return nil, err
 	}
-	osdctlConfig.EnsureConfigFile()
 
 	return configuration.CloudTrailList.FilterPatternList, err
 }

@@ -265,7 +265,7 @@ func (e *OcEnv) Delete() {
 
 func (e *OcEnv) ensureEnvDir() {
 	if _, err := os.Stat(e.Path); errors.Is(err, os.ErrNotExist) {
-		err := os.MkdirAll(e.Path, os.ModePerm)
+		err := os.MkdirAll(e.Path, 0750)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -310,7 +310,7 @@ var f embed.FS
 
 func (e *OcEnv) createBins() {
 	if _, err := os.Stat(e.binPath()); errors.Is(err, os.ErrNotExist) {
-		err := os.Mkdir(e.binPath(), os.ModePerm)
+		err := os.Mkdir(e.binPath(), 0750)
 		if err != nil {
 			log.Fatal(err)
 		}

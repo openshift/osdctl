@@ -62,7 +62,7 @@ func (l *list) Run() error {
 		return fmt.Errorf("failed to list management clusters: %v", err)
 	}
 
-	output := []managementClusterOutput{}
+	var output []managementClusterOutput
 	for _, mc := range managementClusters.Items().Slice() {
 		cluster, err := ocm.ClustersMgmt().V1().Clusters().Cluster(mc.ClusterManagementReference().ClusterId()).Get().Send()
 		if err != nil {
@@ -114,15 +114,24 @@ func (l *list) Run() error {
 			fmt.Fprintf(w, " Account ID:\t%s\n", item.AccountID)
 			fmt.Fprintf(w, " Status:\t%s\n", item.Status)
 			if i < len(output)-1 {
-				fmt.Fprintln(w, "")
+				_, err := fmt.Fprintln(w, "")
+				if err != nil {
+					return fmt.Errorf("failed to format text output: %v", err)
+				}
 			}
-			w.Flush()
+			err = w.Flush()
+			if err != nil {
+				return fmt.Errorf("failed to format text output: %v", err)
+			}
 		}
 	case "table":
 		w := tabwriter.NewWriter(os.Stdout, 1, 1, 1, ' ', 0)
-		fmt.Fprintln(w, "NAME\tID\tSECTOR\tREGION\tACCOUNT_ID\tSTATUS")
+		_, err := fmt.Fprintln(w, "NAME\tID\tSECTOR\tREGION\tACCOUNT_ID\tSTATUS")
+		if err != nil {
+			return fmt.Errorf("failed to format table output: %v", err)
+		}
 		for _, item := range output {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			_, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
 				item.Name,
 				item.ID,
 				item.Sector,
@@ -130,8 +139,14 @@ func (l *list) Run() error {
 				item.AccountID,
 				item.Status,
 			)
+			if err != nil {
+				return fmt.Errorf("failed to format table output: %v", err)
+			}
 		}
-		w.Flush()
+		err = w.Flush()
+		if err != nil {
+			return fmt.Errorf("failed to format table output: %v", err)
+		}
 	default:
 		return fmt.Errorf("unsupported output format: %s, must be one of: table, text, json, yaml", l.outputFormat)
 	}

@@ -3,6 +3,7 @@ package aao
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/spf13/cobra"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -33,6 +35,7 @@ func newCmdPool(client client.Client) *cobra.Command {
 
 // poolOptions defines the struct for running the pool command
 type poolOptions struct {
+	genericclioptions.IOStreams
 	kubeCli client.Client
 }
 
@@ -84,16 +87,16 @@ func (o *poolOptions) run() error {
 			handlePoolCounting(defaultMap, account)
 		}
 	}
-	fmt.Printf("Available Accounts: %d\n", availabilityCount)
-	fmt.Println("========================================================================================================================")
-	fmt.Println("Default Account Pool")
-	fmt.Println("========================================================================================================================")
-	printSortedCount(getSortedCount(defaultMap, 10))
+	fmt.Fprintf(o.IOStreams.Out, "Available Accounts: %d\n", availabilityCount)
+	fmt.Fprintf(o.IOStreams.Out, "========================================================================================================================")
+	fmt.Fprintf(o.IOStreams.Out, "Default Account Pool")
+	fmt.Fprintf(o.IOStreams.Out, "========================================================================================================================")
+	printSortedCount(getSortedCount(defaultMap, 10), o.IOStreams.Out)
 
-	fmt.Println("========================================================================================================================")
-	fmt.Println("fm-accountpool")
-	fmt.Println("========================================================================================================================")
-	printSortedCount(getSortedCount(fmMap, 10))
+	fmt.Fprintln(o.IOStreams.Out, "========================================================================================================================")
+	fmt.Fprintln(o.IOStreams.Out, "fm-accountpool")
+	fmt.Fprintln(o.IOStreams.Out, "========================================================================================================================")
+	printSortedCount(getSortedCount(fmMap, 10), o.IOStreams.Out)
 
 	return nil
 }
@@ -149,7 +152,7 @@ func getSortedCount(inputMap map[string]legalEntityStats, maxLen int) []legalEnt
 	return inputCounts[:maxLen]
 }
 
-func printSortedCount(lec []legalEntityStats) {
+func printSortedCount(lec []legalEntityStats, out io.Writer) {
 
 	totalClaimed := 0
 	totalUnused := 0
@@ -173,11 +176,11 @@ func printSortedCount(lec []legalEntityStats) {
 	table.AddRow([]string{})
 	err := table.Flush()
 	if err != nil {
-		fmt.Println("error while flushing table: ", err.Error())
+		fmt.Fprintln(out, "error while flushing table: ", err.Error())
 	}
 
-	fmt.Printf("Total Claimed: %d\n", totalClaimed)
-	fmt.Printf("Total Unused: %d\n", totalUnused)
-	fmt.Printf("Total Accounts: %d\n", totalTotal)
-	fmt.Println()
+	fmt.Fprintf(out, "Total Claimed: %d\n", totalClaimed)
+	fmt.Fprintf(out, "Total Unused: %d\n", totalUnused)
+	fmt.Fprintf(out, "Total Accounts: %d\n", totalTotal)
+	fmt.Fprintln(out)
 }

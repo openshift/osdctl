@@ -53,9 +53,9 @@ func newCmdEtcdMemberReplacement() *cobra.Command {
 	replaceCmd.Flags().StringVar(&opts.clusterID, "cluster-id", "", "Provide internal Cluster ID")
 	replaceCmd.Flags().StringVar(&opts.nodeId, "node", "", "Node ID (required)")
 	replaceCmd.Flags().StringVar(&opts.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
-	replaceCmd.MarkFlagRequired("cluster-id")
-	replaceCmd.MarkFlagRequired("node")
-	replaceCmd.MarkFlagRequired("reason")
+	_ = replaceCmd.MarkFlagRequired("cluster-id")
+	_ = replaceCmd.MarkFlagRequired("node")
+	_ = replaceCmd.MarkFlagRequired("reason")
 	return replaceCmd
 }
 
@@ -157,8 +157,8 @@ func (opts *etcdOptions) removeEtcdMember(kconfig *rest.Config, clientset *kuber
 		return fmt.Errorf("operation cancelled by user")
 	}
 
-	remove_cmd := "etcdctl member remove " + memberId
-	output, err := Etcdctlhealth(kconfig, clientset, remove_cmd, pod)
+	removeCmd := "etcdctl member remove " + memberId
+	output, err := Etcdctlhealth(kconfig, clientset, removeCmd, pod)
 	if err != nil {
 		fmt.Println("[ERROR] Could not replace pod. Refer error below")
 		return err

@@ -121,7 +121,10 @@ func PrintKey(identifier string, opts *clusterSSHKeyOpts) error {
 	}
 
 	scheme := runtime.NewScheme()
-	corev1.AddToScheme(scheme)
+	err = corev1.AddToScheme(scheme)
+	if err != nil {
+		return fmt.Errorf("failed to add corev1 api scheme: %w", err)
+	}
 	hiveClient, err := k8s.NewAsBackplaneClusterAdmin(hive.ID(), client.Options{Scheme: scheme}, []string{
 		opts.elevationReason,
 		fmt.Sprintf("Need elevation for %s hive cluster in order to get ssh key for %s", hive.ID(), clusterID),

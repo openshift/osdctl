@@ -1,0 +1,4 @@
+DISPLAY NAME        INTERNAL CLUSTER ID   EXTERNAL CLUSTER ID   STATUS
+cluster-1           cid-1                 ext-1                 Active
+cluster-2           cid-2                 ext-2                 Inactive
+

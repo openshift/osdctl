@@ -66,7 +66,7 @@ func TestCreateKubeconfigFileForRestConfig_Success(t *testing.T) {
 // Test creating a tarball with actual files in a directory
 func TestCreateTarball_Success(t *testing.T) {
 	dir := "/tmp/osdctl-targz-test"
-	err := os.MkdirAll(dir, 0755)
+	err := os.MkdirAll(dir, 0750)
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 

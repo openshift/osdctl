@@ -26,5 +26,6 @@ Provides a set of commands for interacting with Jira
 ### SEE ALSO
 
 * [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl jira create-handover-announcement](osdctl_jira_create-handover-announcement.md)	 - Create a new Handover announcement for SREPHOA Project
 * [osdctl jira quick-task](osdctl_jira_quick-task.md)	 - creates a new ticket with the given name
 

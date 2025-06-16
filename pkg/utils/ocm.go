@@ -2,18 +2,20 @@ package utils
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/google/uuid"
 	sdk "github.com/openshift-online/ocm-sdk-go"
+	amsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+
+	ocmConfig "github.com/openshift-online/ocm-common/pkg/ocm/config"
+	ocmConnBuilder "github.com/openshift-online/ocm-common/pkg/ocm/connection-builder"
 )
 
 const ClusterServiceClusterSearch = "id = '%s' or name = '%s' or external_id = '%s'"
@@ -26,7 +28,7 @@ const (
 	integrationGovURL          = "https://api-admin.int.openshiftusgov.com"
 	stagingGovURL              = "https://api-admin.stage.openshiftusgov.com"
 	HypershiftClusterTypeLabel = "ext-hypershift.openshift.io/cluster-type"
-	DynatraceTenantKeyLabel    = "sre-capabilities.dtp.v2.tenant"
+	DynatraceTenantKeyLabel    = "dynatrace.regional-tenant"
 )
 
 var urlAliases = map[string]string{
@@ -51,22 +53,6 @@ var urlAliases = map[string]string{
 	"staginggov":      stagingGovURL,
 	"stagegov":        stagingGovURL,
 	stagingGovURL:     stagingGovURL,
-}
-
-// Config describes the OCM client configuration
-// Taken wholesale from openshift-online/ocm-cli
-type Config struct {
-	AccessToken  string   `json:"access_token,omitempty" doc:"Bearer access token."`
-	ClientID     string   `json:"client_id,omitempty" doc:"OpenID client identifier."`
-	ClientSecret string   `json:"client_secret,omitempty" doc:"OpenID client secret."`
-	Insecure     bool     `json:"insecure,omitempty" doc:"Enables insecure communication with the server. This disables verification of TLS certificates and host names."`
-	Password     string   `json:"password,omitempty" doc:"User password."`
-	RefreshToken string   `json:"refresh_token,omitempty" doc:"Offline or refresh token."`
-	Scopes       []string `json:"scopes,omitempty" doc:"OpenID scope. If this option is used it will replace completely the default scopes. Can be repeated multiple times to specify multiple scopes."`
-	TokenURL     string   `json:"token_url,omitempty" doc:"OpenID token URL."`
-	URL          string   `json:"url,omitempty" doc:"URL of the API gateway. The value can be the complete URL or an alias. The valid aliases are 'production', 'staging' and 'integration'."`
-	User         string   `json:"user,omitempty" doc:"User name."`
-	Pager        string   `json:"pager,omitempty" doc:"Pager command, for example 'less'. If empty no pager will be used."`
 }
 
 // GetClusterAnyStatus returns an OCM cluster object given an OCM connection and cluster id
@@ -103,22 +89,33 @@ func GetClusters(ocmClient *sdk.Connection, clusterIds []string) []*cmv1.Cluster
 }
 
 func GetOrgfromClusterID(ocmClient *sdk.Connection, cluster cmv1.Cluster) (string, error) {
-	subID, ok := cluster.Subscription().GetID()
-	if !ok {
-		return "", fmt.Errorf("failed getting sub id")
-	}
-
-	resp, err := ocmClient.AccountsMgmt().V1().Subscriptions().List().Search(fmt.Sprintf("id like '%s'", subID)).Size(1).Send()
+	sub, err := GetSubFromClusterID(ocmClient, cluster)
 	if err != nil {
 		return "", err
 	}
 
-	respSlice := resp.Items().Slice()
-	if len(respSlice) > 1 {
-		return "", fmt.Errorf("expected only 1 org to be returned")
+	return sub.OrganizationID(), nil
+}
+
+func GetSubFromClusterID(ocmClient *sdk.Connection, cluster cmv1.Cluster) (*amsv1.Subscription, error) {
+	subID, ok := cluster.Subscription().GetID()
+	if !ok {
+		return nil, fmt.Errorf("failed getting sub id")
 	}
 
-	return respSlice[0].OrganizationID(), nil
+	resp, err := ocmClient.AccountsMgmt().V1().Subscriptions().List().Search(fmt.Sprintf("id like '%s'", subID)).Size(1).Send()
+	if err != nil {
+		return nil, err
+	}
+
+	respSlice := resp.Items().Slice()
+	if len(respSlice) > 1 {
+		return nil, fmt.Errorf("expected only 1 sub to be returned")
+	} else if len(respSlice) == 0 {
+		return nil, fmt.Errorf("subscription not found")
+	}
+
+	return respSlice[0], nil
 }
 
 // ApplyFilters retrieves clusters in OCM which match the filters given
@@ -165,146 +162,35 @@ func GenerateQuery(clusterIdentifier string) string {
 	}
 }
 
-// Finds the OCM Configuration file and returns the path to it
-// Taken wholesale from	openshift-online/ocm-cli
-func getOCMConfigLocation() (string, error) {
-	if ocmconfig := os.Getenv("OCM_CONFIG"); ocmconfig != "" {
-		return ocmconfig, nil
-	}
-
-	// Determine home directory to use for the legacy file path
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-
-	path := filepath.Join(home, ".ocm.json")
-
-	_, err = os.Stat(path)
-	if os.IsNotExist(err) {
-		// Determine standard config directory
-		configDir, err := os.UserConfigDir()
-		if err != nil {
-			return path, err
-		}
-
-		// Use standard config directory
-		path = filepath.Join(configDir, "/ocm/ocm.json")
-	}
-
-	return path, nil
-}
-
-// Loads the OCM Configuration file
-// Taken wholesale from	openshift-online/ocm-cli
-func loadOCMConfig() (*Config, error) {
-	var err error
-
-	file, err := getOCMConfigLocation()
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = os.Stat(file)
-	if os.IsNotExist(err) {
-		cfg := &Config{}
-		err = nil
-		return cfg, err
-	}
-
-	if err != nil {
-		err = fmt.Errorf("can't check if config file '%s' exists: %v", file, err)
-		return nil, err
-	}
-
-	data, err := os.ReadFile(file)
-	if err != nil {
-		err = fmt.Errorf("can't read config file '%s': %v", file, err)
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		return nil, nil
-	}
-
-	cfg := &Config{}
-	err = json.Unmarshal(data, cfg)
-
-	if err != nil {
-		err = fmt.Errorf("can't parse config file '%s': %v", file, err)
-		return cfg, err
-	}
-
-	return cfg, nil
-}
-
-func getOcmConfiguration(ocmConfigLoader func() (*Config, error)) (*Config, error) {
-	tokenEnv := os.Getenv("OCM_TOKEN")
-	urlEnv := os.Getenv("OCM_URL")
-	refreshTokenEnv := os.Getenv("OCM_REFRESH_TOKEN") // Unlikely to be set, but check anyway
-
-	config := &Config{}
-
-	// If missing required data, load from the config file.
-	// We don't want to always load this, because the user might only use environment variables.
-	if tokenEnv == "" || refreshTokenEnv == "" || urlEnv == "" {
-		var fileConfigLoadError error
-		config, fileConfigLoadError = ocmConfigLoader()
-		if fileConfigLoadError != nil {
-			return config, fmt.Errorf("could not load OCM configuration file")
-		}
-	}
-
-	// Overwrite with set environment variables, to allow users to overwrite
-	// their configuration file's variables
-	if tokenEnv != "" {
-		config.AccessToken = tokenEnv
-	}
-	if urlEnv != "" {
-		config.URL = urlEnv
-	}
-	if refreshTokenEnv != "" {
-		config.RefreshToken = refreshTokenEnv
-	}
-
-	return config, nil
-}
-
+// Creates a connection to OCM
 func CreateConnection() (*sdk.Connection, error) {
-	ocmConfigError := "Unable to load OCM config\nLogin with 'ocm login' or set OCM_TOKEN, OCM_URL and OCM_REFRESH_TOKEN environment variables"
-
-	connectionBuilder := sdk.NewConnectionBuilder()
-
-	config, err := getOcmConfiguration(loadOCMConfig)
-	if err != nil {
-		return nil, errors.New(ocmConfigError)
-	}
-
-	connectionBuilder.Tokens(config.AccessToken, config.RefreshToken)
-
-	if config.URL == "" {
-		return nil, errors.New(ocmConfigError)
-	}
-
-	// Parse the URL in case it is an alias
-	gatewayURL, ok := urlAliases[config.URL]
-	if !ok {
-		return nil, fmt.Errorf("invalid OCM_URL found: %s\nValid URL aliases are: 'production', 'staging', 'integration'", config.URL)
-	}
-	connectionBuilder.URL(gatewayURL)
-
-	connectionBuilder.Client(config.ClientID, config.ClientSecret)
-
-	connection, err := connectionBuilder.Build()
-
-	if err != nil {
-		if strings.Contains(err.Error(), "Not logged in, run the") {
-			return nil, errors.New(ocmConfigError)
+	urlEnv := os.Getenv("OCM_URL")
+	var ocmApiOverride string
+	if urlEnv != "" {
+		// if the OCM url is overridden by an env var, use that, but first we need to validate it
+		// in the case where it may be an alias
+		gatewayURL, ok := urlAliases[urlEnv]
+		if !ok {
+			return nil, fmt.Errorf("invalid OCM_URL found: %s\nValid URL aliases are: 'production', 'staging', 'integration'", urlEnv)
 		}
-		return nil, fmt.Errorf("failed to create OCM connection: %v", err)
+
+		ocmApiOverride = gatewayURL
 	}
 
-	return connection, nil
+	config, err := ocmConfig.Load()
+	if err != nil {
+		return nil, fmt.Errorf("unable to load OCM config. %w", err)
+	}
+
+	agentString := fmt.Sprintf("osdctl-%s", Version)
+
+	connBuilder := ocmConnBuilder.NewConnection().Config(config).AsAgent(agentString)
+
+	if ocmApiOverride != "" {
+		connBuilder.WithApiUrl(ocmApiOverride)
+	}
+
+	return connBuilder.Build()
 }
 
 func GetSupportRoleArnForCluster(ocmClient *sdk.Connection, clusterID string) (string, error) {

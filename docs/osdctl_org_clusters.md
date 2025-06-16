@@ -25,7 +25,6 @@ osdctl org clusters 123456789AbcDEfGHiJklMnopQR --all
 
 Retrieving all active clusters for a given AWS profile:
 osdctl org clusters --aws-profile my-aws-profile --aws-account-id 123456789
-
 ```
 
 ### Options

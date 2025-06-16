@@ -26,7 +26,16 @@ var (
 		Args:          cobra.ArbitraryArgs,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			cmdutil.CheckErr(searchOrgs(cmd))
+			ocmClient, err := utils.CreateConnection()
+			if err != nil {
+				cmdutil.CheckErr(err)
+			}
+			defer func() {
+				if err := ocmClient.Close(); err != nil {
+					fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
+				}
+			}()
+			cmdutil.CheckErr(searchOrgs(cmd, ocmClient))
 		},
 	}
 	searchEBSaccountID string
@@ -79,12 +88,12 @@ func init() {
 
 }
 
-func searchOrgs(cmd *cobra.Command) error {
+func searchOrgs(cmd *cobra.Command, ocmClient *sdk.Connection) error {
 	if searchUser == "" && searchEBSaccountID == "" {
 		return fmt.Errorf("invalid search params")
 	}
 
-	response, err := getOrgs()
+	response, err := getOrgs(ocmClient)
 
 	if err != nil {
 		return fmt.Errorf("invalid input: %q", err)
@@ -111,17 +120,7 @@ func searchOrgs(cmd *cobra.Command) error {
 	return nil
 }
 
-func getOrgs() (*sdk.Response, error) {
-	// Create OCM client to talk
-	ocmClient, err := utils.CreateConnection()
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err := ocmClient.Close(); err != nil {
-			fmt.Printf("Cannot close the ocmClient (possible memory leak): %q", err)
-		}
-	}()
+func getOrgs(ocmClient *sdk.Connection) (*sdk.Response, error) {
 	request := ocmClient.Get()
 	apiPath := ""
 	switch getSearchType() {

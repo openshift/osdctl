@@ -52,7 +52,7 @@ func newCmddelete(streams genericclioptions.IOStreams, globalOpts *globalflags.G
 	deleteCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 
 	// Mark cluster-id as required
-	deleteCmd.MarkFlagRequired("cluster-id")
+	_ = deleteCmd.MarkFlagRequired("cluster-id")
 
 	return deleteCmd
 }

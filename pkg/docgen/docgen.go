@@ -112,7 +112,7 @@ func GenerateDocs(opts *Options) error {
 		opts = NewDefaultOptions()
 	}
 
-	if err := os.MkdirAll(opts.DocsDir, 0755); err != nil {
+	if err := os.MkdirAll(opts.DocsDir, 0750); err != nil {
 		return fmt.Errorf("creating docs directory: %w", err)
 	}
 
