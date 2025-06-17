@@ -10,13 +10,13 @@ import (
 
 const updatePullSecCmdExample = `
   # Update Pull Secret's OCM access token data
-  osdctl cluster update-pullsecret --cluster-id 1kfmyclusteristhebesteverp8m --reason "Update PullSecret per pd or jira-id"
+  osdctl cluster update-pull-secret --cluster-id 1kfmyclusteristhebesteverp8m --reason "Update PullSecret per pd or jira-id"
 `
 
 func newCmdUpdatePullSecret(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	ops := newTransferOwnerOptions(streams, globalOpts)
 	updatePullSecretCmd := &cobra.Command{
-		Use:               "update-pullsecret",
+		Use:               "update-pull-secret",
 		Short:             "Update cluster pullsecret with current OCM accessToken data(to be done by Region Lead)",
 		Args:              cobra.NoArgs,
 		Example:           updatePullSecCmdExample,

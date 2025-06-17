@@ -1,9 +1,9 @@
-## osdctl cluster update-pullsecret
+## osdctl cluster update-pull-secret
 
 Update cluster pullsecret with current OCM accessToken data(to be done by Region Lead)
 
 ```
-osdctl cluster update-pullsecret [flags]
+osdctl cluster update-pull-secret [flags]
 ```
 
 ### Examples
@@ -11,7 +11,7 @@ osdctl cluster update-pullsecret [flags]
 ```
 
   # Update Pull Secret's OCM access token data
-  osdctl cluster update-pullsecret --cluster-id 1kfmyclusteristhebesteverp8m --reason "Update PullSecret per pd or jira-id"
+  osdctl cluster update-pull-secret --cluster-id 1kfmyclusteristhebesteverp8m --reason "Update PullSecret per pd or jira-id"
 
 ```
 
@@ -20,7 +20,7 @@ osdctl cluster update-pullsecret [flags]
 ```
   -C, --cluster-id string   The Internal Cluster ID/External Cluster ID/ Cluster Name
   -d, --dry-run             Dry-run - show all changes but do not apply them
-  -h, --help                help for update-pullsecret
+  -h, --help                help for update-pull-secret
       --reason string       The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)
 ```
 

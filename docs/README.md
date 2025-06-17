@@ -68,7 +68,7 @@
     - `post --cluster-id <cluster-identifier>` - Send limited support reason to a given cluster
     - `status --cluster-id <cluster-identifier>` - Shows the support status of a specified cluster
   - `transfer-owner` - Transfer cluster ownership to a new user (to be done by Region Lead)
-  - `update-pullsecret` - Update cluster pullsecret with current OCM accessToken data(to be done by Region Lead)
+  - `update-pull-secret` - Update cluster pullsecret with current OCM accessToken data(to be done by Region Lead)
   - `validate-pull-secret --cluster-id <cluster-identifier>` - Checks if the pull secret email matches the owner email
   - `validate-pull-secret-ext [CLUSTER_ID]` - Extended checks to confirm pull-secret data is synced with current OCM data
 - `cost` - Cost Management related utilities
@@ -1977,12 +1977,12 @@ osdctl cluster transfer-owner [flags]
   -S, --skip-version-check               skip checking to see if this is the most recent release
 ```
 
-### osdctl cluster update-pullsecret
+### osdctl cluster update-pull-secret
 
 Update cluster pullsecret with current OCM accessToken data(to be done by Region Lead)
 
 ```
-osdctl cluster update-pullsecret [flags]
+osdctl cluster update-pull-secret [flags]
 ```
 
 #### Flags
@@ -1993,7 +1993,7 @@ osdctl cluster update-pullsecret [flags]
   -C, --cluster-id string                The Internal Cluster ID/External Cluster ID/ Cluster Name
       --context string                   The name of the kubeconfig context to use
   -d, --dry-run                          Dry-run - show all changes but do not apply them
-  -h, --help                             help for update-pullsecret
+  -h, --help                             help for update-pull-secret
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
