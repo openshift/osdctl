@@ -23,26 +23,34 @@ const (
 	stagingURL                 = "https://api.stage.openshift.com"
 	integrationURL             = "https://api.integration.openshift.com"
 	productionGovURL           = "https://api-admin.openshiftusgov.com"
+	integrationGovURL          = "https://api-admin.int.openshiftusgov.com"
+	stagingGovURL              = "https://api-admin.stage.openshiftusgov.com"
 	HypershiftClusterTypeLabel = "ext-hypershift.openshift.io/cluster-type"
-	DynatraceTenantKeyLabel    = "sre-capabilities.dtp.tenant"
+	DynatraceTenantKeyLabel    = "sre-capabilities.dtp.v2.tenant"
 )
 
 var urlAliases = map[string]string{
-	"production":     productionURL,
-	"prod":           productionURL,
-	"prd":            productionURL,
-	productionURL:    productionURL,
-	"staging":        stagingURL,
-	"stage":          stagingURL,
-	"stg":            stagingURL,
-	stagingURL:       stagingURL,
-	"integration":    integrationURL,
-	"int":            integrationURL,
-	integrationURL:   integrationURL,
-	"productiongov":  productionGovURL,
-	"prodgov":        productionGovURL,
-	"prdgov":         productionGovURL,
-	productionGovURL: productionGovURL,
+	"production":      productionURL,
+	"prod":            productionURL,
+	"prd":             productionURL,
+	productionURL:     productionURL,
+	"staging":         stagingURL,
+	"stage":           stagingURL,
+	"stg":             stagingURL,
+	stagingURL:        stagingURL,
+	"integration":     integrationURL,
+	"int":             integrationURL,
+	integrationURL:    integrationURL,
+	"productiongov":   productionGovURL,
+	"prodgov":         productionGovURL,
+	"prdgov":          productionGovURL,
+	productionGovURL:  productionGovURL,
+	"integrationgov":  integrationGovURL,
+	"intgov":          integrationGovURL,
+	integrationGovURL: integrationGovURL,
+	"staginggov":      stagingGovURL,
+	"stagegov":        stagingGovURL,
+	stagingGovURL:     stagingGovURL,
 }
 
 // Config describes the OCM client configuration
