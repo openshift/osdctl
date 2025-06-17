@@ -2,6 +2,32 @@
 
 Create a new Handover announcement for SREPHOA Project
 
+### Synopsis
+
+
+Create a new Handover announcement for SREPHOA Project. To fill the fields, use the following instructions:
+
+1. Cluster ID
+	- If a specific cluster is affected, enter the ID (internal or external).
+	- If not applicable: enter None, N/A, or All for fleet-wide impact.
+
+2. Customer Name 	
+	- Use the exact name from the output of the command you ran. Do not modify or abbreviate. Copy-paste exactly.
+	- If not applicable: enter None or N/A
+	Note : To find the Customer Name you can get it from ocm describe cluster | grep -i organization or run the following command ocm get $(ocm get $(ocm get cluster $CLUSTER_ID  | jq -r .subscription.href) | jq -r '.creator.href') |  jq -r '.organization.name'
+
+3. Version
+Use the Openshift version number in the format:
+	- 4.16 if it affects entire Y-stream versions
+	- 4.16.5 if it affects a specific version
+
+4. Product Type
+Select the appropriate product type:
+	- Choose Multiple if it affects the fleet
+	- Otherwise, select the specific product involved
+
+5. Description - Add a brief description of the announcement.
+
 ```
 osdctl jira create-handover-announcement [flags]
 ```
@@ -15,7 +41,7 @@ osdctl jira create-handover-announcement [flags]
   -h, --help                 help for create-handover-announcement
       --products string      Comma-separated list of products (e.g. 'Product A,Product B')
       --summary string       Enter Summary/Title for the Announcment
-      --version string       Affects version
+      --version string       Affected Openshift Version (e.g 4.16 or 4.15.32)
 ```
 
 ### Options inherited from parent commands
