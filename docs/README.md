@@ -93,6 +93,7 @@
   - `get` - Get OCP CredentialsRequests
   - `save` - Save iam permissions for use in mcc
 - `jira` - Provides a set of commands for interacting with Jira
+  - `create-handover-announcement` - Create a new Handover announcement for SREPHOA Project
   - `quick-task <title>` - creates a new ticket with the given name
 - `jumphost` - 
   - `create` - Create a jumphost for emergency SSH access to a cluster's VMs
@@ -1966,7 +1967,8 @@ osdctl cluster transfer-owner [flags]
   -h, --help                             help for transfer-owner
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
-      --new-owner string                 The new owners username to transfer the cluster to
+      --new-owner string                 The new owner's username to transfer the cluster to
+      --old-owner string                 The old owner's username to transfer the cluster from
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --reason string                    The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
@@ -2718,6 +2720,35 @@ osdctl jira [flags]
   -S, --skip-version-check               skip checking to see if this is the most recent release
 ```
 
+### osdctl jira create-handover-announcement
+
+Create a new Handover announcement for SREPHOA Project
+
+```
+osdctl jira create-handover-announcement [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   Cluster ID
+      --context string                   The name of the kubeconfig context to use
+      --customer string                  Customer name
+      --description string               Enter Description for the Announcment
+  -h, --help                             help for create-handover-announcement
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --products string                  Comma-separated list of products (e.g. 'Product A,Product B')
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+      --summary string                   Enter Summary/Title for the Announcment
+      --version string                   Affects version
+```
+
 ### osdctl jira quick-task
 
 Creates a new ticket with the given name and a label specified by "jira_team_label" from the osdctl config. The flags "jira_board_id" and "jira_team" are also required for running this command.
@@ -3111,8 +3142,7 @@ osdctl org clusters [flags]
 
 ### osdctl org context
 
-Fetches information about the given organization. This data is presented as a table where each row includes the name, version, ID, cloud provider, and plan for the cluster.
-Rows will also include the number of recent service logs, active PD Alerts, Jira Issues, and limited support status for that specific cluster.
+Fetches information about the given organization. This data is presented as a table where each row includes the name, version, ID, cloud provider, and plan for the cluster. Rows will also include the number of recent service logs, active PD Alerts, Jira Issues, and limited support status for that specific cluster.
 
 ```
 osdctl org context orgId [flags]
@@ -3444,7 +3474,7 @@ osdctl servicelog list --cluster-id <cluster-identifier> [flags] [options]
   -A, --all-messages                     Toggle if we should see all of the messages or only SRE-P specific ones
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                Internal Cluster identifier (required)
+  -C, --cluster-id string                Internal Cluster identifier (required)
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for list
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure

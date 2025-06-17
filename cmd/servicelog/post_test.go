@@ -186,7 +186,7 @@ var _ = Describe("Test posting service logs", func() {
 		It("reads a URL successfully", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("test content"))
+				_, _ = w.Write([]byte("test content"))
 			}))
 			defer server.Close()
 
@@ -547,7 +547,7 @@ func TestReadTemplate(t *testing.T) {
 					"description": "Test Description",
 					"internal_only": true
 				}`
-				if err := os.WriteFile("template.json", []byte(fileContent), 0644); err != nil {
+				if err := os.WriteFile("template.json", []byte(fileContent), 0600); err != nil {
 					t.Fatalf("Failed to create template file: %v", err)
 				}
 			},
@@ -562,7 +562,7 @@ func TestReadTemplate(t *testing.T) {
 			tt.options.readTemplate()
 			assert.Equal(t, tt.expectedMsg, tt.options.Message)
 			if tt.options.Template == "template.json" {
-				os.Remove(tt.options.Template)
+				_ = os.Remove(tt.options.Template)
 			}
 		})
 	}
@@ -639,7 +639,7 @@ func TestReadFilterFile(t *testing.T) {
 			tt.options.readFilterFile()
 			assert.Equal(t, tt.expectedFilter, tt.options.filtersFromFile)
 			for _, filterFile := range tt.options.filterFiles {
-				os.Remove(filterFile)
+				_ = os.Remove(filterFile)
 			}
 		})
 	}

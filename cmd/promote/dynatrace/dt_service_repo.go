@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"strings"
 )
 
-func CheckoutAndCompareGitHash(gitURL, gitHash, currentGitHash, serviceFullPath string) (string, string, error) {
+func CheckoutAndCompareGitHash(appInterface AppInterface, gitURL, gitHash, currentGitHash, serviceFullPath string) (string, string, error) {
 	tempDir, err := ioutil.TempDir("", "")
+	exec := appInterface.GitExecutor
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create temporary directory: %v", err)
 	}
@@ -20,8 +20,7 @@ func CheckoutAndCompareGitHash(gitURL, gitHash, currentGitHash, serviceFullPath 
 		return "", "", fmt.Errorf("failed to change directory to temporary directory: %v", err)
 	}
 
-	cmd := exec.Command("git", "clone", gitURL, "source-dir")
-	err = cmd.Run()
+	err = exec.Run("", "git", "clone", gitURL, "source-dir")
 	if err != nil {
 		return "", "", fmt.Errorf("failed to clone git repository: %v", err)
 	}
@@ -33,8 +32,7 @@ func CheckoutAndCompareGitHash(gitURL, gitHash, currentGitHash, serviceFullPath 
 
 	if gitHash == "" {
 		fmt.Printf("No git hash provided. Using HEAD.\n")
-		cmd := exec.Command("git", "rev-list", "-n", "1", "HEAD", "--", serviceFullPath)
-		output, err := cmd.Output()
+		output, err := exec.Output("", "git", "rev-list", "-n", "1", "HEAD", "--", serviceFullPath)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to get git hash: %v", err)
 		}
@@ -45,8 +43,7 @@ func CheckoutAndCompareGitHash(gitURL, gitHash, currentGitHash, serviceFullPath 
 	if currentGitHash == gitHash {
 		return "", "", fmt.Errorf("git hash %s is already at HEAD", gitHash)
 	} else {
-		cmd := exec.Command("git", "log", "--no-merges", fmt.Sprintf("%s..%s", currentGitHash, gitHash))
-		commitLog, err := cmd.Output()
+		commitLog, err := exec.Output("", "git", "log", "--no-merges", fmt.Sprintf("%s..%s", currentGitHash, gitHash))
 		if err != nil {
 			return "", "", err
 		}

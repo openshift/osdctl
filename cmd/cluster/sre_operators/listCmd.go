@@ -15,7 +15,7 @@ import (
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/xanzy/go-gitlab"
+	gitlab "gitlab.com/gitlab-org/api/client-go"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -210,7 +210,9 @@ func (ctx *sreOperatorsListOptions) printText(opList []sreOperator) error {
 			if ctx.noCommit {
 				row = []string{op.Name, op.Current, op.Expected, op.Status, op.Channel}
 			}
-			if op.Current != op.Expected {
+			if op.Expected == "" {
+				row = []string{Red + Bold + op.Name, Gap + op.Current, Gap + op.CurrentCommit, Gap + "not found (Gitlab token may be missing or expired)", Gap + op.ExpectedCommit, Gap + op.Status, Gap + op.Channel, Gap + op.RepositoryURL + RestoreColor}
+			} else if op.Current != op.Expected {
 				row = []string{Red + Bold + op.Name, Gap + op.Current, Gap + op.CurrentCommit, Gap + op.Expected, Gap + op.ExpectedCommit, Gap + op.Status, Gap + op.Channel, Gap + op.RepositoryURL + RestoreColor}
 				if ctx.noCommit {
 					row = []string{Red + Bold + op.Name, Gap + op.Current, Gap + op.Expected, Gap + op.Status, Gap + op.Channel + RestoreColor}

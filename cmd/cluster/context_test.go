@@ -190,6 +190,7 @@ func TestBuildSplunkURL(t *testing.T) {
 	testCases := []struct {
 		name              string
 		hypershiftEnabled bool
+		regionID          string
 		ocmEnv            string
 		clusterID         string
 		clusterName       string
@@ -241,6 +242,15 @@ func TestBuildSplunkURL(t *testing.T) {
 			infraID:           "mock-infra-id",
 			expectedURL:       "",
 		},
+		{
+			name:              "Hypershift enabled, staging environment, region-locked",
+			hypershiftEnabled: true,
+			regionID:          "aws.ap-southeast-1.stage",
+			ocmEnv:            "stage",
+			clusterID:         "mock-cluster-id",
+			clusterName:       "mock-cluster",
+			expectedURL:       fmt.Sprintf(SGPSplunkURL, "openshift_managed_hypershift_audit_stage", "staging", "mock-cluster-id", "mock-cluster"),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -253,8 +263,9 @@ func TestBuildSplunkURL(t *testing.T) {
 			}
 
 			o := &contextOptions{
-				cluster: mockCluster.ToV1Cluster(),
-				infraID: tc.infraID,
+				cluster:  mockCluster.ToV1Cluster(),
+				infraID:  tc.infraID,
+				regionID: tc.regionID,
 			}
 
 			data := &contextData{

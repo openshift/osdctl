@@ -1,10 +1,10 @@
 package dynatrace
 
 import (
-	"fmt"
-	"os/exec"
 	"strings"
 	"sync"
+
+	"github.com/openshift/osdctl/cmd/promote/iexec"
 )
 
 var (
@@ -14,21 +14,21 @@ var (
 )
 
 // getBaseDir returns the base directory of the git repository, this can only be called once per process
-func getBaseDir() (string, error) {
+func getBaseDir(exec iexec.IExec) (string, error) {
 	baseDirOnce.Do(func() {
-		baseDirCmd := exec.Command("git", "rev-parse", "--show-toplevel")
-		baseDirOutput, err := baseDirCmd.Output()
+		baseDirOutput, err := exec.Output("", "git", "rev-parse", "--show-toplevel")
 		if err != nil {
 			baseDirErr = err
 			return
 		}
-
 		BaseDir = strings.TrimSpace(string(baseDirOutput))
 	})
 
 	return BaseDir, baseDirErr
 }
 
+/*
+// commented out as not used
 func checkBehindMaster(dir string) error {
 	fmt.Printf("### Checking 'master' branch is up to date ###\n")
 
@@ -67,3 +67,4 @@ func checkBehindMaster(dir string) error {
 
 	return nil
 }
+*/

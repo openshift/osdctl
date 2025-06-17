@@ -39,7 +39,7 @@ func UpdateDefaultValue(file *hclwrite.File, name string, value string) bool {
 }
 
 func Save(filename string, file *hclwrite.File) error {
-	if err := os.WriteFile(filename, file.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(filename, file.Bytes(), 0600); err != nil {
 		return err
 	}
 	return nil
