@@ -44,7 +44,9 @@ func TestPrintKubeConfigExport(t *testing.T) {
 
 			w.Close()
 			os.Stdout = oldStdout
-			io.Copy(&buf, r)
+			if _, err := io.Copy(&buf, r); err != nil {
+				t.Fatalf("failed to copy: %v", err)
+			}
 
 			assert.Equal(t, tt.expected, buf.String())
 		})
@@ -102,7 +104,7 @@ func TestEnsureFile(t *testing.T) {
 			name:     "File already exists",
 			filename: "existing.txt",
 			setup: func(path string) error {
-				return os.WriteFile(path, []byte("test"), 0644)
+				return os.WriteFile(path, []byte("test"), 0600)
 			},
 			wantFile: false,
 		},
@@ -538,7 +540,7 @@ func TestKillChildren(t *testing.T) {
 			assert.NoError(t, err)
 
 			if tt.content != "" {
-				err := os.WriteFile(filepath.Join(testPath, ".killpds"), []byte(tt.content), 0644)
+				err := os.WriteFile(filepath.Join(testPath, ".killpds"), []byte(tt.content), 0600)
 				assert.NoError(t, err)
 			}
 
@@ -634,13 +636,13 @@ func TestStart(t *testing.T) {
 
 	ocenvPath := filepath.Join(tmpDir, ".ocenv")
 	envContent := "FOO=bar\nBAR=baz\n"
-	if err := os.WriteFile(ocenvPath, []byte(envContent), 0644); err != nil {
+	if err := os.WriteFile(ocenvPath, []byte(envContent), 0600); err != nil {
 		t.Fatalf("failed to write .ocenv: %v", err)
 	}
 
 	shellScript := filepath.Join(tmpDir, "fake-shell.sh")
 	scriptContent := "#!/bin/sh\necho 'Mock shell running'\nexit 0\n"
-	if err := os.WriteFile(shellScript, []byte(scriptContent), 0755); err != nil {
+	if err := os.WriteFile(shellScript, []byte(scriptContent), 0700); err != nil {
 		t.Fatalf("failed to write mock shell script: %v", err)
 	}
 
@@ -663,7 +665,9 @@ func TestStart(t *testing.T) {
 	}()
 
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatalf("failed to copy: %v", err)
+	}
 	os.Stdout = oldStdout
 
 	output := buf.String()
