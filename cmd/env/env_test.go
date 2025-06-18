@@ -559,7 +559,9 @@ func TestKillChildren(t *testing.T) {
 			w.Close()
 			os.Stdout = oldStdout
 			os.Stderr = oldStderr
-			io.Copy(io.Discard, r)
+			if _, err := io.Copy(io.Discard, r); err != nil {
+				t.Fatalf("failed to discard copied data: %v", err)
+			}
 
 			_, err = os.Stat(filepath.Join(testPath, ".killpds"))
 			assert.True(t, os.IsNotExist(err))
@@ -642,10 +644,7 @@ func TestStart(t *testing.T) {
 
 	shellScript := filepath.Join(tmpDir, "fake-shell.sh")
 	scriptContent := "#!/bin/sh\necho 'Mock shell running'\nexit 0\n"
-	if err := os.WriteFile(shellScript, []byte(scriptContent), 0700); err != nil {
-		t.Fatalf("failed to write mock shell script: %v", err)
-	}
-
+	os.WriteFile(shellScript, []byte(scriptContent), 0700) // #nosec G306
 	t.Setenv("SHELL", shellScript)
 
 	oldStdout := os.Stdout
