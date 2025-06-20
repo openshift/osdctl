@@ -644,6 +644,8 @@ func TestStart(t *testing.T) {
 
 	shellScript := filepath.Join(tmpDir, "fake-shell.sh")
 	scriptContent := "#!/bin/sh\necho 'Mock shell running'\nexit 0\n"
+
+	// #nosec G306 - script needs execute permission for shell
 	if err := os.WriteFile(shellScript, []byte(scriptContent), 0700); err != nil {
 		t.Fatalf("failed to write shell script: %v", err)
 	}
