@@ -644,7 +644,9 @@ func TestStart(t *testing.T) {
 
 	shellScript := filepath.Join(tmpDir, "fake-shell.sh")
 	scriptContent := "#!/bin/sh\necho 'Mock shell running'\nexit 0\n"
-	os.WriteFile(shellScript, []byte(scriptContent), 0700) // #nosec G306
+	if err := os.WriteFile(shellScript, []byte(scriptContent), 0700); err != nil {
+		t.Fatalf("failed to write shell script: %v", err)
+	}
 	t.Setenv("SHELL", shellScript)
 
 	oldStdout := os.Stdout
