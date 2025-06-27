@@ -114,7 +114,7 @@ func TestValidateInstanceSize(t *testing.T) {
 		{
 			instanceSize: "r5.2xlarge",
 			nodeType:     "infra",
-			expectErr:    true,
+			expectErr:    false,
 		},
 		{
 			instanceSize: "m5.4xlarge",
@@ -129,7 +129,7 @@ func TestValidateInstanceSize(t *testing.T) {
 		{
 			instanceSize: "m5.2xlarge",
 			nodeType:     "controlplane",
-			expectErr:    true,
+			expectErr:    false,
 		},
 		{
 			instanceSize: "r5.4xlarge",

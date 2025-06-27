@@ -6,6 +6,7 @@ import (
 
 var supportedInstanceTypes = map[string][]string{
 	"controlplane": {
+		"m5.2xlarge",
 		"m5.4xlarge",
 		"m5.8xlarge",
 		"m5.12xlarge",
@@ -19,6 +20,8 @@ var supportedInstanceTypes = map[string][]string{
 		"n2-standard-32",
 	},
 	"infra": {
+		"r5.xlarge",
+		"r5.2xlarge",
 		"r5.4xlarge",
 		"r5.8xlarge",
 		"r5.12xlarge",
