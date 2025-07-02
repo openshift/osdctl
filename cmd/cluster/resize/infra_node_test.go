@@ -562,3 +562,5 @@ func TestGetInfraMachinePoolNoInfraPool(t *testing.T) {
 	// Verify mock was called correctly
 	mockHive.AssertExpectations(t)
 }
+
+
