@@ -315,7 +315,6 @@ func TestNodesMatchExpectedCount(t *testing.T) {
 }
 
 func TestGetInfraMachinePool(t *testing.T) {
-	// Create a test namespace
 	testNamespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-namespace",
@@ -325,14 +324,13 @@ func TestGetInfraMachinePool(t *testing.T) {
 		},
 	}
 
-	// Create a test machine pool with name exactly matching "infra"
 	testMachinePool := &hivev1.MachinePool{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster-infra", // Name in metadata
+			Name:      "test-cluster-infra",
 			Namespace: "test-namespace",
 		},
 		Spec: hivev1.MachinePoolSpec{
-			Name: "infra", // This is what the code checks for
+			Name: "infra",
 			Platform: hivev1.MachinePoolPlatform{
 				AWS: &hivev1aws.MachinePoolPlatform{
 					InstanceType: "r5.xlarge",
@@ -341,10 +339,7 @@ func TestGetInfraMachinePool(t *testing.T) {
 		},
 	}
 
-	// Create mock client
 	mockHive := &MockClient{}
-
-	// Set up mock expectations for namespace list - first call
 	firstCall := mockHive.On("List", mock.Anything, mock.MatchedBy(func(obj interface{}) bool {
 		_, ok := obj.(*corev1.NamespaceList)
 		return ok
@@ -354,7 +349,6 @@ func TestGetInfraMachinePool(t *testing.T) {
 		nsList.Items = []corev1.Namespace{*testNamespace}
 	})
 
-	// Set up mock expectations for machine pool list - second call
 	secondCall := mockHive.On("List", mock.Anything, mock.MatchedBy(func(obj interface{}) bool {
 		_, ok := obj.(*hivev1.MachinePoolList)
 		return ok
@@ -364,22 +358,17 @@ func TestGetInfraMachinePool(t *testing.T) {
 		mpList.Items = []hivev1.MachinePool{*testMachinePool}
 	})
 
-	// Create Infra instance
 	infra := &Infra{
 		clusterId: "test-cluster",
 		hive:      mockHive,
 	}
 
-	// Call the function
 	mp, err := infra.getInfraMachinePool(context.Background())
 
-	// Verify results
 	assert.NoError(t, err)
 	assert.NotNil(t, mp)
 	assert.Equal(t, "infra", mp.Spec.Name)
 	assert.Equal(t, "r5.xlarge", mp.Spec.Platform.AWS.InstanceType)
-
-	// Verify mock was called correctly
 	mockHive.AssertExpectations(t)
 }
 
@@ -482,5 +471,3 @@ func TestGetInfraMachinePoolNoInfraPool(t *testing.T) {
 	// Verify mock was called correctly
 	mockHive.AssertExpectations(t)
 }
-
-
