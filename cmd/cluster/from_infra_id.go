@@ -3,6 +3,10 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"sort"
+	"strings"
+
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	amv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
@@ -11,9 +15,6 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"os"
-	"sort"
-	"strings"
 )
 
 type fromInfraIdOptions struct {
@@ -72,7 +73,7 @@ func (ops *fromInfraIdOptions) run(cmd *cobra.Command, args []string) error {
 	}
 	clusters, err := utils.ApplyFilters(
 		ocmClient,
-		[]string{fmt.Sprintf("name like '%s%%'", clusterName)},
+		[]string{fmt.Sprintf("infra_id like '%s%%'", clusterName)},
 	)
 	if err != nil {
 		return fmt.Errorf("could not retrieve clusters for %s", infraId)
