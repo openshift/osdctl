@@ -13,7 +13,7 @@ osdctl hcp must-gather --cluster-id <cluster-identifier> [flags]
 ### Examples
 
 ```
-osdctl hcp must-gather --cluster-id CLUSTER_ID --gather sc_mg,mc_mg,sc_acm --reason OHSS-1234
+osdctl hcp must-gather --cluster-id CLUSTER_ID --gather sc,mc,sc_acm --reason OHSS-1234
 ```
 
 ### Options
