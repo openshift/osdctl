@@ -19,6 +19,17 @@ func setupVaultToken(vaultAddr string) error {
 		return fmt.Errorf("error setting environment variable: %v", err)
 	}
 
+	versionCheckCmd := exec.Command("vault", "version")
+
+	if err = versionCheckCmd.Run(); err != nil{
+		return fmt.Errorf("missing vault cli: %v", err)
+	}
+
+	versionCheckCmd.Stdout = nil
+	versionCheckCmd.Stderr = nil
+
+	fmt.Println("Vault cli installed")
+
 	tokenCheckCmd := exec.Command("vault", "token", "lookup")
 	tokenCheckCmd.Stdout = nil
 	tokenCheckCmd.Stderr = nil
