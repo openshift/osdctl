@@ -102,41 +102,29 @@ func NewCmdLogs() *cobra.Command {
 
 func GetLinkToWebConsole(dtURL string, since int, finalQuery string) (string, error) {
 	SearchQuery := map[string]interface{}{
-		"version": "0",
-		"data": map[string]interface{}{
-			"tableConfig": map[string]interface{}{
-				"visibleColumns": []string{"timestamp", "status", "content"},
-				"columnAttributes": map[string]interface{}{
-					"columnWidths": map[string]interface{}{},
-					"lineWraps": map[string]interface{}{
-						"timestamp": true,
-						"status":    true,
-						"content":   true,
-					},
-					"tableLineWrap": true,
-				},
-				"columnOrder": []string{"timestamp", "status", "content"},
-			},
-			"queryConfig": map[string]interface{}{
-				"query":     finalQuery,
-				"timeframe": map[string]interface{}{"from": fmt.Sprintf("now()-%vh", since), "to": "now()"},
-				"filter": map[string]interface{}{
-					"datatype": "logs",
-					"filters":  map[string]interface{}{},
-					"sort": map[string]interface{}{
-						"field":     "timestamp",
-						"direction": sortOrder,
-					},
-				},
-				"showDqlEditor": true,
+		"version":  1,
+		"dt.query": finalQuery,
+		"dt.timeframe": map[string]interface{}{
+			"from": fmt.Sprintf("now()-%vh", since),
+			"to":   "now()",
+		},
+		"showDqlEditor": true,
+		"tableConfig": map[string]interface{}{
+			"visibleColumns": []string{"timestamp", "status", "content"},
+			"columnOrder":    []string{"timestamp", "status", "content"},
+			"columnAttributes": map[string]interface{}{
+				"columnWidths":  map[string]interface{}{},
+				"lineWraps":     map[string]interface{}{},
+				"tableLineWrap": true,
 			},
 		},
 	}
+
 	mStr, err := json.Marshal(SearchQuery)
 	if err != nil {
 		return "", fmt.Errorf("failed to create JSON for sharable URL: %v", err)
 	}
-	return fmt.Sprintf("%sui/apps/dynatrace.logs/?gtf=-%dh&gf=all&sortDirection=desc&advancedQueryMode=true&isDefaultQuery=false&visualizationType=table#%s\n\n", dtURL, since, url.PathEscape(string(mStr))), nil
+	return fmt.Sprintf("%sui/apps/dynatrace.logs/#%s", dtURL, url.PathEscape(string(mStr))), nil
 }
 
 func main(clusterID string) error {
