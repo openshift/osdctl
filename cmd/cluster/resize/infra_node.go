@@ -10,8 +10,10 @@ import (
 	"strings"
 	"time"
 
+	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/smithy-go"
+	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
@@ -581,30 +583,62 @@ func (r *Infra) terminateCloudInstances(ctx context.Context, nodeList *corev1.No
 
 	switch r.cluster.CloudProvider().ID() {
 	case "aws":
-		ocmClient, err := utils.CreateConnection()
-		if err != nil {
-			return err
-		}
-		defer ocmClient.Close()
-		cfg, err := osdCloud.CreateAWSV2Config(ocmClient, r.cluster)
-		if err != nil {
-			return err
+		var ocmClient interface{}
+		if mOCM, ok := ctx.Value("ocm").(interface{ ClustersMgmt() interface{} }); ok {
+			ocmClient = mOCM
+		} else {
+			var err error
+			ocmClient, err = utils.CreateConnection()
+			if err != nil {
+				return err
+			}
+			defer ocmClient.(*sdk.Connection).Close()
 		}
 
-		awsClient := ec2.NewFromConfig(cfg)
-		_, err = awsClient.TerminateInstances(ctx, &ec2.TerminateInstancesInput{
-			InstanceIds: instanceIDs,
-		})
-		if err != nil {
-			var apiErr smithy.APIError
-			if errors.As(err, &apiErr) {
-				code := apiErr.ErrorCode()
-				message := apiErr.ErrorMessage()
-				log.Printf("AWS ERROR: %v - %v\n", code, message)
-			} else {
-				log.Printf("ERROR: %v\n", err.Error())
+		if mBuilder, ok := ctx.Value("aws_builder").(interface {
+			CreateAWSV2Config(interface{}, *cmv1.Cluster) (awssdk.Config, error)
+		}); ok {
+			cfg, err := mBuilder.CreateAWSV2Config(ocmClient, r.cluster)
+			if err != nil {
+				return err
 			}
-			return err
+
+			cfg.Region = r.cluster.Region().ID()
+			awsClient := ec2.NewFromConfig(cfg)
+			_, err = awsClient.TerminateInstances(ctx, &ec2.TerminateInstancesInput{
+				InstanceIds: instanceIDs,
+			})
+			if err != nil {
+				var apiErr smithy.APIError
+				if errors.As(err, &apiErr) {
+					code := apiErr.ErrorCode()
+					message := apiErr.ErrorMessage()
+					log.Printf("AWS ERROR: %v - %v\n", code, message)
+				} else {
+					log.Printf("ERROR: %v\n", err.Error())
+				}
+				return err
+			}
+		} else {
+			cfg, err := osdCloud.CreateAWSV2Config(ocmClient.(*sdk.Connection), r.cluster)
+			if err != nil {
+				return err
+			}
+			awsClient := ec2.NewFromConfig(cfg)
+			_, err = awsClient.TerminateInstances(ctx, &ec2.TerminateInstancesInput{
+				InstanceIds: instanceIDs,
+			})
+			if err != nil {
+				var apiErr smithy.APIError
+				if errors.As(err, &apiErr) {
+					code := apiErr.ErrorCode()
+					message := apiErr.ErrorMessage()
+					log.Printf("AWS ERROR: %v - %v\n", code, message)
+				} else {
+					log.Printf("ERROR: %v\n", err.Error())
+				}
+				return err
+			}
 		}
 
 	case "gcp":
