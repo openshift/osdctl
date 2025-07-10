@@ -8,6 +8,15 @@ reviewers:
 - devppratik
 - Tafhim
 - joshbranham
+- bergmannf
+- Makdaam
+- Nikokolas3270
+- RaphaelBut
+- MateSaary
+- rolandmkunkel
+- petrkotas
+- zmird-r
+- hectorakemp
 approvers:
 - clcollins
 - dustman9000
@@ -18,6 +27,15 @@ approvers:
 - devppratik
 - Tafhim
 - joshbranham
+- bergmannf
+- Makdaam
+- Nikokolas3270
+- RaphaelBut
+- MateSaary
+- rolandmkunkel
+- petrkotas
+- zmird-r
+- hectorakemp
 maintainers:
 - clcollins
 - fahlmant
