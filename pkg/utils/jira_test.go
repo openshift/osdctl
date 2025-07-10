@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/andygrunwald/go-jira"
-	"github.com/golang/mock/gomock"
 	mocks "github.com/openshift/osdctl/pkg/utils/mocks"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 )
 
 func TestGetJiraIssuesForClusterWithClient(t *testing.T) {
