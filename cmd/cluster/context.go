@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
+	"net"
 	"os"
 	"os/exec"
 	"sort"
@@ -106,6 +108,16 @@ type contextData struct {
 	UserBanned     bool
 	BanCode        string
 	BanDescription string
+
+	// Network data
+	NetworkType                string
+	NetworkMachineCIDR         string
+	NetworkServiceCIDR         string
+	NetworkPodCIDR             string
+	NetworkHostPrefix          int
+	NetworkMaxNodesFromPodCIDR int
+	NetworkMaxPodsPerNode      int
+	NetworkMaxServices         int
 }
 
 // newCmdContext implements the context command to show the current context of a cluster
@@ -231,6 +243,8 @@ func (o *contextOptions) printLongOutput(data *contextData, w io.Writer) {
 	data.printClusterHeader(w)
 
 	fmt.Fprintln(w, strings.TrimSpace(data.Description))
+	fmt.Println()
+	printNetworkInfo(data, w)
 	fmt.Println()
 	utils.PrintHandoverAnnouncements(data.HandoverAnnouncements)
 	fmt.Println()
@@ -377,6 +391,45 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	data.ClusterID = o.clusterID
 	data.ClusterVersion = o.cluster.Version().RawID()
 	data.OCMEnv = utils.GetCurrentOCMEnv(ocmClient)
+
+	// network info fetch and calculations
+	var clusterNetwork = o.cluster.Network()
+	var ok bool
+	var podNetwork *net.IPNet
+	var serviceNetwork *net.IPNet
+
+	data.NetworkType = clusterNetwork.Type()
+	data.NetworkMachineCIDR, ok = clusterNetwork.GetMachineCIDR()
+	if !ok {
+		errors = append(errors, fmt.Errorf("missing Machine CIDR in OCM Cluster"))
+		return nil, errors
+	}
+	data.NetworkServiceCIDR = clusterNetwork.ServiceCIDR()
+	data.NetworkPodCIDR = clusterNetwork.PodCIDR()
+	data.NetworkHostPrefix = clusterNetwork.HostPrefix()
+
+	//max possible nodes from hostprefix
+
+	_, podNetwork, err = net.ParseCIDR(data.NetworkPodCIDR)
+	if err != nil {
+		errors = append(errors, err)
+		return nil, errors
+	}
+	var b, max = podNetwork.Mask.Size()
+	data.NetworkMaxNodesFromPodCIDR = int(math.Pow(float64(2), float64(data.NetworkHostPrefix-b)))
+
+	//max pods per node
+	data.NetworkMaxPodsPerNode = int(math.Pow(float64(2), float64(max-data.NetworkHostPrefix)))
+
+	//max services
+
+	_, serviceNetwork, err = net.ParseCIDR(data.NetworkServiceCIDR)
+	if err != nil {
+		errors = append(errors, err)
+		return nil, errors
+	}
+	b, max = serviceNetwork.Mask.Size()
+	data.NetworkMaxServices = int(math.Pow(float64(2), float64(max-b))) - 2 // minus 2: API and DNS service
 
 	GetLimitedSupport := func() {
 		defer wg.Done()
@@ -767,6 +820,25 @@ func skippableEvent(eventName string) bool {
 		}
 	}
 	return false
+}
+
+func printNetworkInfo(data *contextData, w io.Writer) {
+	var name = "Network Info"
+	fmt.Fprintln(w, delimiter+name)
+
+	table := printer.NewTablePrinter(w, 20, 1, 3, ' ')
+	table.AddRow([]string{"Network Type", data.NetworkType})
+	table.AddRow([]string{"MachineCIDR", data.NetworkMachineCIDR})
+	table.AddRow([]string{"ServiceCIDR", data.NetworkServiceCIDR})
+	table.AddRow([]string{"Max Services", strconv.Itoa(data.NetworkMaxServices)})
+	table.AddRow([]string{"PodCIDR", data.NetworkPodCIDR})
+	table.AddRow([]string{"Host Prefix", strconv.Itoa(data.NetworkHostPrefix)})
+	table.AddRow([]string{"Max Nodes (based on PodCIDR)", strconv.Itoa(data.NetworkMaxNodesFromPodCIDR)})
+	table.AddRow([]string{"Max pods per node", strconv.Itoa(data.NetworkMaxPodsPerNode)})
+
+	if err := table.Flush(); err != nil {
+		fmt.Fprintf(w, "Error printing %s: %v\n", name, err)
+	}
 }
 
 func printDynatraceResources(data *contextData, w io.Writer) {
