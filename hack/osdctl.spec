@@ -15,18 +15,7 @@
 
 %global common_description %{expand:
 CLI for the OSD utilities.}
-
-%global golicenses      LICENSE
-%global godocs          README.md
-
-BuildRequires:  git
-Name:           osdctl
-Release:        %autorelease
-Summary:        CLI for the OSD utilities
-License:        Apache-2.0
-URL:            %{gourl}
 Version:        @version@
-Source:         %{gosource}
 
 # REMOVE BEFORE SUBMITTING THIS FOR REVIEW
 # ---
@@ -39,6 +28,18 @@ Source:         %{gosource}
 # ---
 # REMOVE BEFORE SUBMITTING THIS FOR REVIEW
 %gometa -L -f
+
+%global golicenses      LICENSE
+%global godocs          README.md
+
+BuildRequires:  git
+Name:           osdctl
+Release:        %autorelease
+Summary:        CLI for the OSD utilities
+License:        Apache-2.0
+URL:            %{gourl}
+Source:         %{gosource}
+
 
 %description %{common_description}
 
@@ -55,6 +56,7 @@ Source:         %{gosource}
 %if %{without bootstrap}
 %define gomodulesmode GO111MODULE=on
 %build
+export GO_LDFLAGS='-X "github.com/openshift/osdctl/pkg/utils.Version="@version@"'
 %gobuild -o %{gobuilddir}/bin/osdctl %{goipath}
 %endif
 
