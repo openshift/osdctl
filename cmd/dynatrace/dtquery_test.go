@@ -2,6 +2,7 @@ package dynatrace
 
 import (
 	"testing"
+	"time"
 )
 
 func TestDTQuery_InitLogs(t *testing.T) {
@@ -188,6 +189,32 @@ func TestDTQuery_Deployments(t *testing.T) {
 			q := new(DTQuery).InitLogs(1).Deployments(tt.input)
 			if q.fragments[1] != tt.expected {
 				t.Errorf("expected: %s\ngot: %s", tt.expected, q.fragments[1])
+			}
+		})
+	}
+}
+
+func TestDTQuery_InitLogsWithTimeRange(t *testing.T) {
+	tests := []struct {
+		name     string
+		from     time.Time
+		to       time.Time
+		expected string
+	}{
+		{
+			name: "Standard time range",
+			from: time.Date(2025, 6, 12, 5, 0, 0, 0, time.UTC),
+			to:   time.Date(2025, 6, 17, 15, 0, 0, 0, time.UTC),
+			expected: `fetch logs, from:"2025-06-12T05:00:00Z", to:"2025-06-17T15:00:00Z" 
+| filter matchesValue(event.type, "LOG") and `,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q := new(DTQuery).InitLogsWithTimeRange(tt.from, tt.to)
+			if q.fragments[0] != tt.expected {
+				t.Errorf("expected: %s\ngot: %s", tt.expected, q.fragments[0])
 			}
 		})
 	}
