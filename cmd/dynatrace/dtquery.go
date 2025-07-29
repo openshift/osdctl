@@ -3,7 +3,10 @@ package dynatrace
 import (
 	"fmt"
 	"strings"
+	"time"
 )
+
+const timeFormat = "2006-01-02T15:04:05Z"
 
 type DTQuery struct {
 	fragments  []string
@@ -14,6 +17,17 @@ func (q *DTQuery) InitLogs(hours int) *DTQuery {
 	q.fragments = []string{}
 
 	q.fragments = append(q.fragments, fmt.Sprintf("fetch logs, from:now()-%dh \n| filter matchesValue(event.type, \"LOG\") and ", hours))
+
+	return q
+}
+
+func (q *DTQuery) InitLogsWithTimeRange(from time.Time, to time.Time) *DTQuery {
+	q.fragments = []string{}
+
+	fromStr := from.Format(timeFormat)
+	toStr := to.Format(timeFormat)
+
+	q.fragments = append(q.fragments, fmt.Sprintf("fetch logs, from:\"%s\", to:\"%s\" \n| filter matchesValue(event.type, \"LOG\") and ", fromStr, toStr))
 
 	return q
 }

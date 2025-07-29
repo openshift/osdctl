@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"time"
 
 	k8s "github.com/openshift/osdctl/pkg/k8s"
 	"github.com/spf13/cobra"
@@ -14,6 +15,8 @@ var (
 	dryRun        bool
 	tail          int
 	since         int
+	fromVar       time.Time
+	toVar         time.Time
 	contains      string
 	sortOrder     string
 	clusterID     string
@@ -52,6 +55,9 @@ const (
   # Only return logs newer than 2 hours old (an integer in hours)
   $ osdctl dt logs alertmanager-main-0 -n openshift-monitoring --since 2
 
+  # Get logs for a specific time range using --from and --to flags
+  $ osdctl dt logs alertmanager-main-0 -n openshift-monitoring --from "2025-06-15 04:00" --to "2025-06-17 13:00"
+
   # Restrict return of logs to those that contain a specific phrase
   $ osdctl dt logs alertmanager-main-0 -n openshift-monitoring --contains <phrase>
 `
@@ -89,6 +95,11 @@ func NewCmdLogs() *cobra.Command {
 	logsCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Only builds the query without fetching any logs from the tenant")
 	logsCmd.Flags().IntVar(&tail, "tail", 1000, "Last 'n' logs to fetch (defaults to 100)")
 	logsCmd.Flags().IntVar(&since, "since", 1, "Number of hours (integer) since which to search (defaults to 1 hour)")
+	logsCmd.Flags().TimeVar(&fromVar, "from", time.Time{}, []string{time.RFC3339, "2006-01-02 15:04"}, "Datetime from which to filter logs, in the format \"YYYY-MM-DD HH:MM\"")
+	logsCmd.Flags().TimeVar(&toVar, "to", time.Time{}, []string{time.RFC3339, "2006-01-02 15:04"}, "Datetime until which to filter logs to, in the format \"YYYY-MM-DD HH:MM\"")
+	logsCmd.MarkFlagsRequiredTogether("from", "to")
+	logsCmd.MarkFlagsMutuallyExclusive("since", "from")
+	logsCmd.MarkFlagsMutuallyExclusive("since", "to")
 	logsCmd.Flags().StringVar(&contains, "contains", "", "Include logs which contain a phrase")
 	logsCmd.Flags().StringVar(&sortOrder, "sort", "asc", "Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'. Defaults to 'asc'")
 	logsCmd.Flags().StringSliceVar(&nodeList, "node", []string{}, "Node name(s) (comma-separated)")
@@ -100,13 +111,13 @@ func NewCmdLogs() *cobra.Command {
 	return logsCmd
 }
 
-func GetLinkToWebConsole(dtURL string, since int, finalQuery string) (string, error) {
+func GetLinkToWebConsole(dtURL string, from string, to string, finalQuery string) (string, error) {
 	SearchQuery := map[string]interface{}{
 		"version":  1,
 		"dt.query": finalQuery,
 		"dt.timeframe": map[string]interface{}{
-			"from": fmt.Sprintf("now()-%vh", since),
-			"to":   "now()",
+			"from": from,
+			"to":   to,
 		},
 		"showDqlEditor": true,
 		"tableConfig": map[string]interface{}{
@@ -132,6 +143,11 @@ func main(clusterID string) error {
 	if since <= 0 {
 		return fmt.Errorf("invalid time duration")
 	}
+
+	if !fromVar.IsZero() && !toVar.IsZero() && toVar.Before(fromVar) {
+		return fmt.Errorf("--to cannot be set to a datetime before --from")
+	}
+
 	hcpCluster, err := FetchClusterDetails(clusterID)
 	if err != nil {
 		return fmt.Errorf("failed to acquire cluster details %v", err)
@@ -141,7 +157,7 @@ func main(clusterID string) error {
 		return fmt.Errorf("invalid sort order, expecting 'asc' or 'desc'")
 	}
 
-	query, err := GetQuery(hcpCluster)
+	query, err := GetQuery(hcpCluster, fromVar, toVar, since)
 	if err != nil {
 		return fmt.Errorf("failed to build query for Dynatrace %v", err)
 	}
@@ -149,7 +165,15 @@ func main(clusterID string) error {
 	fmt.Println(query.Build())
 
 	if console {
-		url, err := GetLinkToWebConsole(hcpCluster.DynatraceURL, since, query.finalQuery)
+		var url string
+		var err error
+
+		if !fromVar.IsZero() && !toVar.IsZero() { // Absolute timestamp condition
+			url, err = GetLinkToWebConsole(hcpCluster.DynatraceURL, fromVar.Format(time.RFC3339), toVar.Format(time.RFC3339), query.finalQuery)
+		} else { // otherwise relative (since "mode")
+			url, err = GetLinkToWebConsole(hcpCluster.DynatraceURL, fmt.Sprintf("now()-%dh", since), "now()", query.finalQuery)
+		}
+
 		if err != nil {
 			return fmt.Errorf("failed to get url: %v", err)
 		}
@@ -179,9 +203,14 @@ func main(clusterID string) error {
 	return nil
 }
 
-func GetQuery(hcpCluster HCPCluster) (query DTQuery, error error) {
+func GetQuery(hcpCluster HCPCluster, fromVar time.Time, toVar time.Time, since int) (query DTQuery, error error) {
 	q := DTQuery{}
-	q.InitLogs(since).Cluster(hcpCluster.managementClusterName)
+
+	if !fromVar.IsZero() && !toVar.IsZero() {
+		q.InitLogsWithTimeRange(fromVar, toVar).Cluster(hcpCluster.managementClusterName)
+	} else {
+		q.InitLogs(since).Cluster(hcpCluster.managementClusterName)
+	}
 
 	if hcpCluster.hcpNamespace != "" {
 		namespaceList = append(namespaceList, hcpCluster.hcpNamespace)
