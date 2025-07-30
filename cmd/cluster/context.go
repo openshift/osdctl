@@ -515,18 +515,20 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 				data.DyntraceEnvURL = "Failed to fetch Dynatrace URL"
 			}
 			return
-		} else {
-			query, err := dynatrace.GetQuery(hcpCluster)
-			if err != nil {
-				errors = append(errors, fmt.Errorf("failed to build query for Dynatrace %v", err))
-			}
-			queryTxt := query.Build()
-			data.DyntraceEnvURL = hcpCluster.DynatraceURL
-			data.DyntraceLogsURL, err = dynatrace.GetLinkToWebConsole(hcpCluster.DynatraceURL, 10, queryTxt)
-			if err != nil {
-				errors = append(errors, fmt.Errorf("failed to get url: %v", err))
-			}
 		}
+		query, err := dynatrace.GetQuery(hcpCluster, time.Time{}, time.Time{}, 1) // passing nil from/to values to use --since behaviour
+		if err != nil {
+			errors = append(errors, fmt.Errorf("failed to build query for Dynatrace %v", err))
+			data.DyntraceEnvURL = fmt.Sprintf("Failed to build Dynatrace query: %v", err)
+			return
+		}
+		queryTxt := query.Build()
+		data.DyntraceEnvURL = hcpCluster.DynatraceURL
+		data.DyntraceLogsURL, err = dynatrace.GetLinkToWebConsole(hcpCluster.DynatraceURL, "now()-10h", "now()", queryTxt)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("failed to get url: %v", err))
+		}
+
 	}
 
 	GetPagerDutyAlerts := func() {
