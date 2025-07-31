@@ -65,7 +65,7 @@ func NewCmdAccess(streams genericclioptions.IOStreams, client *k8s.LazyClient) *
 	}
 	accessCmd.AddCommand(newCmdCleanup(client, streams))
 	accessCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
-	accessCmd.Flags().StringVar(&ops.clusterID, "cluster-id", "", "Provide the internal ID of the cluster")
+	accessCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Provide the internal ID of the cluster")
 	_ = accessCmd.MarkFlagRequired("reason")
 	_ = accessCmd.MarkFlagRequired("cluster-id")
 

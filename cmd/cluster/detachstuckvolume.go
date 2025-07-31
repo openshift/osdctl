@@ -43,7 +43,7 @@ func newCmdDetachStuckVolume() *cobra.Command {
 		},
 	}
 
-	detachstuckvolumeCmd.Flags().StringVar(&ops.clusterID, "cluster-id", "", "Provide internal ID of the cluster")
+	detachstuckvolumeCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Provide internal ID of the cluster")
 	detachstuckvolumeCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
 	_ = detachstuckvolumeCmd.MarkFlagRequired("cluster-id")
 	_ = detachstuckvolumeCmd.MarkFlagRequired("reason")

@@ -36,7 +36,7 @@ osdctl env [flags] [env-alias]
 
 ```
   -a, --api string            OpenShift API URL for individual cluster login
-  -c, --cluster-id string     Cluster ID
+  -C, --cluster-id string     Cluster ID
   -d, --delete                Delete environment
   -k, --export-kubeconfig     Output export kubeconfig statement, to use environment outside of the env directory
   -h, --help                  help for env

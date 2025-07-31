@@ -14,7 +14,7 @@ osdctl cluster hypershift-info [flags]
 ### Options
 
 ```
-  -c, --cluster-id string           Provide internal ID of the cluster
+  -C, --cluster-id string           Provide internal ID of the cluster
   -h, --help                        help for hypershift-info
   -o, --output string               output format ['table', 'graphviz'] (default "graphviz")
   -l, --privatelinkaccount string   Privatelink account ID

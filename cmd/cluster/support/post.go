@@ -84,7 +84,7 @@ The cluster has a second failing ingress controller, which is not supported and 
 	}
 
 	// Define required flags
-	postCmd.Flags().StringVarP(&p.ClusterID, "cluster-id", "c", "", "Internal Cluster ID (required)")
+	postCmd.Flags().StringVarP(&p.ClusterID, "cluster-id", "C", "", "Internal Cluster ID (required)")
 	postCmd.Flags().StringVarP(&p.Template, "template", "t", "", "Message template file or URL")
 	postCmd.Flags().StringArrayVarP(&p.TemplateParams, "param", "p", p.TemplateParams, "Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.")
 	postCmd.Flags().Var(&p.Misconfiguration, MisconfigurationFlag, "The type of misconfiguration responsible for the cluster being placed into limited support. Valid values are `cloud` or `cluster`.")

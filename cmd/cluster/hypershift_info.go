@@ -47,7 +47,7 @@ It attempts to render the relationships as graphviz if that output format is cho
 			cmdutil.CheckErr(ops.run())
 		},
 	}
-	infoCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "Provide internal ID of the cluster")
+	infoCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Provide internal ID of the cluster")
 	infoCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", "", "AWS Profile")
 	infoCmd.Flags().StringVarP(&ops.awsRegion, "region", "r", "", "AWS Region")
 	infoCmd.Flags().StringVarP(&ops.privatelinkAccountId, "privatelinkaccount", "l", "", "Privatelink account ID")

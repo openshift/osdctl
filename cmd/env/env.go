@@ -106,7 +106,7 @@ func NewCmdEnv() *cobra.Command {
 	envCmd.Flags().BoolVarP(&options.ResetEnv, "reset", "r", false, "Reset environment")
 	envCmd.Flags().BoolVarP(&options.ExportKubeConfig, "export-kubeconfig", "k", false, "Output export kubeconfig statement, to use environment outside of the env directory")
 
-	envCmd.Flags().StringVarP(&options.ClusterId, "cluster-id", "c", "", "Cluster ID")
+	envCmd.Flags().StringVarP(&options.ClusterId, "cluster-id", "C", "", "Cluster ID")
 	envCmd.Flags().StringVarP(&options.LoginScript, "login-script", "l", "", "OCM login script to execute in a loop in ocb every 30 seconds")
 
 	envCmd.Flags().StringVarP(&options.LoginScript, "username", "u", "", "Username for individual cluster login")

@@ -9,7 +9,7 @@ osdctl cluster support status --cluster-id <cluster-identifier> [flags]
 ### Options
 
 ```
-  -c, --cluster-id string   Cluster ID for which to get support status
+  -C, --cluster-id string   Cluster ID for which to get support status
   -h, --help                help for status
       --verbose             Verbose output
 ```

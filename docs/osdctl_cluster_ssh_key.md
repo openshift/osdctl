@@ -44,7 +44,7 @@ Despite the logs from backplane, the ssh key is the only output channelled throu
 ### Options
 
 ```
-      --cluster-id string   Cluster identifier (internal ID, UUID, name, etc) to retrieve the SSH key for. If not specified, the current cluster will be used.
+  -C, --cluster-id string   Cluster identifier (internal ID, UUID, name, etc) to retrieve the SSH key for. If not specified, the current cluster will be used.
   -h, --help                help for key
       --reason string       Provide a reason for accessing the clusters SSH key, used for backplane. Eg: 'OHSS-XXXX', or '#ITN-2024-XXXXX
   -y, --yes                 Skip any confirmation prompts and print the key automatically. Useful for redirects and scripting.

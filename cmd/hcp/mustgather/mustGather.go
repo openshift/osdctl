@@ -51,7 +51,7 @@ func NewCmdMustGather() *cobra.Command {
 	}
 
 	defaultAcmImage := "quay.io/stolostron/must-gather:2.11.4-SNAPSHOT-2024-12-02-15-19-44"
-	mustGatherCommand.Flags().StringVar(&mg.clusterId, "cluster-id", "", "Internal ID of the cluster to gather data from")
+	mustGatherCommand.Flags().StringVarP(&mg.clusterId, "cluster-id", "C", "", "Internal ID of the cluster to gather data from")
 	mustGatherCommand.Flags().StringVar(&mg.reason, "reason", "", "The reason for this command, which requires elevation (e.g., OHSS ticket or PD incident).")
 	mustGatherCommand.Flags().StringVar(&mg.gatherTargets, "gather", "hcp", "Comma-separated list of gather targets (available: sc, sc_acm, mc, hcp).")
 	mustGatherCommand.Flags().StringVar(&mg.acmMustGatherImage, "acm_image", defaultAcmImage, "Overrides the acm must-gather image being used for acm mc, sc as well as hcp must-gathers.")

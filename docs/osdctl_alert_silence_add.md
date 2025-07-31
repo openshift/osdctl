@@ -15,7 +15,7 @@ osdctl alert silence add --cluster-id <cluster-identifier> [--all --duration --c
 ```
       --alertname strings   alertname (comma-separated)
   -a, --all                 Adding silences for all alert
-      --cluster-id string   Provide the internal ID of the cluster
+  -C, --cluster-id string   Provide the internal ID of the cluster
   -c, --comment string      add comment about silence (default "Adding silence using the osdctl alert command")
   -d, --duration string     Adding duration for silence as 15 days (default "15d")
   -h, --help                help for add

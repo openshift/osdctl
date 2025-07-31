@@ -13,7 +13,7 @@ osdctl cluster etcd-member-replace --cluster-id <cluster-identifier> [flags]
 ### Options
 
 ```
-      --cluster-id string   Provide internal Cluster ID
+  -C, --cluster-id string   Provide internal Cluster ID
   -h, --help                help for etcd-member-replace
       --node string         Node ID (required)
       --reason string       The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)

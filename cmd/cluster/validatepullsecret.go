@@ -40,7 +40,7 @@ This command will automatically login to the cluster to check the current pull-s
 	}
 
 	// Add cluster-id flag
-	validatePullSecretCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "The internal ID of the cluster to check (required)")
+	validatePullSecretCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "The internal ID of the cluster to check (required)")
 	if err := validatePullSecretCmd.MarkFlagRequired("cluster-id"); err != nil {
 		fmt.Printf("Error marking cluster-id flag as required: %v\n", err)
 	}

@@ -9,7 +9,7 @@ osdctl cluster context --cluster-id <cluster-identifier> [flags]
 ### Options
 
 ```
-  -c, --cluster-id string           Provide internal ID of the cluster
+  -C, --cluster-id string           Provide internal ID of the cluster
   -d, --days int                    Command will display X days of Error SLs sent to the cluster. Days is set to 30 by default (default 30)
       --full                        Run full suite of checks.
   -h, --help                        help for context

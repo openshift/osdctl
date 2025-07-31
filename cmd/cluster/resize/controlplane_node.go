@@ -73,7 +73,7 @@ func newCmdResizeControlPlane() *cobra.Command {
 			return ops.run(context.Background())
 		},
 	}
-	resizeControlPlaneNodeCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "The internal ID of the cluster to perform actions on")
+	resizeControlPlaneNodeCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "The internal ID of the cluster to perform actions on")
 	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.newMachineType, "machine-type", "", "The target AWS machine type to resize to (e.g. m5.2xlarge)")
 	resizeControlPlaneNodeCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
 	_ = resizeControlPlaneNodeCmd.MarkFlagRequired("cluster-id")

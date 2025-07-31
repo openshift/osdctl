@@ -20,7 +20,7 @@ osdctl hcp must-gather --cluster-id CLUSTER_ID --gather sc,mc,sc_acm --reason OH
 
 ```
       --acm_image string    Overrides the acm must-gather image being used for acm mc, sc as well as hcp must-gathers. (default "quay.io/stolostron/must-gather:2.11.4-SNAPSHOT-2024-12-02-15-19-44")
-      --cluster-id string   Internal ID of the cluster to gather data from
+  -C, --cluster-id string   Internal ID of the cluster to gather data from
       --gather string       Comma-separated list of gather targets (available: sc, sc_acm, mc, hcp). (default "hcp")
   -h, --help                help for must-gather
       --reason string       The reason for this command, which requires elevation (e.g., OHSS ticket or PD incident).
