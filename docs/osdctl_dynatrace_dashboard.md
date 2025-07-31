@@ -9,7 +9,7 @@ osdctl dynatrace dashboard --cluster-id CLUSTER_ID [flags]
 ### Options
 
 ```
-      --cluster-id string   Provide the id of the cluster
+  -C, --cluster-id string   Provide the id of the cluster
       --dash string         Name of the dashboard you wish to find (default "Central ROSA HCP Dashboard")
   -h, --help                help for dashboard
 ```

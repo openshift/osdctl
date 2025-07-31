@@ -13,7 +13,7 @@ osdctl cluster etcd-health-check --cluster-id <cluster-id> --reason <reason for 
 ### Options
 
 ```
-      --cluster-id string   Provide the internal Cluster ID or name to perform health check on
+  -C, --cluster-id string   Provide the internal Cluster ID or name to perform health check on
   -h, --help                help for etcd-health-check
       --reason string       Specify a reason for privilege escalation
 ```

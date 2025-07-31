@@ -9,7 +9,7 @@ osdctl cluster check-banned-user --cluster-id <cluster-identifier> [flags]
 ### Options
 
 ```
-  -c, --cluster-id string   Provide internal ID of the cluster
+  -C, --cluster-id string   Provide internal ID of the cluster
   -h, --help                help for check-banned-user
 ```
 

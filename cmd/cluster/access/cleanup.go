@@ -33,7 +33,7 @@ func newCmdCleanup(client *k8s.LazyClient, streams genericclioptions.IOStreams) 
 			cmdutil.CheckErr(ops.Run(cmd))
 		},
 	}
-	cleanupCmd.Flags().StringVar(&ops.clusterID, "cluster-id", "", "[Mandatory] Provide the Internal ID of the cluster")
+	cleanupCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "[Mandatory] Provide the Internal ID of the cluster")
 	cleanupCmd.Flags().StringVar(&ops.reason, "reason", "", "[Mandatory for PrivateLink clusters] The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
 
 	_ = cleanupCmd.MarkFlagRequired("cluster-id")

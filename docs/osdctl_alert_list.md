@@ -13,7 +13,7 @@ osdctl alert list --cluster-id <cluster-id> --level [warning, critical, firing, 
 ### Options
 
 ```
-      --cluster-id string   Provide the internal ID of the cluster
+  -C, --cluster-id string   Provide the internal ID of the cluster
   -h, --help                help for list
   -l, --level string        Alert level [warning, critical, firing, pending, all] (default "all")
       --reason string       The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)

@@ -45,7 +45,7 @@ func newCmddelete(streams genericclioptions.IOStreams, globalOpts *globalflags.G
 	}
 
 	// Defined required flags
-	deleteCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "Internal cluster ID (required)")
+	deleteCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Internal cluster ID (required)")
 	deleteCmd.Flags().BoolVar(&ops.removeAll, "all", false, "Remove all limited support reasons")
 	deleteCmd.Flags().StringVarP(&ops.limitedSupportReasonID, "limited-support-reason-id", "i", "", "Limited support reason ID")
 	deleteCmd.Flags().BoolVarP(&ops.isDryRun, "dry-run", "d", false, "Dry-run - print the limited support reason about to be sent but don't send it.")

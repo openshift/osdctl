@@ -46,7 +46,7 @@ func newCmdDashboard() *cobra.Command {
 	}
 
 	urlCmd.Flags().StringVar(&dashboardName, "dash", "Central ROSA HCP Dashboard", "Name of the dashboard you wish to find")
-	urlCmd.Flags().StringVar(&clusterId, "cluster-id", "", "Provide the id of the cluster")
+	urlCmd.Flags().StringVarP(&clusterId, "cluster-id", "C", "", "Provide the id of the cluster")
 	_ = urlCmd.MarkFlagRequired("cluster-id")
 
 	return urlCmd

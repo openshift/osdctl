@@ -34,7 +34,7 @@ func newCmdstatus(streams genericclioptions.IOStreams, globalOpts *globalflags.G
 		},
 	}
 
-	statusCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "Cluster ID for which to get support status")
+	statusCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Cluster ID for which to get support status")
 	statusCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 
 	_ = statusCmd.MarkFlagRequired("cluster-id")

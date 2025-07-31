@@ -79,7 +79,7 @@ Despite the logs from backplane, the ssh key is the only output channelled throu
 		},
 	}
 
-	cmd.Flags().StringVar(&opts.clusterID, "cluster-id", "", "Cluster identifier (internal ID, UUID, name, etc) to retrieve the SSH key for. If not specified, the current cluster will be used.")
+	cmd.Flags().StringVarP(&opts.clusterID, "cluster-id", "C", "", "Cluster identifier (internal ID, UUID, name, etc) to retrieve the SSH key for. If not specified, the current cluster will be used.")
 	cmd.Flags().BoolVarP(&opts.skipConfirmation, "yes", "y", false, "Skip any confirmation prompts and print the key automatically. Useful for redirects and scripting.")
 	cmd.Flags().StringVar(&opts.elevationReason, "reason", "", "Provide a reason for accessing the clusters SSH key, used for backplane. Eg: 'OHSS-XXXX', or '#ITN-2024-XXXXX")
 

@@ -33,7 +33,7 @@ func NewCmdClearSilence() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&silenceCmd.clusterID, "cluster-id", "", "Provide the internal ID of the cluster")
+	cmd.Flags().StringVarP(&silenceCmd.clusterID, "cluster-id", "C", "", "Provide the internal ID of the cluster")
 	cmd.Flags().StringSliceVar(&silenceCmd.silenceIDs, "silence-id", []string{}, "silence id (comma-separated)")
 	cmd.Flags().BoolVarP(&silenceCmd.all, "all", "a", false, "clear all silences")
 	cmd.Flags().StringVar(&silenceCmd.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")

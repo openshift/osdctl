@@ -37,7 +37,7 @@ func newCmdLoggingCheck(streams genericclioptions.IOStreams, globalOpts *globalf
 		},
 	}
 	loggingCheckCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
-	loggingCheckCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "c", "", "The internal ID of the cluster to check (required)")
+	loggingCheckCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "The internal ID of the cluster to check (required)")
 	cmdutil.CheckErr(loggingCheckCmd.MarkFlagRequired("cluster-id"))
 
 	return loggingCheckCmd

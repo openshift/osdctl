@@ -27,7 +27,7 @@ func NewCmdListSilence() *cobra.Command {
 			ListSilence(listSilenceCmd)
 		},
 	}
-	cmd.Flags().StringVar(&listSilenceCmd.clusterID, "cluster-id", "", "Provide the internal ID of the cluster")
+	cmd.Flags().StringVarP(&listSilenceCmd.clusterID, "cluster-id", "C", "", "Provide the internal ID of the cluster")
 	cmd.Flags().StringVar(&listSilenceCmd.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
 	_ = cmd.MarkFlagRequired("cluster-id")
 	_ = cmd.MarkFlagRequired("reason")

@@ -25,7 +25,7 @@ osdctl dynatrace gather-logs --cluster-id <cluster-identifier> [flags]
 ### Options
 
 ```
-      --cluster-id string   Internal ID of the HCP cluster to gather logs from (required)
+  -C, --cluster-id string   Internal ID of the HCP cluster to gather logs from (required)
       --dest-dir string     Destination directory for the logs dump, defaults to the local directory.
   -h, --help                help for gather-logs
       --since int           Number of hours (integer) since which to pull logs and events (default 10)

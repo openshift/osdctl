@@ -16,7 +16,7 @@ osdctl cluster break-glass cleanup --cluster-id <cluster-identifier> [flags]
 ### Options
 
 ```
-      --cluster-id string   [Mandatory] Provide the Internal ID of the cluster
+  -C, --cluster-id string   [Mandatory] Provide the Internal ID of the cluster
   -h, --help                help for cleanup
       --reason string       [Mandatory for PrivateLink clusters] The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
 ```

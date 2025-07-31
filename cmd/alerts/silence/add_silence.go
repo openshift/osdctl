@@ -37,7 +37,7 @@ func NewCmdAddSilence() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&addSilenceCmd.clusterID, "cluster-id", "", "Provide the internal ID of the cluster")
+	cmd.Flags().StringVarP(&addSilenceCmd.clusterID, "cluster-id", "C", "", "Provide the internal ID of the cluster")
 	cmd.Flags().StringSliceVar(&addSilenceCmd.alertID, "alertname", []string{}, "alertname (comma-separated)")
 	cmd.Flags().StringVarP(&addSilenceCmd.comment, "comment", "c", "Adding silence using the osdctl alert command", "add comment about silence")
 	cmd.Flags().StringVarP(&addSilenceCmd.duration, "duration", "d", "15d", "Adding duration for silence as 15 days") //default duration set to 15 days
