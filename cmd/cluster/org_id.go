@@ -31,7 +31,7 @@ func newCmdOrgId() *cobra.Command {
 		},
 	}
 
-	orgIdCmd.Flags().StringVarP(&o.clusterID, "cluster-id", "c", "", "The internal ID of the cluster to check (required)")
+	orgIdCmd.Flags().StringVarP(&o.clusterID, "cluster-id", "C", "", "The internal ID of the cluster to check (required)")
 
 	return orgIdCmd
 }

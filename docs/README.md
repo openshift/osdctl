@@ -926,7 +926,7 @@ osdctl alert list --cluster-id <cluster-id> --level [warning, critical, firing, 
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                Provide the internal ID of the cluster
+  -C, --cluster-id string                Provide the internal ID of the cluster
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for list
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -979,7 +979,7 @@ osdctl alert silence add --cluster-id <cluster-identifier> [--all --duration --c
   -a, --all                              Adding silences for all alert
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                Provide the internal ID of the cluster
+  -C, --cluster-id string                Provide the internal ID of the cluster
   -c, --comment string                   add comment about silence (default "Adding silence using the osdctl alert command")
       --context string                   The name of the kubeconfig context to use
   -d, --duration string                  Adding duration for silence as 15 days (default "15d")
@@ -1008,7 +1008,7 @@ osdctl alert silence expire [--cluster-id <cluster-identifier>] [--all | --silen
   -a, --all                              clear all silences
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                Provide the internal ID of the cluster
+  -C, --cluster-id string                Provide the internal ID of the cluster
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for expire
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -1035,7 +1035,7 @@ osdctl alert silence list --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                Provide the internal ID of the cluster
+  -C, --cluster-id string                Provide the internal ID of the cluster
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for list
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -1194,7 +1194,7 @@ osdctl cluster break-glass --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                Provide the internal ID of the cluster
+  -C, --cluster-id string                Provide the internal ID of the cluster
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for break-glass
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -1223,7 +1223,7 @@ osdctl cluster break-glass cleanup --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                [Mandatory] Provide the Internal ID of the cluster
+  -C, --cluster-id string                [Mandatory] Provide the Internal ID of the cluster
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for cleanup
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -1249,7 +1249,7 @@ osdctl cluster check-banned-user --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-  -c, --cluster-id string                Provide internal ID of the cluster
+  -C, --cluster-id string                Provide internal ID of the cluster
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for check-banned-user
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -1274,7 +1274,7 @@ osdctl cluster context --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-  -c, --cluster-id string                Provide internal ID of the cluster
+  -C, --cluster-id string                Provide internal ID of the cluster
       --context string                   The name of the kubeconfig context to use
   -d, --days int                         Command will display X days of Error SLs sent to the cluster. Days is set to 30 by default (default 30)
       --full                             Run full suite of checks.
@@ -1345,7 +1345,7 @@ osdctl cluster detach-stuck-volume --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                Provide internal ID of the cluster
+  -C, --cluster-id string                Provide internal ID of the cluster
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for detach-stuck-volume
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -1371,7 +1371,7 @@ osdctl cluster etcd-health-check --cluster-id <cluster-id> --reason <reason for 
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                Provide the internal Cluster ID or name to perform health check on
+  -C, --cluster-id string                Provide the internal Cluster ID or name to perform health check on
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for etcd-health-check
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -1397,7 +1397,7 @@ osdctl cluster etcd-member-replace --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                Provide internal Cluster ID
+  -C, --cluster-id string                Provide internal Cluster ID
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for etcd-member-replace
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -1476,7 +1476,7 @@ osdctl cluster hypershift-info [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-  -c, --cluster-id string                Provide internal ID of the cluster
+  -C, --cluster-id string                Provide internal ID of the cluster
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for hypershift-info
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -1505,7 +1505,7 @@ osdctl cluster logging-check --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-  -c, --cluster-id string                The internal ID of the cluster to check (required)
+  -C, --cluster-id string                The internal ID of the cluster to check (required)
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for logging-check
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -1531,7 +1531,7 @@ osdctl cluster orgId --cluster-id <cluster-identifier [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-  -c, --cluster-id string                The internal ID of the cluster to check (required)
+  -C, --cluster-id string                The internal ID of the cluster to check (required)
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for orgId
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -1609,7 +1609,7 @@ osdctl cluster resize control-plane [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-  -c, --cluster-id string                The internal ID of the cluster to perform actions on
+  -C, --cluster-id string                The internal ID of the cluster to perform actions on
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for control-plane
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -1823,7 +1823,7 @@ osdctl cluster ssh key --reason $reason [--cluster-id $CLUSTER_ID] [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                Cluster identifier (internal ID, UUID, name, etc) to retrieve the SSH key for. If not specified, the current cluster will be used.
+  -C, --cluster-id string                Cluster identifier (internal ID, UUID, name, etc) to retrieve the SSH key for. If not specified, the current cluster will be used.
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for key
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -1875,7 +1875,7 @@ osdctl cluster support delete --cluster-id <cluster-identifier> [flags]
       --all                                Remove all limited support reasons
       --as string                          Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                     The name of the kubeconfig cluster to use
-  -c, --cluster-id string                  Internal cluster ID (required)
+  -C, --cluster-id string                  Internal cluster ID (required)
       --context string                     The name of the kubeconfig context to use
   -d, --dry-run                            Dry-run - print the limited support reason about to be sent but don't send it.
   -h, --help                               help for delete
@@ -1904,7 +1904,7 @@ osdctl cluster support post --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-  -c, --cluster-id string                Internal Cluster ID (required)
+  -C, --cluster-id string                Internal Cluster ID (required)
       --context string                   The name of the kubeconfig context to use
       --evidence string                  (optional) The reasoning that led to the decision to place the cluster in limited support. Can also be a link to a Jira case. Used for internal service log only.
   -h, --help                             help for post
@@ -1935,7 +1935,7 @@ osdctl cluster support status --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-  -c, --cluster-id string                Cluster ID for which to get support status
+  -C, --cluster-id string                Cluster ID for which to get support status
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for status
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -1993,7 +1993,7 @@ osdctl cluster validate-pull-secret --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-  -c, --cluster-id string                The internal ID of the cluster to check (required)
+  -C, --cluster-id string                The internal ID of the cluster to check (required)
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for validate-pull-secret
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -2238,7 +2238,7 @@ osdctl dynatrace dashboard --cluster-id CLUSTER_ID [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                Provide the id of the cluster
+  -C, --cluster-id string                Provide the id of the cluster
       --context string                   The name of the kubeconfig context to use
       --dash string                      Name of the dashboard you wish to find (default "Central ROSA HCP Dashboard")
   -h, --help                             help for dashboard
@@ -2268,7 +2268,7 @@ osdctl dynatrace gather-logs --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                Internal ID of the HCP cluster to gather logs from (required)
+  -C, --cluster-id string                Internal ID of the HCP cluster to gather logs from (required)
       --context string                   The name of the kubeconfig context to use
       --dest-dir string                  Destination directory for the logs dump, defaults to the local directory.
   -h, --help                             help for gather-logs
@@ -2302,7 +2302,7 @@ osdctl dynatrace logs --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                Name or Internal ID of the cluster (defaults to current cluster context)
+  -C, --cluster-id string                Name or Internal ID of the cluster (defaults to current cluster context)
       --console                          Print the url to the dynatrace web console instead of outputting the logs
       --container strings                Container name(s) (comma-separated)
       --contains string                  Include logs which contain a phrase
@@ -2339,7 +2339,7 @@ osdctl dynatrace url --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                ID of the cluster
+  -C, --cluster-id string                ID of the cluster
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for url
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
@@ -2387,7 +2387,7 @@ osdctl env [flags] [env-alias]
   -a, --api string                       OpenShift API URL for individual cluster login
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-  -c, --cluster-id string                Cluster ID
+  -C, --cluster-id string                Cluster ID
       --context string                   The name of the kubeconfig context to use
   -d, --delete                           Delete environment
   -k, --export-kubeconfig                Output export kubeconfig statement, to use environment outside of the env directory
@@ -2442,7 +2442,7 @@ osdctl hcp must-gather --cluster-id <cluster-identifier> [flags]
       --acm_image string                 Overrides the acm must-gather image being used for acm mc, sc as well as hcp must-gathers. (default "quay.io/stolostron/must-gather:2.11.4-SNAPSHOT-2024-12-02-15-19-44")
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-      --cluster-id string                Internal ID of the cluster to gather data from
+  -C, --cluster-id string                Internal ID of the cluster to gather data from
       --context string                   The name of the kubeconfig context to use
       --gather string                    Comma-separated list of gather targets (available: sc, sc_acm, mc, hcp). (default "hcp")
   -h, --help                             help for must-gather

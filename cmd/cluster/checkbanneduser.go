@@ -22,7 +22,7 @@ func newCmdCheckBannedUser() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&clusterID, "cluster-id", "c", "", "Provide internal ID of the cluster")
+	cmd.Flags().StringVarP(&clusterID, "cluster-id", "C", "", "Provide internal ID of the cluster")
 	_ = cmd.MarkFlagRequired("cluster-id")
 
 	return cmd

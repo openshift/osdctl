@@ -48,7 +48,7 @@ osdctl dynatrace logs --cluster-id <cluster-identifier> [flags]
 ### Options
 
 ```
-      --cluster-id string   Name or Internal ID of the cluster (defaults to current cluster context)
+  -C, --cluster-id string   Name or Internal ID of the cluster (defaults to current cluster context)
       --console             Print the url to the dynatrace web console instead of outputting the logs
       --container strings   Container name(s) (comma-separated)
       --contains string     Include logs which contain a phrase

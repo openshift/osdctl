@@ -13,7 +13,7 @@ osdctl alert silence list --cluster-id <cluster-identifier> [flags]
 ### Options
 
 ```
-      --cluster-id string   Provide the internal ID of the cluster
+  -C, --cluster-id string   Provide the internal ID of the cluster
   -h, --help                help for list
       --reason string       The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
 ```

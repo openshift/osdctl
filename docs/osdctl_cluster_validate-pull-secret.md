@@ -16,7 +16,7 @@ osdctl cluster validate-pull-secret --cluster-id <cluster-identifier> [flags]
 ### Options
 
 ```
-  -c, --cluster-id string   The internal ID of the cluster to check (required)
+  -C, --cluster-id string   The internal ID of the cluster to check (required)
   -h, --help                help for validate-pull-secret
       --reason string       The reason for this command to be run (usually an OHSS or PD ticket), mandatory when using elevate
 ```

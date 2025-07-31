@@ -50,7 +50,7 @@ func newCmdEtcdMemberReplacement() *cobra.Command {
 			cmdutil.CheckErr(opts.EtcdReplaceMember())
 		},
 	}
-	replaceCmd.Flags().StringVar(&opts.clusterID, "cluster-id", "", "Provide internal Cluster ID")
+	replaceCmd.Flags().StringVarP(&opts.clusterID, "cluster-id", "C", "", "Provide internal Cluster ID")
 	replaceCmd.Flags().StringVar(&opts.nodeId, "node", "", "Node ID (required)")
 	replaceCmd.Flags().StringVar(&opts.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
 	_ = replaceCmd.MarkFlagRequired("cluster-id")

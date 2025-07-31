@@ -30,7 +30,7 @@ func NewCmdListAlerts() *cobra.Command {
 			ListAlerts(alertCmd)
 		},
 	}
-	newCmd.Flags().StringVar(&alertCmd.clusterID, "cluster-id", "", "Provide the internal ID of the cluster")
+	newCmd.Flags().StringVarP(&alertCmd.clusterID, "cluster-id", "C", "", "Provide the internal ID of the cluster")
 	_ = newCmd.MarkFlagRequired("cluster-id")
 
 	newCmd.Flags().StringVarP(&alertCmd.alertLevel, "level", "l", "all", "Alert level [warning, critical, firing, pending, all]")

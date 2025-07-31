@@ -25,7 +25,7 @@ osdctl cluster resize control-plane [flags]
 ### Options
 
 ```
-  -c, --cluster-id string     The internal ID of the cluster to perform actions on
+  -C, --cluster-id string     The internal ID of the cluster to perform actions on
   -h, --help                  help for control-plane
       --machine-type string   The target AWS machine type to resize to (e.g. m5.2xlarge)
       --reason string         The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)

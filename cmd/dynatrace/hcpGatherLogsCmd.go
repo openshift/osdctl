@@ -55,7 +55,7 @@ func NewCmdHCPMustGather() *cobra.Command {
 	hcpMgCmd.Flags().IntVar(&g.Tail, "tail", 0, "Last 'n' logs and events to fetch. By default it will pull everything")
 	hcpMgCmd.Flags().StringVar(&g.SortOrder, "sort", "asc", "Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'")
 	hcpMgCmd.Flags().StringVar(&g.DestDir, "dest-dir", "", "Destination directory for the logs dump, defaults to the local directory.")
-	hcpMgCmd.Flags().StringVar(&g.ClusterID, "cluster-id", "", "Internal ID of the HCP cluster to gather logs from (required)")
+	hcpMgCmd.Flags().StringVarP(&g.ClusterID, "cluster-id", "C", "", "Internal ID of the HCP cluster to gather logs from (required)")
 
 	_ = hcpMgCmd.MarkFlagRequired("cluster-id")
 

@@ -9,7 +9,7 @@ osdctl dynatrace url --cluster-id <cluster-identifier> [flags]
 ### Options
 
 ```
-      --cluster-id string   ID of the cluster
+  -C, --cluster-id string   ID of the cluster
   -h, --help                help for url
 ```
 

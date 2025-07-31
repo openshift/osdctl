@@ -9,7 +9,7 @@ osdctl cluster logging-check --cluster-id <cluster-identifier> [flags]
 ### Options
 
 ```
-  -c, --cluster-id string   The internal ID of the cluster to check (required)
+  -C, --cluster-id string   The internal ID of the cluster to check (required)
   -h, --help                help for logging-check
       --verbose             Verbose output
 ```

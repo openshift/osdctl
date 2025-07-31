@@ -91,7 +91,7 @@ func NewCmdLogs() *cobra.Command {
 		},
 	}
 
-	logsCmd.Flags().StringVar(&clusterID, "cluster-id", "", "Name or Internal ID of the cluster (defaults to current cluster context)")
+	logsCmd.Flags().StringVarP(&clusterID, "cluster-id", "C", "", "Name or Internal ID of the cluster (defaults to current cluster context)")
 	logsCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Only builds the query without fetching any logs from the tenant")
 	logsCmd.Flags().IntVar(&tail, "tail", 1000, "Last 'n' logs to fetch (defaults to 100)")
 	logsCmd.Flags().IntVar(&since, "since", 1, "Number of hours (integer) since which to search (defaults to 1 hour)")

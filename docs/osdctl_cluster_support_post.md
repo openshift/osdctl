@@ -27,7 +27,7 @@ The cluster has a second failing ingress controller, which is not supported and 
 ### Options
 
 ```
-  -c, --cluster-id string        Internal Cluster ID (required)
+  -C, --cluster-id string        Internal Cluster ID (required)
       --evidence string          (optional) The reasoning that led to the decision to place the cluster in limited support. Can also be a link to a Jira case. Used for internal service log only.
   -h, --help                     help for post
       --misconfiguration cloud   The type of misconfiguration responsible for the cluster being placed into limited support. Valid values are cloud or `cluster`.
