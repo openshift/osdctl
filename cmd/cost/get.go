@@ -340,7 +340,8 @@ func getTimePeriod(timePtr *string) (string, string) {
 
 	switch *timePtr {
 	case "LM": //Last Month
-		start = fmt.Sprintf("%d-%02d-%02d", t.Year(), t.Month()-1, 01)
+		prevMonth := t.AddDate(0, -1, 0)
+		start = fmt.Sprintf("%d-%02d-%02d", prevMonth.Year(), prevMonth.Month(), 01)
 		end = fmt.Sprintf("%d-%02d-%02d", t.Year(), t.Month(), 01)
 	case "MTD":
 		start = fmt.Sprintf("%d-%02d-%02d", t.Year(), t.Month(), 01)
