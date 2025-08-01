@@ -31,5 +31,5 @@ osdctl cloudtrail [flags]
 
 * [osdctl](osdctl.md)	 - OSD CLI
 * [osdctl cloudtrail permission-denied-events](osdctl_cloudtrail_permission-denied-events.md)	 - Prints cloudtrail permission-denied events to console.
-* [osdctl cloudtrail write-events](osdctl_cloudtrail_write-events.md)	 - Prints cloudtrail write events to console with optional filtering
+* [osdctl cloudtrail write-events](osdctl_cloudtrail_write-events.md)	 - Prints cloudtrail write events to console with advanced filtering options
 
