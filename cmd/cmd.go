@@ -17,6 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/kubectl/pkg/util/slice"
 
+	metrics "github.com/iamkirkbater/cobra-otel-metrics"
 	"github.com/openshift/osdctl/cmd/aao"
 	"github.com/openshift/osdctl/cmd/account"
 	"github.com/openshift/osdctl/cmd/alerts"
@@ -54,36 +55,38 @@ func init() {
 }
 
 // NewCmdRoot represents the base command when called without any subcommands
-func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
+func NewCmdRoot(streams genericclioptions.IOStreams) *metrics.Command {
 	globalOpts := &globalflags.GlobalOptions{}
-	rootCmd := &cobra.Command{
-		Use:               "osdctl",
-		Short:             "OSD CLI",
-		Long:              `CLI tool to provide OSD related utilities`,
-		DisableAutoGenTag: true,
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			noAwsProxy, err := cmd.Flags().GetBool(aws.NoProxyFlag)
-			if err != nil {
-				fmt.Printf("flag --%v undefined\n", aws.NoProxyFlag)
-				os.Exit(1)
-			}
-			viper.Set(aws.NoProxyFlag, noAwsProxy)
+	rootCmd := &metrics.Command{
+		Command: cobra.Command{
+			Use:               "osdctl",
+			Short:             "OSD CLI",
+			Long:              `CLI tool to provide OSD related utilities`,
+			DisableAutoGenTag: true,
+			PersistentPreRun: func(cmd *cobra.Command, args []string) {
+				noAwsProxy, err := cmd.Flags().GetBool(aws.NoProxyFlag)
+				if err != nil {
+					fmt.Printf("flag --%v undefined\n", aws.NoProxyFlag)
+					os.Exit(1)
+				}
+				viper.Set(aws.NoProxyFlag, noAwsProxy)
 
-			skipVersionCheck, err := cmd.Flags().GetBool("skip-version-check")
-			if err != nil {
-				fmt.Println("flag --skip-version-check/-S undefined")
-				os.Exit(1)
-			}
+				skipVersionCheck, err := cmd.Flags().GetBool("skip-version-check")
+				if err != nil {
+					fmt.Println("flag --skip-version-check/-S undefined")
+					os.Exit(1)
+				}
 
-			// Checks the skipVersionCheck flag and the command being run to determine if the version check should run
-			if shouldRunVersionCheck(skipVersionCheck, cmd.Use) {
-				versionCheck()
-			}
+				// Checks the skipVersionCheck flag and the command being run to determine if the version check should run
+				if shouldRunVersionCheck(skipVersionCheck, cmd.Use) {
+					versionCheck()
+				}
+			},
 		},
 	}
 
-	globalflags.AddGlobalFlags(rootCmd, globalOpts)
-	kubeFlags := globalflags.GetFlags(rootCmd)
+	globalflags.AddGlobalFlags(&rootCmd.Command, globalOpts)
+	kubeFlags := globalflags.GetFlags(&rootCmd.Command)
 
 	kubeClient := k8s.NewClient(kubeFlags)
 
