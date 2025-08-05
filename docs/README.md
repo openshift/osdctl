@@ -3047,7 +3047,13 @@ Verify an AWS OSD/ROSA cluster can reach all required external URLs necessary fo
   verify whether a ROSA cluster's VPC allows for all required external URLs are reachable. The exact cause can vary and
   typically requires a customer to remediate the issue themselves.
 
-  The osd-network-verifier launches a probe, an instance in a given subnet, and checks egress to external required URL's. Since October 2022, the probe is an instance without a public IP address. For this reason, the probe's requests will fail for subnets that don't have a NAT gateway. The osdctl network verify-egress command will always fail and give a false negative for public subnets (in non-privatelink clusters), since they have an internet gateway and no NAT gateway.
+  The osd-network-verifier supports two modes:
+  1. Traditional mode: launches a probe instance in a given subnet and checks egress to external required URLs.
+     Since October 2022, the probe is an instance without a public IP address. For this reason, the probe's requests
+     will fail for subnets that don't have a NAT gateway. This mode will always fail and give a false negative for
+     public subnets (in non-privatelink clusters), since they have an internet gateway and no NAT gateway.
+  2. Pod mode (--pod-mode): runs verification as Kubernetes Jobs within the target cluster. This mode requires
+     cluster admin access but provides more accurate results as it tests from within the actual cluster environment.
 
   Docs: https://docs.openshift.com/rosa/rosa_install_access_delete_clusters/rosa_getting_started_iam/rosa-aws-prereqs.html#osd-aws-privatelink-firewall-prerequisites_prerequisites
 
@@ -3070,12 +3076,14 @@ osdctl network verify-egress [flags]
       --gcp-project-id string            (optional) the GCP project ID to run verification for
   -h, --help                             help for verify-egress
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
-      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+      --kubeconfig string                (optional) path to kubeconfig file for pod mode (uses default kubeconfig if not specified)
+      --namespace string                 (optional) Kubernetes namespace to run verification pods in (default "openshift-network-diagnostics")
       --no-tls                           (optional) if provided, ignore all ssl certificate validations on client-side.
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --platform string                  (optional) override for cloud platform/product. E.g., 'aws-classic' (OSD/ROSA Classic), 'aws-hcp' (ROSA HCP), or 'aws-hcp-zeroegress'
+      --pod-mode                         (optional) run verification using Kubernetes pods instead of cloud instances
       --probe string                     (optional) select the probe to be used for egress testing. Either 'curl' (default) or 'legacy' (default "curl")
-      --region string                    (optional) AWS region
+      --region string                    (optional) AWS region, required for --pod-mode
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
       --security-group string            (optional) security group ID override for osd-network-verifier, required if not specifying --cluster-id
   -s, --server string                    The address and port of the Kubernetes API server
