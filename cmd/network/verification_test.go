@@ -724,17 +724,6 @@ func TestEgressVerification_ValidateInput_PodMode(t *testing.T) {
 			errorMsg:  "pod mode requires either --cluster-id or --platform to determine platform type",
 		},
 		{
-			name: "pod_mode_with_cacert",
-			ev: &EgressVerification{
-				PodMode:      true,
-				platformName: "aws-classic",
-				Region:       "us-east-1", // Need region for AWS platform
-				CaCert:       "/path/to/cert",
-			},
-			wantError: true,
-			errorMsg:  "--cacert is not supported in pod mode",
-		},
-		{
 			name: "pod_mode_aws_without_cluster_or_region",
 			ev: &EgressVerification{
 				PodMode:      true,

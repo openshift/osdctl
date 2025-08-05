@@ -29,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -44,7 +45,7 @@ const (
 	blockedEgressTemplateUrl     = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/required_network_egresses_are_blocked.json"
 	caBundleConfigMapKey         = "ca-bundle.crt"
 	networkVerifierDepPath       = "github.com/openshift/osd-network-verifier"
-	LimitedSupportTemplate       = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/limited_support/egressFailureLimitedSupport.json"
+	limitedSupportTemplate       = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/limited_support/egressFailureLimitedSupport.json"
 )
 
 var networkVerifierDefaultTags = map[string]string{
@@ -165,11 +166,11 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().StringVar(&e.SecurityGroupId, "security-group", "", "(optional) security group ID override for osd-network-verifier, required if not specifying --cluster-id")
 	validateEgressCmd.Flags().StringVar(&e.CaCert, "cacert", "", "(optional) path to a file containing the additional CA trust bundle. Typically set so that the verifier can use a configured cluster-wide proxy.")
 	validateEgressCmd.Flags().BoolVar(&e.NoTls, "no-tls", false, "(optional) if provided, ignore all ssl certificate validations on client-side.")
-	validateEgressCmd.Flags().StringVar(&e.Region, "region", "", "(optional) AWS region")
+	validateEgressCmd.Flags().StringVar(&e.Region, "region", "", "(optional) AWS region, required for --pod-mode")
 	validateEgressCmd.Flags().BoolVar(&e.Debug, "debug", false, "(optional) if provided, enable additional debug-level logging")
 	validateEgressCmd.Flags().BoolVarP(&e.AllSubnets, "all-subnets", "A", false, "(optional) an option for AWS Privatelink clusters to run osd-network-verifier against all subnets listed by ocm.")
 	validateEgressCmd.Flags().StringVar(&e.platformName, "platform", "", "(optional) override for cloud platform/product. E.g., 'aws-classic' (OSD/ROSA Classic), 'aws-hcp' (ROSA HCP), or 'aws-hcp-zeroegress'")
-	validateEgressCmd.Flags().DurationVar(&e.EgressTimeout, "egress-timeout", 5*time.Second, "(optional) timeout for individual egress verification requests")
+	validateEgressCmd.Flags().DurationVar(&e.EgressTimeout, "egress-timeout", onv.DefaultTimeout, "(optional) timeout for individual egress verification requests")
 	validateEgressCmd.Flags().BoolVar(&e.Version, "version", false, "When present, prints out the version of osd-network-verifier being used")
 	validateEgressCmd.Flags().StringVar(&e.Probe, "probe", "curl", "(optional) select the probe to be used for egress testing. Either 'curl' (default) or 'legacy'")
 	validateEgressCmd.Flags().StringVar(&e.CpuArchName, "cpu-arch", "x86", "(optional) compute instance CPU architecture. E.g., 'x86' or 'arm'")
@@ -179,9 +180,8 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().StringVar(&e.KubeConfig, "kubeconfig", "", "(optional) path to kubeconfig file for pod mode (uses default kubeconfig if not specified)")
 	validateEgressCmd.Flags().StringVar(&e.Namespace, "namespace", "openshift-network-diagnostics", "(optional) Kubernetes namespace to run verification pods in")
 
-	// If a cluster-id is specified, don't allow the foot-gun of overriding region (except in pod mode)
-	validateEgressCmd.MarkFlagsMutuallyExclusive("cluster-id", "region")
 	// Pod mode is incompatible with cloud-specific configuration flags
+	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "cacert")
 	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "subnet-id")
 	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "security-group")
 	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "all-subnets")
@@ -261,7 +261,7 @@ func (e *EgressVerification) Run(ctx context.Context) {
 			blockedUrl := strings.Join(postCmd.TemplateParams, ",")
 			if (strings.Contains(blockedUrl, "deadmanssnitch") || strings.Contains(blockedUrl, "pagerduty")) && e.cluster.State() == "ready" {
 				fmt.Println("PagerDuty and/or DMS outgoing traffic is blocked, resulting in a loss of observability. As a result, Red Hat can no longer guarantee SLAs and the cluster should be put in limited support")
-				pCmd := lsupport.Post{Template: LimitedSupportTemplate}
+				pCmd := lsupport.Post{Template: limitedSupportTemplate}
 				if err := pCmd.Run(e.ClusterId); err != nil {
 					fmt.Printf("failed to post limited support reason: %v", err)
 				}
@@ -562,11 +562,6 @@ func (e *EgressVerification) validateInput() error {
 				return fmt.Errorf("pod mode for AWS platforms requires --region when --cluster-id is not specified")
 			}
 		}
-
-		// Warn about incompatible flags that were not marked mutually exclusive
-		if e.CaCert != "" {
-			return fmt.Errorf("--cacert is not supported in pod mode, proxy CA certificates should be configured in the cluster")
-		}
 	}
 
 	return nil
@@ -582,19 +577,31 @@ func printVersion() {
 
 // setupForPodMode creates a Kubernetes client and KubeVerifier for pod-based verification
 func (e *EgressVerification) setupForPodMode(ctx context.Context) (*onvKubeClient.KubeVerifier, error) {
-	// Build kubeconfig
-	var kubeconfig string
-	if e.KubeConfig != "" {
-		kubeconfig = e.KubeConfig
-	} else {
-		// Use default kubeconfig from environment or home directory
-		kubeconfig = clientcmd.RecommendedHomeFile
-	}
+	var restConfig *rest.Config
+	var err error
 
-	// Build rest config from kubeconfig
-	restConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build kubeconfig: %w", err)
+	// Prefer backplane credentials when cluster ID is available
+	if e.ClusterId != "" {
+		restConfig, err = k8s.NewRestConfig(e.ClusterId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get REST config from backplane for cluster %s: %w", e.ClusterId, err)
+		}
+		e.log.Info(ctx, "Pod mode using backplane credentials for cluster: %s", e.ClusterId)
+	} else if e.KubeConfig != "" {
+		// Fallback to user-provided kubeconfig
+		restConfig, err = clientcmd.BuildConfigFromFlags("", e.KubeConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build kubeconfig from %s: %w", e.KubeConfig, err)
+		}
+		e.log.Info(ctx, "Pod mode using provided kubeconfig: %s", e.KubeConfig)
+	} else {
+		// Fallback to default kubeconfig from environment or home directory
+		kubeconfig := clientcmd.RecommendedHomeFile
+		restConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build default kubeconfig: %w", err)
+		}
+		e.log.Info(ctx, "Pod mode using default kubeconfig")
 	}
 
 	// Create Kubernetes clientset
