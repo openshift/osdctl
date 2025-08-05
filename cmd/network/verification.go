@@ -23,10 +23,13 @@ import (
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
 	onvAwsClient "github.com/openshift/osd-network-verifier/pkg/verifier/aws"
 	onvGcpClient "github.com/openshift/osd-network-verifier/pkg/verifier/gcp"
+	onvKubeClient "github.com/openshift/osd-network-verifier/pkg/verifier/kube"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -92,6 +95,12 @@ type EgressVerification struct {
 	GcpProjectID string
 	// VpcName is the VPC where the verifier will run
 	VpcName string
+	// PodMode enables Kubernetes pod-based verification instead of cloud instances
+	PodMode bool
+	// KubeConfig is the path to the kubeconfig file for pod mode
+	KubeConfig string
+	// Namespace is the Kubernetes namespace to run verification pods in
+	Namespace string
 }
 
 func NewCmdValidateEgress() *cobra.Command {
@@ -108,7 +117,13 @@ func NewCmdValidateEgress() *cobra.Command {
   verify whether a ROSA cluster's VPC allows for all required external URLs are reachable. The exact cause can vary and
   typically requires a customer to remediate the issue themselves.
 
-  The osd-network-verifier launches a probe, an instance in a given subnet, and checks egress to external required URL's. Since October 2022, the probe is an instance without a public IP address. For this reason, the probe's requests will fail for subnets that don't have a NAT gateway. The osdctl network verify-egress command will always fail and give a false negative for public subnets (in non-privatelink clusters), since they have an internet gateway and no NAT gateway.
+  The osd-network-verifier supports two modes:
+  1. Traditional mode: launches a probe instance in a given subnet and checks egress to external required URLs.
+     Since October 2022, the probe is an instance without a public IP address. For this reason, the probe's requests
+     will fail for subnets that don't have a NAT gateway. This mode will always fail and give a false negative for
+     public subnets (in non-privatelink clusters), since they have an internet gateway and no NAT gateway.
+  2. Pod mode (--pod-mode): runs verification as Kubernetes Jobs within the target cluster. This mode requires
+     cluster admin access but provides more accurate results as it tests from within the actual cluster environment.
 
   Docs: https://docs.openshift.com/rosa/rosa_install_access_delete_clusters/rosa_getting_started_iam/rosa-aws-prereqs.html#osd-aws-privatelink-firewall-prerequisites_prerequisites`,
 		Example: `
@@ -127,6 +142,12 @@ func NewCmdValidateEgress() *cobra.Command {
 
   # Override automatic selection of the list of endpoints to check
   osdctl network verify-egress --cluster-id my-rosa-cluster --platform hostedcluster
+
+  # Run in pod mode using Kubernetes jobs (requires cluster access)
+  osdctl network verify-egress --cluster-id my-rosa-cluster --pod-mode
+
+  # Run in pod mode with custom namespace and kubeconfig
+  osdctl network verify-egress --pod-mode --region us-east-1 --namespace my-namespace --kubeconfig ~/.kube/config
 
   # (Not recommended) Run against a specific VPC, without specifying cluster-id
   <export environment variables like AWS_ACCESS_KEY_ID or use aws configure>
@@ -154,9 +175,19 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().StringVar(&e.CpuArchName, "cpu-arch", "x86", "(optional) compute instance CPU architecture. E.g., 'x86' or 'arm'")
 	validateEgressCmd.Flags().StringVar(&e.GcpProjectID, "gcp-project-id", "", "(optional) the GCP project ID to run verification for")
 	validateEgressCmd.Flags().StringVar(&e.VpcName, "vpc", "", "(optional) VPC name for cases where it can't be fetched from OCM")
+	validateEgressCmd.Flags().BoolVar(&e.PodMode, "pod-mode", false, "(optional) run verification using Kubernetes pods instead of cloud instances")
+	validateEgressCmd.Flags().StringVar(&e.KubeConfig, "kubeconfig", "", "(optional) path to kubeconfig file for pod mode (uses default kubeconfig if not specified)")
+	validateEgressCmd.Flags().StringVar(&e.Namespace, "namespace", "openshift-network-diagnostics", "(optional) Kubernetes namespace to run verification pods in")
 
-	// If a cluster-id is specified, don't allow the foot-gun of overriding region
+	// If a cluster-id is specified, don't allow the foot-gun of overriding region (except in pod mode)
 	validateEgressCmd.MarkFlagsMutuallyExclusive("cluster-id", "region")
+	// Pod mode is incompatible with cloud-specific configuration flags
+	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "subnet-id")
+	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "security-group")
+	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "all-subnets")
+	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "cpu-arch")
+	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "gcp-project-id")
+	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "vpc")
 
 	return validateEgressCmd
 }
@@ -198,48 +229,28 @@ func (e *EgressVerification) Run(ctx context.Context) {
 		log.Fatalf("error getting platform: %s", err)
 	}
 
+	// Setup verifier and inputs based on mode
 	var inputs []*onv.ValidateEgressInput
 	var verifier networkVerifier
 
-	switch platform {
-	case cloud.AWSHCP, cloud.AWSHCPZeroEgress, cloud.AWSClassic:
-		cfg, err := e.setupForAws(ctx)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		verifier, err = onvAwsClient.NewAwsVerifierFromConfig(*cfg, e.log)
-		if err != nil {
-			log.Fatalf("failed to assemble osd-network-verifier client: %s", err)
-		}
-
-		inputs, err = e.generateAWSValidateEgressInput(ctx, platform)
-		if err != nil {
-			log.Fatal(err)
-		}
-	case cloud.GCPClassic:
-		credentials, err := e.setupForGcp(ctx)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		verifier, err = onvGcpClient.NewGcpVerifier(credentials, e.Debug)
-		if err != nil {
-			log.Fatalf("failed to assemble osd-network-verifier client: %s", err)
-		}
-
-		inputs, err = e.generateGcpValidateEgressInput(ctx, platform)
-		if err != nil {
-			log.Fatal(err)
-		}
-	default:
-		log.Fatalf("unsupported platform: %s", platform)
+	if e.PodMode {
+		e.log.Info(ctx, "Preparing to run pod-based network verification in namespace %s.", e.Namespace)
+		verifier, inputs, err = e.setupPodModeVerification(ctx, platform)
+	} else {
+		verifier, inputs, err = e.setupCloudProviderVerification(ctx, platform)
+		e.log.Info(ctx, "Preparing to check %+v subnet(s) with network verifier.", len(inputs))
 	}
 
-	e.log.Info(ctx, "Preparing to check %+v subnet(s) with network verifier.", len(inputs))
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	var failures int
 	for i := range inputs {
-		e.log.Info(ctx, "running network verifier for subnet  %+v, security group %+v", inputs[i].SubnetID, inputs[i].AWS.SecurityGroupIDs)
+		if !e.PodMode {
+			e.log.Info(ctx, "running network verifier for subnet  %+v, security group %+v", inputs[i].SubnetID, inputs[i].AWS.SecurityGroupIDs)
+		}
+
 		out := onv.ValidateEgress(verifier, *inputs[i])
 		out.Summary(e.Debug)
 		// Prompt putting the cluster into LS if egresses crucial for monitoring (PagerDuty/DMS) are blocked.
@@ -537,6 +548,27 @@ func (e *EgressVerification) validateInput() error {
 			"--subnet-id foo --subnet-id bar")
 	}
 
+	// Pod mode validation
+	if e.PodMode {
+		// Require cluster-id or explicit platform for platform determination
+		if e.ClusterId == "" && e.platformName == "" {
+			return fmt.Errorf("pod mode requires either --cluster-id or --platform to determine platform type")
+		}
+
+		// For AWS platforms without cluster-id, require region
+		if e.ClusterId == "" && e.Region == "" {
+			// Check if we're dealing with an AWS platform
+			if strings.HasPrefix(strings.ToLower(e.platformName), "aws") {
+				return fmt.Errorf("pod mode for AWS platforms requires --region when --cluster-id is not specified")
+			}
+		}
+
+		// Warn about incompatible flags that were not marked mutually exclusive
+		if e.CaCert != "" {
+			return fmt.Errorf("--cacert is not supported in pod mode, proxy CA certificates should be configured in the cluster")
+		}
+	}
+
 	return nil
 }
 
@@ -546,4 +578,130 @@ func printVersion() {
 		panic(fmt.Errorf("unable to find version for network verifier: %w", err))
 	}
 	log.Println(fmt.Sprintf("Using osd-network-verifier version %v", version))
+}
+
+// setupForPodMode creates a Kubernetes client and KubeVerifier for pod-based verification
+func (e *EgressVerification) setupForPodMode(ctx context.Context) (*onvKubeClient.KubeVerifier, error) {
+	// Build kubeconfig
+	var kubeconfig string
+	if e.KubeConfig != "" {
+		kubeconfig = e.KubeConfig
+	} else {
+		// Use default kubeconfig from environment or home directory
+		kubeconfig = clientcmd.RecommendedHomeFile
+	}
+
+	// Build rest config from kubeconfig
+	restConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build kubeconfig: %w", err)
+	}
+
+	// Create Kubernetes clientset
+	clientset, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
+	}
+
+	// Create KubeVerifier
+	kubeVerifier, err := onvKubeClient.NewKubeVerifier(clientset, e.Debug)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create KubeVerifier: %w", err)
+	}
+
+	// Set namespace if specified
+	if e.Namespace != "" {
+		kubeVerifier.KubeClient.SetNamespace(e.Namespace)
+	}
+
+	e.log.Info(ctx, "Pod mode initialized with namespace: %s", e.Namespace)
+	return kubeVerifier, nil
+}
+
+// setupPodModeVerification sets up pod-based verification and returns verifier and inputs
+func (e *EgressVerification) setupPodModeVerification(ctx context.Context, platform cloud.Platform) (networkVerifier, []*onv.ValidateEgressInput, error) {
+	// Force curl probe for pod mode
+	if strings.ToLower(e.Probe) != "curl" {
+		e.log.Info(ctx, "Pod mode only supports curl probe, switching from %s to curl", e.Probe)
+		e.Probe = "curl"
+	}
+
+	verifier, err := e.setupForPodMode(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	input, err := e.defaultValidateEgressInput(ctx, platform)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// For AWS-based platforms in pod mode, ensure region is set for proper egress list generation
+	if platform == cloud.AWSClassic || platform == cloud.AWSHCP || platform == cloud.AWSHCPZeroEgress {
+		var region string
+
+		// Try to detect region from OCM cluster info first
+		if e.cluster != nil && e.cluster.Region() != nil && e.cluster.Region().ID() != "" {
+			region = e.cluster.Region().ID()
+			e.log.Info(ctx, "Detected AWS region from OCM: %s", region)
+		} else if e.Region != "" {
+			// Use manually specified region
+			region = e.Region
+			e.log.Info(ctx, "Using manually specified AWS region: %s", region)
+		} else {
+			// No region available - require user to specify it
+			return nil, nil, fmt.Errorf("pod mode for AWS platforms requires region information. Please specify --region or provide --cluster-id for automatic detection")
+		}
+
+		// Set AWS config in the input for region-specific egress list generation
+		input.AWS = onv.AwsEgressConfig{
+			Region: region,
+		}
+	}
+
+	// For pod mode, we only need one input since we're not dealing with multiple subnets
+	inputs := []*onv.ValidateEgressInput{input}
+	return verifier, inputs, nil
+}
+
+// setupCloudProviderVerification sets up cloud provider-based verification and returns verifier and inputs
+func (e *EgressVerification) setupCloudProviderVerification(ctx context.Context, platform cloud.Platform) (networkVerifier, []*onv.ValidateEgressInput, error) {
+	switch platform {
+	case cloud.AWSHCP, cloud.AWSHCPZeroEgress, cloud.AWSClassic:
+		cfg, err := e.setupForAws(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		verifier, err := onvAwsClient.NewAwsVerifierFromConfig(*cfg, e.log)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to assemble osd-network-verifier client: %s", err)
+		}
+
+		inputs, err := e.generateAWSValidateEgressInput(ctx, platform)
+		if err != nil {
+			return nil, nil, err
+		}
+		return verifier, inputs, nil
+
+	case cloud.GCPClassic:
+		credentials, err := e.setupForGcp(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		verifier, err := onvGcpClient.NewGcpVerifier(credentials, e.Debug)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to assemble osd-network-verifier client: %s", err)
+		}
+
+		inputs, err := e.generateGcpValidateEgressInput(ctx, platform)
+		if err != nil {
+			return nil, nil, err
+		}
+		return verifier, inputs, nil
+
+	default:
+		return nil, nil, fmt.Errorf("unsupported platform: %s", platform)
+	}
 }
