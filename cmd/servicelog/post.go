@@ -44,6 +44,7 @@ type PostCmdOptions struct {
 	clustersFile    string
 	InternalOnly    bool
 	ClusterId       string
+	skipLinkCheck   bool
 
 	// Messaged clusters
 	successfulClusters map[string]string
@@ -94,6 +95,7 @@ func newPostCmd() *cobra.Command {
 	postCmd.Flags().StringArrayVarP(&opts.filterFiles, "query-file", "f", []string{}, "File containing search queries to apply. All lines in the file will be concatenated into a single query. If this flag is called multiple times, every file's search query will be combined with logical AND.")
 	postCmd.Flags().StringVarP(&opts.clustersFile, "clusters-file", "c", "", `Read a list of clusters to post the servicelog to. the format of the file is: {"clusters":["$CLUSTERID"]}`)
 	postCmd.Flags().BoolVarP(&opts.InternalOnly, "internal", "i", false, "Internal only service log. Use MESSAGE for template parameter (eg. -p MESSAGE='My super secret message').")
+	postCmd.Flags().BoolVarP(&opts.skipLinkCheck, "skip-link-check", "s", false, "Skip link check.")
 
 	return postCmd
 }
@@ -239,6 +241,18 @@ func (o *PostCmdOptions) Run() error {
 	log.Infoln("The following template will be sent:")
 	if err := o.printTemplate(); err != nil {
 		return fmt.Errorf("cannot read generated template: %w", err)
+	}
+
+	// Validate links in service log before sending to customer
+	if !o.InternalOnly {
+		lv := NewLinkValidator()
+		messageText := o.Message.Summary + " " + o.Message.Description
+		if err := lv.validateLinks(messageText); err != nil {
+			log.Error(err)
+			if !ocmutils.ConfirmPrompt() {
+				log.Error("aborting due to dead links")
+			}
+		}
 	}
 
 	// If this is a dry-run, don't proceed further.
