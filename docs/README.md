@@ -3083,7 +3083,7 @@ osdctl network verify-egress [flags]
       --platform string                  (optional) override for cloud platform/product. E.g., 'aws-classic' (OSD/ROSA Classic), 'aws-hcp' (ROSA HCP), or 'aws-hcp-zeroegress'
       --pod-mode                         (optional) run verification using Kubernetes pods instead of cloud instances
       --probe string                     (optional) select the probe to be used for egress testing. Either 'curl' (default) or 'legacy' (default "curl")
-      --region string                    (optional) AWS region, required for --pod-mode
+      --region string                    (optional) AWS region, required for --pod-mode if not passing a --cluster-id
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
       --security-group string            (optional) security group ID override for osd-network-verifier, required if not specifying --cluster-id
   -s, --server string                    The address and port of the Kubernetes API server
