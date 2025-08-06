@@ -181,13 +181,13 @@ func (mg *mustGather) Run() error {
 				// 2. ACM must-gather which includes running the hypershift binary for a dump
 				clusterHyperShift, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(mg.clusterId).Hypershift().Get().Send()
 				if err != nil {
-					fmt.Printf("failed to get OCM cluster hypershift info for %s: %v\n", mg.clusterId, err)
+					fmt.Printf("collected HCP dynatrace logs but failed to get OCM cluster hypershift info for %s: %v\n", mg.clusterId, err)
 					return
 				}
 
 				hcpNamespace, ok := clusterHyperShift.Body().GetHCPNamespace()
 				if !ok {
-					fmt.Println("failed to get HCP namespace")
+					fmt.Println("collected HCP dynatrace logs but failed to get HCP namespace")
 					return
 				}
 
@@ -198,8 +198,9 @@ func (mg *mustGather) Run() error {
 				acmHyperShiftImage := "quay.io/rokejungrh/must-gather:v2.13.0-33-linux"
 				gatherScript := fmt.Sprintf("/usr/bin/gather hosted-cluster-namespace=%s hosted-cluster-name=%s", hcNamespace, hcName)
 				if err := createMustGather(mcRestCfg, mcK8sCli, []string{"--dest-dir=" + destDir, "--image=" + acmHyperShiftImage, gatherScript}); err != nil {
-					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
+					fmt.Printf("collected HCP dynatrace logs but failed to gather %s: %v\n", gatherTarget, err.Error())
 				}
+
 			default:
 				fmt.Printf("unknown gather type: %s\n", gatherTarget)
 			}
