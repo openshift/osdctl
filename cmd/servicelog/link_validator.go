@@ -16,10 +16,10 @@ type LinkValidator struct {
 }
 
 // NewLinkValidator creates a new LinkValidator with default settings
-func NewLinkValidator() *LinkValidator {
+func NewLinkValidator(skipLinkCheck bool) *LinkValidator {
 	return &LinkValidator{
 		timeout:       time.Second * 5,
-		skipLinkCheck: false,
+		skipLinkCheck: skipLinkCheck,
 		httpClient:    &http.Client{Timeout: time.Second * 5},
 	}
 }

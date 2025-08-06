@@ -7,7 +7,7 @@ import (
 )
 
 func TestLinkValidator_extractURLs(t *testing.T) {
-	lv := NewLinkValidator()
+	lv := NewLinkValidator(false)
 
 	testCases := []struct {
 		name     string
