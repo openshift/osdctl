@@ -2,7 +2,6 @@ package network
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -118,66 +117,6 @@ func TestEgressVerification_PodModeRegionDetection(t *testing.T) {
 				} else {
 					assert.Equal(t, tt.wantRegion, region, "Region detection should match expected")
 				}
-			}
-		})
-	}
-}
-
-func TestEgressVerification_PodModeProbeValidation(t *testing.T) {
-	tests := []struct {
-		name          string
-		initialProbe  string
-		expectedProbe string
-		shouldSwitch  bool
-	}{
-		{
-			name:          "curl_probe_unchanged",
-			initialProbe:  "curl",
-			expectedProbe: "curl",
-			shouldSwitch:  false,
-		},
-		{
-			name:          "legacy_probe_switched_to_curl",
-			initialProbe:  "legacy",
-			expectedProbe: "curl",
-			shouldSwitch:  true,
-		},
-		{
-			name:          "unknown_probe_switched_to_curl",
-			initialProbe:  "unknown",
-			expectedProbe: "curl",
-			shouldSwitch:  true,
-		},
-		{
-			name:          "uppercase_curl_unchanged",
-			initialProbe:  "CURL",
-			expectedProbe: "CURL",
-			shouldSwitch:  false,
-		},
-		{
-			name:          "mixed_case_curl_unchanged",
-			initialProbe:  "CuRl",
-			expectedProbe: "CuRl",
-			shouldSwitch:  false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ev := &EgressVerification{
-				Probe: tt.initialProbe,
-				log:   newTestLogger(t),
-			}
-
-			// Simulate the probe validation logic from setupPodModeVerification
-			originalProbe := ev.Probe
-			if strings.ToLower(ev.Probe) != "curl" {
-				ev.Probe = "curl"
-				assert.True(t, tt.shouldSwitch, "Expected probe to be switched")
-				assert.Equal(t, "curl", ev.Probe)
-			} else {
-				assert.False(t, tt.shouldSwitch, "Expected probe to remain unchanged")
-				assert.Equal(t, originalProbe, ev.Probe)
 			}
 		})
 	}
@@ -313,6 +252,81 @@ func TestEgressVerification_PodModeAwsConfigSetting(t *testing.T) {
 			} else {
 				// For non-AWS platforms, AWS config should be empty
 				assert.Empty(t, input.AWS.Region)
+			}
+		})
+	}
+}
+
+func TestEgressVerification_ValidateInput_PodMode(t *testing.T) {
+	tests := []struct {
+		name      string
+		ev        *EgressVerification
+		wantError bool
+		errorMsg  string
+	}{
+		{
+			name: "pod_mode_with_cluster_id",
+			ev: &EgressVerification{
+				PodMode:   true,
+				ClusterId: "test-cluster",
+			},
+			wantError: false,
+		},
+		{
+			name: "pod_mode_with_platform",
+			ev: &EgressVerification{
+				PodMode:      true,
+				platformName: "aws-classic",
+				Region:       "us-east-1", // Need region for AWS platform
+			},
+			wantError: false,
+		},
+		{
+			name: "pod_mode_without_cluster_or_platform",
+			ev: &EgressVerification{
+				PodMode: true,
+			},
+			wantError: true,
+			errorMsg:  "pod mode requires either --cluster-id or --platform to determine platform type",
+		},
+		{
+			name: "pod_mode_aws_without_cluster_or_region",
+			ev: &EgressVerification{
+				PodMode:      true,
+				platformName: "aws-classic",
+			},
+			wantError: true,
+			errorMsg:  "pod mode for AWS platforms requires --region when --cluster-id is not specified",
+		},
+		{
+			name: "pod_mode_aws_with_region",
+			ev: &EgressVerification{
+				PodMode:      true,
+				platformName: "aws-classic",
+				Region:       "us-east-1",
+			},
+			wantError: false,
+		},
+		{
+			name: "normal_mode_validation_still_works",
+			ev: &EgressVerification{
+				PodMode:   false,
+				SubnetIds: []string{"subnet-123"},
+			},
+			wantError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.ev.validateInput()
+			if tt.wantError {
+				assert.Error(t, err)
+				if tt.errorMsg != "" {
+					assert.Contains(t, err.Error(), tt.errorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
