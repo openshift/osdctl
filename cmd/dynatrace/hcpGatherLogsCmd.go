@@ -44,7 +44,7 @@ func NewCmdHCPMustGather() *cobra.Command {
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 
-			err := g.GatherLogs(g.ClusterID)
+			err := g.GatherLogs(g.ClusterID, "")
 			if err != nil {
 				cmdutil.CheckErr(err)
 			}
@@ -62,7 +62,7 @@ func NewCmdHCPMustGather() *cobra.Command {
 	return hcpMgCmd
 }
 
-func (g *GatherLogsOpts) GatherLogs(clusterID string) (error error) {
+func (g *GatherLogsOpts) GatherLogs(clusterID string, elevationReasons ...string) (error error) {
 	accessToken, err := getStorageAccessToken()
 	if err != nil {
 		return fmt.Errorf("failed to acquire access token %v", err)
@@ -73,7 +73,7 @@ func (g *GatherLogsOpts) GatherLogs(clusterID string) (error error) {
 		return err
 	}
 
-	_, _, clientset, err := common.GetKubeConfigAndClient(hcpCluster.managementClusterID, "", "")
+	_, _, clientset, err := common.GetKubeConfigAndClient(hcpCluster.managementClusterID, elevationReasons...)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve Kubernetes configuration and client for cluster with ID %s: %w", hcpCluster.managementClusterID, err)
 	}
