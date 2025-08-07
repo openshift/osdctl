@@ -139,6 +139,16 @@ func (s *LazyClient) getClient() client.Client {
 }
 
 func New(clusterID string, options client.Options) (client.Client, error) {
+	cfg, err := NewRestConfig(clusterID)
+	if err != nil {
+		return nil, err
+	}
+	setRuntimeLoggerDiscard()
+	return client.New(cfg, options)
+}
+
+// NewRestConfig returns a *rest.Config for the given cluster ID using backplane configuration
+func NewRestConfig(clusterID string) (*rest.Config, error) {
 	bp, err := bpconfig.GetBackplaneConfiguration()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
@@ -148,8 +158,8 @@ func New(clusterID string, options client.Options) (client.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	setRuntimeLoggerDiscard()
-	return client.New(cfg, options)
+
+	return cfg, nil
 }
 
 func NewAsBackplaneClusterAdmin(clusterID string, options client.Options, elevationReasons ...string) (client.Client, error) {
