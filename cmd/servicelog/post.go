@@ -248,9 +248,13 @@ func (o *PostCmdOptions) Run() error {
 	if !o.skipLinkCheck {
 		lv := linkValidator.NewLinkValidator()
 		messageText := o.Message.Summary + " " + o.Message.Description
-		if err := lv.ValidateLinks(messageText); err != nil {
+		warnings, err := lv.ValidateLinks(messageText)
+		if err != nil {
 			log.Error("aborting due to dead link use '--skip-link-check' to override\n", err)
 			return nil
+		}
+		for _, warning := range warnings {
+			log.Warnf("link warning: %s (%v)", warning.URL, warning.Warning)
 		}
 	}
 

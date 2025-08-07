@@ -18,6 +18,12 @@ type LinkValidator struct {
 	httpClient *http.Client
 }
 
+// ValidationResult holds a URL validation warning for non-fatal HTTP errors
+type ValidationResult struct {
+	URL     string
+	Warning error
+}
+
 // NewLinkValidator creates a new LinkValidator with default settings
 func NewLinkValidator() *LinkValidator {
 	return &LinkValidator{
@@ -42,26 +48,35 @@ func extractURLs(text string) []string {
 }
 
 // Check if URL is active
-func (lv *LinkValidator) checkURL(url string) error {
+func (lv *LinkValidator) checkURL(url string) (int, error) {
 	resp, err := lv.httpClient.Head(url)
+	// Check for network errors
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	return nil
+	return resp.StatusCode, nil
 }
 
 // Perform link validation
-func (lv *LinkValidator) ValidateLinks(message string) error {
+func (lv *LinkValidator) ValidateLinks(message string) ([]ValidationResult, error) {
 	urls := extractURLs(message)
+	var warnings []ValidationResult
 
 	for _, url := range urls {
-		if err := lv.checkURL(url); err != nil {
-			return fmt.Errorf("dead link: %s (%v)", url, err)
+		statusCode, err := lv.checkURL(url)
+		if err != nil {
+			return nil, fmt.Errorf("network error for link validation %v", err)
+		}
+		if statusCode == 404 || statusCode == 410 {
+			return nil, fmt.Errorf("dead link: %s (HTTP %d)", url, statusCode)
+		}
+		if statusCode >= 400 {
+			warnings = append(warnings, ValidationResult{
+				URL:     url,
+				Warning: fmt.Errorf("HTTP %d", statusCode),
+			})
 		}
 	}
-	return nil
+	return warnings, nil
 }

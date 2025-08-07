@@ -70,83 +70,201 @@ func TestLinkValidator_checkURL(t *testing.T) {
 	}))
 	defer server404.Close()
 
+	// Create a test server that returns 500
+	server500 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server500.Close()
+
 	lv := NewLinkValidator()
 
 	testCases := []struct {
-		name        string
-		url         string
-		expectError bool
+		name           string
+		url            string
+		expectedStatus int
+		expectError    bool
 	}{
 		{
-			name:        "valid URL",
-			url:         server.URL,
-			expectError: false,
+			name:           "valid URL",
+			url:            server.URL,
+			expectedStatus: 200,
+			expectError:    false,
 		},
 		{
-			name:        "404 URL",
-			url:         server404.URL,
-			expectError: true,
+			name:           "404 URL",
+			url:            server404.URL,
+			expectedStatus: 404,
+			expectError:    false,
 		},
 		{
-			name:        "invalid URL",
-			url:         "not-a-valid-url",
-			expectError: true,
+			name:           "500 URL",
+			url:            server500.URL,
+			expectedStatus: 500,
+			expectError:    false,
+		},
+		{
+			name:           "invalid URL",
+			url:            "not-a-valid-url",
+			expectedStatus: 0,
+			expectError:    true,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := lv.checkURL(tc.url)
+			statusCode, err := lv.checkURL(tc.url)
 			if tc.expectError && err == nil {
 				t.Error("Expected error but got none")
 			}
 			if !tc.expectError && err != nil {
 				t.Errorf("Expected no error but got: %v", err)
+			}
+			if !tc.expectError && statusCode != tc.expectedStatus {
+				t.Errorf("Expected status code %d, got %d", tc.expectedStatus, statusCode)
 			}
 		})
 	}
 }
 
-func TestLinkValidator_validateLinks(t *testing.T) {
-	// Create a test server for valid URLs
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestLinkValidator_ValidateLinks(t *testing.T) {
+	// Create a test server for valid URLs (200 OK)
+	serverOK := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer server.Close()
+	defer serverOK.Close()
+
+	// Create a test server for 404 errors (dead links)
+	server404 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server404.Close()
+
+	// Create a test server for 410 errors (gone links)
+	server410 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusGone)
+	}))
+	defer server410.Close()
+
+	// Create a test server for warning status (500 internal server error)
+	server500 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server500.Close()
 
 	lv := NewLinkValidator()
 
 	testCases := []struct {
-		name        string
-		message     string
-		expectError bool
+		name             string
+		message          string
+		expectError      bool
+		expectedWarnings int
 	}{
 		{
-			name:        "message with valid URL",
-			message:     "Please check " + server.URL + " for more information",
-			expectError: false,
+			name:             "message with valid URL",
+			message:          "Please check " + serverOK.URL + " for more information",
+			expectError:      false,
+			expectedWarnings: 0,
 		},
 		{
-			name:        "message with no URLs",
-			message:     "This is just a plain text message",
-			expectError: false,
+			name:             "message with no URLs",
+			message:          "This is just a plain text message",
+			expectError:      false,
+			expectedWarnings: 0,
 		},
 		{
-			name:        "message with invalid URL",
-			message:     "Check http://this-domain-should-not-exist-12345.com",
-			expectError: true,
+			name:             "message with 404 URL (dead link error)",
+			message:          "Check " + server404.URL + " for details",
+			expectError:      true,
+			expectedWarnings: 0,
+		},
+		{
+			name:             "message with 410 URL (gone link error)",
+			message:          "Visit " + server410.URL + " for info",
+			expectError:      true,
+			expectedWarnings: 0,
+		},
+		{
+			name:             "message with 500 URL (warning)",
+			message:          "See " + server500.URL + " for more",
+			expectError:      false,
+			expectedWarnings: 1,
+		},
+		{
+			name:             "message with mixed URLs",
+			message:          "Good link: " + serverOK.URL + " and warning link: " + server500.URL,
+			expectError:      false,
+			expectedWarnings: 1,
+		},
+		{
+			name:             "message with network error URL",
+			message:          "Check http://this-domain-should-not-exist-12345.com",
+			expectError:      true,
+			expectedWarnings: 0,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := lv.ValidateLinks(tc.message)
+			warnings, err := lv.ValidateLinks(tc.message)
 			if tc.expectError && err == nil {
 				t.Error("Expected error but got none")
 			}
 			if !tc.expectError && err != nil {
 				t.Errorf("Expected no error but got: %v", err)
 			}
+			if !tc.expectError && len(warnings) != tc.expectedWarnings {
+				t.Errorf("Expected %d warnings, got %d: %v", tc.expectedWarnings, len(warnings), warnings)
+			}
+
+			// Verify warning structure if warnings are expected
+			if !tc.expectError && tc.expectedWarnings > 0 {
+				for _, warning := range warnings {
+					if warning.URL == "" {
+						t.Error("Warning should have a URL")
+					}
+					if warning.Warning == nil {
+						t.Error("Warning should have an error message")
+					}
+				}
+			}
 		})
+	}
+}
+
+func TestValidationResult_Structure(t *testing.T) {
+	// Create a test server that returns 403 Forbidden
+	server403 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer server403.Close()
+
+	lv := NewLinkValidator()
+
+	// Test a scenario that should produce warnings
+	message := "Check this link: " + server403.URL
+	warnings, err := lv.ValidateLinks(message)
+
+	if err != nil {
+		t.Fatalf("Expected no error for 403 status, got: %v", err)
+	}
+
+	if len(warnings) != 1 {
+		t.Fatalf("Expected 1 warning, got %d", len(warnings))
+	}
+
+	warning := warnings[0]
+
+	// Test the ValidationResult structure
+	if warning.URL != server403.URL {
+		t.Errorf("Expected URL %s, got %s", server403.URL, warning.URL)
+	}
+
+	if warning.Warning == nil {
+		t.Error("Expected warning to have an error message")
+	}
+
+	expectedErrorMsg := "HTTP 403"
+	if warning.Warning.Error() != expectedErrorMsg {
+		t.Errorf("Expected warning message '%s', got '%s'", expectedErrorMsg, warning.Warning.Error())
 	}
 }
