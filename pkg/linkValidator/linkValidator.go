@@ -1,4 +1,4 @@
-package servicelog
+package linkValidator
 
 import (
 	"fmt"
@@ -8,24 +8,26 @@ import (
 	"time"
 )
 
+const (
+	Timeout = time.Second * 5
+)
+
 // LinkValidator handles validation of URLs in service log messages
 type LinkValidator struct {
-	timeout       time.Duration
-	skipLinkCheck bool
-	httpClient    *http.Client
+	timeout    time.Duration
+	httpClient *http.Client
 }
 
 // NewLinkValidator creates a new LinkValidator with default settings
-func NewLinkValidator(skipLinkCheck bool) *LinkValidator {
+func NewLinkValidator() *LinkValidator {
 	return &LinkValidator{
-		timeout:       time.Second * 5,
-		skipLinkCheck: skipLinkCheck,
-		httpClient:    &http.Client{Timeout: time.Second * 5},
+		timeout:    Timeout,
+		httpClient: &http.Client{Timeout: Timeout},
 	}
 }
 
 // Extract URLs from service log
-func (lv *LinkValidator) extractURLs(text string) []string {
+func extractURLs(text string) []string {
 	urlRegex := regexp.MustCompile(`https?://[^\s]+`)
 	matches := urlRegex.FindAllString(text, -1)
 
@@ -53,12 +55,8 @@ func (lv *LinkValidator) checkURL(url string) error {
 }
 
 // Perform link validation
-func (lv *LinkValidator) validateLinks(message string) error {
-	urls := lv.extractURLs(message)
-	if lv.skipLinkCheck {
-		fmt.Errorf("Link validation skipped")
-		return nil
-	}
+func (lv *LinkValidator) ValidateLinks(message string) error {
+	urls := extractURLs(message)
 
 	for _, url := range urls {
 		if err := lv.checkURL(url); err != nil {

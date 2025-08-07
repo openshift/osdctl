@@ -1,4 +1,4 @@
-package servicelog
+package linkValidator
 
 import (
 	"net/http"
@@ -7,7 +7,6 @@ import (
 )
 
 func TestLinkValidator_extractURLs(t *testing.T) {
-	lv := NewLinkValidator(false)
 
 	testCases := []struct {
 		name     string
@@ -43,7 +42,7 @@ func TestLinkValidator_extractURLs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := lv.extractURLs(tc.input)
+			result := extractURLs(tc.input)
 			if len(result) != len(tc.expected) {
 				t.Errorf("Expected %d URLs, got %d: %v", len(tc.expected), len(result), result)
 				return
@@ -141,7 +140,7 @@ func TestLinkValidator_validateLinks(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := lv.validateLinks(tc.message)
+			err := lv.ValidateLinks(tc.message)
 			if tc.expectError && err == nil {
 				t.Error("Expected error but got none")
 			}
@@ -149,16 +148,5 @@ func TestLinkValidator_validateLinks(t *testing.T) {
 				t.Errorf("Expected no error but got: %v", err)
 			}
 		})
-	}
-}
-
-func TestLinkValidator_SetSkipValidation(t *testing.T) {
-	lv := NewLinkValidator()
-	lv.skipLinkCheck = true
-
-	// Even with a bad URL, validation should be skipped
-	err := lv.validateLinks("Check http://this-domain-should-not-exist-12345.com")
-	if err != nil {
-		t.Errorf("Expected no error when validation is skipped, but got: %v", err)
 	}
 }
