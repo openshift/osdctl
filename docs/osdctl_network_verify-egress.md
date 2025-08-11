@@ -19,6 +19,12 @@ Verify an AWS OSD/ROSA cluster can reach all required external URLs necessary fo
      public subnets (in non-privatelink clusters), since they have an internet gateway and no NAT gateway.
   2. Pod mode (--pod-mode): runs verification as Kubernetes Jobs within the target cluster. This mode requires
      cluster admin access but provides more accurate results as it tests from within the actual cluster environment.
+     
+                 Pod mode uses the following Kubernetes client configuration priority:
+      1. In-cluster configuration (when ServiceAccount token exists)
+      2. Backplane credentials (when --cluster-id is provided)
+      3. User-provided kubeconfig (when --kubeconfig is specified)
+      4. Default kubeconfig (from ~/.kube/config)
 
   Docs: https://docs.openshift.com/rosa/rosa_install_access_delete_clusters/rosa_getting_started_iam/rosa-aws-prereqs.html#osd-aws-privatelink-firewall-prerequisites_prerequisites
 
@@ -49,8 +55,14 @@ osdctl network verify-egress [flags]
   # Run in pod mode using Kubernetes jobs (requires cluster access)
   osdctl network verify-egress --cluster-id my-rosa-cluster --pod-mode
 
+  # Run in pod mode using ServiceAccount (when running inside a Kubernetes Pod)
+  osdctl network verify-egress --pod-mode --region us-east-1 --namespace my-namespace
+
   # Run in pod mode with custom namespace and kubeconfig
   osdctl network verify-egress --pod-mode --region us-east-1 --namespace my-namespace --kubeconfig ~/.kube/config
+
+  # Run network verification without sending service logs on failure
+  osdctl network verify-egress --cluster-id my-rosa-cluster --no-service-log
 
   # (Not recommended) Run against a specific VPC, without specifying cluster-id
   <export environment variables like AWS_ACCESS_KEY_ID or use aws configure>
@@ -70,6 +82,7 @@ osdctl network verify-egress [flags]
   -h, --help                      help for verify-egress
       --kubeconfig string         (optional) path to kubeconfig file for pod mode (uses default kubeconfig if not specified)
       --namespace string          (optional) Kubernetes namespace to run verification pods in (default "openshift-network-diagnostics")
+      --no-service-log            (optional) disable automatic service log sending when verification fails
       --no-tls                    (optional) if provided, ignore all ssl certificate validations on client-side.
       --platform string           (optional) override for cloud platform/product. E.g., 'aws-classic' (OSD/ROSA Classic), 'aws-hcp' (ROSA HCP), or 'aws-hcp-zeroegress'
       --pod-mode                  (optional) run verification using Kubernetes pods instead of cloud instances
@@ -77,6 +90,7 @@ osdctl network verify-egress [flags]
       --region string             (optional) AWS region, required for --pod-mode if not passing a --cluster-id
       --security-group string     (optional) security group ID override for osd-network-verifier, required if not specifying --cluster-id
       --subnet-id stringArray     (optional) private subnet ID override, required if not specifying --cluster-id and can be specified multiple times to run against multiple subnets
+
       --version                   When present, prints out the version of osd-network-verifier being used
       --vpc string                (optional) VPC name for cases where it can't be fetched from OCM
 ```

@@ -102,6 +102,8 @@ type EgressVerification struct {
 	KubeConfig string
 	// Namespace is the Kubernetes namespace to run verification pods in
 	Namespace string
+	// NoServiceLog disables automatic service log sending on verification failures
+	NoServiceLog bool
 }
 
 func NewCmdValidateEgress() *cobra.Command {
@@ -125,6 +127,12 @@ func NewCmdValidateEgress() *cobra.Command {
      public subnets (in non-privatelink clusters), since they have an internet gateway and no NAT gateway.
   2. Pod mode (--pod-mode): runs verification as Kubernetes Jobs within the target cluster. This mode requires
      cluster admin access but provides more accurate results as it tests from within the actual cluster environment.
+     
+     Pod mode uses the following Kubernetes client configuration priority:
+     1. In-cluster configuration (when ServiceAccount token exists)
+     2. Backplane credentials (when --cluster-id is provided)
+     3. User-provided kubeconfig (when --kubeconfig is specified)
+     4. Default kubeconfig (from ~/.kube/config)
 
   Docs: https://docs.openshift.com/rosa/rosa_install_access_delete_clusters/rosa_getting_started_iam/rosa-aws-prereqs.html#osd-aws-privatelink-firewall-prerequisites_prerequisites`,
 		Example: `
@@ -147,8 +155,14 @@ func NewCmdValidateEgress() *cobra.Command {
   # Run in pod mode using Kubernetes jobs (requires cluster access)
   osdctl network verify-egress --cluster-id my-rosa-cluster --pod-mode
 
+  # Run in pod mode using ServiceAccount (when running inside a Kubernetes Pod)
+  osdctl network verify-egress --pod-mode --region us-east-1 --namespace my-namespace
+
   # Run in pod mode with custom namespace and kubeconfig
   osdctl network verify-egress --pod-mode --region us-east-1 --namespace my-namespace --kubeconfig ~/.kube/config
+
+  # Run network verification without sending service logs on failure
+  osdctl network verify-egress --cluster-id my-rosa-cluster --no-service-log
 
   # (Not recommended) Run against a specific VPC, without specifying cluster-id
   <export environment variables like AWS_ACCESS_KEY_ID or use aws configure>
@@ -179,6 +193,7 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().BoolVar(&e.PodMode, "pod-mode", false, "(optional) run verification using Kubernetes pods instead of cloud instances")
 	validateEgressCmd.Flags().StringVar(&e.KubeConfig, "kubeconfig", "", "(optional) path to kubeconfig file for pod mode (uses default kubeconfig if not specified)")
 	validateEgressCmd.Flags().StringVar(&e.Namespace, "namespace", "openshift-network-diagnostics", "(optional) Kubernetes namespace to run verification pods in")
+	validateEgressCmd.Flags().BoolVar(&e.NoServiceLog, "no-service-log", false, "(optional) disable automatic service log sending when verification fails")
 
 	// Pod mode is incompatible with cloud-specific configuration flags
 	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "cacert")
@@ -257,17 +272,23 @@ func (e *EgressVerification) Run(ctx context.Context) {
 		// Prompt sending a service log instead for other blocked egresses.
 		if !out.IsSuccessful() && len(out.GetEgressURLFailures()) > 0 {
 			failures++
-			postCmd := generateServiceLog(out, e.ClusterId)
-			blockedUrl := strings.Join(postCmd.TemplateParams, ",")
-			if (strings.Contains(blockedUrl, "deadmanssnitch") || strings.Contains(blockedUrl, "pagerduty")) && e.cluster.State() == "ready" {
-				fmt.Println("PagerDuty and/or DMS outgoing traffic is blocked, resulting in a loss of observability. As a result, Red Hat can no longer guarantee SLAs and the cluster should be put in limited support")
-				pCmd := lsupport.Post{Template: limitedSupportTemplate}
-				if err := pCmd.Run(e.ClusterId); err != nil {
-					fmt.Printf("failed to post limited support reason: %v", err)
+
+			// Only send service logs if not disabled by flag
+			if !e.NoServiceLog {
+				postCmd := generateServiceLog(out, e.ClusterId)
+				blockedUrl := strings.Join(postCmd.TemplateParams, ",")
+				if (strings.Contains(blockedUrl, "deadmanssnitch") || strings.Contains(blockedUrl, "pagerduty")) && e.cluster.State() == "ready" {
+					fmt.Println("PagerDuty and/or DMS outgoing traffic is blocked, resulting in a loss of observability. As a result, Red Hat can no longer guarantee SLAs and the cluster should be put in limited support")
+					pCmd := lsupport.Post{Template: limitedSupportTemplate}
+					if err := pCmd.Run(e.ClusterId); err != nil {
+						fmt.Printf("failed to post limited support reason: %v", err)
+					}
+				} else if err := postCmd.Run(); err != nil {
+					fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
+					fmt.Printf("osdctl servicelog post %v -t %v -p %v\n", e.ClusterId, blockedEgressTemplateUrl, strings.Join(postCmd.TemplateParams, " -p "))
 				}
-			} else if err := postCmd.Run(); err != nil {
-				fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
-				fmt.Printf("osdctl servicelog post %v -t %v -p %v\n", e.ClusterId, blockedEgressTemplateUrl, strings.Join(postCmd.TemplateParams, " -p "))
+			} else {
+				fmt.Println("Service log sending disabled by --no-service-log flag. Network verification failed but no service log will be sent.")
 			}
 		}
 		if failures > 0 {
@@ -580,22 +601,36 @@ func (e *EgressVerification) setupForPodMode(ctx context.Context) (*onvKubeClien
 	var restConfig *rest.Config
 	var err error
 
-	// Prefer backplane credentials when cluster ID is available
-	if e.ClusterId != "" {
+	// Priority 1: Try in-cluster configuration (when ServiceAccount token exists)
+	if _, err := os.Stat("/var/run/secrets/kubernetes.io/serviceaccount/token"); err == nil {
+		restConfig, err = rest.InClusterConfig()
+		if err == nil {
+			e.log.Info(ctx, "Pod mode using in-cluster configuration with ServiceAccount")
+		} else {
+			e.log.Info(ctx, "ServiceAccount token found but in-cluster config failed, falling back to other methods")
+		}
+	}
+
+	// Priority 2: Use backplane credentials when cluster ID is available
+	if restConfig == nil && e.ClusterId != "" {
 		restConfig, err = k8s.NewRestConfig(e.ClusterId)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get REST config from backplane for cluster %s: %w", e.ClusterId, err)
 		}
 		e.log.Info(ctx, "Pod mode using backplane credentials for cluster: %s", e.ClusterId)
-	} else if e.KubeConfig != "" {
-		// Fallback to user-provided kubeconfig
+	}
+
+	// Priority 3: Use user-provided kubeconfig
+	if restConfig == nil && e.KubeConfig != "" {
 		restConfig, err = clientcmd.BuildConfigFromFlags("", e.KubeConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build kubeconfig from %s: %w", e.KubeConfig, err)
 		}
 		e.log.Info(ctx, "Pod mode using provided kubeconfig: %s", e.KubeConfig)
-	} else {
-		// Fallback to default kubeconfig from environment or home directory
+	}
+
+	// Priority 4: Fallback to default kubeconfig from environment or home directory
+	if restConfig == nil {
 		kubeconfig := clientcmd.RecommendedHomeFile
 		restConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
