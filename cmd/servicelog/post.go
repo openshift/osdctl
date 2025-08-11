@@ -22,6 +22,7 @@ import (
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/internal/utils"
+	"github.com/openshift/osdctl/pkg/link_validator"
 	"github.com/openshift/osdctl/pkg/printer"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
 
@@ -44,6 +45,7 @@ type PostCmdOptions struct {
 	clustersFile    string
 	InternalOnly    bool
 	ClusterId       string
+	skipLinkCheck   bool
 
 	// Messaged clusters
 	successfulClusters map[string]string
@@ -94,6 +96,7 @@ func newPostCmd() *cobra.Command {
 	postCmd.Flags().StringArrayVarP(&opts.filterFiles, "query-file", "f", []string{}, "File containing search queries to apply. All lines in the file will be concatenated into a single query. If this flag is called multiple times, every file's search query will be combined with logical AND.")
 	postCmd.Flags().StringVarP(&opts.clustersFile, "clusters-file", "c", "", `Read a list of clusters to post the servicelog to. the format of the file is: {"clusters":["$CLUSTERID"]}`)
 	postCmd.Flags().BoolVarP(&opts.InternalOnly, "internal", "i", false, "Internal only service log. Use MESSAGE for template parameter (eg. -p MESSAGE='My super secret message').")
+	postCmd.Flags().BoolVar(&opts.skipLinkCheck, "skip-link-check", false, "Skip validating if links in Service Log are valid")
 
 	return postCmd
 }
@@ -243,6 +246,20 @@ func (o *PostCmdOptions) Run() error {
 	log.Infoln("The following template will be sent:")
 	if err := o.printTemplate(); err != nil {
 		return fmt.Errorf("cannot read generated template: %w", err)
+	}
+
+	// Validate links in service log unless skipped via '--skip-link-check'
+	if !o.skipLinkCheck {
+		lv := link_validator.NewLinkValidator()
+		messageText := o.Message.Summary + " " + o.Message.Description
+		warnings, err := lv.ValidateLinks(messageText)
+		if err != nil {
+			log.Error("aborting due to dead link use '--skip-link-check' to override\n", err)
+			return nil
+		}
+		for _, warning := range warnings {
+			log.Warnf("link warning: %s (%v)", warning.URL, warning.Warning)
+		}
 	}
 
 	// If this is a dry-run, don't proceed further.
