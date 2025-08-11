@@ -22,7 +22,7 @@ import (
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/internal/utils"
-	"github.com/openshift/osdctl/pkg/linkValidator"
+	"github.com/openshift/osdctl/pkg/link_validator"
 	"github.com/openshift/osdctl/pkg/printer"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
 
@@ -246,7 +246,7 @@ func (o *PostCmdOptions) Run() error {
 
 	// Validate links in service log unless skipped via '--skip-link-check'
 	if !o.skipLinkCheck {
-		lv := linkValidator.NewLinkValidator()
+		lv := link_validator.NewLinkValidator()
 		messageText := o.Message.Summary + " " + o.Message.Description
 		warnings, err := lv.ValidateLinks(messageText)
 		if err != nil {

@@ -1,4 +1,4 @@
-package linkValidator
+package link_validator
 
 import (
 	"fmt"
@@ -32,7 +32,6 @@ func NewLinkValidator() *LinkValidator {
 	}
 }
 
-// Extract URLs from service log
 func extractURLs(text string) []string {
 	urlRegex := regexp.MustCompile(`https?://[^\s]+`)
 	matches := urlRegex.FindAllString(text, -1)
@@ -47,7 +46,6 @@ func extractURLs(text string) []string {
 	return cleanURLs
 }
 
-// Check if URL is active
 func (lv *LinkValidator) checkURL(url string) (int, error) {
 	resp, err := lv.httpClient.Head(url)
 	// Check for network errors
@@ -58,7 +56,7 @@ func (lv *LinkValidator) checkURL(url string) (int, error) {
 	return resp.StatusCode, nil
 }
 
-// Perform link validation
+// ValidateLinks performs link validation through HTTP status codes
 func (lv *LinkValidator) ValidateLinks(message string) ([]ValidationResult, error) {
 	urls := extractURLs(message)
 	var warnings []ValidationResult

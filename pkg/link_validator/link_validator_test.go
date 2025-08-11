@@ -1,4 +1,4 @@
-package linkValidator
+package link_validator
 
 import (
 	"net/http"
