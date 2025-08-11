@@ -6,6 +6,13 @@ import (
 	"testing"
 )
 
+// newTestServer creates a test server that returns the specified HTTP status code
+func newTestServer(status int) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(status)
+	}))
+}
+
 func TestLinkValidator_extractURLs(t *testing.T) {
 
 	testCases := []struct {
@@ -58,22 +65,14 @@ func TestLinkValidator_extractURLs(t *testing.T) {
 }
 
 func TestLinkValidator_checkURL(t *testing.T) {
-	// Create a test server that returns 200 OK
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
+	// Create test servers using the helper function
+	server := newTestServer(http.StatusOK)
 	defer server.Close()
 
-	// Create a test server that returns 404
-	server404 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
+	server404 := newTestServer(http.StatusNotFound)
 	defer server404.Close()
 
-	// Create a test server that returns 500
-	server500 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
+	server500 := newTestServer(http.StatusInternalServerError)
 	defer server500.Close()
 
 	lv := NewLinkValidator()
@@ -127,28 +126,17 @@ func TestLinkValidator_checkURL(t *testing.T) {
 }
 
 func TestLinkValidator_ValidateLinks(t *testing.T) {
-	// Create a test server for valid URLs (200 OK)
-	serverOK := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
+	// Create test servers using the helper function
+	serverOK := newTestServer(http.StatusOK)
 	defer serverOK.Close()
 
-	// Create a test server for 404 errors (dead links)
-	server404 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
+	server404 := newTestServer(http.StatusNotFound)
 	defer server404.Close()
 
-	// Create a test server for 410 errors (gone links)
-	server410 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusGone)
-	}))
+	server410 := newTestServer(http.StatusGone)
 	defer server410.Close()
 
-	// Create a test server for warning status (500 internal server error)
-	server500 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
+	server500 := newTestServer(http.StatusInternalServerError)
 	defer server500.Close()
 
 	lv := NewLinkValidator()
@@ -233,9 +221,7 @@ func TestLinkValidator_ValidateLinks(t *testing.T) {
 
 func TestValidationResult_Structure(t *testing.T) {
 	// Create a test server that returns 403 Forbidden
-	server403 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	}))
+	server403 := newTestServer(http.StatusForbidden)
 	defer server403.Close()
 
 	lv := NewLinkValidator()
