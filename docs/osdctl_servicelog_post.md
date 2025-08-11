@@ -46,6 +46,7 @@ osdctl servicelog post --cluster-id <cluster-identifier> [flags]
   -p, --param stringArray        Specify a key-value pair (eg. -p FOO=BAR) to set/override a parameter value in the template.
   -q, --query stringArray        Specify a search query (eg. -q "name like foo") for a bulk-post to matching clusters.
   -f, --query-file stringArray   File containing search queries to apply. All lines in the file will be concatenated into a single query. If this flag is called multiple times, every file's search query will be combined with logical AND.
+      --skip-link-check          Skip validating if links in Service Log are valid
   -t, --template string          Message template file or URL
   -y, --yes                      Skips all prompts.
 ```
