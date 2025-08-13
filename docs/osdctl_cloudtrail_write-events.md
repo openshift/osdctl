@@ -1,20 +1,51 @@
 ## osdctl cloudtrail write-events
 
-Prints cloudtrail write events to console with optional filtering
+Prints cloudtrail write events to console with advanced filtering options
+
+### Synopsis
+
+
+	Lists AWS CloudTrail write events for a specific OpenShift/ROSA cluster with advanced 
+	filtering capabilities to help investigate cluster-related activities.
+
+	The command automatically authenticates with OpenShift Cluster Manager (OCM) and assumes 
+	the appropriate AWS role for the target cluster to access CloudTrail logs.
+
+	By default, the command filters out system and service account events using patterns 
+	from the osdctl configuration file. 
 
 ```
 osdctl cloudtrail write-events [flags]
 ```
 
+### Examples
+
+```
+
+    # Time range with user and include events where username=(john.doe or system) and event=(CreateBucket or AssumeRole); print custom format
+    $ osdctl cloudtrail write-events -C cluster-id --after 2025-07-15,09:00:00 --until 2025-07-15,17:00:00 \
+      -I username=john.doe -I event=CreateBucket -E event=AssumeRole -E username=system --print-format event,time,username,resource-name
+
+    # Get all events from a specific time onwards for a 2h duration; print url
+    $ osdctl cloudtrail write-events -C cluster-id --after 2025-07-15,15:00:00 --since 2h --url
+
+    # Get all events until the specified time since the last 2 hours; print raw-event
+    $ osdctl cloudtrail write-events -C cluster-id --after 2025-07-15,15:00:00 --since 2h --raw-event
+```
+
 ### Options
 
 ```
-  -A, --all                 Prints all cloudtrail write events without filtering
-  -C, --cluster-id string   Cluster ID
-  -h, --help                help for write-events
-  -r, --raw-event           Prints the cloudtrail events to the console in raw json format
-      --since string        Specifies that only events that occur within the specified time are returned.Defaults to 1h.Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". (default "1h")
-  -u, --url                 Generates Url link to cloud console cloudtrail event
+      --after string           Specifies all events that occur after the specified time. Format "YY-MM-DD,hh:mm:ss".
+  -C, --cluster-id string      Cluster ID
+  -E, --exclude strings        Filter events by exclusion. (i.e. "-E username=, -E event=, -E resource-name=, -E resource-type=, -E arn=")
+  -h, --help                   help for write-events
+  -I, --include strings        Filter events by inclusion. (i.e. "-I username=, -I event=, -I resource-name=, -I resource-type=, -I arn=")
+      --print-format strings   Prints all cloudtrail write events in selected format. Can specify (username, time, event, arn, resource-name, resource-type, arn). i.e --print-format username,time,event
+  -r, --raw-event              Prints the cloudtrail events to the console in raw json format
+      --since string           Specifies that only events that occur within the specified time are returned. Defaults to 1h. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h", "d", "w". (default "1h")
+      --until string           Specifies all events that occur before the specified time. Format "YY-MM-DD,hh:mm:ss".
+  -u, --url                    Generates Url link to cloud console cloudtrail event
 ```
 
 ### Options inherited from parent commands
