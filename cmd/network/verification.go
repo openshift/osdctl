@@ -102,7 +102,7 @@ type EgressVerification struct {
 	KubeConfig string
 	// Namespace is the Kubernetes namespace to run verification pods in
 	Namespace string
-	// NoServiceLog disables automatic service log sending on verification failures
+	// NoServiceLog disables automatic service log prompting on verification failures
 	NoServiceLog bool
 }
 
@@ -612,7 +612,7 @@ func (e *EgressVerification) setupForPodMode(ctx context.Context) (*onvKubeClien
 	}
 
 	// Priority 2: Use backplane credentials when cluster ID is available
-	if restConfig == nil && e.ClusterId != "" {
+	else if restConfig == nil && e.ClusterId != "" {
 		restConfig, err = k8s.NewRestConfig(e.ClusterId)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get REST config from backplane for cluster %s: %w", e.ClusterId, err)
@@ -621,7 +621,7 @@ func (e *EgressVerification) setupForPodMode(ctx context.Context) (*onvKubeClien
 	}
 
 	// Priority 3: Use user-provided kubeconfig
-	if restConfig == nil && e.KubeConfig != "" {
+	else if restConfig == nil && e.KubeConfig != "" {
 		restConfig, err = clientcmd.BuildConfigFromFlags("", e.KubeConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build kubeconfig from %s: %w", e.KubeConfig, err)
@@ -630,7 +630,7 @@ func (e *EgressVerification) setupForPodMode(ctx context.Context) (*onvKubeClien
 	}
 
 	// Priority 4: Fallback to default kubeconfig from environment or home directory
-	if restConfig == nil {
+	else {
 		kubeconfig := clientcmd.RecommendedHomeFile
 		restConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
