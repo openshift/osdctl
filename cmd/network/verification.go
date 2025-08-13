@@ -601,7 +601,6 @@ func (e *EgressVerification) setupForPodMode(ctx context.Context) (*onvKubeClien
 	var restConfig *rest.Config
 	var err error
 
-	// Priority 1: Try in-cluster configuration (when ServiceAccount token exists)
 	if _, err := os.Stat("/var/run/secrets/kubernetes.io/serviceaccount/token"); err == nil {
 		restConfig, err = rest.InClusterConfig()
 		if err == nil {
@@ -609,28 +608,22 @@ func (e *EgressVerification) setupForPodMode(ctx context.Context) (*onvKubeClien
 		} else {
 			e.log.Info(ctx, "ServiceAccount token found but in-cluster config failed, falling back to other methods")
 		}
-	}
-
-	// Priority 2: Use backplane credentials when cluster ID is available
-	else if restConfig == nil && e.ClusterId != "" {
+	} else if restConfig == nil && e.ClusterId != "" {
+		// Priority 2: Use backplane credentials when cluster ID is available
 		restConfig, err = k8s.NewRestConfig(e.ClusterId)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get REST config from backplane for cluster %s: %w", e.ClusterId, err)
 		}
 		e.log.Info(ctx, "Pod mode using backplane credentials for cluster: %s", e.ClusterId)
-	}
-
-	// Priority 3: Use user-provided kubeconfig
-	else if restConfig == nil && e.KubeConfig != "" {
+	} else if restConfig == nil && e.KubeConfig != "" {
+		// Priority 3: Use user-provided kubeconfig
 		restConfig, err = clientcmd.BuildConfigFromFlags("", e.KubeConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build kubeconfig from %s: %w", e.KubeConfig, err)
 		}
 		e.log.Info(ctx, "Pod mode using provided kubeconfig: %s", e.KubeConfig)
-	}
-
-	// Priority 4: Fallback to default kubeconfig from environment or home directory
-	else {
+	} else {
+		// Priority 4: Fallback to default kubeconfig from environment or home directory
 		kubeconfig := clientcmd.RecommendedHomeFile
 		restConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
