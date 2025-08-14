@@ -2,10 +2,13 @@ package network
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	"github.com/openshift-online/ocm-sdk-go/logging"
 	"github.com/openshift/osd-network-verifier/pkg/data/cloud"
 	"github.com/openshift/osd-network-verifier/pkg/data/cpu"
 	"github.com/openshift/osd-network-verifier/pkg/probes/curl"
@@ -329,5 +332,97 @@ func TestEgressVerification_ValidateInput_PodMode(t *testing.T) {
 				assert.NoError(t, err)
 			}
 		})
+	}
+}
+
+// Validates that setupForPodMode uses the provided kubeconfig path without relying on ServiceAccount or Backplane
+func TestSetupForPodMode_UsesProvidedKubeconfig(t *testing.T) {
+	// Minimal kubeconfig that client-go can parse without contacting a real server
+	kubeconfigContent := []byte(`apiVersion: v1
+clusters:
+- cluster:
+    server: https://127.0.0.1
+  name: test
+contexts:
+- context:
+    cluster: test
+    user: test
+  name: test
+current-context: test
+kind: Config
+preferences: {}
+users:
+- name: test
+  user:
+    token: dummy
+`)
+
+	tmpDir := t.TempDir()
+	kcPath := filepath.Join(tmpDir, "config")
+	if err := os.WriteFile(kcPath, kubeconfigContent, 0600); err != nil {
+		t.Fatalf("failed to write temp kubeconfig: %v", err)
+	}
+
+	logger, err := logging.NewGoLoggerBuilder().Debug(true).Build()
+	if err != nil {
+		t.Fatalf("failed to build logger: %v", err)
+	}
+
+	e := &EgressVerification{
+		PodMode:    true,
+		KubeConfig: kcPath,
+		Namespace:  "test-ns",
+		log:        logger,
+	}
+
+	kv, err := e.setupForPodMode(context.Background())
+	if err != nil {
+		t.Fatalf("setupForPodMode returned error: %v", err)
+	}
+	if kv == nil {
+		t.Fatalf("expected non-nil KubeVerifier")
+	}
+}
+
+// Attempts to validate the ServiceAccount branch of setupForPodMode.
+// Skips if the test process lacks permissions to write the token path.
+func TestSetupForPodMode_UsesServiceAccountWhenTokenPresent(t *testing.T) {
+	const saRoot = "/var/run/secrets/kubernetes.io/serviceaccount"
+	// Try to create the service account directory if it doesn't exist
+	if err := os.MkdirAll(saRoot, 0755); err != nil {
+		t.Skipf("skipping: cannot create serviceaccount path (%v)", err)
+	}
+
+	// Write minimal token and CA files
+	tokenPath := filepath.Join(saRoot, "token")
+	caPath := filepath.Join(saRoot, "ca.crt")
+	if err := os.WriteFile(tokenPath, []byte("dummy-token"), 0600); err != nil {
+		t.Skipf("skipping: cannot write token file (%v)", err)
+	}
+	if err := os.WriteFile(caPath, []byte("dummy-ca"), 0644); err != nil {
+		t.Skipf("skipping: cannot write ca.crt file (%v)", err)
+	}
+
+	// Set required in-cluster env vars
+	t.Setenv("KUBERNETES_SERVICE_HOST", "127.0.0.1")
+	t.Setenv("KUBERNETES_SERVICE_PORT", "8443")
+
+	logger, err := logging.NewGoLoggerBuilder().Debug(true).Build()
+	if err != nil {
+		t.Fatalf("failed to build logger: %v", err)
+	}
+
+	e := &EgressVerification{
+		PodMode:   true,
+		Namespace: "sa-test-ns",
+		log:       logger,
+	}
+
+	kv, err := e.setupForPodMode(context.Background())
+	if err != nil {
+		t.Fatalf("setupForPodMode returned error using ServiceAccount: %v", err)
+	}
+	if kv == nil {
+		t.Fatalf("expected non-nil KubeVerifier using ServiceAccount")
 	}
 }
