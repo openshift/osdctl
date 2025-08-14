@@ -399,7 +399,7 @@ func TestSetupForPodMode_UsesServiceAccountWhenTokenPresent(t *testing.T) {
 	if err := os.WriteFile(tokenPath, []byte("dummy-token"), 0600); err != nil {
 		t.Skipf("skipping: cannot write token file (%v)", err)
 	}
-	if err := os.WriteFile(caPath, []byte("dummy-ca"), 0644); err != nil {
+	if err := os.WriteFile(caPath, []byte("dummy-ca"), 0600); err != nil {
 		t.Skipf("skipping: cannot write ca.crt file (%v)", err)
 	}
 
