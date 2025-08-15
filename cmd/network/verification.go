@@ -103,8 +103,8 @@ type EgressVerification struct {
 	KubeConfig string
 	// Namespace is the Kubernetes namespace to run verification pods in
 	Namespace string
-	// NoServiceLog disables automatic service log prompting on verification failures
-	NoServiceLog bool
+	// SkipServiceLog disables automatic service log prompting on verification failures
+	SkipServiceLog bool
 }
 
 func NewCmdValidateEgress() *cobra.Command {
@@ -194,7 +194,7 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().BoolVar(&e.PodMode, "pod-mode", false, "(optional) run verification using Kubernetes pods instead of cloud instances")
 	validateEgressCmd.Flags().StringVar(&e.KubeConfig, "kubeconfig", "", "(optional) path to kubeconfig file for pod mode (uses default kubeconfig if not specified)")
 	validateEgressCmd.Flags().StringVar(&e.Namespace, "namespace", "openshift-network-diagnostics", "(optional) Kubernetes namespace to run verification pods in")
-	validateEgressCmd.Flags().BoolVar(&e.NoServiceLog, "skip-service-log", false, "(optional) disable automatic service log sending when verification fails")
+	validateEgressCmd.Flags().BoolVar(&e.SkipServiceLog, "skip-service-log", false, "(optional) disable automatic service log sending when verification fails")
 
 	// Pod mode is incompatible with cloud-specific configuration flags
 	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "cacert")
@@ -275,7 +275,7 @@ func (e *EgressVerification) Run(ctx context.Context) {
 			failures++
 
 			// Only send service logs if not disabled by flag
-			if !e.NoServiceLog {
+			if !e.SkipServiceLog {
 				postCmd := generateServiceLog(out, e.ClusterId)
 				blockedUrl := strings.Join(postCmd.TemplateParams, ",")
 				if (strings.Contains(blockedUrl, "deadmanssnitch") || strings.Contains(blockedUrl, "pagerduty")) && e.cluster.State() == "ready" {
