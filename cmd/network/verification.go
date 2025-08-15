@@ -46,6 +46,7 @@ const (
 	caBundleConfigMapKey         = "ca-bundle.crt"
 	networkVerifierDepPath       = "github.com/openshift/osd-network-verifier"
 	limitedSupportTemplate       = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/limited_support/egressFailureLimitedSupport.json"
+	serviceAccountTokenPath      = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 )
 
 var networkVerifierDefaultTags = map[string]string{
@@ -162,7 +163,7 @@ func NewCmdValidateEgress() *cobra.Command {
   osdctl network verify-egress --pod-mode --region us-east-1 --namespace my-namespace --kubeconfig ~/.kube/config
 
   # Run network verification without sending service logs on failure
-  osdctl network verify-egress --cluster-id my-rosa-cluster --no-service-log
+  osdctl network verify-egress --cluster-id my-rosa-cluster --skip-service-log
 
   # (Not recommended) Run against a specific VPC, without specifying cluster-id
   <export environment variables like AWS_ACCESS_KEY_ID or use aws configure>
@@ -193,7 +194,7 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().BoolVar(&e.PodMode, "pod-mode", false, "(optional) run verification using Kubernetes pods instead of cloud instances")
 	validateEgressCmd.Flags().StringVar(&e.KubeConfig, "kubeconfig", "", "(optional) path to kubeconfig file for pod mode (uses default kubeconfig if not specified)")
 	validateEgressCmd.Flags().StringVar(&e.Namespace, "namespace", "openshift-network-diagnostics", "(optional) Kubernetes namespace to run verification pods in")
-	validateEgressCmd.Flags().BoolVar(&e.NoServiceLog, "no-service-log", false, "(optional) disable automatic service log sending when verification fails")
+	validateEgressCmd.Flags().BoolVar(&e.NoServiceLog, "skip-service-log", false, "(optional) disable automatic service log sending when verification fails")
 
 	// Pod mode is incompatible with cloud-specific configuration flags
 	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "cacert")
@@ -288,7 +289,7 @@ func (e *EgressVerification) Run(ctx context.Context) {
 					fmt.Printf("osdctl servicelog post %v -t %v -p %v\n", e.ClusterId, blockedEgressTemplateUrl, strings.Join(postCmd.TemplateParams, " -p "))
 				}
 			} else {
-				fmt.Println("Service log sending disabled by --no-service-log flag. Network verification failed but no service log will be sent.")
+				fmt.Println("Service log sending disabled by --skip-service-log flag. Network verification failed but no service log will be sent.")
 			}
 		}
 		if failures > 0 {
@@ -596,40 +597,57 @@ func printVersion() {
 	log.Println(fmt.Sprintf("Using osd-network-verifier version %v", version))
 }
 
-// setupForPodMode creates a Kubernetes client and KubeVerifier for pod-based verification
-func (e *EgressVerification) setupForPodMode(ctx context.Context) (*onvKubeClient.KubeVerifier, error) {
+// getRestConfig retrieves a Kubernetes REST config using the following priority order:
+// 1. User-provided kubeconfig (when --kubeconfig is specified)
+// 2. Backplane credentials (when --cluster-id is provided)
+// 3. In-cluster configuration (when ServiceAccount token exists and no explicit config provided)
+// 4. Default kubeconfig (from ~/.kube/config)
+func (e *EgressVerification) getRestConfig(ctx context.Context) (*rest.Config, error) {
 	var restConfig *rest.Config
-	var err error
 
-	if _, err := os.Stat("/var/run/secrets/kubernetes.io/serviceaccount/token"); err == nil {
-		restConfig, err = rest.InClusterConfig()
-		if err == nil {
-			e.log.Info(ctx, "Pod mode using in-cluster configuration with ServiceAccount")
-		} else {
-			e.log.Info(ctx, "ServiceAccount token found but in-cluster config failed, falling back to other methods")
-		}
-	} else if restConfig == nil && e.ClusterId != "" {
-		// Priority 2: Use backplane credentials when cluster ID is available
-		restConfig, err = k8s.NewRestConfig(e.ClusterId)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get REST config from backplane for cluster %s: %w", e.ClusterId, err)
-		}
-		e.log.Info(ctx, "Pod mode using backplane credentials for cluster: %s", e.ClusterId)
-	} else if restConfig == nil && e.KubeConfig != "" {
-		// Priority 3: Use user-provided kubeconfig
-		restConfig, err = clientcmd.BuildConfigFromFlags("", e.KubeConfig)
+	// Priority 1: Use explicitly provided kubeconfig
+	if e.KubeConfig != "" {
+		restConfig, err := clientcmd.BuildConfigFromFlags("", e.KubeConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build kubeconfig from %s: %w", e.KubeConfig, err)
 		}
 		e.log.Info(ctx, "Pod mode using provided kubeconfig: %s", e.KubeConfig)
-	} else {
-		// Priority 4: Fallback to default kubeconfig from environment or home directory
-		kubeconfig := clientcmd.RecommendedHomeFile
-		restConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		return restConfig, nil
+	} else if e.ClusterId != "" {
+		// Priority 2: Use backplane credentials when cluster ID is available
+		restConfig, err := k8s.NewRestConfig(e.ClusterId)
 		if err != nil {
-			return nil, fmt.Errorf("failed to build default kubeconfig: %w", err)
+			return nil, fmt.Errorf("failed to get REST config from backplane for cluster %s: %w", e.ClusterId, err)
 		}
-		e.log.Info(ctx, "Pod mode using default kubeconfig")
+		e.log.Info(ctx, "Pod mode using backplane credentials for cluster: %s", e.ClusterId)
+		return restConfig, nil
+	} else if _, err := os.Stat(serviceAccountTokenPath); err == nil {
+		// Priority 3: Try in-cluster configuration when no explicit config provided
+		var err error
+		restConfig, err = rest.InClusterConfig()
+		if err == nil {
+			e.log.Info(ctx, "Pod mode using in-cluster configuration with ServiceAccount")
+			return restConfig, nil
+		} else {
+			e.log.Info(ctx, "ServiceAccount token found but in-cluster config failed, falling back to default kubeconfig")
+		}
+	}
+
+	// Priority 4: Fallback to default kubeconfig from environment or home directory
+	kubeconfig := clientcmd.RecommendedHomeFile
+	restConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build default kubeconfig: %w", err)
+	}
+	e.log.Info(ctx, "Pod mode using default kubeconfig")
+	return restConfig, nil
+}
+
+// setupForPodMode creates a Kubernetes client and KubeVerifier for pod-based verification
+func (e *EgressVerification) setupForPodMode(ctx context.Context) (*onvKubeClient.KubeVerifier, error) {
+	restConfig, err := e.getRestConfig(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create Kubernetes clientset
