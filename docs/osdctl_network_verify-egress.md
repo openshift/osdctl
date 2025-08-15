@@ -62,7 +62,7 @@ osdctl network verify-egress [flags]
   osdctl network verify-egress --pod-mode --region us-east-1 --namespace my-namespace --kubeconfig ~/.kube/config
 
   # Run network verification without sending service logs on failure
-  osdctl network verify-egress --cluster-id my-rosa-cluster --no-service-log
+  osdctl network verify-egress --cluster-id my-rosa-cluster --skip-service-log
 
   # (Not recommended) Run against a specific VPC, without specifying cluster-id
   <export environment variables like AWS_ACCESS_KEY_ID or use aws configure>
@@ -82,13 +82,13 @@ osdctl network verify-egress [flags]
   -h, --help                      help for verify-egress
       --kubeconfig string         (optional) path to kubeconfig file for pod mode (uses default kubeconfig if not specified)
       --namespace string          (optional) Kubernetes namespace to run verification pods in (default "openshift-network-diagnostics")
-      --no-service-log            (optional) disable automatic service log sending when verification fails
       --no-tls                    (optional) if provided, ignore all ssl certificate validations on client-side.
       --platform string           (optional) override for cloud platform/product. E.g., 'aws-classic' (OSD/ROSA Classic), 'aws-hcp' (ROSA HCP), or 'aws-hcp-zeroegress'
       --pod-mode                  (optional) run verification using Kubernetes pods instead of cloud instances
       --probe string              (optional) select the probe to be used for egress testing. Either 'curl' (default) or 'legacy' (default "curl")
       --region string             (optional) AWS region, required for --pod-mode if not passing a --cluster-id
       --security-group string     (optional) security group ID override for osd-network-verifier, required if not specifying --cluster-id
+      --skip-service-log          (optional) disable automatic service log sending when verification fails
       --subnet-id stringArray     (optional) private subnet ID override, required if not specifying --cluster-id and can be specified multiple times to run against multiple subnets
       --version                   When present, prints out the version of osd-network-verifier being used
       --vpc string                (optional) VPC name for cases where it can't be fetched from OCM

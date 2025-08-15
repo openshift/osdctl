@@ -3084,7 +3084,6 @@ osdctl network verify-egress [flags]
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                (optional) path to kubeconfig file for pod mode (uses default kubeconfig if not specified)
       --namespace string                 (optional) Kubernetes namespace to run verification pods in (default "openshift-network-diagnostics")
-      --no-service-log                   (optional) disable automatic service log sending when verification fails
       --no-tls                           (optional) if provided, ignore all ssl certificate validations on client-side.
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --platform string                  (optional) override for cloud platform/product. E.g., 'aws-classic' (OSD/ROSA Classic), 'aws-hcp' (ROSA HCP), or 'aws-hcp-zeroegress'
@@ -3095,6 +3094,7 @@ osdctl network verify-egress [flags]
       --security-group string            (optional) security group ID override for osd-network-verifier, required if not specifying --cluster-id
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+      --skip-service-log                 (optional) disable automatic service log sending when verification fails
   -S, --skip-version-check               skip checking to see if this is the most recent release
       --subnet-id stringArray            (optional) private subnet ID override, required if not specifying --cluster-id and can be specified multiple times to run against multiple subnets
       --version                          When present, prints out the version of osd-network-verifier being used

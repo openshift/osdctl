@@ -46,7 +46,7 @@ const (
 	caBundleConfigMapKey         = "ca-bundle.crt"
 	networkVerifierDepPath       = "github.com/openshift/osd-network-verifier"
 	limitedSupportTemplate       = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/limited_support/egressFailureLimitedSupport.json"
-	serviceAccountTokenPath      = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	serviceAccountTokenPath      = "/var/run/secrets/kubernetes.io/serviceaccount/token" // #nosec G101 -- This is a standard Kubernetes ServiceAccount token path, not a credential
 )
 
 var networkVerifierDefaultTags = map[string]string{
