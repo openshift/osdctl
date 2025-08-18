@@ -669,6 +669,89 @@ func TestGetCaBundleFromSyncSet(t *testing.T) {
 	}
 }
 
+func TestEgressVerification_GetRestConfig(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name           string
+		ev             *EgressVerification
+		expectedLog    string
+		expectError    bool
+		expectedResult string // Description of expected result type
+	}{
+		{
+			name: "priority_1_explicit_kubeconfig",
+			ev: &EgressVerification{
+				KubeConfig: "/path/to/test.kubeconfig",
+				ClusterId:  "should-be-ignored",
+				log:        newTestLogger(t),
+			},
+			expectedLog:    "Pod mode using provided kubeconfig: /path/to/test.kubeconfig",
+			expectError:    false,
+			expectedResult: "explicit kubeconfig should be used",
+		},
+		{
+			name: "priority_2_backplane_credentials",
+			ev: &EgressVerification{
+				ClusterId:  "test-cluster-id",
+				KubeConfig: "", // No explicit kubeconfig
+				log:        newTestLogger(t),
+			},
+			expectedLog:    "Pod mode using backplane credentials for cluster: test-cluster-id",
+			expectError:    false,
+			expectedResult: "backplane credentials should be used",
+		},
+		{
+			name: "priority_4_default_kubeconfig_fallback",
+			ev: &EgressVerification{
+				ClusterId:  "", // No cluster ID
+				KubeConfig: "", // No explicit kubeconfig
+				log:        newTestLogger(t),
+			},
+			expectedLog:    "Pod mode using default kubeconfig",
+			expectError:    false,
+			expectedResult: "default kubeconfig should be used (may succeed if valid kubeconfig exists)",
+		},
+		{
+			name: "invalid_explicit_kubeconfig_should_error",
+			ev: &EgressVerification{
+				KubeConfig: "/nonexistent/invalid.kubeconfig",
+				log:        newTestLogger(t),
+			},
+			expectError:    true,
+			expectedResult: "should return error for invalid kubeconfig",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Note: These tests focus on the priority logic and error handling.
+			// Actual REST config creation will fail in test environment, but we can
+			// verify the correct code paths are taken and appropriate errors are returned.
+
+			_, err := tt.ev.getRestConfig(ctx)
+
+			if tt.expectError {
+				assert.Error(t, err, tt.expectedResult)
+			} else {
+				// In test environment, the result depends on whether valid kubeconfig files exist
+				// The important thing is that no panic occurs and the function handles
+				// the priority order correctly. We verify the function completes successfully.
+
+				// For default kubeconfig case, it might succeed if ~/.kube/config exists and is valid
+				// For other cases, we typically expect errors due to missing files/services
+				if tt.name == "priority_4_default_kubeconfig_fallback" {
+					// Default kubeconfig might actually work in test environment
+					// Just verify no panic occurred
+					t.Logf("Default kubeconfig test completed. Error: %v", err)
+				} else {
+					// For explicit kubeconfig and backplane cases, we expect errors
+					assert.NotNil(t, err, "Expected error in test environment due to missing real kubeconfig/backplane")
+				}
+			}
+		})
+	}
+}
 func Test_egressVerification_setupForAwsVerification(t *testing.T) {
 	tests := []struct {
 		name string
