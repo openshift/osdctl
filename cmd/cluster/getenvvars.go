@@ -15,8 +15,6 @@ import (
 )
 
 type getEnvVarsOptions struct {
-	cluster *cmv1.Cluster
-
 	ClusterID string
 	output    string
 }
