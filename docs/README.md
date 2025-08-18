@@ -3082,6 +3082,12 @@ Verify an AWS OSD/ROSA cluster can reach all required external URLs necessary fo
      public subnets (in non-privatelink clusters), since they have an internet gateway and no NAT gateway.
   2. Pod mode (--pod-mode): runs verification as Kubernetes Jobs within the target cluster. This mode requires
      cluster admin access but provides more accurate results as it tests from within the actual cluster environment.
+     
+     Pod mode uses the following Kubernetes client configuration priority:
+     1. In-cluster configuration (when ServiceAccount token exists)
+     2. Backplane credentials (when --cluster-id is provided)
+     3. User-provided kubeconfig (when --kubeconfig is specified)
+     4. Default kubeconfig (from ~/.kube/config)
 
   Docs: https://docs.openshift.com/rosa/rosa_install_access_delete_clusters/rosa_getting_started_iam/rosa-aws-prereqs.html#osd-aws-privatelink-firewall-prerequisites_prerequisites
 
@@ -3116,6 +3122,7 @@ osdctl network verify-egress [flags]
       --security-group string            (optional) security group ID override for osd-network-verifier, required if not specifying --cluster-id
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+      --skip-service-log                 (optional) disable automatic service log sending when verification fails
   -S, --skip-version-check               skip checking to see if this is the most recent release
       --subnet-id stringArray            (optional) private subnet ID override, required if not specifying --cluster-id and can be specified multiple times to run against multiple subnets
       --version                          When present, prints out the version of osd-network-verifier being used
