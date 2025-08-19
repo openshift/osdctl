@@ -1,10 +1,11 @@
-package cloudtrail
+package testdata
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
-	ctUtil "github.com/openshift/osdctl/cmd/cloudtrail/pkg"
+	cloudtrail "github.com/openshift/osdctl/cmd/cloudtrail"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -58,9 +59,9 @@ func TestIgnoreListFilter(t *testing.T) {
 		}
 
 		ignoreList := []string{".*kube-system-capa-controller.*"}
-		filtered, err := ctUtil.ApplyFilters(testEvents,
+		filtered, err := cloudtrail.ApplyFilters(testEvents,
 			func(event types.Event) (bool, error) {
-				return isIgnoredEvent(event, ctUtil.MergeRegex(ignoreList))
+				return cloudtrail.IsIgnoredEvent(event, strings.Join(ignoreList, "|"))
 			},
 		)
 
@@ -80,9 +81,9 @@ func TestIgnoreListFilter(t *testing.T) {
 		}
 
 		ignoreList := []string{}
-		filtered, err := ctUtil.ApplyFilters(testEvents,
+		filtered, err := cloudtrail.ApplyFilters(testEvents,
 			func(event types.Event) (bool, error) {
-				return isIgnoredEvent(event, ctUtil.MergeRegex(ignoreList))
+				return cloudtrail.IsIgnoredEvent(event, strings.Join(ignoreList, "|"))
 			},
 		)
 		assert.Nil(t, err)
@@ -118,9 +119,9 @@ func TestPermissonDeniedFilter(t *testing.T) {
 			{Username: &testUsername2, CloudTrailEvent: &testCloudTrailEvent2},
 		}
 
-		filtered, err := ctUtil.ApplyFilters(TestEvents,
+		filtered, err := cloudtrail.ApplyFilters(TestEvents,
 			func(event types.Event) (bool, error) {
-				return isforbiddenEvent(event)
+				return cloudtrail.IsforbiddenEvent(event)
 			},
 		)
 		assert.Nil(t, err)
@@ -138,9 +139,9 @@ func TestPermissonDeniedFilter(t *testing.T) {
 		}
 		expected := []types.Event{}
 
-		filtered, err := ctUtil.ApplyFilters(edgeCaseEvents,
+		filtered, err := cloudtrail.ApplyFilters(edgeCaseEvents,
 			func(event types.Event) (bool, error) {
-				return isforbiddenEvent(event)
+				return cloudtrail.IsforbiddenEvent(event)
 			},
 		)
 		assert.Nil(t, err)
@@ -157,9 +158,9 @@ func TestPermissonDeniedFilter(t *testing.T) {
 		}
 		expected := []types.Event{}
 
-		filtered, err := ctUtil.ApplyFilters(edgeCaseEvents,
+		filtered, err := cloudtrail.ApplyFilters(edgeCaseEvents,
 			func(event types.Event) (bool, error) {
-				return isforbiddenEvent(event)
+				return cloudtrail.IsforbiddenEvent(event)
 			},
 		)
 		assert.Nil(t, err)
@@ -176,9 +177,9 @@ func TestPermissonDeniedFilter(t *testing.T) {
 			{Username: &edgeCaseUsername, CloudTrailEvent: &edgeCaseCloudtrailEvent},
 		}
 		expected := []types.Event{}
-		filtered, err := ctUtil.ApplyFilters(edgeCaseEvents,
+		filtered, err := cloudtrail.ApplyFilters(edgeCaseEvents,
 			func(event types.Event) (bool, error) {
-				return isforbiddenEvent(event)
+				return cloudtrail.IsforbiddenEvent(event)
 			},
 		)
 		assert.EqualErrorf(t, err, "[ERROR] failed to extract raw CloudTrail event details: cannot parse a nil input", "")
