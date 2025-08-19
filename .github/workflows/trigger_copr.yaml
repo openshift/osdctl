@@ -1,0 +1,29 @@
+# Create a project release automatically on tag creation
+
+name: trigger_copr_on_tag
+
+on:
+  push:
+    tags:
+      - "*" # triggers only if push new tag version, like `0.8.4`
+
+jobs:
+  build:
+    name: trigger_copr_on_tag
+    runs-on: ubuntu-latest
+    permissions:
+      repository-projects: write
+
+    steps:
+      - name: Trigger COPR build
+        run: |
+          curl --request POST \
+            --header "Content-Type: application/json" \
+            --header "Accept: application/json" \
+            --data "{
+                \"ref_type\": \"tag\",
+                \"ref\": \"${GITHUB_REF#refs/tags/}\"
+            }" \
+            --url "$COPR_URL"
+        env:
+          COPR_URL: ${{ secrets.COPR_URL }}
