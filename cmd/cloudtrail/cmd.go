@@ -9,8 +9,8 @@ func NewCloudtrailCmd() *cobra.Command {
 	cloudtrailCmd := &cobra.Command{
 		Use:   "cloudtrail",
 		Short: "AWS CloudTrail related utilities",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return cmd.Help()
+		Run: func(cmd *cobra.Command, args []string) {
+			cmd.Help()
 		},
 	}
 

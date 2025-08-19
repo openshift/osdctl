@@ -1,4 +1,4 @@
-package pkg
+package cloudtrail
 
 import (
 	"context"
@@ -6,14 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
-	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
-	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
-// RawEventDetails struct represents the structure of an AWS raw event
+// RawEventDetails represents the structure of relevant fields extracted from a CloudTrail event JSON.
 type RawEventDetails struct {
 	EventVersion string `json:"eventVersion"`
 	UserIdentity struct {
@@ -31,11 +28,12 @@ type RawEventDetails struct {
 	ErrorCode   string `json:"errorCode"`
 }
 
+// QueryOptions defines the start time for querying CloudTrail events.
 type QueryOptions struct {
 	StartTime time.Time
 }
 
-// Extracts Raw cloudtrailEvent Details
+// ExtractUserDetails parses a CloudTrail event JSON string and extracts user identity details.
 func ExtractUserDetails(cloudTrailEvent *string) (*RawEventDetails, error) {
 	if cloudTrailEvent == nil || *cloudTrailEvent == "" {
 		return &RawEventDetails{}, fmt.Errorf("cannot parse a nil input")
@@ -59,7 +57,8 @@ func ExtractUserDetails(cloudTrailEvent *string) (*RawEventDetails, error) {
 	return &res, nil
 }
 
-// whoami retrieves caller identity information
+// Whoami retrieves the AWS account ARN and account ID for the current caller
+// using the provided STS client.
 func Whoami(stsClient sts.Client) (accountArn string, accountId string, err error) {
 	ctx := context.TODO()
 	callerIdentityOutput, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
@@ -73,40 +72,4 @@ func Whoami(stsClient sts.Client) (accountArn string, accountId string, err erro
 	}
 
 	return userArn.String(), userArn.AccountID, nil
-}
-
-// getWriteEvents retrieves cloudtrail events since the specified time
-// using the provided cloudtrail client and starttime from since flag.
-func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, writeOnly bool) ([]types.Event, error) {
-
-	alllookupEvents := []types.Event{}
-	input := cloudtrail.LookupEventsInput{
-		StartTime: &startTime,
-		EndTime:   aws.Time(time.Now()),
-	}
-
-	if writeOnly {
-		input.LookupAttributes = []types.LookupAttribute{
-			{AttributeKey: "ReadOnly",
-				AttributeValue: aws.String("false")},
-		}
-	}
-
-	paginator := cloudtrail.NewLookupEventsPaginator(cloudtailClient, &input, func(c *cloudtrail.LookupEventsPaginatorOptions) {})
-	for paginator.HasMorePages() {
-
-		lookupOutput, err := paginator.NextPage(context.TODO())
-		if err != nil {
-			return nil, fmt.Errorf("[WARNING] paginator error: \n%w", err)
-		}
-		alllookupEvents = append(alllookupEvents, lookupOutput.Events...)
-
-		input.NextToken = lookupOutput.NextToken
-		if lookupOutput.NextToken == nil {
-			break
-		}
-
-	}
-
-	return alllookupEvents, nil
 }
