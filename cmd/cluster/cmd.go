@@ -44,6 +44,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, client *k8s.LazyClient, 
 	clusterCmd.AddCommand(newCmdDetachStuckVolume())
 	clusterCmd.AddCommand(ssh.NewCmdSSH())
 	clusterCmd.AddCommand(sre_operators.NewCmdSREOperators(streams, client))
+	clusterCmd.AddCommand(newCmdGetEnvVars())
 	return clusterCmd
 }
 
