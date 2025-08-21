@@ -118,6 +118,13 @@ type contextData struct {
 	NetworkMaxNodesFromPodCIDR int
 	NetworkMaxPodsPerNode      int
 	NetworkMaxServices         int
+
+	// Migration data
+	MigrationType        string
+	MigrationState       string
+	MigrationDescription string
+	MigrationCreatedAt   string
+	MigrationUpdatedAt   string
 }
 
 // newCmdContext implements the context command to show the current context of a cluster
@@ -276,6 +283,9 @@ func (o *contextOptions) printLongOutput(data *contextData, w io.Writer) {
 
 	// Print User Banned Details
 	printUserBannedStatus(data, w)
+
+	// Print Migration Status
+	printMigrationStatus(data, w)
 }
 
 func (o *contextOptions) printShortOutput(data *contextData, w io.Writer) {
@@ -554,6 +564,14 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		}
 	}
 
+	GetMigrationInfo := func() {
+		defer wg.Done()
+		defer utils.StartDelayTracker(o.verbose, "Migration Info").End()
+		data.MigrationType = "SDN to OVN"
+		data.MigrationState = "In Progress"
+		data.MigrationDescription = "Migration of SDN to OVN is in progress"
+	}
+
 	var retrievers []func()
 
 	retrievers = append(
@@ -566,6 +584,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		GetPagerDutyAlerts,
 		GetDynatraceDetails,
 		GetBannedUser,
+		GetMigrationInfo,
 	)
 
 	if o.output == longOutputConfigValue {
@@ -895,4 +914,17 @@ func (data *contextData) printClusterHeader(w io.Writer) {
 	fmt.Fprintln(w, strings.Repeat("=", len(clusterHeader)))
 	fmt.Fprintln(w, clusterHeader)
 	fmt.Fprintln(w, strings.Repeat("=", len(clusterHeader)))
+}
+
+func printMigrationStatus(data *contextData, w io.Writer) {
+	var name string = "Migration Status"
+	fmt.Fprintln(w, "\n"+delimiter+name)
+
+	if data.MigrationType == "" {
+		fmt.Fprintln(w, "No active migrations")
+		return
+	}
+	if data.MigrationType == "SDN to OVN" && data.MigrationState == "In Progress" {
+		fmt.Fprintln(w, "SDN to OVN migration is in progress")
+	}
 }
