@@ -16,6 +16,7 @@ type saasOptions struct {
 	serviceName             string
 	gitHash                 string
 	namespaceRef            string
+	hotfix                  bool
 }
 
 // newCmdSaas implementes the saas command to interact with promoting SaaS services/operators
@@ -52,7 +53,13 @@ func NewCmdSaas() *cobra.Command {
 				return cmd.Help()
 			}
 
-			err := servicePromotion(appInterface, ops.serviceName, ops.gitHash, ops.namespaceRef, ops.osd, ops.hcp)
+			if ops.hotfix && ops.gitHash == "" {
+				fmt.Printf("Error: --hotfix requires --gitHash to be specified\n\n")
+
+				return cmd.Help()
+			}
+
+			err := servicePromotion(appInterface, ops.serviceName, ops.gitHash, ops.namespaceRef, ops.osd, ops.hcp, ops.hotfix)
 			if err != nil {
 				fmt.Printf("Error while promoting service: %v\n", err)
 			}
@@ -68,6 +75,7 @@ func NewCmdSaas() *cobra.Command {
 	saasCmd.Flags().BoolVarP(&ops.osd, "osd", "", false, "OSD service/operator getting promoted")
 	saasCmd.Flags().BoolVarP(&ops.hcp, "hcp", "", false, "HCP service/operator getting promoted")
 	saasCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "appInterfaceDir", "", "", "location of app-interface checkout. Falls back to current working directory")
+	saasCmd.Flags().BoolVarP(&ops.hotfix, "hotfix", "", false, "Add gitHash to hotfixVersions in app.yml to bypass progressive delivery (requires --gitHash)")
 
 	return saasCmd
 }

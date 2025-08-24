@@ -26,6 +26,7 @@ osdctl promote saas [flags]
   -g, --gitHash string           Git hash of the SaaS service/operator commit getting promoted
       --hcp                      HCP service/operator getting promoted
   -h, --help                     help for saas
+      --hotfix                   Add gitHash to hotfixVersions in app.yml to bypass progressive delivery (requires --gitHash)
   -l, --list                     List all SaaS services/operators
   -n, --namespaceRef string      SaaS target namespace reference name
       --osd                      OSD service/operator getting promoted

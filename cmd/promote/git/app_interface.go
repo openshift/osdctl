@@ -323,3 +323,21 @@ func (a *AppInterface) CommitSaasFile(saasFile, commitMessage string) error {
 
 	return nil
 }
+
+func (a *AppInterface) CommitSaasAndAppYmlFile(saasFile, serviceName, commitMessage string) error {
+	if err := a.GitExecutor.Run(a.GitDirectory, "git", "add", saasFile); err != nil {
+		return fmt.Errorf("failed to add file %s: %v", saasFile, err)
+	}
+
+	componentName := strings.TrimPrefix(serviceName, "saas-")
+	appYmlPath := filepath.Join(a.GitDirectory, "data", "services", componentName, "app.yml")
+	if err := a.GitExecutor.Run(a.GitDirectory, "git", "add", appYmlPath); err != nil {
+		return fmt.Errorf("failed to add file %s: %v", appYmlPath, err)
+	}
+
+	if err := a.GitExecutor.Run(a.GitDirectory, "git", "commit", "-m", commitMessage); err != nil {
+		return fmt.Errorf("failed to commit changes: %v", err)
+	}
+
+	return nil
+}
