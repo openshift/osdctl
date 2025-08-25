@@ -11,6 +11,7 @@ import (
 	pd "github.com/PagerDuty/go-pagerduty"
 	"github.com/andygrunwald/go-jira"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	v2 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"github.com/openshift/osdctl/pkg/provider/pagerduty"
@@ -581,6 +582,44 @@ func TestPrintUserBannedStatus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			printUserBannedStatus(&tt.data, &buf)
+			actualOutput := buf.String()
+
+			expected := strings.TrimSpace(tt.expectedOutput)
+			actual := strings.TrimSpace(actualOutput)
+
+			if expected != actual {
+				t.Errorf("expected:\n%q\ngot:\n%q", expected, actual)
+			}
+		})
+	}
+}
+func TestPrintMigrationStatus(t *testing.T) {
+	tests := []struct {
+		name           string
+		data           contextData
+		expectedOutput string
+	}{
+		{
+			name: "no active migrations",
+			data: contextData{
+				SdnToOvnMigration: nil,
+			},
+			expectedOutput: "\n>> Migration Status\nNo active migrations",
+		},
+		{
+			name: "migration in progress",
+			data: contextData{
+				SdnToOvnMigration:   &v1.SdnToOvnClusterMigration{},
+				MigrationStateValue: cmv1.ClusterMigrationStateValueInProgress,
+			},
+			expectedOutput: "\n>> Migration Status\nSDN to OVN migration is in progress",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			printMigrationStatus(&tt.data, &buf)
 			actualOutput := buf.String()
 
 			expected := strings.TrimSpace(tt.expectedOutput)

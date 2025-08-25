@@ -120,11 +120,8 @@ type contextData struct {
 	NetworkMaxServices         int
 
 	// Migration data
-	MigrationType        string
-	MigrationState       string
-	MigrationDescription string
-	MigrationCreatedAt   string
-	MigrationUpdatedAt   string
+	SdnToOvnMigration   *cmv1.SdnToOvnClusterMigration
+	MigrationStateValue cmv1.ClusterMigrationStateValue
 }
 
 // newCmdContext implements the context command to show the current context of a cluster
@@ -567,9 +564,21 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	GetMigrationInfo := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Migration Info").End()
-		data.MigrationType = "SDN to OVN"
-		data.MigrationState = "In Progress"
-		data.MigrationDescription = "Migration of SDN to OVN is in progress"
+
+		migrationResponse, err := utils.GetMigration(ocmClient, o.clusterID)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("error while getting migration info: %v", err))
+			return
+		}
+
+		migration, ok := migrationResponse.GetSdnToOvn()
+		if !ok {
+			return
+		}
+		data.SdnToOvnMigration = migration
+		if state, ok := migrationResponse.GetState(); ok {
+			data.MigrationStateValue = state.Value()
+		}
 	}
 
 	var retrievers []func()
@@ -920,11 +929,13 @@ func printMigrationStatus(data *contextData, w io.Writer) {
 	var name string = "Migration Status"
 	fmt.Fprintln(w, "\n"+delimiter+name)
 
-	if data.MigrationType == "" {
+	if data.SdnToOvnMigration == nil {
 		fmt.Fprintln(w, "No active migrations")
 		return
 	}
-	if data.MigrationType == "SDN to OVN" && data.MigrationState == "In Progress" {
+
+	if data.SdnToOvnMigration != nil && data.MigrationStateValue == cmv1.ClusterMigrationStateValueInProgress {
 		fmt.Fprintln(w, "SDN to OVN migration is in progress")
 	}
+
 }
