@@ -3464,6 +3464,7 @@ osdctl promote saas [flags]
   -g, --gitHash string                   Git hash of the SaaS service/operator commit getting promoted
       --hcp                              HCP service/operator getting promoted
   -h, --help                             help for saas
+      --hotfix                           Add gitHash to hotfixVersions in app.yml to bypass progressive delivery (requires --gitHash)
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
   -l, --list                             List all SaaS services/operators

@@ -5,10 +5,12 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/openshift/osdctl/cmd/promote/git"
 	"github.com/openshift/osdctl/cmd/promote/iexec"
+	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
 const (
@@ -37,7 +39,7 @@ func listServiceNames(appInterface git.AppInterface) error {
 	return nil
 }
 
-func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string, namespaceRef string, osd, hcp bool) error {
+func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string, namespaceRef string, osd, hcp, hotfix bool) error {
 	_, err := GetServiceNames(appInterface, OSDSaasDir, BPSaasDir, CADSaasDir)
 	if err != nil {
 		return err
@@ -79,14 +81,32 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	if err != nil {
 		fmt.Printf("FAILURE: %v\n", err)
 	}
+
+	if hotfix {
+		err = updateAppYmlWithHotfix(appInterface, serviceName, promotionGitHash)
+		if err != nil {
+			return fmt.Errorf("failed to update app.yml with hotfix: %v", err)
+		}
+	}
 	prefix := "saas-"
 	operatorName := strings.TrimPrefix(serviceName, prefix)
-	commitMessage := fmt.Sprintf("Promote %s to %s\n\nMonitor rollout status here https://inscope.corp.redhat.com/catalog/default/component/%s/rollout\n\n", serviceName, promotionGitHash, operatorName)
+
+	var commitMessage string
+	if hotfix {
+		commitMessage = fmt.Sprintf("Promote %s to %s (HOTFIX; bypass progressive delivery)\n\nMonitor rollout status here https://inscope.corp.redhat.com/catalog/default/component/%s/rollout\n\n", serviceName, promotionGitHash, operatorName)
+	} else {
+		commitMessage = fmt.Sprintf("Promote %s to %s\n\nMonitor rollout status here https://inscope.corp.redhat.com/catalog/default/component/%s/rollout\n\n", serviceName, promotionGitHash, operatorName)
+	}
 	commitMessage += fmt.Sprintf("See %s/compare/%s...%s for contents of the promotion. clog:\n\n%s", serviceRepo, currentGitHash, promotionGitHash, commitLog)
 
 	// ovverriding appInterface.GitExecuter to iexec.Exec{}
 	appInterface.GitExecutor = iexec.Exec{}
-	err = appInterface.CommitSaasFile(saasDir, commitMessage)
+
+	if hotfix {
+		err = appInterface.CommitSaasAndAppYmlFile(saasDir, serviceName, commitMessage)
+	} else {
+		err = appInterface.CommitSaasFile(saasDir, commitMessage)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to commit changes to app-interface: %w", err)
 	}
@@ -154,4 +174,78 @@ func GetSaasDir(serviceName string, osd bool, hcp bool) (string, error) {
 	}
 
 	return "", fmt.Errorf("saas directory for service %s not found", serviceName)
+}
+
+// sets the hotfix git sha in app.yml, adding hotfixVersions to codeComponents if it does not exist, and otherwise overwriting the existing sha value
+func setHotfixVersion(fileContent string, componentName string, gitHash string) (string, error, bool) {
+	node, err := kyaml.Parse(fileContent)
+	if err != nil {
+		return "", fmt.Errorf("error parsing app.yml: %v", err), false
+	}
+	componentFound := false
+
+	codeComponents, err := kyaml.Lookup("codeComponents").Filter(node)
+	if err != nil {
+		return "", fmt.Errorf("error querying codeComponents: %v", err), false
+	}
+
+	for i := range len(codeComponents.Content()) {
+		component, err := kyaml.Lookup("codeComponents", strconv.Itoa(i)).Filter(node)
+		if err != nil {
+			return "", fmt.Errorf("error querying component %d: %v", i, err), false
+		}
+
+		name, _ := component.GetString("name")
+		if name == componentName {
+			componentFound = true
+
+			fmt.Printf("Found component: %s\n", name)
+			fmt.Printf("Set hotfixVersions to [%s]\n", gitHash)
+
+			listYaml := fmt.Sprintf("- %s\n", gitHash)
+			listNode, err := kyaml.Parse(listYaml)
+			if err != nil {
+				return "", fmt.Errorf("failed to create hotfixVerions list: %v", err), false
+			}
+
+			_, err = component.Pipe(kyaml.SetField("hotfixVersions", listNode))
+			if err != nil {
+				return "", fmt.Errorf("error setting hotfixVersions: %v", err), false
+			}
+			break
+		}
+	}
+
+	return node.MustString(), err, componentFound
+}
+
+// locates the corresponding app.yml file, and updates the file with the hotfix sha
+func updateAppYmlWithHotfix(appInterface git.AppInterface, serviceName, gitHash string) error {
+	componentName := strings.TrimPrefix(serviceName, "saas-")
+
+	appYmlPath := filepath.Join(appInterface.GitDirectory, "data", "services", componentName, "app.yml")
+
+	if _, err := os.Stat(appYmlPath); os.IsNotExist(err) {
+		return fmt.Errorf("app.yml file not found at %s", appYmlPath)
+	}
+
+	fileContent, err := os.ReadFile(appYmlPath)
+	if err != nil {
+		return fmt.Errorf("failed to read app.yml file: %v", err)
+	}
+
+	newContent, err, found := setHotfixVersion(string(fileContent), componentName, gitHash)
+	if err != nil {
+		return fmt.Errorf("error modifying app.yml: %v", err)
+	}
+	if !found {
+		return fmt.Errorf("component %s not found in app.yml", componentName)
+	}
+
+	err = os.WriteFile(appYmlPath, []byte(newContent), 0600)
+	if err != nil {
+		return fmt.Errorf("failed to write updated app.yml: %v", err)
+	}
+
+	return nil
 }
