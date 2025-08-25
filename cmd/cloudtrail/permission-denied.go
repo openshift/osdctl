@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/openshift/osdctl/pkg/osdCloud"
@@ -95,24 +94,28 @@ func (p *permissionDeniedEventsOptions) run() error {
 	if err != nil {
 		return err
 	}
+
+	awsAPI := NewEventAPI(cfg, false)
+	printer := NewPrinter(p.PrintUrl, p.PrintRaw)
+	requestTime := Period{StartTime: startTime, EndTime: time.Now().UTC()}
+	generator := awsAPI.GetEvents(p.ClusterID, requestTime)
+
 	fmt.Printf("[INFO] Checking Permission Denied History since %v for AWS Account %v as %v \n", startTime, accountId, arn)
-	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
-	lookupOutput, err := GetEvents(cloudTrailclient, startTime, time.Now().UTC(), false)
-	if err != nil {
-		return err
-	}
 
-	filteredEvents, err := ApplyFilters(lookupOutput,
-		func(event types.Event) (bool, error) {
-			return isforbiddenEvent(event)
-		},
-	)
-	if err != nil {
-		return err
+	for page := range generator {
+		filteredEvents, err := ApplyFilters(page.AWSEvent,
+			func(event types.Event) (bool, error) {
+				return isforbiddenEvent(event)
+			},
+		)
+		if err != nil {
+			return err
+		}
+		if len(filteredEvents) > 0 {
+			printer.PrintEvents(filteredEvents, defaultFields)
+		}
 	}
-
-	PrintEvents(filteredEvents, p.PrintUrl, p.PrintRaw)
 
 	if DefaultRegion != cfg.Region {
 		defaultConfig, err := config.LoadDefaultConfig(
@@ -122,25 +125,25 @@ func (p *permissionDeniedEventsOptions) run() error {
 			return err
 		}
 
-		defaultCloudtrailClient := cloudtrail.New(cloudtrail.Options{
-			Region:      DefaultRegion,
-			Credentials: cfg.Credentials,
-			HTTPClient:  cfg.HTTPClient,
-		})
+		defaultAwsAPI := NewEventAPI(cfg, true)
+		defaultAwsAPI.client = NewEventAPIWithOptions(cfg, DefaultRegion)
+
 		fmt.Printf("[INFO] Fetching Cloudtrail Global Permission Denied Event History from %v Region...", defaultConfig.Region)
-		lookupOutput, err := GetEvents(defaultCloudtrailClient, startTime, time.Now().UTC(), false)
-		if err != nil {
-			return err
+		generator := defaultAwsAPI.GetEvents(p.ClusterID, requestTime)
+
+		for page := range generator {
+			filteredEvents, err := ApplyFilters(page.AWSEvent,
+				func(event types.Event) (bool, error) {
+					return isforbiddenEvent(event)
+				},
+			)
+			if err != nil {
+				return err
+			}
+			if len(filteredEvents) > 0 {
+				printer.PrintEvents(filteredEvents, defaultFields)
+			}
 		}
-		filteredEvents, err := ApplyFilters(lookupOutput,
-			func(event types.Event) (bool, error) {
-				return isforbiddenEvent(event)
-			},
-		)
-		if err != nil {
-			return err
-		}
-		PrintEvents(filteredEvents, p.PrintUrl, p.PrintRaw)
 	}
 
 	return err
