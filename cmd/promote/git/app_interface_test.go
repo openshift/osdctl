@@ -71,7 +71,7 @@ func TestCommitSaasFile(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			file := filepath.Join(tmpDir, "saas.yaml")
-			_ = os.WriteFile(file, []byte("dummy content"), 0600)
+			_ = os.WriteFile(file, []byte("dummy content"), 0o600)
 
 			mockExec := new(MockExec)
 			tc.setupMock(mockExec, tmpDir, file, tc.commitMessage)
@@ -285,6 +285,7 @@ resourceTemplates:
 		})
 	}
 }
+
 func TestGetCurrentPackageTagFromAppInterface(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -332,7 +333,7 @@ resourceTemplates: []
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			saasFilePath := filepath.Join(tmpDir, "saas.yaml")
-			err := os.WriteFile(saasFilePath, []byte(tt.yamlData), 0600)
+			err := os.WriteFile(saasFilePath, []byte(tt.yamlData), 0o600)
 			require.NoError(t, err)
 
 			actual, err := GetCurrentPackageTagFromAppInterface(saasFilePath)
@@ -364,7 +365,7 @@ func TestUpdatePackageTag(t *testing.T) {
 				tmpDir := t.TempDir()
 				saasFile := filepath.Join(tmpDir, "test.yaml")
 
-				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0600)
+				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0o600)
 
 				mockExec.On("Run", tmpDir, "git", []string{"checkout", "master"}).Return(nil).Once()
 				mockExec.On("Run", tmpDir, "git", []string{"branch", "-D", "feature-branch"}).Return(errors.New("branch does not exist")).Once()
@@ -384,7 +385,7 @@ func TestUpdatePackageTag(t *testing.T) {
 				tmpDir := t.TempDir()
 				saasFile := filepath.Join(tmpDir, "test.yaml")
 
-				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0600)
+				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0o600)
 
 				mockExec.On("Run", tmpDir, "git", []string{"checkout", "master"}).Return(errors.New("checkout failed")).Once()
 
@@ -421,7 +422,7 @@ func TestUpdatePackageTag(t *testing.T) {
 				tmpDir := t.TempDir()
 				saasFile := filepath.Join(tmpDir, "readonly.yaml")
 
-				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0400)
+				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0o400)
 
 				mockExec.On("Run", tmpDir, "git", []string{"checkout", "master"}).Return(nil).Once()
 				mockExec.On("Run", tmpDir, "git", []string{"branch", "-D", "feature-branch"}).Return(nil).Once()
@@ -490,7 +491,7 @@ resourceTemplates:
       - name: "target-canary"
         ref: "currentGitHash"
 `
-				if err := os.WriteFile(saas_file, []byte(yaml_content), 0600); err != nil {
+				if err := os.WriteFile(saas_file, []byte(yaml_content), 0o600); err != nil {
 					t.Fatalf("failed to write saas file: %v", err)
 				}
 
@@ -525,7 +526,7 @@ resourceTemplates:
       - name: "target-prod"
         ref: "currentGitHash"
 `
-				if err := os.WriteFile(saas_file, []byte(yaml_content), 0600); err != nil {
+				if err := os.WriteFile(saas_file, []byte(yaml_content), 0o600); err != nil {
 					t.Fatalf("failed to write saas file: %v", err)
 				}
 
@@ -605,6 +606,92 @@ resourceTemplates:
 			}
 
 			tt.verify(t, saas_file)
+		})
+	}
+}
+
+func TestCommitSaasAndAppYmlFile(t *testing.T) {
+	tests := []struct {
+		name        string
+		setupMock   func(m *MockExec, dir, saasFile, serviceName, commitMsg string)
+		serviceName string
+		commitMsg   string
+		wantErr     bool
+		expectedErr string
+	}{
+		{
+			name: "commits_saas_and_app_yml_successfully",
+			setupMock: func(m *MockExec, dir, saasFile, serviceName, commitMsg string) {
+				appYmlPath := filepath.Join(dir, "data", "services", "test-service", "app.yml")
+				m.On("Run", dir, "git", []string{"add", saasFile}).Return(nil)
+				m.On("Run", dir, "git", []string{"add", appYmlPath}).Return(nil)
+				m.On("Run", dir, "git", []string{"commit", "-m", commitMsg}).Return(nil)
+			},
+			serviceName: "saas-test-service",
+			commitMsg:   "test hotfix commit",
+			wantErr:     false,
+		},
+		{
+			name: "fails_when_saas_file_add_fails",
+			setupMock: func(m *MockExec, dir, saasFile, serviceName, commitMsg string) {
+				m.On("Run", dir, "git", []string{"add", saasFile}).Return(errors.New("saas file not found"))
+			},
+			serviceName: "saas-test-service",
+			commitMsg:   "test commit",
+			wantErr:     true,
+			expectedErr: "failed to add file",
+		},
+		{
+			name: "fails_when_app_yml_add_fails",
+			setupMock: func(m *MockExec, dir, saasFile, serviceName, commitMsg string) {
+				appYmlPath := filepath.Join(dir, "data", "services", "test-service", "app.yml")
+				m.On("Run", dir, "git", []string{"add", saasFile}).Return(nil)
+				m.On("Run", dir, "git", []string{"add", appYmlPath}).Return(errors.New("app.yml not found"))
+			},
+			serviceName: "saas-test-service",
+			commitMsg:   "test commit",
+			wantErr:     true,
+			expectedErr: "failed to add file",
+		},
+		{
+			name: "fails_when_commit_fails",
+			setupMock: func(m *MockExec, dir, saasFile, serviceName, commitMsg string) {
+				appYmlPath := filepath.Join(dir, "data", "services", "test-service", "app.yml")
+				m.On("Run", dir, "git", []string{"add", saasFile}).Return(nil)
+				m.On("Run", dir, "git", []string{"add", appYmlPath}).Return(nil)
+				m.On("Run", dir, "git", []string{"commit", "-m", commitMsg}).Return(errors.New("commit failed"))
+			},
+			serviceName: "saas-test-service",
+			commitMsg:   "test commit",
+			wantErr:     true,
+			expectedErr: "failed to commit changes",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			saasFile := filepath.Join(tmpDir, "saas.yaml")
+			_ = os.WriteFile(saasFile, []byte("dummy content"), 0o600)
+
+			mockExec := new(MockExec)
+			tc.setupMock(mockExec, tmpDir, saasFile, tc.serviceName, tc.commitMsg)
+
+			app := AppInterface{
+				GitDirectory: tmpDir,
+				GitExecutor:  mockExec,
+			}
+
+			err := app.CommitSaasAndAppYmlFile(saasFile, tc.serviceName, tc.commitMsg)
+
+			if tc.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedErr)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			mockExec.AssertExpectations(t)
 		})
 	}
 }
