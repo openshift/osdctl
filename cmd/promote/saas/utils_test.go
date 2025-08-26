@@ -3,10 +3,12 @@ package saas
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/openshift/osdctl/cmd/promote/git"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetSaasDir(t *testing.T) {
@@ -246,6 +248,230 @@ func TestGetServiceNames(t *testing.T) {
 			if tt.assertions != nil {
 				tt.assertions(t, got)
 			}
+		})
+	}
+}
+
+func TestSetHotfixVersion(t *testing.T) {
+	tests := []struct {
+		name            string
+		fileContent     string
+		componentName   string
+		gitHash         string
+		expectedContent string
+		expectError     bool
+		expectedFound   bool
+		errorSubstr     string
+	}{
+		{
+			name: "adds_hotfixVersions_to_Codecomponents_if_does_not_exist",
+			fileContent: `
+codeComponents:
+  - name: test-component
+    url: https://github.com/example/repo
+  - name: other-component
+    url: https://github.com/example/other
+`,
+			componentName: "test-component",
+			gitHash:       "abc123",
+			expectedContent: `codeComponents:
+  - name: test-component
+    url: https://github.com/example/repo
+    hotfixVersions:
+      - abc123
+  - name: other-component
+    url: https://github.com/example/other
+`,
+			expectError:   false,
+			expectedFound: true,
+		},
+		{
+			name: "replaces_hotfixVersion_if_already_exists",
+			fileContent: `
+codeComponents:
+  - name: test-component
+    url: https://github.com/example/repo
+    hotfixVersions:
+      - old-hash
+  - name: other-component
+    url: https://github.com/example/other
+`,
+			componentName: "test-component",
+			gitHash:       "new-hash",
+			expectedContent: `codeComponents:
+  - name: test-component
+    url: https://github.com/example/repo
+    hotfixVersions:
+      - new-hash
+  - name: other-component
+    url: https://github.com/example/other
+`,
+			expectError:   false,
+			expectedFound: true,
+		},
+		{
+			name: "invalid_yaml_returns_error",
+			fileContent: `
+codeComponents:
+  - name: test-component
+    url: [invalid yaml structure
+`,
+			componentName: "test-component",
+			gitHash:       "abc123",
+			expectError:   true,
+			errorSubstr:   "error parsing app.yml",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err, found := setHotfixVersion(tc.fileContent, tc.componentName, tc.gitHash)
+
+			if tc.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errorSubstr)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedFound, found)
+				if tc.expectedFound {
+					assert.Contains(t, result, tc.gitHash)
+					assert.Contains(t, result, "hotfixVersions:")
+				}
+			}
+		})
+	}
+}
+
+func TestUpdateAppYmlWithHotfix(t *testing.T) {
+	tests := []struct {
+		name        string
+		setup       func(t *testing.T) (git.AppInterface, string)
+		serviceName string
+		gitHash     string
+		expectError bool
+		errorSubstr string
+	}{
+		{
+			name: "successfully_updates_app_yml",
+			setup: func(t *testing.T) (git.AppInterface, string) {
+				tmpDir := t.TempDir()
+				servicesDir := filepath.Join(tmpDir, "data", "services", "test-service")
+				err := os.MkdirAll(servicesDir, 0755)
+				require.NoError(t, err)
+
+				appYmlContent := `
+codeComponents:
+  - name: test-service
+    url: https://github.com/example/repo
+`
+				appYmlPath := filepath.Join(servicesDir, "app.yml")
+				err = os.WriteFile(appYmlPath, []byte(appYmlContent), 0600)
+				require.NoError(t, err)
+
+				return git.AppInterface{GitDirectory: tmpDir}, "saas-test-service"
+			},
+			serviceName: "saas-test-service",
+			gitHash:     "abc123",
+			expectError: false,
+		},
+		{
+			name: "fails_when_app_yml_not_found",
+			setup: func(t *testing.T) (git.AppInterface, string) {
+				tmpDir := t.TempDir()
+				return git.AppInterface{GitDirectory: tmpDir}, "saas-nonexistent-service"
+			},
+			serviceName: "saas-nonexistent-service",
+			gitHash:     "abc123",
+			expectError: true,
+			errorSubstr: "app.yml file not found",
+		},
+		{
+			name: "fails_when_component_not_found_in_app_yml",
+			setup: func(t *testing.T) (git.AppInterface, string) {
+				tmpDir := t.TempDir()
+				servicesDir := filepath.Join(tmpDir, "data", "services", "test-service")
+				err := os.MkdirAll(servicesDir, 0755)
+				require.NoError(t, err)
+
+				appYmlContent := `
+codeComponents:
+  - name: other-service
+    url: https://github.com/example/repo
+`
+				appYmlPath := filepath.Join(servicesDir, "app.yml")
+				err = os.WriteFile(appYmlPath, []byte(appYmlContent), 0600)
+				require.NoError(t, err)
+
+				return git.AppInterface{GitDirectory: tmpDir}, "saas-test-service"
+			},
+			serviceName: "saas-test-service",
+			gitHash:     "abc123",
+			expectError: true,
+			errorSubstr: "component test-service not found in app.yml",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			appInterface, _ := tc.setup(t)
+
+			err := updateAppYmlWithHotfix(appInterface, tc.serviceName, tc.gitHash)
+
+			if tc.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errorSubstr)
+			} else {
+				assert.NoError(t, err)
+
+				componentName := strings.TrimPrefix(tc.serviceName, "saas-")
+				appYmlPath := filepath.Join(appInterface.GitDirectory, "data", "services", componentName, "app.yml")
+				content, readErr := os.ReadFile(appYmlPath)
+				assert.NoError(t, readErr)
+				assert.Contains(t, string(content), tc.gitHash)
+				assert.Contains(t, string(content), "hotfixVersions:")
+			}
+		})
+	}
+}
+
+func TestHotfixValidation(t *testing.T) {
+	tests := []struct {
+		name      string
+		hotfix    bool
+		gitHash   string
+		expectErr bool
+	}{
+		{
+			name:      "hotfix_requires_gitHash",
+			hotfix:    true,
+			gitHash:   "",
+			expectErr: true,
+		},
+		{
+			name:      "hotfix_with_gitHash_is_valid",
+			hotfix:    true,
+			gitHash:   "abc123",
+			expectErr: false,
+		},
+		{
+			name:      "no_hotfix_is_valid",
+			hotfix:    false,
+			gitHash:   "",
+			expectErr: false,
+		},
+		{
+			name:      "gitHash_without_hotfix_is_valid",
+			hotfix:    false,
+			gitHash:   "abc123",
+			expectErr: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			hasValidationError := tc.hotfix && tc.gitHash == ""
+
+			assert.Equal(t, tc.expectErr, hasValidationError)
 		})
 	}
 }
