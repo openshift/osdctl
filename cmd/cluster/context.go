@@ -926,7 +926,7 @@ func (data *contextData) printClusterHeader(w io.Writer) {
 }
 
 func printSDNtoOVNMigrationStatus(data *contextData, w io.Writer) {
-	var name string = "SDN to OVN Migration Status"
+	name := "SDN to OVN Migration Status"
 	fmt.Fprintln(w, "\n"+delimiter+name)
 
 	if data.SdnToOvnMigration != nil && data.MigrationStateValue == cmv1.ClusterMigrationStateValueInProgress {
