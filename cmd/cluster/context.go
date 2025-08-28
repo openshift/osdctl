@@ -925,17 +925,14 @@ func (data *contextData) printClusterHeader(w io.Writer) {
 	fmt.Fprintln(w, strings.Repeat("=", len(clusterHeader)))
 }
 
-func printMigrationStatus(data *contextData, w io.Writer) {
-	var name string = "Migration Status"
+func printSDNtoOVNMigrationStatus(data *contextData, w io.Writer) {
+	var name string = "SDN to OVN Migration Status"
 	fmt.Fprintln(w, "\n"+delimiter+name)
-
-	if data.SdnToOvnMigration == nil {
-		fmt.Fprintln(w, "No active SDN to OVN migrations")
-		return
-	}
 
 	if data.SdnToOvnMigration != nil && data.MigrationStateValue == cmv1.ClusterMigrationStateValueInProgress {
 		fmt.Fprintln(w, "SDN to OVN migration is in progress")
+		return
 	}
 
+	fmt.Fprintln(w, "No active SDN to OVN migrations")
 }
