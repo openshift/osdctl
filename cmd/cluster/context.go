@@ -281,8 +281,8 @@ func (o *contextOptions) printLongOutput(data *contextData, w io.Writer) {
 	// Print User Banned Details
 	printUserBannedStatus(data, w)
 
-	// Print Migration Status
-	printMigrationStatus(data, w)
+	// Print SDNtoOVN Migration Status
+	printSDNtoOVNMigrationStatus(data, w)
 }
 
 func (o *contextOptions) printShortOutput(data *contextData, w io.Writer) {
@@ -571,11 +571,11 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			return
 		}
 
-		migration, ok := migrationResponse.GetSdnToOvn()
+		sdntoovnmigration, ok := migrationResponse.GetSdnToOvn()
 		if !ok {
 			return
 		}
-		data.SdnToOvnMigration = migration
+		data.SdnToOvnMigration = sdntoovnmigration
 		if state, ok := migrationResponse.GetState(); ok {
 			data.MigrationStateValue = state.Value()
 		}
@@ -930,7 +930,7 @@ func printMigrationStatus(data *contextData, w io.Writer) {
 	fmt.Fprintln(w, "\n"+delimiter+name)
 
 	if data.SdnToOvnMigration == nil {
-		fmt.Fprintln(w, "No active migrations")
+		fmt.Fprintln(w, "No active SDN to OVN migrations")
 		return
 	}
 
