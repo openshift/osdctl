@@ -941,7 +941,8 @@ func (o *transferOwnerOptions) run() error {
 			}
 		}
 	}
-	// During a dry-run the PS has not yet been updated and can provide misleading errors 
+
+	// During a dry-run the PS has not yet been updated and can provide misleading errors
 	if o.dryrun {
 		fmt.Println("This is a 'dryrun', skipping the verification of cluster's pull secret.")
 	} else {
