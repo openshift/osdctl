@@ -2,48 +2,126 @@ package cloudtrail
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 )
 
-// GetEvents etrieve CloudTrail events using the provided client and time range.
-// It paginates through all available events, and returns all.
-func GetEvents(cloudtailClient *cloudtrail.Client, startTime time.Time, endTime time.Time, writeOnly bool) ([]types.Event, error) {
+// RawEventDetails represents the structure of relevant fields extracted from a CloudTrail event JSON.
+type RawEventDetails struct {
+	EventVersion string `json:"eventVersion"`
+	UserIdentity struct {
+		AccountId      string `json:"accountId"`
+		SessionContext struct {
+			SessionIssuer struct {
+				Type     string `json:"type"`
+				UserName string `json:"userName"`
+				Arn      string `json:"arn"`
+			} `json:"sessionIssuer"`
+		} `json:"sessionContext"`
+	} `json:"userIdentity"`
+	EventRegion string `json:"awsRegion"`
+	EventId     string `json:"eventID"`
+	ErrorCode   string `json:"errorCode"`
+}
 
-	alllookupEvents := []types.Event{}
-	input := cloudtrail.LookupEventsInput{
-		StartTime: &startTime,
-		EndTime:   &endTime,
+type EventResult struct {
+	AWSEvent []types.Event
+	errors   error
+}
+
+type EventAPI struct {
+	client    *cloudtrail.Client
+	writeOnly bool
+}
+
+func NewEventAPI(cfg aws.Config, writeOnly bool, region string) *EventAPI {
+	var client *cloudtrail.Client
+
+	if region != "" {
+		client = cloudtrail.New(cloudtrail.Options{
+			Region:      region,
+			Credentials: cfg.Credentials,
+			HTTPClient:  cfg.HTTPClient,
+		})
+	} else {
+		client = cloudtrail.NewFromConfig(cfg)
 	}
 
-	if writeOnly {
+	return &EventAPI{
+		client:    client,
+		writeOnly: writeOnly,
+	}
+}
+
+func (a *EventAPI) GetEvents(clusterID string, missing Period) <-chan EventResult {
+	var alllookupEvents []types.Event
+
+	pageChan := make(chan EventResult)
+
+	input := cloudtrail.LookupEventsInput{
+		StartTime: &missing.StartTime,
+		EndTime:   &missing.EndTime,
+	}
+
+	if a.writeOnly {
 		input.LookupAttributes = []types.LookupAttribute{
 			{AttributeKey: "ReadOnly",
 				AttributeValue: aws.String("false")},
 		}
 	}
+	paginator := cloudtrail.NewLookupEventsPaginator(a.client, &input, func(c *cloudtrail.LookupEventsPaginatorOptions) {})
 
-	paginator := cloudtrail.NewLookupEventsPaginator(cloudtailClient, &input, func(c *cloudtrail.LookupEventsPaginatorOptions) {})
-	for paginator.HasMorePages() {
-		lookupOutput, err := paginator.NextPage(context.TODO())
-		if err != nil {
-			return nil, fmt.Errorf("[WARNING] paginator error: \n%w", err)
+	go func() {
+		defer close(pageChan)
+
+		for paginator.HasMorePages() {
+			lookupOutput, err := paginator.NextPage(context.Background())
+			if err != nil {
+				pageChan <- EventResult{
+					AWSEvent: nil,
+					errors:   err,
+				}
+			}
+			alllookupEvents = append(alllookupEvents, lookupOutput.Events...)
+
+			pageChan <- EventResult{
+				AWSEvent: lookupOutput.Events,
+				errors:   nil,
+			}
+
 		}
-		alllookupEvents = append(alllookupEvents, lookupOutput.Events...)
+	}()
 
-		input.NextToken = lookupOutput.NextToken
-		if lookupOutput.NextToken == nil {
-			break
-		}
+	return pageChan
+}
 
+// ExtractUserDetails parses a CloudTrail event JSON string and extracts user identity details.
+func ExtractUserDetails(cloudTrailEvent *string) (*RawEventDetails, error) {
+	if cloudTrailEvent == nil || *cloudTrailEvent == "" {
+		return &RawEventDetails{}, fmt.Errorf("cannot parse a nil input")
+	}
+	var res RawEventDetails
+	err := json.Unmarshal([]byte(*cloudTrailEvent), &res)
+	if err != nil {
+		return &RawEventDetails{}, fmt.Errorf("could not marshal event.CloudTrailEvent: %w", err)
 	}
 
-	return alllookupEvents, nil
+	const supportedEventVersionMajor = 1
+	const minSupportedEventVersionMinor = 8
+
+	var responseMajor, responseMinor int
+	if _, err := fmt.Sscanf(res.EventVersion, "%d.%d", &responseMajor, &responseMinor); err != nil {
+		return &RawEventDetails{}, fmt.Errorf("failed to parse CloudTrail event version: %w", err)
+	}
+	if responseMajor != supportedEventVersionMajor || responseMinor < minSupportedEventVersionMinor {
+		return &RawEventDetails{}, fmt.Errorf("unexpected event version (got %s, expected compatibility with %d.%d)", res.EventVersion, supportedEventVersionMajor, minSupportedEventVersionMinor)
+	}
+	return &res, nil
 }
 
 // PrintEvents prints the filtered CloudTrail events in a human-readable format.
@@ -148,41 +226,4 @@ func PrintFormat(filterEvents []types.Event, printUrl bool, printRaw bool, table
 
 	}
 	fmt.Println(eventStringBuilder.String())
-}
-
-// generateLink generates a hyperlink to aws cloudTrail event
-// based on the provided RawEventDetails.
-func generateLink(raw RawEventDetails) (url_link string) {
-	str1 := "https://"
-	str2 := ".console.aws.amazon.com/cloudtrailv2/home?region="
-	str3 := "#/events/"
-
-	eventRegion := raw.EventRegion
-	eventId := raw.EventId
-
-	var url = str1 + eventRegion + str2 + eventRegion + str3 + eventId
-	url_link = url
-
-	return url_link
-}
-
-// ValidateTable checks for the string list given and returns error
-// if it does not match.
-func ValidateFormat(table []string) error {
-	allowedKeys := map[string]struct{}{
-		"username":      {},
-		"event":         {},
-		"resource-name": {},
-		"resource-type": {},
-		"arn":           {},
-		"time":          {},
-	}
-
-	for _, column := range table {
-		if _, ok := allowedKeys[strings.ToLower(column)]; !ok {
-			return fmt.Errorf("invalid table column: %s (allowed: username, event, resource-name, resource-type, arn, time, url, region)", column)
-		}
-	}
-
-	return nil
 }

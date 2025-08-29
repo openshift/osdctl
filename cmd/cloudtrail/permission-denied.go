@@ -1,14 +1,11 @@
 package cloudtrail
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/cloudtrail"
 	"github.com/aws/aws-sdk-go-v2/service/cloudtrail/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/openshift/osdctl/pkg/osdCloud"
@@ -95,44 +92,17 @@ func (p *permissionDeniedEventsOptions) run() error {
 	if err != nil {
 		return err
 	}
+
+	awsAPI := NewEventAPI(cfg, false, cfg.Region)
+	printer := NewPrinter(p.PrintUrl, p.PrintRaw)
+	requestTime := Period{StartTime: startTime, EndTime: time.Now().UTC()}
+	generator := awsAPI.GetEvents(p.ClusterID, requestTime)
+
 	fmt.Printf("[INFO] Checking Permission Denied History since %v for AWS Account %v as %v \n", startTime, accountId, arn)
-	cloudTrailclient := cloudtrail.NewFromConfig(cfg)
 	fmt.Printf("[INFO] Fetching %v Event History...", cfg.Region)
-	lookupOutput, err := GetEvents(cloudTrailclient, startTime, time.Now().UTC(), false)
-	if err != nil {
-		return err
-	}
 
-	filteredEvents, err := ApplyFilters(lookupOutput,
-		func(event types.Event) (bool, error) {
-			return isforbiddenEvent(event)
-		},
-	)
-	if err != nil {
-		return err
-	}
-
-	PrintEvents(filteredEvents, p.PrintUrl, p.PrintRaw)
-
-	if DefaultRegion != cfg.Region {
-		defaultConfig, err := config.LoadDefaultConfig(
-			context.Background(),
-			config.WithRegion(DefaultRegion))
-		if err != nil {
-			return err
-		}
-
-		defaultCloudtrailClient := cloudtrail.New(cloudtrail.Options{
-			Region:      DefaultRegion,
-			Credentials: cfg.Credentials,
-			HTTPClient:  cfg.HTTPClient,
-		})
-		fmt.Printf("[INFO] Fetching Cloudtrail Global Permission Denied Event History from %v Region...", defaultConfig.Region)
-		lookupOutput, err := GetEvents(defaultCloudtrailClient, startTime, time.Now().UTC(), false)
-		if err != nil {
-			return err
-		}
-		filteredEvents, err := ApplyFilters(lookupOutput,
+	for page := range generator {
+		filteredEvents, err := ApplyFilters(page.AWSEvent,
 			func(event types.Event) (bool, error) {
 				return isforbiddenEvent(event)
 			},
@@ -140,7 +110,30 @@ func (p *permissionDeniedEventsOptions) run() error {
 		if err != nil {
 			return err
 		}
-		PrintEvents(filteredEvents, p.PrintUrl, p.PrintRaw)
+		if len(filteredEvents) > 0 {
+			printer.PrintEvents(filteredEvents, defaultFields)
+		}
+	}
+
+	if DEFAULT_REGION != cfg.Region {
+		defaultAwsAPI := NewEventAPI(cfg, true, DEFAULT_REGION)
+
+		fmt.Printf("[INFO] Fetching Cloudtrail Global Permission Denied Event History from %v Region...", DEFAULT_REGION)
+		generator := defaultAwsAPI.GetEvents(p.ClusterID, requestTime)
+
+		for page := range generator {
+			filteredEvents, err := ApplyFilters(page.AWSEvent,
+				func(event types.Event) (bool, error) {
+					return isforbiddenEvent(event)
+				},
+			)
+			if err != nil {
+				return err
+			}
+			if len(filteredEvents) > 0 {
+				printer.PrintEvents(filteredEvents, defaultFields)
+			}
+		}
 	}
 
 	return err
