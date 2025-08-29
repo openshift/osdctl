@@ -941,10 +941,14 @@ func (o *transferOwnerOptions) run() error {
 			}
 		}
 	}
-
-	err = verifyClusterPullSecret(targetClientSet, string(pullSecret), auths)
-	if err != nil {
-		return fmt.Errorf("error verifying cluster pull secret: %w", err)
+	// During a dry-run the PS has not yet been updated and can provide misleading errors 
+	if o.dryrun {
+		fmt.Println("This is a 'dryrun', skipping the verification of cluster's pull secret.")
+	} else {
+		err = verifyClusterPullSecret(targetClientSet, string(pullSecret), auths)
+		if err != nil {
+			return fmt.Errorf("error verifying cluster pull secret: %w", err)
+		}
 	}
 
 	if o.doPullSecretOnly {
