@@ -118,6 +118,10 @@ type contextData struct {
 	NetworkMaxNodesFromPodCIDR int
 	NetworkMaxPodsPerNode      int
 	NetworkMaxServices         int
+
+	// Migration data
+	SdnToOvnMigration   *cmv1.SdnToOvnClusterMigration
+	MigrationStateValue cmv1.ClusterMigrationStateValue
 }
 
 // newCmdContext implements the context command to show the current context of a cluster
@@ -276,6 +280,9 @@ func (o *contextOptions) printLongOutput(data *contextData, w io.Writer) {
 
 	// Print User Banned Details
 	printUserBannedStatus(data, w)
+
+	// Print SDNtoOVN Migration Status
+	printSDNtoOVNMigrationStatus(data, w)
 }
 
 func (o *contextOptions) printShortOutput(data *contextData, w io.Writer) {
@@ -554,6 +561,26 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		}
 	}
 
+	GetMigrationInfo := func() {
+		defer wg.Done()
+		defer utils.StartDelayTracker(o.verbose, "Migration Info").End()
+
+		migrationResponse, err := utils.GetMigration(ocmClient, o.clusterID)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("error while getting migration info: %v", err))
+			return
+		}
+
+		sdntoovnmigration, ok := migrationResponse.GetSdnToOvn()
+		if !ok {
+			return
+		}
+		data.SdnToOvnMigration = sdntoovnmigration
+		if state, ok := migrationResponse.GetState(); ok {
+			data.MigrationStateValue = state.Value()
+		}
+	}
+
 	var retrievers []func()
 
 	retrievers = append(
@@ -566,6 +593,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		GetPagerDutyAlerts,
 		GetDynatraceDetails,
 		GetBannedUser,
+		GetMigrationInfo,
 	)
 
 	if o.output == longOutputConfigValue {
@@ -895,4 +923,16 @@ func (data *contextData) printClusterHeader(w io.Writer) {
 	fmt.Fprintln(w, strings.Repeat("=", len(clusterHeader)))
 	fmt.Fprintln(w, clusterHeader)
 	fmt.Fprintln(w, strings.Repeat("=", len(clusterHeader)))
+}
+
+func printSDNtoOVNMigrationStatus(data *contextData, w io.Writer) {
+	name := "SDN to OVN Migration Status"
+	fmt.Fprintln(w, "\n"+delimiter+name)
+
+	if data.SdnToOvnMigration != nil && data.MigrationStateValue == cmv1.ClusterMigrationStateValueInProgress {
+		fmt.Fprintln(w, "SDN to OVN migration is in progress")
+		return
+	}
+
+	fmt.Fprintln(w, "No active SDN to OVN migrations")
 }

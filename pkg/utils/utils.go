@@ -254,6 +254,20 @@ func GetAccount(connection *sdk.Connection, key string) (account *amv1.Account, 
 	return
 }
 
+// GetMigration function gets the migration info for a cluster
+func GetMigration(connection *sdk.Connection, clusterID string) (*cmv1.ClusterMigration, error) {
+	migrationResponse, err := connection.ClustersMgmt().V1().Clusters().Cluster(clusterID).Migrations().List().Send()
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve migrations for cluster %s: %v", clusterID, err)
+	}
+
+	if migrationResponse.Items().Len() > 0 {
+		return migrationResponse.Items().Get(0), nil
+	}
+
+	return nil, nil
+}
+
 func GetRegistryCredentials(connection *sdk.Connection, accountId string) ([]*amv1.RegistryCredential, error) {
 	searchString := fmt.Sprintf("account_id = '%s'", accountId)
 	registryCredentials, err := connection.AccountsMgmt().V1().RegistryCredentials().List().Search(searchString).Send()

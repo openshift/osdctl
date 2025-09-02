@@ -17,8 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type MockOCMClient struct{}
-
 type MockCluster struct {
 	ID                string
 	ExternalID        string
@@ -589,6 +587,35 @@ func TestPrintUserBannedStatus(t *testing.T) {
 			if expected != actual {
 				t.Errorf("expected:\n%q\ngot:\n%q", expected, actual)
 			}
+		})
+	}
+}
+
+func TestPrintSDNtoOVNMigrationStatus(t *testing.T) {
+	tests := []struct {
+		name                 string
+		hasSdnToOvnMigration bool
+		migrationState       v1.ClusterMigrationStateValue
+		expectedOutput       string
+	}{
+		{name: "no migration", hasSdnToOvnMigration: false, migrationState: "", expectedOutput: "No active SDN to OVN migrations"},
+		{name: "in progress", hasSdnToOvnMigration: true, migrationState: v1.ClusterMigrationStateValueInProgress, expectedOutput: "SDN to OVN migration is in progress"},
+		{name: "completed", hasSdnToOvnMigration: true, migrationState: v1.ClusterMigrationStateValueCompleted, expectedOutput: "No active SDN to OVN migrations"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := &contextData{}
+			if tt.hasSdnToOvnMigration {
+				sdnToOvn, _ := v1.NewSdnToOvnClusterMigration().Build()
+				data.SdnToOvnMigration = sdnToOvn
+				data.MigrationStateValue = tt.migrationState
+			}
+
+			var buf bytes.Buffer
+			printSDNtoOVNMigrationStatus(data, &buf)
+
+			assert.Contains(t, buf.String(), tt.expectedOutput)
 		})
 	}
 }
