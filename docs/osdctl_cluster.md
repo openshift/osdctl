@@ -34,6 +34,7 @@ Provides information for a specified cluster
 * [osdctl cluster etcd-health-check](osdctl_cluster_etcd-health-check.md)	 - Checks the etcd components and member health
 * [osdctl cluster etcd-member-replace](osdctl_cluster_etcd-member-replace.md)	 - Replaces an unhealthy etcd node
 * [osdctl cluster from-infra-id](osdctl_cluster_from-infra-id.md)	 - Get cluster ID and external ID from a given infrastructure ID commonly used by Splunk
+* [osdctl cluster get-env-vars](osdctl_cluster_get-env-vars.md)	 - Print a cluster's ID/management namespaces, optionally as env variables
 * [osdctl cluster health](osdctl_cluster_health.md)	 - Describes health of cluster nodes and provides other cluster vitals.
 * [osdctl cluster hypershift-info](osdctl_cluster_hypershift-info.md)	 - Pull information about AWS objects from the cluster, the management cluster and the privatelink cluster
 * [osdctl cluster logging-check](osdctl_cluster_logging-check.md)	 - Shows the logging support status of a specified cluster
