@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -18,6 +20,7 @@ func newCmdUpdatePullSecret(streams genericclioptions.IOStreams, globalOpts *glo
 	updatePullSecretCmd := &cobra.Command{
 		Use:               "update-pull-secret",
 		Short:             "Update cluster pullsecret with current OCM accessToken data(to be done by Region Lead)",
+		Long:              fmt.Sprintf("Update cluster pullsecret with current OCM accessToken data(to be done by Region Lead)\n\n%s\n", transferOwnerDocs),
 		Args:              cobra.NoArgs,
 		Example:           updatePullSecCmdExample,
 		DisableAutoGenTag: true,

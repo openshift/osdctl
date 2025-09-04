@@ -72,6 +72,12 @@ var red *color.Color
 var blue *color.Color
 var green *color.Color
 
+const transferOwnerDocs = `See documentation prior to executing:
+https://github.com/openshift/ops-sop/blob/master/hypershift/knowledge_base/howto/replace-pull-secret.md
+https://github.com/openshift/ops-sop/blob/master/v4/howto/transfer_cluster_ownership.md
+https://access.redhat.com/solutions/6126691
+`
+
 const transferOwnerCmdExample = `
   # Transfer ownership
   osdctl cluster transfer-owner --new-owner "$NEW_ACCOUNT" --old-owner "$OLD_ACCOUNT" --cluster-id 1kfmyclusteristhebesteverp8m --reason "transfer ownership per jira-id"
@@ -82,6 +88,7 @@ func newCmdTransferOwner(streams genericclioptions.IOStreams, globalOpts *global
 	transferOwnerCmd := &cobra.Command{
 		Use:               "transfer-owner",
 		Short:             "Transfer cluster ownership to a new user (to be done by Region Lead)",
+		Long:              fmt.Sprintf("Transfer cluster ownership to a new user (to be done by Region Lead)\n\n%s\n", transferOwnerDocs),
 		Args:              cobra.NoArgs,
 		Example:           transferOwnerCmdExample,
 		DisableAutoGenTag: true,
@@ -581,6 +588,13 @@ func (o *transferOwnerOptions) run() error {
 	var subscription *amv1.Subscription = nil
 	var oldOwnerAccount *amv1.Account = nil
 	var ok bool
+	if o.hypershift {
+		// Hypershift transfers carry additional risks and should not be performed by
+		// this command at this time.
+		err = fmt.Errorf("hypershift clusters are not currently supported with this command")
+		fmt.Printf("Warning %s\n%s\n", err, transferOwnerDocs)
+		return err
+	}
 	if o.doPullSecretOnly {
 		// This is updating the pull secret and not a ownwership transfer.
 		// Use existing subscription, account, and userName value...
