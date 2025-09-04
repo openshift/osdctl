@@ -48,6 +48,17 @@ Release are available on Github
 
 ### Creating a release
 
+#### For Fedora
+
+Fedora releases can automatically be build in a COPR repository by using a [custom
+webhook](https://docs.pagure.org/copr.copr/user_documentation.html#custom-webhook) and the `hack/copr.sh` script as
+build method.
+
+This expects the webhook to be configured to only react to tag events. If setup this will automatically trigger a
+rebuild of the package in the COPR project that receives the custom webhook.
+
+#### Manually
+
 Repository owners can create a new `osdctl` release with the `make release` target. An API token with `repo` permissions is required. [See: https://goreleaser.com/environment/#api-tokens](https://goreleaser.com/environment/#api-tokens)
 
 The goreleaser config (`.goreleaser.yaml`) will look for the token in `~/.config/goreleaser/token`.
