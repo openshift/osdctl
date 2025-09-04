@@ -1965,6 +1965,13 @@ osdctl cluster support status --cluster-id <cluster-identifier> [flags]
 
 Transfer cluster ownership to a new user (to be done by Region Lead)
 
+See documentation prior to executing:
+https://github.com/openshift/ops-sop/blob/master/hypershift/knowledge_base/howto/replace-pull-secret.md
+https://github.com/openshift/ops-sop/blob/master/v4/howto/transfer_cluster_ownership.md
+https://access.redhat.com/solutions/6126691
+
+
+
 ```
 osdctl cluster transfer-owner [flags]
 ```
@@ -1993,6 +2000,13 @@ osdctl cluster transfer-owner [flags]
 ### osdctl cluster update-pull-secret
 
 Update cluster pullsecret with current OCM accessToken data(to be done by Region Lead)
+
+See documentation prior to executing:
+https://github.com/openshift/ops-sop/blob/master/hypershift/knowledge_base/howto/replace-pull-secret.md
+https://github.com/openshift/ops-sop/blob/master/v4/howto/transfer_cluster_ownership.md
+https://access.redhat.com/solutions/6126691
+
+
 
 ```
 osdctl cluster update-pull-secret [flags]

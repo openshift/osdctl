@@ -2,6 +2,17 @@
 
 Update cluster pullsecret with current OCM accessToken data(to be done by Region Lead)
 
+### Synopsis
+
+Update cluster pullsecret with current OCM accessToken data(to be done by Region Lead)
+
+See documentation prior to executing:
+https://github.com/openshift/ops-sop/blob/master/hypershift/knowledge_base/howto/replace-pull-secret.md
+https://github.com/openshift/ops-sop/blob/master/v4/howto/transfer_cluster_ownership.md
+https://access.redhat.com/solutions/6126691
+
+
+
 ```
 osdctl cluster update-pull-secret [flags]
 ```
