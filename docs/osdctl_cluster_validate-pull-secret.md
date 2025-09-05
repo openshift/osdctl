@@ -6,7 +6,9 @@ Checks if the pull secret email matches the owner email
 
 Checks if the pull secret email matches the owner email.
 
-This command will automatically login to the cluster to check the current pull-secret defined in 'openshift-config/pull-secret'
+The command will first attempt to create a managedjob on the cluster to complete the task.
+However if this fails (e.g. pod fails to run on the cluster), the fallback option of elevating
+with backplane (requires reason and cluster-id) can be run.
 
 
 ```
@@ -16,9 +18,10 @@ osdctl cluster validate-pull-secret --cluster-id <cluster-identifier> [flags]
 ### Options
 
 ```
-  -C, --cluster-id string   The internal ID of the cluster to check (required)
+  -C, --cluster-id string   The internal ID of the cluster to check (only required if elevating, and ID is not found within context.)
+      --elevate             Skip managed job approach and use backplane elevation directly
   -h, --help                help for validate-pull-secret
-      --reason string       The reason for this command to be run (usually an OHSS or PD ticket), mandatory when using elevate
+      --reason string       The reason for this command to be run (usually an OHSS or PD ticket)
 ```
 
 ### Options inherited from parent commands
