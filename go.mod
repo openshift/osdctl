@@ -45,7 +45,7 @@ require (
 	github.com/openshift/gcp-project-operator v0.0.0-20241024143818-ec4eabd35aba
 	github.com/openshift/hive/apis v0.0.0-20250206153200-5a34ea42e678
 	github.com/openshift/hypershift/api v0.0.0-20250208145556-2753dcc8cfb7
-	github.com/openshift/osd-network-verifier v1.3.0
+	github.com/openshift/osd-network-verifier v1.4.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/shopspring/decimal v1.4.0
 	github.com/sirupsen/logrus v1.9.3
