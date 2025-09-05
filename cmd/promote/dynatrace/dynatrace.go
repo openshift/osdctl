@@ -19,7 +19,7 @@ type promoteDynatraceOptions struct {
 	dynatraceConfigCheckoutDir string
 }
 
-// NewCmdPromote implements the promote command to promote services/operators
+// NewCmdDynatrace implements the promote command to promote services/operators
 func NewCmdDynatrace() *cobra.Command {
 	ops := &promoteDynatraceOptions{}
 	promoteDynatraceCmd := &cobra.Command{
@@ -52,7 +52,7 @@ func NewCmdDynatrace() *cobra.Command {
 						cmd.Help()
 						os.Exit(1)
 					}
-					listDynatraceModuleNames(dynatraceConfig)
+					_ = listDynatraceModuleNames(dynatraceConfig)
 					os.Exit(0)
 				} else {
 					if ops.module == "" {

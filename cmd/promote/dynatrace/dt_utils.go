@@ -309,10 +309,10 @@ func modulePromotion(dynatraceConfig DynatraceConfig, module string) error {
 	if err != nil {
 		return err
 	}
-	commitLog := "Promote Module " + module + " to GitHash %s" + promotionGitHash
-	fmt.Printf("commitLog: %v\n", commitLog)
+	commitMsg := fmt.Sprintf("Promote Module %s to GitHash %s", module, promotionGitHash)
+	fmt.Printf("commitLog: %v\n", commitMsg)
 
-	err = dynatraceConfig.commitFiles(commitLog)
+	err = dynatraceConfig.commitFiles(commitMsg)
 	if err != nil {
 		return fmt.Errorf("failed to commit changes to app-interface: %w", err)
 	}
