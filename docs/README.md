@@ -1449,7 +1449,7 @@ osdctl cluster get-env-vars --cluster-id <cluster-identifier> [flags]
 ```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-  -c, --cluster-id string                Provide internal ID of the cluster
+  -C, --cluster-id string                Provide internal ID of the cluster
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for get-env-vars
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure

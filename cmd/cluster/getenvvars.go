@@ -44,7 +44,7 @@ func newCmdGetEnvVars() *cobra.Command {
 		},
 	}
 
-	getEnvVarsCmd.Flags().StringVarP(&opts.ClusterID, "cluster-id", "c", "", "Provide internal ID of the cluster")
+	getEnvVarsCmd.Flags().StringVarP(&opts.ClusterID, "cluster-id", "C", "", "Provide internal ID of the cluster")
 	_ = getEnvVarsCmd.MarkFlagRequired("cluster-id")
 
 	getEnvVarsCmd.Flags().StringVarP(&opts.output, "output", "o", "text", "Valid formats are ['text', 'json', 'env']")
