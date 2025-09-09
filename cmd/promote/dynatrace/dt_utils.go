@@ -78,8 +78,10 @@ func servicePromotion(appInterface AppInterface, component, gitHash string) erro
 		fmt.Printf("Unable to find a git hash to promote. Exiting.\n")
 		os.Exit(6)
 	}
+
 	fmt.Printf("Service: %s will be promoted to %s\n", component, promotionGitHash)
 	fmt.Printf("commitLog: %v\n", commitLog)
+
 	branchName := fmt.Sprintf("promote-%s-%s", component, promotionGitHash)
 
 	err = appInterface.UpdateAppInterface(component, saasDir, currentGitHash, promotionGitHash, branchName)
@@ -88,11 +90,13 @@ func servicePromotion(appInterface AppInterface, component, gitHash string) erro
 	}
 
 	commitMessage := fmt.Sprintf("Promote %s to %s\n\nSee %s/compare/%s...%s for contents of the promotion.\n clog:%s", component, promotionGitHash, serviceRepo, currentGitHash, promotionGitHash, commitLog)
+
+	fmt.Printf("commitMessage: %s\n", commitMessage)
+
 	err = appInterface.CommitSaasFile(saasDir, commitMessage)
 	if err != nil {
-		return fmt.Errorf("failed to commit changes to app-interface: %w", err)
+		return fmt.Errorf("failed to commit changes to app-interface; manual commit may still succeed: %w", err)
 	}
-	fmt.Printf("commitMessage: %s\n", commitMessage)
 
 	fmt.Printf("The branch %s is ready to be pushed\n", branchName)
 	fmt.Println("")
@@ -310,11 +314,13 @@ func modulePromotion(dynatraceConfig DynatraceConfig, module string) error {
 		return err
 	}
 	commitMsg := fmt.Sprintf("Promote Module %s to GitHash %s", module, promotionGitHash)
-	fmt.Printf("commitLog: %v\n", commitMsg)
+
+	fmt.Printf("commitMessage: %v\n", commitMsg)
 
 	err = dynatraceConfig.commitFiles(commitMsg)
+
 	if err != nil {
-		return fmt.Errorf("failed to commit changes to app-interface: %w", err)
+		return fmt.Errorf("failed to commit changes to app-interface; manual commit may still succeed: %w", err)
 	}
 
 	fmt.Printf("The branch %s is ready to be pushed\n", branchName)

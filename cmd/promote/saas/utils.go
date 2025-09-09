@@ -99,6 +99,8 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	}
 	commitMessage += fmt.Sprintf("See %s/compare/%s...%s for contents of the promotion. clog:\n\n%s", serviceRepo, currentGitHash, promotionGitHash, commitLog)
 
+	fmt.Printf("commitMessage: %s\n", commitMessage)
+
 	// ovverriding appInterface.GitExecuter to iexec.Exec{}
 	appInterface.GitExecutor = iexec.Exec{}
 
@@ -107,10 +109,10 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	} else {
 		err = appInterface.CommitSaasFile(saasDir, commitMessage)
 	}
+
 	if err != nil {
-		return fmt.Errorf("failed to commit changes to app-interface: %w", err)
+		return fmt.Errorf("failed to commit changes to app-interface; manual commit may still succeed: %w", err)
 	}
-	fmt.Printf("commitMessage: %s\n", commitMessage)
 
 	fmt.Printf("The branch %s is ready to be pushed\n", branchName)
 	fmt.Println("")
