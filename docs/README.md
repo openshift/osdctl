@@ -1995,9 +1995,10 @@ osdctl cluster transfer-owner [flags]
 
 Checks if the pull secret email matches the owner email.
 
-The command will first attempt to create a managedjob on the cluster to complete the task.
+The command will by default attempt to create a managedjob on the cluster to complete the task.
 However if this fails (e.g. pod fails to run on the cluster), the fallback option of elevating
-with backplane (requires reason and cluster-id) can be run.
+with backplane (requires reason for elevation) can be run. You can also directly use backplane
+elevation by setting --managed-script=false.
 
 
 ```
@@ -2011,10 +2012,10 @@ osdctl cluster validate-pull-secret --cluster-id <cluster-identifier> [flags]
       --cluster string                   The name of the kubeconfig cluster to use
   -C, --cluster-id string                The internal ID of the cluster to check (only required if elevating, and ID is not found within context.)
       --context string                   The name of the kubeconfig context to use
-      --elevate                          Skip managed job approach and use backplane elevation directly
   -h, --help                             help for validate-pull-secret
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+      --managed-script                   Use managed job approach to get pull secret (default true). Set to false to use backplane elevation directly (default true)
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --reason string                    The reason for this command to be run (usually an OHSS or PD ticket)
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
