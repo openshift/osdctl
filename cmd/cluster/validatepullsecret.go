@@ -4,9 +4,15 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 
+	"github.com/AlecAivazis/survey/v2"
 	v1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
+	bpapi "github.com/openshift/backplane-cli/pkg/backplaneapi"
+	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
+	bputils "github.com/openshift/backplane-cli/pkg/utils"
 	"github.com/openshift/osdctl/cmd/servicelog"
+	"github.com/openshift/osdctl/pkg/backplane"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -18,10 +24,12 @@ import (
 
 // validatePullSecretOptions defines the struct for running validate-pull-secret command
 type validatePullSecretOptions struct {
-	clusterID string
-	elevate   bool
-	reason    string
+	clusterID     string
+	managedScript bool
+	reason        string
 }
+
+var emailRegex = regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
 
 func newCmdValidatePullSecret() *cobra.Command {
 	ops := newValidatePullSecretOptions()
@@ -30,7 +38,10 @@ func newCmdValidatePullSecret() *cobra.Command {
 		Short: "Checks if the pull secret email matches the owner email",
 		Long: `Checks if the pull secret email matches the owner email.
 
-This command will automatically login to the cluster to check the current pull-secret defined in 'openshift-config/pull-secret'
+The command will by default attempt to create a managedjob on the cluster to complete the task.
+However if this fails (e.g. pod fails to run on the cluster), the fallback option of elevating
+with backplane (requires reason for elevation) can be run. You can also directly use backplane
+elevation by setting --managed-script=false.
 `,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
@@ -39,14 +50,10 @@ This command will automatically login to the cluster to check the current pull-s
 		},
 	}
 
-	// Add cluster-id flag
-	validatePullSecretCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "The internal ID of the cluster to check (required)")
-	if err := validatePullSecretCmd.MarkFlagRequired("cluster-id"); err != nil {
-		fmt.Printf("Error marking cluster-id flag as required: %v\n", err)
-	}
+	validatePullSecretCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "The internal ID of the cluster to check (only required if elevating, and ID is not found within context.)")
+	validatePullSecretCmd.Flags().BoolVar(&ops.managedScript, "managed-script", true, "Use managed job approach to get pull secret (default true). Set to false to use backplane elevation directly")
+	validatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command to be run (usually an OHSS or PD ticket)")
 
-	validatePullSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command to be run (usually an OHSS or PD ticket), mandatory when using elevate")
-	_ = validatePullSecretCmd.MarkFlagRequired("reason")
 	return validatePullSecretCmd
 }
 
@@ -55,6 +62,15 @@ func newValidatePullSecretOptions() *validatePullSecretOptions {
 }
 
 func (o *validatePullSecretOptions) run() error {
+	if o.clusterID == "" {
+		bpCluster, err := bputils.DefaultClusterUtils.GetBackplaneCluster()
+		if err != nil {
+			return fmt.Errorf("no cluster-id provided and failed to get cluster from current context: %w. Please provide --cluster-id or ensure you're logged into a cluster", err)
+		}
+		o.clusterID = bpCluster.ClusterID
+		fmt.Printf("Using cluster from current context: %s\n", o.clusterID)
+	}
+
 	// get the pull secret in OCM
 	emailOCM, err, done := o.getPullSecretFromOCM()
 	if err != nil {
@@ -64,13 +80,33 @@ func (o *validatePullSecretOptions) run() error {
 		return nil
 	}
 
-	// get the pull secret in cluster
-	emailCluster, err, done := getPullSecretElevated(o.clusterID, o.reason)
-	if err != nil {
-		return err
+	var emailCluster string
+	var clusterErr error
+
+	if o.managedScript {
+		fmt.Println("Creating managedjob in-cluster to get pull-secret email")
+		emailCluster, clusterErr = o.getPullSecretWithManagedJob()
+		if clusterErr != nil {
+			fmt.Printf("Managed job failed: %v\n", clusterErr)
+			fmt.Println("Falling back to elevated access...")
+		}
 	}
-	if done {
-		return nil
+
+	if !o.managedScript || clusterErr != nil {
+		if o.reason == "" {
+			var err error
+			o.reason, err = o.promptForReason()
+			if err != nil {
+				return fmt.Errorf("failed to get reason for elevation: %w", err)
+			}
+		}
+		emailCluster, clusterErr, done = getPullSecretElevated(o.clusterID, o.reason)
+		if clusterErr != nil {
+			return clusterErr
+		}
+		if done {
+			return nil
+		}
 	}
 
 	if emailOCM != emailCluster {
@@ -84,6 +120,49 @@ func (o *validatePullSecretOptions) run() error {
 
 	fmt.Println("Email addresses match.")
 	return nil
+}
+
+func (o *validatePullSecretOptions) getPullSecretWithManagedJob() (email string, err error) {
+	bp, err := bpconfig.GetBackplaneConfiguration()
+	if err != nil {
+		return "", fmt.Errorf("failed to load backplane configuration: %w", err)
+	}
+
+	bpclient, err := bpapi.DefaultClientUtils.MakeRawBackplaneAPIClient(bp.URL)
+	if err != nil {
+		return "", fmt.Errorf("failed to create backplane API client: %w", err)
+	}
+
+	client := backplane.NewClient(bpclient, o.clusterID)
+	canonicalName := "security/get-pull-secret-email"
+	parameters := map[string]string{}
+
+	result, err := client.RunManagedJobWithClient(canonicalName, parameters, 60)
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Printf("email from managedjob (cluster): %s\n", result.Output)
+
+	email = emailRegex.FindString(result.Output)
+	if email == "" {
+		return "", fmt.Errorf("failed to extract email from job output: %s", result.Output)
+	}
+
+	return email, nil
+}
+
+func (o *validatePullSecretOptions) promptForReason() (string, error) {
+	prompt := &survey.Input{
+		Message: "Enter reason for elevation (usually an OHSS or PD ticket):",
+	}
+	var reason string
+	err := survey.AskOne(prompt, &reason, survey.WithValidator(survey.Required))
+	if err != nil {
+		return "", err
+	}
+
+	return reason, nil
 }
 
 // getPullSecretElevated gets the pull-secret in the cluster with backplane elevation.

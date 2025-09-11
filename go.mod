@@ -4,6 +4,7 @@ go 1.23.6
 
 require (
 	cloud.google.com/go/compute v1.37.0
+	github.com/AlecAivazis/survey/v2 v2.3.7
 	github.com/Dynatrace/dynatrace-operator v0.14.2
 	github.com/PagerDuty/go-pagerduty v1.8.0
 	github.com/andygrunwald/go-jira v1.16.0
@@ -40,6 +41,7 @@ require (
 	github.com/openshift-online/ocm-sdk-go v0.1.473
 	github.com/openshift/api v0.0.0-20250207102212-9e59a77ed2e0
 	github.com/openshift/aws-account-operator/api v0.0.0-20250205151445-6455c35fc4ae
+	github.com/openshift/backplane-api v0.0.0-20250514095514-2aa57551ec70
 	github.com/openshift/backplane-cli v0.4.0
 	github.com/openshift/cloud-credential-operator v0.0.0-20250120201329-db5f2531a5b4
 	github.com/openshift/gcp-project-operator v0.0.0-20241024143818-ec4eabd35aba
@@ -83,7 +85,6 @@ require (
 	cloud.google.com/go/compute/metadata v0.7.0 // indirect
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
 	github.com/99designs/keyring v1.2.2 // indirect
-	github.com/AlecAivazis/survey/v2 v2.3.7 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/CloudyKit/fastprinter v0.0.0-20200109182630-33d98a066a53 // indirect
@@ -217,7 +218,6 @@ require (
 	github.com/oasdiff/yaml3 v0.0.0-20241214160948-977117996672 // indirect
 	github.com/openshift-online/ocm-api-model/clientapi v0.0.426 // indirect
 	github.com/openshift-online/ocm-api-model/model v0.0.426 // indirect
-	github.com/openshift/backplane-api v0.0.0-20250514095514-2aa57551ec70 // indirect
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
