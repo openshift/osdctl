@@ -1,10 +1,10 @@
-## osdctl cluster transfer-owner
+## osdctl cluster update-pull-secret
 
-Transfer cluster ownership to a new user (to be done by Region Lead)
+Update cluster pullsecret with current OCM accessToken data(to be done by Region Lead)
 
 ### Synopsis
 
-Transfer cluster ownership to a new user (to be done by Region Lead)
+Update cluster pullsecret with current OCM accessToken data(to be done by Region Lead)
 
 See documentation prior to executing:
 https://github.com/openshift/ops-sop/blob/master/hypershift/knowledge_base/howto/replace-pull-secret.md
@@ -14,15 +14,15 @@ https://access.redhat.com/solutions/6126691
 
 
 ```
-osdctl cluster transfer-owner [flags]
+osdctl cluster update-pull-secret [flags]
 ```
 
 ### Examples
 
 ```
 
-  # Transfer ownership
-  osdctl cluster transfer-owner --new-owner "$NEW_ACCOUNT" --old-owner "$OLD_ACCOUNT" --cluster-id 1kfmyclusteristhebesteverp8m --reason "transfer ownership per jira-id"
+  # Update Pull Secret's OCM access token data
+  osdctl cluster update-pull-secret --cluster-id 1kfmyclusteristhebesteverp8m --reason "Update PullSecret per pd or jira-id"
 
 ```
 
@@ -31,10 +31,8 @@ osdctl cluster transfer-owner [flags]
 ```
   -C, --cluster-id string   The Internal Cluster ID/External Cluster ID/ Cluster Name
   -d, --dry-run             Dry-run - show all changes but do not apply them
-  -h, --help                help for transfer-owner
-      --new-owner string    The new owner's username to transfer the cluster to
-      --old-owner string    The old owner's username to transfer the cluster from
-      --reason string       The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
+  -h, --help                help for update-pull-secret
+      --reason string       The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)
 ```
 
 ### Options inherited from parent commands
