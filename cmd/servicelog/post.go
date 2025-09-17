@@ -110,8 +110,8 @@ func (o *PostCmdOptions) Init() error {
 }
 
 func (o *PostCmdOptions) Validate() error {
-	if o.ClusterId == "" && len(o.filterParams) == 0 && o.clustersFile == "" {
-		return fmt.Errorf("no cluster identifier has been found, please specify --cluster-id, -q, or -c")
+	if o.ClusterId == "" && len(o.filterParams) == 0 && o.clustersFile == "" && len(o.filterFiles) == 0 {
+		return fmt.Errorf("no cluster identifier has been found, please specify --cluster-id, -q, -c or -f")
 	}
 	return nil
 }
