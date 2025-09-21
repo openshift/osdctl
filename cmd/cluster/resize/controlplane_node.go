@@ -541,7 +541,7 @@ func promptGenerateResizeSL(clusterID string, newMachineType string) error {
 
 	fmt.Println("Service log sent successfully. Use the following command to track progress of the resize:")
 	fmt.Println()
-	fmt.Println(`watch -d 'oc get machines -n openshift-machine-api -l machine.openshift.io/cluster-api-machine-role=master && oc get nodes -l node-role.kubernetes.io/control-plane'`)
+	fmt.Println(`watch -d 'oc get machines -n openshift-machine-api -l machine.openshift.io/cluster-api-machine-role=master && oc get nodes -l node-role.kubernetes.io/master'`)
 
 	return nil
 }
