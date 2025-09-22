@@ -1,7 +1,6 @@
 reviewers:
 - clcollins
 - dustman9000
-- fahlmant
 - iamkirkbater
 - sam-nguyen7
 - typeid
@@ -20,7 +19,6 @@ reviewers:
 approvers:
 - clcollins
 - dustman9000
-- fahlmant
 - iamkirkbater
 - sam-nguyen7
 - typeid
@@ -38,4 +36,3 @@ approvers:
 - hectorakemp
 maintainers:
 - clcollins
-- fahlmant
