@@ -8,6 +8,8 @@ import (
 	"text/tabwriter"
 
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
+	ocmsdk "github.com/openshift-online/ocm-sdk-go"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -18,12 +20,13 @@ type list struct {
 }
 
 type managementClusterOutput struct {
-	Name      string `json:"name" yaml:"name"`
-	ID        string `json:"id" yaml:"id"`
-	Sector    string `json:"sector" yaml:"sector"`
-	Region    string `json:"region" yaml:"region"`
-	AccountID string `json:"account_id" yaml:"account_id"`
-	Status    string `json:"status" yaml:"status"`
+	Name             string `json:"name" yaml:"name"`
+	ID               string `json:"id" yaml:"id"`
+	Sector           string `json:"sector" yaml:"sector"`
+	Region           string `json:"region" yaml:"region"`
+	AccountID        string `json:"account_id" yaml:"account_id"`
+	Status           string `json:"status" yaml:"status"`
+	ProvisionShardID string `json:"provision_shard_id" yaml:"provision_shard_id"`
 }
 
 func newCmdList() *cobra.Command {
@@ -63,6 +66,11 @@ func (l *list) Run() error {
 	}
 
 	var output []managementClusterOutput
+	provisionShards, err := getProvisionShards(ocm)
+	if err != nil {
+		log.Printf("Warning: %s", err)
+	}
+
 	for _, mc := range managementClusters.Items().Slice() {
 		cluster, err := ocm.ClustersMgmt().V1().Clusters().Cluster(mc.ClusterManagementReference().ClusterId()).Get().Send()
 		if err != nil {
@@ -80,14 +88,25 @@ func (l *list) Run() error {
 			awsAccountID = supportRoleARN.AccountID
 		}
 
-		output = append(output, managementClusterOutput{
+		mcData := managementClusterOutput{
 			Name:      mc.Name(),
 			ID:        mc.ClusterManagementReference().ClusterId(),
 			Sector:    mc.Sector(),
 			Region:    mc.Region(),
 			AccountID: awsAccountID,
 			Status:    mc.Status(),
-		})
+		}
+
+		if provisionShards != nil {
+			ps, ok := provisionShards[mcData.Name]
+			if ok {
+				mcData.ProvisionShardID = ps.ID()
+			} else {
+				mcData.ProvisionShardID = "N/A"
+			}
+		}
+
+		output = append(output, mcData)
 	}
 
 	switch l.outputFormat {
@@ -113,6 +132,7 @@ func (l *list) Run() error {
 			fmt.Fprintf(w, " Region:\t%s\n", item.Region)
 			fmt.Fprintf(w, " Account ID:\t%s\n", item.AccountID)
 			fmt.Fprintf(w, " Status:\t%s\n", item.Status)
+			fmt.Fprintf(w, " Provision Shard ID:\t%s\n", item.ProvisionShardID)
 			if i < len(output)-1 {
 				_, err := fmt.Fprintln(w, "")
 				if err != nil {
@@ -126,18 +146,19 @@ func (l *list) Run() error {
 		}
 	case "table":
 		w := tabwriter.NewWriter(os.Stdout, 1, 1, 1, ' ', 0)
-		_, err := fmt.Fprintln(w, "NAME\tID\tSECTOR\tREGION\tACCOUNT_ID\tSTATUS")
+		_, err := fmt.Fprintln(w, "NAME\tID\tSECTOR\tREGION\tACCOUNT_ID\tSTATUS\tPROVISION_SHARD_ID")
 		if err != nil {
 			return fmt.Errorf("failed to format table output: %v", err)
 		}
 		for _, item := range output {
-			_, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			_, err := fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 				item.Name,
 				item.ID,
 				item.Sector,
 				item.Region,
 				item.AccountID,
 				item.Status,
+				item.ProvisionShardID,
 			)
 			if err != nil {
 				return fmt.Errorf("failed to format table output: %v", err)
@@ -152,4 +173,21 @@ func (l *list) Run() error {
 	}
 
 	return nil
+}
+
+func getProvisionShards(ocmClient *ocmsdk.Connection) (map[string]*cmv1.ProvisionShard, error) {
+	provisionShardResponse, err := ocmClient.ClustersMgmt().V1().ProvisionShards().List().Send()
+	if err != nil {
+		return nil, fmt.Errorf("Warning: unable to get provision shards: %w", err)
+	}
+
+	provisionShards := map[string]*cmv1.ProvisionShard{}
+
+	for _, ps := range provisionShardResponse.Items().Slice() {
+		if ps.ManagementCluster() != "" {
+			provisionShards[ps.ManagementCluster()] = ps
+		}
+	}
+
+	return provisionShards, nil
 }
