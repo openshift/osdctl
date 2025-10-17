@@ -109,14 +109,14 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 		return nil, err
 	}
 
-	input.SubnetID = subnetId[0]
-
-	checkPublic, err := e.isSubnetPublic(ctx, input.SubnetID)
-	if err != nil {
-		return nil, err
-	}
-	if checkPublic {
-		return nil, fmt.Errorf("subnet %v you provided is public. The network verifier only works for private subnets. Please provide a private subnet ID", input.SubnetID)
+	for _, subnet := range subnetId {
+		checkPublic, err := e.isSubnetPublic(ctx, subnet)
+		if err != nil {
+			return nil, err
+		}
+		if checkPublic {
+			return nil, fmt.Errorf("subnet %v you provided is public. The network verifier only works for private subnets. Please provide a private subnet ID", input.SubnetID)
+		}
 	}
 
 	// Obtain security group id to use

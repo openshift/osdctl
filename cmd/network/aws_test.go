@@ -137,6 +137,47 @@ func Test_egressVerification_GenerateAWSValidateEgressInput(t *testing.T) {
 			expectErr: true,
 		},
 		{
+			name: "Require all override subnets be private",
+			e: &EgressVerification{
+				awsClient: mockEgressVerificationAWSClient{
+					describeSecurityGroupsResp: &ec2.DescribeSecurityGroupsOutput{
+						SecurityGroups: []types.SecurityGroup{
+							{
+								GroupId: aws.String("sg-abcd"),
+							},
+						},
+					},
+					describeSubnetsResp: &ec2.DescribeSubnetsOutput{
+						Subnets: []types.Subnet{
+							{
+								SubnetId: aws.String("subnet-abcd"),
+							},
+						},
+					},
+					describeRouteTablesResp: &ec2.DescribeRouteTablesOutput{
+						RouteTables: []types.RouteTable{
+							{
+								RouteTableId: aws.String("rt-id"),
+								Routes: []types.Route{
+									{
+										GatewayId: aws.String("igw-internet"),
+										DestinationCidrBlock: aws.String("0.0.0.0/0"),
+									},
+								},
+							},
+						},
+					},
+				},
+				cluster: newTestCluster(t, cmv1.NewCluster().
+					CloudProvider(cmv1.NewCloudProvider().ID("aws")).
+					Product(cmv1.NewProduct().ID("rosa")),
+				),
+				log: newTestLogger(t),
+			},
+			region: "us-east-2",
+			expectErr: true,
+		},
+		{
 			name: "Transparent cluster-wide proxy",
 			e: &EgressVerification{
 				awsClient: mockEgressVerificationAWSClient{
