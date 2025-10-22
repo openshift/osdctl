@@ -160,7 +160,7 @@ func Test_egressVerification_GenerateAWSValidateEgressInput(t *testing.T) {
 								RouteTableId: aws.String("rt-id"),
 								Routes: []types.Route{
 									{
-										GatewayId: aws.String("igw-internet"),
+										GatewayId:            aws.String("igw-internet"),
 										DestinationCidrBlock: aws.String("0.0.0.0/0"),
 									},
 								},
@@ -174,7 +174,7 @@ func Test_egressVerification_GenerateAWSValidateEgressInput(t *testing.T) {
 				),
 				log: newTestLogger(t),
 			},
-			region: "us-east-2",
+			region:    "us-east-2",
 			expectErr: true,
 		},
 		{

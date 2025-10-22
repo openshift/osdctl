@@ -115,7 +115,7 @@ func (e *EgressVerification) generateAWSValidateEgressInput(ctx context.Context,
 			return nil, err
 		}
 		if checkPublic {
-			return nil, fmt.Errorf("subnet %v you provided is public. The network verifier only works for private subnets. Please provide a private subnet ID", input.SubnetID)
+			return nil, fmt.Errorf("subnet %v you provided is public. The network verifier only works for private subnets. Please provide a private subnet ID", subnet)
 		}
 	}
 
