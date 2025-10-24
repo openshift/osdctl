@@ -8,20 +8,39 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/openshift/osdctl/cmd/cluster"
+	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/spf13/cobra"
 )
 
-type ClusterContextInput struct {
+// This is reusable Input type for commands that only need the cluster id and nothing else.
+type ClusterIdInput struct {
 	ClusterId string `json:"cluster_id" jsonschema:"ID of the cluster to retrieve information for"`
 }
 
-var ClusterContextInputSchema, _ = jsonschema.For[ClusterContextInput](&jsonschema.ForOptions{})
+var ClusterIdInputSchema, _ = jsonschema.For[ClusterIdInput](&jsonschema.ForOptions{})
 
-type ClusterContextOutput struct {
+// This is just the most generic type of output. Used for e.g. the context command that already provides a JSON output
+// option, but the data types that make it up can't be converted to a JSONSCHEMA because Jira types are
+// self-referential.
+type MCPStringOutput struct {
 	Context string `json:"context"`
 }
 
-var ClusterContextOutputSchema, err = jsonschema.For[ClusterContextOutput](&jsonschema.ForOptions{})
+var MCPStringOutputSchema, _ = jsonschema.For[MCPStringOutput](&jsonschema.ForOptions{})
+
+type MCPServiceLogInput struct {
+	ClusterId string `json:"cluster_id" jsonschema:"ID of the cluster to retrieve information for"`
+	Internal  bool   `json:"internal" jsonschema:"Include internal servicelogs"`
+	All       bool   `json:"all" jsonschema:"List all servicelogs"`
+}
+
+var MCPServiceLogInputSchema, _ = jsonschema.For[MCPServiceLogInput](&jsonschema.ForOptions{})
+
+type MCPServiceLogOutput struct {
+	ServiceLogs servicelog.LogEntryResponseView `json:"service_logs"`
+}
+
+var MCPServiceLogOutputSchema, _ = jsonschema.For[MCPServiceLogOutput](&jsonschema.ForOptions{})
 
 var MCPCmd = &cobra.Command{
 	Use:   "mcp",
@@ -46,10 +65,17 @@ func runMCP(cmd *cobra.Command, argv []string) error {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         "context",
 		Description:  "Retrieve cluster context for a given cluster id",
-		InputSchema:  ClusterContextInputSchema,
-		OutputSchema: ClusterContextOutputSchema,
+		InputSchema:  ClusterIdInputSchema,
+		OutputSchema: MCPStringOutputSchema,
 		Title:        "cluster context",
 	}, GenerateContext)
+	mcp.AddTool(server, &mcp.Tool{
+		Name:         "service_logs",
+		Description:  "Retrieve cluster service logs for a given cluster id",
+		InputSchema:  MCPServiceLogInputSchema,
+		OutputSchema: MCPServiceLogOutputSchema,
+		Title:        "cluster service logs",
+	}, ListServiceLogs)
 	if useHttp {
 		// Create the streamable HTTP handler.
 		handler := mcp.NewStreamableHTTPHandler(func(req *http.Request) *mcp.Server {
@@ -65,9 +91,30 @@ func runMCP(cmd *cobra.Command, argv []string) error {
 	return nil
 }
 
-func GenerateContext(ctx context.Context, req *mcp.CallToolRequest, input ClusterContextInput) (*mcp.CallToolResult, ClusterContextOutput, error) {
+func GenerateContext(ctx context.Context, req *mcp.CallToolRequest, input ClusterIdInput) (*mcp.CallToolResult, MCPStringOutput, error) {
 	context, _ := cluster.GenerateContextData(input.ClusterId)
-	return nil, ClusterContextOutput{
+	return nil, MCPStringOutput{
 		context,
 	}, nil
+}
+
+func ListServiceLogs(ctx context.Context, req *mcp.CallToolRequest, input MCPServiceLogInput) (*mcp.CallToolResult, MCPServiceLogOutput, error) {
+	output := MCPServiceLogOutput{}
+	serviceLogs, err := servicelog.FetchServiceLogs(input.ClusterId, input.All, input.Internal)
+	if err != nil {
+		return &mcp.CallToolResult{
+			Meta:              mcp.Meta{},
+			Content:           []mcp.Content{},
+			StructuredContent: nil,
+			IsError:           true,
+		}, output, err
+	}
+	view := servicelog.ConvertOCMSlToLogEntryView(serviceLogs)
+	output.ServiceLogs = view
+	return &mcp.CallToolResult{
+		Meta:              mcp.Meta{},
+		Content:           []mcp.Content{},
+		StructuredContent: output,
+		IsError:           false,
+	}, output, nil
 }

@@ -83,7 +83,8 @@ func TestPrintDynatraceResources(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printDynatraceResources(data, &buf)
+	p := NewClusterContextPresenter(&buf)
+	p.printDynatraceResources(data)
 	output := buf.String()
 
 	expectedHeader := "Dynatrace Details"
@@ -156,7 +157,8 @@ func TestPrintCloudTrailLogs(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printCloudTrailLogs(events, &buf)
+	p := NewClusterContextPresenter(&buf)
+	p.printCloudTrailLogs(events)
 	outputStr := buf.String()
 
 	if !strings.Contains(outputStr, "Potentially interesting CloudTrail events") {
@@ -260,17 +262,14 @@ func TestBuildSplunkURL(t *testing.T) {
 				CreationTimestamp: time.Now(),
 			}
 
-			o := &contextOptions{
-				cluster:  mockCluster.ToV1Cluster(),
-				infraID:  tc.infraID,
-				regionID: tc.regionID,
-			}
-
 			data := &contextData{
-				OCMEnv: tc.ocmEnv,
+				Cluster:  mockCluster.ToV1Cluster(),
+				OCMEnv:   tc.ocmEnv,
+				InfraID:  tc.infraID,
+				RegionID: tc.regionID,
 			}
 
-			actualURL := o.buildSplunkURL(data)
+			actualURL := buildSplunkURL(data)
 			assert.Equal(t, tc.expectedURL, actualURL, "Generated Splunk URL does not match expected value")
 		})
 	}
@@ -282,18 +281,16 @@ func TestPrintOtherLinks(t *testing.T) {
 	mockExternalClusterID := "mock-external-cluster-id"
 	mockPDServiceID := []string{"PD12345"}
 
-	o := &contextOptions{
-		clusterID:         mockClusterID,
-		externalClusterID: mockExternalClusterID,
-	}
-
 	data := &contextData{
-		pdServiceID: mockPDServiceID,
+		ClusterID:         mockClusterID,
+		ExternalClusterID: mockExternalClusterID,
+		pdServiceID:       mockPDServiceID,
 	}
 
-	var buf bytes.Buffer
-	o.printOtherLinks(data, &buf)
-	output := buf.String()
+	buffer := strings.Builder{}
+	p := NewClusterContextPresenter(&buffer)
+	p.printOtherLinks(data, ContextOptions{})
+	output := buffer.String()
 
 	expectedLinks := []string{
 		"OHSS Cards",
@@ -322,7 +319,8 @@ func TestPrintJIRASupportExceptions(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	printJIRASupportExceptions(mockIssues, &buf)
+	p := NewClusterContextPresenter(&buf)
+	p.printJIRASupportExceptions(mockIssues)
 	output := buf.String()
 
 	expectedStrings := []string{
@@ -346,7 +344,8 @@ func TestPrintHistoricalPDAlertSummary(t *testing.T) {
 	mockSinceDays := 7
 
 	var buf bytes.Buffer
-	printHistoricalPDAlertSummary(mockIncidentCounters, mockServiceIDs, mockSinceDays, &buf)
+	p := NewClusterContextPresenter(&buf)
+	p.printHistoricalPDAlertSummary(mockIncidentCounters, mockServiceIDs, mockSinceDays)
 	output := buf.String()
 
 	expectedStrings := []string{
@@ -364,7 +363,7 @@ func TestPrintHistoricalPDAlertSummary(t *testing.T) {
 }
 
 func TestPrintShortOutput(t *testing.T) {
-	opts := &contextOptions{days: 7}
+	opts := ContextOptions{Days: 7}
 
 	limitedSupportReason, _ := v1.NewLimitedSupportReason().Build()
 	serviceLog1, _ := v2.NewLogEntry().
@@ -394,9 +393,10 @@ func TestPrintShortOutput(t *testing.T) {
 		HistoricalAlerts:      map[string][]*pagerduty.IncidentOccurrenceTracker{"service-2": {historicalAlert}},
 	}
 
-	var buf bytes.Buffer
-	opts.printShortOutput(data, &buf)
-	output := buf.String()
+	buffer := strings.Builder{}
+	p := NewClusterContextPresenter(&buffer)
+	p.RenderShort(data, opts)
+	output := buffer.String()
 
 	assert.Contains(t, output, "Version")
 	assert.Contains(t, output, "Supported?")
@@ -408,7 +408,6 @@ func TestPrintShortOutput(t *testing.T) {
 }
 
 func TestPrintJsonOutput(t *testing.T) {
-	opts := &contextOptions{}
 	jiraIssue := jira.Issue{Key: "JIRA-999"}
 
 	data := &contextData{
@@ -417,9 +416,10 @@ func TestPrintJsonOutput(t *testing.T) {
 		JiraIssues:     []jira.Issue{jiraIssue},
 	}
 
-	var buf bytes.Buffer
-	opts.printJsonOutput(data, &buf)
-	output := buf.String()
+	buffer := strings.Builder{}
+	p := NewClusterContextPresenter(&buffer)
+	p.RenderJSON(data)
+	output := buffer.String()
 
 	var result map[string]interface{}
 	err := json.Unmarshal([]byte(output), &result)
@@ -510,15 +510,16 @@ func TestPrintLongOutput(t *testing.T) {
 	*mockData.CloudtrailEvents[0].EventId = "evt-1234567890"
 	*mockData.CloudtrailEvents[0].Username = "mockUser"
 
-	o := &contextOptions{
-		verbose: true,
-		days:    30,
-		full:    true,
+	o := &ContextOptions{
+		Verbose:  true,
+		Days:     30,
+		FullScan: true,
 	}
 
-	var buf bytes.Buffer
-	o.printLongOutput(mockData, &buf)
-	output := buf.String()
+	buffer := strings.Builder{}
+	p := NewClusterContextPresenter(&buffer)
+	p.RenderLong(mockData, *o)
+	output := buffer.String()
 
 	assert.Contains(t, output, "ClusterABC")
 	assert.Contains(t, output, "cluster-123")
@@ -529,11 +530,12 @@ func TestPrintLongOutput(t *testing.T) {
 }
 
 func TestRun_UnknownOutput(t *testing.T) {
-	contextOptions := &contextOptions{
-		output: "invalidOutputFormat",
+	contextOptions := ContextOptions{
+		Days:   1,
+		Output: "invalidOutputFormat",
 	}
 
-	err := contextOptions.run()
+	err := contextOptions.Validate()
 
 	if err == nil || err.Error() != "unknown Output Format: invalidOutputFormat" {
 		t.Errorf("Expected unknown output format error, got: %v", err)
@@ -578,7 +580,8 @@ func TestPrintUserBannedStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			printUserBannedStatus(&tt.data, &buf)
+			p := NewClusterContextPresenter(&buf)
+			p.printUserBannedStatus(&tt.data)
 			actualOutput := buf.String()
 
 			expected := strings.TrimSpace(tt.expectedOutput)
@@ -613,7 +616,8 @@ func TestPrintSDNtoOVNMigrationStatus(t *testing.T) {
 			}
 
 			var buf bytes.Buffer
-			printSDNtoOVNMigrationStatus(data, &buf)
+			p := NewClusterContextPresenter(&buf)
+			p.printSDNtoOVNMigrationStatus(data)
 
 			assert.Contains(t, buf.String(), tt.expectedOutput)
 		})
