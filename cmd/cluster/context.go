@@ -73,7 +73,6 @@ func (o ContextOptions) Validate() error {
 	default:
 		return fmt.Errorf("unknown Output Format: %s", o.Output)
 	}
-	return nil
 }
 
 // ContextCache holds the runtime state and cluster information needed during execution.
@@ -284,7 +283,10 @@ func GenerateContextData(clusterId string) (string, []error) {
 
 	builder := &strings.Builder{}
 	presenter := NewClusterContextPresenter(builder)
-	presenter.Render(contextData, queryOpts)
+	err = presenter.Render(contextData, queryOpts)
+	if err != nil {
+		errs = append(errs, err)
+	}
 	return builder.String(), errs
 }
 

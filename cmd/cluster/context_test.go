@@ -395,7 +395,8 @@ func TestPrintShortOutput(t *testing.T) {
 
 	buffer := strings.Builder{}
 	p := NewClusterContextPresenter(&buffer)
-	p.RenderShort(data, opts)
+	err := p.RenderShort(data, opts)
+	assert.NoError(t, err)
 	output := buffer.String()
 
 	assert.Contains(t, output, "Version")
@@ -418,11 +419,12 @@ func TestPrintJsonOutput(t *testing.T) {
 
 	buffer := strings.Builder{}
 	p := NewClusterContextPresenter(&buffer)
-	p.RenderJSON(data)
+	err := p.RenderJSON(data)
+	assert.NoError(t, err)
 	output := buffer.String()
 
 	var result map[string]interface{}
-	err := json.Unmarshal([]byte(output), &result)
+	err = json.Unmarshal([]byte(output), &result)
 	assert.NoError(t, err)
 	assert.Contains(t, output, `"JSON Test Cluster"`)
 	assert.Contains(t, output, `"4.9"`)
@@ -518,7 +520,8 @@ func TestPrintLongOutput(t *testing.T) {
 
 	buffer := strings.Builder{}
 	p := NewClusterContextPresenter(&buffer)
-	p.RenderLong(mockData, *o)
+	err := p.RenderLong(mockData, *o)
+	assert.NoError(t, err)
 	output := buffer.String()
 
 	assert.Contains(t, output, "ClusterABC")

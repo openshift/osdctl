@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -81,7 +82,12 @@ func runMCP(cmd *cobra.Command, argv []string) error {
 		handler := mcp.NewStreamableHTTPHandler(func(req *http.Request) *mcp.Server {
 			return server
 		}, nil)
-		if err := http.ListenAndServe(fmt.Sprintf("http://localhost:%d", httpPort), handler); err != nil {
+		server := &http.Server{
+			Addr:              fmt.Sprintf("http://localhost:%d", httpPort),
+			ReadHeaderTimeout: 3 * time.Second,
+		}
+		http.Handle("/", handler)
+		if err := server.ListenAndServe(); err != nil {
 			return err
 		}
 	}

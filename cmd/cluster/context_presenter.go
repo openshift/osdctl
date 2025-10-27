@@ -159,7 +159,7 @@ func (p *ClusterContextPresenter) RenderJSON(data *contextData) error {
 
 // printOtherLinks prints external resource links
 func (p *ClusterContextPresenter) printOtherLinks(data *contextData, opts ContextOptions) {
-	var name string = "External resources"
+	name := "External resources"
 	fmt.Fprintln(p.writer, delimiter+name)
 
 	var ohssQueryURL = fmt.Sprintf("%[1]s/issues/?jql=project%%20%%3D%%22OpenShift%%20Hosted%%20SRE%%20Support%%22and%%20(%%22Cluster%%20ID%%22%%20~%%20%%20%%22%[2]s%%22OR%%22Cluster%%20ID%%22~%%22%[3]s%%22OR%%22description%%22~%%22%[2]s%%22OR%%22description%%22~%%22%[3]s%%22)",
@@ -235,7 +235,7 @@ func buildHCPSplunkURL(baseURL string, environment string, cluster *cmv1.Cluster
 
 // printHistoricalPDAlertSummary prints a summary of historical PagerDuty alerts
 func (p *ClusterContextPresenter) printHistoricalPDAlertSummary(incidentCounters map[string][]*pagerduty.IncidentOccurrenceTracker, serviceIDs []string, sinceDays int) {
-	var name string = "PagerDuty Historical Alerts"
+	name := "PagerDuty Historical Alerts"
 	fmt.Fprintln(p.writer, delimiter+name)
 
 	for _, serviceID := range serviceIDs {
@@ -266,7 +266,7 @@ func (p *ClusterContextPresenter) printHistoricalPDAlertSummary(incidentCounters
 
 // printJIRASupportExceptions prints JIRA support exception tickets
 func (p *ClusterContextPresenter) printJIRASupportExceptions(issues []jira.Issue) {
-	var name string = "Support Exceptions"
+	name := "Support Exceptions"
 	fmt.Fprintln(p.writer, delimiter+name)
 
 	for _, i := range issues {
@@ -281,7 +281,7 @@ func (p *ClusterContextPresenter) printJIRASupportExceptions(issues []jira.Issue
 
 // printCloudTrailLogs prints potentially interesting CloudTrail events
 func (p *ClusterContextPresenter) printCloudTrailLogs(events []*types.Event) {
-	var name string = "Potentially interesting CloudTrail events"
+	name := "Potentially interesting CloudTrail events"
 	fmt.Fprintln(p.writer, delimiter+name)
 
 	if events == nil {
@@ -327,7 +327,7 @@ func (p *ClusterContextPresenter) printNetworkInfo(data *contextData) {
 
 // printDynatraceResources prints Dynatrace-related URLs and information
 func (p *ClusterContextPresenter) printDynatraceResources(data *contextData) {
-	var name string = "Dynatrace Details"
+	name := "Dynatrace Details"
 	fmt.Fprintln(p.writer, delimiter+name)
 
 	links := map[string]string{
@@ -360,7 +360,7 @@ func (p *ClusterContextPresenter) printDynatraceResources(data *contextData) {
 
 // printUserBannedStatus prints user ban status and details
 func (p *ClusterContextPresenter) printUserBannedStatus(data *contextData) {
-	var name string = "User Ban Details"
+	name := "User Ban Details"
 	fmt.Fprintln(p.writer, "\n"+delimiter+name)
 	if data.UserBanned {
 		fmt.Fprintln(p.writer, "User is banned")
