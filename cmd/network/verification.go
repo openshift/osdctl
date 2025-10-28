@@ -310,6 +310,7 @@ func generateServiceLog(out *output.Output, clusterId string) servicelog.PostCmd
 			Template:       blockedEgressTemplateUrl,
 			ClusterId:      clusterId,
 			TemplateParams: []string{fmt.Sprintf("URLS=%v", strings.Join(egressUrls, ","))},
+			SkipLinkCheck:  true,
 		}
 	}
 	return servicelog.PostCmdOptions{}
