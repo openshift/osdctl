@@ -572,6 +572,7 @@ func Test_generateServiceLog(t *testing.T) {
 				Template:       blockedEgressTemplateUrl,
 				TemplateParams: []string{"URLS=storage.googleapis.com:443"},
 				ClusterId:      testClusterId,
+				SkipLinkCheck:  true,
 			},
 		},
 		{
@@ -585,6 +586,7 @@ func Test_generateServiceLog(t *testing.T) {
 				Template:       blockedEgressTemplateUrl,
 				TemplateParams: []string{"URLS=storage.googleapis.com:443,console.redhat.com:443,s3.amazonaws.com:443"},
 				ClusterId:      testClusterId,
+				SkipLinkCheck:  true,
 			},
 		},
 	}
