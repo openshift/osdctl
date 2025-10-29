@@ -8,7 +8,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
-	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
@@ -71,12 +70,6 @@ func (o *consoleOptions) complete(cmd *cobra.Command) error {
 func (o *consoleOptions) run() error {
 
 	var err error
-
-	ocmClient, err := utils.CreateConnection()
-	if err != nil {
-		return err
-	}
-	defer ocmClient.Close()
 
 	// Build the base AWS client using the provide credentials (profile or env vars)
 	awsClient, err := aws.NewAwsClient(o.awsProfile, o.region, "")
