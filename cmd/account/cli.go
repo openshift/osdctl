@@ -6,7 +6,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts/types"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/provider/aws"
-	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
@@ -45,15 +44,6 @@ type cliOptions struct {
 }
 
 func (o *cliOptions) complete(cmd *cobra.Command) error {
-
-	var err error
-
-	ocmClient, err := utils.CreateConnection()
-	if err != nil {
-		return err
-	}
-	defer ocmClient.Close()
-
 	if o.awsAccountID == "" {
 		return fmt.Errorf("please specify account number with '-i'")
 	}
@@ -68,12 +58,6 @@ func (o *cliOptions) complete(cmd *cobra.Command) error {
 func (o *cliOptions) run() error {
 
 	var err error
-
-	ocmClient, err := utils.CreateConnection()
-	if err != nil {
-		return err
-	}
-	defer ocmClient.Close()
 
 	// Build the base AWS client using the provide credentials (profile or env vars)
 	awsClient, err := aws.NewAwsClient(o.awsProfile, o.region, "")
