@@ -38,6 +38,7 @@ CLI tool to provide OSD related utilities
 * [osdctl jira](osdctl_jira.md)	 - Provides a set of commands for interacting with Jira
 * [osdctl jumphost](osdctl_jumphost.md)	 - 
 * [osdctl mc](osdctl_mc.md)	 - 
+* [osdctl mcp](osdctl_mcp.md)	 - Start osdctl in MCP server mode
 * [osdctl network](osdctl_network.md)	 - network related utilities
 * [osdctl org](osdctl_org.md)	 - Provides information for a specified organization
 * [osdctl promote](osdctl_promote.md)	 - Utilities to promote services/operators

@@ -63,6 +63,17 @@ func listServiceLogs(clusterID string, opts *listCmdOptions) error {
 }
 
 func printServiceLogResponse(response *slv1.ClustersClusterLogsListResponse) error {
+	view := ConvertOCMSlToLogEntryView(response)
+
+	viewBytes, err := json.Marshal(view)
+	if err != nil {
+		return fmt.Errorf("failed to marshal response for output: %w", err)
+	}
+
+	return dump.Pretty(os.Stdout, viewBytes)
+}
+
+func ConvertOCMSlToLogEntryView(response *slv1.ClustersClusterLogsListResponse) LogEntryResponseView {
 	entryViews := logEntryToView(response.Items().Slice())
 	slices.Reverse(entryViews)
 	view := LogEntryResponseView{
@@ -72,13 +83,7 @@ func printServiceLogResponse(response *slv1.ClustersClusterLogsListResponse) err
 		Size:  response.Size(),
 		Total: response.Total(),
 	}
-
-	viewBytes, err := json.Marshal(view)
-	if err != nil {
-		return fmt.Errorf("failed to marshal response for output: %w", err)
-	}
-
-	return dump.Pretty(os.Stdout, viewBytes)
+	return view
 }
 
 type LogEntryResponseView struct {
@@ -110,15 +115,24 @@ type LogEntryView struct {
 }
 
 func logEntryToView(entries []*slv1.LogEntry) []*LogEntryView {
+	// Forces an empty array to actual be [] when Marshalled and not null - this is a JSONSCHEMA error that is
+	// configurable json v2: https://pkg.go.dev/encoding/json/v2#FormatNilSliceAsNull
+	emptyDocReference := []string{}
 	entryViews := make([]*LogEntryView, 0, len(entries))
 	for _, entry := range entries {
+		var docRef []string
+		if len(entry.DocReferences()) > 0 {
+			docRef = entry.DocReferences()
+		} else {
+			docRef = emptyDocReference
+		}
 		entryView := &LogEntryView{
 			ClusterID:     entry.ClusterID(),
 			ClusterUUID:   entry.ClusterUUID(),
 			CreatedAt:     entry.CreatedAt(),
 			CreatedBy:     entry.CreatedBy(),
 			Description:   entry.Description(),
-			DocReferences: entry.DocReferences(),
+			DocReferences: docRef,
 			EventStreamID: entry.EventStreamID(),
 			Href:          entry.HREF(),
 			ID:            entry.ID(),
