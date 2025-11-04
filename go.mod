@@ -2,8 +2,6 @@ module github.com/openshift/osdctl
 
 go 1.24.0
 
-toolchain go1.24.5
-
 require (
 	cloud.google.com/go/compute v1.37.0
 	github.com/AlecAivazis/survey/v2 v2.3.7
@@ -43,7 +41,7 @@ require (
 	github.com/openshift-online/ocm-sdk-go v0.1.473
 	github.com/openshift/api v0.0.0-20250207102212-9e59a77ed2e0
 	github.com/openshift/aws-account-operator/api v0.0.0-20250205151445-6455c35fc4ae
-	github.com/openshift/backplane-api v0.0.0-20251104000747-98b06cbc6ca5
+	github.com/openshift/backplane-api v0.0.0-20251104022300-74674d3b6921
 	github.com/openshift/backplane-cli v0.4.0
 	github.com/openshift/cloud-credential-operator v0.0.0-20250120201329-db5f2531a5b4
 	github.com/openshift/gcp-project-operator v0.0.0-20241024143818-ec4eabd35aba

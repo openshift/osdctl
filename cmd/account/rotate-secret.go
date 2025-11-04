@@ -87,7 +87,7 @@ func (o *rotateSecretOptions) complete(cmd *cobra.Command, args []string) error 
 	o.awsAccountTimeout = awsSdk.Int32(900)
 
 	if o.osdManagedAdminUsername != "" && !strings.HasPrefix(o.osdManagedAdminUsername, common.OSDManagedAdminIAM) {
-		return cmdutil.UsageErrorf(cmd, fmt.Sprintf("admin-username must start with %v", common.OSDManagedAdminIAM))
+		return cmdutil.UsageErrorf(cmd, "admin-username must start with %v", common.OSDManagedAdminIAM)
 	}
 
 	return nil

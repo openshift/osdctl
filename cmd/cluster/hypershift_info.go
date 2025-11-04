@@ -146,7 +146,7 @@ func (i *infoOptions) complete(cmd *cobra.Command) error {
 		}
 	}
 	if errMsg != "" {
-		return fmt.Errorf(errMsg)
+		return errors.New(errMsg)
 	}
 	return nil
 }

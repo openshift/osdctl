@@ -79,19 +79,19 @@ func (o *listAccountOptions) complete(cmd *cobra.Command, _ []string) error {
 
 	// throw error
 	default:
-		return cmdutil.UsageErrorf(cmd, "unsupported account state "+o.state)
+		return cmdutil.UsageErrorf(cmd, "unsupported account state %s", o.state)
 	}
 
 	switch o.reused {
 	case "", "true", "false":
 	default:
-		return cmdutil.UsageErrorf(cmd, "unsupported reused status filter "+o.reused)
+		return cmdutil.UsageErrorf(cmd, "unsupported reused status filter %s", o.reused)
 	}
 
 	switch o.claimed {
 	case "", "true", "false":
 	default:
-		return cmdutil.UsageErrorf(cmd, "unsupported claimed status filter "+o.claimed)
+		return cmdutil.UsageErrorf(cmd, "unsupported claimed status filter %s", o.claimed)
 	}
 
 	o.output = o.GlobalOptions.Output

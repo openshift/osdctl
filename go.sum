@@ -465,8 +465,8 @@ github.com/openshift/api v0.0.0-20250207102212-9e59a77ed2e0 h1:5n8BKML7fkmR4tz81
 github.com/openshift/api v0.0.0-20250207102212-9e59a77ed2e0/go.mod h1:yk60tHAmHhtVpJQo3TwVYq2zpuP70iJIFDCmeKMIzPw=
 github.com/openshift/aws-account-operator/api v0.0.0-20250205151445-6455c35fc4ae h1:yXsnxp1RC3l2VX26ipQbXZl4s3Vky8eWcJdozD+RtMo=
 github.com/openshift/aws-account-operator/api v0.0.0-20250205151445-6455c35fc4ae/go.mod h1:1PdbQqTDrejSl9zsScM1x59f0oHNTsAgoJqTZqTkH/U=
-github.com/openshift/backplane-api v0.0.0-20251104000747-98b06cbc6ca5 h1:Ebxp4NroZLd8yjDCrqY3RXkWYw+8LM/FUNhKKiHmDgE=
-github.com/openshift/backplane-api v0.0.0-20251104000747-98b06cbc6ca5/go.mod h1:0+HQ/Ujo/hRKpBFePq2Zitrk6sc5viJNrDtbBTx1uh0=
+github.com/openshift/backplane-api v0.0.0-20251104022300-74674d3b6921 h1:YeKHtikw9xrsmneWANnPEF5EDe5rUFUbBhMyY14N3ps=
+github.com/openshift/backplane-api v0.0.0-20251104022300-74674d3b6921/go.mod h1:0+HQ/Ujo/hRKpBFePq2Zitrk6sc5viJNrDtbBTx1uh0=
 github.com/openshift/backplane-cli v0.4.0 h1:x4XbAfnLyrYK0HGWBdsOyUlwG2A6lTPGg8TSbilrD6M=
 github.com/openshift/backplane-cli v0.4.0/go.mod h1:FOU+vEWkJw2b7x7JZ0ZRhMgnVXKgBA8J5wDID9j1ZQg=
 github.com/openshift/cloud-credential-operator v0.0.0-20250120201329-db5f2531a5b4 h1:nrD3npDGt5bvwNXZKTzzEuZTI/4Uo5PbrkpAjfxhxtE=

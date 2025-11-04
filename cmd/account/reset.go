@@ -79,7 +79,7 @@ func (o *resetOptions) complete(cmd *cobra.Command, args []string) error {
 func (o *resetOptions) run() error {
 	if !o.skipCheck {
 		reader := bufio.NewReader(o.In)
-		fmt.Fprintf(o.Out, fmt.Sprintf("Reset account %s? (Y/N) ", o.accountName))
+		fmt.Fprintf(o.Out, "Reset account %s? (Y/N) ", o.accountName)
 		text, _ := reader.ReadSlice('\n')
 
 		input := strings.ToLower(strings.Trim(string(text), "\n"))
