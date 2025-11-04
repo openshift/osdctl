@@ -1307,7 +1307,7 @@ osdctl cluster context --cluster-id <cluster-identifier> [flags]
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
   -S, --skip-version-check               skip checking to see if this is the most recent release
-  -t, --team-ids team_ids                Pass in PD team IDs directly to filter the PD Alerts by team. Can also be defined as team_ids in ~/.config/osdctl
+  -t, --team-ids teamIds                 Pass in PD team IDs directly to filter the PD Alerts by team. Can also be defined as teamIds in ~/.config/osdctl
                                          Will show all PD Alerts for all PD service IDs if none is defined
       --usertoken pd_user_token          Pass in PD usertoken directly. If not passed in, by default will read pd_user_token from ~/config/osdctl
       --verbose                          Verbose output
