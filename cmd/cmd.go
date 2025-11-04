@@ -20,7 +20,6 @@ import (
 	"github.com/openshift/osdctl/cmd/aao"
 	"github.com/openshift/osdctl/cmd/account"
 	"github.com/openshift/osdctl/cmd/alerts"
-	"github.com/openshift/osdctl/cmd/capability"
 	"github.com/openshift/osdctl/cmd/cloudtrail"
 	"github.com/openshift/osdctl/cmd/cluster"
 	"github.com/openshift/osdctl/cmd/cost"
@@ -118,16 +117,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	// Add upgradeCmd for upgrading the currently running executable in-place.
 	rootCmd.AddCommand(upgradeCmd)
 
-	rootCmd.AddCommand(capability.NewCmdCapability())
-
 	return rootCmd
-}
-
-func help(cmd *cobra.Command, _ []string) {
-	err := cmd.Help()
-	if err != nil {
-		fmt.Println("Error while printing help: ", err.Error())
-	}
 }
 
 // Checks if the version check should be run
