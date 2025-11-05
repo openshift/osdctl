@@ -62,7 +62,7 @@ func (o *listAccountClaimOptions) complete(cmd *cobra.Command, _ []string) error
 
 	// throw error
 	default:
-		return cmdutil.UsageErrorf(cmd, "unsupported account claim state "+o.state)
+		return cmdutil.UsageErrorf(cmd, "unsupported account claim state %s", o.state)
 	}
 
 	o.output = o.GlobalOptions.Output

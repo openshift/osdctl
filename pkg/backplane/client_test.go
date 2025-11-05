@@ -69,7 +69,7 @@ func TestNewClient(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockClient := &mockBackplaneClient{}
-			client := NewClient(mockClient, tt.clusterID)
+			client := newMockClient(mockClient, tt.clusterID)
 
 			if client.clusterID != tt.clusterID {
 				t.Errorf("NewClient() clusterID = %v, expected %v", client.clusterID, tt.clusterID)
@@ -117,7 +117,7 @@ func TestGetJobLogs(t *testing.T) {
 				getLogsError:    tt.mockError,
 			}
 
-			client := NewClient(mockClient, "test-cluster")
+			client := newMockClient(mockClient, "test-cluster")
 			logs, err := client.getJobLogs(tt.jobID)
 
 			if tt.expectedError {
@@ -165,7 +165,7 @@ func TestRunManagedJobWithClient_CreateJobErrors(t *testing.T) {
 				createJobError:    tt.mockError,
 			}
 
-			client := NewClient(mockClient, "test-cluster")
+			client := newMockClient(mockClient, "test-cluster")
 			result, err := client.RunManagedJobWithClient("test-script", map[string]string{}, 60)
 
 			if result != nil {
@@ -178,5 +178,12 @@ func TestRunManagedJobWithClient_CreateJobErrors(t *testing.T) {
 				t.Errorf("RunManagedJobWithClient() error = %v, expected to contain %v", err, tt.errorContains)
 			}
 		})
+	}
+}
+
+func newMockClient(backplaneClient backplaneapi.ClientInterface, clusterID string) *Client {
+	return &Client{
+		backplaneClient: backplaneClient,
+		clusterID:       clusterID,
 	}
 }

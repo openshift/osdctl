@@ -20,7 +20,7 @@ osdctl cluster context --cluster-id <cluster-identifier> [flags]
   -o, --output string               Valid formats are ['long', 'short', 'json']. Output is set to 'long' by default (default "long")
       --pages int                   Command will display X pages of Cloud Trail logs for the cluster. Pages is set to 40 by default (default 40)
   -p, --profile string              AWS Profile
-  -t, --team-ids team_ids           Pass in PD team IDs directly to filter the PD Alerts by team. Can also be defined as team_ids in ~/.config/osdctl
+  -t, --team-ids teamIds            Pass in PD team IDs directly to filter the PD Alerts by team. Can also be defined as teamIds in ~/.config/osdctl
                                     Will show all PD Alerts for all PD service IDs if none is defined
       --usertoken pd_user_token     Pass in PD usertoken directly. If not passed in, by default will read pd_user_token from ~/config/osdctl
       --verbose                     Verbose output

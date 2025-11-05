@@ -2,13 +2,22 @@ package backplane
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
 
 	backplaneapi "github.com/openshift/backplane-api/pkg/client"
+	bpapi "github.com/openshift/backplane-cli/pkg/backplaneapi"
+	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
+
+type ManagedJobResult struct {
+	Output string
+	JobID  string
+}
 
 type Client struct {
 	backplaneClient backplaneapi.ClientInterface
@@ -16,16 +25,21 @@ type Client struct {
 }
 
 // NewClient creates a new backplane client
-func NewClient(backplaneClient backplaneapi.ClientInterface, clusterID string) *Client {
-	return &Client{
-		backplaneClient: backplaneClient,
-		clusterID:       clusterID,
+func NewClient(clusterID string) (*Client, error) {
+	bp, err := bpconfig.GetBackplaneConfiguration()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load backplane configuration: %w", err)
 	}
-}
 
-type ManagedJobResult struct {
-	Output string
-	JobID  string
+	bpclient, err := bpapi.DefaultClientUtils.MakeRawBackplaneAPIClient(bp.URL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create backplane API client: %w", err)
+	}
+
+	return &Client{
+		backplaneClient: bpclient,
+		clusterID:       clusterID,
+	}, nil
 }
 
 // RunManagedJobWithClient executes a managedscript (with a specified timeout) on the cluster and returns the result
@@ -41,7 +55,7 @@ func (c *Client) RunManagedJobWithClient(canonicalName string, parameters map[st
 	fmt.Printf("\nCreating managed job for script: %s on cluster: %s\n", canonicalName, c.clusterID)
 	resp, err := c.backplaneClient.CreateJob(ctx, c.clusterID, createJob)
 	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return nil, fmt.Errorf("timeout deadline reached: was unable to create the job within the deadline")
 		}
 		return nil, fmt.Errorf("failed to create managed job: %w", err)
@@ -79,6 +93,43 @@ func (c *Client) RunManagedJobWithClient(canonicalName string, parameters map[st
 		Output: output,
 		JobID:  jobID,
 	}, nil
+}
+
+// ListReports returns a type that includes a slice of reports for a cluster. The default for `last` is 10.
+func (c *Client) ListReports(ctx context.Context, last int) (*backplaneapi.ListReports, error) {
+	list := &backplaneapi.ListReports{}
+
+	params := &backplaneapi.GetReportsByClusterParams{}
+	if last > 0 {
+		params.Last = &last
+	}
+	reports, err := c.backplaneClient.GetReportsByCluster(ctx, c.clusterID, params)
+	if err != nil {
+		return list, fmt.Errorf("failed to list reports: %w", err)
+	}
+	defer reports.Body.Close()
+
+	err = json.NewDecoder(reports.Body).Decode(&list)
+	if err != nil {
+		return list, fmt.Errorf("failed to unmarshal reports: %w", err)
+	}
+	return list, nil
+}
+
+func (c *Client) GetReport(ctx context.Context, reportID string) (*backplaneapi.Report, error) {
+	output := &backplaneapi.Report{}
+
+	report, err := c.backplaneClient.GetReportById(ctx, c.clusterID, reportID)
+	if err != nil {
+		return output, fmt.Errorf("failed to get report: %w", err)
+	}
+	defer report.Body.Close()
+
+	err = json.NewDecoder(report.Body).Decode(&output)
+	if err != nil {
+		return output, fmt.Errorf("failed to unmarshal report: %w", err)
+	}
+	return output, nil
 }
 
 func (c *Client) waitForJobCompletion(jobID string) error {

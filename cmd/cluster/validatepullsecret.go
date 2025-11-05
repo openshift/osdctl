@@ -8,8 +8,6 @@ import (
 
 	"github.com/AlecAivazis/survey/v2"
 	v1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
-	bpapi "github.com/openshift/backplane-cli/pkg/backplaneapi"
-	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
 	bputils "github.com/openshift/backplane-cli/pkg/utils"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/backplane"
@@ -123,21 +121,14 @@ func (o *validatePullSecretOptions) run() error {
 }
 
 func (o *validatePullSecretOptions) getPullSecretWithManagedJob() (email string, err error) {
-	bp, err := bpconfig.GetBackplaneConfiguration()
+	backplaneClient, err := backplane.NewClient(o.clusterID)
 	if err != nil {
-		return "", fmt.Errorf("failed to load backplane configuration: %w", err)
+		return "", fmt.Errorf("failed to create backplane client: %w", err)
 	}
-
-	bpclient, err := bpapi.DefaultClientUtils.MakeRawBackplaneAPIClient(bp.URL)
-	if err != nil {
-		return "", fmt.Errorf("failed to create backplane API client: %w", err)
-	}
-
-	client := backplane.NewClient(bpclient, o.clusterID)
 	canonicalName := "security/get-pull-secret-email"
 	parameters := map[string]string{}
 
-	result, err := client.RunManagedJobWithClient(canonicalName, parameters, 60)
+	result, err := backplaneClient.RunManagedJobWithClient(canonicalName, parameters, 60)
 	if err != nil {
 		return "", err
 	}

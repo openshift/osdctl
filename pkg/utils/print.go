@@ -14,6 +14,7 @@ import (
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
+	backplaneapi "github.com/openshift/backplane-api/pkg/client"
 	"github.com/openshift/osdctl/pkg/printer"
 )
 
@@ -139,5 +140,29 @@ func PrintLimitedSupportReasons(limitedSupportReasons []*cmv1.LimitedSupportReas
 	table.AddRow([]string{})
 	if err := table.Flush(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error printing %s: %v\n", name, err)
+	}
+}
+
+func PrintClusterReports(reports *backplaneapi.ListReports) {
+	fmt.Println(delimiter + "Cluster Reports 📒")
+
+	if reports == nil || len(reports.Reports) == 0 {
+		fmt.Println("None")
+		return
+	}
+
+	table := printer.NewTablePrinter(os.Stdout, 20, 1, 3, ' ')
+	table.AddRow([]string{"Report ID", "Summary", "Created At"})
+	for _, report := range reports.Reports {
+		timeString := report.CreatedAt.Format(time.RFC3339)
+		table.AddRow([]string{
+			*report.ReportId,
+			*report.Summary,
+			timeString,
+		})
+	}
+
+	if err := table.Flush(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error printing cluster reports: %v\n", err)
 	}
 }
