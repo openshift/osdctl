@@ -31,7 +31,7 @@ OS := $(shell go env GOOS | sed 's/[a-z]/\U&/')
 ARCH := $(shell go env GOARCH)
 .PHONY: download-goreleaser
 download-goreleaser: ## Download goreleaser binary
-	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser/v2@v2.6.1 # TODO: bump once we move to Go 1.24
+	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser/v2@v2.11.2
 
 # Update documentation as a part of every release
 .PHONY: generate-docs
@@ -40,7 +40,7 @@ generate-docs: ## Generate docs
 	
 # Verify documents using PROW as a part of every PR raised for osdctl
 .PHONY: verify-docs
-verify-docs: ## Verify docs are up to date
+verify-docs:
 	./scripts/verify-docs.sh
 
 # CI build containers don't include goreleaser by default,
@@ -50,8 +50,8 @@ ci-build: download-goreleaser build ## Build for CI environment
 
 SINGLE_TARGET ?= false
 
-# Need to use --snapshot here because the goReleaser
-# requires more git info that is provided in Prow's clone.
+# Need to use --snapshot here because goreleaser
+# requires more git info than what is provided in Prow's clone.
 # Snapshot allows the build without validation of the
 # repository itself
 build: ## Compile osdctl
