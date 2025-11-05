@@ -118,6 +118,15 @@ func GetSubFromClusterID(ocmClient *sdk.Connection, cluster cmv1.Cluster) (*amsv
 	return respSlice[0], nil
 }
 
+func GetInternalClusterID(ocmClient *sdk.Connection, clusterIdentifier string) (string, error) {
+	cluster, err := GetCluster(ocmClient, clusterIdentifier)
+	if err != nil {
+		return "", fmt.Errorf("failed to get cluster: %w", err)
+	}
+
+	return cluster.ID(), nil
+}
+
 // ApplyFilters retrieves clusters in OCM which match the filters given
 func ApplyFilters(ocmClient *sdk.Connection, filters []string) ([]*cmv1.Cluster, error) {
 	if len(filters) < 1 {
