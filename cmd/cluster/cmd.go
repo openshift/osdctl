@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/openshift/osdctl/cmd/cluster/access"
+	"github.com/openshift/osdctl/cmd/cluster/reports"
 	"github.com/openshift/osdctl/cmd/cluster/resize"
 	"github.com/openshift/osdctl/cmd/cluster/sre_operators"
 	"github.com/openshift/osdctl/cmd/cluster/ssh"
@@ -45,6 +46,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, client *k8s.LazyClient, 
 	clusterCmd.AddCommand(ssh.NewCmdSSH())
 	clusterCmd.AddCommand(sre_operators.NewCmdSREOperators(streams, client))
 	clusterCmd.AddCommand(newCmdGetEnvVars())
+	clusterCmd.AddCommand(reports.NewCmdReports())
 	return clusterCmd
 }
 

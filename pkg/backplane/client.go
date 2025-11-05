@@ -132,6 +132,32 @@ func (c *Client) GetReport(ctx context.Context, reportID string) (*backplaneapi.
 	return output, nil
 }
 
+func (c *Client) CreateReport(ctx context.Context, summary string, data string) (*backplaneapi.Report, error) {
+	output := &backplaneapi.Report{}
+
+	createReq := backplaneapi.CreateReportJSONRequestBody{
+		Summary: summary,
+		Data:    data,
+	}
+
+	resp, err := c.backplaneClient.CreateReport(ctx, c.clusterID, createReq)
+	if err != nil {
+		return output, fmt.Errorf("failed to create report: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 && resp.StatusCode != 201 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return output, fmt.Errorf("failed to create report, status: %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&output)
+	if err != nil {
+		return output, fmt.Errorf("failed to unmarshal report: %w", err)
+	}
+	return output, nil
+}
+
 func (c *Client) waitForJobCompletion(jobID string) error {
 	pollCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
