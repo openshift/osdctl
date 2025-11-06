@@ -53,7 +53,7 @@ osdctl dynatrace logs --cluster-id <cluster-identifier> [flags]
       --container strings   Container name(s) (comma-separated)
       --contains string     Include logs which contain a phrase
       --dry-run             Only builds the query without fetching any logs from the tenant
-      --from time           Datetime from which to filter logs, in the format "YYYY-MM-DD HH:MM" (default 0001-01-01T00:00:00Z)
+      --from time           Datetime from which to filter logs, in the format "YYYY-MM-DD HH:MM"
   -h, --help                help for logs
   -n, --namespace strings   Namespace(s) (comma-separated)
       --node strings        Node name(s) (comma-separated)
@@ -61,7 +61,7 @@ osdctl dynatrace logs --cluster-id <cluster-identifier> [flags]
       --sort string         Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'. Defaults to 'asc' (default "asc")
       --status strings      Status(Info/Warn/Error) (comma-separated)
       --tail int            Last 'n' logs to fetch (defaults to 100) (default 1000)
-      --to time             Datetime until which to filter logs to, in the format "YYYY-MM-DD HH:MM" (default 0001-01-01T00:00:00Z)
+      --to time             Datetime until which to filter logs to, in the format "YYYY-MM-DD HH:MM"
 ```
 
 ### Options inherited from parent commands
