@@ -55,7 +55,7 @@
   - `logging-check --cluster-id <cluster-identifier>` - Shows the logging support status of a specified cluster
   - `orgId --cluster-id <cluster-identifier` - Get the OCM org ID for a given cluster
   - `owner` - List the clusters owned by the user (can be specified to any user, not only yourself)
-  - `reports` - Cluster Reports from backplane-api
+  - `reports` - Manage cluster reports in backplane-api
     - `create` - Create a new cluster report in backplane-api
     - `get` - Get a specific cluster report from backplane-api
     - `list` - List cluster reports from backplane-api
@@ -1614,7 +1614,11 @@ osdctl cluster owner [flags]
 
 ### osdctl cluster reports
 
-Cluster Reports from backplane-api
+Manage cluster reports stored in backplane-api.
+
+Cluster reports are used to store and retrieve diagnostic information
+and other data related to cluster operations. Reports are associated with a
+specific cluster and include a summary and base64-encoded data.
 
 ```
 osdctl cluster reports [flags]
@@ -1638,7 +1642,29 @@ osdctl cluster reports [flags]
 
 ### osdctl cluster reports create
 
-Create a new cluster report in backplane-api
+Create a new report for a cluster with data from a string or file.
+
+This command creates a new report associated with a cluster. The report
+includes a summary (title) and data content. You can provide the data either
+directly as a string using --data, or from a file using --file. The data
+will be automatically base64-encoded before storage.
+
+Examples:
+  # Create a report with inline data
+  osdctl cluster reports create --cluster-id 1a2b3c4d \
+    --summary "Network diagnostic results" \
+    --data "All network checks passed successfully"
+
+  # Create a report from a file
+  osdctl cluster reports create -C my-cluster \
+    --summary "Pod logs from incident" \
+    --file /tmp/pod-logs.txt
+
+  # Create a report and output as JSON
+  osdctl cluster reports create --cluster-id 1a2b3c4d \
+    --summary "Cluster health check" \
+    --data "CPU: 45%, Memory: 67%, Disk: 23%" \
+    --output json
 
 ```
 osdctl cluster reports create [flags]
@@ -1666,7 +1692,20 @@ osdctl cluster reports create [flags]
 
 ### osdctl cluster reports get
 
-Get a specific cluster report from backplane-api
+Retrieve and display a specific report by its ID.
+
+This command fetches a report by its report ID and displays the decoded
+report data. Use 'list' to find available report IDs.
+
+Examples:
+  # Get a specific report and display its contents
+  osdctl cluster reports get --cluster-id 1a2b3c4d --report-id abc-123-def
+
+  # Get a report with JSON output (includes encoded data)
+  osdctl cluster reports get -C my-cluster -r report-456 --output json
+
+  # Get a report and pipe the output to a file
+  osdctl cluster reports get -C 1a2b3c4d -r abc-123 > report-output.txt
 
 ```
 osdctl cluster reports get [flags]
@@ -1692,7 +1731,21 @@ osdctl cluster reports get [flags]
 
 ### osdctl cluster reports list
 
-List cluster reports from backplane-api
+List all reports for a specific cluster.
+
+This command retrieves and displays all reports associated with a cluster,
+showing the report ID, summary, and creation timestamp. You can optionally
+limit the number of reports returned to the most recent N reports.
+
+Examples:
+  # List all reports for a cluster (defaults to 10 most recent)
+  osdctl cluster reports list --cluster-id 1a2b3c4d
+
+  # List the 5 most recent reports
+  osdctl cluster reports list --cluster-id 1a2b3c4d --last 5
+
+  # List reports with JSON output
+  osdctl cluster reports list --cluster-id my-cluster --output json
 
 ```
 osdctl cluster reports list [flags]
@@ -2460,7 +2513,7 @@ osdctl dynatrace logs --cluster-id <cluster-identifier> [flags]
       --contains string                  Include logs which contain a phrase
       --context string                   The name of the kubeconfig context to use
       --dry-run                          Only builds the query without fetching any logs from the tenant
-      --from time                        Datetime from which to filter logs, in the format "YYYY-MM-DD HH:MM" (default 0001-01-01T00:00:00Z)
+      --from time                        Datetime from which to filter logs, in the format "YYYY-MM-DD HH:MM"
   -h, --help                             help for logs
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
@@ -2475,7 +2528,7 @@ osdctl dynatrace logs --cluster-id <cluster-identifier> [flags]
       --sort string                      Sort the results by timestamp in either ascending or descending order. Accepted values are 'asc' and 'desc'. Defaults to 'asc' (default "asc")
       --status strings                   Status(Info/Warn/Error) (comma-separated)
       --tail int                         Last 'n' logs to fetch (defaults to 100) (default 1000)
-      --to time                          Datetime until which to filter logs to, in the format "YYYY-MM-DD HH:MM" (default 0001-01-01T00:00:00Z)
+      --to time                          Datetime until which to filter logs to, in the format "YYYY-MM-DD HH:MM"
 ```
 
 ### osdctl dynatrace url

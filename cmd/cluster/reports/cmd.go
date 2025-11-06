@@ -13,8 +13,13 @@ import (
 // osdctl cluster reports create --cluster-id <cluster-id> --summary <summary> --file <file-path>
 func NewCmdReports() *cobra.Command {
 	reportsCmd := &cobra.Command{
-		Use:               "reports",
-		Short:             "Cluster Reports from backplane-api",
+		Use:   "reports",
+		Short: "Manage cluster reports in backplane-api",
+		Long: `Manage cluster reports stored in backplane-api.
+
+Cluster reports are used to store and retrieve diagnostic information
+and other data related to cluster operations. Reports are associated with a
+specific cluster and include a summary and base64-encoded data.`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run:               help,

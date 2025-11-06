@@ -2,6 +2,24 @@
 
 List cluster reports from backplane-api
 
+### Synopsis
+
+List all reports for a specific cluster.
+
+This command retrieves and displays all reports associated with a cluster,
+showing the report ID, summary, and creation timestamp. You can optionally
+limit the number of reports returned to the most recent N reports.
+
+Examples:
+  # List all reports for a cluster (defaults to 10 most recent)
+  osdctl cluster reports list --cluster-id 1a2b3c4d
+
+  # List the 5 most recent reports
+  osdctl cluster reports list --cluster-id 1a2b3c4d --last 5
+
+  # List reports with JSON output
+  osdctl cluster reports list --cluster-id my-cluster --output json
+
 ```
 osdctl cluster reports list [flags]
 ```
@@ -31,5 +49,5 @@ osdctl cluster reports list [flags]
 
 ### SEE ALSO
 
-* [osdctl cluster reports](osdctl_cluster_reports.md)	 - Cluster Reports from backplane-api
+* [osdctl cluster reports](osdctl_cluster_reports.md)	 - Manage cluster reports in backplane-api
 

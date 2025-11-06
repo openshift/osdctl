@@ -2,6 +2,23 @@
 
 Get a specific cluster report from backplane-api
 
+### Synopsis
+
+Retrieve and display a specific report by its ID.
+
+This command fetches a report by its report ID and displays the decoded
+report data. Use 'list' to find available report IDs.
+
+Examples:
+  # Get a specific report and display its contents
+  osdctl cluster reports get --cluster-id 1a2b3c4d --report-id abc-123-def
+
+  # Get a report with JSON output (includes encoded data)
+  osdctl cluster reports get -C my-cluster -r report-456 --output json
+
+  # Get a report and pipe the output to a file
+  osdctl cluster reports get -C 1a2b3c4d -r abc-123 > report-output.txt
+
 ```
 osdctl cluster reports get [flags]
 ```
@@ -31,5 +48,5 @@ osdctl cluster reports get [flags]
 
 ### SEE ALSO
 
-* [osdctl cluster reports](osdctl_cluster_reports.md)	 - Cluster Reports from backplane-api
+* [osdctl cluster reports](osdctl_cluster_reports.md)	 - Manage cluster reports in backplane-api
 

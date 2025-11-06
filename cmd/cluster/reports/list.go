@@ -24,8 +24,23 @@ func newCmdList() *cobra.Command {
 	opts := &listOptions{}
 
 	listCmd := &cobra.Command{
-		Use:               "list",
-		Short:             "List cluster reports from backplane-api",
+		Use:   "list",
+		Short: "List cluster reports from backplane-api",
+		Long: `List all reports for a specific cluster.
+
+This command retrieves and displays all reports associated with a cluster,
+showing the report ID, summary, and creation timestamp. You can optionally
+limit the number of reports returned to the most recent N reports.
+
+Examples:
+  # List all reports for a cluster (defaults to 10 most recent)
+  osdctl cluster reports list --cluster-id 1a2b3c4d
+
+  # List the 5 most recent reports
+  osdctl cluster reports list --cluster-id 1a2b3c4d --last 5
+
+  # List reports with JSON output
+  osdctl cluster reports list --cluster-id my-cluster --output json`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

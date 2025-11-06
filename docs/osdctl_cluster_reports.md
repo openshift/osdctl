@@ -1,6 +1,14 @@
 ## osdctl cluster reports
 
-Cluster Reports from backplane-api
+Manage cluster reports in backplane-api
+
+### Synopsis
+
+Manage cluster reports stored in backplane-api.
+
+Cluster reports are used to store and retrieve diagnostic information
+and other data related to cluster operations. Reports are associated with a
+specific cluster and include a summary and base64-encoded data.
 
 ```
 osdctl cluster reports [flags]

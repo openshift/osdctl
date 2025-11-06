@@ -11,7 +11,7 @@ func TestNewCmdReports(t *testing.T) {
 
 	assert.NotNil(t, cmd)
 	assert.Equal(t, "reports", cmd.Use)
-	assert.Equal(t, "Cluster Reports from backplane-api", cmd.Short)
+	assert.Equal(t, "Manage cluster reports in backplane-api", cmd.Short)
 
 	// Check that subcommands are registered
 	subcommands := cmd.Commands()
