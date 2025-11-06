@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	backplaneapi "github.com/openshift/backplane-api/pkg/client"
@@ -124,6 +125,13 @@ func (c *Client) GetReport(ctx context.Context, reportID string) (*backplaneapi.
 		return output, fmt.Errorf("failed to get report: %w", err)
 	}
 	defer report.Body.Close()
+
+	if report.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("report %s not found", reportID)
+	} else if report.StatusCode != 200 {
+		bodyBytes, _ := io.ReadAll(report.Body)
+		return nil, fmt.Errorf("failure getting report, status: %d, body: %s", report.StatusCode, string(bodyBytes))
+	}
 
 	err = json.NewDecoder(report.Body).Decode(&output)
 	if err != nil {
