@@ -393,16 +393,31 @@ func (e *EgressVerification) getCaBundleFromManagementCluster(ctx context.Contex
 		return "", fmt.Errorf("one namespace expected matching: api.openshift.com/id=%s, found %d", e.cluster.ID(), len(nsList.Items))
 	}
 
-	cm := &corev1.ConfigMap{}
-	if err := mcClient.Get(ctx, client.ObjectKey{Name: "user-ca-bundle", Namespace: nsList.Items[0].Name}, cm); err != nil {
+	// List all ConfigMaps in the namespace to find one matching "user-ca-bundle-*"
+	cmList := &corev1.ConfigMapList{}
+	if err := mcClient.List(ctx, cmList, &client.ListOptions{Namespace: nsList.Items[0].Name}); err != nil {
 		return "", err
 	}
 
-	if _, ok := cm.Data[caBundleConfigMapKey]; ok {
-		return cm.Data[caBundleConfigMapKey], nil
+	// Search for a ConfigMap whose name starts with "user-ca-bundle"
+	var foundCM *corev1.ConfigMap
+	for i := range cmList.Items {
+		if strings.HasPrefix(cmList.Items[i].Name, "user-ca-bundle") {
+			foundCM = &cmList.Items[i]
+			e.log.Debug(ctx, "found CA bundle ConfigMap: %s", foundCM.Name)
+			break
+		}
 	}
 
-	return "", fmt.Errorf("%s data not found in the ConfigMap %s/user-ca-bundle on %s", caBundleConfigMapKey, nsList.Items[0].Name, mc.Name())
+	if foundCM == nil {
+		return "", fmt.Errorf("configmap with prefix 'user-ca-bundle' not found in namespace %s on %s", nsList.Items[0].Name, mc.Name())
+	}
+
+	if _, ok := foundCM.Data[caBundleConfigMapKey]; ok {
+		return foundCM.Data[caBundleConfigMapKey], nil
+	}
+
+	return "", fmt.Errorf("%s data not found in the ConfigMap %s/%s on %s", caBundleConfigMapKey, nsList.Items[0].Name, foundCM.Name, mc.Name())
 }
 
 func (e *EgressVerification) getCaBundleFromHive(ctx context.Context) (string, error) {
@@ -515,11 +530,19 @@ func (e *EgressVerification) defaultValidateEgressInput(ctx context.Context, pla
 			input.Proxy.HttpsProxy = e.cluster.Proxy().HTTPSProxy()
 		}
 
-		// The actual trust bundle is redacted in OCM, but is an indicator that --cacert is required
+		// The actual trust bundle is redacted in OCM, but is an indicator that --cacert is required (for non-pod mode)
 		if e.cluster.AdditionalTrustBundle() != "" && e.CaCert == "" {
 			caBundle, err := e.getCABundle(ctx)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get additional CA trust bundle from hive with error: %v, consider specifying --cacert", err)
+				source := "hive"
+				if e.cluster.Hypershift().Enabled() {
+					source = "management cluster"
+				}
+
+				if e.PodMode {
+					return nil, fmt.Errorf("failed to get additional CA trust bundle from %s with error: %v", source, err)
+				}
+				return nil, fmt.Errorf("failed to get additional CA trust bundle from %s with error: %v, consider specifying --cacert", source, err)
 			}
 
 			input.Proxy.Cacert = caBundle
