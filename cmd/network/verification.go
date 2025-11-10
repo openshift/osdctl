@@ -400,13 +400,18 @@ func (e *EgressVerification) getCaBundleFromManagementCluster(ctx context.Contex
 	}
 
 	// Search for a ConfigMap whose name starts with "user-ca-bundle"
+	// If multiple are found, select the most recently created one
 	var foundCM *corev1.ConfigMap
 	for i := range cmList.Items {
 		if strings.HasPrefix(cmList.Items[i].Name, "user-ca-bundle") {
-			foundCM = &cmList.Items[i]
-			e.log.Debug(ctx, "found CA bundle ConfigMap: %s", foundCM.Name)
-			break
+			if foundCM == nil || cmList.Items[i].CreationTimestamp.After(foundCM.CreationTimestamp.Time) {
+				foundCM = &cmList.Items[i]
+			}
 		}
+	}
+
+	if foundCM != nil {
+		e.log.Debug(ctx, "found CA bundle ConfigMap: %s", foundCM.Name)
 	}
 
 	if foundCM == nil {
