@@ -399,30 +399,38 @@ func (e *EgressVerification) getCaBundleFromManagementCluster(ctx context.Contex
 		return "", err
 	}
 
+	caBundle, err := selectMostRecentCaBundleConfigMap(cmList.Items)
+	if err != nil {
+		return "", fmt.Errorf("%w in namespace %s on %s", err, nsList.Items[0].Name, mc.Name())
+	}
+
+	e.log.Debug(ctx, "found CA bundle ConfigMap")
+	return caBundle, nil
+}
+
+// selectMostRecentCaBundleConfigMap finds the most recently created ConfigMap with the "user-ca-bundle" prefix
+// and extracts the CA bundle data from it. Returns the CA bundle string or an error.
+func selectMostRecentCaBundleConfigMap(configMaps []corev1.ConfigMap) (string, error) {
 	// Search for a ConfigMap whose name starts with "user-ca-bundle"
 	// If multiple are found, select the most recently created one
 	var foundCM *corev1.ConfigMap
-	for i := range cmList.Items {
-		if strings.HasPrefix(cmList.Items[i].Name, "user-ca-bundle") {
-			if foundCM == nil || cmList.Items[i].CreationTimestamp.After(foundCM.CreationTimestamp.Time) {
-				foundCM = &cmList.Items[i]
+	for i := range configMaps {
+		if strings.HasPrefix(configMaps[i].Name, "user-ca-bundle") {
+			if foundCM == nil || configMaps[i].CreationTimestamp.After(foundCM.CreationTimestamp.Time) {
+				foundCM = &configMaps[i]
 			}
 		}
 	}
 
-	if foundCM != nil {
-		e.log.Debug(ctx, "found CA bundle ConfigMap: %s", foundCM.Name)
-	}
-
 	if foundCM == nil {
-		return "", fmt.Errorf("configmap with prefix 'user-ca-bundle' not found in namespace %s on %s", nsList.Items[0].Name, mc.Name())
+		return "", fmt.Errorf("configmap with prefix 'user-ca-bundle' not found")
 	}
 
-	if _, ok := foundCM.Data[caBundleConfigMapKey]; ok {
-		return foundCM.Data[caBundleConfigMapKey], nil
+	if bundle, ok := foundCM.Data[caBundleConfigMapKey]; ok {
+		return bundle, nil
 	}
 
-	return "", fmt.Errorf("%s data not found in the ConfigMap %s/%s on %s", caBundleConfigMapKey, nsList.Items[0].Name, foundCM.Name, mc.Name())
+	return "", fmt.Errorf("%s data not found in the ConfigMap %s", caBundleConfigMapKey, foundCM.Name)
 }
 
 func (e *EgressVerification) getCaBundleFromHive(ctx context.Context) (string, error) {
