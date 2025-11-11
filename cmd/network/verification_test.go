@@ -20,6 +20,8 @@ import (
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -665,6 +667,117 @@ func TestGetCaBundleFromSyncSet(t *testing.T) {
 
 				if test.expected != actual {
 					t.Errorf("expected: %s, got: %s", test.expected, actual)
+				}
+			}
+		})
+	}
+}
+
+func TestSelectMostRecentCaBundleConfigMap(t *testing.T) {
+	// Helper function to create a ConfigMap with a specific name, timestamp, and CA bundle data
+	createConfigMap := func(name string, timestamp time.Time, hasCaBundle bool) corev1.ConfigMap {
+		cm := corev1.ConfigMap{}
+		cm.Name = name
+		cm.CreationTimestamp = metav1.Time{Time: timestamp}
+		if hasCaBundle {
+			cm.Data = map[string]string{
+				caBundleConfigMapKey: fmt.Sprintf("ca-bundle-data-from-%s", name),
+			}
+		} else {
+			cm.Data = map[string]string{
+				"other-key": "other-data",
+			}
+		}
+		return cm
+	}
+
+	now := time.Now()
+	olderTime := now.Add(-2 * time.Hour)
+	oldestTime := now.Add(-4 * time.Hour)
+
+	tests := []struct {
+		name           string
+		configMaps     []corev1.ConfigMap
+		expectedBundle string
+		expectErr      bool
+	}{
+		{
+			name: "single_configmap_exact_name",
+			configMaps: []corev1.ConfigMap{
+				createConfigMap("user-ca-bundle", now, true),
+			},
+			expectedBundle: "ca-bundle-data-from-user-ca-bundle",
+			expectErr:      false,
+		},
+		{
+			name: "single_configmap_with_suffix",
+			configMaps: []corev1.ConfigMap{
+				createConfigMap("user-ca-bundle-abc123", now, true),
+			},
+			expectedBundle: "ca-bundle-data-from-user-ca-bundle-abc123",
+			expectErr:      false,
+		},
+		{
+			name: "multiple_configmaps_select_most_recent",
+			configMaps: []corev1.ConfigMap{
+				createConfigMap("user-ca-bundle-old", oldestTime, true),
+				createConfigMap("user-ca-bundle-newer", olderTime, true),
+				createConfigMap("user-ca-bundle-newest", now, true),
+			},
+			expectedBundle: "ca-bundle-data-from-user-ca-bundle-newest",
+			expectErr:      false,
+		},
+		{
+			name: "multiple_configmaps_unordered_select_most_recent",
+			configMaps: []corev1.ConfigMap{
+				createConfigMap("user-ca-bundle-newest", now, true),
+				createConfigMap("user-ca-bundle-old", oldestTime, true),
+				createConfigMap("user-ca-bundle-newer", olderTime, true),
+			},
+			expectedBundle: "ca-bundle-data-from-user-ca-bundle-newest",
+			expectErr:      false,
+		},
+		{
+			name: "no_matching_configmap",
+			configMaps: []corev1.ConfigMap{
+				createConfigMap("other-configmap", now, true),
+				createConfigMap("another-bundle", now, true),
+			},
+			expectErr: true,
+		},
+		{
+			name: "configmap_exists_but_missing_ca_bundle_key",
+			configMaps: []corev1.ConfigMap{
+				createConfigMap("user-ca-bundle", now, false),
+			},
+			expectErr: true,
+		},
+		{
+			name: "mixed_configmaps_some_with_prefix_some_without",
+			configMaps: []corev1.ConfigMap{
+				createConfigMap("other-bundle", oldestTime, true),
+				createConfigMap("user-ca-bundle-correct", now, true),
+				createConfigMap("another-config", olderTime, true),
+			},
+			expectedBundle: "ca-bundle-data-from-user-ca-bundle-correct",
+			expectErr:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual, err := selectMostRecentCaBundleConfigMap(tt.configMaps)
+			if err != nil {
+				if !tt.expectErr {
+					t.Errorf("expected no err, got %v", err)
+				}
+			} else {
+				if tt.expectErr {
+					t.Error("expected error, got nil")
+				}
+
+				if tt.expectedBundle != actual {
+					t.Errorf("expected: %s, got: %s", tt.expectedBundle, actual)
 				}
 			}
 		})

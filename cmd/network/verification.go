@@ -393,16 +393,44 @@ func (e *EgressVerification) getCaBundleFromManagementCluster(ctx context.Contex
 		return "", fmt.Errorf("one namespace expected matching: api.openshift.com/id=%s, found %d", e.cluster.ID(), len(nsList.Items))
 	}
 
-	cm := &corev1.ConfigMap{}
-	if err := mcClient.Get(ctx, client.ObjectKey{Name: "user-ca-bundle", Namespace: nsList.Items[0].Name}, cm); err != nil {
+	// List all ConfigMaps in the namespace to find one matching "user-ca-bundle-*"
+	cmList := &corev1.ConfigMapList{}
+	if err := mcClient.List(ctx, cmList, &client.ListOptions{Namespace: nsList.Items[0].Name}); err != nil {
 		return "", err
 	}
 
-	if _, ok := cm.Data[caBundleConfigMapKey]; ok {
-		return cm.Data[caBundleConfigMapKey], nil
+	caBundle, err := selectMostRecentCaBundleConfigMap(cmList.Items)
+	if err != nil {
+		return "", fmt.Errorf("%w in namespace %s on %s", err, nsList.Items[0].Name, mc.Name())
 	}
 
-	return "", fmt.Errorf("%s data not found in the ConfigMap %s/user-ca-bundle on %s", caBundleConfigMapKey, nsList.Items[0].Name, mc.Name())
+	e.log.Debug(ctx, "found CA bundle ConfigMap")
+	return caBundle, nil
+}
+
+// selectMostRecentCaBundleConfigMap finds the most recently created ConfigMap with the "user-ca-bundle" prefix
+// and extracts the CA bundle data from it. Returns the CA bundle string or an error.
+func selectMostRecentCaBundleConfigMap(configMaps []corev1.ConfigMap) (string, error) {
+	// Search for a ConfigMap whose name starts with "user-ca-bundle"
+	// If multiple are found, select the most recently created one
+	var foundCM *corev1.ConfigMap
+	for i := range configMaps {
+		if strings.HasPrefix(configMaps[i].Name, "user-ca-bundle") {
+			if foundCM == nil || configMaps[i].CreationTimestamp.After(foundCM.CreationTimestamp.Time) {
+				foundCM = &configMaps[i]
+			}
+		}
+	}
+
+	if foundCM == nil {
+		return "", fmt.Errorf("configmap with prefix 'user-ca-bundle' not found")
+	}
+
+	if bundle, ok := foundCM.Data[caBundleConfigMapKey]; ok {
+		return bundle, nil
+	}
+
+	return "", fmt.Errorf("%s data not found in the ConfigMap %s", caBundleConfigMapKey, foundCM.Name)
 }
 
 func (e *EgressVerification) getCaBundleFromHive(ctx context.Context) (string, error) {
@@ -515,11 +543,19 @@ func (e *EgressVerification) defaultValidateEgressInput(ctx context.Context, pla
 			input.Proxy.HttpsProxy = e.cluster.Proxy().HTTPSProxy()
 		}
 
-		// The actual trust bundle is redacted in OCM, but is an indicator that --cacert is required
+		// The actual trust bundle is redacted in OCM, but is an indicator that --cacert is required (for non-pod mode)
 		if e.cluster.AdditionalTrustBundle() != "" && e.CaCert == "" {
 			caBundle, err := e.getCABundle(ctx)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get additional CA trust bundle from hive with error: %v, consider specifying --cacert", err)
+				source := "hive"
+				if e.cluster.Hypershift().Enabled() {
+					source = "management cluster"
+				}
+
+				if e.PodMode {
+					return nil, fmt.Errorf("failed to get additional CA trust bundle from %s with error: %v", source, err)
+				}
+				return nil, fmt.Errorf("failed to get additional CA trust bundle from %s with error: %v, consider specifying --cacert", source, err)
 			}
 
 			input.Proxy.Cacert = caBundle
