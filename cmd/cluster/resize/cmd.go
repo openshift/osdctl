@@ -46,6 +46,7 @@ func NewCmdResize() *cobra.Command {
 	resize.AddCommand(
 		newCmdResizeInfra(),
 		newCmdResizeControlPlane(),
+		newCmdResizeRequestServingNodes(),
 	)
 
 	return resize
