@@ -1,11 +1,34 @@
-## osdctl cluster resize
+## osdctl cluster resize request-serving-nodes
 
-resize control-plane/infra nodes
+Resize a ROSA HCP cluster's request-serving nodes
+
+### Synopsis
+
+Resize a ROSA HCP cluster's request-serving nodes by applying a cluster-size-override annotation
+
+```
+osdctl cluster resize request-serving-nodes [flags]
+```
+
+### Examples
+
+```
+
+  # Resize a ROSA HCP cluster's request-serving nodes to the next size
+  osdctl cluster resize request-serving-nodes --cluster-id "${CLUSTER_ID}" --reason "${OHSS}"
+
+  # Resize a ROSA HCP cluster's request-serving nodes to a specific size
+  osdctl cluster resize request-serving-nodes --cluster-id "${CLUSTER_ID}" --size m54xl --reason "${OHSS}"
+
+```
 
 ### Options
 
 ```
-  -h, --help   help for resize
+  -C, --cluster-id string   The internal ID of the cluster to perform actions on
+  -h, --help                help for request-serving-nodes
+      --reason string       The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)
+      --size string         The target request-serving node size (e.g. m54xl). If not specified, will auto-select the next size up
 ```
 
 ### Options inherited from parent commands
@@ -25,8 +48,5 @@ resize control-plane/infra nodes
 
 ### SEE ALSO
 
-* [osdctl cluster](osdctl_cluster.md)	 - Provides information for a specified cluster
-* [osdctl cluster resize control-plane](osdctl_cluster_resize_control-plane.md)	 - Resize an OSD/ROSA cluster's control plane nodes
-* [osdctl cluster resize infra](osdctl_cluster_resize_infra.md)	 - Resize an OSD/ROSA cluster's infra nodes
-* [osdctl cluster resize request-serving-nodes](osdctl_cluster_resize_request-serving-nodes.md)	 - Resize a ROSA HCP cluster's request-serving nodes
+* [osdctl cluster resize](osdctl_cluster_resize.md)	 - resize control-plane/infra nodes
 
