@@ -244,7 +244,7 @@ func (r *requestServingNodesOpts) run(ctx context.Context) error {
 
 	// Send customer-facing service log
 	printer.PrintlnGreen("\nSending customer service log...")
-	if err := r.sendCustomerServiceLog(targetSize); err != nil {
+	if err := r.sendCustomerServiceLog(); err != nil {
 		fmt.Printf("Warning: failed to send customer service log: %v\n", err)
 		fmt.Println("You can send it manually with:")
 		fmt.Printf("osdctl servicelog post -C %s -t %s -p INSTANCE_TYPE=%s\n", r.clusterID, resizeRequestServingServiceLogTemplate, targetSize)
@@ -394,12 +394,9 @@ func (r *requestServingNodesOpts) applyClusterSizeOverride(ctx context.Context, 
 	return nil
 }
 
-func (r *requestServingNodesOpts) sendCustomerServiceLog(targetSize string) error {
+func (r *requestServingNodesOpts) sendCustomerServiceLog() error {
 	postCmd := servicelog.PostCmdOptions{
-		Template: resizeRequestServingServiceLogTemplate,
-		TemplateParams: []string{
-			fmt.Sprintf("INSTANCE_TYPE=%s", targetSize),
-		},
+		Template:  resizeRequestServingServiceLogTemplate,
 		ClusterId: r.clusterID,
 	}
 
