@@ -8,7 +8,7 @@ import (
 	"github.com/openshift/osdctl/cmd/promote/iexec"
 )
 
-func CheckoutAndCompareGitHash(gitExecutor iexec.IExec, gitURL, gitHash, currentGitHash string, serviceFullPath ...string) (string, string, error) {
+func CheckoutAndCompareGitHash(gitExecutor iexec.IExec, gitURL, gitHash, currentGitHash string, serviceFullPath string) (string, string, error) {
 	tempDir, err := os.MkdirTemp("", "")
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create temporary directory: %v", err)
@@ -33,8 +33,8 @@ func CheckoutAndCompareGitHash(gitExecutor iexec.IExec, gitURL, gitHash, current
 		fmt.Printf("No git hash provided. Using HEAD.\n")
 		var output string
 		// If serviceFullPath is provided, get the latest commit for that specific path
-		if len(serviceFullPath) > 0 && serviceFullPath[0] != "" {
-			output, err = gitExecutor.Output("", "git", "rev-list", "-n", "1", "HEAD", "--", serviceFullPath[0])
+		if serviceFullPath != "" {
+			output, err = gitExecutor.Output("", "git", "rev-list", "-n", "1", "HEAD", "--", serviceFullPath)
 		} else {
 			output, err = gitExecutor.Output("", "git", "rev-parse", "HEAD")
 		}
@@ -50,9 +50,9 @@ func CheckoutAndCompareGitHash(gitExecutor iexec.IExec, gitURL, gitHash, current
 	} else {
 		var commitLog string
 		var err error
-		// If serviceFullPAth is provided, filter logs to only show changes in that path
-		if len(serviceFullPath) > 0 && serviceFullPath[0] != "" {
-			commitLog, err = gitExecutor.Output("", "git", "log", "--no-merges", fmt.Sprintf("%s..%s", currentGitHash, gitHash), "--", serviceFullPath[0])
+		// If serviceFullPath is provided, filter logs to only show changes in that path
+		if serviceFullPath != "" {
+			commitLog, err = gitExecutor.Output("", "git", "log", "--no-merges", fmt.Sprintf("%s..%s", currentGitHash, gitHash), "--", serviceFullPath)
 		} else {
 			commitLog, err = gitExecutor.Output("", "git", "log", "--no-merges", fmt.Sprintf("%s..%s", currentGitHash, gitHash))
 		}

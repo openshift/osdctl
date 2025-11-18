@@ -76,3 +76,107 @@ func TestCheckoutAndCompareGitHash_ChdirSourceDirError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to change directory to source-dir")
 }
+
+// Should include path filter in git log when serviceFullPath is provided
+func TestCheckoutAndCompareGitHash_WithPathFilter(t *testing.T) {
+	mockExec := new(MockExecService)
+
+	mockExec.On("Run", mock.Anything, "git", mock.MatchedBy(func(args []string) bool {
+		if len(args) == 3 && args[0] == "clone" {
+			cwd, _ := os.Getwd()
+			_ = os.Mkdir(filepath.Join(cwd, "source-dir"), 0o755)
+			return true
+		}
+		return false
+	})).Return(nil).Once()
+
+	expectedCommitLog := "commit abc123\nAuthor: Test\n\n    Test commit"
+	mockExec.On("Output", "", "git", []string{
+		"log",
+		"--no-merges",
+		"old123..new456",
+		"--",
+		"operators/dynatrace",
+	}).Return(expectedCommitLog, nil).Once()
+
+	gitHash, commitLog, err := CheckoutAndCompareGitHash(
+		mockExec,
+		"https://github.com/some/repo.git",
+		"new456",
+		"old123",
+		"operators/dynatrace",
+	)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "new456", gitHash)
+	assert.Equal(t, expectedCommitLog, commitLog)
+	mockExec.AssertExpectations(t)
+}
+
+// Should NOT include path filter in git log when serviceFullPath is not provided
+func TestCheckoutAndCompareGitHash_WithoutPathFilter(t *testing.T) {
+	mockExec := new(MockExecService)
+
+	mockExec.On("Run", mock.Anything, "git", mock.MatchedBy(func(args []string) bool {
+		if len(args) == 3 && args[0] == "clone" {
+			cwd, _ := os.Getwd()
+			_ = os.Mkdir(filepath.Join(cwd, "source-dir"), 0o755)
+			return true
+		}
+		return false
+	})).Return(nil).Once()
+
+	expectedCommitLog := "commit xyz789\nAuthor: Test\n\n    All commits"
+	mockExec.On("Output", "", "git", []string{
+		"log",
+		"--no-merges",
+		"old789..new999",
+	}).Return(expectedCommitLog, nil).Once()
+
+	gitHash, commitLog, err := CheckoutAndCompareGitHash(
+		mockExec,
+		"https://github.com/some/repo.git",
+		"new999",
+		"old789",
+		"",
+	)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "new999", gitHash)
+	assert.Equal(t, expectedCommitLog, commitLog)
+	mockExec.AssertExpectations(t)
+}
+
+// Should NOT include path filter in git log when serviceFullPath is empty string
+func TestCheckoutAndCompareGitHash_WithEmptyPathFilter(t *testing.T) {
+	mockExec := new(MockExecService)
+
+	mockExec.On("Run", mock.Anything, "git", mock.MatchedBy(func(args []string) bool {
+		if len(args) == 3 && args[0] == "clone" {
+			cwd, _ := os.Getwd()
+			_ = os.Mkdir(filepath.Join(cwd, "source-dir"), 0o755)
+			return true
+		}
+		return false
+	})).Return(nil).Once()
+
+	expectedCommitLog := "commit def456\nAuthor: Test\n\n    Empty path test"
+	mockExec.On("Output", "", "git", []string{
+		"log",
+		"--no-merges",
+		"oldabc..newabc",
+	}).Return(expectedCommitLog, nil).Once()
+
+	gitHash, commitLog, err := CheckoutAndCompareGitHash(
+		mockExec,
+		"https://github.com/some/repo.git",
+		"newabc",
+		"oldabc",
+		"",
+	)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "newabc", gitHash)
+	assert.Equal(t, expectedCommitLog, commitLog)
+	mockExec.AssertExpectations(t)
+}

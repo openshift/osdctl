@@ -74,7 +74,7 @@ func listServiceNames(appInterface git.AppInterface) error {
 	return nil
 }
 
-// extractPathFromServiceYAML extracts the path field from the first resourceTemplate
+// extractPathFromServiceYAML extracts all unique path fields from resourceTemplates
 func extractPathFromServiceYAML(yamlData []byte) string {
 	var service struct {
 		ResourceTemplates []struct {
@@ -87,12 +87,20 @@ func extractPathFromServiceYAML(yamlData []byte) string {
 		return ""
 	}
 
-	// Return the path from the first resourceTemplate if it exists
-	if len(service.ResourceTemplates) > 0 {
-		return service.ResourceTemplates[0].PATH
+	pathSet := make(map[string]bool)
+	for _, rt := range service.ResourceTemplates {
+		if rt.PATH != "" {
+			pathSet[rt.PATH] = true
+		}
 	}
 
-	return ""
+	var paths []string
+	for path := range pathSet {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+
+	return strings.Join(paths, ", ")
 }
 
 func servicePromotion(appInterface git.AppInterface, component, gitHash string) error {
