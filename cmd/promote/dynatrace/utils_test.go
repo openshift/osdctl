@@ -7,15 +7,16 @@ import (
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
+	"github.com/openshift/osdctl/cmd/promote/git"
 	"github.com/stretchr/testify/assert"
 )
 
 var _ = ginkgo.Describe("Dynatrace Utilities", func() {
 
-	var mockAppInterface AppInterface
+	var mockAppInterface git.AppInterface
 
 	ginkgo.BeforeEach(func() {
-		mockAppInterface = AppInterface{
+		mockAppInterface = git.AppInterface{
 			GitDirectory: "/mock/base/dir",
 		}
 	})

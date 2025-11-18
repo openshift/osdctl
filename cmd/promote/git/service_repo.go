@@ -2,15 +2,14 @@ package git
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
 	"github.com/openshift/osdctl/cmd/promote/iexec"
 )
 
-func CheckoutAndCompareGitHash(gitExecutor iexec.IExec, gitURL, gitHash, currentGitHash string) (string, string, error) {
-	tempDir, err := ioutil.TempDir("", "")
+func CheckoutAndCompareGitHash(gitExecutor iexec.IExec, gitURL, gitHash, currentGitHash string, serviceFullPath ...string) (string, string, error) {
+	tempDir, err := os.MkdirTemp("", "")
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create temporary directory: %v", err)
 	}
@@ -32,7 +31,13 @@ func CheckoutAndCompareGitHash(gitExecutor iexec.IExec, gitURL, gitHash, current
 
 	if gitHash == "" {
 		fmt.Printf("No git hash provided. Using HEAD.\n")
-		output, err := gitExecutor.Output("", "git", "rev-parse", "HEAD")
+		var output string
+		// If serviceFullPath is provided, get the latest commit for that specific path
+		if len(serviceFullPath) > 0 && serviceFullPath[0] != "" {
+			output, err = gitExecutor.Output("", "git", "rev-list", "-n", "1", "HEAD", "--", serviceFullPath[0])
+		} else {
+			output, err = gitExecutor.Output("", "git", "rev-parse", "HEAD")
+		}
 		if err != nil {
 			return "", "", fmt.Errorf("failed to get git hash: %v", err)
 		}
@@ -43,7 +48,14 @@ func CheckoutAndCompareGitHash(gitExecutor iexec.IExec, gitURL, gitHash, current
 	if currentGitHash == gitHash {
 		return "", "", fmt.Errorf("git hash %s is already at HEAD", gitHash)
 	} else {
-		commitLog, err := gitExecutor.Output("", "git", "log", "--no-merges", fmt.Sprintf("%s..%s", currentGitHash, gitHash))
+		var commitLog string
+		var err error
+		// If serviceFullPAth is provided, filter logs to only show changes in that path
+		if len(serviceFullPath) > 0 && serviceFullPath[0] != "" {
+			commitLog, err = gitExecutor.Output("", "git", "log", "--no-merges", fmt.Sprintf("%s..%s", currentGitHash, gitHash), "--", serviceFullPath[0])
+		} else {
+			commitLog, err = gitExecutor.Output("", "git", "log", "--no-merges", fmt.Sprintf("%s..%s", currentGitHash, gitHash))
+		}
 		if err != nil {
 			return "", "", err
 		}

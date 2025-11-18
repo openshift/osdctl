@@ -1,4 +1,4 @@
-package dynatrace
+package git
 
 import (
 	"errors"
@@ -41,7 +41,7 @@ func TestGetBaseDir_Success(t *testing.T) {
 		err:    nil,
 	}
 
-	dir, err := getBaseDir(mock)
+	dir, err := GetBaseDir(mock)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "/path/to/git/repo", dir)
@@ -56,7 +56,7 @@ func TestGetBaseDir_Error(t *testing.T) {
 		err:    errors.New("git error"),
 	}
 
-	dir, err := getBaseDir(mock)
+	dir, err := GetBaseDir(mock)
 
 	assert.Error(t, err)
 	assert.Equal(t, "", dir)
