@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/openshift/osdctl/cmd/promote/git"
 	"github.com/openshift/osdctl/cmd/promote/iexec"
 	"github.com/spf13/cobra"
 )
@@ -76,8 +77,7 @@ func NewCmdDynatrace() *cobra.Command {
 			} else {
 
 				ops.validateSaasFlow()
-				appInterface := BootstrapOsdCtlForAppInterfaceAndServicePromotions(ops.appInterfaceCheckoutDir)
-				appInterface.GitExecutor = iexec.Exec{}
+				appInterface := git.BootstrapOsdCtlForAppInterfaceAndServicePromotions(ops.appInterfaceCheckoutDir, iexec.Exec{})
 				if ops.list {
 					if ops.component != "" || ops.gitHash != "" {
 						fmt.Printf("Error: --list cannot be used with any other flags\n\n")
@@ -110,7 +110,7 @@ func NewCmdDynatrace() *cobra.Command {
 	promoteDynatraceCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "appInterfaceDir", "", "", "location of app-interface checkout. Falls back to current working directory")
 	promoteDynatraceCmd.Flags().BoolVarP(&ops.terraform, "terraform", "t", false, "deploy dynatrace-config terraform job")
 	promoteDynatraceCmd.Flags().StringVarP(&ops.module, "module", "m", "", "module to promote")
-	promoteDynatraceCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "dynatraceConfigDir", "", "", "location of dynatrace-config checkout. Falls back to current working directory")
+	promoteDynatraceCmd.Flags().StringVarP(&ops.dynatraceConfigCheckoutDir, "dynatraceConfigDir", "", "", "location of dynatrace-config checkout. Falls back to current working directory")
 
 	return promoteDynatraceCmd
 }

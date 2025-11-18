@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/openshift/osdctl/cmd/promote/git"
 	"github.com/openshift/osdctl/cmd/promote/iexec"
 )
 
@@ -26,7 +27,7 @@ var (
 	ModulesFilesMap  = map[string]string{}
 )
 
-func listServiceNames(appInterface AppInterface) error {
+func listServiceNames(appInterface git.AppInterface) error {
 	_, err := GetServiceNames(appInterface, saasDynatraceDir)
 	if err != nil {
 		return err
@@ -41,7 +42,7 @@ func listServiceNames(appInterface AppInterface) error {
 	return nil
 }
 
-func servicePromotion(appInterface AppInterface, component, gitHash string) error {
+func servicePromotion(appInterface git.AppInterface, component, gitHash string) error {
 
 	_, err := GetServiceNames(appInterface, saasDynatraceDir)
 	if err != nil {
@@ -64,14 +65,14 @@ func servicePromotion(appInterface AppInterface, component, gitHash string) erro
 		return fmt.Errorf("failed to read SAAS file: %v", err)
 	}
 
-	currentGitHash, serviceRepo, serviceFullPath, err := GetCurrentGitHashFromAppInterface(serviceData, component)
+	currentGitHash, serviceRepo, serviceFullPath, err := git.GetCurrentGitHashAndPathFromAppInterface(serviceData, component, "")
 	if err != nil {
 		return fmt.Errorf("failed to get current git hash or service repo: %v", err)
 	}
 
 	fmt.Printf("Current Git Hash: %v\nGit Repo: %v\nComponent path: %v\n", currentGitHash, serviceRepo, serviceFullPath)
 
-	promotionGitHash, commitLog, err := CheckoutAndCompareGitHash(appInterface, serviceRepo, gitHash, currentGitHash, strings.TrimPrefix(serviceFullPath, "/"))
+	promotionGitHash, commitLog, err := git.CheckoutAndCompareGitHash(appInterface.GitExecutor, serviceRepo, gitHash, currentGitHash, strings.TrimPrefix(serviceFullPath, "/"))
 	if err != nil {
 		return fmt.Errorf("failed to checkout and compare git hash: %v", err)
 	} else if promotionGitHash == "" {
@@ -107,7 +108,7 @@ func servicePromotion(appInterface AppInterface, component, gitHash string) erro
 	return nil
 }
 
-func GetServiceNames(appInterface AppInterface, saaDirs ...string) ([]string, error) {
+func GetServiceNames(appInterface git.AppInterface, saaDirs ...string) ([]string, error) {
 	baseDir := appInterface.GitDirectory
 
 	for _, dir := range saaDirs {
