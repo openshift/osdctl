@@ -48,7 +48,14 @@ func CheckoutAndCompareGitHash(gitExecutor iexec.IExec, gitURL, gitHash, current
 	if currentGitHash == gitHash {
 		return "", "", fmt.Errorf("git hash %s is already at HEAD", gitHash)
 	} else {
-		commitLog, err := gitExecutor.Output("", "git", "log", "--no-merges", fmt.Sprintf("%s..%s", currentGitHash, gitHash))
+		var commitLog string
+		var err error
+		// If serviceFullPAth is provided, filter logs to only show changes in that path
+		if len(serviceFullPath) > 0 && serviceFullPath[0] != "" {
+			commitLog, err = gitExecutor.Output("", "git", "log", "--no-merges", fmt.Sprintf("%s..%s", currentGitHash, gitHash), "--", serviceFullPath[0])
+		} else {
+			commitLog, err = gitExecutor.Output("", "git", "log", "--no-merges", fmt.Sprintf("%s..%s", currentGitHash, gitHash))
+		}
 		if err != nil {
 			return "", "", err
 		}

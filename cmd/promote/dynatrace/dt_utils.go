@@ -11,6 +11,7 @@ import (
 
 	"github.com/openshift/osdctl/cmd/promote/git"
 	"github.com/openshift/osdctl/cmd/promote/iexec"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -34,12 +35,64 @@ func listServiceNames(appInterface git.AppInterface) error {
 	}
 
 	sort.Strings(ServicesSlice)
-	fmt.Println("### Available service names ###")
+	fmt.Println("### Available Dynatrace components ###")
+	fmt.Println()
+
+	// Find the longest service name for alignment
+	maxLen := 0
 	for _, service := range ServicesSlice {
-		fmt.Println(service)
+		if len(service) > maxLen {
+			maxLen = len(service)
+		}
+	}
+
+	for _, service := range ServicesSlice {
+		// Read the service YAML file to extract the path
+		saasDir, err := GetSaasDir(service)
+		if err != nil {
+			fmt.Printf("%-*s   (unable to read config)\n", maxLen, service)
+			continue
+		}
+
+		serviceData, err := os.ReadFile(saasDir)
+		if err != nil {
+			fmt.Printf("%-*s   (unable to read config)\n", maxLen, service)
+			continue
+		}
+
+		// Extract the path by parsing the YAML directly
+		serviceFullPath := extractPathFromServiceYAML(serviceData)
+
+		// Display service name with its path
+		if serviceFullPath != "" {
+			fmt.Printf("%-*s → %s\n", maxLen, service, serviceFullPath)
+		} else {
+			fmt.Printf("%-*s   (no specific path)\n", maxLen, service)
+		}
 	}
 
 	return nil
+}
+
+// extractPathFromServiceYAML extracts the path field from the first resourceTemplate
+func extractPathFromServiceYAML(yamlData []byte) string {
+	var service struct {
+		ResourceTemplates []struct {
+			PATH string `yaml:"path"`
+		} `yaml:"resourceTemplates"`
+	}
+
+	err := yaml.Unmarshal(yamlData, &service)
+	if err != nil {
+		return ""
+	}
+
+	// Return the path from the first resourceTemplate if it exists
+	if len(service.ResourceTemplates) > 0 {
+		return service.ResourceTemplates[0].PATH
+	}
+
+	return ""
 }
 
 func servicePromotion(appInterface git.AppInterface, component, gitHash string) error {

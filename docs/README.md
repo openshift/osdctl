@@ -3582,7 +3582,24 @@ osdctl promote [flags]
 
 ### osdctl promote dynatrace
 
-Utilities to promote dynatrace
+Promote Dynatrace components or terraform modules.
+
+DYNATRACE COMPONENTS:
+  Components are defined in app-interface under:
+    data/services/osd-operators/cicd/saas/saas-dynatrace/
+
+  Each component maps to a specific path within the dynatrace-config repository.
+  When promoting a component, only changes to that component's path are included
+  in the promotion diff.
+
+  Please run 'osdctl promote dynatrace --list' to check available dynatrace components for promotion & their corresponding paths.
+
+TERRAFORM MODULES:
+  Modules are defined in the dynatrace-config repository under:
+    terraform/modules/
+
+  Promoting a module updates configs in:
+    terraform/redhat-aws/sd-sre/
 
 ```
 osdctl promote dynatrace [flags]
