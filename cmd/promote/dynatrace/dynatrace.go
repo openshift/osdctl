@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/openshift/osdctl/cmd/promote/git"
 	"github.com/openshift/osdctl/cmd/promote/iexec"
 	"github.com/spf13/cobra"
 )
@@ -27,6 +28,24 @@ func NewCmdDynatrace() *cobra.Command {
 		Short:             "Utilities to promote dynatrace",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
+		Long: `Promote Dynatrace components or terraform modules.
+
+DYNATRACE COMPONENTS:
+  Components are defined in app-interface under:
+    data/services/osd-operators/cicd/saas/saas-dynatrace/
+
+  Each component maps to a specific path within the dynatrace-config repository.
+  When promoting a component, only changes to that component's path are included
+  in the promotion diff.
+
+  Please run 'osdctl promote dynatrace --list' to check available dynatrace components for promotion & their corresponding paths.
+
+TERRAFORM MODULES:
+  Modules are defined in the dynatrace-config repository under:
+    terraform/modules/
+
+  Promoting a module updates configs in:
+    terraform/redhat-aws/sd-sre/`,
 		Example: `
 		# List all Dynatrace components available for promotion
 		osdctl promote dynatrace --list
@@ -76,8 +95,7 @@ func NewCmdDynatrace() *cobra.Command {
 			} else {
 
 				ops.validateSaasFlow()
-				appInterface := BootstrapOsdCtlForAppInterfaceAndServicePromotions(ops.appInterfaceCheckoutDir)
-				appInterface.GitExecutor = iexec.Exec{}
+				appInterface := git.BootstrapOsdCtlForAppInterfaceAndServicePromotions(ops.appInterfaceCheckoutDir, iexec.Exec{})
 				if ops.list {
 					if ops.component != "" || ops.gitHash != "" {
 						fmt.Printf("Error: --list cannot be used with any other flags\n\n")
@@ -110,7 +128,7 @@ func NewCmdDynatrace() *cobra.Command {
 	promoteDynatraceCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "appInterfaceDir", "", "", "location of app-interface checkout. Falls back to current working directory")
 	promoteDynatraceCmd.Flags().BoolVarP(&ops.terraform, "terraform", "t", false, "deploy dynatrace-config terraform job")
 	promoteDynatraceCmd.Flags().StringVarP(&ops.module, "module", "m", "", "module to promote")
-	promoteDynatraceCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "dynatraceConfigDir", "", "", "location of dynatrace-config checkout. Falls back to current working directory")
+	promoteDynatraceCmd.Flags().StringVarP(&ops.dynatraceConfigCheckoutDir, "dynatraceConfigDir", "", "", "location of dynatrace-config checkout. Falls back to current working directory")
 
 	return promoteDynatraceCmd
 }

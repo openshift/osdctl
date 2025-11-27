@@ -9,7 +9,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/openshift/osdctl/cmd/promote/git"
 	"github.com/openshift/osdctl/cmd/promote/iexec"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -26,22 +28,82 @@ var (
 	ModulesFilesMap  = map[string]string{}
 )
 
-func listServiceNames(appInterface AppInterface) error {
+func listServiceNames(appInterface git.AppInterface) error {
 	_, err := GetServiceNames(appInterface, saasDynatraceDir)
 	if err != nil {
 		return err
 	}
 
 	sort.Strings(ServicesSlice)
-	fmt.Println("### Available service names ###")
+	fmt.Println("### Available Dynatrace components ###")
+	fmt.Println()
+
+	// Find the longest service name for alignment
+	maxLen := 0
 	for _, service := range ServicesSlice {
-		fmt.Println(service)
+		if len(service) > maxLen {
+			maxLen = len(service)
+		}
+	}
+
+	for _, service := range ServicesSlice {
+		// Read the service YAML file to extract the path
+		saasDir, err := GetSaasDir(service)
+		if err != nil {
+			fmt.Printf("%-*s   (unable to read config)\n", maxLen, service)
+			continue
+		}
+
+		serviceData, err := os.ReadFile(saasDir)
+		if err != nil {
+			fmt.Printf("%-*s   (unable to read config)\n", maxLen, service)
+			continue
+		}
+
+		// Extract the path by parsing the YAML directly
+		serviceFullPath := extractPathFromServiceYAML(serviceData)
+
+		// Display service name with its path
+		if serviceFullPath != "" {
+			fmt.Printf("%-*s → %s\n", maxLen, service, serviceFullPath)
+		} else {
+			fmt.Printf("%-*s   (no specific path)\n", maxLen, service)
+		}
 	}
 
 	return nil
 }
 
-func servicePromotion(appInterface AppInterface, component, gitHash string) error {
+// extractPathFromServiceYAML extracts all unique path fields from resourceTemplates
+func extractPathFromServiceYAML(yamlData []byte) string {
+	var service struct {
+		ResourceTemplates []struct {
+			PATH string `yaml:"path"`
+		} `yaml:"resourceTemplates"`
+	}
+
+	err := yaml.Unmarshal(yamlData, &service)
+	if err != nil {
+		return ""
+	}
+
+	pathSet := make(map[string]bool)
+	for _, rt := range service.ResourceTemplates {
+		if rt.PATH != "" {
+			pathSet[rt.PATH] = true
+		}
+	}
+
+	var paths []string
+	for path := range pathSet {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+
+	return strings.Join(paths, ", ")
+}
+
+func servicePromotion(appInterface git.AppInterface, component, gitHash string) error {
 
 	_, err := GetServiceNames(appInterface, saasDynatraceDir)
 	if err != nil {
@@ -64,14 +126,14 @@ func servicePromotion(appInterface AppInterface, component, gitHash string) erro
 		return fmt.Errorf("failed to read SAAS file: %v", err)
 	}
 
-	currentGitHash, serviceRepo, serviceFullPath, err := GetCurrentGitHashFromAppInterface(serviceData, component)
+	currentGitHash, serviceRepo, serviceFullPath, err := git.GetCurrentGitHashAndPathFromAppInterface(serviceData, component, "")
 	if err != nil {
 		return fmt.Errorf("failed to get current git hash or service repo: %v", err)
 	}
 
 	fmt.Printf("Current Git Hash: %v\nGit Repo: %v\nComponent path: %v\n", currentGitHash, serviceRepo, serviceFullPath)
 
-	promotionGitHash, commitLog, err := CheckoutAndCompareGitHash(appInterface, serviceRepo, gitHash, currentGitHash, strings.TrimPrefix(serviceFullPath, "/"))
+	promotionGitHash, commitLog, err := git.CheckoutAndCompareGitHash(appInterface.GitExecutor, serviceRepo, gitHash, currentGitHash, strings.TrimPrefix(serviceFullPath, "/"))
 	if err != nil {
 		return fmt.Errorf("failed to checkout and compare git hash: %v", err)
 	} else if promotionGitHash == "" {
@@ -107,7 +169,7 @@ func servicePromotion(appInterface AppInterface, component, gitHash string) erro
 	return nil
 }
 
-func GetServiceNames(appInterface AppInterface, saaDirs ...string) ([]string, error) {
+func GetServiceNames(appInterface git.AppInterface, saaDirs ...string) ([]string, error) {
 	baseDir := appInterface.GitDirectory
 
 	for _, dir := range saaDirs {

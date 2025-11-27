@@ -25,6 +25,7 @@ type Service struct {
 	ResourceTemplates []struct {
 		Name    string `yaml:"name"`
 		URL     string `yaml:"url"`
+		PATH    string `yaml:"path"` // Optional: path within the repo (used by dynatrace)
 		Targets []struct {
 			Name       string
 			Namespace  map[string]string      `yaml:"namespace"`
@@ -89,7 +90,7 @@ func BootstrapOsdCtlForAppInterfaceAndServicePromotions(appInterfaceCheckoutDir 
 		return a
 	}
 
-	dir, err := getBaseDir(iexec.Exec{})
+	dir, err := GetBaseDir(gitExecutor)
 	if err == nil {
 		a.GitDirectory = dir
 		err = a.checkAppInterfaceCheckout()
@@ -127,8 +128,16 @@ func (a *AppInterface) checkAppInterfaceCheckout() error {
 }
 
 func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, namespaceRef string) (string, string, error) {
+	hash, repo, _, err := GetCurrentGitHashAndPathFromAppInterface(saarYamlFile, serviceName, namespaceRef)
+	return hash, repo, err
+}
+
+// GetCurrentGitHashAndPathFromAppInterface returns the current git hash, service repo, and service path
+// This version also returns the PATH field from the resource template (used by dynatrace)
+func GetCurrentGitHashAndPathFromAppInterface(saarYamlFile []byte, serviceName string, namespaceRef string) (string, string, string, error) {
 	var currentGitHash string
 	var serviceRepo string
+	var servicePath string
 	var service Service
 	err := yaml.Unmarshal(saarYamlFile, &service)
 	if err != nil {
@@ -140,6 +149,7 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, 
 			for _, target := range resourceTemplate.Targets {
 				if strings.Contains(target.Namespace["$ref"], namespaceRef) {
 					currentGitHash = target.Ref
+					servicePath = resourceTemplate.PATH
 					break
 				}
 			}
@@ -149,6 +159,7 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, 
 			for _, target := range resourceTemplate.Targets {
 				if strings.Contains(target.Namespace["$ref"], "app-sre-observability-production-int.yml") {
 					currentGitHash = target.Ref
+					servicePath = resourceTemplate.PATH
 					break
 				}
 			}
@@ -158,6 +169,7 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, 
 			for _, target := range resourceTemplate.Targets {
 				if strings.Contains(target.Namespace["$ref"], "configuration-anomaly-detection-production") {
 					currentGitHash = target.Ref
+					servicePath = resourceTemplate.PATH
 					break
 				}
 			}
@@ -167,6 +179,7 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, 
 			for _, target := range resourceTemplate.Targets {
 				if strings.Contains(target.Namespace["$ref"], "production") {
 					currentGitHash = target.Ref
+					servicePath = resourceTemplate.PATH
 					break
 				}
 			}
@@ -176,6 +189,7 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, 
 			for _, target := range resourceTemplate.Targets {
 				if strings.Contains(target.Namespace["$ref"], "backplanep") {
 					currentGitHash = target.Ref
+					servicePath = resourceTemplate.PATH
 					break
 				}
 			}
@@ -186,6 +200,7 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, 
 				for _, target := range resourceTemplate.Targets {
 					if strings.Contains(target.Name, canaryStr) {
 						currentGitHash = target.Ref // get canary target ref
+						servicePath = resourceTemplate.PATH
 						break
 					}
 				}
@@ -193,6 +208,7 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, 
 					for _, target := range resourceTemplate.Targets {
 						if strings.Contains(target.Namespace["$ref"], prodHiveStr) {
 							currentGitHash = target.Ref
+							servicePath = resourceTemplate.PATH
 							break
 						}
 					}
@@ -202,7 +218,7 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, 
 	}
 
 	if currentGitHash == "" {
-		return "", "", fmt.Errorf("production namespace not found for service %s", serviceName)
+		return "", "", "", fmt.Errorf("production namespace not found for service %s", serviceName)
 	}
 
 	if len(service.ResourceTemplates) > 0 {
@@ -210,10 +226,10 @@ func GetCurrentGitHashFromAppInterface(saarYamlFile []byte, serviceName string, 
 	}
 
 	if serviceRepo == "" {
-		return "", "", fmt.Errorf("service repo not found for service %s", serviceName)
+		return "", "", "", fmt.Errorf("service repo not found for service %s", serviceName)
 	}
 
-	return currentGitHash, serviceRepo, nil
+	return currentGitHash, serviceRepo, servicePath, nil
 }
 
 func GetCurrentPackageTagFromAppInterface(saasFile string) (string, error) {

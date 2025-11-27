@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/openshift/osdctl/cmd/promote/git"
 	"github.com/openshift/osdctl/cmd/promote/iexec"
 )
 
@@ -28,7 +29,7 @@ func DynatraceConfigPromotion(dynatraceConfigCheckoutDir string) DynatraceConfig
 		return a
 	}
 
-	dir, err := getBaseDir(a.GitExecutor)
+	dir, err := git.GetBaseDir(a.GitExecutor)
 	if err == nil {
 		a.GitDirectory = dir
 		err = a.checkDynatraceConfigCheckout()
