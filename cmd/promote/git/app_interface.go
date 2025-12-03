@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/openshift/osdctl/cmd/promote/iexec"
+	"github.com/openshift/osdctl/cmd/promote/pathutil"
 	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
 
 	"gopkg.in/yaml.v3"
@@ -330,7 +331,12 @@ func (a *AppInterface) CommitSaasAndAppYmlFile(saasFile, serviceName, commitMess
 	}
 
 	componentName := strings.TrimPrefix(serviceName, "saas-")
-	appYmlPath := filepath.Join(a.GitDirectory, "data", "services", componentName, "app.yml")
+
+	appYmlPath, err := pathutil.DeriveAppYmlPath(a.GitDirectory, saasFile, componentName)
+	if err != nil {
+		return fmt.Errorf("failed to derive app.yml path: %v", err)
+	}
+
 	if err := a.GitExecutor.Run(a.GitDirectory, "git", "add", appYmlPath); err != nil {
 		return fmt.Errorf("failed to add file %s: %v", appYmlPath, err)
 	}
