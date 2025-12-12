@@ -10,6 +10,7 @@ import (
 
 	"github.com/openshift/osdctl/cmd/promote/git"
 	"github.com/openshift/osdctl/cmd/promote/iexec"
+	"github.com/openshift/osdctl/cmd/promote/pathutil"
 	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
@@ -83,7 +84,7 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	}
 
 	if hotfix {
-		err = updateAppYmlWithHotfix(appInterface, serviceName, promotionGitHash)
+		err = updateAppYmlWithHotfix(appInterface, serviceName, saasDir, promotionGitHash)
 		if err != nil {
 			return fmt.Errorf("failed to update app.yml with hotfix: %v", err)
 		}
@@ -222,10 +223,13 @@ func setHotfixVersion(fileContent string, componentName string, gitHash string) 
 }
 
 // locates the corresponding app.yml file, and updates the file with the hotfix sha
-func updateAppYmlWithHotfix(appInterface git.AppInterface, serviceName, gitHash string) error {
+func updateAppYmlWithHotfix(appInterface git.AppInterface, serviceName, saasDir, gitHash string) error {
 	componentName := strings.TrimPrefix(serviceName, "saas-")
 
-	appYmlPath := filepath.Join(appInterface.GitDirectory, "data", "services", componentName, "app.yml")
+	appYmlPath, err := pathutil.DeriveAppYmlPath(appInterface.GitDirectory, saasDir, componentName)
+	if err != nil {
+		return fmt.Errorf("failed to derive app.yml path: %v", err)
+	}
 
 	if _, err := os.Stat(appYmlPath); os.IsNotExist(err) {
 		return fmt.Errorf("app.yml file not found at %s", appYmlPath)
