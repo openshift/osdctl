@@ -632,6 +632,19 @@ func TestCommitSaasAndAppYmlFile(t *testing.T) {
 			wantErr:     false,
 		},
 		{
+			name: "commits_osd_operator_saas_and_app_yml_successfully",
+			setupMock: func(m *MockExec, dir, saasFile, serviceName, commitMsg string) {
+				//osd-operators have the app.yml under osd-operators/<name>/app.yml
+				appYmlPath := filepath.Join(dir, "data", "services", "osd-operators", "managed-cluster-config", "app.yml")
+				m.On("Run", dir, "git", []string{"add", saasFile}).Return(nil)
+				m.On("Run", dir, "git", []string{"add", appYmlPath}).Return(nil)
+				m.On("Run", dir, "git", []string{"commit", "-m", commitMsg}).Return(nil)
+			},
+			serviceName: "saas-managed-cluster-config",
+			commitMsg:   "test hotfix commit for OSD operator",
+			wantErr:     false,
+		},
+		{
 			name: "fails_when_saas_file_add_fails",
 			setupMock: func(m *MockExec, dir, saasFile, serviceName, commitMsg string) {
 				m.On("Run", dir, "git", []string{"add", saasFile}).Return(errors.New("saas file not found"))
@@ -671,7 +684,15 @@ func TestCommitSaasAndAppYmlFile(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
-			saasFile := filepath.Join(tmpDir, "saas.yaml")
+			var saasFile string
+			if tc.serviceName == "saas-managed-cluster-config" {
+				// osd-operator path structure
+				saasFile = filepath.Join(tmpDir, "data", "services", "osd-operators", "cicd", "saas", "saas-managed-cluster-config.yaml")
+			} else {
+				// Regular path structure
+				saasFile = filepath.Join(tmpDir, "data", "services", "test-service", "cicd", "saas", "saas-test-service.yaml")
+			}
+			_ = os.MkdirAll(filepath.Dir(saasFile), 0o755)
 			_ = os.WriteFile(saasFile, []byte("dummy content"), 0o600)
 
 			mockExec := new(MockExec)
