@@ -77,6 +77,7 @@
   - `validate-pull-secret --cluster-id <cluster-identifier>` - Checks if the pull secret email matches the owner email
   - `validate-pull-secret-ext [CLUSTER_ID]` - Extended checks to confirm pull-secret data is synced with current OCM data
 - `cost` - Cost Management related utilities
+  - `carbon-report` - Generate carbon emissions report csv to stdout for a given AWS Account and Usage Period
   - `create` - Create a cost category for the given OU
   - `get` - Get total cost of a given OU
   - `list` - List the cost of each Account/OU under given OU
@@ -2300,6 +2301,37 @@ osdctl cost [flags]
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
   -S, --skip-version-check               skip checking to see if this is the most recent release
+```
+
+### osdctl cost carbon-report
+
+Generate carbon emissions report csv to stdout for a given AWS Account and Usage Period
+
+```
+osdctl cost carbon-report [flags]
+```
+
+#### Flags
+
+```
+      --account string                   AWS account number
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+  -a, --aws-access-key-id string         AWS Access Key ID
+  -c, --aws-config string                specify AWS config file path
+  -p, --aws-profile string               specify AWS profile
+  -g, --aws-region string                specify AWS region (default "us-east-1")
+  -x, --aws-secret-access-key string     AWS Secret Access Key
+      --cluster string                   The name of the kubeconfig cluster to use
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for carbon-report
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+      --usage-period string              Usage period in YYYY or YYYY-MM format
 ```
 
 ### osdctl cost create

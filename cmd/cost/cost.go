@@ -34,6 +34,7 @@ platforms may be added in the future)`,
 	costCmd.AddCommand(newCmdReconcile(streams))
 	costCmd.AddCommand(newCmdCreate(streams))
 	costCmd.AddCommand(newCmdList(streams, globalOpts))
+	costCmd.AddCommand(newCmdCarbonReport(streams, globalOpts))
 
 	return costCmd
 }
