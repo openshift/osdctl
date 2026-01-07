@@ -54,6 +54,8 @@ type Client interface {
 	ListBuckets(*s3.ListBucketsInput) (*s3.ListBucketsOutput, error)
 	DeleteBucket(*s3.DeleteBucketInput) (*s3.DeleteBucketOutput, error)
 	ListObjects(*s3.ListObjectsInput) (*s3.ListObjectsOutput, error)
+	ListObjectsV2(*s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, error)
+	GetObject(*s3.GetObjectInput) (*s3.GetObjectOutput, error)
 	DeleteObjects(*s3.DeleteObjectsInput) (*s3.DeleteObjectsOutput, error)
 
 	//iam
@@ -283,6 +285,14 @@ func (c *AwsClient) DeleteBucket(input *s3.DeleteBucketInput) (*s3.DeleteBucketO
 
 func (c *AwsClient) ListObjects(input *s3.ListObjectsInput) (*s3.ListObjectsOutput, error) {
 	return c.s3Client.ListObjects(context.TODO(), input)
+}
+
+func (c *AwsClient) ListObjectsV2(input *s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, error) {
+	return c.s3Client.ListObjectsV2(context.TODO(), input)
+}
+
+func (c *AwsClient) GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
+	return c.s3Client.GetObject(context.TODO(), input)
 }
 
 func (c *AwsClient) DeleteObjects(input *s3.DeleteObjectsInput) (*s3.DeleteObjectsOutput, error) {
