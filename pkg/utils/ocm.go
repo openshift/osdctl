@@ -286,7 +286,6 @@ func CreateConnection() (*sdk.Connection, error) {
 
 // Creates a connection to OCM
 func CreateConnectionWithUrl(OcmUrl string) (*sdk.Connection, error) {
-	var ocmApiUrl string = OcmUrl
 	if len(OcmUrl) <= 0 {
 		return nil, fmt.Errorf("CreateConnectionWithUrl provided empty OCM URL")
 	}
@@ -434,7 +433,7 @@ func GetHiveShardWithConn(clusterID string, conn *sdk.Connection) (string, error
 	}
 
 	if shard == "" {
-		return "", fmt.Errorf("Unable to retrieve shard for cluster %s", clusterID)
+		return "", fmt.Errorf("unable to retrieve shard for cluster %s", clusterID)
 	}
 
 	return shard, nil

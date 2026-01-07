@@ -92,8 +92,8 @@ func TestGetOcmConfigFromFilePath(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to marshal config: %v", err)
 				}
-				if err := os.WriteFile(configFile, data, 0644); err != nil {
-					t.Fatalf("failed to write config file: %v", err)
+				if err := os.WriteFile(configFile, data, 0600); err != nil {
+					t.Skipf("failed to write config file (insufficient permissions?): %v", err)
 				}
 				return configFile
 			},
@@ -135,8 +135,8 @@ func TestGetOcmConfigFromFilePath(t *testing.T) {
 			setupFunc: func(t *testing.T) string {
 				tmpDir := t.TempDir()
 				configFile := filepath.Join(tmpDir, "ocm.json")
-				if err := os.WriteFile(configFile, []byte(""), 0644); err != nil {
-					t.Fatalf("failed to write empty file: %v", err)
+				if err := os.WriteFile(configFile, []byte(""), 0600); err != nil {
+					t.Skipf("failed to write empty file (insufficient permissions?): %v", err)
 				}
 				return configFile
 			},
@@ -149,8 +149,8 @@ func TestGetOcmConfigFromFilePath(t *testing.T) {
 			setupFunc: func(t *testing.T) string {
 				tmpDir := t.TempDir()
 				configFile := filepath.Join(tmpDir, "ocm.json")
-				if err := os.WriteFile(configFile, []byte("{invalid json}"), 0644); err != nil {
-					t.Fatalf("failed to write invalid json: %v", err)
+				if err := os.WriteFile(configFile, []byte("{invalid json}"), 0600); err != nil {
+					t.Skipf("failed to write invalid json (insufficient permissions?): %v", err)
 				}
 				return configFile
 			},
@@ -259,8 +259,8 @@ func TestGetOCMSdkConnBuilderFromFilePath(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to marshal config: %v", err)
 				}
-				if err := os.WriteFile(configFile, data, 0644); err != nil {
-					t.Fatalf("failed to write config file: %v", err)
+				if err := os.WriteFile(configFile, data, 0600); err != nil {
+					t.Skipf("failed to write config file (insufficient permissions?): %v", err)
 				}
 				return configFile
 			},
@@ -319,8 +319,8 @@ func TestGetOCMSdkConnFromFilePath(t *testing.T) {
 			setupFunc: func(t *testing.T) string {
 				tmpDir := t.TempDir()
 				configFile := filepath.Join(tmpDir, "ocm.json")
-				if err := os.WriteFile(configFile, []byte(""), 0644); err != nil {
-					t.Fatalf("failed to write empty file: %v", err)
+				if err := os.WriteFile(configFile, []byte(""), 0600); err != nil {
+					t.Skipf("failed to write empty file (insufficient permissions?): %v", err)
 				}
 				return configFile
 			},
@@ -449,8 +449,8 @@ func TestGetOCMConfigFromEnv(t *testing.T) {
 				if err != nil {
 					t.Fatalf("failed to marshal config: %v", err)
 				}
-				if err := os.WriteFile(configFile, data, 0644); err != nil {
-					t.Fatalf("failed to write config file: %v", err)
+				if err := os.WriteFile(configFile, data, 0600); err != nil {
+					t.Skipf("failed to write config file (insufficient permissions?): %v", err)
 				}
 				oldVal := os.Getenv("OCM_CONFIG")
 				os.Setenv("OCM_CONFIG", configFile)
@@ -493,8 +493,8 @@ func TestGetOCMConfigFromEnv(t *testing.T) {
 			setupFunc: func(t *testing.T) func() {
 				tmpDir := t.TempDir()
 				configFile := filepath.Join(tmpDir, "invalid-ocm.json")
-				if err := os.WriteFile(configFile, []byte("{invalid json}"), 0644); err != nil {
-					t.Fatalf("failed to write invalid json: %v", err)
+				if err := os.WriteFile(configFile, []byte("{invalid json}"), 0600); err != nil {
+					t.Skipf("failed to write invalid json (insufficient permissions?): %v", err)
 				}
 				oldVal := os.Getenv("OCM_CONFIG")
 				os.Setenv("OCM_CONFIG", configFile)
@@ -609,12 +609,12 @@ func TestCreateConnectionWithUrl(t *testing.T) {
 // the hive-login test command.
 func TestGetHiveBPClientForCluster(t *testing.T) {
 	tests := []struct {
-		name             string
-		clusterID        string
-		elevationReason  string
-		hiveOCMURL       string
-		wantErr          bool
-		errContains      string
+		name            string
+		clusterID       string
+		elevationReason string
+		hiveOCMURL      string
+		wantErr         bool
+		errContains     string
 	}{
 		{
 			// Test that an empty cluster ID returns an error

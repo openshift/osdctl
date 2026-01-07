@@ -26,7 +26,6 @@ import (
 
 type testHiveLoginOptions struct {
 	clusterID         string
-	output            string
 	verbose           bool
 	hiveOcmConfigPath string
 	hiveOcmURL        string
@@ -37,7 +36,7 @@ const longDescription = `
 This test utility attempts to exercise and validate OSDCTL's functions related to
 OCM and backplane client connections. 
 	
-This test utiltiy can be run against an	OSD/Rosa Classic target cluster. This utility
+This test utility can be run against an OSD/Rosa Classic target cluster. This utility
 will attempt to discover the Hive cluster, and create both
 OCM and kube client connections, and perform basic requests for each to connection in 
 order to validate functionality of the related OSDCTL utility functions.  
@@ -48,7 +47,7 @@ environment (ie integration, staging) from the hive cluster (ie production).
 The default OCM environment vars should be set for the target cluster. 
 If the target cluster exists outside of the OCM 'production' environment, the user 
 has the option to provide the production OCM config (with valid token set), 
-or provide the production OCM API url as a command arguement, or set the value in the osdctl 
+or provide the production OCM API url as a command argument, or set the value in the osdctl 
 config yaml file (ie: "hive_ocm_url: https://api.openshift.com" or "hive_ocm_url: production" ).
 For testing purposes comment out 'hive_ocm_url' from osdctl's config if testing an empty value. 
 `
@@ -73,7 +72,7 @@ func newCmdTestHiveLogin() *cobra.Command {
 	testHiveLoginCmd.Flags().StringVar(&ops.hiveOcmConfigPath, "hive-ocm-config", "", "OCM config for hive if different than Cluster")
 	testHiveLoginCmd.Flags().StringVar(&ops.hiveOcmURL, "hive-ocm-url", "", "OCM URL for hive, this will fallback to reading from the osdctl config value: 'hive_ocm_url' if left empty")
 
-	testHiveLoginCmd.MarkFlagRequired("cluster-id")
+	_ = testHiveLoginCmd.MarkFlagRequired("cluster-id")
 	return testHiveLoginCmd
 }
 
@@ -225,7 +224,7 @@ func setupHiveCluster(clusterID string, ocmClient, hiveOCM *sdk.Connection) (*v1
 	printDiv()
 	hiveCluster, err := utils.GetHiveClusterWithConn(clusterID, ocmClient, hiveOCM)
 	if err != nil {
-		fmt.Printf("Failed to fetch hive cluster with provided OCM conneciton, err:'%v'", err)
+		fmt.Printf("Failed to fetch hive cluster with provided OCM connection, err:'%v'", err)
 		return nil, err
 	}
 
