@@ -429,7 +429,7 @@ func TestProcessCarbonData(t *testing.T) {
 					// Create gzipped data
 					var buf strings.Builder
 					gzWriter := gzip.NewWriter(&buf)
-					gzWriter.Write([]byte(csvData))
+					_, _ = gzWriter.Write([]byte(csvData))
 					gzWriter.Close()
 
 					return &s3.GetObjectOutput{
@@ -456,7 +456,7 @@ func TestProcessCarbonData(t *testing.T) {
 				r.GetObject(gomock.Any()).DoAndReturn(func(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
 					var buf strings.Builder
 					gzWriter := gzip.NewWriter(&buf)
-					gzWriter.Write([]byte(csvData))
+					_, _ = gzWriter.Write([]byte(csvData))
 					gzWriter.Close()
 
 					return &s3.GetObjectOutput{
@@ -484,7 +484,7 @@ func TestProcessCarbonData(t *testing.T) {
 				r.GetObject(gomock.Any()).DoAndReturn(func(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
 					var buf strings.Builder
 					gzWriter := gzip.NewWriter(&buf)
-					gzWriter.Write([]byte(csvData))
+					_, _ = gzWriter.Write([]byte(csvData))
 					gzWriter.Close()
 
 					return &s3.GetObjectOutput{
