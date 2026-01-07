@@ -55,6 +55,12 @@ func (o *carbonReportOptions) validateUsagePeriod() error {
 
 // CreateAWSClient creates an AWS client after validating the AWS_ACCOUNT_NAME environment variable
 func CreateAWSClient() (awsprovider.Client, error) {
+	return createAWSClientWithOptions(opsCost)
+}
+
+// createAWSClientWithOptions creates an AWS client with the provided costOptions
+// This function is separated for testing purposes
+func createAWSClientWithOptions(opts *costOptions) (awsprovider.Client, error) {
 	// Check for AWS_ACCOUNT_NAME environment variable
 	awsAccountName := os.Getenv("AWS_ACCOUNT_NAME")
 	if awsAccountName != expectedAccountName {
@@ -65,7 +71,7 @@ func CreateAWSClient() (awsprovider.Client, error) {
 	}
 
 	// Initialize AWS client (which includes S3 client)
-	awsClient, err := opsCost.initAWSClients()
+	awsClient, err := opts.initAWSClients()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create AWS client. Please run 'rh-aws-saml-login rh-control' first: %w", err)
 	}
