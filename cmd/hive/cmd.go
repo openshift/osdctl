@@ -2,6 +2,7 @@ package hive
 
 import (
 	"fmt"
+
 	cd "github.com/openshift/osdctl/cmd/hive/clusterdeployment"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -19,6 +20,7 @@ func NewCmdHive(streams genericclioptions.IOStreams, client client.Client) *cobr
 
 	hiveCmd.AddCommand(NewCmdClusterSyncFailures(streams, client))
 	hiveCmd.AddCommand(cd.NewCmdClusterDeployment(streams, client))
+	hiveCmd.AddCommand(newCmdTestHiveLogin())
 	return hiveCmd
 }
 
