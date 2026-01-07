@@ -28,4 +28,5 @@ hive related utilities
 * [osdctl](osdctl.md)	 - OSD CLI
 * [osdctl hive clusterdeployment](osdctl_hive_clusterdeployment.md)	 - cluster deployment related utilities
 * [osdctl hive clustersync-failures](osdctl_hive_clustersync-failures.md)	 - List clustersync failures
+* [osdctl hive login-tests](osdctl_hive_login-tests.md)	 - Test utility to exercise OSDCTL client connections for both Target Cluster and it's Hive Cluster.
 
