@@ -286,7 +286,7 @@ func newCmdCarbonReport(streams genericclioptions.IOStreams, globalOpts *globalf
 	ops := newCarbonReportOptions(streams, globalOpts)
 	carbonReportCmd := &cobra.Command{
 		Use:   "carbon-report",
-		Short: "Generate carbon emissions report",
+		Short: "Generate carbon emissions report csv to stdout for a given AWS Account and Usage Period",
 		Run: func(cmd *cobra.Command, args []string) {
 			// Validate usage period
 			cmdutil.CheckErr(ops.validateUsagePeriod())
@@ -348,7 +348,7 @@ func newCmdCarbonReport(streams genericclioptions.IOStreams, globalOpts *globalf
 	}
 
 	carbonReportCmd.Flags().StringVar(&ops.usagePeriod, "usage-period", "", "Usage period in YYYY or YYYY-MM format")
-	carbonReportCmd.Flags().StringVar(&ops.account, "account", "", "AWS account number (at least 12 digits)")
+	carbonReportCmd.Flags().StringVar(&ops.account, "account", "", "AWS account number")
 
 	return carbonReportCmd
 }
