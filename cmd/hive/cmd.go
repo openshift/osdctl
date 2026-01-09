@@ -20,7 +20,6 @@ func NewCmdHive(streams genericclioptions.IOStreams, client client.Client) *cobr
 
 	hiveCmd.AddCommand(NewCmdClusterSyncFailures(streams, client))
 	hiveCmd.AddCommand(cd.NewCmdClusterDeployment(streams, client))
-	hiveCmd.AddCommand(newCmdTestHiveLogin())
 	return hiveCmd
 }
 
