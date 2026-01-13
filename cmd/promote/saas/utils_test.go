@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/openshift/osdctl/cmd/promote/git"
+	"github.com/openshift/osdctl/cmd/promote/pathutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -352,7 +353,7 @@ func TestUpdateAppYmlWithHotfix(t *testing.T) {
 		errorSubstr string
 	}{
 		{
-			name: "successfully_updates_app_yml",
+			name: "successfully_updates_app_yml_for_service_directly_under_services",
 			setup: func(t *testing.T) (git.AppInterface, string) {
 				tmpDir := t.TempDir()
 				servicesDir := filepath.Join(tmpDir, "data", "services", "test-service")
@@ -368,17 +369,68 @@ codeComponents:
 				err = os.WriteFile(appYmlPath, []byte(appYmlContent), 0600)
 				require.NoError(t, err)
 
-				return git.AppInterface{GitDirectory: tmpDir}, "saas-test-service"
+				saasDir := filepath.Join(tmpDir, "data", "services", "test-service", "cicd", "saas", "saas-test-service.yaml")
+				return git.AppInterface{GitDirectory: tmpDir}, saasDir
 			},
 			serviceName: "saas-test-service",
 			gitHash:     "abc123",
 			expectError: false,
 		},
 		{
+			name: "successfully_updates_app_yml_for_osd_operator",
+			setup: func(t *testing.T) (git.AppInterface, string) {
+				tmpDir := t.TempDir()
+				// imitating operators' directories
+				servicesDir := filepath.Join(tmpDir, "data", "services", "osd-operators", "managed-cluster-config")
+				err := os.MkdirAll(servicesDir, 0755)
+				require.NoError(t, err)
+
+				appYmlContent := `
+codeComponents:
+  - name: managed-cluster-config
+    url: https://github.com/openshift/managed-cluster-config
+`
+				appYmlPath := filepath.Join(servicesDir, "app.yml")
+				err = os.WriteFile(appYmlPath, []byte(appYmlContent), 0600)
+				require.NoError(t, err)
+
+				saasDir := filepath.Join(tmpDir, "data", "services", "osd-operators", "cicd", "saas", "saas-managed-cluster-config.yaml")
+				return git.AppInterface{GitDirectory: tmpDir}, saasDir
+			},
+			serviceName: "saas-managed-cluster-config",
+			gitHash:     "7f2dbae9d4284f8b68813270c1202ca3435459e5",
+			expectError: false,
+		},
+		{
+			name: "successfully_updates_app_yml_for_backplane_service",
+			setup: func(t *testing.T) (git.AppInterface, string) {
+				tmpDir := t.TempDir()
+				// Imitate dir structure for backplane
+				servicesDir := filepath.Join(tmpDir, "data", "services", "backplane", "backplane-api")
+				err := os.MkdirAll(servicesDir, 0755)
+				require.NoError(t, err)
+
+				appYmlContent := `
+codeComponents:
+  - name: backplane-api
+    url: https://github.com/openshift/backplane-api
+`
+				appYmlPath := filepath.Join(servicesDir, "app.yml")
+				err = os.WriteFile(appYmlPath, []byte(appYmlContent), 0600)
+				require.NoError(t, err)
+				saasDir := filepath.Join(tmpDir, "data", "services", "backplane", "cicd", "saas", "saas-backplane-api.yaml")
+				return git.AppInterface{GitDirectory: tmpDir}, saasDir
+			},
+			serviceName: "saas-backplane-api",
+			gitHash:     "def456",
+			expectError: false,
+		},
+		{
 			name: "fails_when_app_yml_not_found",
 			setup: func(t *testing.T) (git.AppInterface, string) {
 				tmpDir := t.TempDir()
-				return git.AppInterface{GitDirectory: tmpDir}, "saas-nonexistent-service"
+				saasDir := filepath.Join(tmpDir, "data", "services", "cicd", "saas", "saas-nonexistent-service.yaml")
+				return git.AppInterface{GitDirectory: tmpDir}, saasDir
 			},
 			serviceName: "saas-nonexistent-service",
 			gitHash:     "abc123",
@@ -402,7 +454,8 @@ codeComponents:
 				err = os.WriteFile(appYmlPath, []byte(appYmlContent), 0600)
 				require.NoError(t, err)
 
-				return git.AppInterface{GitDirectory: tmpDir}, "saas-test-service"
+				saasDir := filepath.Join(tmpDir, "data", "services", "test-service", "cicd", "saas", "saas-test-service.yaml")
+				return git.AppInterface{GitDirectory: tmpDir}, saasDir
 			},
 			serviceName: "saas-test-service",
 			gitHash:     "abc123",
@@ -413,9 +466,9 @@ codeComponents:
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			appInterface, _ := tc.setup(t)
+			appInterface, saasDir := tc.setup(t)
 
-			err := updateAppYmlWithHotfix(appInterface, tc.serviceName, tc.gitHash)
+			err := updateAppYmlWithHotfix(appInterface, tc.serviceName, saasDir, tc.gitHash)
 
 			if tc.expectError {
 				assert.Error(t, err)
@@ -423,8 +476,11 @@ codeComponents:
 			} else {
 				assert.NoError(t, err)
 
+				// Use the same path derivation logic as the implementation
 				componentName := strings.TrimPrefix(tc.serviceName, "saas-")
-				appYmlPath := filepath.Join(appInterface.GitDirectory, "data", "services", componentName, "app.yml")
+				appYmlPath, err := pathutil.DeriveAppYmlPath(appInterface.GitDirectory, saasDir, componentName)
+				require.NoError(t, err)
+
 				content, readErr := os.ReadFile(appYmlPath)
 				assert.NoError(t, readErr)
 				assert.Contains(t, string(content), tc.gitHash)
