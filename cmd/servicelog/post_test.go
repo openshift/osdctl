@@ -380,39 +380,6 @@ func TestListMessagedClusters(t *testing.T) {
 		})
 	}
 }
-func TestParseClustersFile(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    []byte
-		expected error
-	}{
-		{
-			name:     "valid_JSON_input_with_no_errors",
-			input:    []byte(`{"clusters":["cluster-1","cluster-2"]}`),
-			expected: nil,
-		},
-		{
-			name:     "invalid_JSON_input_with_errors",
-			input:    []byte(`{"clusters":["cluster-1","cluster-2"`),
-			expected: assert.AnError,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			options := &PostCmdOptions{}
-			err := options.parseClustersFile(tt.input)
-			if tt.expected == nil {
-				assert.NoError(t, err)
-				assert.Equal(t, 2, len(options.ClustersFile.Clusters))
-				assert.Equal(t, "cluster-1", options.ClustersFile.Clusters[0])
-				assert.Equal(t, "cluster-2", options.ClustersFile.Clusters[1])
-			} else {
-				assert.Error(t, err)
-			}
-		})
-	}
-}
 func TestReplaceFlags(t *testing.T) {
 	tests := []struct {
 		name           string

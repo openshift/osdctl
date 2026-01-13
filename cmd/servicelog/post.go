@@ -20,6 +20,7 @@ import (
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	"github.com/openshift/osdctl/internal/io"
 	"github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/internal/utils"
 	"github.com/openshift/osdctl/pkg/link_validator"
@@ -33,7 +34,6 @@ import (
 
 type PostCmdOptions struct {
 	Message         servicelog.Message
-	ClustersFile    servicelog.ClustersFile
 	Template        string
 	TemplateParams  []string
 	Overrides       []string
@@ -191,16 +191,12 @@ func (o *PostCmdOptions) Run() error {
 	// Combine existing OCM filters with any cluster id-related flags
 	var queries []string
 	if o.clustersFile != "" {
-		contents, err := o.accessFile(o.clustersFile)
+		clusterIDs, err := io.ParseAndValidateClustersFile(o.clustersFile)
 		if err != nil {
-			return fmt.Errorf("cannot read file %s: %w", o.clustersFile, err)
+			return fmt.Errorf("cannot parse clusters file %s: %w", o.clustersFile, err)
 		}
-		if err := o.parseClustersFile(contents); err != nil {
-			return fmt.Errorf("cannot parse file %s: %w", o.clustersFile, err)
-		}
-		for i := range o.ClustersFile.Clusters {
-			cluster := o.ClustersFile.Clusters[i]
-			queries = append(queries, ocmutils.GenerateQuery(cluster))
+		for _, clusterID := range clusterIDs {
+			queries = append(queries, ocmutils.GenerateQuery(clusterID))
 		}
 	}
 	if o.ClusterId != "" {
@@ -462,11 +458,6 @@ func (o *PostCmdOptions) accessFile(filePath string) ([]byte, error) {
 		return nil, fmt.Errorf("the provided path %q is a directory, not a file", filePath)
 	}
 	return nil, fmt.Errorf("cannot read the file %q", filePath)
-}
-
-// parseClustersFile reads the clustrs file into a JSON struct
-func (o *PostCmdOptions) parseClustersFile(jsonFile []byte) error {
-	return json.Unmarshal(jsonFile, &o.ClustersFile)
 }
 
 // parseTemplate reads the template file into a JSON struct

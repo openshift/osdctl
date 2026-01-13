@@ -26,5 +26,6 @@
 ### SEE ALSO
 
 * [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl hcp force-upgrade](osdctl_hcp_force-upgrade.md)	 - Schedule forced control plane upgrade for HCP clusters (Requires ForceUpgrader permissions)
 * [osdctl hcp must-gather](osdctl_hcp_must-gather.md)	 - Create a must-gather for HCP cluster
 
