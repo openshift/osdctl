@@ -264,7 +264,7 @@ func GetCurrentPackageTagFromAppInterface(saasFile string) (string, error) {
 	return currentPackageTag, nil
 }
 
-func (a *AppInterface) UpdateAppInterface(_, saasFile, currentGitHash, promotionGitHash, branchName string) error {
+func (a *AppInterface) UpdateAppInterface(_, saasFile, currentGitHash, promotionGitHash, branchName string, hotfix bool) error {
 
 	if err := a.GitExecutor.Run(a.GitDirectory, "git", "checkout", "master"); err != nil {
 		return fmt.Errorf("failed to checkout master: branch %v", err)
@@ -283,16 +283,23 @@ func (a *AppInterface) UpdateAppInterface(_, saasFile, currentGitHash, promotion
 		return fmt.Errorf("failed to read file %s: %v", saasFile, err)
 	}
 	var newContent string
+	var canaryTargetsSetUp bool
 
-	// If canary targets are set up in saas, replace the hash only in canary targets in the file content
-	// Otherwise proceed to promoting to all prod hives.
-	newContent, err, canaryTargetsSetUp := replaceTargetSha(string(fileContent), canaryStr, promotionGitHash)
-	if err != nil {
-		return fmt.Errorf("error modifying YAML: %v", err)
-	}
-	if !canaryTargetsSetUp {
-		fmt.Println("canary targets not set, continuing to replace all occurrences of sha.")
+	// If this is a hotfix, update all targets to bypass progressive delivery
+	if hotfix {
+		fmt.Println("hotfix mode: updating all targets to bypass progressive delivery")
 		newContent = strings.ReplaceAll(string(fileContent), currentGitHash, promotionGitHash)
+	} else {
+		// If canary targets are set up in saas, replace the hash only in canary targets in the file content
+		// Otherwise proceed to promoting to all prod hives.
+		newContent, err, canaryTargetsSetUp = replaceTargetSha(string(fileContent), canaryStr, promotionGitHash)
+		if err != nil {
+			return fmt.Errorf("error modifying YAML: %v", err)
+		}
+		if !canaryTargetsSetUp {
+			fmt.Println("canary targets not set, continuing to replace all occurrences of sha.")
+			newContent = strings.ReplaceAll(string(fileContent), currentGitHash, promotionGitHash)
+		}
 	}
 
 	err = os.WriteFile(saasFile, []byte(newContent), 0600)

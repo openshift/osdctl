@@ -593,7 +593,7 @@ resourceTemplates:
 		t.Run(name, func(t *testing.T) {
 			app, saas_file := tt.setup(t)
 
-			err := app.UpdateAppInterface(tt.service_name, saas_file, tt.current_git_hash, tt.promotion_git_hash, tt.branch_name)
+			err := app.UpdateAppInterface(tt.service_name, saas_file, tt.current_git_hash, tt.promotion_git_hash, tt.branch_name, false)
 			if tt.expected_err != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expected_err)
