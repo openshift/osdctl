@@ -146,7 +146,7 @@ func servicePromotion(appInterface git.AppInterface, component, gitHash string) 
 
 	branchName := fmt.Sprintf("promote-%s-%s", component, promotionGitHash)
 
-	err = appInterface.UpdateAppInterface(component, saasDir, currentGitHash, promotionGitHash, branchName)
+	err = appInterface.UpdateAppInterface(component, saasDir, currentGitHash, promotionGitHash, branchName, false)
 	if err != nil {
 		fmt.Printf("FAILURE: %v\n", err)
 	}
