@@ -43,6 +43,7 @@ func NewCmdCluster(streams genericclioptions.IOStreams, client *k8s.LazyClient, 
 	clusterCmd.AddCommand(NewCmdHypershiftInfo(streams))
 	clusterCmd.AddCommand(newCmdOrgId())
 	clusterCmd.AddCommand(newCmdDetachStuckVolume())
+	clusterCmd.AddCommand(NewCmdVerifyDNS(streams))
 	clusterCmd.AddCommand(ssh.NewCmdSSH())
 	clusterCmd.AddCommand(sre_operators.NewCmdSREOperators(streams, client))
 	clusterCmd.AddCommand(newCmdGetEnvVars())
