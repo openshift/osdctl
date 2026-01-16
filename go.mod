@@ -6,6 +6,7 @@ require (
 	cloud.google.com/go/compute v1.37.0
 	github.com/AlecAivazis/survey/v2 v2.3.7
 	github.com/Dynatrace/dynatrace-operator v0.14.2
+	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/PagerDuty/go-pagerduty v1.8.0
 	github.com/andygrunwald/go-jira v1.17.0
 	github.com/aws/aws-sdk-go-v2 v1.40.0
