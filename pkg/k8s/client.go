@@ -172,7 +172,7 @@ func NewWithConn(clusterID string, options client.Options, ocmConn *sdk.Connecti
 	}
 	bp, err := bpconfig.GetBackplaneConfigurationWithConn(ocmConn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
+		return nil, fmt.Errorf("failed to load backplane-cli config: %w", err)
 	}
 
 	cfg, err := bplogin.GetRestConfigWithConn(bp, ocmConn, clusterID)
@@ -186,7 +186,7 @@ func NewWithConn(clusterID string, options client.Options, ocmConn *sdk.Connecti
 func NewAsBackplaneClusterAdmin(clusterID string, options client.Options, elevationReasons ...string) (client.Client, error) {
 	bp, err := bpconfig.GetBackplaneConfiguration()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
+		return nil, fmt.Errorf("failed to load backplane-cli config: %w", err)
 	}
 
 	cfg, err := bplogin.GetRestConfigAsUser(bp, clusterID, "backplane-cluster-admin", elevationReasons...)
@@ -206,7 +206,7 @@ func NewAsBackplaneClusterAdminWithConn(clusterID string, options client.Options
 	}
 	bp, err := bpconfig.GetBackplaneConfigurationWithConn(ocmConn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
+		return nil, fmt.Errorf("failed to load backplane-cli config: %w", err)
 	}
 
 	cfg, err := bplogin.GetRestConfigAsUserWithConn(bp, ocmConn, clusterID, "backplane-cluster-admin", elevationReasons...)

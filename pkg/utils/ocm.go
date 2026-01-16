@@ -67,7 +67,7 @@ func GetClusterAnyStatus(conn *sdk.Connection, clusterId string) (*cmv1.Cluster,
 	clustersSearch := fmt.Sprintf(ClusterServiceClusterSearch, clusterId, clusterId, clusterId)
 	clustersListResponse, err := conn.ClustersMgmt().V1().Clusters().List().Search(clustersSearch).Size(1).Send()
 	if err != nil {
-		return nil, fmt.Errorf("can't retrieve clusters for clusterId '%s': %v", clusterId, err)
+		return nil, fmt.Errorf("can't retrieve clusters for clusterId '%s': %w", clusterId, err)
 	}
 
 	// If there is exactly one cluster matching then return it:
@@ -195,7 +195,7 @@ func getOCMConfigLocation() (string, error) {
 		// Determine standard config directory
 		configDir, err := os.UserConfigDir()
 		if err != nil {
-			return path, err
+			return "", err
 		}
 
 		// Use standard config directory
@@ -228,13 +228,13 @@ func loadOCMConfig() (*ocmConfig.Config, error) {
 	}
 
 	if err != nil {
-		err = fmt.Errorf("can't check if config file '%s' exists: %v", file, err)
+		err = fmt.Errorf("can't check if config file '%s' exists: %w", file, err)
 		return nil, err
 	}
 
 	data, err := os.ReadFile(file)
 	if err != nil {
-		err = fmt.Errorf("can't read config file '%s': %v", file, err)
+		err = fmt.Errorf("can't read config file '%s': %w", file, err)
 		return nil, err
 	}
 
@@ -246,7 +246,7 @@ func loadOCMConfig() (*ocmConfig.Config, error) {
 	err = json.Unmarshal(data, cfg)
 
 	if err != nil {
-		err = fmt.Errorf("can't parse config file '%s': %v", file, err)
+		err = fmt.Errorf("can't parse config file '%s': %w", file, err)
 		return cfg, err
 	}
 
@@ -491,7 +491,7 @@ func GetHiveBPClientForCluster(clusterID string, options client.Options, elevati
 		defer hiveOCMConn.Close()
 		hiveCluster, err := GetHiveClusterWithConn(clusterID, nil, hiveOCMConn)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch hive cluster for cluster:'%s', ocmURL:'%s', Err:'%v'", clusterID, hiveOCMURL, err)
+			return nil, fmt.Errorf("failed to fetch hive cluster for cluster:'%s', ocmURL:'%s', Err:'%w'", clusterID, hiveOCMURL, err)
 		}
 		if len(elevationReason) > 0 {
 			return k8s.NewAsBackplaneClusterAdminWithConn(hiveCluster.ID(), options, hiveOCMConn, elevationReason)
@@ -500,7 +500,7 @@ func GetHiveBPClientForCluster(clusterID string, options client.Options, elevati
 	} else {
 		hiveCluster, err := GetHiveCluster(clusterID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch hive cluster for cluster:'%s', err:'%v'", clusterID, err)
+			return nil, fmt.Errorf("failed to fetch hive cluster for cluster:'%s', err:'%w'", clusterID, err)
 		}
 		if len(elevationReason) > 0 {
 			return k8s.NewAsBackplaneClusterAdmin(hiveCluster.ID(), options, elevationReason)
@@ -644,7 +644,7 @@ func IsManagementCluster(clusterID string) (isMC bool, err error) {
 	// Send the request to retrieve the list of external cluster labels:
 	response, err := resource.List().Send()
 	if err != nil {
-		return false, fmt.Errorf("can't retrieve cluster labels: %v", err)
+		return false, fmt.Errorf("can't retrieve cluster labels: %w", err)
 	}
 
 	labels, ok := response.GetItems()
@@ -746,7 +746,7 @@ func SendRequest(request *sdk.Request) (*sdk.Response, error) {
 func GetOcmConfigFromFilePath(filePath string) (*ocmConfig.Config, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		err = fmt.Errorf("can't read config file '%s': %v", filePath, err)
+		err = fmt.Errorf("can't read config file '%s': %w", filePath, err)
 		return nil, err
 	}
 
@@ -756,7 +756,7 @@ func GetOcmConfigFromFilePath(filePath string) (*ocmConfig.Config, error) {
 	cfg := &ocmConfig.Config{}
 	err = json.Unmarshal(data, cfg)
 	if err != nil {
-		err = fmt.Errorf("can't parse config file '%s': %v", filePath, err)
+		err = fmt.Errorf("can't parse config file '%s': %w", filePath, err)
 		return nil, err
 	}
 	return cfg, nil

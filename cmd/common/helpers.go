@@ -83,7 +83,7 @@ func GetKubeConfigAndClient(clusterID string, elevationReasons ...string) (clien
 func GetKubeConfigAndClientWithConn(clusterID string, ocm *ocmsdk.Connection, elevationReasons ...string) (client.Client, *rest.Config, *kubernetes.Clientset, error) {
 	bp, err := bpconfig.GetBackplaneConfigurationWithConn(ocm)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to load backplane-cli config: %v", err)
+		return nil, nil, nil, fmt.Errorf("failed to load backplane-cli config: %w", err)
 	}
 	var kubeconfig *rest.Config
 	if len(elevationReasons) == 0 {
