@@ -2,6 +2,7 @@ package hive
 
 import (
 	"fmt"
+
 	cd "github.com/openshift/osdctl/cmd/hive/clusterdeployment"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"

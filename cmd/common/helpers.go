@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	ocmsdk "github.com/openshift-online/ocm-sdk-go"
 	bplogin "github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
 	bpconfig "github.com/openshift/backplane-cli/pkg/cli/config"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -75,4 +76,32 @@ func GetKubeConfigAndClient(clusterID string, elevationReasons ...string) (clien
 		return nil, nil, nil, err
 	}
 	return kubeCli, kubeconfig, clientset, err
+}
+
+// If some elevationReasons are provided, then the config will be elevated with user backplane-cluster-admin
+// Using provided OCM sdk connection for config values.
+func GetKubeConfigAndClientWithConn(clusterID string, ocm *ocmsdk.Connection, elevationReasons ...string) (client.Client, *rest.Config, *kubernetes.Clientset, error) {
+	bp, err := bpconfig.GetBackplaneConfigurationWithConn(ocm)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to load backplane-cli config: %w", err)
+	}
+	var kubeconfig *rest.Config
+	if len(elevationReasons) == 0 {
+		kubeconfig, err = bplogin.GetRestConfigWithConn(bp, ocm, clusterID)
+	} else {
+		kubeconfig, err = bplogin.GetRestConfigAsUserWithConn(bp, ocm, clusterID, "backplane-cluster-admin", elevationReasons...)
+	}
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	// create the clientset
+	clientset, err := kubernetes.NewForConfig(kubeconfig)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	kubeCli, err := client.New(kubeconfig, client.Options{})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return kubeCli, kubeconfig, clientset, nil
 }
