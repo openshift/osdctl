@@ -4,15 +4,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/openshift/osdctl/cmd/promote/git"
-	"github.com/openshift/osdctl/cmd/promote/iexec"
+	"github.com/openshift/osdctl/cmd/promote/utils"
 	"github.com/spf13/cobra"
 )
 
 type promoteDynatraceOptions struct {
 	list bool
 
-	appInterfaceCheckoutDir    string
+	appInterfaceProvidedPath   string
 	gitHash                    string
 	component                  string
 	terraform                  bool
@@ -59,7 +58,7 @@ TERRAFORM MODULES:
 		# Promote a dynatrace module
 		osdctl promote dynatrace --terraform --module=<module-name>`,
 
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 
 			if ops.terraform {
 				dynatraceConfig := DynatraceConfigPromotion(ops.dynatraceConfigCheckoutDir)
@@ -93,16 +92,29 @@ TERRAFORM MODULES:
 					}
 				}
 			} else {
-
 				ops.validateSaasFlow()
-				appInterface := git.BootstrapOsdCtlForAppInterfaceAndServicePromotions(ops.appInterfaceCheckoutDir, iexec.Exec{})
+
+				appInterfaceClone, err := utils.FindAppInterfaceClone(ops.appInterfaceProvidedPath)
+				if err != nil {
+					return err
+				}
+
+				servicesRegistry, err := utils.NewServicesRegistry(
+					appInterfaceClone,
+					validateDynatraceServiceFilePath,
+					saasDynatraceDir,
+				)
+				if err != nil {
+					return err
+				}
+
 				if ops.list {
 					if ops.component != "" || ops.gitHash != "" {
 						fmt.Printf("Error: --list cannot be used with any other flags\n\n")
 						cmd.Help()
 						os.Exit(1)
 					}
-					listServiceNames(appInterface)
+					_ = listServiceIds(servicesRegistry)
 					os.Exit(0)
 				}
 
@@ -112,20 +124,26 @@ TERRAFORM MODULES:
 					cmd.Help()
 					os.Exit(1)
 				}
-				err := servicePromotion(appInterface, ops.component, ops.gitHash)
+
+				service, err := servicesRegistry.GetService(ops.component)
+				if err != nil {
+					return err
+				}
+				err = service.Promote(&utils.DefaultPromoteCallbacks{Service: service}, ops.gitHash)
+
 				if err != nil {
 					fmt.Printf("Error while promoting service: %v\n", err)
 					os.Exit(1)
 				}
 			}
-			os.Exit(0)
+			return nil
 		},
 	}
 
 	promoteDynatraceCmd.Flags().BoolVarP(&ops.list, "list", "l", false, "List all SaaS services/operators")
 	promoteDynatraceCmd.Flags().StringVarP(&ops.component, "component", "c", "", "Dynatrace component getting promoted")
 	promoteDynatraceCmd.Flags().StringVarP(&ops.gitHash, "gitHash", "g", "", "Git hash of the SaaS service/operator commit getting promoted")
-	promoteDynatraceCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "appInterfaceDir", "", "", "location of app-interface checkout. Falls back to current working directory")
+	promoteDynatraceCmd.Flags().StringVarP(&ops.appInterfaceProvidedPath, "appInterfaceDir", "", "", "location of app-interface checkout. Falls back to current working directory")
 	promoteDynatraceCmd.Flags().BoolVarP(&ops.terraform, "terraform", "t", false, "deploy dynatrace-config terraform job")
 	promoteDynatraceCmd.Flags().StringVarP(&ops.module, "module", "m", "", "module to promote")
 	promoteDynatraceCmd.Flags().StringVarP(&ops.dynatraceConfigCheckoutDir, "dynatraceConfigDir", "", "", "location of dynatrace-config checkout. Falls back to current working directory")
