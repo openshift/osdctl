@@ -218,10 +218,13 @@ func NewAsBackplaneClusterAdminWithConn(clusterID string, options client.Options
 }
 
 func setRuntimeLoggerDiscard() {
-	// To avoid warnings/backtrace, if k8s controller-runtime logger has not already been set, do it now...
-	if !log.Log.Enabled() {
-		log.SetLogger(zap.New(zap.WriteTo(io.Discard)))
-	}
+	// Unconditionally set logger to discard to avoid initialization warnings.
+	// The controller-runtime library prints a stack trace if the logger is accessed
+	// before SetLogger() is called within 30 seconds of startup. Checking if the
+	// logger is enabled before setting it causes this warning because the check
+	// itself triggers the eventuallyFulfillRoot() mechanism. SetLogger() can be
+	// called multiple times safely - the last call wins.
+	log.SetLogger(zap.New(zap.WriteTo(io.Discard)))
 }
 
 func GetCurrentCluster() (string, error) {
