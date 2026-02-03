@@ -31,6 +31,12 @@ var BackplaneClusterAdmin = "backplane-cluster-admin"
 // Default auth section used to validate ocm account email againstsa
 const cloudAuthKey = "cloud.openshift.com"
 
+// Service log template URLs
+const (
+	ServiceLogMultipleSyncFailures = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_multiple_sync_failures.json"
+	ServiceLogUpdatePullSecret     = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/update_pull_secret.json"
+)
+
 type Result int
 
 // Const values for results table entries
@@ -42,23 +48,28 @@ const (
 
 // validatePullSecretExtOptions defines the struct for running validate-pull-secret command
 type validatePullSecretExtOptions struct {
-	account        *v1.Account       // Account which owns target cluster
-	clusterID      string            // Target cluster containing pull-secret to be validated against OCM values
-	reason         string            // Reason or justification for accessing sensitive data. (ie jira ticket)
-	ocm            *sdk.Connection   // openshift api client
-	results        *tabwriter.Writer // Used for printing tabled results
-	log            *logrus.Logger    // Simple stderr logger
-	verboseLevel   string            // Logging level
-	useAccessToken bool              // Flag to use OCM access token values for validations
-	useRegCreds    bool              // Flag to use OCM registry credentials values for validations
+	account              *v1.Account         // Account which owns target cluster
+	clusterID            string              // Target cluster containing pull-secret to be validated against OCM values
+	reason               string              // Reason or justification for accessing sensitive data. (ie jira ticket)
+	ocm                  *sdk.Connection     // openshift api client
+	results              *tabwriter.Writer   // Used for printing tabled results
+	log                  *logrus.Logger      // Simple stderr logger
+	verboseLevel         string              // Logging level
+	useAccessToken       bool                // Flag to use OCM access token values for validations
+	useRegCreds          bool                // Flag to use OCM registry credentials values for validations
+	skipServiceLogs      bool                // Flag to skip service logs
+	failuresByServiceLog map[string][]string // Track failures by template
 }
 
 const VPSExample string = `
 	# Compare OCM Access-Token, OCM Registry-Credentials, and OCM Account Email against cluster's pull secret
 	osdctl cluster validate-pull-secret-ext ${CLUSTER_ID} --reason "OSD-XYZ"
 
-	# Exclude Access-Token, and Registry-Credential checks...
+	# Exclude Access-Token, and Registry-Credential checks
 	osdctl cluster validate-pull-secret-ext ${CLUSTER_ID} --reason "OSD-XYZ" --skip-access-token --skip-registry-creds
+
+	# Skip sending service logs (useful for testing)
+	osdctl cluster validate-pull-secret-ext ${CLUSTER_ID} --reason "OSD-XYZ" --skip-service-logs
 `
 
 func newCmdValidatePullSecretExt() *cobra.Command {
@@ -67,10 +78,14 @@ func newCmdValidatePullSecretExt() *cobra.Command {
 		Use:   "validate-pull-secret-ext [CLUSTER_ID]",
 		Short: "Extended checks to confirm pull-secret data is synced with current OCM data",
 		Long: `
-	Attempts to validate if a cluster's pull-secret auth values are in sync with the account's email, 
-	registry_credential, and access token data stored in OCM.  
-	If this is being executed against a cluster which is not owned by the current OCM account, 
-	Region Lead permissions are required to view and validate the OCM AccessToken. 
+	Attempts to validate if a cluster's pull-secret auth values are in sync with the account's email,
+	registry_credential, and access token data stored in OCM.
+
+	Service logs are automatically sent for detected issues. Multiple failures are aggregated into
+	a single service log. Use --skip-service-logs to prevent sending service logs.
+
+	If this is being executed against a cluster which is not owned by the current OCM account,
+	Region Lead permissions are required to view and validate the OCM AccessToken.
 `,
 		Example:           VPSExample,
 		Args:              cobra.ExactArgs(1),
@@ -84,6 +99,7 @@ func newCmdValidatePullSecretExt() *cobra.Command {
 	validatePullSecretCmd.Flags().StringVarP(&ops.verboseLevel, "log-level", "l", "info", "debug, info, warn, error. (default=info)")
 	validatePullSecretCmd.Flags().Bool("skip-registry-creds", false, "Exclude OCM Registry Credentials checks against cluster secret")
 	validatePullSecretCmd.Flags().Bool("skip-access-token", false, "Exclude OCM AccessToken checks against cluster secret")
+	validatePullSecretCmd.Flags().BoolVar(&ops.skipServiceLogs, "skip-service-logs", false, "Skip sending service logs (useful for testing/automation)")
 
 	_ = validatePullSecretCmd.MarkFlagRequired("reason")
 	return validatePullSecretCmd
@@ -149,6 +165,9 @@ func (o *validatePullSecretExtOptions) run() error {
 	var regCreds []*v1.RegistryCredential = nil
 	var accessToken *v1.AccessToken = nil
 
+	// Initialize failure tracking map
+	o.failuresByServiceLog = make(map[string][]string)
+
 	// Create OCM connection...
 	o.ocm, err = utils.CreateConnection()
 	if err != nil {
@@ -184,6 +203,13 @@ func (o *validatePullSecretExtOptions) run() error {
 		o.results.Flush()
 	}()
 
+	// Defer sending aggregated service logs after all validations complete
+	defer func() {
+		if err := o.sendAggregatedServiceLogs(); err != nil {
+			o.log.Errorf("Failed to send aggregated service logs: %v", err)
+		}
+	}()
+
 	// get account info from OCM
 	o.account, err = o.getOCMAccountInfo()
 	if err != nil {
@@ -198,7 +224,7 @@ func (o *validatePullSecretExtOptions) run() error {
 	if err != nil {
 		return err
 	}
-	// This validation prompts user to send or not send a service log...
+	// Validate auth email
 	err = o.validateAuthEmail(pullSecret, emailOCM, cloudAuthKey)
 	if err != nil {
 		fmt.Printf("Error validating pull-secret auth['%s] email.\nErr:'%s'\nWould you like to continue with validations? ", cloudAuthKey, err)
@@ -267,23 +293,6 @@ func (o *validatePullSecretExtOptions) run() error {
 	return nil
 }
 
-func sendPullSecretServiceLog(clusterID string, err error) {
-	postCmd := servicelog.PostCmdOptions{
-		Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json",
-		ClusterId: clusterID,
-	}
-	sendServiceLog(postCmd, fmt.Sprintf("%s", err))
-}
-
-func sendPullSecretMismatchServiceLog(clusterID string, err error) {
-	// Note: This will prompt the user to continue.
-	postCmd := servicelog.PostCmdOptions{
-		Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_user_mismatch.json",
-		ClusterId: clusterID,
-	}
-	sendServiceLog(postCmd, fmt.Sprintf("%s\n", err))
-}
-
 func (o *validatePullSecretExtOptions) validateAuthEmail(pullSecret *corev1.Secret, emailOCM string, authKey string) error {
 	// Extract email from cluster pull-secret.
 	emailCluster, err := getPullSecretAuthEmail(pullSecret, authKey)
@@ -294,14 +303,14 @@ func (o *validatePullSecretExtOptions) validateAuthEmail(pullSecret *corev1.Secr
 			o.log.Errorf("Couldn't extract email address from pull secret for: '%s'"+
 				"This can mean the pull secret is misconfigured. Please verify the pull secret manually:\n"+
 				"	oc get secret -n openshift-config pull-secret -o json | jq -r '.data[\".dockerconfigjson\"]' | base64 -d", errAENF.auth)
-			sendPullSecretServiceLog(o.clusterID, err)
+			o.recordServiceLogFailure(ServiceLogMultipleSyncFailures, errAENF.auth)
 		}
 		if errors.Is(err, ErrSecretMissingDockerConfigJson) {
-			sendPullSecretServiceLog(o.clusterID, err)
+			o.recordServiceLogFailure(ServiceLogMultipleSyncFailures, "pull-secret (missing .dockerconfigjson)")
 		}
 		var errSANF *ErrorSecretAuthNotFound
 		if errors.As(err, &errSANF) {
-			sendPullSecretServiceLog(o.clusterID, err)
+			o.recordServiceLogFailure(ServiceLogMultipleSyncFailures, errSANF.auth)
 		}
 		//Todo: Should this prompt for a service log for other errors too (such as fail to unmarshall)?
 		return err
@@ -313,7 +322,7 @@ func (o *validatePullSecretExtOptions) validateAuthEmail(pullSecret *corev1.Secr
 		o.addResult("account.Email", authKey, pullSecret.Namespace, pullSecret.Name, "email", Fail)
 		err = fmt.Errorf("pull-secret auth:'%s', email:'%s' doesn't match user email from OCM:'%s'", cloudAuthKey, emailCluster, emailOCM)
 		o.log.Errorf("%s\n", err)
-		sendPullSecretMismatchServiceLog(o.clusterID, err)
+		o.recordServiceLogFailure(ServiceLogMultipleSyncFailures, authKey)
 		return err
 	}
 	o.addResult("account.Email", authKey, pullSecret.Namespace, pullSecret.Name, "email", Pass)
@@ -348,6 +357,7 @@ func (o *validatePullSecretExtOptions) checkAccessTokenToPullSecret(accessToken 
 		if err != nil {
 			o.addResult("access_token", akey, pullSecret.Namespace, pullSecret.Name, "auth", Fail)
 			o.log.Errorf("OCM accessToken.auth['%s'], failed to fetch this auth from cluster pull-secret, err:'%s'", akey, err)
+			o.recordServiceLogFailure(ServiceLogMultipleSyncFailures, akey)
 			hasErrors = true
 			// no matching auth present containing email + token
 			continue
@@ -357,6 +367,7 @@ func (o *validatePullSecretExtOptions) checkAccessTokenToPullSecret(accessToken 
 			// Record token mismatch
 			o.addResult("access_token", akey, pullSecret.Namespace, pullSecret.Name, "token", Fail)
 			o.log.Errorf("OCM accessToken.auth['%s'] does not match token found in cluster pull-secret ", akey)
+			o.recordServiceLogFailure(ServiceLogMultipleSyncFailures, akey)
 			hasErrors = true
 		} else {
 			o.addResult("access_token", akey, pullSecret.Namespace, pullSecret.Name, "token", Pass)
@@ -367,6 +378,7 @@ func (o *validatePullSecretExtOptions) checkAccessTokenToPullSecret(accessToken 
 			// Record email mismatch
 			o.addResult("access_token", akey, pullSecret.Namespace, pullSecret.Name, "email", Fail)
 			o.log.Errorf("auth['%s'], pull-secret email:'%s' does not match OCM accessToken.email:'%s'", akey, psTokenAuth.Email(), auth.Email())
+			o.recordServiceLogFailure(ServiceLogMultipleSyncFailures, akey)
 			hasErrors = true
 		} else {
 			o.addResult("access_token", akey, pullSecret.Namespace, pullSecret.Name, "email", Pass)
@@ -434,6 +446,7 @@ func (o *validatePullSecretExtOptions) checkRegistryCredsAgainstPullSecret(regCr
 		if err != nil {
 			o.addResult("registry_credential", regCred.Registry().ID(), pullSecret.Namespace, pullSecret.Name, "auth", Fail)
 			o.log.Errorf("OCM registry_credential['%s'] failed to fetch auth section from cluster pull secret, err:'%s'", regName, err)
+			o.recordServiceLogFailure(ServiceLogMultipleSyncFailures, regName)
 			setErr()
 			continue
 		}
@@ -442,6 +455,7 @@ func (o *validatePullSecretExtOptions) checkRegistryCredsAgainstPullSecret(regCr
 		if emailOCM != secEmail {
 			o.addResult("account.Email", regCred.Registry().ID(), pullSecret.Namespace, pullSecret.Name, "email", Fail)
 			o.log.Errorf("pull-secret auth['%s'].email:'%s' does not match OCM account.Email:'%s'.", regName, secEmail, emailOCM)
+			o.recordServiceLogFailure(ServiceLogMultipleSyncFailures, regName)
 			setErr() // set the error but continue to check the token portion...
 		} else {
 			o.addResult("account.Email", regCred.Registry().ID(), pullSecret.Namespace, pullSecret.Name, "email", Pass)
@@ -452,6 +466,7 @@ func (o *validatePullSecretExtOptions) checkRegistryCredsAgainstPullSecret(regCr
 		if len(secToken) <= 0 {
 			o.addResult("registry_credential", regCred.Registry().ID(), pullSecret.Namespace, pullSecret.Name, "token", Fail)
 			o.log.Errorf("empty token found in cluster pull-secret for auth section:'%s', err:'%s'", regName, err)
+			o.recordServiceLogFailure(ServiceLogMultipleSyncFailures, regName)
 			setErr()
 			continue
 		}
@@ -460,6 +475,7 @@ func (o *validatePullSecretExtOptions) checkRegistryCredsAgainstPullSecret(regCr
 		if err != nil {
 			o.addResult("registry_credential", regCred.Registry().ID(), pullSecret.Namespace, pullSecret.Name, "token", Fail)
 			o.log.Errorf("error decoding token in cluster pull-secret for auth section:'%s', err:'%s'", regName, err)
+			o.recordServiceLogFailure(ServiceLogMultipleSyncFailures, regName)
 			setErr()
 			continue
 		}
@@ -468,6 +484,7 @@ func (o *validatePullSecretExtOptions) checkRegistryCredsAgainstPullSecret(regCr
 			o.addResult("registry_credential", regCred.Registry().ID(), pullSecret.Namespace, pullSecret.Name, "token", Fail)
 			o.log.Errorf("OCM registry_credential['%s'] token did NOT match value found in cluster pull_secret!\n"+
 				"May need to sync ocm credentials to cluster pull secret.\n", regName)
+			o.recordServiceLogFailure(ServiceLogMultipleSyncFailures, regName)
 			setErr()
 			continue
 		} else {
@@ -642,7 +659,7 @@ func (o *validatePullSecretExtOptions) getOCMRegistryCredentials(accountID strin
 		err := fmt.Errorf("registryCredentials not found for Account:'%s' in OCM", accountID)
 		o.log.Errorf("%s\nSee: /api/accounts_mgmt/v1/registry_credentials -p search=\"account_id='%s'\"", err, accountID)
 		postCmd := servicelog.PostCmdOptions{
-			Template:       "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/update_pull_secret.json",
+			Template:       ServiceLogUpdatePullSecret,
 			TemplateParams: []string{"REGISTRY=registry.redhat.io"},
 			ClusterId:      o.clusterID,
 		}
@@ -676,6 +693,78 @@ func sendServiceLog(postCmd servicelog.PostCmdOptions, message string) error {
 		}
 	}
 	return err
+}
+
+// buildTemplateParameters creates the template parameter array for service log
+func buildTemplateParameters(failures []string) []string {
+	failureList := strings.Join(failures, ", ")
+	return []string{fmt.Sprintf("FAILURE_LIST=%s", failureList)}
+}
+
+// formatFailureDisplay formats the visual display of failures for user output
+func formatFailureDisplay(category string, failures []string) string {
+	var output strings.Builder
+	output.WriteString(fmt.Sprintf("\nPull Secret Validation Failures: %s\n", category))
+	output.WriteString(fmt.Sprintf("Found %d failure(s):\n\n", len(failures)))
+
+	for i, failure := range failures {
+		output.WriteString(fmt.Sprintf("  %d. %s\n", i+1, failure))
+	}
+	output.WriteString("\n")
+
+	return output.String()
+}
+
+// recordServiceLogFailure collects failures to be aggregated and sent at the end
+func (o *validatePullSecretExtOptions) recordServiceLogFailure(template string, authSource string) {
+	if o.skipServiceLogs {
+		return // Don't collect if we're skipping service logs
+	}
+
+	if o.failuresByServiceLog == nil {
+		o.failuresByServiceLog = make(map[string][]string)
+	}
+
+	// Add authSource to the list for this template
+	o.failuresByServiceLog[template] = append(o.failuresByServiceLog[template], authSource)
+	o.log.Debugf("Recorded service log failure for template %s: %s", template, authSource)
+}
+
+// sendAggregatedServiceLogs sends collected service logs after all validations complete
+func (o *validatePullSecretExtOptions) sendAggregatedServiceLogs() error {
+	if o.skipServiceLogs {
+		o.log.Infof("Skipping service logs (--skip-service-logs flag set)")
+		return nil
+	}
+
+	// Get all failures (we only use one template now)
+	allFailures := o.failuresByServiceLog[ServiceLogMultipleSyncFailures]
+	if len(allFailures) == 0 {
+		o.log.Infof("No validation failures requiring service logs")
+		return nil
+	}
+
+	// Display failures to user
+	display := formatFailureDisplay("Pull Secret Issues", allFailures)
+	fmt.Print(display)
+
+	// Build template parameters
+	templateParams := buildTemplateParameters(allFailures)
+
+	// Use servicelog package's built-in prompting and validation
+	postCmd := servicelog.PostCmdOptions{
+		Template:       ServiceLogMultipleSyncFailures,
+		TemplateParams: templateParams,
+		ClusterId:      o.clusterID,
+	}
+
+	if err := postCmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error sending service log: %s\n", err)
+		return err
+	}
+
+	o.log.Infof("Service log sent successfully")
+	return nil
 }
 
 // getPullSecretAuthEmail extract the email for a specific auth from the provided secret
