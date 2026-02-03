@@ -130,7 +130,7 @@ func (q *DTQuery) Status(statusList []string) *DTQuery {
 }
 
 func (q *DTQuery) ContainsPhrase(phrase string) *DTQuery {
-	q.fragments = append(q.fragments, " and contains(content,\""+phrase+"\")")
+	q.fragments = append(q.fragments, " and contains(content,\""+phrase+"\", caseSensitive:false)")
 
 	return q
 }

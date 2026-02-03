@@ -53,7 +53,7 @@ func TestDTQuery_Namespaces(t *testing.T) {
 
 func TestDTQuery_ContainsPhrase(t *testing.T) {
 	q := new(DTQuery).InitLogs(1).ContainsPhrase("error")
-	expected := ` and contains(content,"error")`
+	expected := ` and contains(content,"error", caseSensitive:false)`
 	if q.fragments[1] != expected {
 		t.Errorf("expected: %s\ngot: %s", expected, q.fragments[1])
 	}
@@ -105,7 +105,7 @@ func TestDTQuery_Build(t *testing.T) {
 		Limit(5)
 
 	expected := `fetch logs, from:now()-1h 
-| filter matchesValue(event.type, "LOG") and matchesPhrase(dt.kubernetes.cluster.name, "prod-cluster") and (matchesValue(k8s.namespace.name, "ns1")) and contains(content,"fail")` +
+| filter matchesValue(event.type, "LOG") and matchesPhrase(dt.kubernetes.cluster.name, "prod-cluster") and (matchesValue(k8s.namespace.name, "ns1")) and contains(content,"fail", caseSensitive:false)` +
 		"\n| limit 5"
 
 	actual := q.Build()
