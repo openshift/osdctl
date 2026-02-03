@@ -407,21 +407,24 @@ func (o *validatePullSecretExtOptions) checkRegistryCredsAgainstPullSecret(regCr
 		}
 		o.log.Debugf("OCM registry_credential:'%s'\n", regCred.HREF())
 		// registry_credential.token is stored plain text in OCM, no need to decode here...
-		token := regCred.Token()
-		username := regCred.Username()
-		if len(token) <= 0 {
+		token, ok := regCred.GetToken()
+		if !ok {
 			o.addResult("registry_credential", regCred.Registry().ID(), pullSecret.Namespace, pullSecret.Name, "token", Fail)
 			o.log.Errorf("empty token for OCM registry_credential. See:'ocm get %s'", regCred.HREF())
 			setErr()
 		}
-		if len(username) <= 0 {
+
+		username, ok := regCred.GetUsername()
+		if !ok {
 			o.addResult("registry_credential", regCred.Registry().ID(), pullSecret.Namespace, pullSecret.Name, "token", Fail)
 			o.log.Errorf("empty username for registry_credential. See:'ocm get %s'", regCred.HREF())
 			setErr()
 		}
+
 		if regErr {
 			continue
 		}
+
 		// Auth token in cluster's pull-secret data uses format: "username + ':' + token"
 		regToken := fmt.Sprintf("%s:%s", username, token)
 		//Get the exact registry name from the registry_credentials registry.id ...
@@ -434,8 +437,8 @@ func (o *validatePullSecretExtOptions) checkRegistryCredsAgainstPullSecret(regCr
 			continue
 		}
 		//The registry name is used to find the correct section in the cluster pull-secret data.
-		regName := registry.Name()
-		if len(regName) <= 0 {
+		regName, ok := registry.GetName()
+		if !ok {
 			o.addResult("registry_credential", regCred.Registry().ID(), pullSecret.Namespace, pullSecret.Name, "registry", Fail)
 			o.log.Errorf("empty name for registry_credential. See:'ocm get %s'", registry.HREF())
 			setErr()
@@ -451,7 +454,14 @@ func (o *validatePullSecretExtOptions) checkRegistryCredsAgainstPullSecret(regCr
 			continue
 		}
 		// Check all auth sections matching registries found in the registry_credentials for matching emails...
-		secEmail := secTokenAuth.Email()
+		secEmail, ok := secTokenAuth.GetEmail()
+		if !ok {
+			o.addResult("account.Email", regCred.Registry().ID(), pullSecret.Namespace, pullSecret.Name, "email", Fail)
+			o.log.Errorf("empty email found in cluster pull-secret for auth section:'%s'", regName)
+			o.recordServiceLogFailure(ServiceLogMultipleSyncFailures, regName)
+			setErr()
+			continue
+		}
 		if emailOCM != secEmail {
 			o.addResult("account.Email", regCred.Registry().ID(), pullSecret.Namespace, pullSecret.Name, "email", Fail)
 			o.log.Errorf("pull-secret auth['%s'].email:'%s' does not match OCM account.Email:'%s'.", regName, secEmail, emailOCM)
@@ -462,8 +472,8 @@ func (o *validatePullSecretExtOptions) checkRegistryCredsAgainstPullSecret(regCr
 			o.log.Debugf("OCM registry_credential['%s']. OCM and cluster emails match. PASS\n", regName)
 		}
 		// Get the token from the cluster pull_secret...
-		secToken := secTokenAuth.Auth()
-		if len(secToken) <= 0 {
+		secToken, ok := secTokenAuth.GetAuth()
+		if !ok {
 			o.addResult("registry_credential", regCred.Registry().ID(), pullSecret.Namespace, pullSecret.Name, "token", Fail)
 			o.log.Errorf("empty token found in cluster pull-secret for auth section:'%s', err:'%s'", regName, err)
 			o.recordServiceLogFailure(ServiceLogMultipleSyncFailures, regName)
