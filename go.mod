@@ -1,6 +1,6 @@
 module github.com/openshift/osdctl
 
-go 1.24.4
+go 1.25.3
 
 require (
 	cloud.google.com/go/compute v1.37.0
@@ -9,9 +9,9 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/PagerDuty/go-pagerduty v1.8.0
 	github.com/andygrunwald/go-jira v1.17.0
-	github.com/aws/aws-sdk-go-v2 v1.40.0
-	github.com/aws/aws-sdk-go-v2/config v1.31.20
-	github.com/aws/aws-sdk-go-v2/credentials v1.18.24
+	github.com/aws/aws-sdk-go-v2 v1.41.0
+	github.com/aws/aws-sdk-go-v2/config v1.32.5
+	github.com/aws/aws-sdk-go-v2/credentials v1.19.5
 	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.47.4
 	github.com/aws/aws-sdk-go-v2/service/costexplorer v1.46.7
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.230.0
@@ -23,8 +23,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/route53 v1.48.7
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.76.0
 	github.com/aws/aws-sdk-go-v2/service/servicequotas v1.25.18
-	github.com/aws/aws-sdk-go-v2/service/sts v1.41.1
-	github.com/aws/smithy-go v1.23.2
+	github.com/aws/aws-sdk-go-v2/service/sts v1.41.5
+	github.com/aws/smithy-go v1.24.0
 	github.com/brianvoe/gofakeit/v6 v6.24.0
 	github.com/coreos/go-semver v0.3.1
 	github.com/deckarep/golang-set v1.8.0
@@ -36,14 +36,14 @@ require (
 	github.com/manifoldco/promptui v0.9.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.38.2
-	github.com/openshift-online/ocm-cli v1.0.8
+	github.com/onsi/gomega v1.38.3
+	github.com/openshift-online/ocm-cli v1.0.10
 	github.com/openshift-online/ocm-common v0.0.29
-	github.com/openshift-online/ocm-sdk-go v0.1.485
+	github.com/openshift-online/ocm-sdk-go v0.1.486
 	github.com/openshift/api v0.0.0-20250207102212-9e59a77ed2e0
 	github.com/openshift/aws-account-operator/api v0.0.0-20250205151445-6455c35fc4ae
 	github.com/openshift/backplane-api v0.0.0-20251104022300-74674d3b6921
-	github.com/openshift/backplane-cli v0.6.1
+	github.com/openshift/backplane-cli v0.6.2
 	github.com/openshift/cloud-credential-operator v0.0.0-20250120201329-db5f2531a5b4
 	github.com/openshift/gcp-project-operator v0.0.0-20241024143818-ec4eabd35aba
 	github.com/openshift/hive/apis v0.0.0-20250206153200-5a34ea42e678
@@ -62,7 +62,7 @@ require (
 	go.uber.org/mock v0.6.0
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sync v0.18.0
-	golang.org/x/term v0.37.0
+	golang.org/x/term v0.38.0
 	google.golang.org/api v0.240.0
 	google.golang.org/genproto v0.0.0-20250505200425-f936aa4a68b2
 	gopkg.in/yaml.v2 v2.4.0
@@ -94,18 +94,19 @@ require (
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.8 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.13 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.14 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.14 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.16 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.16 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.16 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.3.32 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.5.6 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.14 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.16 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.18.13 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssm v1.67.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.30.3 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/signin v1.0.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.67.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.30.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.12 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
@@ -189,8 +190,8 @@ require (
 	github.com/oapi-codegen/runtime v1.1.2 // indirect
 	github.com/oasdiff/yaml v0.0.0-20250309154309-f31be36b4037 // indirect
 	github.com/oasdiff/yaml3 v0.0.0-20250309153720-d2182401db90 // indirect
-	github.com/openshift-online/ocm-api-model/clientapi v0.0.439 // indirect
-	github.com/openshift-online/ocm-api-model/model v0.0.439 // indirect
+	github.com/openshift-online/ocm-api-model/clientapi v0.0.440 // indirect
+	github.com/openshift-online/ocm-api-model/model v0.0.440 // indirect
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
@@ -227,7 +228,7 @@ require (
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	golang.org/x/tools v0.38.0 // indirect
