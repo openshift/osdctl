@@ -531,3 +531,8 @@ func TestHotfixValidation(t *testing.T) {
 		})
 	}
 }
+
+// Note: The origin/master sync logic added to servicePromotion is tested indirectly
+// through the git package tests (cmd/promote/git/app_interface_test.go).
+// The sync uses git.AppInterface.GitExecutor.Run() which is thoroughly tested there.
+// Full integration testing of the sync behavior should be done through end-to-end tests.

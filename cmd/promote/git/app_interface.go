@@ -266,9 +266,8 @@ func GetCurrentPackageTagFromAppInterface(saasFile string) (string, error) {
 
 func (a *AppInterface) UpdateAppInterface(_, saasFile, currentGitHash, promotionGitHash, branchName string, hotfix bool) error {
 
-	if err := a.GitExecutor.Run(a.GitDirectory, "git", "checkout", "master"); err != nil {
-		return fmt.Errorf("failed to checkout master: branch %v", err)
-	}
+	// Note: Caller should have already synced with origin/master before calling this function
+	// to ensure currentGitHash is accurate
 
 	if err := a.GitExecutor.Run(a.GitDirectory, "git", "branch", "-D", branchName); err != nil {
 		fmt.Printf("failed to cleanup branch %s: %v, continuing to create it.\n", branchName, err)
@@ -312,9 +311,8 @@ func (a *AppInterface) UpdateAppInterface(_, saasFile, currentGitHash, promotion
 
 func (a *AppInterface) UpdatePackageTag(saasFile, oldTag, promotionTag, branchName string) error {
 
-	if err := a.GitExecutor.Run(a.GitDirectory, "git", "checkout", "master"); err != nil {
-		return fmt.Errorf("failed to checkout master branch: %v", err)
-	}
+	// Note: Caller should have already synced with origin/master before calling this function
+	// to ensure oldTag is accurate
 
 	if err := a.GitExecutor.Run(a.GitDirectory, "git", "branch", "-D", branchName); err != nil {
 		fmt.Printf("failed to cleanup branch %s: %v, continuing to create it.\n", branchName, err)

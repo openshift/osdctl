@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// MockExec is a mock implementation of iexec.IExec for testing
+// It is exported so other packages can use it in their tests
 type MockExec struct {
 	mock.Mock
 	iexec.IExec
@@ -367,7 +369,6 @@ func TestUpdatePackageTag(t *testing.T) {
 
 				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0o600)
 
-				mockExec.On("Run", tmpDir, "git", []string{"checkout", "master"}).Return(nil).Once()
 				mockExec.On("Run", tmpDir, "git", []string{"branch", "-D", "feature-branch"}).Return(errors.New("branch does not exist")).Once()
 
 				return AppInterface{
@@ -379,32 +380,12 @@ func TestUpdatePackageTag(t *testing.T) {
 			expectedFile: "tag: new456",
 		},
 		{
-			name: "fails_git_checkout",
-			setup: func(t *testing.T) (AppInterface, string) {
-				mockExec := new(MockExec)
-				tmpDir := t.TempDir()
-				saasFile := filepath.Join(tmpDir, "test.yaml")
-
-				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0o600)
-
-				mockExec.On("Run", tmpDir, "git", []string{"checkout", "master"}).Return(errors.New("checkout failed")).Once()
-
-				return AppInterface{
-					GitDirectory: tmpDir,
-					GitExecutor:  mockExec,
-				}, saasFile
-			},
-			expectedErr:  "failed to checkout master branch",
-			expectedFile: "tag: old123",
-		},
-		{
 			name: "fails_reading_file",
 			setup: func(t *testing.T) (AppInterface, string) {
 				mockExec := new(MockExec)
 				tmpDir := t.TempDir()
 				saasFile := filepath.Join(tmpDir, "nonexistent.yaml")
 
-				mockExec.On("Run", tmpDir, "git", []string{"checkout", "master"}).Return(nil).Once()
 				mockExec.On("Run", tmpDir, "git", []string{"branch", "-D", "feature-branch"}).Return(nil).Once()
 
 				return AppInterface{
@@ -424,7 +405,6 @@ func TestUpdatePackageTag(t *testing.T) {
 
 				_ = os.WriteFile(saasFile, []byte("tag: old123"), 0o400)
 
-				mockExec.On("Run", tmpDir, "git", []string{"checkout", "master"}).Return(nil).Once()
 				mockExec.On("Run", tmpDir, "git", []string{"branch", "-D", "feature-branch"}).Return(nil).Once()
 
 				return AppInterface{
@@ -496,7 +476,6 @@ resourceTemplates:
 				}
 
 				mock_exec := new(MockExec)
-				mock_exec.On("Run", "/path/to/git/dir", "git", []string{"checkout", "master"}).Return(nil).Once()
 				mock_exec.On("Run", "/path/to/git/dir", "git", []string{"branch", "-D", "feature-branch"}).Return(nil).Once()
 				mock_exec.On("Run", "/path/to/git/dir", "git", []string{"checkout", "-b", "feature-branch", "master"}).Return(nil).Once()
 
@@ -531,7 +510,8 @@ resourceTemplates:
 				}
 
 				mock_exec := new(MockExec)
-				mock_exec.On("Run", "/path/to/git/dir", "git", []string{"checkout", "master"}).Return(errors.New("failed to checkout master branch")).Once()
+				mock_exec.On("Run", "/path/to/git/dir", "git", []string{"branch", "-D", "feature-error"}).Return(nil).Once()
+				mock_exec.On("Run", "/path/to/git/dir", "git", []string{"checkout", "-b", "feature-error", "master"}).Return(errors.New("failed to create branch")).Once()
 
 				return AppInterface{
 					GitDirectory: "/path/to/git/dir",
@@ -542,7 +522,7 @@ resourceTemplates:
 			current_git_hash:   "currentGitHash",
 			promotion_git_hash: "promotionGitHash",
 			branch_name:        "feature-error",
-			expected_err:       "failed to checkout master branch",
+			expected_err:       "failed to create branch",
 			verify:             func(t *testing.T, _ string) {},
 		},
 		"fails_when_git_directory_does_not_exist": {
@@ -550,8 +530,9 @@ resourceTemplates:
 				non_existent_dir := filepath.Join(os.TempDir(), "nonexistent-dir")
 				mock_exec := new(MockExec)
 				// Simulate failure on git checkout due to missing directory
-				mock_exec.On("Run", non_existent_dir, "git", []string{"checkout", "master"}).
-					Return(errors.New("failed to checkout master branch")).Once()
+				mock_exec.On("Run", non_existent_dir, "git", []string{"branch", "-D", "feature-no-dir"}).Return(nil).Once()
+				mock_exec.On("Run", non_existent_dir, "git", []string{"checkout", "-b", "feature-no-dir", "master"}).
+					Return(errors.New("failed to create branch")).Once()
 
 				return AppInterface{
 					GitDirectory: non_existent_dir,
@@ -562,7 +543,7 @@ resourceTemplates:
 			current_git_hash:   "abcdef",
 			promotion_git_hash: "123456",
 			branch_name:        "feature-no-dir",
-			expected_err:       "failed to checkout master branch",
+			expected_err:       "failed to create branch",
 			verify:             func(t *testing.T, _ string) {},
 		},
 		"fails_when_file_does_not_exist": {
@@ -571,7 +552,6 @@ resourceTemplates:
 				saasFilePath := filepath.Join(tmpDir, "nonexistent.yaml") // file intentionally does not exist
 
 				mockExec := new(MockExec)
-				mockExec.On("Run", tmpDir, "git", []string{"checkout", "master"}).Return(nil).Once()
 				mockExec.On("Run", tmpDir, "git", []string{"branch", "-D", "feature-fail-read"}).Return(nil).Once()
 				mockExec.On("Run", tmpDir, "git", []string{"checkout", "-b", "feature-fail-read", "master"}).Return(nil).Once()
 
