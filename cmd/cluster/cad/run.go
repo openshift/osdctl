@@ -3,6 +3,7 @@ package cad
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -15,6 +16,8 @@ import (
 const (
 	cadClusterIDProd  = "2fbi9mjhqpobh20ot5d7e5eeq3a8gfhs" // These IDs are hard-coded in app-interface
 	cadClusterIDStage = "2f9ghpikkv446iidcv7b92em2hgk13q9"
+	cadNamespaceProd  = "configuration-anomaly-detection-production"
+	cadNamespaceStage = "configuration-anomaly-detection-stage"
 )
 
 var validInvestigations = []string{
@@ -40,6 +43,7 @@ type cadRunOptions struct {
 	investigation   string
 	elevationReason string
 	environment     string
+	isDryRun        bool
 }
 
 func newCmdRun() *cobra.Command {
@@ -51,7 +55,7 @@ func newCmdRun() *cobra.Command {
 		Long: `Run a manual investigation on the Configuration Anomaly Detection (CAD) cluster.
 
 This command schedules a Tekton PipelineRun on the appropriate CAD cluster (stage or production)
-to run an investigation against a target cluster.
+to run an investigation against a target cluster. The results will be written to a backplane report.
 
 Prerequisites:
   - Connected to the target cluster's OCM environment (production or stage)
@@ -61,13 +65,21 @@ Available Investigations:
   chgm, cmbb, can-not-retrieve-updates, ai, cpd, etcd-quota-low,
   insightsoperatordown, machine-health-check, must-gather, upgrade-config
 
-Example:
+Examples:
   # Run a change management investigation on a production cluster
   osdctl cluster cad run \
     --cluster-id 1a2b3c4d5e6f7g8h9i0j \
     --investigation chgm \
     --environment production \
     --reason "OHSS-12345"
+
+  # Run a dry-run investigation (does not create a report)
+  osdctl cluster cad run \
+    --cluster-id 1a2b3c4d5e6f7g8h9i0j \
+    --investigation chgm \
+    --environment production \
+    --reason "OHSS-12345" \
+    --dry-run
 
 Note:
   After the investigation completes (may take several minutes), view results using:
@@ -83,8 +95,14 @@ Note:
 
 	runCmd.Flags().StringVarP(&opts.clusterID, "cluster-id", "C", "", "Cluster ID (internal or external)")
 	runCmd.Flags().StringVarP(&opts.investigation, "investigation", "i", "", "Investigation name")
-	runCmd.Flags().StringVarP(&opts.environment, "environment", "e", "", "Environment of the cluster we want to run the investigation on. Allowed values: \"stage\" or \"production\"")
+	runCmd.Flags().StringVarP(&opts.environment, "environment", "e", "", "Environment in which the target cluster runs. Allowed values: \"stage\" or \"production\"")
+	runCmd.Flags().BoolVarP(&opts.isDryRun, "dry-run", "d", false, "Dry-Run: Run the investigation with the dry-run flag. This will not create a report.")
 	runCmd.Flags().StringVar(&opts.elevationReason, "reason", "", "Provide a reason for running a manual investigation, used for backplane. Eg: 'OHSS-XXXX', or '#ITN-2024-XXXXX.")
+
+	_ = runCmd.MarkFlagRequired("cluster-id")
+	_ = runCmd.MarkFlagRequired("investigation")
+	_ = runCmd.MarkFlagRequired("environment")
+	_ = runCmd.MarkFlagRequired("reason")
 
 	_ = runCmd.RegisterFlagCompletionFunc("investigation", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return validInvestigations, cobra.ShellCompDirectiveNoFileComp
@@ -123,42 +141,32 @@ func (o *cadRunOptions) run() error {
 		return fmt.Errorf("failed to schedule task: %w", err)
 	}
 
-	reportCmd := fmt.Sprintf("'osdctl cluster reports list -C %s -l 1'", o.clusterID)
-	fmt.Println("Successfully scheduled manual investigation. It can take several minutes until a report is available. Run this command to check the latest report for the results while being connected to the right OCM backplane environment. " + reportCmd)
+	// Get the generated name created by the API server
+	pipelineRunName := u.GetName()
+
+	logsLink := fmt.Sprintf("https://grafana.app-sre.devshift.net/explore?schemaVersion=1&panes=%%7B%%22buh%%22:%%7B%%22datasource%%22:%%22P1A97A9592CB7F392%%22,%%22queries%%22:%%5B%%7B%%22id%%22:%%22%%22,%%22region%%22:%%22us-east-1%%22,%%22namespace%%22:%%22%%22,%%22refId%%22:%%22A%%22,%%22datasource%%22:%%7B%%22type%%22:%%22cloudwatch%%22,%%22uid%%22:%%22P1A97A9592CB7F392%%22%%7D,%%22queryMode%%22:%%22Logs%%22,%%22logGroups%%22:%%5B%%7B%%22arn%%22:%%22arn:aws:logs:us-east-1:744086762512:log-group:cads01ue1.configuration-anomaly-detection-stage:%%2A%%22,%%22name%%22:%%22cads01ue1.configuration-anomaly-detection-stage%%22,%%22accountId%%22:%%22744086762512%%22%%7D,%%7B%%22arn%%22:%%22arn:aws:logs:us-east-1:744086762512:log-group:cadp01ue1.configuration-anomaly-detection-production:%%2A%%22,%%22name%%22:%%22cadp01ue1.configuration-anomaly-detection-production%%22,%%22accountId%%22:%%22744086762512%%22%%7D%%5D,%%22expression%%22:%%22fields%%20message%%5Cn%%7C%%20filter%%20kubernetes.pod_name%%20like%%20%%5C%%22%s%%5C%%22%%22,%%22statsGroups%%22:%%5B%%5D%%7D%%5D,%%22range%%22:%%7B%%22from%%22:%%22now-1h%%22,%%22to%%22:%%22now%%22%%7D,%%22panelsState%%22:%%7B%%22logs%%22:%%7B%%22visualisationType%%22:%%22logs%%22%%7D%%7D%%7D%%7D&orgId=1", pipelineRunName)
+	if !o.isDryRun {
+		reportCmd := fmt.Sprintf("'osdctl cluster reports list -C %s -l 1'", o.clusterID)
+		fmt.Println("Successfully scheduled manual investigation. It can take several minutes until a report is available. \n" +
+			"Run this command to check the latest report for the results while being connected to the right OCM backplane environment. " + reportCmd + " \n" +
+			"If a report fails to show up, check the TaskRun pod logs here after a few minutes: " + logsLink)
+	} else {
+		fmt.Println("Dry-run investigation scheduled. Check for logs here: ", logsLink)
+	}
 
 	return nil
 }
 
 func (o *cadRunOptions) validate() error {
-	conn, err := utils.CreateConnection()
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
 	if o.clusterID == "" {
 		return fmt.Errorf("cluster-id is required")
 	}
 
-	validInvestigation := false
-	for _, v := range validInvestigations {
-		if o.investigation == v {
-			validInvestigation = true
-			break
-		}
-	}
-	if !validInvestigation {
+	if !slices.Contains(validInvestigations, o.investigation) {
 		return fmt.Errorf("invalid investigation %q, must be one of: %v", o.investigation, validInvestigations)
 	}
 
-	validEnvironment := false
-	for _, v := range validEnvironments {
-		if o.environment == v {
-			validEnvironment = true
-			break
-		}
-	}
-	if !validEnvironment {
+	if !slices.Contains(validEnvironments, o.environment) {
 		return fmt.Errorf("invalid environment %q, must be one of: %v", o.environment, validEnvironments)
 	}
 
@@ -171,9 +179,9 @@ func (o *cadRunOptions) validate() error {
 
 func (o *cadRunOptions) getCADClusterConfig() (clusterID, namespace string) {
 	if o.environment == "stage" {
-		return cadClusterIDStage, "configuration-anomaly-detection-stage"
+		return cadClusterIDStage, cadNamespaceStage
 	}
-	return cadClusterIDProd, "configuration-anomaly-detection-production"
+	return cadClusterIDProd, cadNamespaceProd
 }
 
 func (o *cadRunOptions) pipelineRunTemplate(cadNamespace string) *unstructured.Unstructured {
@@ -197,7 +205,7 @@ func (o *cadRunOptions) pipelineRunTemplate(cadNamespace string) *unstructured.U
 				},
 				{
 					"name":  "dry-run",
-					"value": "false",
+					"value": o.isDryRun,
 				},
 			},
 			"pipelineRef": map[string]interface{}{

@@ -56,6 +56,7 @@ func TestPipelineRunTemplate(t *testing.T) {
 		clusterID         string
 		investigation     string
 		cadNamespace      string
+		isDryRun          bool
 		expectedNamespace string
 	}{
 		{
@@ -63,6 +64,7 @@ func TestPipelineRunTemplate(t *testing.T) {
 			clusterID:         "test-cluster-123",
 			investigation:     "chgm",
 			cadNamespace:      "configuration-anomaly-detection-production",
+			isDryRun:          false,
 			expectedNamespace: "configuration-anomaly-detection-production",
 		},
 		{
@@ -70,7 +72,16 @@ func TestPipelineRunTemplate(t *testing.T) {
 			clusterID:         "stage-cluster-456",
 			investigation:     "cmbb",
 			cadNamespace:      "configuration-anomaly-detection-stage",
+			isDryRun:          false,
 			expectedNamespace: "configuration-anomaly-detection-stage",
+		},
+		{
+			name:              "dry-run pipeline run",
+			clusterID:         "test-cluster-789",
+			investigation:     "ai",
+			cadNamespace:      "configuration-anomaly-detection-production",
+			isDryRun:          true,
+			expectedNamespace: "configuration-anomaly-detection-production",
 		},
 	}
 
@@ -79,6 +90,7 @@ func TestPipelineRunTemplate(t *testing.T) {
 			opts := &cadRunOptions{
 				clusterID:     tt.clusterID,
 				investigation: tt.investigation,
+				isDryRun:      tt.isDryRun,
 			}
 
 			result := opts.pipelineRunTemplate(tt.cadNamespace)
@@ -103,7 +115,7 @@ func TestPipelineRunTemplate(t *testing.T) {
 			assert.Equal(t, tt.investigation, params[1]["value"], "investigation value should match")
 
 			assert.Equal(t, "dry-run", params[2]["name"], "third param should be dry-run")
-			assert.Equal(t, "false", params[2]["value"], "dry-run should be false")
+			assert.Equal(t, tt.isDryRun, params[2]["value"], "dry-run value should match")
 		})
 	}
 }
