@@ -17,7 +17,6 @@ import (
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
-	types "k8s.io/apimachinery/pkg/types"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -103,7 +102,7 @@ func (mr *MockClientMockRecorder) DeleteAllOf(ctx, obj any, opts ...any) *gomock
 }
 
 // Get mocks base method.
-func (m *MockClient) Get(ctx context.Context, key types.NamespacedName, obj client.Object, opts ...client.GetOption) error {
+func (m *MockClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, key, obj}
 	for _, a := range opts {
