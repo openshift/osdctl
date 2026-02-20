@@ -134,6 +134,19 @@ func (o *controlPlane) New() error {
 
 func (o *controlPlane) embiggenMachineType() {}
 
+// extractInstanceClass extracts the instance class from an instance type string.
+// For example: "m5.4xlarge" -> "m5", "m6i.8xlarge" -> "m6i"
+func extractInstanceClass(instanceType string) (string, error) {
+	if strings.Contains(instanceType, ".") {
+		parts := strings.Split(instanceType, ".")
+		if len(parts) >= 2 {
+			return parts[0], nil
+		}
+	}
+
+	return "", fmt.Errorf("instance type %s is not a valid instance type", instanceType)
+}
+
 type optionsDialogResponse int64
 
 const (
@@ -292,8 +305,9 @@ func (o *controlPlane) run(ctx context.Context) error {
 	patch := client.MergeFrom(cpms.DeepCopy())
 
 	var (
-		rawBytes []byte
-		err      error
+		rawBytes            []byte
+		currentInstanceType string
+		err                 error
 	)
 	switch o.cluster.CloudProvider().ID() {
 	case "aws":
@@ -301,11 +315,26 @@ func (o *controlPlane) run(ctx context.Context) error {
 		if err := json.Unmarshal(cpms.Spec.Template.OpenShiftMachineV1Beta1Machine.Spec.ProviderSpec.Value.Raw, &awsSpec); err != nil {
 			return fmt.Errorf("error unmarshalling providerSpec: %v", err)
 		}
+		currentInstanceType = awsSpec.InstanceType
+
+		// Validate that instance class is not being changed
+		currentClass, err := extractInstanceClass(currentInstanceType)
+		if err != nil {
+			return fmt.Errorf("error extracting current instance class: %v", err)
+		}
+		newClass, err := extractInstanceClass(o.newMachineType)
+		if err != nil {
+			return fmt.Errorf("error extracting new instance class: %v", err)
+		}
+		if currentClass != newClass {
+			return fmt.Errorf("cannot change instance class from %s to %s (current: %s, requested: %s). You can only resize within the same instance class", currentClass, newClass, currentInstanceType, o.newMachineType)
+		}
+
 		awsSpec.InstanceType = o.newMachineType
 
 		rawBytes, err = json.Marshal(awsSpec)
 		if err != nil {
-			return fmt.Errorf("error marshalling awsSpec: %v", err)
+			return fmt.Errorf("error marshalling AWS spec: %v", err)
 		}
 	case "gcp":
 		gcpSpec := &machinev1beta1.GCPMachineProviderSpec{}
@@ -316,7 +345,7 @@ func (o *controlPlane) run(ctx context.Context) error {
 		gcpSpec.MachineType = o.newMachineType
 		rawBytes, err = json.Marshal(gcpSpec)
 		if err != nil {
-			return fmt.Errorf("error marshalling gcpSpec: %v", err)
+			return fmt.Errorf("error marshalling GCP spec: %v", err)
 		}
 	default:
 		return fmt.Errorf("cloud provider not supported: %s, only AWS and GCP are supported", o.cluster.CloudProvider().ID())
