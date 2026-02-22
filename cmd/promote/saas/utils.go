@@ -40,96 +40,26 @@ func listServiceNames(appInterface git.AppInterface) error {
 	return nil
 }
 
-// discoverE2ETestSaasName reads the e2e test SaaS file to find the actual
-// name field, which may differ from the operator name due to abbreviations
-// or other inconsistencies.
+// generatePipelineLogsURL creates a Tekton console URL for viewing pipeline logs
+// for the given operator. The URL points directly to the PipelineRuns list page
+// in the operator's pipeline namespace on the appsrep09ue1 cluster.
 //
-// Example:
+// This provides immediate access to pipeline execution logs without dependency on
+// log forwarding to external systems. Users can view all recent PipelineRuns and
+// filter by environment, timestamp, or status directly in the Tekton console.
 //
-//	Operator: configure-alertmanager-operator
-//	E2E SaaS name: saas-configure-am-operator-e2e-test (abbreviated!)
-//
-// This function handles the inconsistency by reading the actual YAML file.
-func discoverE2ETestSaasName(appInterface git.AppInterface, operatorName string) (string, error) {
-	// Standard location: data/services/osd-operators/cicd/saas/saas-<operator>/osde2e-focus-test.yaml
-	e2eTestPath := filepath.Join(
-		appInterface.GitDirectory,
-		"data/services/osd-operators/cicd/saas",
-		fmt.Sprintf("saas-%s", operatorName),
-		"osde2e-focus-test.yaml",
-	)
+// Note: The env parameter is no longer used in URL construction since both INT
+// and STAGE PipelineRuns are visible in the same namespace. It's kept for backward
+// compatibility and may be removed in future versions.
+func generatePipelineLogsURL(appInterface git.AppInterface, operatorName, gitHash string, env string) string {
+	// Tekton console base URL for the appsrep09ue1 cluster where pipelines run
+	consoleBaseURL := "https://console-openshift-console.apps.rosa.appsrep09ue1.03r5.p3.openshiftapps.com"
 
-	// Check if file exists
-	if _, err := os.Stat(e2eTestPath); os.IsNotExist(err) {
-		return "", fmt.Errorf("e2e test file not found at %s", e2eTestPath)
-	}
-
-	// Read the YAML file
-	fileContent, err := os.ReadFile(e2eTestPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read e2e test file: %w", err)
-	}
-
-	// Parse YAML to get the 'name' field
-	node, err := kyaml.Parse(string(fileContent))
-	if err != nil {
-		return "", fmt.Errorf("failed to parse e2e test YAML: %w", err)
-	}
-
-	// Extract the name field
-	nameValue, err := node.GetString("name")
-	if err != nil || nameValue == "" {
-		return "", fmt.Errorf("failed to extract 'name' field from e2e test YAML: %w", err)
-	}
-
-	return nameValue, nil
-}
-
-// generateTestLogsURL creates a Grafana dashboard URL for viewing e2e test logs
-// for the given operator and git hash. It automatically discovers the correct
-// e2e test SaaS file name from app-interface to handle naming inconsistencies.
-//
-// The URL includes filters for:
-//   - Operator namespace/pipeline
-//   - Git hash being promoted
-//   - Environment (INT/STAGE)
-//   - 7-day time window
-//
-// If discovery fails, falls back to standard naming convention.
-func generateTestLogsURL(appInterface git.AppInterface, operatorName, gitHash string, env string) string {
-	if env == "" {
-		env = "osd-stage-hives02ue1"
-	}
-
-	// Try to discover the actual e2e test SaaS name from app-interface
-	e2eTestSaasName, err := discoverE2ETestSaasName(appInterface, operatorName)
-	if err != nil {
-		// Fall back to standard naming convention
-		e2eTestSaasName = fmt.Sprintf("saas-%s-e2e-test", operatorName)
-		fmt.Printf("Warning: Could not discover e2e test SaaS name for %s (error: %v)\n", operatorName, err)
-		fmt.Printf("Falling back to standard convention: %s\n", e2eTestSaasName)
-	} else {
-		fmt.Printf("Discovered e2e test SaaS name: %s\n", e2eTestSaasName)
-	}
-
-	// Grafana dashboard ID for HCM CICD Test Logs
-	dashboardID := "feq1jm3omydq8c"
-	baseURL := "https://grafana.app-sre.devshift.net/d"
-
-	// Build URL with query parameters
-	url := fmt.Sprintf("%s/%s/hcm-cicd-test-logs?", baseURL, dashboardID)
-	url += fmt.Sprintf("var-namespace=%s-pipelines", operatorName)
-	url += fmt.Sprintf("&var-targetref=%s", gitHash)
-	url += fmt.Sprintf("&var-env=%s", env)
-	url += fmt.Sprintf("&var-saasfilename=%s", e2eTestSaasName)
-	url += "&orgId=1"
-	url += "&from=now-7d"
-	url += "&to=now"
-	url += "&timezone=UTC"
-	url += "&var-cluster=appsrep09ue1"
-	url += "&var-datasource=P7B77307D2CE073BC"
-	url += "&var-loggroup=$__all"
-	url += "&var-pipeline=$__all"
+	// Build URL to PipelineRuns list page for this operator's namespace
+	// Format: /k8s/ns/{namespace}/tekton.dev~v1~PipelineRun
+	url := fmt.Sprintf("%s/k8s/ns/%s-pipelines/tekton.dev~v1~PipelineRun",
+		consoleBaseURL,
+		operatorName)
 
 	return url
 }
@@ -186,9 +116,9 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	prefix := "saas-"
 	operatorName := strings.TrimPrefix(serviceName, prefix)
 
-	// Generate test logs URLs for INT and STAGE validation
-	intTestLogsURL := generateTestLogsURL(appInterface, operatorName, promotionGitHash, "int")
-	stageTestLogsURL := generateTestLogsURL(appInterface, operatorName, promotionGitHash, "stage")
+	// Generate pipeline logs URLs for INT and STAGE validation
+	intPipelineLogsURL := generatePipelineLogsURL(appInterface, operatorName, promotionGitHash, "int")
+	stagePipelineLogsURL := generatePipelineLogsURL(appInterface, operatorName, promotionGitHash, "stage")
 
 	// Build GitLab Markdown formatted commit message
 	var commitMessage string
@@ -201,8 +131,10 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	// Add monitoring and validation links section
 	commitMessage += "## Monitoring and Validation\n\n"
 	commitMessage += fmt.Sprintf("- 📊 [Monitor rollout status](https://inscope.corp.redhat.com/catalog/default/component/%s/rollout)\n", operatorName)
-	commitMessage += fmt.Sprintf("- 🧪 [View INT e2e test logs](%s)\n", intTestLogsURL)
-	commitMessage += fmt.Sprintf("- 🧪 [View STAGE e2e test logs](%s)\n", stageTestLogsURL)
+	// Note: INT runs dedicated E2E test pipelines, while STAGE typically runs deployment pipelines.
+	// Both links point to the same namespace, but the labels reflect the primary pipeline type for each environment.
+	commitMessage += fmt.Sprintf("- 🧪 [View INT e2e test logs](%s)\n", intPipelineLogsURL)
+	commitMessage += fmt.Sprintf("- 📦 [View STAGE deployment logs](%s)\n", stagePipelineLogsURL)
 	commitMessage += "- 🚨 [View Platform SRE Int/Stage incident activity](https://redhat.pagerduty.com/analytics/insights/incident-activity-report/9wMMqHHHSuvd8jMF1sByzA)\n"
 	commitMessage += "- 📈 [View Int/Stage PagerDuty Dashboard](https://redhat.pagerduty.com/analytics/overview-dashboard/sSWGx0MIdgVckAwpwbix8A)\n\n"
 
