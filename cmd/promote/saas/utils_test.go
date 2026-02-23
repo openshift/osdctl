@@ -531,3 +531,231 @@ func TestHotfixValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestDiscoverPipelineNamespace(t *testing.T) {
+	tests := []struct {
+		name        string
+		serviceName string
+		saasYAML    string
+		expectedNS  string
+		expectErr   bool
+		errContains string
+	}{
+		{
+			name:        "abbreviated_namespace_mcvw",
+			serviceName: "saas-managed-cluster-validating-webhooks",
+			saasYAML: `---
+name: saas-mc-validating-webhooks
+pipelinesProvider:
+  $ref: /services/osd-operators/managed-cluster-validating-webhooks/pipelines/tekton-mcvw-pipelines.appsrep09ue1.yaml
+`,
+			expectedNS: "mcvw-pipelines",
+			expectErr:  false,
+		},
+		{
+			name:        "standard_namespace_configure_am",
+			serviceName: "saas-configure-alertmanager-operator",
+			saasYAML: `---
+name: saas-configure-am-operator
+pipelinesProvider:
+  $ref: /services/osd-operators/configure-alertmanager-operator/pipelines/tekton-configure-alertmanager-operator-pipelines.appsrep09ue1.yaml
+`,
+			expectedNS: "configure-alertmanager-operator-pipelines",
+			expectErr:  false,
+		},
+		{
+			name:        "shared_namespace_backplane",
+			serviceName: "saas-backplane-api",
+			saasYAML: `---
+name: saas-backplane-api
+pipelinesProvider:
+  $ref: /services/backplane/pipelines/tekton.backplane-pipelines.appsrep09ue1.yaml
+`,
+			expectedNS: "backplane-pipelines",
+			expectErr:  false,
+		},
+		{
+			name:        "tekton_dot_prefix",
+			serviceName: "saas-test-service",
+			saasYAML: `---
+name: saas-test-service
+pipelinesProvider:
+  $ref: /services/test/pipelines/tekton.test-pipelines.appsrep09ue1.yaml
+`,
+			expectedNS: "test-pipelines",
+			expectErr:  false,
+		},
+		{
+			name:        "missing_pipelinesProvider",
+			serviceName: "saas-no-provider",
+			saasYAML: `---
+name: saas-no-provider
+description: Test service without pipelinesProvider
+`,
+			expectErr:   true,
+			errContains: "failed to get pipelinesProvider.$ref",
+		},
+		{
+			name:        "invalid_yaml",
+			serviceName: "saas-invalid",
+			saasYAML: `---
+name: [invalid yaml structure
+pipelinesProvider: broken
+`,
+			expectErr:   true,
+			errContains: "failed to parse SaaS YAML",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create temp directory for test
+			tmpDir := t.TempDir()
+
+			// Create mock SaaS file
+			saasFile := filepath.Join(tmpDir, tc.serviceName+".yaml")
+			err := os.WriteFile(saasFile, []byte(tc.saasYAML), 0600)
+			require.NoError(t, err)
+
+			// Setup ServicesFilesMap
+			originalMap := ServicesFilesMap
+			ServicesFilesMap = map[string]string{
+				tc.serviceName: saasFile,
+			}
+			defer func() { ServicesFilesMap = originalMap }()
+
+			// Create mock AppInterface
+			appInterface := git.AppInterface{GitDirectory: tmpDir}
+
+			// Test the function
+			namespace, err := discoverPipelineNamespace(appInterface, tc.serviceName)
+
+			if tc.expectErr {
+				assert.Error(t, err)
+				if tc.errContains != "" {
+					assert.Contains(t, err.Error(), tc.errContains)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedNS, namespace)
+			}
+		})
+	}
+}
+
+func TestDiscoverPipelineNamespace_ServiceNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	appInterface := git.AppInterface{GitDirectory: tmpDir}
+
+	// Clear ServicesFilesMap
+	originalMap := ServicesFilesMap
+	ServicesFilesMap = map[string]string{}
+	defer func() { ServicesFilesMap = originalMap }()
+
+	namespace, err := discoverPipelineNamespace(appInterface, "saas-nonexistent")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "saas file not found")
+	assert.Empty(t, namespace)
+}
+
+func TestGeneratePipelineLogsURL(t *testing.T) {
+	tests := []struct {
+		name            string
+		serviceName     string
+		operatorName    string
+		saasYAML        string
+		expectedNS      string
+		expectedURLPath string
+	}{
+		{
+			name:         "with_namespace_discovery_mcvw",
+			serviceName:  "saas-managed-cluster-validating-webhooks",
+			operatorName: "managed-cluster-validating-webhooks",
+			saasYAML: `---
+name: saas-mc-validating-webhooks
+pipelinesProvider:
+  $ref: /services/osd-operators/managed-cluster-validating-webhooks/pipelines/tekton-mcvw-pipelines.appsrep09ue1.yaml
+`,
+			expectedNS:      "mcvw-pipelines",
+			expectedURLPath: "/k8s/ns/mcvw-pipelines/tekton.dev~v1~PipelineRun",
+		},
+		{
+			name:         "with_namespace_discovery_backplane",
+			serviceName:  "saas-backplane-api",
+			operatorName: "backplane-api",
+			saasYAML: `---
+name: saas-backplane-api
+pipelinesProvider:
+  $ref: /services/backplane/pipelines/tekton.backplane-pipelines.appsrep09ue1.yaml
+`,
+			expectedNS:      "backplane-pipelines",
+			expectedURLPath: "/k8s/ns/backplane-pipelines/tekton.dev~v1~PipelineRun",
+		},
+		{
+			name:         "fallback_to_standard_naming",
+			serviceName:  "saas-test-operator",
+			operatorName: "test-operator",
+			saasYAML: `---
+name: saas-test-operator
+description: No pipelinesProvider
+`,
+			expectedNS:      "test-operator-pipelines",
+			expectedURLPath: "/k8s/ns/test-operator-pipelines/tekton.dev~v1~PipelineRun",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create temp directory for test
+			tmpDir := t.TempDir()
+
+			// Create mock SaaS file
+			saasFile := filepath.Join(tmpDir, tc.serviceName+".yaml")
+			err := os.WriteFile(saasFile, []byte(tc.saasYAML), 0600)
+			require.NoError(t, err)
+
+			// Setup ServicesFilesMap
+			originalMap := ServicesFilesMap
+			ServicesFilesMap = map[string]string{
+				tc.serviceName: saasFile,
+			}
+			defer func() { ServicesFilesMap = originalMap }()
+
+			// Create mock AppInterface
+			appInterface := git.AppInterface{GitDirectory: tmpDir}
+
+			// Test the function
+			url := generatePipelineLogsURL(appInterface, tc.serviceName, tc.operatorName, "abc123", "int")
+
+			// Verify URL structure
+			assert.Contains(t, url, "console-openshift-console.apps.rosa.appsrep09ue1.03r5.p3.openshiftapps.com")
+			assert.Contains(t, url, tc.expectedURLPath)
+			assert.Contains(t, url, tc.expectedNS)
+
+			// Verify full URL format
+			expectedURL := "https://console-openshift-console.apps.rosa.appsrep09ue1.03r5.p3.openshiftapps.com" + tc.expectedURLPath
+			assert.Equal(t, expectedURL, url)
+		})
+	}
+}
+
+func TestGeneratePipelineLogsURL_URLFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	appInterface := git.AppInterface{GitDirectory: tmpDir}
+
+	// Clear ServicesFilesMap to force fallback
+	originalMap := ServicesFilesMap
+	ServicesFilesMap = map[string]string{}
+	defer func() { ServicesFilesMap = originalMap }()
+
+	url := generatePipelineLogsURL(appInterface, "saas-test", "test", "abc123", "int")
+
+	// Verify URL components
+	assert.True(t, strings.HasPrefix(url, "https://"))
+	assert.Contains(t, url, "console-openshift-console.apps.rosa.appsrep09ue1.03r5.p3.openshiftapps.com")
+	assert.Contains(t, url, "/k8s/ns/")
+	assert.Contains(t, url, "/tekton.dev~v1~PipelineRun")
+	assert.NotContains(t, url, "abc123") // gitHash should NOT be in URL
+	assert.NotContains(t, url, "int")    // env should NOT be in URL
+}

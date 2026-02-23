@@ -40,9 +40,69 @@ func listServiceNames(appInterface git.AppInterface) error {
 	return nil
 }
 
+// discoverPipelineNamespace reads the SaaS file to find the actual pipeline namespace.
+// The namespace may differ from the operator name due to abbreviations or inconsistencies.
+//
+// For example:
+//   - Operator: managed-cluster-validating-webhooks
+//   - Namespace: mcvw-pipelines (abbreviated)
+//
+// This function extracts the namespace from the pipelinesProvider.$ref field in the SaaS YAML.
+func discoverPipelineNamespace(appInterface git.AppInterface, serviceName string) (string, error) {
+	// Get the SaaS file path from the services map
+	saasFilePath, ok := ServicesFilesMap[serviceName]
+	if !ok {
+		return "", fmt.Errorf("saas file not found for service %s", serviceName)
+	}
+
+	// Read the SaaS YAML file
+	fileContent, err := os.ReadFile(saasFilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read SaaS file: %w", err)
+	}
+
+	// Parse YAML to get the pipelinesProvider reference
+	node, err := kyaml.Parse(string(fileContent))
+	if err != nil {
+		return "", fmt.Errorf("failed to parse SaaS YAML: %w", err)
+	}
+
+	// Extract pipelinesProvider.$ref path
+	// Example: "/services/osd-operators/managed-cluster-validating-webhooks/pipelines/tekton-mcvw-pipelines.appsrep09ue1.yaml"
+	pipelineRef, err := node.GetString("pipelinesProvider.$ref")
+	if err != nil {
+		return "", fmt.Errorf("failed to get pipelinesProvider.$ref: %w", err)
+	}
+
+	// Extract namespace from the pipeline provider filename
+	// Format: "tekton-{namespace}.appsrep09ue1.yaml" or "tekton.{namespace}.appsrep09ue1.yaml"
+	filename := filepath.Base(pipelineRef)
+
+	// Remove "tekton-" or "tekton." prefix
+	namespace := strings.TrimPrefix(filename, "tekton-")
+	namespace = strings.TrimPrefix(namespace, "tekton.")
+
+	// Remove cluster-specific suffix (e.g ".appsrep09ue1.yaml")
+	// Pattern: .{cluster-name}.yaml where cluster-name starts with "apps", "hive", etc.
+	if idx := strings.Index(namespace, "."); idx > 0 {
+		namespace = namespace[:idx]
+	}
+
+	if namespace == "" {
+		return "", fmt.Errorf("could not extract namespace from pipelinesProvider: %s", pipelineRef)
+	}
+
+	fmt.Printf("Discovered pipeline namespace: %s\n", namespace)
+	return namespace, nil
+}
+
 // generatePipelineLogsURL creates a Tekton console URL for viewing pipeline logs
 // for the given operator. The URL points directly to the PipelineRuns list page
 // in the operator's pipeline namespace on the appsrep09ue1 cluster.
+//
+// This function discovers the actual namespace from the SaaS file's pipelinesProvider
+// reference to handle cases where the namespace name differs from the operator name
+// (e.g mcvw-pipelines vs mc-validating-webhooks-pipelines).
 //
 // This provides immediate access to pipeline execution logs without dependency on
 // log forwarding to external systems. Users can view all recent PipelineRuns and
@@ -51,15 +111,24 @@ func listServiceNames(appInterface git.AppInterface) error {
 // Note: The env parameter is no longer used in URL construction since both INT
 // and STAGE PipelineRuns are visible in the same namespace. It's kept for backward
 // compatibility and may be removed in future versions.
-func generatePipelineLogsURL(appInterface git.AppInterface, operatorName, gitHash string, env string) string {
+func generatePipelineLogsURL(appInterface git.AppInterface, serviceName, operatorName, gitHash string, env string) string {
 	// Tekton console base URL for the appsrep09ue1 cluster where pipelines run
 	consoleBaseURL := "https://console-openshift-console.apps.rosa.appsrep09ue1.03r5.p3.openshiftapps.com"
 
+	// Try to discover the actual namespace from the SaaS file
+	namespace, err := discoverPipelineNamespace(appInterface, serviceName)
+	if err != nil {
+		// Fallback to constructing namespace from operator name
+		namespace = fmt.Sprintf("%s-pipelines", operatorName)
+		fmt.Printf("Warning: Could not discover namespace for %s (error: %v)\n", serviceName, err)
+		fmt.Printf("Falling back to standard convention: %s\n", namespace)
+	}
+
 	// Build URL to PipelineRuns list page for this operator's namespace
 	// Format: /k8s/ns/{namespace}/tekton.dev~v1~PipelineRun
-	url := fmt.Sprintf("%s/k8s/ns/%s-pipelines/tekton.dev~v1~PipelineRun",
+	url := fmt.Sprintf("%s/k8s/ns/%s/tekton.dev~v1~PipelineRun",
 		consoleBaseURL,
-		operatorName)
+		namespace)
 
 	return url
 }
@@ -117,8 +186,8 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	operatorName := strings.TrimPrefix(serviceName, prefix)
 
 	// Generate pipeline logs URLs for INT and STAGE validation
-	intPipelineLogsURL := generatePipelineLogsURL(appInterface, operatorName, promotionGitHash, "int")
-	stagePipelineLogsURL := generatePipelineLogsURL(appInterface, operatorName, promotionGitHash, "stage")
+	intPipelineLogsURL := generatePipelineLogsURL(appInterface, serviceName, operatorName, promotionGitHash, "int")
+	stagePipelineLogsURL := generatePipelineLogsURL(appInterface, serviceName, operatorName, promotionGitHash, "stage")
 
 	// Build GitLab Markdown formatted commit message
 	var commitMessage string
