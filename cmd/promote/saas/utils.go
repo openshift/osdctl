@@ -135,6 +135,20 @@ func generateTestLogsURL(appInterface git.AppInterface, operatorName, gitHash st
 }
 
 func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string, namespaceRef string, osd, hcp, hotfix bool) error {
+	// Fetch and sync with origin/master FIRST before reading any files
+	// to ensure we're working with the latest app-interface state
+	fmt.Println("Syncing app-interface with origin/master...")
+	if err := appInterface.GitExecutor.Run(appInterface.GitDirectory, "git", "fetch", "origin", "master"); err != nil {
+		return fmt.Errorf("failed to fetch origin/master: %v", err)
+	}
+	if err := appInterface.GitExecutor.Run(appInterface.GitDirectory, "git", "checkout", "master"); err != nil {
+		return fmt.Errorf("failed to checkout master: %v", err)
+	}
+	if err := appInterface.GitExecutor.Run(appInterface.GitDirectory, "git", "reset", "--hard", "origin/master"); err != nil {
+		return fmt.Errorf("failed to sync master with origin/master: %v", err)
+	}
+	fmt.Println("Successfully synced local master with origin/master")
+
 	_, err := GetServiceNames(appInterface, OSDSaasDir, BPSaasDir, CADSaasDir)
 	if err != nil {
 		return err
