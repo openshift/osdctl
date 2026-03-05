@@ -28,6 +28,7 @@ Provides information for a specified cluster
 * [osdctl](osdctl.md)	 - OSD CLI
 * [osdctl cluster break-glass](osdctl_cluster_break-glass.md)	 - Emergency access to a cluster
 * [osdctl cluster cad](osdctl_cluster_cad.md)	 - Provides commands to run CAD tasks
+* [osdctl cluster change-volume-type](osdctl_cluster_change-volume-type.md)	 - Change EBS volume type (e.g., io1 to gp3) for cluster volumes
 * [osdctl cluster check-banned-user](osdctl_cluster_check-banned-user.md)	 - Checks if the cluster owner is a banned user.
 * [osdctl cluster context](osdctl_cluster_context.md)	 - Shows the context of a specified cluster
 * [osdctl cluster cpd](osdctl_cluster_cpd.md)	 - Runs diagnostic for a Cluster Provisioning Delay (CPD)
