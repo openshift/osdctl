@@ -23,13 +23,17 @@ osdctl cluster resync [flags]
   # Force a cluster resync by deleting its clustersync CustomResource
   osdctl cluster resync --cluster-id ${CLUSTER_ID}
 
+  # While connected to staging OCM, force a resync using the production Hive environment
+  OCM_URL=staging osdctl cluster resync --cluster-id ${CLUSTER_ID} --hive-ocm-url production
+
 ```
 
 ### Options
 
 ```
-  -C, --cluster-id string   OCM internal/external cluster id or cluster name to delete the clustersync for.
-  -h, --help                help for resync
+  -C, --cluster-id string     OCM internal/external cluster id or cluster name to delete the clustersync for.
+  -h, --help                  help for resync
+      --hive-ocm-url string   (optional) OCM environment URL for Hive operations. Aliases: 'production', 'staging', 'integration'. This only changes how the Hive cluster is resolved; the target cluster still comes from the current/default OCM environment.
 ```
 
 ### Options inherited from parent commands
