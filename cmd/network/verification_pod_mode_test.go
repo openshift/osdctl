@@ -426,3 +426,112 @@ func TestSetupForPodMode_UsesServiceAccountWhenTokenPresent(t *testing.T) {
 		t.Fatalf("expected non-nil KubeVerifier using ServiceAccount")
 	}
 }
+
+func TestValidatePodModeCompatibility(t *testing.T) {
+	tests := []struct {
+		name      string
+		ev        *EgressVerification
+		wantError bool
+		errorMsg  string
+	}{
+		{
+			name: "non_pod_mode",
+			ev: &EgressVerification{
+				PodMode: false,
+			},
+			wantError: false,
+		},
+		{
+			name: "non_pod_mode_with_cacert",
+			ev: &EgressVerification{
+				PodMode: false,
+				CaCert:  "random-CA.pem",
+			},
+			wantError: false,
+		},
+		{
+			name: "pod_mode_with_cacert",
+			ev: &EgressVerification{
+				PodMode: true,
+				CaCert:  "someCA",
+			},
+			wantError: true,
+			errorMsg:  "--cacert",
+		},
+		{
+			name: "pod_mode_with_subnet",
+			ev: &EgressVerification{
+				PodMode:   true,
+				SubnetIds: []string{"subnet-1"},
+			},
+			wantError: true,
+			errorMsg:  "--subnet-id",
+		},
+		{
+			name: "pod_mode_with_security_group",
+			ev: &EgressVerification{
+				PodMode:         true,
+				SecurityGroupId: "someSecurityGroup",
+			},
+			wantError: true,
+			errorMsg:  "--security-group",
+		},
+		{
+			name: "pod_mode_with_all_subnets",
+			ev: &EgressVerification{
+				PodMode:    true,
+				AllSubnets: true,
+			},
+			wantError: true,
+			errorMsg:  "--all-subnets",
+		},
+		{
+			name: "pod_mode_with_cpu_arch",
+			ev: &EgressVerification{
+				PodMode:     true,
+				CpuArchName: "arm",
+			},
+			wantError: true,
+			errorMsg:  "--cpu-arch",
+		},
+		{
+			name: "pod_mode_with_gcp_project",
+			ev: &EgressVerification{
+				PodMode:      true,
+				GcpProjectID: "someGCPProjectID",
+			},
+			wantError: true,
+			errorMsg:  "--gcp-project-id",
+		},
+		{
+			name: "pod_mode_with_vpc",
+			ev: &EgressVerification{
+				PodMode: true,
+				VpcName: "someVPC",
+			},
+			wantError: true,
+			errorMsg:  "--vpc",
+		},
+		{
+			name: "pod_mode_no_conflicts",
+			ev: &EgressVerification{
+				PodMode: true,
+			},
+			wantError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.ev.validatePodModeCompatibility()
+			if tt.wantError {
+				assert.Error(t, err)
+				if tt.errorMsg != "" {
+					assert.Contains(t, err.Error(), tt.errorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
