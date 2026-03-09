@@ -84,6 +84,7 @@ type Client interface {
 	ListRoles(*iam.ListRolesInput) (*iam.ListRolesOutput, error)
 	DeleteRole(*iam.DeleteRoleInput) (*iam.DeleteRoleOutput, error)
 	DeleteUser(*iam.DeleteUserInput) (*iam.DeleteUserOutput, error)
+	SimulatePrincipalPolicy(*iam.SimulatePrincipalPolicyInput) (*iam.SimulatePrincipalPolicyOutput, error)
 
 	//ec2
 	DescribeInstances(*ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error)
@@ -397,6 +398,10 @@ func (c *AwsClient) DeleteRole(input *iam.DeleteRoleInput) (*iam.DeleteRoleOutpu
 
 func (c *AwsClient) DeleteUser(input *iam.DeleteUserInput) (*iam.DeleteUserOutput, error) {
 	return c.iamClient.DeleteUser(context.TODO(), input)
+}
+
+func (c *AwsClient) SimulatePrincipalPolicy(input *iam.SimulatePrincipalPolicyInput) (*iam.SimulatePrincipalPolicyOutput, error) {
+	return c.iamClient.SimulatePrincipalPolicy(context.TODO(), input)
 }
 
 func (c *AwsClient) ListAccounts(input *organizations.ListAccountsInput) (*organizations.ListAccountsOutput, error) {

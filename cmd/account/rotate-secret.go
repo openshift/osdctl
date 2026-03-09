@@ -74,6 +74,53 @@ func getSessionNameFromUserId(userid string) string {
 	return strings.Replace(userid, ":", "-", 1)
 }
 
+// verifyRotationPermissions checks if the assumed role has the necessary IAM permissions
+// to perform secret rotation by simulating the required actions on the osdManagedAdmin user
+func verifyRotationPermissions(awsClient awsprovider.Client, accountID string, osdManagedAdminUsername string) error {
+	// Define the required IAM actions for secret rotation
+	requiredActions := []string{
+		"iam:CreateAccessKey",
+		"iam:CreateUser",
+		"iam:DeleteAccessKey",
+		"iam:DeleteUser",
+		"iam:DeleteUserPolicy",
+		"iam:GetUser",
+		"iam:GetUserPolicy",
+		"iam:ListAccessKeys",
+		"iam:PutUserPolicy",
+		"iam:TagUser",
+	}
+
+	// Construct the ARN for the osdManagedAdmin user
+	userArn := fmt.Sprintf("arn:aws:iam::%s:user/%s", accountID, osdManagedAdminUsername)
+
+	fmt.Printf("Verifying IAM permissions for user %s...\n", osdManagedAdminUsername)
+
+	// Simulate the principal policy to check permissions
+	output, err := awsClient.SimulatePrincipalPolicy(&iam.SimulatePrincipalPolicyInput{
+		PolicySourceArn: awsSdk.String(userArn),
+		ActionNames:     requiredActions,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to simulate principal policy: %w", err)
+	}
+
+	// Check if all actions are allowed
+	var deniedActions []string
+	for _, result := range output.EvaluationResults {
+		if result.EvalDecision != iamTypes.PolicyEvaluationDecisionTypeAllowed {
+			deniedActions = append(deniedActions, *result.EvalActionName)
+		}
+	}
+
+	if len(deniedActions) > 0 {
+		return fmt.Errorf("insufficient permissions for secret rotation. Denied actions: %v", deniedActions)
+	}
+
+	fmt.Println("Permission verification successful. All required IAM actions are allowed.")
+	return nil
+}
+
 func (o *rotateSecretOptions) complete(cmd *cobra.Command, args []string) error {
 
 	if len(args) != 1 {
@@ -218,6 +265,23 @@ func (o *rotateSecretOptions) run() error {
 	osdManagedAdminUsername := o.osdManagedAdminUsername
 	if osdManagedAdminUsername == "" {
 		osdManagedAdminUsername = common.OSDManagedAdminIAM + "-" + accountIDSuffixLabel
+	}
+
+	// Verify that we have the necessary permissions to rotate secrets
+	err = verifyRotationPermissions(awsClient, accountID, osdManagedAdminUsername)
+	if err != nil {
+		// If verification fails with the suffixed username, try without suffix
+		if osdManagedAdminUsername == common.OSDManagedAdminIAM+"-"+accountIDSuffixLabel {
+			fmt.Printf("Permission verification failed for %s, trying %s...\n", osdManagedAdminUsername, common.OSDManagedAdminIAM)
+			err = verifyRotationPermissions(awsClient, accountID, common.OSDManagedAdminIAM)
+			if err != nil {
+				return err
+			}
+			// Update username if verification succeeded without suffix
+			osdManagedAdminUsername = common.OSDManagedAdminIAM
+		} else {
+			return err
+		}
 	}
 
 	// Create new access key

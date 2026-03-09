@@ -1041,6 +1041,21 @@ func (mr *MockClientMockRecorder) RequestServiceQuotaIncrease(arg0 any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequestServiceQuotaIncrease", reflect.TypeOf((*MockClient)(nil).RequestServiceQuotaIncrease), arg0)
 }
 
+// SimulatePrincipalPolicy mocks base method.
+func (m *MockClient) SimulatePrincipalPolicy(arg0 *iam.SimulatePrincipalPolicyInput) (*iam.SimulatePrincipalPolicyOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SimulatePrincipalPolicy", arg0)
+	ret0, _ := ret[0].(*iam.SimulatePrincipalPolicyOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SimulatePrincipalPolicy indicates an expected call of SimulatePrincipalPolicy.
+func (mr *MockClientMockRecorder) SimulatePrincipalPolicy(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SimulatePrincipalPolicy", reflect.TypeOf((*MockClient)(nil).SimulatePrincipalPolicy), arg0)
+}
+
 // TagResource mocks base method.
 func (m *MockClient) TagResource(input *organizations.TagResourceInput) (*organizations.TagResourceOutput, error) {
 	m.ctrl.T.Helper()
