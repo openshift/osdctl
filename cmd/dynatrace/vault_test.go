@@ -4,6 +4,8 @@ import (
 	"os"
 	"os/exec"
 	"testing"
+
+	"github.com/openshift/osdctl/pkg/utils"
 )
 
 // TestSetupVaultToken_ContainerEnvironment tests that the vault login command
@@ -34,14 +36,13 @@ func TestSetupVaultToken_ContainerEnvironment(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment using t.Setenv - automatically cleaned up after test
-			if tt.containerEnvValue != "" {
-				t.Setenv("OCM_CONTAINER", tt.containerEnvValue)
-			}
+			// Always call t.Setenv to ensure clean environment, even for empty case
+			t.Setenv("OCM_CONTAINER", tt.containerEnvValue)
 
 			// Build the command args as the code does
 			loginArgs := []string{"login", "-method=oidc", "-no-print"}
-			if os.Getenv("OCM_CONTAINER") != "" {
-				loginArgs = []string{"login", "-method=oidc", "skip_browser=true"}
+			if utils.IsContainerEnvironment() {
+				loginArgs = []string{"login", "-method=oidc", "skip_browser=true", "listenaddress=0.0.0.0"}
 			}
 
 			// Verify the correct parameter is used
@@ -49,15 +50,19 @@ func TestSetupVaultToken_ContainerEnvironment(t *testing.T) {
 			cmdArgs := cmd.Args[1:] // Skip the "vault" binary name
 
 			if tt.expectNoBrowser {
-				// Should have skip_browser=true parameter
+				// Should have skip_browser=true and listenaddress=0.0.0.0 parameters
 				hasSkipBrowser := false
 				hasNoPrint := false
+				hasListenAddress := false
 				for _, arg := range cmdArgs {
 					if arg == "skip_browser=true" {
 						hasSkipBrowser = true
 					}
 					if arg == "-no-print" {
 						hasNoPrint = true
+					}
+					if arg == "listenaddress=0.0.0.0" {
+						hasListenAddress = true
 					}
 				}
 
@@ -66,6 +71,9 @@ func TestSetupVaultToken_ContainerEnvironment(t *testing.T) {
 				}
 				if hasNoPrint {
 					t.Errorf("Did not expect -no-print flag in container environment, got args: %v", cmdArgs)
+				}
+				if !hasListenAddress {
+					t.Errorf("Expected listenaddress=0.0.0.0 parameter in container environment, got args: %v", cmdArgs)
 				}
 			} else {
 				// Should have -no-print flag
@@ -114,19 +122,18 @@ func TestSetupVaultToken_OutputRedirection(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment using t.Setenv - automatically cleaned up after test
-			if tt.containerEnvValue != "" {
-				t.Setenv("OCM_CONTAINER", tt.containerEnvValue)
-			}
+			// Always call t.Setenv to ensure clean environment, even for empty case
+			t.Setenv("OCM_CONTAINER", tt.containerEnvValue)
 
 			// Build the command as the code does
 			loginArgs := []string{"login", "-method=oidc", "-no-print"}
-			if os.Getenv("OCM_CONTAINER") != "" {
-				loginArgs = []string{"login", "-method=oidc", "skip_browser=true"}
+			if utils.IsContainerEnvironment() {
+				loginArgs = []string{"login", "-method=oidc", "skip_browser=true", "listenaddress=0.0.0.0"}
 			}
 			loginCmd := exec.Command("vault", loginArgs...)
 
 			// Set output redirection as the code does
-			if os.Getenv("OCM_CONTAINER") != "" {
+			if utils.IsContainerEnvironment() {
 				loginCmd.Stdout = os.Stdout
 				loginCmd.Stderr = os.Stderr
 			} else {
