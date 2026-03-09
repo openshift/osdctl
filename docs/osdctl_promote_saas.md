@@ -14,23 +14,19 @@ osdctl promote saas [flags]
 		osdctl promote saas --list
 
 		# Promote a SaaS service/operator
-		osdctl promote saas --serviceName <service-name> --gitHash <git-hash> --osd
-		or
-		osdctl promote saas --serviceName <service-name> --gitHash <git-hash> --hcp
+		osdctl promote saas --serviceName <service> --gitHash <git-hash>
 ```
 
 ### Options
 
 ```
-      --appInterfaceDir string   location of app-interface checkout. Falls back to current working directory
-  -g, --gitHash string           Git hash of the SaaS service/operator commit getting promoted
-      --hcp                      HCP service/operator getting promoted
+      --appInterfaceDir string   location of app-interface checkout. Falls back to the current working directory
+  -g, --gitHash string           Git hash of the repo described by the SaaS file to promote to
   -h, --help                     help for saas
       --hotfix                   Add gitHash to hotfixVersions in app.yml to bypass progressive delivery (requires --gitHash)
-  -l, --list                     List all SaaS services/operators
+  -l, --list                     List all SaaS file names (without the extension)
   -n, --namespaceRef string      SaaS target namespace reference name
-      --osd                      OSD service/operator getting promoted
-      --serviceName string       SaaS service/operator getting promoted
+      --serviceId string         Name of the SaaS file (without the extension)
 ```
 
 ### Options inherited from parent commands
