@@ -26,6 +26,28 @@ func mockReadBuildInfo(parseBuildInfoError bool) func() (info *debug.BuildInfo, 
 	}
 }
 
+func TestIsContainerEnvironment(t *testing.T) {
+	tests := []struct {
+		name     string
+		envValue string
+		expected bool
+	}{
+		{"Container with OCM_CONTAINER=1", "1", true},
+		{"Container with OCM_CONTAINER=true", "true", true},
+		{"Non-container environment", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("OCM_CONTAINER", tt.envValue)
+			got := IsContainerEnvironment()
+			if got != tt.expected {
+				t.Errorf("IsContainerEnvironment() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestGetDependencyVersion(t *testing.T) {
 	tests := []struct {
 		name                string

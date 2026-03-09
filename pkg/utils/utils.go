@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"runtime/debug"
 	"strings"
@@ -30,6 +31,13 @@ const (
 )
 
 var clusterKeyRE = regexp.MustCompile(`^(\w|-)+$`)
+
+// IsContainerEnvironment returns true if running inside a container environment
+// such as ocm-container. This is determined by checking the OCM_CONTAINER
+// environment variable.
+func IsContainerEnvironment() bool {
+	return os.Getenv("OCM_CONTAINER") != ""
+}
 
 func IsValidKey(clusterKey string) bool {
 	return clusterKeyRE.MatchString(clusterKey)
