@@ -2,10 +2,10 @@ package dynatrace
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"runtime"
 
+	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
@@ -15,7 +15,8 @@ var (
 	clusterId     string
 )
 
-// openBrowser opens the specified URL in the default browser
+// openBrowser attempts to open the specified URL in the default system browser.
+// Supports Linux (xdg-open), Windows (rundll32), and macOS (open).
 func openBrowser(url string) error {
 	var cmd string
 	var args []string
@@ -68,12 +69,14 @@ func newCmdDashboard() *cobra.Command {
 			fmt.Printf("\n\nDashboard URL:\n  %s\n", dashUrl)
 
 			// Only try to open browser if not in a container environment
-			if os.Getenv("OCM_CONTAINER") == "" {
+			if !utils.IsContainerEnvironment() {
 				// Open the dashboard in the default browser
 				fmt.Println("\nOpening dashboard in your browser...")
 				if err := openBrowser(dashUrl); err != nil {
 					fmt.Printf("Could not open browser automatically: %s\n", err)
 				}
+			} else {
+				fmt.Println("\nRunning in container mode - open the URL above in your host browser.")
 			}
 		},
 	}
