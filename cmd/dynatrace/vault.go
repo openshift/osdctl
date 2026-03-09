@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+
+	"github.com/openshift/osdctl/pkg/utils"
 )
 
 type response struct {
@@ -13,6 +15,9 @@ type response struct {
 	} `json:"data"`
 }
 
+// setupVaultToken ensures a valid Vault token exists by checking the current
+// token and requesting a new one via OIDC if needed. In container environments,
+// it configures authentication to work without browser auto-launch.
 func setupVaultToken(vaultAddr string) error {
 	err := os.Setenv("VAULT_ADDR", vaultAddr)
 	if err != nil {
@@ -38,10 +43,10 @@ func setupVaultToken(vaultAddr string) error {
 		// Check if we're in a container environment (OCM_CONTAINER env var is set)
 		// If so, skip automatic browser launch and print the URL for manual authentication
 		loginArgs := []string{"login", "-method=oidc", "-no-print"}
-		if os.Getenv("OCM_CONTAINER") != "" {
+		if utils.IsContainerEnvironment() {
 			fmt.Println("\nNOTE: Running in container mode - OIDC authentication requires port forwarding.")
 			fmt.Println("Ensure port 8250 is exposed in your ocm-container configuration:")
-			fmt.Println("  Add 'ports: [\"8250:8250\"]' to ~/.config/ocm-container/ocm-container.yaml")
+			fmt.Println("  Add 'launch-opts: \"-p 8250:8250\"' to ~/.config/ocm-container/ocm-container.yaml")
 			fmt.Println("Then restart your ocm-container for the change to take effect.")
 
 			// In container: skip browser launch and listen on all interfaces (0.0.0.0)
@@ -51,7 +56,7 @@ func setupVaultToken(vaultAddr string) error {
 		loginCmd := exec.Command("vault", loginArgs...)
 
 		// Show output when using skip_browser so user can see the authentication URL
-		if os.Getenv("OCM_CONTAINER") != "" {
+		if utils.IsContainerEnvironment() {
 			loginCmd.Stdout = os.Stdout
 			loginCmd.Stderr = os.Stderr
 		} else {
@@ -60,13 +65,13 @@ func setupVaultToken(vaultAddr string) error {
 		}
 
 		if err = loginCmd.Run(); err != nil {
-			if os.Getenv("OCM_CONTAINER") != "" {
+			if utils.IsContainerEnvironment() {
 				return fmt.Errorf("vault login failed: %v\n\n"+
 					"If authentication timed out or the callback failed, this is likely because:\n"+
 					"  1. Port 8250 is not exposed in your ocm-container configuration\n"+
 					"  2. Your ocm-container was not restarted after adding the port\n\n"+
 					"To fix:\n"+
-					"  - Add 'ports: [\"8250:8250\"]' to ~/.config/ocm-container/ocm-container.yaml\n"+
+					"  - Add 'launch-opts: \"-p 8250:8250\"' to ~/.config/ocm-container/ocm-container.yaml\n"+
 					"  - Exit and restart your ocm-container\n"+
 					"  - Try the authentication again", err)
 			}
