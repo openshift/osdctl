@@ -95,19 +95,19 @@ func TestSetupVaultToken_ContainerEnvironment(t *testing.T) {
 // redirected based on the environment
 func TestSetupVaultToken_OutputRedirection(t *testing.T) {
 	tests := []struct {
-		name            string
+		name              string
 		containerEnvValue string
-		expectOutput    bool
+		expectOutput      bool
 	}{
 		{
-			name:            "Container environment shows output",
+			name:              "Container environment shows output",
 			containerEnvValue: "1",
-			expectOutput:    true,
+			expectOutput:      true,
 		},
 		{
-			name:            "Non-container environment hides output",
+			name:              "Non-container environment hides output",
 			containerEnvValue: "",
-			expectOutput:    false,
+			expectOutput:      false,
 		},
 	}
 
@@ -153,4 +153,3 @@ func TestSetupVaultToken_OutputRedirection(t *testing.T) {
 		})
 	}
 }
-
