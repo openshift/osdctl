@@ -33,6 +33,7 @@ var validInvestigations = []string{
 	"machine-health-check",
 	"must-gather",
 	"upgrade-config",
+	"restart-controlplane",
 }
 
 var validEnvironments = []string{
