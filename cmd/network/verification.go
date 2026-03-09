@@ -196,15 +196,6 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().StringVar(&e.Namespace, "namespace", "openshift-network-diagnostics", "(optional) Kubernetes namespace to run verification pods in")
 	validateEgressCmd.Flags().BoolVar(&e.SkipServiceLog, "skip-service-log", false, "(optional) disable automatic service log sending when verification fails")
 
-	// Pod mode is incompatible with cloud-specific configuration flags
-	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "cacert")
-	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "subnet-id")
-	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "security-group")
-	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "all-subnets")
-	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "cpu-arch")
-	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "gcp-project-id")
-	validateEgressCmd.MarkFlagsMutuallyExclusive("pod-mode", "vpc")
-
 	return validateEgressCmd
 }
 
@@ -243,6 +234,16 @@ func (e *EgressVerification) Run(ctx context.Context) {
 	platform, err := e.getPlatform()
 	if err != nil {
 		log.Fatalf("error getting platform: %s", err)
+	}
+
+	if !e.PodMode && platform == cloud.AWSHCP {
+		e.log.Info(ctx, "Cluster is HCP - forcing pod mode.")
+		e.PodMode = true
+	}
+
+	err = e.validatePodModeCompatibility()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// Setup verifier and inputs based on mode
@@ -794,4 +795,50 @@ func (e *EgressVerification) setupCloudProviderVerification(ctx context.Context,
 	default:
 		return nil, nil, fmt.Errorf("unsupported platform: %s", platform)
 	}
+}
+
+// validatePodModeCompatibility checks if any of the cloud provider configuration flags
+// are passed, as they are incompatible with pod mode. As pod mode can be enforced at
+// runtime regardless of --pod-mode (e.g. for HCP clusters), this check must be done
+// after flag parsing.
+func (e *EgressVerification) validatePodModeCompatibility() error {
+	conflicts := []string{}
+
+	if !e.PodMode {
+		return nil
+	}
+
+	if e.CaCert != "" {
+		conflicts = append(conflicts, "--cacert")
+	}
+
+	if len(e.SubnetIds) > 0 {
+		conflicts = append(conflicts, "--subnet-id")
+	}
+
+	if e.SecurityGroupId != "" {
+		conflicts = append(conflicts, "--security-group")
+	}
+
+	if e.AllSubnets {
+		conflicts = append(conflicts, "--all-subnets")
+	}
+
+	if e.CpuArchName != "" && e.CpuArchName != "x86" { // default value
+		conflicts = append(conflicts, "--cpu-arch")
+	}
+
+	if e.GcpProjectID != "" {
+		conflicts = append(conflicts, "--gcp-project-id")
+	}
+
+	if e.VpcName != "" {
+		conflicts = append(conflicts, "--vpc")
+	}
+
+	if len(conflicts) > 0 {
+		return fmt.Errorf("the following configuration flags are incompatible with pod mode: %s", strings.Join(conflicts, ","))
+	}
+
+	return nil
 }
