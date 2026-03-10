@@ -5,11 +5,11 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/openshift/osdctl/pkg/utils"
+	ocmutils "github.com/openshift/ocm-container/pkg/utils"
 )
 
 // TestSetupVaultToken_ContainerEnvironment tests that the vault login command
-// uses the correct flags when running inside a container (OCM_CONTAINER env var set)
+// uses the correct flags when running inside a container (IO_OPENSHIFT_MANAGED_NAME env var set)
 func TestSetupVaultToken_ContainerEnvironment(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -17,13 +17,8 @@ func TestSetupVaultToken_ContainerEnvironment(t *testing.T) {
 		expectNoBrowser   bool
 	}{
 		{
-			name:              "Container environment with OCM_CONTAINER=1",
-			containerEnvValue: "1",
-			expectNoBrowser:   true,
-		},
-		{
-			name:              "Container environment with OCM_CONTAINER=true",
-			containerEnvValue: "true",
+			name:              "Container environment with IO_OPENSHIFT_MANAGED_NAME=ocm-container",
+			containerEnvValue: "ocm-container",
 			expectNoBrowser:   true,
 		},
 		{
@@ -37,11 +32,11 @@ func TestSetupVaultToken_ContainerEnvironment(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment using t.Setenv - automatically cleaned up after test
 			// Always call t.Setenv to ensure clean environment, even for empty case
-			t.Setenv("OCM_CONTAINER", tt.containerEnvValue)
+			t.Setenv("IO_OPENSHIFT_MANAGED_NAME", tt.containerEnvValue)
 
 			// Build the command args as the code does
 			loginArgs := []string{"login", "-method=oidc", "-no-print"}
-			if utils.IsContainerEnvironment() {
+			if ocmutils.IsRunningInOcmContainer() {
 				loginArgs = []string{"login", "-method=oidc", "skip_browser=true", "listenaddress=0.0.0.0"}
 			}
 
@@ -109,7 +104,7 @@ func TestSetupVaultToken_OutputRedirection(t *testing.T) {
 	}{
 		{
 			name:              "Container environment shows output",
-			containerEnvValue: "1",
+			containerEnvValue: "ocm-container",
 			expectOutput:      true,
 		},
 		{
@@ -123,17 +118,17 @@ func TestSetupVaultToken_OutputRedirection(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment using t.Setenv - automatically cleaned up after test
 			// Always call t.Setenv to ensure clean environment, even for empty case
-			t.Setenv("OCM_CONTAINER", tt.containerEnvValue)
+			t.Setenv("IO_OPENSHIFT_MANAGED_NAME", tt.containerEnvValue)
 
 			// Build the command as the code does
 			loginArgs := []string{"login", "-method=oidc", "-no-print"}
-			if utils.IsContainerEnvironment() {
+			if ocmutils.IsRunningInOcmContainer() {
 				loginArgs = []string{"login", "-method=oidc", "skip_browser=true", "listenaddress=0.0.0.0"}
 			}
 			loginCmd := exec.Command("vault", loginArgs...)
 
 			// Set output redirection as the code does
-			if utils.IsContainerEnvironment() {
+			if ocmutils.IsRunningInOcmContainer() {
 				loginCmd.Stdout = os.Stdout
 				loginCmd.Stderr = os.Stderr
 			} else {

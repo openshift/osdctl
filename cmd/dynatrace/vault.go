@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/openshift/osdctl/pkg/utils"
+	ocmutils "github.com/openshift/ocm-container/pkg/utils"
 )
 
 type response struct {
@@ -43,7 +43,7 @@ func setupVaultToken(vaultAddr string) error {
 		// Check if we're in a container environment (OCM_CONTAINER env var is set)
 		// If so, skip automatic browser launch and print the URL for manual authentication
 		loginArgs := []string{"login", "-method=oidc", "-no-print"}
-		if utils.IsContainerEnvironment() {
+		if ocmutils.IsRunningInOcmContainer() {
 			fmt.Println("\nNOTE: Running in container mode - OIDC authentication requires port forwarding.")
 			fmt.Println("Ensure port 8250 is exposed in your ocm-container configuration:")
 			fmt.Println("  Add 'launch-opts: \"-p 8250:8250\"' to ~/.config/ocm-container/ocm-container.yaml")
@@ -56,7 +56,7 @@ func setupVaultToken(vaultAddr string) error {
 		loginCmd := exec.Command("vault", loginArgs...)
 
 		// Show output when using skip_browser so user can see the authentication URL
-		if utils.IsContainerEnvironment() {
+		if ocmutils.IsRunningInOcmContainer() {
 			loginCmd.Stdout = os.Stdout
 			loginCmd.Stderr = os.Stderr
 		} else {
@@ -65,7 +65,7 @@ func setupVaultToken(vaultAddr string) error {
 		}
 
 		if err = loginCmd.Run(); err != nil {
-			if utils.IsContainerEnvironment() {
+			if ocmutils.IsRunningInOcmContainer() {
 				return fmt.Errorf("vault login failed: %v\n\n"+
 					"If authentication timed out or the callback failed, this is likely because:\n"+
 					"  1. Port 8250 is not exposed in your ocm-container configuration\n"+

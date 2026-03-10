@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"runtime"
 
-	"github.com/openshift/osdctl/pkg/utils"
+	ocmutils "github.com/openshift/ocm-container/pkg/utils"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
@@ -69,7 +69,7 @@ func newCmdDashboard() *cobra.Command {
 			fmt.Printf("\n\nDashboard URL:\n  %s\n", dashUrl)
 
 			// Only try to open browser if not in a container environment
-			if !utils.IsContainerEnvironment() {
+			if !ocmutils.IsRunningInOcmContainer() {
 				// Open the dashboard in the default browser
 				fmt.Println("\nOpening dashboard in your browser...")
 				if err := openBrowser(dashUrl); err != nil {
