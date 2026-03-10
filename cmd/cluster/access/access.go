@@ -66,6 +66,7 @@ func NewCmdAccess(streams genericclioptions.IOStreams, client *k8s.LazyClient) *
 	accessCmd.AddCommand(newCmdCleanup(client, streams))
 	accessCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
 	accessCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "Provide the internal ID of the cluster")
+	accessCmd.Flags().StringVar(&ops.hiveOcmUrl, "hive-ocm-url", "", "(optional) OCM environment URL for hive operations. Aliases: 'production', 'staging', 'integration'. If not specified, uses the same OCM environment as the target cluster.")
 	_ = accessCmd.MarkFlagRequired("reason")
 	_ = accessCmd.MarkFlagRequired("cluster-id")
 
@@ -74,8 +75,9 @@ func NewCmdAccess(streams genericclioptions.IOStreams, client *k8s.LazyClient) *
 
 // clusterAccessOptions contains the objects and information required to access a cluster
 type clusterAccessOptions struct {
-	reason    string
-	clusterID string
+	reason     string
+	clusterID  string
+	hiveOcmUrl string
 
 	genericclioptions.IOStreams
 }
@@ -112,23 +114,26 @@ func (c *clusterAccessOptions) Readln() (string, error) {
 
 // accessCmdComplete verifies the command's invocation, returning an error if the usage is invalid
 func (c *clusterAccessOptions) accessCmdComplete() error {
-	return osdctlutil.IsValidClusterKey(c.clusterID)
+	if err := osdctlutil.IsValidClusterKey(c.clusterID); err != nil {
+		return err
+	}
+
+	// Validate --hive-ocm-url if provided
+	if c.hiveOcmUrl != "" {
+		_, err := osdctlutil.ValidateAndResolveOcmUrl(c.hiveOcmUrl)
+		if err != nil {
+			return fmt.Errorf("invalid --hive-ocm-url: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // Run executes the 'break-glass' access subcommand
 func (c *clusterAccessOptions) Run(ctx context.Context) error {
-	// Login to hive shard
-	hive, err := osdctlutil.GetHiveCluster(c.clusterID)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve hive shard for %q: %w", c.clusterID, err)
-	}
-
-	hiveClient, err := k8s.NewAsBackplaneClusterAdmin(hive.ID(), kclient.Options{Scheme: scheme.Scheme}, c.reason, fmt.Sprintf("Elevation required to break-glass on %q cluster", c.clusterID))
-	if err != nil {
-		return fmt.Errorf("failed to login to hive shard %q: %w", hive.Name(), err)
-	}
-
-	c.Println(fmt.Sprintf("Retrieving Kubeconfig for cluster '%s'", c.clusterID))
+	var hive *clustersmgmtv1.Cluster
+	var hiveClient kclient.Client
+	var err error
 
 	// Connect to ocm and grab cluster definition: user-provided cluster identifier could be any one of name, internal ID, or UUID
 	// and we need to ensure we're only referring to cluster by internal-ID while interacting with hive
@@ -145,6 +150,37 @@ func (c *clusterAccessOptions) Run(ctx context.Context) error {
 		return err
 	}
 	c.Println(fmt.Sprintf("Internal Cluster ID: %s", cluster.ID()))
+	c.Println(fmt.Sprintf("Retrieving Kubeconfig for cluster '%s'", c.clusterID))
+
+	if c.hiveOcmUrl != "" {
+		// Multi-environment path - enables staging/integration testing
+		hiveOCM, err := osdctlutil.CreateConnectionWithUrl(c.hiveOcmUrl)
+		if err != nil {
+			return fmt.Errorf("failed to create hive OCM connection with URL '%s': %w", c.hiveOcmUrl, err)
+		}
+		defer hiveOCM.Close()
+
+		hive, err = osdctlutil.GetHiveClusterWithConn(cluster.ID(), conn, hiveOCM)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve hive shard for %q (OCM URL:'%s'): %w", c.clusterID, c.hiveOcmUrl, err)
+		}
+
+		hiveClient, err = k8s.NewAsBackplaneClusterAdminWithConn(hive.ID(), kclient.Options{Scheme: scheme.Scheme}, hiveOCM, c.reason, fmt.Sprintf("Elevation required to break-glass on %q cluster", c.clusterID))
+		if err != nil {
+			return fmt.Errorf("failed to login to hive shard %q (OCM URL:'%s'): %w", hive.Name(), c.hiveOcmUrl, err)
+		}
+	} else {
+		// Original path - backward compatible
+		hive, err = osdctlutil.GetHiveCluster(cluster.ID())
+		if err != nil {
+			return fmt.Errorf("failed to retrieve hive shard for %q: %w", c.clusterID, err)
+		}
+
+		hiveClient, err = k8s.NewAsBackplaneClusterAdmin(hive.ID(), kclient.Options{Scheme: scheme.Scheme}, c.reason, fmt.Sprintf("Elevation required to break-glass on %q cluster", c.clusterID))
+		if err != nil {
+			return fmt.Errorf("failed to login to hive shard %q: %w", hive.Name(), err)
+		}
+	}
 
 	// Retrieve the kubeconfig secret from the cluster's namespace on hive
 	ns, err := getClusterNamespace(hiveClient, cluster.ID())
