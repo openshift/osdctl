@@ -105,6 +105,8 @@ type EgressVerification struct {
 	Namespace string
 	// SkipServiceLog disables automatic service log prompting on verification failures
 	SkipServiceLog bool
+	// hiveOcmUrl is the OCM environment URL for Hive operations (Classic clusters only)
+	hiveOcmUrl string
 }
 
 func NewCmdValidateEgress() *cobra.Command {
@@ -165,6 +167,11 @@ func NewCmdValidateEgress() *cobra.Command {
   # Run network verification without sending service logs on failure
   osdctl network verify-egress --cluster-id my-rosa-cluster --skip-service-log
 
+  # Run against a staging cluster using production Hive (multi-environment OCM)
+  export OCM_URL=staging
+  ocm login
+  osdctl network verify-egress --cluster-id my-staging-cluster --hive-ocm-url production
+
   # (Not recommended) Run against a specific VPC, without specifying cluster-id
   <export environment variables like AWS_ACCESS_KEY_ID or use aws configure>
   osdctl network verify-egress --subnet-id subnet-abcdefg123 --security-group sg-abcdefgh123 --region us-east-1`,
@@ -195,6 +202,7 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().StringVar(&e.KubeConfig, "kubeconfig", "", "(optional) path to kubeconfig file for pod mode (uses default kubeconfig if not specified)")
 	validateEgressCmd.Flags().StringVar(&e.Namespace, "namespace", "openshift-network-diagnostics", "(optional) Kubernetes namespace to run verification pods in")
 	validateEgressCmd.Flags().BoolVar(&e.SkipServiceLog, "skip-service-log", false, "(optional) disable automatic service log sending when verification fails")
+	validateEgressCmd.Flags().StringVar(&e.hiveOcmUrl, "hive-ocm-url", "", "(optional) OCM environment URL for hive operations. Aliases: 'production', 'staging', 'integration'. If not specified, uses the same OCM environment as the target cluster.")
 
 	return validateEgressCmd
 }
@@ -444,15 +452,48 @@ func (e *EgressVerification) getCaBundleFromHive(ctx context.Context) (string, e
 		return "", err
 	}
 
-	hive, err := utils.GetHiveCluster(e.cluster.ID())
-	if err != nil {
-		return "", err
-	}
+	var hive *cmv1.Cluster
+	var hc client.Client
+	var err error
 
-	e.log.Debug(ctx, "assembling K8s client for %s (%s)", hive.ID(), hive.Name())
-	hc, err := k8s.New(hive.ID(), client.Options{Scheme: scheme})
-	if err != nil {
-		return "", err
+	if e.hiveOcmUrl != "" {
+		// Multi-environment path - enables staging/integration testing
+		targetOCM, err := utils.CreateConnection()
+		if err != nil {
+			return "", fmt.Errorf("failed to create target OCM connection: %w", err)
+		}
+		defer targetOCM.Close()
+
+		hiveOCM, err := utils.CreateConnectionWithUrl(e.hiveOcmUrl)
+		if err != nil {
+			return "", fmt.Errorf("failed to create hive OCM connection with URL '%s': %w", e.hiveOcmUrl, err)
+		}
+		defer hiveOCM.Close()
+
+		e.log.Debug(ctx, "using multi-environment OCM: target cluster OCM and hive OCM URL '%s'", e.hiveOcmUrl)
+
+		hive, err = utils.GetHiveClusterWithConn(e.cluster.ID(), targetOCM, hiveOCM)
+		if err != nil {
+			return "", fmt.Errorf("failed to get hive cluster (OCM URL:'%s'): %w", e.hiveOcmUrl, err)
+		}
+
+		e.log.Debug(ctx, "assembling K8s client for %s (%s)", hive.ID(), hive.Name())
+		hc, err = k8s.NewWithConn(hive.ID(), client.Options{Scheme: scheme}, hiveOCM)
+		if err != nil {
+			return "", fmt.Errorf("failed to create hive k8s client (OCM URL:'%s'): %w", e.hiveOcmUrl, err)
+		}
+	} else {
+		// Original path - backward compatible
+		hive, err = utils.GetHiveCluster(e.cluster.ID())
+		if err != nil {
+			return "", err
+		}
+
+		e.log.Debug(ctx, "assembling K8s client for %s (%s)", hive.ID(), hive.Name())
+		hc, err = k8s.New(hive.ID(), client.Options{Scheme: scheme})
+		if err != nil {
+			return "", err
+		}
 	}
 
 	e.log.Debug(ctx, "searching for proxy SyncSet")
@@ -621,6 +662,14 @@ func (e *EgressVerification) validateInput() error {
 			if strings.HasPrefix(strings.ToLower(e.platformName), "aws") {
 				return fmt.Errorf("pod mode for AWS platforms requires --region when --cluster-id is not specified")
 			}
+		}
+	}
+
+	// Validate --hive-ocm-url if provided
+	if e.hiveOcmUrl != "" {
+		_, err := utils.ValidateAndResolveOcmUrl(e.hiveOcmUrl)
+		if err != nil {
+			return fmt.Errorf("invalid --hive-ocm-url: %w", err)
 		}
 	}
 
