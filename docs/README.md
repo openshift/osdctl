@@ -2153,6 +2153,7 @@ osdctl cluster ssh key --reason $reason [--cluster-id $CLUSTER_ID] [flags]
   -C, --cluster-id string                Cluster identifier (internal ID, UUID, name, etc) to retrieve the SSH key for. If not specified, the current cluster will be used.
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for key
+      --hive-ocm-url string              (optional) OCM environment URL for hive operations. Aliases: 'production', 'staging', 'integration'. If not specified, uses the same OCM environment as the target cluster.
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']

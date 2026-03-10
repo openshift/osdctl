@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -25,6 +26,7 @@ type clusterSSHKeyOpts struct {
 	elevationReason  string
 	skipConfirmation bool
 	clusterID        string
+	hiveOcmUrl       string
 }
 
 func NewCmdKey() *cobra.Command {
@@ -61,6 +63,14 @@ $ cat /tmp/ssh.key
 Despite the logs from backplane, the ssh key is the only output channelled through stdout. This means you can safely redirect the output to a file for greater convienence.`,
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, args []string) error {
+			// Validate --hive-ocm-url if provided
+			if opts.hiveOcmUrl != "" {
+				_, err := utils.ValidateAndResolveOcmUrl(opts.hiveOcmUrl)
+				if err != nil {
+					return fmt.Errorf("invalid --hive-ocm-url: %w", err)
+				}
+			}
+
 			// If user provides a cluster-id flag: use it to identify the cluster's hive shard,
 			// otherwise use the current cluster's ID
 			var err error
@@ -82,6 +92,7 @@ Despite the logs from backplane, the ssh key is the only output channelled throu
 	cmd.Flags().StringVarP(&opts.clusterID, "cluster-id", "C", "", "Cluster identifier (internal ID, UUID, name, etc) to retrieve the SSH key for. If not specified, the current cluster will be used.")
 	cmd.Flags().BoolVarP(&opts.skipConfirmation, "yes", "y", false, "Skip any confirmation prompts and print the key automatically. Useful for redirects and scripting.")
 	cmd.Flags().StringVar(&opts.elevationReason, "reason", "", "Provide a reason for accessing the clusters SSH key, used for backplane. Eg: 'OHSS-XXXX', or '#ITN-2024-XXXXX")
+	cmd.Flags().StringVar(&opts.hiveOcmUrl, "hive-ocm-url", "", "(optional) OCM environment URL for hive operations. Aliases: 'production', 'staging', 'integration'. If not specified, uses the same OCM environment as the target cluster.")
 
 	_ = cmd.MarkFlagRequired("reason")
 
@@ -115,22 +126,50 @@ func PrintKey(identifier string, opts *clusterSSHKeyOpts) error {
 	}
 
 	clusterID := cluster.ID()
-	hive, err := utils.GetHiveCluster(clusterID)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve hive shard for cluster: %w", err)
-	}
 
 	scheme := runtime.NewScheme()
 	err = corev1.AddToScheme(scheme)
 	if err != nil {
 		return fmt.Errorf("failed to add corev1 api scheme: %w", err)
 	}
-	hiveClient, err := k8s.NewAsBackplaneClusterAdmin(hive.ID(), client.Options{Scheme: scheme}, []string{
-		opts.elevationReason,
-		fmt.Sprintf("Need elevation for %s hive cluster in order to get ssh key for %s", hive.ID(), clusterID),
-	}...)
-	if err != nil {
-		return fmt.Errorf("failed to create privileged client: %w", err)
+
+	var hive *cmv1.Cluster
+	var hiveClient client.Client
+
+	if opts.hiveOcmUrl != "" {
+		// Multi-environment path - enables staging/integration testing
+		hiveOCM, err := utils.CreateConnectionWithUrl(opts.hiveOcmUrl)
+		if err != nil {
+			return fmt.Errorf("failed to create hive OCM connection with URL '%s': %w", opts.hiveOcmUrl, err)
+		}
+		defer hiveOCM.Close()
+
+		hive, err = utils.GetHiveClusterWithConn(clusterID, ocmClient, hiveOCM)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve hive shard for cluster (OCM URL:'%s'): %w", opts.hiveOcmUrl, err)
+		}
+
+		hiveClient, err = k8s.NewAsBackplaneClusterAdminWithConn(hive.ID(), client.Options{Scheme: scheme}, hiveOCM, []string{
+			opts.elevationReason,
+			fmt.Sprintf("Need elevation for %s hive cluster in order to get ssh key for %s", hive.ID(), clusterID),
+		}...)
+		if err != nil {
+			return fmt.Errorf("failed to create privileged client (OCM URL:'%s'): %w", opts.hiveOcmUrl, err)
+		}
+	} else {
+		// Original path - backward compatible
+		hive, err = utils.GetHiveCluster(clusterID)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve hive shard for cluster: %w", err)
+		}
+
+		hiveClient, err = k8s.NewAsBackplaneClusterAdmin(hive.ID(), client.Options{Scheme: scheme}, []string{
+			opts.elevationReason,
+			fmt.Sprintf("Need elevation for %s hive cluster in order to get ssh key for %s", hive.ID(), clusterID),
+		}...)
+		if err != nil {
+			return fmt.Errorf("failed to create privileged client: %w", err)
+		}
 	}
 
 	// Determine the cluster's hive namespace via cluster ID
