@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"runtime"
 
+	ocmutils "github.com/openshift/ocm-container/pkg/utils"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
@@ -14,7 +15,8 @@ var (
 	clusterId     string
 )
 
-// openBrowser opens the specified URL in the default browser
+// openBrowser attempts to open the specified URL in the default system browser.
+// Supports Linux (xdg-open), Windows (rundll32), and macOS (open).
 func openBrowser(url string) error {
 	var cmd string
 	var args []string
@@ -66,10 +68,15 @@ func newCmdDashboard() *cobra.Command {
 			dashUrl := hcpCluster.DynatraceURL + "ui/apps/dynatrace.dashboards/dashboard/" + id + "#vfilter__id=" + hcpCluster.externalID
 			fmt.Printf("\n\nDashboard URL:\n  %s\n", dashUrl)
 
-			// Open the dashboard in the default browser
-			fmt.Println("\nOpening dashboard in your browser...")
-			if err := openBrowser(dashUrl); err != nil {
-				fmt.Printf("Could not open browser automatically: %s\n", err)
+			// Only try to open browser if not in a container environment
+			if !ocmutils.IsRunningInOcmContainer() {
+				// Open the dashboard in the default browser
+				fmt.Println("\nOpening dashboard in your browser...")
+				if err := openBrowser(dashUrl); err != nil {
+					fmt.Printf("Could not open browser automatically: %s\n", err)
+				}
+			} else {
+				fmt.Println("\nRunning in container mode - open the URL above in your host browser.")
 			}
 		},
 	}
