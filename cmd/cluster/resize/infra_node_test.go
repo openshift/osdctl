@@ -3,12 +3,14 @@ package resize
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	hivev1aws "github.com/openshift/hive/apis/hive/v1/aws"
 	hivev1gcp "github.com/openshift/hive/apis/hive/v1/gcp"
+	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
@@ -500,4 +502,68 @@ func TestGetInfraMachinePoolNoInfraPool(t *testing.T) {
 
 	// Verify mock was called correctly
 	mockHive.AssertExpectations(t)
+}
+
+// TestHiveOcmUrlValidation tests the early validation of --hive-ocm-url flag in the infra resize command
+func TestHiveOcmUrlValidation(t *testing.T) {
+	tests := []struct {
+		name        string
+		hiveOcmUrl  string
+		expectErr   bool
+		errContains string
+	}{
+		{
+			name:       "Valid hive-ocm-url (production)",
+			hiveOcmUrl: "production",
+			expectErr:  false,
+		},
+		{
+			name:       "Valid hive-ocm-url (staging)",
+			hiveOcmUrl: "staging",
+			expectErr:  false,
+		},
+		{
+			name:       "Valid hive-ocm-url (integration)",
+			hiveOcmUrl: "integration",
+			expectErr:  false,
+		},
+		{
+			name:       "Valid hive-ocm-url (full URL)",
+			hiveOcmUrl: "https://api.openshift.com",
+			expectErr:  false,
+		},
+		{
+			name:        "Invalid hive-ocm-url",
+			hiveOcmUrl:  "invalid-environment",
+			expectErr:   true,
+			errContains: "invalid OCM_URL",
+		},
+		{
+			name:       "Empty hive-ocm-url (flag omitted)",
+			hiveOcmUrl: "",
+			expectErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Simulate Infra.New() behavior: validate only when value is provided
+			var err error
+			if tt.hiveOcmUrl != "" {
+				_, err = utils.ValidateAndResolveOcmUrl(tt.hiveOcmUrl)
+			}
+
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("Expected error containing '%s', but got nil", tt.errContains)
+				} else if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("Expected error containing '%s', but got: %v", tt.errContains, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, but got: %v", err)
+				}
+			}
+		})
+	}
 }

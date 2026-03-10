@@ -35,6 +35,7 @@ osdctl cluster resize infra [flags]
 ```
   -C, --cluster-id string      OCM internal/external cluster id or cluster name to resize infra nodes for.
   -h, --help                   help for infra
+      --hive-ocm-url string    (optional) OCM environment URL for hive operations. Aliases: 'production', 'staging', 'integration'. If not specified, uses the same OCM environment as the target cluster.
       --instance-type string   (optional) Override for an AWS or GCP instance type to resize the infra nodes to, by default supported instance types are automatically selected.
       --justification string   The justification behind resize
       --ohss string            OHSS ticket tracking this infra node resize
