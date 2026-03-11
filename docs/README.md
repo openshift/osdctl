@@ -37,6 +37,7 @@
     - `list --cluster-id <cluster-identifier>` - List all silences
     - `org <org-id> [--all --duration --comment | --alertname --duration --comment]` - Add new silence for alert for org
 - `cloudtrail` - AWS CloudTrail related utilities
+  - `errors` - Prints CloudTrail error events (permission/IAM issues) to console.
   - `permission-denied-events` - Prints cloudtrail permission-denied events to console.
   - `write-events` - Prints cloudtrail write events to console with advanced filtering options
 - `cluster` - Provides information for a specified cluster
@@ -48,6 +49,7 @@
   - `context --cluster-id <cluster-identifier>` - Shows the context of a specified cluster
   - `cpd` - Runs diagnostic for a Cluster Provisioning Delay (CPD)
   - `detach-stuck-volume --cluster-id <cluster-identifier>` - Detach openshift-monitoring namespace's volume from a cluster forcefully
+  - `diff <before.yaml> <after.yaml>` - Compare two cluster snapshots to identify changes
   - `etcd-health-check --cluster-id <cluster-id> --reason <reason for escalation>` - Checks the etcd components and member health
   - `etcd-member-replace --cluster-id <cluster-identifier>` - Replaces an unhealthy etcd node
   - `from-infra-id` - Get cluster ID and external ID from a given infrastructure ID commonly used by Splunk
@@ -66,6 +68,7 @@
     - `infra` - Resize an OSD/ROSA cluster's infra nodes
     - `request-serving-nodes` - Resize a ROSA HCP cluster's request-serving nodes
   - `resync` - Force a resync of a cluster from Hive
+  - `snapshot` - Capture a point-in-time snapshot of cluster state
   - `sre-operators` - SRE operator related utilities
     - `describe` - Describe SRE operators
     - `list` - List the current and latest version of SRE operators
@@ -91,6 +94,8 @@
   - `logs --cluster-id <cluster-identifier>` - Fetch logs from Dynatrace
   - `url --cluster-id <cluster-identifier>` - Get the Dynatrace Tenant URL for a given MC or HCP cluster
 - `env [flags] [env-alias]` - Create an environment to interact with a cluster
+- `evidence` - Evidence collection utilities for feature testing
+  - `collect` - Collect evidence from cluster and AWS for feature testing
 - `hcp` - 
   - `force-upgrade` - Schedule forced control plane upgrade for HCP clusters (Requires ForceUpgrader permissions)
   - `get-cp-autoscaling-status` - Get control plane autoscaling status for hosted clusters on a management cluster
@@ -1113,6 +1118,47 @@ osdctl cloudtrail [flags]
   -S, --skip-version-check               skip checking to see if this is the most recent release
 ```
 
+### osdctl cloudtrail errors
+
+Surfaces permission and IAM-related errors from AWS CloudTrail.
+
+By default, matches these error patterns:
+  - AccessDenied
+  - UnauthorizedOperation / Client.UnauthorizedOperation
+  - Forbidden
+  - InvalidClientTokenId
+  - AuthFailure
+  - ExpiredToken
+  - SignatureDoesNotMatch
+
+Use --error-types to filter for specific error patterns.
+
+```
+osdctl cloudtrail errors [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+  -C, --cluster-id string                Cluster ID
+      --context string                   The name of the kubeconfig context to use
+      --error-types strings              Comma-separated list of error patterns to match (default: all common permission errors)
+  -h, --help                             help for errors
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --json                             Output results as JSON
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+  -r, --raw-event                        Print raw CloudTrail event JSON
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --since string                     Time window to search (e.g., 30m, 1h, 24h). Valid units: ns, us, ms, s, m, h. (default "1h")
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+  -u, --url                              Include console URL links for each event
+```
+
 ### osdctl cloudtrail permission-denied-events
 
 Prints cloudtrail permission-denied events to console.
@@ -1469,6 +1515,40 @@ osdctl cluster detach-stuck-volume --cluster-id <cluster-identifier> [flags]
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --reason string                    The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+```
+
+### osdctl cluster diff
+
+Compare two cluster snapshots to identify changes.
+
+This command compares two snapshot files created by 'osdctl cluster snapshot'
+and reports the differences. This is useful for understanding what changed
+in a cluster during feature testing or validation.
+
+Changes are categorized as:
+- added: Resource exists in after but not in before
+- removed: Resource exists in before but not in after  
+- modified: Resource exists in both but with different values
+
+```
+osdctl cluster diff <before.yaml> <after.yaml> [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for diff
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --json                             Output diff in JSON format
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
@@ -2013,6 +2093,42 @@ osdctl cluster resync [flags]
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+```
+
+### osdctl cluster snapshot
+
+Capture a point-in-time snapshot of cluster state for evidence collection.
+
+This command captures the current state of key cluster resources including:
+- Namespace states
+- Node conditions and readiness  
+- ClusterOperator status
+- Custom resources (optional)
+
+The snapshot can be saved to a YAML file and later compared using 
+'osdctl cluster diff' to identify changes during feature testing.
+
+```
+osdctl cluster snapshot [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+  -C, --cluster-id string                Cluster ID (internal, external, or name)
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for snapshot
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+      --namespaces strings               Specific namespaces to include (default: all openshift-* namespaces)
+  -o, --output string                    Output file path (YAML format)
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+      --resources strings                Additional resource types to capture (e.g., pods,deployments)
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
   -S, --skip-version-check               skip checking to see if this is the most recent release
@@ -2810,6 +2926,73 @@ osdctl env [flags] [env-alias]
   -S, --skip-version-check               skip checking to see if this is the most recent release
   -t, --temp                             Delete environment on exit
   -u, --username string                  Username for individual cluster login
+```
+
+### osdctl evidence
+
+Evidence collection utilities for feature testing.
+
+This command group provides tools to help SRE teams collect evidence
+during feature validation testing. The collected evidence can include
+CloudTrail logs, cluster snapshots, and other diagnostic information.
+
+```
+osdctl evidence [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for evidence
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+```
+
+### osdctl evidence collect
+
+Collect comprehensive evidence from a cluster and AWS for feature testing.
+
+This all-in-one command gathers:
+- Cluster state (nodes, operators, machine configs)
+- CloudTrail error events (permission denied, etc.)
+- Recent Kubernetes events (optional)
+- must-gather output (optional)
+
+The collected evidence is saved to the specified output directory for
+inclusion in test reports and feature validation documentation.
+
+```
+osdctl evidence collect [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+  -C, --cluster-id string                Cluster ID (internal, external, or name)
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for collect
+      --include-events                   Include Kubernetes events in collection
+      --include-must-gather              Run must-gather and include output
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Output directory for collected evidence
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --since string                     Time window to look back for events (e.g., 30m, 1h, 2h) (default "1h")
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+      --skip-cloudtrail                  Skip CloudTrail event collection
+      --skip-cluster-state               Skip cluster state collection
+  -S, --skip-version-check               skip checking to see if this is the most recent release
 ```
 
 ### osdctl hcp

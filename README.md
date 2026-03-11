@@ -635,3 +635,84 @@ Note : Here node-id refers to the node that has the unhealthy etcd member. This 
 ```
 osdctl swarm secondary
 ```
+
+### Feature Testing Evidence Collection
+
+These commands help SRE teams collect evidence during feature validation testing (IAM policies, operators, etc.).
+
+#### CloudTrail Errors
+
+Surface permission errors and other AWS API errors from CloudTrail. Useful when validating new IAM policies or features that interact with AWS APIs.
+
+```bash
+# Get permission errors from the last hour
+osdctl cloudtrail errors -C <cluster-id> --since 1h
+
+# Get errors from the last 30 minutes with JSON output
+osdctl cloudtrail errors -C <cluster-id> --since 30m --json
+
+# Get errors with AWS console links
+osdctl cloudtrail errors -C <cluster-id> --since 2h --url
+
+# Filter for specific error types
+osdctl cloudtrail errors -C <cluster-id> --since 1h --error-types AccessDenied,UnauthorizedOperation
+```
+
+**Note:** For ROSA HCP clusters, CloudTrail events only show customer account activity. Control plane activity is in Red Hat's account and not visible.
+
+#### Cluster Snapshot
+
+Capture a point-in-time snapshot of cluster state for evidence collection. The snapshot includes nodes, ClusterOperators, and namespaces.
+
+```bash
+# Capture cluster snapshot to a file
+osdctl cluster snapshot -C <cluster-id> -o before.yaml
+
+# Capture snapshot with specific namespaces
+osdctl cluster snapshot -C <cluster-id> -o snapshot.yaml --namespaces openshift-monitoring,openshift-operators
+
+# Capture additional resource types
+osdctl cluster snapshot -C <cluster-id> -o snapshot.yaml --resources pods,deployments,services
+```
+
+#### Cluster Diff
+
+Compare two cluster snapshots to identify changes. Useful for understanding what changed during feature testing.
+
+```bash
+# Compare two snapshots
+osdctl cluster diff before.yaml after.yaml
+
+# Compare snapshots with JSON output
+osdctl cluster diff before.yaml after.yaml --json
+```
+
+Changes are categorized as:
+- `+` added: Resource exists in after but not in before
+- `-` removed: Resource exists in before but not in after
+- `~` modified: Resource exists in both but with different values
+
+#### Evidence Collection (All-in-One)
+
+Collect comprehensive evidence from a cluster and AWS for feature testing. This all-in-one command gathers cluster state, CloudTrail events, and optionally Kubernetes events and must-gather output.
+
+```bash
+# Collect all evidence to a directory
+osdctl evidence collect -C <cluster-id> --output ./evidence/
+
+# Collect evidence from the last 2 hours
+osdctl evidence collect -C <cluster-id> --output ./evidence/ --since 2h
+
+# Collect evidence without CloudTrail (for non-AWS or limited access)
+osdctl evidence collect -C <cluster-id> --output ./evidence/ --skip-cloudtrail
+
+# Include Kubernetes events in collection
+osdctl evidence collect -C <cluster-id> --output ./evidence/ --include-events
+
+# Include must-gather output
+osdctl evidence collect -C <cluster-id> --output ./evidence/ --include-must-gather
+```
+
+The collected evidence includes:
+- `evidence.yaml` - Main evidence file with cluster state and CloudTrail data
+- `summary.txt` - Human-readable summary of findings
