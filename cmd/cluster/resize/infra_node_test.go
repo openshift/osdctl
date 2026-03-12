@@ -567,3 +567,106 @@ func TestHiveOcmUrlValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestNewInfraFromClients(t *testing.T) {
+	cluster := newTestCluster(t, cmv1.NewCluster().ID("test-id").CloudProvider(cmv1.NewCloudProvider().ID("aws")))
+	mockClient := &MockClient{}
+	mockHive := &MockClient{}
+	mockHiveAdmin := &MockClient{}
+
+	infra := NewInfraFromClients(cluster, mockClient, mockHive, mockHiveAdmin, "test-reason")
+
+	assert.NotNil(t, infra)
+	assert.Equal(t, cluster, infra.cluster)
+	assert.Equal(t, "test-id", infra.clusterId)
+	assert.Equal(t, mockClient, infra.client)
+	assert.Equal(t, mockHive, infra.hive)
+	assert.Equal(t, mockHiveAdmin, infra.hiveAdmin)
+	assert.Equal(t, "test-reason", infra.reason)
+	assert.Nil(t, infra.MachinePoolModifier)
+	assert.False(t, infra.SkipServiceLog)
+}
+
+func TestCloneAndModifyMachinePool(t *testing.T) {
+	originalMp := &hivev1.MachinePool{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test-cluster-infra",
+			Namespace:       "test-namespace",
+			ResourceVersion: "12345",
+			Generation:      3,
+			UID:             "abc-123",
+			Finalizers:      []string{"hive.openshift.io/machinepool"},
+		},
+		Spec: hivev1.MachinePoolSpec{
+			Name:     "infra",
+			Replicas: int64Ptr(2),
+			Labels: map[string]string{
+				"node-role.kubernetes.io/infra": "",
+			},
+			Platform: hivev1.MachinePoolPlatform{
+				AWS: &hivev1aws.MachinePoolPlatform{
+					InstanceType: "r5.xlarge",
+					EC2RootVolume: hivev1aws.EC2RootVolume{
+						IOPS: 3000,
+						Size: 300,
+						Type: "io1",
+					},
+				},
+			},
+		},
+	}
+
+	t.Run("success - changes volume type", func(t *testing.T) {
+		r := &Infra{
+			MachinePoolModifier: func(mp *hivev1.MachinePool) error {
+				mp.Spec.Platform.AWS.Type = "gp3"
+				mp.Spec.Platform.AWS.IOPS = 0
+				return nil
+			},
+		}
+
+		result, err := r.cloneAndModifyMachinePool(originalMp)
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+
+		// Verify modifier was applied
+		assert.Equal(t, "gp3", result.Spec.Platform.AWS.Type)
+		assert.Equal(t, 0, result.Spec.Platform.AWS.IOPS)
+
+		// Verify metadata was reset
+		assert.Empty(t, result.ResourceVersion)
+		assert.Equal(t, int64(0), result.Generation)
+		assert.Empty(t, string(result.UID))
+		assert.Empty(t, result.Finalizers)
+		assert.Equal(t, metav1.Time{}, result.CreationTimestamp)
+
+		// Verify other fields preserved
+		assert.Equal(t, "test-cluster-infra", result.Name)
+		assert.Equal(t, "test-namespace", result.Namespace)
+		assert.Equal(t, "infra", result.Spec.Name)
+		assert.Equal(t, int64(2), *result.Spec.Replicas)
+		assert.Equal(t, "r5.xlarge", result.Spec.Platform.AWS.InstanceType)
+		assert.Equal(t, 300, result.Spec.Platform.AWS.Size)
+
+		// Verify original is unchanged
+		assert.Equal(t, "io1", originalMp.Spec.Platform.AWS.Type)
+		assert.Equal(t, 3000, originalMp.Spec.Platform.AWS.IOPS)
+	})
+
+	t.Run("modifier error is propagated", func(t *testing.T) {
+		r := &Infra{
+			MachinePoolModifier: func(mp *hivev1.MachinePool) error {
+				return fmt.Errorf("infra volumes are already gp3")
+			},
+		}
+
+		result, err := r.cloneAndModifyMachinePool(originalMp)
+		assert.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "infra volumes are already gp3")
+	})
+}
+
+func int64Ptr(i int64) *int64 {
+	return &i
+}
