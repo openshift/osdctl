@@ -60,6 +60,14 @@ type Infra struct {
 
 	// OHSS ticket to reference in SL
 	ohss string
+
+	// MachinePoolModifier is an optional function that modifies a cloned MachinePool.
+	// If set, it is used instead of embiggenMachinePool during the machinepool dance.
+	// This allows external callers (e.g., change-ebs-volume-type) to reuse the dance.
+	MachinePoolModifier func(*hivev1.MachinePool) error
+
+	// SkipServiceLog controls whether to skip posting a service log after the dance.
+	SkipServiceLog bool
 }
 
 func newCmdResizeInfra() *cobra.Command {
@@ -101,6 +109,20 @@ func newCmdResizeInfra() *cobra.Command {
 	_ = infraResizeCmd.MarkFlagRequired("ohss")
 
 	return infraResizeCmd
+}
+
+// NewInfraFromClients creates an Infra instance with pre-configured clients.
+// This is used by external callers (e.g., change-ebs-volume-type) that set up
+// their own clients and want to reuse the machinepool dance.
+func NewInfraFromClients(cluster *cmv1.Cluster, clusterClient, hiveClient, hiveAdminClient client.Client, reason string) *Infra {
+	return &Infra{
+		client:    clusterClient,
+		hive:      hiveClient,
+		hiveAdmin: hiveAdminClient,
+		cluster:   cluster,
+		clusterId: cluster.ID(),
+		reason:    reason,
+	}
 }
 
 func (r *Infra) New() error {
@@ -171,38 +193,50 @@ func (r *Infra) RunInfra(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize command: %v", err)
 	}
 
-	log.Printf("resizing infra nodes for %s - %s", r.cluster.Name(), r.clusterId)
+	return r.RunMachinePoolDance(ctx)
+}
+
+// RunMachinePoolDance performs the machinepool dance to replace infra nodes.
+// It can be called directly by external callers who have already initialized
+// clients via NewInfraFromClients and set a MachinePoolModifier.
+func (r *Infra) RunMachinePoolDance(ctx context.Context) error {
+	log.Printf("replacing infra nodes for %s - %s", r.cluster.Name(), r.clusterId)
 	originalMp, err := r.getInfraMachinePool(ctx)
 	if err != nil {
 		return err
 	}
-	originalInstanceType, err := getInstanceType(originalMp)
-	if err != nil {
-		return fmt.Errorf("failed to parse instance type from machinepool: %v", err)
+
+	var newMp *hivev1.MachinePool
+	if r.MachinePoolModifier != nil {
+		newMp, err = r.cloneAndModifyMachinePool(originalMp)
+		if err != nil {
+			return err
+		}
+	} else {
+		originalInstanceType, err := getInstanceType(originalMp)
+		if err != nil {
+			return fmt.Errorf("failed to parse instance type from machinepool: %v", err)
+		}
+		log.Printf("current instance type: %s", originalInstanceType)
+		newMp, err = r.embiggenMachinePool(originalMp)
+		if err != nil {
+			return err
+		}
 	}
 
-	newMp, err := r.embiggenMachinePool(originalMp)
-	if err != nil {
-		return err
-	}
 	tempMp := newMp.DeepCopy()
 	tempMp.Name = fmt.Sprintf("%s2", tempMp.Name)
 	tempMp.Spec.Name = fmt.Sprintf("%s2", tempMp.Spec.Name)
 	tempMp.Spec.Labels[temporaryInfraNodeLabel] = ""
 
-	instanceType, err := getInstanceType(tempMp)
-	if err != nil {
-		return fmt.Errorf("failed to parse instance type from machinepool: %v", err)
-	}
-
 	// Create the temporary machinepool
-	log.Printf("planning to resize to instance type from %s to %s", originalInstanceType, instanceType)
+	log.Printf("planning to replace infra nodes")
 	if !utils.ConfirmPrompt() {
 		log.Printf("exiting")
 		return nil
 	}
 
-	log.Printf("creating temporary machinepool %s, with instance type %s", tempMp.Name, instanceType)
+	log.Printf("creating temporary machinepool %s", tempMp.Name)
 	if err := r.hiveAdmin.Create(ctx, tempMp); err != nil {
 		return err
 	}
@@ -276,7 +310,7 @@ func (r *Infra) RunInfra(ctx context.Context) error {
 	}
 
 	// Delete original machinepool
-	log.Printf("deleting original machinepool %s, with instance type %s", originalMp.Name, originalInstanceType)
+	log.Printf("deleting original machinepool %s", originalMp.Name)
 	if err := r.hiveAdmin.Delete(ctx, originalMp); err != nil {
 		return err
 	}
@@ -329,7 +363,7 @@ func (r *Infra) RunInfra(ctx context.Context) error {
 	}
 
 	// Create new permanent machinepool
-	log.Printf("creating new machinepool %s, with instance type %s", newMp.Name, instanceType)
+	log.Printf("creating new permanent machinepool %s", newMp.Name)
 	if err := r.hiveAdmin.Create(ctx, newMp); err != nil {
 		return err
 	}
@@ -378,7 +412,7 @@ func (r *Infra) RunInfra(ctx context.Context) error {
 	}
 
 	// Delete temp machinepool
-	log.Printf("deleting temporary machinepool %s, with instance type %s", tempMp.Name, instanceType)
+	log.Printf("deleting temporary machinepool %s", tempMp.Name)
 	if err := r.hiveAdmin.Delete(ctx, tempMp); err != nil {
 		return err
 	}
@@ -448,11 +482,13 @@ func (r *Infra) RunInfra(ctx context.Context) error {
 		}
 	}
 
-	postCmd := generateServiceLog(tempMp, r.instanceType, r.justification, r.clusterId, r.ohss)
-	if err := postCmd.Run(); err != nil {
-		fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
-		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
-			r.clusterId, resizedInfraNodeServiceLogTemplate, strings.Join(postCmd.TemplateParams, " -p "))
+	if !r.SkipServiceLog {
+		postCmd := generateServiceLog(tempMp, r.instanceType, r.justification, r.clusterId, r.ohss)
+		if err := postCmd.Run(); err != nil {
+			fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
+			fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
+				r.clusterId, resizedInfraNodeServiceLogTemplate, strings.Join(postCmd.TemplateParams, " -p "))
+		}
 	}
 
 	return nil
@@ -487,6 +523,26 @@ func (r *Infra) getInfraMachinePool(ctx context.Context) (*hivev1.MachinePool, e
 	}
 
 	return nil, fmt.Errorf("did not find the infra machinepool in namespace: %s", ns.Items[0].Name)
+}
+
+// cloneAndModifyMachinePool clones a MachinePool, resets metadata fields,
+// and applies the MachinePoolModifier function.
+func (r *Infra) cloneAndModifyMachinePool(mp *hivev1.MachinePool) (*hivev1.MachinePool, error) {
+	newMp := &hivev1.MachinePool{}
+	mp.DeepCopyInto(newMp)
+
+	newMp.CreationTimestamp = metav1.Time{}
+	newMp.Finalizers = []string{}
+	newMp.ResourceVersion = ""
+	newMp.Generation = 0
+	newMp.UID = ""
+	newMp.Status = hivev1.MachinePoolStatus{}
+
+	if err := r.MachinePoolModifier(newMp); err != nil {
+		return nil, err
+	}
+
+	return newMp, nil
 }
 
 func (r *Infra) embiggenMachinePool(mp *hivev1.MachinePool) (*hivev1.MachinePool, error) {
