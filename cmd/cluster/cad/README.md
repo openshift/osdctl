@@ -23,6 +23,7 @@ osdctl cluster cad run \
 - `--investigation` / `-i`: Investigation to run (see available investigations below)
 - `--environment` / `-e`: Target cluster environment (`stage` or `production`). This is kept explicit, because the pipeline will silently fail if this parameter isn't correct
 - `--reason`: Elevation reason for backplane access (e.g., `OHSS-1234` or `#ITN-2024-12345`)
+- `--dry-run` / `-d`: Run the investigation with the dry-run flag. This will not create a report
 
 ### Available Investigations
 
@@ -36,6 +37,7 @@ osdctl cluster cad run \
 - `machine-health-check` - Machine Health Check
 - `must-gather` - Must-Gather Collection
 - `upgrade-config` - Upgrade Configuration Check
+- `restart-controlplane` - Restart Control Plane
 
 ### Example
 
