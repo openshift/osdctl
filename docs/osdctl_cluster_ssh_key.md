@@ -44,10 +44,11 @@ Despite the logs from backplane, the ssh key is the only output channelled throu
 ### Options
 
 ```
-  -C, --cluster-id string   Cluster identifier (internal ID, UUID, name, etc) to retrieve the SSH key for. If not specified, the current cluster will be used.
-  -h, --help                help for key
-      --reason string       Provide a reason for accessing the clusters SSH key, used for backplane. Eg: 'OHSS-XXXX', or '#ITN-2024-XXXXX
-  -y, --yes                 Skip any confirmation prompts and print the key automatically. Useful for redirects and scripting.
+  -C, --cluster-id string     Cluster identifier (internal ID, UUID, name, etc) to retrieve the SSH key for. If not specified, the current cluster will be used.
+  -h, --help                  help for key
+      --hive-ocm-url string   (optional) OCM environment URL for hive operations. Aliases: 'production', 'staging', 'integration'. If not specified, uses the same OCM environment as the target cluster.
+      --reason string         Provide a reason for accessing the clusters SSH key, used for backplane. Eg: 'OHSS-XXXX', or '#ITN-2024-XXXXX
+  -y, --yes                   Skip any confirmation prompts and print the key automatically. Useful for redirects and scripting.
 ```
 
 ### Options inherited from parent commands
