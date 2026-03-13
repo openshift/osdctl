@@ -32,6 +32,7 @@ CLI tool to provide OSD related utilities
 * [osdctl cost](osdctl_cost.md)	 - Cost Management related utilities
 * [osdctl dynatrace](osdctl_dynatrace.md)	 - Dynatrace related utilities
 * [osdctl env](osdctl_env.md)	 - Create an environment to interact with a cluster
+* [osdctl evidence](osdctl_evidence.md)	 - Evidence collection utilities for feature testing
 * [osdctl hcp](osdctl_hcp.md)	 - 
 * [osdctl hive](osdctl_hive.md)	 - hive related utilities
 * [osdctl iampermissions](osdctl_iampermissions.md)	 - STS/WIF utilities

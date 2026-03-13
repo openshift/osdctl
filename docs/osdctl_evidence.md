@@ -1,15 +1,23 @@
-## osdctl cloudtrail
+## osdctl evidence
 
-AWS CloudTrail related utilities
+Evidence collection utilities for feature testing
+
+### Synopsis
+
+Evidence collection utilities for feature testing.
+
+This command group provides tools to help SRE teams collect evidence
+during feature validation testing. The collected evidence can include
+CloudTrail logs, cluster snapshots, and other diagnostic information.
 
 ```
-osdctl cloudtrail [flags]
+osdctl evidence [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for cloudtrail
+  -h, --help   help for evidence
 ```
 
 ### Options inherited from parent commands
@@ -30,7 +38,5 @@ osdctl cloudtrail [flags]
 ### SEE ALSO
 
 * [osdctl](osdctl.md)	 - OSD CLI
-* [osdctl cloudtrail errors](osdctl_cloudtrail_errors.md)	 - Prints CloudTrail error events (permission/IAM issues) to console.
-* [osdctl cloudtrail permission-denied-events](osdctl_cloudtrail_permission-denied-events.md)	 - Prints cloudtrail permission-denied events to console.
-* [osdctl cloudtrail write-events](osdctl_cloudtrail_write-events.md)	 - Prints cloudtrail write events to console with advanced filtering options
+* [osdctl evidence collect](osdctl_evidence_collect.md)	 - Collect evidence from cluster and AWS for feature testing
 
