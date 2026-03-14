@@ -3589,6 +3589,7 @@ osdctl network verify-egress [flags]
       --egress-timeout duration          (optional) timeout for individual egress verification requests (default 5s)
       --gcp-project-id string            (optional) the GCP project ID to run verification for
   -h, --help                             help for verify-egress
+      --hive-ocm-url string              (optional) OCM environment URL for hive operations. Aliases: 'production', 'staging', 'integration'. If not specified, uses the same OCM environment as the target cluster.
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                (optional) path to kubeconfig file for pod mode (uses default kubeconfig if not specified)
       --namespace string                 (optional) Kubernetes namespace to run verification pods in (default "openshift-network-diagnostics")
