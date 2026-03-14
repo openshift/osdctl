@@ -13,9 +13,10 @@ osdctl cluster break-glass --cluster-id <cluster-identifier> [flags]
 ### Options
 
 ```
-  -C, --cluster-id string   Provide the internal ID of the cluster
-  -h, --help                help for break-glass
-      --reason string       The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
+  -C, --cluster-id string     Provide the internal ID of the cluster
+  -h, --help                  help for break-glass
+      --hive-ocm-url string   (optional) OCM environment URL for hive operations. Aliases: 'production', 'staging', 'integration'. If not specified, uses the same OCM environment as the target cluster.
+      --reason string         The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
 ```
 
 ### Options inherited from parent commands
