@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	JiraBaseURL                   = "https://issues.redhat.com"
+	JiraBaseURL                   = "https://redhat.atlassian.net"
 	JiraTokenRegistrationPath     = "/secure/ViewProfile.jspa?selectedTab=com.atlassian.pats.pats-plugin:jira-user-personal-access-tokens" // #nosec G101
 	PagerDutyTokenRegistrationUrl = "https://martindstone.github.io/PDOAuth/"                                                              // #nosec G101
 	ClassicSplunkURL              = "https://osdsecuritylogs.splunkcloud.com/en-US/app/search/search?q=search%%20index%%3D%%22%s%%22%%20clusterid%%3D%%22%s%%22\n\n"

@@ -326,7 +326,7 @@ func TestPrintJIRASupportExceptions(t *testing.T) {
 	output := buf.String()
 
 	expectedStrings := []string{
-		"- Link: https://issues.redhat.com/browse/JIRA-123",
+		"- Link: https://redhat.atlassian.net/browse/JIRA-123",
 	}
 
 	for _, expected := range expectedStrings {

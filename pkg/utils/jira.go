@@ -10,6 +10,7 @@ import (
 
 const (
 	JiraTokenConfigKey = "jira_token"
+	JiraEmailConfigKey = "jira_email"
 )
 
 // JiraClientInterface defines the methods we use from go-jira
@@ -33,7 +34,9 @@ type jiraClientWrapper struct {
 // Full implementation of the interface
 
 func (j *jiraClientWrapper) SearchIssues(jql string) ([]jira.Issue, error) {
-	issues, _, err := j.client.Issue.Search(jql, nil)
+	issues, _, err := j.client.Issue.SearchV2JQL(jql, &jira.SearchOptionsV2{
+		Fields: []string{"*all"},
+	})
 	return issues, err
 }
 
@@ -86,7 +89,22 @@ func getJiraClient(jiratoken string) (JiraClientInterface, error) {
 			return nil, fmt.Errorf("JIRA token is not defined")
 		}
 	}
-	tp := jira.PATAuthTransport{Token: jiratoken}
+
+	var jiraEmail string
+	if viper.IsSet(JiraEmailConfigKey) {
+		jiraEmail = viper.GetString(JiraEmailConfigKey)
+	}
+	if os.Getenv("JIRA_EMAIL") != "" {
+		jiraEmail = os.Getenv("JIRA_EMAIL")
+	}
+	if jiraEmail == "" {
+		return nil, fmt.Errorf("JIRA email is not defined.")
+	}
+
+	tp := jira.BasicAuthTransport{
+		Username: jiraEmail,
+		Password: jiratoken,
+	}
 	client, err := jira.NewClient(tp.Client(), JiraBaseURL)
 	if err != nil {
 		return nil, err
