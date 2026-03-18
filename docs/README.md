@@ -2011,6 +2011,7 @@ osdctl cluster resync [flags]
   -C, --cluster-id string                OCM internal/external cluster id or cluster name to delete the clustersync for.
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for resync
+      --hive-ocm-url string              (optional) OCM environment URL for Hive operations. Aliases: 'production', 'staging', 'integration'. This only changes how the Hive cluster is resolved; the target cluster still comes from the current/default OCM environment.
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']

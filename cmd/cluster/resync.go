@@ -24,8 +24,9 @@ const (
 )
 
 type Resync struct {
-	hive      client.Client
-	clusterId string
+	hive       client.Client
+	clusterId  string
+	hiveOcmUrl string
 }
 
 func newCmdResync() *cobra.Command {
@@ -44,6 +45,9 @@ func newCmdResync() *cobra.Command {
 		Example: `
   # Force a cluster resync by deleting its clustersync CustomResource
   osdctl cluster resync --cluster-id ${CLUSTER_ID}
+
+  # While connected to staging OCM, force a resync using the production Hive environment
+  OCM_URL=staging osdctl cluster resync --cluster-id ${CLUSTER_ID} --hive-ocm-url production
 `,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return r.Run(context.Background())
@@ -51,6 +55,7 @@ func newCmdResync() *cobra.Command {
 	}
 
 	resyncCmd.Flags().StringVarP(&r.clusterId, "cluster-id", "C", "", "OCM internal/external cluster id or cluster name to delete the clustersync for.")
+	resyncCmd.Flags().StringVar(&r.hiveOcmUrl, "hive-ocm-url", "", "(optional) OCM environment URL for Hive operations. Aliases: 'production', 'staging', 'integration'. This only changes how the Hive cluster is resolved; the target cluster still comes from the current/default OCM environment.")
 
 	return resyncCmd
 }
@@ -67,6 +72,22 @@ func (r *Resync) New() error {
 		return err
 	}
 
+	// Validate and resolve --hive-ocm-url if provided
+	if r.hiveOcmUrl != "" {
+		resolvedHiveOcmURL, err := utils.ValidateAndResolveOcmUrl(r.hiveOcmUrl)
+		if err != nil {
+			return fmt.Errorf("invalid --hive-ocm-url: %w", err)
+		}
+		r.hiveOcmUrl = resolvedHiveOcmURL
+	}
+
+	// Check if multi-environment support is needed
+	if r.hiveOcmUrl != "" {
+		// Use new multi-environment path
+		return r.initWithMultiEnv(scheme)
+	}
+
+	// === ORIGINAL PATH (PRESERVED FOR BACKWARD COMPATIBILITY) ===
 	ocmClient, err := utils.CreateConnection()
 	if err != nil {
 		return err
@@ -89,6 +110,48 @@ func (r *Resync) New() error {
 	}
 	r.hive = hc
 	log.Printf("ready to delete clustersync for cluster: %s/%s on hive: %s", cluster.ID(), cluster.Name(), hive.Name())
+
+	return nil
+}
+
+// initWithMultiEnv initializes the Resync struct using separate OCM connections for target cluster and hive
+func (r *Resync) initWithMultiEnv(scheme *runtime.Scheme) error {
+	// Create OCM connection for target cluster (uses system env vars)
+	targetOCM, err := utils.CreateConnection()
+	if err != nil {
+		return fmt.Errorf("failed to create target cluster OCM connection: %w", err)
+	}
+	defer targetOCM.Close()
+
+	// Create separate OCM connection for hive
+	hiveOCM, err := utils.CreateConnectionWithUrl(r.hiveOcmUrl)
+	if err != nil {
+		return fmt.Errorf("failed to create hive OCM connection with URL '%s': %w", r.hiveOcmUrl, err)
+	}
+	defer hiveOCM.Close()
+
+	// Get cluster info from target OCM environment
+	cluster, err := utils.GetClusterAnyStatus(targetOCM, r.clusterId)
+	if err != nil {
+		return fmt.Errorf("failed to get OCM cluster info for %s: %w", r.clusterId, err)
+	}
+	r.clusterId = cluster.ID()
+
+	// Get hive cluster using both OCM connections
+	hive, err := utils.GetHiveClusterWithConn(cluster.ID(), targetOCM, hiveOCM)
+	if err != nil {
+		return fmt.Errorf("failed to get hive cluster (OCM URL:'%s'): %w", r.hiveOcmUrl, err)
+	}
+
+	// Create k8s client for hive using the hive OCM connection
+	hc, err := k8s.NewWithConn(hive.ID(), client.Options{Scheme: scheme}, hiveOCM)
+	if err != nil {
+		return fmt.Errorf("failed to create hive k8s client(OCM URL:'%s'): %w", r.hiveOcmUrl, err)
+	}
+
+	r.hive = hc
+	log.Printf("ready to delete clustersync for cluster: %s/%s on hive: %s (using hive OCM URL: %s)",
+		cluster.ID(), cluster.Name(), hive.Name(), r.hiveOcmUrl)
 
 	return nil
 }
