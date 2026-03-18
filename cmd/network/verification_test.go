@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/openshift/osd-network-verifier/pkg/probes/curl"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
 	"github.com/openshift/osdctl/cmd/servicelog"
+	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -73,6 +75,46 @@ func TestEgressVerification_ValidateInput(t *testing.T) {
 			},
 			wantError: false,
 		},
+		{
+			name: "valid_hive_ocm_url_production",
+			ev: &EgressVerification{
+				SubnetIds:  []string{"subnet-123"},
+				hiveOcmUrl: "production",
+			},
+			wantError: false,
+		},
+		{
+			name: "valid_hive_ocm_url_staging",
+			ev: &EgressVerification{
+				SubnetIds:  []string{"subnet-123"},
+				hiveOcmUrl: "staging",
+			},
+			wantError: false,
+		},
+		{
+			name: "valid_hive_ocm_url_integration",
+			ev: &EgressVerification{
+				SubnetIds:  []string{"subnet-123"},
+				hiveOcmUrl: "integration",
+			},
+			wantError: false,
+		},
+		{
+			name: "valid_hive_ocm_url_full_url",
+			ev: &EgressVerification{
+				SubnetIds:  []string{"subnet-123"},
+				hiveOcmUrl: "https://api.openshift.com",
+			},
+			wantError: false,
+		},
+		{
+			name: "invalid_hive_ocm_url",
+			ev: &EgressVerification{
+				SubnetIds:  []string{"subnet-123"},
+				hiveOcmUrl: "invalid-environment",
+			},
+			wantError: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -82,6 +124,68 @@ func TestEgressVerification_ValidateInput(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// TestHiveOcmUrlValidation tests the validation of --hive-ocm-url flag
+func TestHiveOcmUrlValidation(t *testing.T) {
+	tests := []struct {
+		name        string
+		hiveOcmUrl  string
+		expectErr   bool
+		errContains string
+	}{
+		{
+			name:       "Valid hive-ocm-url (production)",
+			hiveOcmUrl: "production",
+			expectErr:  false,
+		},
+		{
+			name:       "Valid hive-ocm-url (staging)",
+			hiveOcmUrl: "staging",
+			expectErr:  false,
+		},
+		{
+			name:       "Valid hive-ocm-url (integration)",
+			hiveOcmUrl: "integration",
+			expectErr:  false,
+		},
+		{
+			name:       "Valid hive-ocm-url (full URL)",
+			hiveOcmUrl: "https://api.openshift.com",
+			expectErr:  false,
+		},
+		{
+			name:        "Invalid hive-ocm-url",
+			hiveOcmUrl:  "invalid-environment",
+			expectErr:   true,
+			errContains: "invalid OCM_URL",
+		},
+		{
+			name:        "Empty hive-ocm-url",
+			hiveOcmUrl:  "",
+			expectErr:   true,
+			errContains: "empty OCM URL",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// This simulates the validation that occurs in the validateInput() method
+			_, err := utils.ValidateAndResolveOcmUrl(tt.hiveOcmUrl)
+
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("Expected error containing '%s', but got nil", tt.errContains)
+				} else if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("Expected error containing '%s', but got: %v", tt.errContains, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, but got: %v", err)
+				}
 			}
 		})
 	}

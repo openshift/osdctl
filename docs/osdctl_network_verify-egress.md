@@ -64,6 +64,13 @@ osdctl network verify-egress [flags]
   # Run network verification without sending service logs on failure
   osdctl network verify-egress --cluster-id my-rosa-cluster --skip-service-log
 
+  # For a classic cluster that needs automatic proxy CA-bundle retrieval,
+  # target staging OCM while querying Hive from production
+  # (Note: --hive-ocm-url only applies to Hive-backed CA-bundle lookup)
+  export OCM_URL=staging
+  ocm login
+  osdctl network verify-egress --cluster-id my-staging-cluster --hive-ocm-url production
+
   # (Not recommended) Run against a specific VPC, without specifying cluster-id
   <export environment variables like AWS_ACCESS_KEY_ID or use aws configure>
   osdctl network verify-egress --subnet-id subnet-abcdefg123 --security-group sg-abcdefgh123 --region us-east-1
@@ -80,6 +87,7 @@ osdctl network verify-egress [flags]
       --egress-timeout duration   (optional) timeout for individual egress verification requests (default 5s)
       --gcp-project-id string     (optional) the GCP project ID to run verification for
   -h, --help                      help for verify-egress
+      --hive-ocm-url string       (optional) OCM environment URL for hive operations. Aliases: 'production', 'staging', 'integration'. If not specified, uses the same OCM environment as the target cluster.
       --kubeconfig string         (optional) path to kubeconfig file for pod mode (uses default kubeconfig if not specified)
       --namespace string          (optional) Kubernetes namespace to run verification pods in (default "openshift-network-diagnostics")
       --no-tls                    (optional) if provided, ignore all ssl certificate validations on client-side.
