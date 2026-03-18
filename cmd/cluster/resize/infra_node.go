@@ -60,6 +60,9 @@ type Infra struct {
 
 	// OHSS ticket to reference in SL
 	ohss string
+
+	// hiveOcmUrl is the OCM environment URL for Hive operations
+	hiveOcmUrl string
 }
 
 func newCmdResizeInfra() *cobra.Command {
@@ -94,6 +97,7 @@ func newCmdResizeInfra() *cobra.Command {
 	infraResizeCmd.Flags().StringVar(&r.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
 	infraResizeCmd.Flags().StringVar(&r.justification, "justification", "", "The justification behind resize")
 	infraResizeCmd.Flags().StringVar(&r.ohss, "ohss", "", "OHSS ticket tracking this infra node resize")
+	infraResizeCmd.Flags().StringVar(&r.hiveOcmUrl, "hive-ocm-url", "", "(optional) OCM environment URL for hive operations. Aliases: 'production', 'staging', 'integration'. If not specified, uses the same OCM environment as the target cluster.")
 
 	_ = infraResizeCmd.MarkFlagRequired("cluster-id")
 	_ = infraResizeCmd.MarkFlagRequired("justification")
@@ -111,6 +115,14 @@ func (r *Infra) New() error {
 		}
 	}
 
+	// Validate --hive-ocm-url if provided
+	if r.hiveOcmUrl != "" {
+		_, err := utils.ValidateAndResolveOcmUrl(r.hiveOcmUrl)
+		if err != nil {
+			return fmt.Errorf("invalid --hive-ocm-url: %w", err)
+		}
+	}
+
 	scheme := runtime.NewScheme()
 
 	if err := machinev1beta1.Install(scheme); err != nil {
@@ -123,42 +135,92 @@ func (r *Infra) New() error {
 		return err
 	}
 
-	ocmClient, err := utils.CreateConnection()
-	if err != nil {
-		return err
-	}
-	defer ocmClient.Close()
-	cluster, err := utils.GetClusterAnyStatus(ocmClient, r.clusterId)
-	if err != nil {
-		return fmt.Errorf("failed to get OCM cluster info for %s: %s", r.clusterId, err)
-	}
-	r.cluster = cluster
-	r.clusterId = cluster.ID()
+	var hive *cmv1.Cluster
+	var c, hc, hac client.Client
 
-	hive, err := utils.GetHiveCluster(cluster.ID())
-	if err != nil {
-		return err
+	if r.hiveOcmUrl != "" {
+		// Multi-environment path - enables staging/integration testing
+		targetOCM, err := utils.CreateConnection()
+		if err != nil {
+			return fmt.Errorf("failed to create target OCM connection: %w", err)
+		}
+		defer targetOCM.Close()
+
+		hiveOCM, err := utils.CreateConnectionWithUrl(r.hiveOcmUrl)
+		if err != nil {
+			return fmt.Errorf("failed to create hive OCM connection with URL '%s': %w", r.hiveOcmUrl, err)
+		}
+		defer hiveOCM.Close()
+
+		cluster, err := utils.GetClusterAnyStatus(targetOCM, r.clusterId)
+		if err != nil {
+			return fmt.Errorf("failed to get OCM cluster info for %s: %s", r.clusterId, err)
+		}
+		r.cluster = cluster
+		r.clusterId = cluster.ID()
+
+		hive, err = utils.GetHiveClusterWithConn(cluster.ID(), targetOCM, hiveOCM)
+		if err != nil {
+			return fmt.Errorf("failed to get hive cluster (OCM URL:'%s'): %w", r.hiveOcmUrl, err)
+		}
+
+		c, err = k8s.New(cluster.ID(), client.Options{Scheme: scheme})
+		if err != nil {
+			return err
+		}
+
+		hc, err = k8s.NewWithConn(hive.ID(), client.Options{Scheme: scheme}, hiveOCM)
+		if err != nil {
+			return fmt.Errorf("failed to create hive k8s client (OCM URL:'%s'): %w", r.hiveOcmUrl, err)
+		}
+
+		hac, err = k8s.NewAsBackplaneClusterAdminWithConn(hive.ID(), client.Options{Scheme: scheme}, hiveOCM, []string{
+			r.reason,
+			fmt.Sprintf("Need elevation for %s cluster in order to resize it to instance type %s", r.clusterId, r.instanceType),
+		}...)
+		if err != nil {
+			return fmt.Errorf("failed to create hive admin k8s client (OCM URL:'%s'): %w", r.hiveOcmUrl, err)
+		}
+	} else {
+		// Original path - backward compatible
+		ocmClient, err := utils.CreateConnection()
+		if err != nil {
+			return err
+		}
+		defer ocmClient.Close()
+
+		cluster, err := utils.GetClusterAnyStatus(ocmClient, r.clusterId)
+		if err != nil {
+			return fmt.Errorf("failed to get OCM cluster info for %s: %s", r.clusterId, err)
+		}
+		r.cluster = cluster
+		r.clusterId = cluster.ID()
+
+		hive, err = utils.GetHiveCluster(cluster.ID())
+		if err != nil {
+			return err
+		}
+
+		c, err = k8s.New(cluster.ID(), client.Options{Scheme: scheme})
+		if err != nil {
+			return err
+		}
+
+		hc, err = k8s.New(hive.ID(), client.Options{Scheme: scheme})
+		if err != nil {
+			return err
+		}
+
+		hac, err = k8s.NewAsBackplaneClusterAdmin(hive.ID(), client.Options{Scheme: scheme}, []string{
+			r.reason,
+			fmt.Sprintf("Need elevation for %s cluster in order to resize it to instance type %s", r.clusterId, r.instanceType),
+		}...)
+		if err != nil {
+			return err
+		}
 	}
 
-	c, err := k8s.New(cluster.ID(), client.Options{Scheme: scheme})
-	if err != nil {
-		return err
-	}
-
-	hc, err := k8s.New(hive.ID(), client.Options{Scheme: scheme})
-	if err != nil {
-		return err
-	}
-
-	hac, err := k8s.NewAsBackplaneClusterAdmin(hive.ID(), client.Options{Scheme: scheme}, []string{
-		r.reason,
-		fmt.Sprintf("Need elevation for %s cluster in order to resize it to instance type %s", r.clusterId, r.instanceType),
-	}...)
-	if err != nil {
-		return err
-	}
-
-	r.clusterId = cluster.ID()
+	r.clusterId = r.cluster.ID()
 	r.client = c
 	r.hive = hc
 	r.hiveAdmin = hac
