@@ -438,3 +438,82 @@ func TestGetKubeConfigSecret(t *testing.T) {
 		})
 	}
 }
+
+// TestClusterAccessOptions_accessCmdComplete tests the early validation of cluster-id and hive-ocm-url
+func TestClusterAccessOptions_accessCmdComplete(t *testing.T) {
+	tests := []struct {
+		name        string
+		clusterID   string
+		hiveOcmUrl  string
+		expectErr   bool
+		errContains string
+	}{
+		{
+			name:       "Valid cluster ID, no hive-ocm-url",
+			clusterID:  "test-cluster-123",
+			hiveOcmUrl: "",
+			expectErr:  false,
+		},
+		{
+			name:       "Valid cluster ID, valid hive-ocm-url (production)",
+			clusterID:  "test-cluster-123",
+			hiveOcmUrl: "production",
+			expectErr:  false,
+		},
+		{
+			name:       "Valid cluster ID, valid hive-ocm-url (staging)",
+			clusterID:  "test-cluster-123",
+			hiveOcmUrl: "staging",
+			expectErr:  false,
+		},
+		{
+			name:       "Valid cluster ID, valid hive-ocm-url (integration)",
+			clusterID:  "test-cluster-123",
+			hiveOcmUrl: "integration",
+			expectErr:  false,
+		},
+		{
+			name:       "Valid cluster ID, valid hive-ocm-url (full URL)",
+			clusterID:  "test-cluster-123",
+			hiveOcmUrl: "https://api.openshift.com",
+			expectErr:  false,
+		},
+		{
+			name:        "Valid cluster ID, invalid hive-ocm-url",
+			clusterID:   "test-cluster-123",
+			hiveOcmUrl:  "invalid-environment",
+			expectErr:   true,
+			errContains: "invalid --hive-ocm-url",
+		},
+		{
+			name:        "Empty cluster ID",
+			clusterID:   "",
+			hiveOcmUrl:  "",
+			expectErr:   true,
+			errContains: "isn't valid",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &clusterAccessOptions{
+				clusterID:  tt.clusterID,
+				hiveOcmUrl: tt.hiveOcmUrl,
+			}
+
+			err := c.accessCmdComplete()
+
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("Expected error containing '%s', but got nil", tt.errContains)
+				} else if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("Expected error containing '%s', but got: %v", tt.errContains, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, but got: %v", err)
+				}
+			}
+		})
+	}
+}
