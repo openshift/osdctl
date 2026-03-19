@@ -1,0 +1,18 @@
+Trigger a Velero backup for an HCP cluster using the cluster's existing daily schedule.
+
+This command:
+  1. Logs into the Management Cluster for the given HCP cluster (unprivileged)
+  2. Validates the Velero schedule exists in the openshift-adp namespace
+  3. Logs into the Management Cluster again with elevated permissions (backplane-cluster-admin)
+  4. Triggers an immediate backup from the schedule via velero backup create --from-schedule
+
+Optional metadata can be attached to the Velero Backup CR:
+
+  --label key=value       Add a label to the Backup CR (may be repeated)
+  --annotation key=value  Add an annotation to the Backup CR (may be repeated)
+
+This command only triggers the backup. It does not wait for completion.
+To monitor the backup status after triggering, log into the management cluster
+and review the Backup CR:
+  ocm backplane login --manager <CLUSTER_ID>
+  oc get backup <backup-id> -n openshift-adp
