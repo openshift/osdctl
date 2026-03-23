@@ -5,11 +5,12 @@ import (
 	"os"
 
 	"github.com/andygrunwald/go-jira"
-	"github.com/spf13/viper"
+	"github.com/openshift/osdctl/pkg/osdctlConfig"
 )
 
 const (
 	JiraTokenConfigKey = "jira_token"
+	JiraEmailConfigKey = "jira_email"
 )
 
 // JiraClientInterface defines the methods we use from go-jira
@@ -33,7 +34,9 @@ type jiraClientWrapper struct {
 // Full implementation of the interface
 
 func (j *jiraClientWrapper) SearchIssues(jql string) ([]jira.Issue, error) {
-	issues, _, err := j.client.Issue.Search(jql, nil)
+	issues, _, err := j.client.Issue.SearchV2JQL(jql, &jira.SearchOptionsV2{
+		Fields: []string{"*all"},
+	})
 	return issues, err
 }
 
@@ -75,18 +78,47 @@ var NewJiraClient = func(jiraToken string) (JiraClientInterface, error) {
 }
 
 func getJiraClient(jiratoken string) (JiraClientInterface, error) {
+	// Check env vars first, then fall back to config file.
+	// TODO: Remove this workaround once backplane-cli stops overwriting the global viper instance.
 	if jiratoken == "" {
-		if viper.IsSet(JiraTokenConfigKey) {
-			jiratoken = viper.GetString(JiraTokenConfigKey)
-		}
-		if os.Getenv("JIRA_API_TOKEN") != "" {
-			jiratoken = os.Getenv("JIRA_API_TOKEN")
-		}
-		if jiratoken == "" {
-			return nil, fmt.Errorf("JIRA token is not defined")
+		if envToken := os.Getenv("JIRA_API_TOKEN"); envToken != "" {
+			jiratoken = envToken
 		}
 	}
-	tp := jira.PATAuthTransport{Token: jiratoken}
+	jiraEmail := os.Getenv("JIRA_EMAIL")
+
+	// Fall back to config file for any values not set via env/flags.
+	if jiratoken == "" || jiraEmail == "" {
+		configVals, err := osdctlConfig.GetConfigValues(JiraTokenConfigKey, JiraEmailConfigKey)
+		if err != nil {
+			if jiratoken == "" {
+				return nil, fmt.Errorf("JIRA token is not defined and failed to load config: %w", err)
+			}
+			if jiraEmail == "" {
+				return nil, fmt.Errorf("JIRA email is not defined and failed to load config: %w", err)
+			}
+		}
+		if err == nil {
+			if jiratoken == "" {
+				jiratoken = configVals[JiraTokenConfigKey]
+			}
+			if jiraEmail == "" {
+				jiraEmail = configVals[JiraEmailConfigKey]
+			}
+		}
+	}
+
+	if jiratoken == "" {
+		return nil, fmt.Errorf("JIRA token is not defined")
+	}
+	if jiraEmail == "" {
+		return nil, fmt.Errorf("JIRA email is not defined. Set it via JIRA_EMAIL env var or `jira_email` in ~/.config/%s", osdctlConfig.ConfigFileName)
+	}
+
+	tp := jira.BasicAuthTransport{
+		Username: jiraEmail,
+		Password: jiratoken,
+	}
 	client, err := jira.NewClient(tp.Client(), JiraBaseURL)
 	if err != nil {
 		return nil, err

@@ -23,7 +23,7 @@ type fieldQuery struct {
 
 const (
 	JiraHandoverAnnouncementProjectName = "SRE Platform HandOver Announcements"
-	JiraBaseURL                         = "https://issues.redhat.com"
+	JiraBaseURL                         = "https://redhat.atlassian.net"
 	ProductCustomField                  = "customfield_12319040"
 	CustomerNameCustomField             = "customfield_12310160"
 	ClusterIDCustomField                = "customfield_12316349"

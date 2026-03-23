@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	JiraBaseURL                   = "https://issues.redhat.com"
+	JiraBaseURL                   = "https://redhat.atlassian.net"
 	JiraTokenRegistrationPath     = "/secure/ViewProfile.jspa?selectedTab=com.atlassian.pats.pats-plugin:jira-user-personal-access-tokens" // #nosec G101
 	PagerDutyTokenRegistrationUrl = "https://martindstone.github.io/PDOAuth/"                                                              // #nosec G101
 	ClassicSplunkURL              = "https://osdsecuritylogs.splunkcloud.com/en-US/app/search/search?q=search%%20index%%3D%%22%s%%22%%20clusterid%%3D%%22%s%%22\n\n"
@@ -362,6 +362,7 @@ func (o *contextOptions) printJsonOutput(data *contextData, w io.Writer) {
 func (o *contextOptions) generateContextData() (*contextData, []error) {
 	data := &contextData{}
 	var dataErrors []error
+	var mu sync.Mutex
 
 	wg := sync.WaitGroup{}
 
@@ -442,7 +443,9 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		defer utils.StartDelayTracker(o.verbose, "Limited Support reasons").End()
 		limitedSupportReasons, err := utils.GetClusterLimitedSupportReasons(ocmClient, o.clusterID)
 		if err != nil {
+			mu.Lock()
 			dataErrors = append(dataErrors, fmt.Errorf("error while getting Limited Support status reasons: %v", err))
+			mu.Unlock()
 		} else {
 			data.LimitedSupportReasons = append(data.LimitedSupportReasons, limitedSupportReasons...)
 		}
@@ -452,22 +455,32 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Service Logs").End()
 		timeToCheckSvcLogs := time.Now().AddDate(0, 0, -o.days)
-		data.ServiceLogs, err = servicelog.GetServiceLogsSince(o.clusterID, timeToCheckSvcLogs, false, false)
-		if err != nil {
-			dataErrors = append(dataErrors, fmt.Errorf("error while getting the service logs: %v", err))
+		svcLogs, svcErr := servicelog.GetServiceLogsSince(o.clusterID, timeToCheckSvcLogs, false, false)
+		if svcErr != nil {
+			mu.Lock()
+			dataErrors = append(dataErrors, fmt.Errorf("error while getting the service logs: %v", svcErr))
+			mu.Unlock()
+		} else {
+			data.ServiceLogs = svcLogs
 		}
 	}
 
 	GetBannedUser := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Check Banned User").End()
-		subscription, err := utils.GetSubscription(ocmClient, data.ClusterID)
-		if err != nil {
-			dataErrors = append(dataErrors, fmt.Errorf("error while getting subscription %v", err))
+		subscription, subErr := utils.GetSubscription(ocmClient, data.ClusterID)
+		if subErr != nil {
+			mu.Lock()
+			dataErrors = append(dataErrors, fmt.Errorf("error while getting subscription %v", subErr))
+			mu.Unlock()
+			return
 		}
-		creator, err := utils.GetAccount(ocmClient, subscription.Creator().ID())
-		if err != nil {
-			dataErrors = append(dataErrors, fmt.Errorf("error while checking if user is banned %v", err))
+		creator, accErr := utils.GetAccount(ocmClient, subscription.Creator().ID())
+		if accErr != nil {
+			mu.Lock()
+			dataErrors = append(dataErrors, fmt.Errorf("error while checking if user is banned %v", accErr))
+			mu.Unlock()
+			return
 		}
 		data.UserBanned = creator.Banned()
 		data.BanCode = creator.BanCode()
@@ -477,33 +490,48 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	GetJiraIssues := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Jira Issues").End()
-		data.JiraIssues, err = utils.GetJiraIssuesForCluster(o.clusterID, o.externalClusterID, o.jiratoken)
-		if err != nil {
-			dataErrors = append(dataErrors, fmt.Errorf("error while getting the open jira tickets: %v", err))
+		jiraIssues, jiraErr := utils.GetJiraIssuesForCluster(o.clusterID, o.externalClusterID, o.jiratoken)
+		if jiraErr != nil {
+			mu.Lock()
+			dataErrors = append(dataErrors, fmt.Errorf("error while getting the open jira tickets: %v", jiraErr))
+			mu.Unlock()
+		} else {
+			data.JiraIssues = jiraIssues
 		}
 	}
 
 	GetHandoverAnnouncements := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Handover Announcements").End()
-		org, err := utils.GetOrganization(ocmClient, o.clusterID)
-		if err != nil {
-			fmt.Printf("Failed to get Subscription for cluster %s - err: %q", o.clusterID, err)
+		org, orgErr := utils.GetOrganization(ocmClient, o.clusterID)
+		if orgErr != nil {
+			mu.Lock()
+			dataErrors = append(dataErrors, fmt.Errorf("error while getting organization for cluster %s: %v", o.clusterID, orgErr))
+			mu.Unlock()
+			return
 		}
 
 		productID := o.cluster.Product().ID()
-		data.HandoverAnnouncements, err = utils.GetRelatedHandoverAnnouncements(o.clusterID, o.externalClusterID, o.jiratoken, org.Name(), productID, o.cluster.Hypershift().Enabled(), o.cluster.Version().RawID())
-		if err != nil {
-			dataErrors = append(dataErrors, fmt.Errorf("error while getting the open jira tickets: %v", err))
+		announcements, haErr := utils.GetRelatedHandoverAnnouncements(o.clusterID, o.externalClusterID, o.jiratoken, org.Name(), productID, o.cluster.Hypershift().Enabled(), o.cluster.Version().RawID())
+		if haErr != nil {
+			mu.Lock()
+			dataErrors = append(dataErrors, fmt.Errorf("error while getting handover announcements: %v", haErr))
+			mu.Unlock()
+		} else {
+			data.HandoverAnnouncements = announcements
 		}
 	}
 
 	GetSupportExceptions := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Support Exceptions").End()
-		data.SupportExceptions, err = utils.GetJiraSupportExceptionsForOrg(o.organizationID, o.jiratoken)
-		if err != nil {
-			dataErrors = append(dataErrors, fmt.Errorf("error while getting support exceptions: %v", err))
+		exceptions, seErr := utils.GetJiraSupportExceptionsForOrg(o.organizationID, o.jiratoken)
+		if seErr != nil {
+			mu.Lock()
+			dataErrors = append(dataErrors, fmt.Errorf("error while getting support exceptions: %v", seErr))
+			mu.Unlock()
+		} else {
+			data.SupportExceptions = exceptions
 		}
 	}
 
@@ -517,28 +545,35 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			if errors.Is(err, dynatrace.ErrUnsupportedCluster) {
 				data.DyntraceEnvURL = dynatrace.ErrUnsupportedCluster.Error()
 			} else {
+				mu.Lock()
 				dataErrors = append(dataErrors, fmt.Errorf("failed to acquire cluster details %v", err))
+				mu.Unlock()
 				data.DyntraceEnvURL = "Failed to fetch Dynatrace URL"
 			}
 			return
 		}
 		query, err := dynatrace.GetQuery(hcpCluster, time.Time{}, time.Time{}, 1) // passing nil from/to values to use --since behaviour
 		if err != nil {
+			mu.Lock()
 			dataErrors = append(dataErrors, fmt.Errorf("failed to build query for Dynatrace %v", err))
+			mu.Unlock()
 			data.DyntraceEnvURL = fmt.Sprintf("Failed to build Dynatrace query: %v", err)
 			return
 		}
 		queryTxt := query.Build()
 		data.DyntraceEnvURL = hcpCluster.DynatraceURL
-		data.DyntraceLogsURL, err = dynatrace.GetLinkToWebConsole(hcpCluster.DynatraceURL, "now()-10h", "now()", queryTxt)
-		if err != nil {
-			dataErrors = append(dataErrors, fmt.Errorf("failed to get url: %v", err))
+		logsURL, dtErr := dynatrace.GetLinkToWebConsole(hcpCluster.DynatraceURL, "now()-10h", "now()", queryTxt)
+		if dtErr != nil {
+			mu.Lock()
+			dataErrors = append(dataErrors, fmt.Errorf("failed to get url: %v", dtErr))
+			mu.Unlock()
+		} else {
+			data.DyntraceLogsURL = logsURL
 		}
 
 	}
 
 	GetPagerDutyAlerts := func() {
-		pdwg.Add(1)
 		defer wg.Done()
 		defer pdwg.Done()
 
@@ -547,16 +582,23 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		}
 
 		delayTracker := utils.StartDelayTracker(o.verbose, "PagerDuty Service")
-		data.pdServiceID, err = pdProvider.GetPDServiceIDs()
-		if err != nil {
-			dataErrors = append(dataErrors, fmt.Errorf("error getting PD Service ID: %v", err))
+		pdServiceID, pdErr := pdProvider.GetPDServiceIDs()
+		if pdErr != nil {
+			mu.Lock()
+			dataErrors = append(dataErrors, fmt.Errorf("error getting PD Service ID: %v", pdErr))
+			mu.Unlock()
 		}
+		data.pdServiceID = pdServiceID
 		delayTracker.End()
 
 		defer utils.StartDelayTracker(o.verbose, "current PagerDuty Alerts").End()
-		data.PdAlerts, err = pdProvider.GetFiringAlertsForCluster(data.pdServiceID)
-		if err != nil {
-			dataErrors = append(dataErrors, fmt.Errorf("error while getting current PD Alerts: %v", err))
+		pdAlerts, paErr := pdProvider.GetFiringAlertsForCluster(data.pdServiceID)
+		if paErr != nil {
+			mu.Lock()
+			dataErrors = append(dataErrors, fmt.Errorf("error while getting current PD Alerts: %v", paErr))
+			mu.Unlock()
+		} else {
+			data.PdAlerts = pdAlerts
 		}
 	}
 
@@ -566,7 +608,9 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 
 		migrationResponse, err := utils.GetMigration(ocmClient, o.clusterID)
 		if err != nil {
+			mu.Lock()
 			dataErrors = append(dataErrors, fmt.Errorf("error while getting migration info: %v", err))
+			mu.Unlock()
 			return
 		}
 
@@ -586,13 +630,19 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 
 		backplaneClient, er := backplane.NewClient(o.clusterID)
 		if er != nil {
+			mu.Lock()
 			dataErrors = append(dataErrors, fmt.Errorf("error while creating backplane-api client: %v", er))
+			mu.Unlock()
 			return
 		}
 
-		data.clusterReports, err = backplaneClient.ListReports(context.Background(), 0)
-		if err != nil {
-			dataErrors = append(dataErrors, fmt.Errorf("error while fetching cluster reports: %v", err))
+		reports, crErr := backplaneClient.ListReports(context.Background(), 0)
+		if crErr != nil {
+			mu.Lock()
+			dataErrors = append(dataErrors, fmt.Errorf("error while fetching cluster reports: %v", crErr))
+			mu.Unlock()
+		} else {
+			data.clusterReports = reports
 		}
 	}
 
@@ -638,18 +688,26 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			pdwg.Wait()
 			defer wg.Done()
 			defer utils.StartDelayTracker(o.verbose, "historical PagerDuty Alerts").End()
-			data.HistoricalAlerts, err = pdProvider.GetHistoricalAlertsForCluster(data.pdServiceID)
-			if err != nil {
-				dataErrors = append(dataErrors, fmt.Errorf("error while getting historical PD Alert Data: %v", err))
+			histAlerts, haErr := pdProvider.GetHistoricalAlertsForCluster(data.pdServiceID)
+			if haErr != nil {
+				mu.Lock()
+				dataErrors = append(dataErrors, fmt.Errorf("error while getting historical PD Alert Data: %v", haErr))
+				mu.Unlock()
+			} else {
+				data.HistoricalAlerts = histAlerts
 			}
 		}
 
 		GetCloudTrailLogs := func() {
 			defer wg.Done()
 			defer utils.StartDelayTracker(o.verbose, fmt.Sprintf("past %d pages of Cloudtrail data", o.pages)).End()
-			data.CloudtrailEvents, err = GetCloudTrailLogsForCluster(o.awsProfile, o.clusterID, o.pages)
-			if err != nil {
-				dataErrors = append(dataErrors, fmt.Errorf("error getting cloudtrail logs for cluster: %v", err))
+			ctEvents, ctErr := GetCloudTrailLogsForCluster(o.awsProfile, o.clusterID, o.pages)
+			if ctErr != nil {
+				mu.Lock()
+				dataErrors = append(dataErrors, fmt.Errorf("error getting cloudtrail logs for cluster: %v", ctErr))
+				mu.Unlock()
+			} else {
+				data.CloudtrailEvents = ctEvents
 			}
 		}
 
@@ -659,6 +717,10 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			GetCloudTrailLogs,
 		)
 	}
+
+	// Add to pdwg before launching goroutines so pdwg.Wait() in
+	// GetHistoricalPagerDutyAlerts doesn't race with pdwg.Add(1).
+	pdwg.Add(1)
 
 	for _, retriever := range retrievers {
 		wg.Add(1)
