@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/andygrunwald/go-jira"
-	"github.com/spf13/viper"
+	"github.com/openshift/osdctl/pkg/osdctlConfig"
 )
 
 const (
@@ -78,27 +78,41 @@ var NewJiraClient = func(jiraToken string) (JiraClientInterface, error) {
 }
 
 func getJiraClient(jiratoken string) (JiraClientInterface, error) {
+	// Check env vars first, then fall back to config file.
+	// TODO: Remove this workaround once backplane-cli stops overwriting the global viper instance.
 	if jiratoken == "" {
-		if viper.IsSet(JiraTokenConfigKey) {
-			jiratoken = viper.GetString(JiraTokenConfigKey)
+		if envToken := os.Getenv("JIRA_API_TOKEN"); envToken != "" {
+			jiratoken = envToken
 		}
-		if os.Getenv("JIRA_API_TOKEN") != "" {
-			jiratoken = os.Getenv("JIRA_API_TOKEN")
+	}
+	jiraEmail := os.Getenv("JIRA_EMAIL")
+
+	// Fall back to config file for any values not set via env/flags.
+	if jiratoken == "" || jiraEmail == "" {
+		configVals, err := osdctlConfig.GetConfigValues(JiraTokenConfigKey, JiraEmailConfigKey)
+		if err != nil {
+			if jiratoken == "" {
+				return nil, fmt.Errorf("JIRA token is not defined and failed to load config: %w", err)
+			}
+			if jiraEmail == "" {
+				return nil, fmt.Errorf("JIRA email is not defined and failed to load config: %w", err)
+			}
 		}
-		if jiratoken == "" {
-			return nil, fmt.Errorf("JIRA token is not defined")
+		if err == nil {
+			if jiratoken == "" {
+				jiratoken = configVals[JiraTokenConfigKey]
+			}
+			if jiraEmail == "" {
+				jiraEmail = configVals[JiraEmailConfigKey]
+			}
 		}
 	}
 
-	var jiraEmail string
-	if viper.IsSet(JiraEmailConfigKey) {
-		jiraEmail = viper.GetString(JiraEmailConfigKey)
-	}
-	if os.Getenv("JIRA_EMAIL") != "" {
-		jiraEmail = os.Getenv("JIRA_EMAIL")
+	if jiratoken == "" {
+		return nil, fmt.Errorf("JIRA token is not defined")
 	}
 	if jiraEmail == "" {
-		return nil, fmt.Errorf("JIRA email is not defined.")
+		return nil, fmt.Errorf("JIRA email is not defined. Set it via JIRA_EMAIL env var or `jira_email` in ~/.config/%s", osdctlConfig.ConfigFileName)
 	}
 
 	tp := jira.BasicAuthTransport{

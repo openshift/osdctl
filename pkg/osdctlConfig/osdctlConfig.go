@@ -37,3 +37,27 @@ func EnsureConfigFile() error {
 	}
 	return nil
 }
+
+// GetConfigValues reads the osdctl config file using a dedicated viper instance,
+// avoiding the global viper which backplane-cli overwrites concurrently.
+// TODO: Remove this workaround once backplane-cli stops overwriting the global viper instance.
+func GetConfigValues(keys ...string) (map[string]string, error) {
+	configHomePath, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	configFilePath := configHomePath + "/.config/" + ConfigFileName
+
+	v := viper.New()
+	v.SetConfigFile(configFilePath)
+	v.SetConfigType("yaml")
+	if err := v.ReadInConfig(); err != nil {
+		return nil, err
+	}
+
+	values := make(map[string]string, len(keys))
+	for _, k := range keys {
+		values[k] = v.GetString(k)
+	}
+	return values, nil
+}
