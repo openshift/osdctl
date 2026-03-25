@@ -3269,7 +3269,7 @@ Examples:
   # Validate a managed policy against a supplementary test manifest
   osdctl iampermissions simulate \
     --policy-file ./ROSAAmazonEBSCSIDriverOperatorPolicy.json \
-    --manifest-file ./ebs-csi-driver-scenarios.yaml
+    --manifest-file ./ebs-csi-driver.yaml
 
   # Validate all policies in a directory against all manifests
   osdctl iampermissions simulate \
