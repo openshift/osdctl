@@ -31,6 +31,7 @@ func NewCmdIamPermissions() *cobra.Command {
 	iamPermissionsCommand.AddCommand(newCmdGet())
 	iamPermissionsCommand.AddCommand(newCmdDiff())
 	iamPermissionsCommand.AddCommand(newCmdSave())
+	iamPermissionsCommand.AddCommand(newCmdSimulate())
 
 	return iamPermissionsCommand
 }

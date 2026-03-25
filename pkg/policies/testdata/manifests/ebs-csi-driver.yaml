@@ -1,0 +1,163 @@
+component: ebs-csi-driver
+policyName: ROSAAmazonEBSCSIDriverOperatorPolicy
+scenarios:
+  # === Day-2 Tag Reconciliation (CFE-1131) ===
+  - name: "Day-2 standalone CreateTags on volumes (CFE-1131)"
+    description: >
+      CSI driver calls ec2:CreateTags on existing EBS volumes during tag
+      reconciliation without a CreateVolume/CreateSnapshot operation in progress.
+      This was the root cause of CFE-1131 AccessDenied errors.
+    action: ec2:CreateTags
+    resources:
+      - "arn:aws:ec2:*:*:volume/*"
+    context: {}
+    expect: allowed
+
+  - name: "Day-2 standalone CreateTags on snapshots"
+    description: "CSI driver calls CreateTags on existing snapshots during reconciliation"
+    action: ec2:CreateTags
+    resources:
+      - "arn:aws:ec2:*:*:snapshot/*"
+    context: {}
+    expect: allowed
+
+  # === Day-1 Tagging (should work with condition) ===
+  - name: "Day-1 CreateTags during CreateVolume"
+    description: "Tagging at volume creation time - should be allowed by ec2:CreateAction condition"
+    action: ec2:CreateTags
+    resources:
+      - "arn:aws:ec2:*:*:volume/*"
+    context:
+      ec2:CreateAction:
+        type: string
+        values: ["CreateVolume"]
+    expect: allowed
+
+  - name: "Day-1 CreateTags during CreateSnapshot"
+    description: "Tagging at snapshot creation time - should be allowed by ec2:CreateAction condition"
+    action: ec2:CreateTags
+    resources:
+      - "arn:aws:ec2:*:*:snapshot/*"
+    context:
+      ec2:CreateAction:
+        type: string
+        values: ["CreateSnapshot"]
+    expect: allowed
+
+  # === Volume Lifecycle with red-hat-managed tag ===
+  - name: "CreateVolume with red-hat-managed tag"
+    action: ec2:CreateVolume
+    resources:
+      - "arn:aws:ec2:*:*:volume/*"
+    context:
+      aws:RequestTag/red-hat-managed:
+        type: string
+        values: ["true"]
+    expect: allowed
+
+  - name: "AttachVolume on red-hat-managed volume"
+    action: ec2:AttachVolume
+    resources:
+      - "arn:aws:ec2:*:*:volume/*"
+    context:
+      aws:ResourceTag/red-hat-managed:
+        type: string
+        values: ["true"]
+    expect: allowed
+
+  - name: "DetachVolume on red-hat-managed volume"
+    action: ec2:DetachVolume
+    resources:
+      - "arn:aws:ec2:*:*:volume/*"
+    context:
+      aws:ResourceTag/red-hat-managed:
+        type: string
+        values: ["true"]
+    expect: allowed
+
+  - name: "DeleteVolume on red-hat-managed volume"
+    action: ec2:DeleteVolume
+    resources:
+      - "arn:aws:ec2:*:*:volume/*"
+    context:
+      aws:ResourceTag/red-hat-managed:
+        type: string
+        values: ["true"]
+    expect: allowed
+
+  - name: "ModifyVolume on red-hat-managed volume"
+    action: ec2:ModifyVolume
+    resources:
+      - "arn:aws:ec2:*:*:volume/*"
+    context:
+      aws:ResourceTag/red-hat-managed:
+        type: string
+        values: ["true"]
+    expect: allowed
+
+  # === Describe operations (no conditions) ===
+  - name: "DescribeInstances"
+    action: ec2:DescribeInstances
+    resources:
+      - "*"
+    context: {}
+    expect: allowed
+
+  - name: "DescribeVolumes"
+    action: ec2:DescribeVolumes
+    resources:
+      - "*"
+    context: {}
+    expect: allowed
+
+  - name: "DescribeSnapshots"
+    action: ec2:DescribeSnapshots
+    resources:
+      - "*"
+    context: {}
+    expect: allowed
+
+  - name: "DescribeTags"
+    action: ec2:DescribeTags
+    resources:
+      - "*"
+    context: {}
+    expect: allowed
+
+  - name: "DescribeVolumesModifications"
+    action: ec2:DescribeVolumesModifications
+    resources:
+      - "*"
+    context: {}
+    expect: allowed
+
+  # === Snapshot lifecycle ===
+  - name: "CreateSnapshot on red-hat-managed volume"
+    action: ec2:CreateSnapshot
+    resources:
+      - "arn:aws:ec2:*:*:volume/*"
+    context:
+      aws:ResourceTag/red-hat-managed:
+        type: string
+        values: ["true"]
+    expect: allowed
+
+  - name: "CreateSnapshot with red-hat-managed request tag"
+    action: ec2:CreateSnapshot
+    resources:
+      - "arn:aws:ec2:*:*:snapshot/*"
+    context:
+      aws:RequestTag/red-hat-managed:
+        type: string
+        values: ["true"]
+    expect: allowed
+
+  - name: "DeleteSnapshot on red-hat-managed snapshot"
+    action: ec2:DeleteSnapshot
+    resources:
+      - "arn:aws:ec2:*:*:snapshot/*"
+    context:
+      aws:ResourceTag/red-hat-managed:
+        type: string
+        values: ["true"]
+    expect: allowed
