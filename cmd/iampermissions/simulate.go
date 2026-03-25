@@ -59,7 +59,7 @@ Examples:
   # Validate a managed policy against a supplementary test manifest
   osdctl iampermissions simulate \
     --policy-file ./ROSAAmazonEBSCSIDriverOperatorPolicy.json \
-    --manifest-file ./ebs-csi-driver-scenarios.yaml
+    --manifest-file ./ebs-csi-driver.yaml
 
   # Validate all policies in a directory against all manifests
   osdctl iampermissions simulate \
@@ -108,6 +108,9 @@ func (o *simulateOptions) run() error {
 	}
 	if o.ManifestFile == "" && o.ManifestDir == "" && o.ReleaseVersion == "" {
 		return fmt.Errorf("one of --manifest-file, --manifest-dir, or --release-version is required")
+	}
+	if o.ReleaseVersion != "" && o.Cloud != policies.AWS {
+		return fmt.Errorf("unsupported cloud provider %q: only 'aws' is supported for IAM policy simulation", o.Cloud.String())
 	}
 
 	// Create IAM client
@@ -300,17 +303,12 @@ func (o *simulateOptions) runCredentialsRequestSimulations(ctx context.Context, 
 			entries = append(entries, entry)
 		}
 
-		// Try to find a matching policy document; if only one policy is loaded, use it
-		var policyJSON string
-		if len(policyDocs) == 1 {
-			for _, doc := range policyDocs {
-				policyJSON = doc
-			}
-		} else if doc, ok := policyDocs[cr.Name]; ok {
-			policyJSON = doc
-		} else {
-			fmt.Fprintf(os.Stderr, "No matching policy found for CredentialsRequest %s, skipping\n", cr.Name)
-			continue
+		// Find a matching policy document by CredentialsRequest name.
+		// Require an explicit match — never silently skip or assume.
+		policyJSON, ok := policyDocs[cr.Name]
+		if !ok {
+			return nil, fmt.Errorf("no matching policy found for CredentialsRequest %q. Available policies: %v",
+				cr.Name, policyDocNames(policyDocs))
 		}
 
 		fmt.Fprintf(os.Stderr, "Simulating CredentialsRequest %s (%d statements)\n", cr.Name, len(entries))
@@ -326,20 +324,17 @@ func (o *simulateOptions) runCredentialsRequestSimulations(ctx context.Context, 
 }
 
 // findPolicyForManifest finds the policy document that matches a simulation manifest.
+// Requires an explicit match by policyName — never falls back to implicit assignment.
 func findPolicyForManifest(manifest *policies.SimulationManifest, policyDocs map[string]string) (string, error) {
-	// If only one policy is loaded, use it
-	if len(policyDocs) == 1 {
-		for _, doc := range policyDocs {
-			return doc, nil
-		}
+	if manifest.PolicyName == "" {
+		return "", fmt.Errorf("manifest for component %q has no policyName specified", manifest.Component)
 	}
 
-	// Try to match by policy name
 	if doc, ok := policyDocs[manifest.PolicyName]; ok {
 		return doc, nil
 	}
 
-	return "", fmt.Errorf("no matching policy found for manifest %s (policyName: %s). Available policies: %v",
+	return "", fmt.Errorf("no matching policy found for manifest %s (policyName: %q). Available policies: %v",
 		manifest.Component, manifest.PolicyName, policyDocNames(policyDocs))
 }
 
