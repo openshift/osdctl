@@ -8,7 +8,6 @@ import (
 	"log"
 	"slices"
 	"strings"
-	"time"
 
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -18,27 +17,19 @@ import (
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
 	"github.com/openshift/osdctl/cmd/servicelog"
+	infraPkg "github.com/openshift/osdctl/pkg/infra"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/selection"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	twentyMinuteTimeout                   = 20 * time.Minute
-	twentySecondIncrement                 = 20 * time.Second
 	resizedInfraNodeServiceLogTemplate    = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_resized.json"
 	resizedInfraNodeServiceLogTemplateGCP = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/gcp/GCP_infranode_resized_auto.json"
-	infraNodeLabel                        = "node-role.kubernetes.io/infra"
-	temporaryInfraNodeLabel               = "osdctl.openshift.io/infra-resize-temporary-machinepool"
 )
 
 type Infra struct {
@@ -63,14 +54,6 @@ type Infra struct {
 
 	// hiveOcmUrl is the OCM environment URL for Hive operations
 	hiveOcmUrl string
-
-	// MachinePoolModifier is an optional function that modifies a cloned MachinePool.
-	// If set, it is used instead of embiggenMachinePool during the machinepool dance.
-	// This allows external callers (e.g., change-ebs-volume-type) to reuse the dance.
-	MachinePoolModifier func(*hivev1.MachinePool) error
-
-	// SkipServiceLog controls whether to skip posting a service log after the dance.
-	SkipServiceLog bool
 }
 
 func newCmdResizeInfra() *cobra.Command {
@@ -113,20 +96,6 @@ func newCmdResizeInfra() *cobra.Command {
 	_ = infraResizeCmd.MarkFlagRequired("ohss")
 
 	return infraResizeCmd
-}
-
-// NewInfraFromClients creates an Infra instance with pre-configured clients.
-// This is used by external callers (e.g., change-ebs-volume-type) that set up
-// their own clients and want to reuse the machinepool dance.
-func NewInfraFromClients(cluster *cmv1.Cluster, clusterClient, hiveClient, hiveAdminClient client.Client, reason string) *Infra {
-	return &Infra{
-		client:    clusterClient,
-		hive:      hiveClient,
-		hiveAdmin: hiveAdminClient,
-		cluster:   cluster,
-		clusterId: cluster.ID(),
-		reason:    reason,
-	}
 }
 
 func (r *Infra) New() error {
@@ -255,356 +224,49 @@ func (r *Infra) RunInfra(ctx context.Context) error {
 		return fmt.Errorf("failed to initialize command: %v", err)
 	}
 
-	return r.RunMachinePoolDance(ctx)
-}
-
-// RunMachinePoolDance performs the machinepool dance to replace infra nodes.
-// It can be called directly by external callers who have already initialized
-// clients via NewInfraFromClients and set a MachinePoolModifier.
-func (r *Infra) RunMachinePoolDance(ctx context.Context) error {
-	log.Printf("replacing infra nodes for %s - %s", r.cluster.Name(), r.clusterId)
-	originalMp, err := r.getInfraMachinePool(ctx)
+	log.Printf("resizing infra nodes for %s - %s", r.cluster.Name(), r.clusterId)
+	originalMp, err := infraPkg.GetInfraMachinePool(ctx, r.hive, r.clusterId)
 	if err != nil {
 		return err
 	}
-
-	var newMp *hivev1.MachinePool
-	if r.MachinePoolModifier != nil {
-		newMp, err = r.cloneAndModifyMachinePool(originalMp)
-		if err != nil {
-			return err
-		}
-	} else {
-		originalInstanceType, err := getInstanceType(originalMp)
-		if err != nil {
-			return fmt.Errorf("failed to parse instance type from machinepool: %v", err)
-		}
-		log.Printf("current instance type: %s", originalInstanceType)
-		newMp, err = r.embiggenMachinePool(originalMp)
-		if err != nil {
-			return err
-		}
+	originalInstanceType, err := getInstanceType(originalMp)
+	if err != nil {
+		return fmt.Errorf("failed to parse instance type from machinepool: %v", err)
 	}
 
-	tempMp := newMp.DeepCopy()
-	tempMp.Name = fmt.Sprintf("%s2", tempMp.Name)
-	tempMp.Spec.Name = fmt.Sprintf("%s2", tempMp.Spec.Name)
-	tempMp.Spec.Labels[temporaryInfraNodeLabel] = ""
+	newMp, err := r.embiggenMachinePool(originalMp)
+	if err != nil {
+		return err
+	}
+	instanceType, err := getInstanceType(newMp)
+	if err != nil {
+		return fmt.Errorf("failed to parse instance type from machinepool: %v", err)
+	}
 
-	// Create the temporary machinepool
-	log.Printf("planning to replace infra nodes")
+	log.Printf("planning to resize to instance type from %s to %s", originalInstanceType, instanceType)
 	if !utils.ConfirmPrompt() {
 		log.Printf("exiting")
 		return nil
 	}
 
-	log.Printf("creating temporary machinepool %s", tempMp.Name)
-	if err := r.hiveAdmin.Create(ctx, tempMp); err != nil {
+	clients := infraPkg.DanceClients{
+		ClusterClient: r.client,
+		HiveClient:    r.hive,
+		HiveAdmin:     r.hiveAdmin,
+	}
+
+	if err := infraPkg.RunMachinePoolDance(ctx, clients, originalMp, newMp, r.terminateCloudInstances); err != nil {
 		return err
 	}
 
-	// This selector will match all infra nodes
-	selector, err := labels.Parse(infraNodeLabel)
-	if err != nil {
-		return err
-	}
-
-	if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
-		nodes := &corev1.NodeList{}
-
-		if err := r.client.List(ctx, nodes, &client.ListOptions{LabelSelector: selector}); err != nil {
-			log.Printf("error retrieving nodes list, continuing to wait: %s", err)
-			return false, nil
-		}
-
-		readyNodes := 0
-		log.Printf("waiting for %d infra nodes to be reporting Ready", int(*originalMp.Spec.Replicas)*2)
-		for _, node := range nodes.Items {
-			for _, cond := range node.Status.Conditions {
-				if cond.Type == corev1.NodeReady {
-					if cond.Status == corev1.ConditionTrue {
-						readyNodes++
-						log.Printf("found node %s reporting Ready", node.Name)
-					}
-				}
-			}
-		}
-
-		switch {
-		case readyNodes >= int(*originalMp.Spec.Replicas)*2:
-			return true, nil
-		default:
-			log.Printf("found %d infra nodes reporting Ready, continuing to wait", readyNodes)
-			return false, nil
-		}
-	}); err != nil {
-		return err
-	}
-
-	// Identify the original nodes and temp nodes
-	// requireInfra matches all infra nodes using the selector from above
-	requireInfra, err := labels.NewRequirement(infraNodeLabel, selection.Exists, nil)
-	if err != nil {
-		return err
-	}
-
-	// requireNotTempNode matches all nodes that do not have the temporaryInfraNodeLabel, created with the new (temporary) machine pool
-	requireNotTempNode, err := labels.NewRequirement(temporaryInfraNodeLabel, selection.DoesNotExist, nil)
-	if err != nil {
-		return err
-	}
-
-	// requireTempNode matches the opposite of above, all nodes that *do* have the temporaryInfraNodeLabel
-	requireTempNode, err := labels.NewRequirement(temporaryInfraNodeLabel, selection.Exists, nil)
-	if err != nil {
-		return err
-	}
-
-	// infraNode + notTempNode = original nodes
-	originalNodeSelector := selector.Add(*requireInfra, *requireNotTempNode)
-
-	// infraNode + tempNode = temp nodes
-	tempNodeSelector := selector.Add(*requireInfra, *requireTempNode)
-
-	originalNodes := &corev1.NodeList{}
-	if err := r.client.List(ctx, originalNodes, &client.ListOptions{LabelSelector: originalNodeSelector}); err != nil {
-		return err
-	}
-
-	// Delete original machinepool
-	log.Printf("deleting original machinepool %s", originalMp.Name)
-	if err := r.hiveAdmin.Delete(ctx, originalMp); err != nil {
-		return err
-	}
-
-	// Wait for original machinepool to delete
-	if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
-		mp := &hivev1.MachinePool{}
-		err := r.hive.Get(ctx, client.ObjectKey{Namespace: originalMp.Namespace, Name: originalMp.Name}, mp)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return true, nil
-			}
-			log.Printf("error retrieving machines list, continuing to wait: %s", err)
-			return false, nil
-		}
-
-		log.Printf("original machinepool %s/%s still exists, continuing to wait", originalMp.Namespace, originalMp.Name)
-		return false, nil
-	}); err != nil {
-		return err
-	}
-
-	// Wait for original nodes to delete
-	if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
-		// Re-check for originalNodes to see if they have been deleted
-		return skipError(wrapResult(r.nodesMatchExpectedCount(ctx, originalNodeSelector, 0)), "error matching expected count")
-	}); err != nil {
-		switch {
-		case errors.Is(err, wait.ErrWaitTimeout):
-			log.Printf("Warning: timed out waiting for nodes to drain: %v. Terminating backing cloud instances.", err.Error())
-
-			// Terminate the backing cloud instances if they are not removed by the 20 minute timeout
-			err := r.terminateCloudInstances(ctx, originalNodes)
-			if err != nil {
-				return err
-			}
-
-			if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
-				log.Printf("waiting for nodes to terminate")
-				return skipError(wrapResult(r.nodesMatchExpectedCount(ctx, originalNodeSelector, 0)), "error matching expected count")
-			}); err != nil {
-				if errors.Is(err, wait.ErrWaitTimeout) {
-					log.Printf("timed out waiting for nodes to terminate: %v.", err.Error())
-				}
-				return err
-			}
-		default:
-			return err
-		}
-	}
-
-	// Create new permanent machinepool
-	log.Printf("creating new permanent machinepool %s", newMp.Name)
-	if err := r.hiveAdmin.Create(ctx, newMp); err != nil {
-		return err
-	}
-
-	// Wait for new permanent machines to become nodes
-	if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
-		nodes := &corev1.NodeList{}
-		selector, err := labels.Parse("node-role.kubernetes.io/infra=")
-		if err != nil {
-			// This should never happen, so we do not have to skip this error
-			return false, err
-		}
-
-		if err := r.client.List(ctx, nodes, &client.ListOptions{LabelSelector: selector}); err != nil {
-			log.Printf("error retrieving nodes list, continuing to wait: %s", err)
-			return false, nil
-		}
-
-		readyNodes := 0
-		log.Printf("waiting for %d infra nodes to be reporting Ready", int(*originalMp.Spec.Replicas)*2)
-		for _, node := range nodes.Items {
-			for _, cond := range node.Status.Conditions {
-				if cond.Type == corev1.NodeReady {
-					if cond.Status == corev1.ConditionTrue {
-						readyNodes++
-						log.Printf("found node %s reporting Ready", node.Name)
-					}
-				}
-			}
-		}
-
-		switch {
-		case readyNodes >= int(*originalMp.Spec.Replicas)*2:
-			return true, nil
-		default:
-			log.Printf("found %d infra nodes reporting Ready, continuing to wait", readyNodes)
-			return false, nil
-		}
-	}); err != nil {
-		return err
-	}
-
-	tempNodes := &corev1.NodeList{}
-	if err := r.client.List(ctx, tempNodes, &client.ListOptions{LabelSelector: tempNodeSelector}); err != nil {
-		return err
-	}
-
-	// Delete temp machinepool
-	log.Printf("deleting temporary machinepool %s", tempMp.Name)
-	if err := r.hiveAdmin.Delete(ctx, tempMp); err != nil {
-		return err
-	}
-
-	// Wait for temporary machinepool to delete
-	if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
-		mp := &hivev1.MachinePool{}
-		err := r.hive.Get(ctx, client.ObjectKey{Namespace: tempMp.Namespace, Name: tempMp.Name}, mp)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return true, nil
-			}
-			log.Printf("error retrieving old machine details, continuing to wait: %s", err)
-			return false, nil
-		}
-
-		log.Printf("temporary machinepool %s/%s still exists, continuing to wait", tempMp.Namespace, tempMp.Name)
-		return false, nil
-	}); err != nil {
-		return err
-	}
-
-	// Wait for infra node count to return to normal
-	log.Printf("waiting for infra node count to return to: %d", int(*originalMp.Spec.Replicas))
-	if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
-		nodes := &corev1.NodeList{}
-		selector, err := labels.Parse("node-role.kubernetes.io/infra=")
-		if err != nil {
-			// This should never happen, so we do not have to skip this errorreturn false, err
-			return false, err
-		}
-
-		if err := r.client.List(ctx, nodes, &client.ListOptions{LabelSelector: selector}); err != nil {
-			log.Printf("error retrieving nodes list, continuing to wait: %s", err)
-			return false, nil
-		}
-
-		switch len(nodes.Items) {
-		case int(*originalMp.Spec.Replicas):
-			log.Printf("found %d infra nodes, infra resize complete", len(nodes.Items))
-			return true, nil
-		default:
-			log.Printf("found %d infra nodes, continuing to wait", len(nodes.Items))
-			return false, nil
-		}
-	}); err != nil {
-		switch {
-		case errors.Is(err, wait.ErrWaitTimeout):
-			log.Printf("Warning: timed out waiting for nodes to drain: %v. Terminating backing cloud instances.", err.Error())
-
-			err := r.terminateCloudInstances(ctx, tempNodes)
-			if err != nil {
-				return err
-			}
-
-			if err := wait.PollImmediate(twentySecondIncrement, twentyMinuteTimeout, func() (bool, error) {
-				log.Printf("waiting for nodes to terminate")
-				return skipError(wrapResult(r.nodesMatchExpectedCount(ctx, tempNodeSelector, 0)), "error matching expected count")
-			}); err != nil {
-				if errors.Is(err, wait.ErrWaitTimeout) {
-					log.Printf("timed out waiting for nodes to terminate: %v.", err.Error())
-				}
-				return err
-			}
-		default:
-			return err
-		}
-	}
-
-	if !r.SkipServiceLog {
-		postCmd := generateServiceLog(tempMp, r.instanceType, r.justification, r.clusterId, r.ohss)
-		if err := postCmd.Run(); err != nil {
-			fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
-			fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
-				r.clusterId, resizedInfraNodeServiceLogTemplate, strings.Join(postCmd.TemplateParams, " -p "))
-		}
+	postCmd := generateServiceLog(newMp, r.instanceType, r.justification, r.clusterId, r.ohss)
+	if err := postCmd.Run(); err != nil {
+		fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
+		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
+			r.clusterId, resizedInfraNodeServiceLogTemplate, strings.Join(postCmd.TemplateParams, " -p "))
 	}
 
 	return nil
-}
-
-func (r *Infra) getInfraMachinePool(ctx context.Context) (*hivev1.MachinePool, error) {
-	ns := &corev1.NamespaceList{}
-	selector, err := labels.Parse(fmt.Sprintf("api.openshift.com/id=%s", r.clusterId))
-	if err != nil {
-		return nil, err
-	}
-
-	if err := r.hive.List(ctx, ns, &client.ListOptions{LabelSelector: selector, Limit: 1}); err != nil {
-		return nil, err
-	}
-	if len(ns.Items) != 1 {
-		return nil, fmt.Errorf("expected 1 namespace, found %d namespaces with tag: api.openshift.com/id=%s", len(ns.Items), r.clusterId)
-	}
-
-	log.Printf("found namespace: %s", ns.Items[0].Name)
-
-	mpList := &hivev1.MachinePoolList{}
-	if err := r.hive.List(ctx, mpList, &client.ListOptions{Namespace: ns.Items[0].Name}); err != nil {
-		return nil, err
-	}
-
-	for _, mp := range mpList.Items {
-		if mp.Spec.Name == "infra" {
-			log.Printf("found machinepool %s", mp.Name)
-			return &mp, nil
-		}
-	}
-
-	return nil, fmt.Errorf("did not find the infra machinepool in namespace: %s", ns.Items[0].Name)
-}
-
-// cloneAndModifyMachinePool clones a MachinePool, resets metadata fields,
-// and applies the MachinePoolModifier function.
-func (r *Infra) cloneAndModifyMachinePool(mp *hivev1.MachinePool) (*hivev1.MachinePool, error) {
-	newMp := &hivev1.MachinePool{}
-	mp.DeepCopyInto(newMp)
-
-	newMp.CreationTimestamp = metav1.Time{}
-	newMp.Finalizers = []string{}
-	newMp.ResourceVersion = ""
-	newMp.Generation = 0
-	newMp.UID = ""
-	newMp.Status = hivev1.MachinePoolStatus{}
-
-	if err := r.MachinePoolModifier(newMp); err != nil {
-		return nil, err
-	}
-
-	return newMp, nil
 }
 
 func (r *Infra) embiggenMachinePool(mp *hivev1.MachinePool) (*hivev1.MachinePool, error) {
@@ -621,18 +283,6 @@ func (r *Infra) embiggenMachinePool(mp *hivev1.MachinePool) (*hivev1.MachinePool
 		"n2-highmem-8":       "n2-highmem-16",
 	}
 
-	newMp := &hivev1.MachinePool{}
-	mp.DeepCopyInto(newMp)
-
-	// Unset fields we want to be regenerated
-	newMp.CreationTimestamp = metav1.Time{}
-	newMp.Finalizers = []string{}
-	newMp.ResourceVersion = ""
-	newMp.Generation = 0
-	newMp.SelfLink = ""
-	newMp.UID = ""
-	newMp.Status = hivev1.MachinePoolStatus{}
-
 	// Update instance type sizing
 	if r.instanceType != "" {
 		log.Printf("using override instance type: %s", r.instanceType)
@@ -648,16 +298,20 @@ func (r *Infra) embiggenMachinePool(mp *hivev1.MachinePool) (*hivev1.MachinePool
 		r.instanceType = embiggen[instanceType]
 	}
 
-	switch r.cluster.CloudProvider().ID() {
-	case "aws":
-		newMp.Spec.Platform.AWS.InstanceType = r.instanceType
-	case "gcp":
-		newMp.Spec.Platform.GCP.InstanceType = r.instanceType
-	default:
-		return nil, fmt.Errorf("cloud provider not supported: %s, only AWS and GCP are supported", r.cluster.CloudProvider().ID())
-	}
+	cloudProvider := r.cluster.CloudProvider().ID()
+	newInstanceType := r.instanceType
 
-	return newMp, nil
+	return infraPkg.CloneMachinePool(mp, func(newMp *hivev1.MachinePool) error {
+		switch cloudProvider {
+		case "aws":
+			newMp.Spec.Platform.AWS.InstanceType = newInstanceType
+		case "gcp":
+			newMp.Spec.Platform.GCP.InstanceType = newInstanceType
+		default:
+			return fmt.Errorf("cloud provider not supported: %s, only AWS and GCP are supported", cloudProvider)
+		}
+		return nil
+	})
 }
 
 func getInstanceType(mp *hivev1.MachinePool) (string, error) {
@@ -784,22 +438,6 @@ func convertProviderIDtoInstanceID(providerID string) string {
 	return providerIDSplit[len(providerIDSplit)-1]
 }
 
-// nodesMatchExpectedCount accepts a context, labelselector and count of expected nodes, and ]
-// returns true if the nodelist matching the labelselector is equal to the expected count
-func (r *Infra) nodesMatchExpectedCount(ctx context.Context, labelSelector labels.Selector, count int) (bool, error) {
-	nodeList := &corev1.NodeList{}
-
-	if err := r.client.List(ctx, nodeList, &client.ListOptions{LabelSelector: labelSelector}); err != nil {
-		return false, err
-	}
-
-	if len(nodeList.Items) == count {
-		return true, nil
-	}
-
-	return false, nil
-}
-
 // validateInstanceSize accepts a string for the requested new instance type and returns an error
 // if the instance type is invalid
 func validateInstanceSize(newInstanceSize string, nodeType string) error {
@@ -807,20 +445,4 @@ func validateInstanceSize(newInstanceSize string, nodeType string) error {
 		return fmt.Errorf("instance type %s not supported for %s nodes", newInstanceSize, nodeType)
 	}
 	return nil
-}
-
-type result struct {
-	condition bool
-	err       error
-}
-
-func wrapResult(condition bool, err error) result {
-	return result{condition, err}
-}
-
-func skipError(res result, msg string) (bool, error) {
-	if res.err != nil {
-		log.Printf("%s, continuing to wait: %s", msg, res.err)
-	}
-	return res.condition, nil
 }

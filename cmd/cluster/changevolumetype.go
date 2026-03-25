@@ -13,8 +13,8 @@ import (
 	machinev1 "github.com/openshift/api/machine/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
-	"github.com/openshift/osdctl/cmd/cluster/resize"
 	"github.com/openshift/osdctl/cmd/servicelog"
+	infraPkg "github.com/openshift/osdctl/pkg/infra"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -399,7 +399,7 @@ const (
 	volumeTypeChangedServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_volume_type_changed.json"
 )
 
-// changeInfraVolumeType uses the Hive MachinePool dance from the resize package
+// changeInfraVolumeType uses the Hive MachinePool dance from pkg/infra
 // to replace infra nodes with new ones using the target volume type.
 func (o *changeVolumeTypeOptions) changeInfraVolumeType(ctx context.Context) error {
 	printer.PrintlnGreen("\n=== Changing infra node volume type ===")
@@ -407,9 +407,12 @@ func (o *changeVolumeTypeOptions) changeInfraVolumeType(ctx context.Context) err
 	targetType := o.targetType
 	previousType := ""
 
-	infraReplacer := resize.NewInfraFromClients(o.cluster, o.client, o.hiveClient, o.hiveAdminClient, o.reason)
-	infraReplacer.SkipServiceLog = true
-	infraReplacer.MachinePoolModifier = func(mp *hivev1.MachinePool) error {
+	originalMp, err := infraPkg.GetInfraMachinePool(ctx, o.hiveClient, o.clusterID)
+	if err != nil {
+		return err
+	}
+
+	newMp, err := infraPkg.CloneMachinePool(originalMp, func(mp *hivev1.MachinePool) error {
 		if mp.Spec.Platform.AWS == nil {
 			return fmt.Errorf("infra MachinePool has no AWS platform configuration")
 		}
@@ -422,9 +425,18 @@ func (o *changeVolumeTypeOptions) changeInfraVolumeType(ctx context.Context) err
 		mp.Spec.Platform.AWS.Type = targetType
 		mp.Spec.Platform.AWS.IOPS = 0
 		return nil
+	})
+	if err != nil {
+		return err
 	}
 
-	if err := infraReplacer.RunMachinePoolDance(ctx); err != nil {
+	clients := infraPkg.DanceClients{
+		ClusterClient: o.client,
+		HiveClient:    o.hiveClient,
+		HiveAdmin:     o.hiveAdminClient,
+	}
+
+	if err := infraPkg.RunMachinePoolDance(ctx, clients, originalMp, newMp, nil); err != nil {
 		return err
 	}
 

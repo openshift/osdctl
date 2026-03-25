@@ -118,17 +118,3 @@ func TestChangeVolumeType_CountReadyNodes(t *testing.T) {
 	nodes := &corev1.NodeList{}
 	assert.Equal(t, 0, countReadyNodes(nodes))
 }
-
-func TestChangeVolumeType_OptionsDefaults(t *testing.T) {
-	ops := &changeVolumeTypeOptions{}
-
-	assert.Empty(t, ops.clusterID)
-	assert.Empty(t, ops.targetType)
-	assert.Empty(t, ops.role)
-	assert.Empty(t, ops.reason)
-	assert.Nil(t, ops.client)
-	assert.Nil(t, ops.clientAdmin)
-	assert.Nil(t, ops.hiveClient)
-	assert.Nil(t, ops.hiveAdminClient)
-	assert.Nil(t, ops.cluster)
-}
