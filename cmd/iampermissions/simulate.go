@@ -33,9 +33,9 @@ type simulateOptions struct {
 	Region       string
 
 	// Injected dependencies for testability
-	iamClientFunc      func(ctx context.Context, region string) (policies.IAMSimulator, error)
-	downloadFunc       func(string, policies.CloudSpec) (string, error)
-	outputWriter       io.Writer
+	iamClientFunc func(ctx context.Context, region string) (policies.IAMSimulator, error)
+	downloadFunc  func(string, policies.CloudSpec) (string, error)
+	outputWriter  io.Writer
 }
 
 func newCmdSimulate() *cobra.Command {
@@ -380,7 +380,7 @@ func convertPolicyConditionToContext(condition cco.IAMPolicyCondition) map[strin
 
 // writeOutput writes the simulation report in the requested format.
 func (o *simulateOptions) writeOutput(report *policies.SimulationReport) error {
-	var w io.Writer = o.outputWriter
+	w := o.outputWriter
 	if o.OutputFile != "" {
 		f, err := os.Create(o.OutputFile)
 		if err != nil {

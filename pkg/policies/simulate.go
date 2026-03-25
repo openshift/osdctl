@@ -38,12 +38,12 @@ type SimulationReport struct {
 
 // SimulationScenario defines a single test case for policy simulation.
 type SimulationScenario struct {
-	Name        string                       `json:"name" yaml:"name"`
-	Description string                       `json:"description,omitempty" yaml:"description,omitempty"`
-	Action      string                       `json:"action" yaml:"action"`
-	Resources   []string                     `json:"resources" yaml:"resources"`
-	Context     map[string]ContextKeyDef     `json:"context,omitempty" yaml:"context,omitempty"`
-	Expect      string                       `json:"expect" yaml:"expect"`
+	Name        string                   `json:"name" yaml:"name"`
+	Description string                   `json:"description,omitempty" yaml:"description,omitempty"`
+	Action      string                   `json:"action" yaml:"action"`
+	Resources   []string                 `json:"resources" yaml:"resources"`
+	Context     map[string]ContextKeyDef `json:"context,omitempty" yaml:"context,omitempty"`
+	Expect      string                   `json:"expect" yaml:"expect"`
 }
 
 // ContextKeyDef defines a condition context key for simulation.
@@ -278,4 +278,3 @@ func parseContextKeyType(t string) (iamtypes.ContextKeyTypeEnum, error) {
 		return "", fmt.Errorf("unsupported context key type: %s", t)
 	}
 }
-

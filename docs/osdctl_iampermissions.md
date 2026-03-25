@@ -34,4 +34,5 @@ osdctl iampermissions [flags]
 * [osdctl iampermissions diff](osdctl_iampermissions_diff.md)	 - Diff IAM permissions for cluster operators between two versions
 * [osdctl iampermissions get](osdctl_iampermissions_get.md)	 - Get OCP CredentialsRequests
 * [osdctl iampermissions save](osdctl_iampermissions_save.md)	 - Save iam permissions for use in mcc
+* [osdctl iampermissions simulate](osdctl_iampermissions_simulate.md)	 - Simulate IAM policies against required permissions to detect mismatches
 
