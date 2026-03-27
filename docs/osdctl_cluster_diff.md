@@ -1,15 +1,39 @@
-## osdctl cloudtrail
+## osdctl cluster diff
 
-AWS CloudTrail related utilities
+Compare two cluster snapshots to identify changes
+
+### Synopsis
+
+Compare two cluster snapshots to identify changes.
+
+This command compares two snapshot files created by 'osdctl cluster snapshot'
+and reports the differences. This is useful for understanding what changed
+in a cluster during feature testing or validation.
+
+Changes are categorized as:
+- added: Resource exists in after but not in before
+- removed: Resource exists in before but not in after  
+- modified: Resource exists in both but with different values
 
 ```
-osdctl cloudtrail [flags]
+osdctl cluster diff <before.yaml> <after.yaml> [flags]
+```
+
+### Examples
+
+```
+  # Compare two snapshots
+  osdctl cluster diff before.yaml after.yaml
+
+  # Compare snapshots with JSON output
+  osdctl cluster diff before.yaml after.yaml --json
 ```
 
 ### Options
 
 ```
-  -h, --help   help for cloudtrail
+  -h, --help   help for diff
+      --json   Output diff in JSON format
 ```
 
 ### Options inherited from parent commands
@@ -29,8 +53,5 @@ osdctl cloudtrail [flags]
 
 ### SEE ALSO
 
-* [osdctl](osdctl.md)	 - OSD CLI
-* [osdctl cloudtrail errors](osdctl_cloudtrail_errors.md)	 - Prints CloudTrail error events (permission/IAM issues) to console.
-* [osdctl cloudtrail permission-denied-events](osdctl_cloudtrail_permission-denied-events.md)	 - Prints cloudtrail permission-denied events to console.
-* [osdctl cloudtrail write-events](osdctl_cloudtrail_write-events.md)	 - Prints cloudtrail write events to console with advanced filtering options
+* [osdctl cluster](osdctl_cluster.md)	 - Provides information for a specified cluster
 

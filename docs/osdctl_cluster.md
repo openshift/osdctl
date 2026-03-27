@@ -33,6 +33,7 @@ Provides information for a specified cluster
 * [osdctl cluster context](osdctl_cluster_context.md)	 - Shows the context of a specified cluster
 * [osdctl cluster cpd](osdctl_cluster_cpd.md)	 - Runs diagnostic for a Cluster Provisioning Delay (CPD)
 * [osdctl cluster detach-stuck-volume](osdctl_cluster_detach-stuck-volume.md)	 - Detach openshift-monitoring namespace's volume from a cluster forcefully
+* [osdctl cluster diff](osdctl_cluster_diff.md)	 - Compare two cluster snapshots to identify changes
 * [osdctl cluster etcd-health-check](osdctl_cluster_etcd-health-check.md)	 - Checks the etcd components and member health
 * [osdctl cluster etcd-member-replace](osdctl_cluster_etcd-member-replace.md)	 - Replaces an unhealthy etcd node
 * [osdctl cluster from-infra-id](osdctl_cluster_from-infra-id.md)	 - Get cluster ID and external ID from a given infrastructure ID commonly used by Splunk
@@ -45,6 +46,7 @@ Provides information for a specified cluster
 * [osdctl cluster reports](osdctl_cluster_reports.md)	 - Manage cluster reports in backplane-api
 * [osdctl cluster resize](osdctl_cluster_resize.md)	 - resize control-plane/infra nodes
 * [osdctl cluster resync](osdctl_cluster_resync.md)	 - Force a resync of a cluster from Hive
+* [osdctl cluster snapshot](osdctl_cluster_snapshot.md)	 - Capture a point-in-time snapshot of cluster state
 * [osdctl cluster sre-operators](osdctl_cluster_sre-operators.md)	 - SRE operator related utilities
 * [osdctl cluster ssh](osdctl_cluster_ssh.md)	 - utilities for accessing cluster via ssh
 * [osdctl cluster support](osdctl_cluster_support.md)	 - Cluster Support

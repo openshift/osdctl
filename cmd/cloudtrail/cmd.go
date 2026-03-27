@@ -16,6 +16,7 @@ func NewCloudtrailCmd() *cobra.Command {
 
 	cloudtrailCmd.AddCommand(newCmdWriteEvents())
 	cloudtrailCmd.AddCommand(newCmdPermissionDenied())
+	cloudtrailCmd.AddCommand(newCmdErrors())
 
 	return cloudtrailCmd
 }

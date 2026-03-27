@@ -51,6 +51,8 @@ func NewCmdCluster(streams genericclioptions.IOStreams, client *k8s.LazyClient, 
 	clusterCmd.AddCommand(newCmdGetEnvVars())
 	clusterCmd.AddCommand(reports.NewCmdReports())
 	clusterCmd.AddCommand(cad.NewCmdCad())
+	clusterCmd.AddCommand(newCmdSnapshot())
+	clusterCmd.AddCommand(newCmdDiff())
 	return clusterCmd
 }
 
