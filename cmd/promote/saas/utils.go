@@ -85,20 +85,87 @@ func discoverE2ETestSaasName(appInterface git.AppInterface, operatorName string)
 	return nameValue, nil
 }
 
-// generateTestLogsURL creates a Grafana dashboard URL for viewing e2e test logs
+// discoverPipelineNamespace reads the SaaS file to find the actual pipeline namespace.
+// The namespace may differ from the operator name due to abbreviations or inconsistencies.
+//
+// For example:
+//   - Operator: managed-cluster-validating-webhooks
+//   - Namespace: mcvw-pipelines (abbreviated)
+//
+// This function extracts the namespace from the pipelinesProvider.$ref field in the SaaS YAML.
+func discoverPipelineNamespace(appInterface git.AppInterface, serviceName string) (string, error) {
+	// Get the SaaS file path from the services map
+	saasFilePath, ok := ServicesFilesMap[serviceName]
+	if !ok {
+		return "", fmt.Errorf("saas file not found for service %s", serviceName)
+	}
+
+	// Read the SaaS YAML file
+	fileContent, err := os.ReadFile(saasFilePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read SaaS file: %w", err)
+	}
+
+	// Parse YAML to get the pipelinesProvider reference
+	node, err := kyaml.Parse(string(fileContent))
+	if err != nil {
+		return "", fmt.Errorf("failed to parse SaaS YAML: %w", err)
+	}
+
+	// Extract pipelinesProvider.$ref path
+	// Example: "/services/osd-operators/managed-cluster-validating-webhooks/pipelines/tekton-mcvw-pipelines.appsrep09ue1.yaml"
+	pipelineRef, err := node.GetString("pipelinesProvider.$ref")
+	if err != nil {
+		return "", fmt.Errorf("failed to get pipelinesProvider.$ref: %w", err)
+	}
+
+	// Extract namespace from the pipeline provider filename
+	// Format: "tekton-{namespace}.appsrep09ue1.yaml" or "tekton.{namespace}.appsrep09ue1.yaml"
+	filename := filepath.Base(pipelineRef)
+
+	// Remove "tekton-" or "tekton." prefix
+	namespace := strings.TrimPrefix(filename, "tekton-")
+	namespace = strings.TrimPrefix(namespace, "tekton.")
+
+	// Remove cluster-specific suffix (e.g ".appsrep09ue1.yaml")
+	// Pattern: .{cluster-name}.yaml where cluster-name starts with "apps", "hive", etc.
+	if idx := strings.Index(namespace, "."); idx > 0 {
+		namespace = namespace[:idx]
+	}
+
+	if namespace == "" {
+		return "", fmt.Errorf("could not extract namespace from pipelinesProvider: %s", pipelineRef)
+	}
+
+	fmt.Printf("Discovered pipeline namespace: %s\n", namespace)
+	return namespace, nil
+}
+
+// generateGrafanaLogsURL creates a Grafana dashboard URL for viewing e2e test logs
 // for the given operator and git hash. It automatically discovers the correct
-// e2e test SaaS file name from app-interface to handle naming inconsistencies.
+// e2e test SaaS file name and pipeline namespace from app-interface to handle
+// naming inconsistencies.
 //
 // The URL includes filters for:
-//   - Operator namespace/pipeline
+//   - Operator namespace/pipeline (discovered from pipelinesProvider reference)
 //   - Git hash being promoted
 //   - Environment (INT/STAGE)
+//   - E2E test SaaS file name
 //   - 7-day time window
 //
 // If discovery fails, falls back to standard naming convention.
-func generateTestLogsURL(appInterface git.AppInterface, operatorName, gitHash string, env string) string {
+func generateGrafanaLogsURL(appInterface git.AppInterface, serviceName, operatorName, gitHash string, env string) string {
 	if env == "" {
 		env = "osd-stage-hives02ue1"
+	}
+
+	// Discover the actual namespace from SaaS file
+	namespace, err := discoverPipelineNamespace(appInterface, serviceName)
+	if err != nil {
+		// Fallback to constructing namespace from operator name
+		namespace = fmt.Sprintf("%s-pipelines", operatorName)
+		fmt.Printf("Warning: Could not discover namespace for %s (error: %v)\n", serviceName, err)
+		fmt.Printf("Falling back to standard convention: %s\n", namespace)
 	}
 
 	// Try to discover the actual e2e test SaaS name from app-interface
@@ -118,7 +185,7 @@ func generateTestLogsURL(appInterface git.AppInterface, operatorName, gitHash st
 
 	// Build URL with query parameters
 	url := fmt.Sprintf("%s/%s/hcm-cicd-test-logs?", baseURL, dashboardID)
-	url += fmt.Sprintf("var-namespace=%s-pipelines", operatorName)
+	url += fmt.Sprintf("var-namespace=%s", namespace)
 	url += fmt.Sprintf("&var-targetref=%s", gitHash)
 	url += fmt.Sprintf("&var-env=%s", env)
 	url += fmt.Sprintf("&var-saasfilename=%s", e2eTestSaasName)
@@ -186,9 +253,9 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	prefix := "saas-"
 	operatorName := strings.TrimPrefix(serviceName, prefix)
 
-	// Generate test logs URLs for INT and STAGE validation
-	intTestLogsURL := generateTestLogsURL(appInterface, operatorName, promotionGitHash, "int")
-	stageTestLogsURL := generateTestLogsURL(appInterface, operatorName, promotionGitHash, "stage")
+	// Generate Grafana logs URLs for INT and STAGE validation
+	intGrafanaLogsURL := generateGrafanaLogsURL(appInterface, serviceName, operatorName, promotionGitHash, "int")
+	stageGrafanaLogsURL := generateGrafanaLogsURL(appInterface, serviceName, operatorName, promotionGitHash, "stage")
 
 	// Build GitLab Markdown formatted commit message
 	var commitMessage string
@@ -201,8 +268,8 @@ func servicePromotion(appInterface git.AppInterface, serviceName, gitHash string
 	// Add monitoring and validation links section
 	commitMessage += "## Monitoring and Validation\n\n"
 	commitMessage += fmt.Sprintf("- 📊 [Monitor rollout status](https://inscope.corp.redhat.com/catalog/default/component/%s/rollout)\n", operatorName)
-	commitMessage += fmt.Sprintf("- 🧪 [View INT e2e test logs](%s)\n", intTestLogsURL)
-	commitMessage += fmt.Sprintf("- 🧪 [View STAGE e2e test logs](%s)\n", stageTestLogsURL)
+	commitMessage += fmt.Sprintf("- 🧪 [View INT e2e test logs](%s)\n", intGrafanaLogsURL)
+	commitMessage += fmt.Sprintf("- 🧪 [View STAGE e2e test logs](%s)\n", stageGrafanaLogsURL)
 	commitMessage += "- 🚨 [View Platform SRE Int/Stage incident activity](https://redhat.pagerduty.com/analytics/insights/incident-activity-report/9wMMqHHHSuvd8jMF1sByzA)\n"
 	commitMessage += "- 📈 [View Int/Stage PagerDuty Dashboard](https://redhat.pagerduty.com/analytics/overview-dashboard/sSWGx0MIdgVckAwpwbix8A)\n\n"
 
