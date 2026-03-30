@@ -353,9 +353,9 @@ type policyDetails struct {
 
 // clusterProcessResult contains the result of processing a cluster
 type clusterProcessResult struct {
-	err                  error
-	policyWasModified    bool // true if we deleted recurring policy (even if later restored)
-	policyWasRestored    bool // true if we successfully restored the policy after modification
+	err               error
+	policyWasModified bool // true if we deleted recurring policy (even if later restored)
+	policyWasRestored bool // true if we successfully restored the policy after modification
 }
 
 func (o *transitionOptions) processCluster(ocmClient *sdk.Connection, cluster *v1.Cluster) *clusterProcessResult {
@@ -656,7 +656,6 @@ func sendServiceLog(ocmClient *sdk.Connection, message *servicelog.Message) erro
 
 	return nil
 }
-
 
 func (o *transitionOptions) printSummary(successful, failed []string) {
 	fmt.Print("\n" + strings.Repeat("=", 60) + "\n")
