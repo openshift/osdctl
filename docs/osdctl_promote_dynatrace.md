@@ -47,14 +47,14 @@ osdctl promote dynatrace [flags]
 ### Options
 
 ```
-      --appInterfaceDir string      location of app-interface checkout. Falls back to current working directory
-  -c, --component string            Dynatrace component getting promoted
-      --dynatraceConfigDir string   location of dynatrace-config checkout. Falls back to current working directory
-  -g, --gitHash string              Git hash of the SaaS service/operator commit getting promoted
+      --appInterfaceDir string      Location of app-interface checkout. Falls back to current working directory
+  -c, --component string            Dynatrace component getting promoted (ex: dynatrace-dynakube)
+      --dynatraceConfigDir string   Location of dynatrace-config checkout. Falls back to current working directory
+  -g, --gitHash string              Git hash of the component getting promoted from dynatrace-config repo
   -h, --help                        help for dynatrace
   -l, --list                        List all SaaS services/operators
-  -m, --module string               module to promote
-  -t, --terraform                   deploy dynatrace-config terraform job
+  -m, --module string               Module to promote
+  -t, --terraform                   Deploy dynatrace-config terraform job
 ```
 
 ### Options inherited from parent commands

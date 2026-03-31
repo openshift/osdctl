@@ -1,18 +1,17 @@
 package dynatrace
 
 import (
+	"errors"
 	"fmt"
-	"os"
 
-	"github.com/openshift/osdctl/cmd/promote/git"
-	"github.com/openshift/osdctl/cmd/promote/iexec"
+	"github.com/openshift/osdctl/cmd/promote/utils"
 	"github.com/spf13/cobra"
 )
 
 type promoteDynatraceOptions struct {
 	list bool
 
-	appInterfaceCheckoutDir    string
+	appInterfaceProvidedPath   string
 	gitHash                    string
 	component                  string
 	terraform                  bool
@@ -59,76 +58,88 @@ TERRAFORM MODULES:
 		# Promote a dynatrace module
 		osdctl promote dynatrace --terraform --module=<module-name>`,
 
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 
 			if ops.terraform {
 				dynatraceConfig := DynatraceConfigPromotion(ops.dynatraceConfigCheckoutDir)
 				if ops.list {
 					ops.validateSaasFlow()
 					if ops.component != "" || ops.gitHash != "" || ops.module != "" {
-						fmt.Printf("Error: Please provide correct parameters \n\n")
-						fmt.Printf("Please run 'osdctl promote dynatrace --terraform --list' to check available dynatrace-config modules for promotion.\n\n")
-						cmd.Help()
-						os.Exit(1)
+						return errors.New("--list cannot be used with --component, --gitHash or --module")
 					}
-					_ = listDynatraceModuleNames(dynatraceConfig)
-					os.Exit(0)
+
+					cmd.SilenceUsage = true
+
+					return listDynatraceModuleNames(dynatraceConfig)
 				} else {
 					if ops.module == "" {
-						fmt.Printf("Error: Please provide correct parameters \n\n")
-						fmt.Printf("Please run 'osdctl promote dynatrace --terraform --module=<module-name>' to check promote dynatrace-config module to latest ref.\n\n")
-						cmd.Help()
-						os.Exit(1)
-					} else if ops.component != "" || ops.gitHash != "" {
-						fmt.Printf("Error: Please provide correct parameters \n\n")
-						fmt.Printf("Please run 'osdctl promote dynatrace --terraform --module=<module-name>' to check promote dynatrace-config module to latest ref.\n\n")
-						cmd.Help()
-						os.Exit(1)
-					} else {
-						err := modulePromotion(dynatraceConfig, ops.module)
-						if err != nil {
-							fmt.Printf("Error while promoting module: %v\n", err)
-							os.Exit(1)
-						}
+						return errors.New("--module is required unless --list is used")
+					}
+					if ops.component != "" || ops.gitHash != "" {
+						return errors.New("--component and --gitHash cannot be used with --terraform")
+					}
+
+					cmd.SilenceUsage = true
+
+					err := modulePromotion(dynatraceConfig, ops.module)
+					if err != nil {
+						return fmt.Errorf("error while promoting module: %v", err)
 					}
 				}
 			} else {
-
 				ops.validateSaasFlow()
-				appInterface := git.BootstrapOsdCtlForAppInterfaceAndServicePromotions(ops.appInterfaceCheckoutDir, iexec.Exec{})
+
+				appInterfaceClone, err := utils.FindAppInterfaceClone(ops.appInterfaceProvidedPath)
+				if err != nil {
+					return err
+				}
+
+				servicesRegistry, err := utils.NewServicesRegistry(
+					appInterfaceClone,
+					validateDynatraceServiceFilePath,
+					saasDynatraceDir,
+				)
+				if err != nil {
+					return err
+				}
+
 				if ops.list {
 					if ops.component != "" || ops.gitHash != "" {
-						fmt.Printf("Error: --list cannot be used with any other flags\n\n")
-						cmd.Help()
-						os.Exit(1)
+						return errors.New("--list cannot be used with --component or --gitHash")
 					}
-					listServiceNames(appInterface)
-					os.Exit(0)
-				}
 
-				if ops.component == "" {
-					fmt.Printf("Error: Please provide dynatrace component to promote.\n\n")
-					fmt.Printf("Please run 'osdctl promote dynatrace --list' to check available dynatrace components for promotion.\n\n")
-					cmd.Help()
-					os.Exit(1)
-				}
-				err := servicePromotion(appInterface, ops.component, ops.gitHash)
-				if err != nil {
-					fmt.Printf("Error while promoting service: %v\n", err)
-					os.Exit(1)
+					cmd.SilenceUsage = true
+
+					return listServiceIds(servicesRegistry)
+				} else {
+					if ops.component == "" {
+						return errors.New("--component is required unless --list is used")
+					}
+
+					cmd.SilenceUsage = true
+
+					service, err := servicesRegistry.GetService(ops.component)
+					if err != nil {
+						return err
+					}
+					err = service.Promote(&utils.DefaultPromoteCallbacks{Service: service}, ops.gitHash)
+
+					if err != nil {
+						return fmt.Errorf("error while promoting service: %v", err)
+					}
 				}
 			}
-			os.Exit(0)
+			return nil
 		},
 	}
 
 	promoteDynatraceCmd.Flags().BoolVarP(&ops.list, "list", "l", false, "List all SaaS services/operators")
-	promoteDynatraceCmd.Flags().StringVarP(&ops.component, "component", "c", "", "Dynatrace component getting promoted")
-	promoteDynatraceCmd.Flags().StringVarP(&ops.gitHash, "gitHash", "g", "", "Git hash of the SaaS service/operator commit getting promoted")
-	promoteDynatraceCmd.Flags().StringVarP(&ops.appInterfaceCheckoutDir, "appInterfaceDir", "", "", "location of app-interface checkout. Falls back to current working directory")
-	promoteDynatraceCmd.Flags().BoolVarP(&ops.terraform, "terraform", "t", false, "deploy dynatrace-config terraform job")
-	promoteDynatraceCmd.Flags().StringVarP(&ops.module, "module", "m", "", "module to promote")
-	promoteDynatraceCmd.Flags().StringVarP(&ops.dynatraceConfigCheckoutDir, "dynatraceConfigDir", "", "", "location of dynatrace-config checkout. Falls back to current working directory")
+	promoteDynatraceCmd.Flags().StringVarP(&ops.component, "component", "c", "", "Dynatrace component getting promoted (ex: dynatrace-dynakube)")
+	promoteDynatraceCmd.Flags().StringVarP(&ops.gitHash, "gitHash", "g", "", "Git hash of the component getting promoted from dynatrace-config repo")
+	promoteDynatraceCmd.Flags().StringVarP(&ops.appInterfaceProvidedPath, "appInterfaceDir", "", "", "Location of app-interface checkout. Falls back to current working directory")
+	promoteDynatraceCmd.Flags().BoolVarP(&ops.terraform, "terraform", "t", false, "Deploy dynatrace-config terraform job")
+	promoteDynatraceCmd.Flags().StringVarP(&ops.module, "module", "m", "", "Module to promote")
+	promoteDynatraceCmd.Flags().StringVarP(&ops.dynatraceConfigCheckoutDir, "dynatraceConfigDir", "", "", "Location of dynatrace-config checkout. Falls back to current working directory")
 
 	return promoteDynatraceCmd
 }

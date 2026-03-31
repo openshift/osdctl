@@ -135,7 +135,7 @@
   - `users` - get organization users
 - `promote` - Utilities to promote services/operators
   - `dynatrace` - Utilities to promote dynatrace
-  - `package` - Utilities to promote package-operator services
+  - `managedscripts` - Promote https://github.com/openshift/managed-scripts
   - `saas` - Utilities to promote SaaS services/operators
 - `servicelog` - OCM/Hive Service log
   - `list --cluster-id <cluster-identifier> [flags] [options]` - Get service logs for a given cluster identifier.
@@ -4182,32 +4182,32 @@ osdctl promote dynatrace [flags]
 #### Flags
 
 ```
-      --appInterfaceDir string           location of app-interface checkout. Falls back to current working directory
+      --appInterfaceDir string           Location of app-interface checkout. Falls back to current working directory
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
-  -c, --component string                 Dynatrace component getting promoted
+  -c, --component string                 Dynatrace component getting promoted (ex: dynatrace-dynakube)
       --context string                   The name of the kubeconfig context to use
-      --dynatraceConfigDir string        location of dynatrace-config checkout. Falls back to current working directory
-  -g, --gitHash string                   Git hash of the SaaS service/operator commit getting promoted
+      --dynatraceConfigDir string        Location of dynatrace-config checkout. Falls back to current working directory
+  -g, --gitHash string                   Git hash of the component getting promoted from dynatrace-config repo
   -h, --help                             help for dynatrace
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
   -l, --list                             List all SaaS services/operators
-  -m, --module string                    module to promote
+  -m, --module string                    Module to promote
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
   -S, --skip-version-check               skip checking to see if this is the most recent release
-  -t, --terraform                        deploy dynatrace-config terraform job
+  -t, --terraform                        Deploy dynatrace-config terraform job
 ```
 
-### osdctl promote package
+### osdctl promote managedscripts
 
-Utilities to promote package-operator services
+Promote https://github.com/openshift/managed-scripts
 
 ```
-osdctl promote package [flags]
+osdctl promote managedscripts [flags]
 ```
 
 #### Flags
@@ -4217,17 +4217,15 @@ osdctl promote package [flags]
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
       --context string                   The name of the kubeconfig context to use
-      --hcp                              The service being promoted conforms to the HyperShift progressive delivery definition
-  -h, --help                             help for package
+  -g, --gitHash string                   Git hash of the managed-scripts repo commit getting promoted
+  -h, --help                             help for managedscripts
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
-  -n, --serviceName string               Service getting promoted
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
   -S, --skip-version-check               skip checking to see if this is the most recent release
-  -t, --tag string                       Package tag being promoted to
 ```
 
 ### osdctl promote saas
@@ -4241,23 +4239,21 @@ osdctl promote saas [flags]
 #### Flags
 
 ```
-      --appInterfaceDir string           location of app-interface checkout. Falls back to current working directory
+      --appInterfaceDir string           Location of app-interface checkout. Falls back to the current working directory
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
       --context string                   The name of the kubeconfig context to use
-  -g, --gitHash string                   Git hash of the SaaS service/operator commit getting promoted
-      --hcp                              HCP service/operator getting promoted
+  -g, --gitHash string                   Git hash of the repo described by the SaaS file to promote to
   -h, --help                             help for saas
       --hotfix                           Add gitHash to hotfixVersions in app.yml to bypass progressive delivery (requires --gitHash)
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
-  -l, --list                             List all SaaS services/operators
+  -l, --list                             List all SaaS file names (without the extension)
   -n, --namespaceRef string              SaaS target namespace reference name
-      --osd                              OSD service/operator getting promoted
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
-      --serviceName string               SaaS service/operator getting promoted
+      --serviceId string                 Name of the SaaS file (without the extension)
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
   -S, --skip-version-check               skip checking to see if this is the most recent release
 ```
