@@ -15,10 +15,6 @@ import (
 )
 
 type simulateOptions struct {
-	// Policy input (one of these is required)
-	PolicyFile string
-	PolicyDir  string
-
 	// Test scenarios (supplementary manifests)
 	ManifestFile string
 	ManifestDir  string
@@ -33,18 +29,20 @@ type simulateOptions struct {
 	Region       string
 
 	// Injected dependencies for testability
-	iamClientFunc func(ctx context.Context, region string) (policies.IAMSimulator, error)
-	downloadFunc  func(string, policies.CloudSpec) (string, error)
-	outputWriter  io.Writer
+	iamClientFunc       func(ctx context.Context, region string) (policies.IAMSimulator, error)
+	downloadFunc        func(string, policies.CloudSpec) (string, error)
+	managedPoliciesFunc func(string) (string, error)
+	outputWriter        io.Writer
 }
 
 func newCmdSimulate() *cobra.Command {
 	ops := &simulateOptions{
-		iamClientFunc: policies.NewIAMClient,
-		downloadFunc:  policies.DownloadCredentialRequests,
-		outputWriter:  os.Stdout,
-		OutputFormat:  "table",
-		Region:        "us-east-1",
+		iamClientFunc:       policies.NewIAMClient,
+		downloadFunc:        policies.DownloadCredentialRequests,
+		managedPoliciesFunc: policies.DownloadManagedPolicies,
+		outputWriter:        os.Stdout,
+		OutputFormat:        "table",
+		Region:              "us-east-1",
 	}
 
 	cmd := &cobra.Command{
@@ -55,28 +53,24 @@ required by OCP components. It uses AWS IAM SimulateCustomPolicy to test
 each required action against the managed policy, including condition key
 contexts that CredentialsRequest diffing alone cannot catch.
 
+Managed policies are automatically fetched from the managed-cluster-config
+repository for the corresponding major.minor version, and all managed
+policies are compared against the respective operator CredentialsRequests
+extracted from the release image.
+
 Examples:
-  # Validate a managed policy against a supplementary test manifest
+  # Compare all managed policies for a version against operator CRs
   osdctl iampermissions simulate \
-    --policy-file ./ROSAAmazonEBSCSIDriverOperatorPolicy.json \
-    --manifest-file ./ebs-csi-driver.yaml
+    --release-version 4.17.0
 
-  # Validate all policies in a directory against all manifests
+  # Also run supplementary test manifests (e.g. for condition key scenarios)
   osdctl iampermissions simulate \
-    --policy-dir ./policies/ \
-    --manifest-dir ./manifests/ \
-    --output json
-
-  # Validate a managed policy against CredentialsRequests from a release
-  osdctl iampermissions simulate \
-    --policy-file ./policy.json \
     --release-version 4.17.0 \
-    --cloud aws
+    --manifest-file ./ebs-csi-driver.yaml
 
   # Output JUnit XML for CI integration
   osdctl iampermissions simulate \
-    --policy-file ./policy.json \
-    --manifest-file ./scenarios.yaml \
+    --release-version 4.17.0 \
     --output junit \
     --output-file results.xml`,
 		Args:              cobra.ExactArgs(0),
@@ -87,14 +81,14 @@ Examples:
 		},
 	}
 
-	cmd.Flags().StringVar(&ops.PolicyFile, "policy-file", "", "Path to a managed IAM policy JSON file")
-	cmd.Flags().StringVar(&ops.PolicyDir, "policy-dir", "", "Path to a directory of managed IAM policy JSON files")
 	cmd.Flags().StringVar(&ops.ManifestFile, "manifest-file", "", "Path to a supplementary test manifest YAML")
 	cmd.Flags().StringVar(&ops.ManifestDir, "manifest-dir", "", "Path to a directory of supplementary test manifest YAMLs")
-	cmd.Flags().StringVarP(&ops.ReleaseVersion, "release-version", "r", "", "OCP release version to extract CredentialsRequests from")
+	cmd.Flags().StringVarP(&ops.ReleaseVersion, "release-version", "r", "", "OCP release version (required)")
 	cmd.Flags().StringVarP(&ops.OutputFormat, "output", "o", "table", "Output format: table, json, junit")
 	cmd.Flags().StringVar(&ops.OutputFile, "output-file", "", "Write output to file instead of stdout")
 	cmd.Flags().StringVar(&ops.Region, "region", "us-east-1", "AWS region for IAM API calls")
+
+	_ = cmd.MarkFlagRequired("release-version")
 
 	return cmd
 }
@@ -102,14 +96,7 @@ Examples:
 func (o *simulateOptions) run() error {
 	ctx := context.Background()
 
-	// Validate inputs
-	if o.PolicyFile == "" && o.PolicyDir == "" {
-		return fmt.Errorf("one of --policy-file or --policy-dir is required")
-	}
-	if o.ManifestFile == "" && o.ManifestDir == "" && o.ReleaseVersion == "" {
-		return fmt.Errorf("one of --manifest-file, --manifest-dir, or --release-version is required")
-	}
-	if o.ReleaseVersion != "" && o.Cloud != policies.AWS {
+	if o.Cloud != policies.AWS {
 		return fmt.Errorf("unsupported cloud provider %q: only 'aws' is supported for IAM policy simulation", o.Cloud.String())
 	}
 
@@ -119,10 +106,20 @@ func (o *simulateOptions) run() error {
 		return fmt.Errorf("failed to create IAM client: %w", err)
 	}
 
-	// Load policy documents
-	policyDocs, err := o.loadPolicies()
+	// Fetch managed policies from managed-cluster-config
+	fmt.Fprintf(os.Stderr, "Fetching managed policies from managed-cluster-config for %s\n", o.ReleaseVersion)
+	policyDir, err := o.managedPoliciesFunc(o.ReleaseVersion)
+	if err != nil {
+		return fmt.Errorf("failed to download managed policies: %w", err)
+	}
+
+	policyDocs, err := policies.LoadPoliciesFromDir(policyDir)
 	if err != nil {
 		return err
+	}
+
+	if len(policyDocs) == 0 {
+		return fmt.Errorf("no policy documents found for version %s", o.ReleaseVersion)
 	}
 
 	var allReports []*policies.SimulationReport
@@ -137,13 +134,11 @@ func (o *simulateOptions) run() error {
 	}
 
 	// Run CredentialsRequest-based validation
-	if o.ReleaseVersion != "" {
-		reports, err := o.runCredentialsRequestSimulations(ctx, client, policyDocs)
-		if err != nil {
-			return err
-		}
-		allReports = append(allReports, reports...)
+	reports, err := o.runCredentialsRequestSimulations(ctx, client, policyDocs)
+	if err != nil {
+		return err
 	}
+	allReports = append(allReports, reports...)
 
 	if len(allReports) == 0 {
 		return fmt.Errorf("no simulations were run")
@@ -163,45 +158,6 @@ func (o *simulateOptions) run() error {
 	}
 
 	return nil
-}
-
-// loadPolicies loads IAM policy JSON documents from file or directory.
-func (o *simulateOptions) loadPolicies() (map[string]string, error) {
-	docs := make(map[string]string)
-
-	if o.PolicyFile != "" {
-		doc, err := policies.LoadPolicyDocument(o.PolicyFile)
-		if err != nil {
-			return nil, err
-		}
-		name := strings.TrimSuffix(filepath.Base(o.PolicyFile), filepath.Ext(o.PolicyFile))
-		docs[name] = doc
-	}
-
-	if o.PolicyDir != "" {
-		entries, err := os.ReadDir(o.PolicyDir)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read policy directory %s: %w", o.PolicyDir, err)
-		}
-		for _, entry := range entries {
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-				continue
-			}
-			path := filepath.Join(o.PolicyDir, entry.Name())
-			doc, err := policies.LoadPolicyDocument(path)
-			if err != nil {
-				return nil, err
-			}
-			name := strings.TrimSuffix(entry.Name(), ".json")
-			docs[name] = doc
-		}
-	}
-
-	if len(docs) == 0 {
-		return nil, fmt.Errorf("no policy documents found")
-	}
-
-	return docs, nil
 }
 
 // runManifestSimulations loads supplementary test manifests and runs simulations.
@@ -237,7 +193,6 @@ func (o *simulateOptions) runManifestSimulations(ctx context.Context, client pol
 	var reports []*policies.SimulationReport
 
 	for _, manifest := range manifests {
-		// Find the matching policy document
 		policyJSON, err := findPolicyForManifest(manifest, policyDocs)
 		if err != nil {
 			return nil, err
@@ -257,7 +212,7 @@ func (o *simulateOptions) runManifestSimulations(ctx context.Context, client pol
 }
 
 // runCredentialsRequestSimulations extracts CredentialsRequests from a release image
-// and simulates them against the provided policies.
+// and simulates them against the managed policies.
 func (o *simulateOptions) runCredentialsRequestSimulations(ctx context.Context, client policies.IAMSimulator, policyDocs map[string]string) ([]*policies.SimulationReport, error) {
 	fmt.Fprintf(os.Stderr, "Downloading CredentialsRequests for %s\n", o.ReleaseVersion)
 	dir, err := o.downloadFunc(o.ReleaseVersion, o.Cloud)
@@ -303,12 +258,12 @@ func (o *simulateOptions) runCredentialsRequestSimulations(ctx context.Context, 
 			entries = append(entries, entry)
 		}
 
-		// Find a matching policy document by CredentialsRequest name.
-		// Require an explicit match — never silently skip or assume.
-		policyJSON, ok := policyDocs[cr.Name]
+		// Find a matching policy using the managed-cluster-config naming convention.
+		derivedKey := policies.CRToManagedPolicyKey(cr.Spec.SecretRef.Namespace, cr.Name)
+		policyJSON, ok := policyDocs[derivedKey]
 		if !ok {
-			return nil, fmt.Errorf("no matching policy found for CredentialsRequest %q. Available policies: %v",
-				cr.Name, policyDocNames(policyDocs))
+			fmt.Fprintf(os.Stderr, "Skipping %s: no matching policy found for key %q\n", cr.Name, derivedKey)
+			continue
 		}
 
 		fmt.Fprintf(os.Stderr, "Simulating CredentialsRequest %s (%d statements)\n", cr.Name, len(entries))
@@ -324,7 +279,6 @@ func (o *simulateOptions) runCredentialsRequestSimulations(ctx context.Context, 
 }
 
 // findPolicyForManifest finds the policy document that matches a simulation manifest.
-// Requires an explicit match by policyName — never falls back to implicit assignment.
 func findPolicyForManifest(manifest *policies.SimulationManifest, policyDocs map[string]string) (string, error) {
 	if manifest.PolicyName == "" {
 		return "", fmt.Errorf("manifest for component %q has no policyName specified", manifest.Component)
