@@ -9,28 +9,24 @@ required by OCP components. It uses AWS IAM SimulateCustomPolicy to test
 each required action against the managed policy, including condition key
 contexts that CredentialsRequest diffing alone cannot catch.
 
+Managed policies are automatically fetched from the managed-cluster-config
+repository for the corresponding major.minor version, and all managed
+policies are compared against the respective operator CredentialsRequests
+extracted from the release image.
+
 Examples:
-  # Validate a managed policy against a supplementary test manifest
+  # Compare all managed policies for a version against operator CRs
   osdctl iampermissions simulate \
-    --policy-file ./ROSAAmazonEBSCSIDriverOperatorPolicy.json \
-    --manifest-file ./ebs-csi-driver.yaml
+    --release-version 4.17.0
 
-  # Validate all policies in a directory against all manifests
+  # Also run supplementary test manifests (e.g. for condition key scenarios)
   osdctl iampermissions simulate \
-    --policy-dir ./policies/ \
-    --manifest-dir ./manifests/ \
-    --output json
-
-  # Validate a managed policy against CredentialsRequests from a release
-  osdctl iampermissions simulate \
-    --policy-file ./policy.json \
     --release-version 4.17.0 \
-    --cloud aws
+    --manifest-file ./ebs-csi-driver.yaml
 
   # Output JUnit XML for CI integration
   osdctl iampermissions simulate \
-    --policy-file ./policy.json \
-    --manifest-file ./scenarios.yaml \
+    --release-version 4.17.0 \
     --output junit \
     --output-file results.xml
 
@@ -46,10 +42,8 @@ osdctl iampermissions simulate [flags]
       --manifest-file string     Path to a supplementary test manifest YAML
   -o, --output string            Output format: table, json, junit (default "table")
       --output-file string       Write output to file instead of stdout
-      --policy-dir string        Path to a directory of managed IAM policy JSON files
-      --policy-file string       Path to a managed IAM policy JSON file
       --region string            AWS region for IAM API calls (default "us-east-1")
-  -r, --release-version string   OCP release version to extract CredentialsRequests from
+  -r, --release-version string   OCP release version (required)
 ```
 
 ### Options inherited from parent commands
