@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 const (
@@ -83,84 +81,6 @@ func (rh *Requester) send() (string, error) {
 	}
 
 	return string(body), nil
-}
-
-func getVaultPath(vaultPathKey string) (addr, path string, error error) {
-	if !viper.IsSet(VaultAddr) {
-		return "", "", fmt.Errorf("key '%s' is not set in config file", VaultAddr)
-	}
-	vaultAddr := viper.GetString(VaultAddr)
-
-	if !viper.IsSet(vaultPathKey) {
-		return "", "", fmt.Errorf("key '%s' is not set in config file", vaultPathKey)
-	}
-	vaultPath := viper.GetString(vaultPathKey)
-
-	return vaultAddr, vaultPath, nil
-}
-
-// getScopedAccessToken gets an access token using the vault path in the configuration key specified
-// It will request any scopes listed in the scopes string
-func getScopedAccessToken(configKey string, scopes string) (string, error) {
-	vaultAddr, vaultPath, err := getVaultPath(configKey)
-	if err != nil {
-		return "", err
-	}
-
-	err = setupVaultToken(vaultAddr)
-	if err != nil {
-		return "", nil
-	}
-
-	clientId, clientSecret, err := getSecretFromVault(vaultAddr, vaultPath)
-	if err != nil {
-		return "", nil
-	}
-
-	reqData := url.Values{
-		"grant_type":    {"client_credentials"},
-		"scope":         {scopes},
-		"client_id":     {clientId},
-		"client_secret": {clientSecret},
-	}.Encode()
-
-	requester := Requester{
-		method: http.MethodPost,
-		url:    authURL,
-		data:   string(reqData),
-		headers: map[string]string{
-			"Content-Type": "application/x-www-form-urlencoded",
-		},
-		successCode: http.StatusOK,
-	}
-
-	resp, err := requester.send()
-	if err != nil {
-		return "", err
-	}
-
-	var respObj map[string]interface{}
-	err = json.Unmarshal([]byte(resp), &respObj)
-	if err != nil {
-		return "", err
-	}
-
-	token, ok := respObj["access_token"].(string)
-	if !ok {
-		return "", fmt.Errorf("access token not present in response")
-	}
-
-	fmt.Println("Successfully authenticated with DynaTrace")
-
-	return token, nil
-}
-
-func getDocumentAccessToken() (string, error) {
-	return getScopedAccessToken(DTDocumentVaultPath, DTDocumentScopes)
-}
-
-func getStorageAccessToken() (string, error) {
-	return getScopedAccessToken(DTStorageVaultPath, DTStorageScopes)
 }
 
 type DTQueryPayload struct {
