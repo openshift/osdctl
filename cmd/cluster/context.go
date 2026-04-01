@@ -874,11 +874,12 @@ func (o *contextOptions) buildSplunkURL(data *contextData) string {
 }
 
 func buildHCPSplunkURL(baseURL string, environment string, cluster *cmv1.Cluster) string {
+	baseDomain := cluster.DomainPrefix()
 	switch environment {
 	case "production":
-		return fmt.Sprintf(baseURL, "openshift_managed_hypershift_audit", "production", cluster.ID(), cluster.Name())
+		return fmt.Sprintf(baseURL, "openshift_managed_hypershift_audit", "production", cluster.ID(), baseDomain)
 	case "stage":
-		return fmt.Sprintf(baseURL, "openshift_managed_hypershift_audit_stage", "staging", cluster.ID(), cluster.Name())
+		return fmt.Sprintf(baseURL, "openshift_managed_hypershift_audit_stage", "staging", cluster.ID(), baseDomain)
 	default:
 		return ""
 	}
