@@ -22,6 +22,7 @@ type MockCluster struct {
 	ExternalID        string
 	InfraID           string
 	Name              string
+	DomainPrefix      string
 	CreationTimestamp time.Time
 	HypershiftEnabled bool
 }
@@ -178,6 +179,7 @@ func (m *MockCluster) ToV1Cluster() *v1.Cluster {
 		ExternalID(m.ExternalID).
 		InfraID(m.InfraID).
 		Name(m.Name).
+		DomainPrefix(m.DomainPrefix).
 		CreationTimestamp(m.CreationTimestamp).
 		Hypershift(v1.NewHypershift().Enabled(m.HypershiftEnabled)).
 		Build()
@@ -192,6 +194,7 @@ func TestBuildSplunkURL(t *testing.T) {
 		ocmEnv            string
 		clusterID         string
 		clusterName       string
+		domainPrefix      string
 		infraID           string
 		expectedURL       string
 	}{
@@ -201,7 +204,8 @@ func TestBuildSplunkURL(t *testing.T) {
 			ocmEnv:            "production",
 			clusterID:         "mock-cluster-id",
 			clusterName:       "mock-cluster",
-			expectedURL:       fmt.Sprintf(HCPSplunkURL, "openshift_managed_hypershift_audit", "production", "mock-cluster-id", "mock-cluster"),
+			domainPrefix:      "mock-domain",
+			expectedURL:       fmt.Sprintf(HCPSplunkURL, "openshift_managed_hypershift_audit", "production", "mock-cluster-id", "mock-domain"),
 		},
 		{
 			name:              "Hypershift enabled, stage environment",
@@ -209,7 +213,8 @@ func TestBuildSplunkURL(t *testing.T) {
 			ocmEnv:            "stage",
 			clusterID:         "mock-cluster-id",
 			clusterName:       "mock-cluster",
-			expectedURL:       fmt.Sprintf(HCPSplunkURL, "openshift_managed_hypershift_audit_stage", "staging", "mock-cluster-id", "mock-cluster"),
+			domainPrefix:      "mock-domain",
+			expectedURL:       fmt.Sprintf(HCPSplunkURL, "openshift_managed_hypershift_audit_stage", "staging", "mock-cluster-id", "mock-domain"),
 		},
 		{
 			name:              "Hypershift enabled, unknown environment",
@@ -217,6 +222,7 @@ func TestBuildSplunkURL(t *testing.T) {
 			ocmEnv:            "unknown",
 			clusterID:         "mock-cluster-id",
 			clusterName:       "mock-cluster",
+			domainPrefix:      "mock-domain",
 			expectedURL:       "",
 		},
 		{
@@ -247,7 +253,8 @@ func TestBuildSplunkURL(t *testing.T) {
 			ocmEnv:            "stage",
 			clusterID:         "mock-cluster-id",
 			clusterName:       "mock-cluster",
-			expectedURL:       fmt.Sprintf(SGPSplunkURL, "openshift_managed_hypershift_audit_stage", "staging", "mock-cluster-id", "mock-cluster"),
+			domainPrefix:      "mock-domain",
+			expectedURL:       fmt.Sprintf(SGPSplunkURL, "openshift_managed_hypershift_audit_stage", "staging", "mock-cluster-id", "mock-domain"),
 		},
 	}
 
@@ -256,6 +263,7 @@ func TestBuildSplunkURL(t *testing.T) {
 			mockCluster := &MockCluster{
 				ID:                tc.clusterID,
 				Name:              tc.clusterName,
+				DomainPrefix:      tc.domainPrefix,
 				HypershiftEnabled: tc.hypershiftEnabled,
 				CreationTimestamp: time.Now(),
 			}
