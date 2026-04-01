@@ -63,9 +63,14 @@ func NewCmdHCPMustGather() *cobra.Command {
 }
 
 func (g *GatherLogsOpts) GatherLogs(clusterID string, elevationReasons ...string) (error error) {
-	accessToken, err := getStorageAccessToken()
+	tokenProvider, err := getStorageTokenProvider()
 	if err != nil {
-		return fmt.Errorf("failed to acquire access token %v", err)
+		return fmt.Errorf("failed to setup access token provider: %v", err)
+	}
+
+	// Eagerly fetch the first token to fail fast on auth issues
+	if _, err := tokenProvider.Token(); err != nil {
+		return fmt.Errorf("failed to acquire access token: %v", err)
 	}
 
 	hcpCluster, err := FetchClusterDetails(clusterID)
@@ -100,7 +105,7 @@ func (g *GatherLogsOpts) GatherLogs(clusterID string, elevationReasons ...string
 			return err
 		}
 
-		err = g.dumpPodLogs(pods, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, accessToken, g.Since, g.Tail, g.SortOrder)
+		err = g.dumpPodLogs(pods, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, tokenProvider, g.Since, g.Tail, g.SortOrder)
 		if err != nil {
 			return err
 		}
@@ -110,12 +115,12 @@ func (g *GatherLogsOpts) GatherLogs(clusterID string, elevationReasons ...string
 			return err
 		}
 
-		err = g.dumpEvents(deployments, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, accessToken, g.Since, g.Tail, g.SortOrder)
+		err = g.dumpEvents(deployments, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, tokenProvider, g.Since, g.Tail, g.SortOrder)
 		if err != nil {
 			return err
 		}
 
-		err = g.dumpRestartedPodLogs(pods, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, accessToken)
+		err = g.dumpRestartedPodLogs(pods, nsDir, gatherNS, hcpCluster.managementClusterName, hcpCluster.DynatraceURL, tokenProvider)
 		if err != nil {
 			return err
 		}
@@ -125,7 +130,7 @@ func (g *GatherLogsOpts) GatherLogs(clusterID string, elevationReasons ...string
 	return nil
 }
 
-func (g *GatherLogsOpts) dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS string, managementClusterName string, DTURL string, accessToken string, since int, tail int, sortOrder string) error {
+func (g *GatherLogsOpts) dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS string, managementClusterName string, DTURL string, tokenProvider AccessTokenProvider, since int, tail int, sortOrder string) error {
 	totalDeployments := len(deploys.Items)
 	for k, d := range deploys.Items {
 		fmt.Printf("[%d/%d] Deployment events for %s\n", k+1, totalDeployments, d.Name)
@@ -167,6 +172,11 @@ func (g *GatherLogsOpts) dumpEvents(deploys *appsv1.DeploymentList, parentDir st
 			return err
 		}
 
+		accessToken, err := tokenProvider.Token()
+		if err != nil {
+			return fmt.Errorf("failed to get access token: %v", err)
+		}
+
 		eventsRequestToken, err := getDTQueryExecution(DTURL, accessToken, eventQuery.finalQuery)
 		if err != nil {
 			log.Print("failed to get request token", err)
@@ -183,7 +193,7 @@ func (g *GatherLogsOpts) dumpEvents(deploys *appsv1.DeploymentList, parentDir st
 	return nil
 }
 
-func (g *GatherLogsOpts) dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, managementClusterName string, DTURL string, accessToken string, since int, tail int, sortOrder string) error {
+func (g *GatherLogsOpts) dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, managementClusterName string, DTURL string, tokenProvider AccessTokenProvider, since int, tail int, sortOrder string) error {
 	totalPods := len(pods.Items)
 	for k, p := range pods.Items {
 		fmt.Printf("[%d/%d] Pod logs for %s\n", k+1, totalPods, p.Name)
@@ -222,6 +232,11 @@ func (g *GatherLogsOpts) dumpPodLogs(pods *corev1.PodList, parentDir string, tar
 			return err
 		}
 
+		accessToken, err := tokenProvider.Token()
+		if err != nil {
+			return fmt.Errorf("failed to get access token: %v", err)
+		}
+
 		podLogsRequestToken, err := getDTQueryExecution(DTURL, accessToken, podLogsQuery.finalQuery)
 		if err != nil {
 			log.Print("failed to get request token", err)
@@ -238,7 +253,7 @@ func (g *GatherLogsOpts) dumpPodLogs(pods *corev1.PodList, parentDir string, tar
 	return nil
 }
 
-func (g *GatherLogsOpts) dumpRestartedPodLogs(pods *corev1.PodList, parentDir string, targetNS string, managementClusterName string, DTURL string, accessToken string) error {
+func (g *GatherLogsOpts) dumpRestartedPodLogs(pods *corev1.PodList, parentDir string, targetNS string, managementClusterName string, DTURL string, tokenProvider AccessTokenProvider) error {
 	var podList []string
 	for _, p := range pods.Items {
 		podList = append(podList, p.Name)
@@ -261,6 +276,11 @@ func (g *GatherLogsOpts) dumpRestartedPodLogs(pods *corev1.PodList, parentDir st
 	f, err := os.OpenFile(restartedPodLogsFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0655)
 	if err != nil {
 		return err
+	}
+
+	accessToken, err := tokenProvider.Token()
+	if err != nil {
+		return fmt.Errorf("failed to get access token: %v", err)
 	}
 
 	podLogsRequestToken, err := getDTQueryExecution(DTURL, accessToken, restartedPodLogsQuery.finalQuery)
