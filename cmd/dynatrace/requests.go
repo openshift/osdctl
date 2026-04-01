@@ -109,12 +109,12 @@ func getScopedAccessToken(configKey string, scopes string) (string, error) {
 
 	err = setupVaultToken(vaultAddr)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 
 	clientId, clientSecret, err := getSecretFromVault(vaultAddr, vaultPath)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 
 	reqData := url.Values{
