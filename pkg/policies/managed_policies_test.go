@@ -128,12 +128,20 @@ func TestLoadPoliciesFromDir_SkipsNonJSON(t *testing.T) {
 
 	// Create a valid JSON policy file
 	policyJSON := `{"Version": "2012-10-17", "Statement": []}`
-	os.WriteFile(filepath.Join(dir, "test_policy.json"), []byte(policyJSON), 0644)
+	if err := os.WriteFile(filepath.Join(dir, "test_policy.json"), []byte(policyJSON), 0600); err != nil {
+		t.Fatalf("failed to write test policy file: %v", err)
+	}
 
 	// Create non-JSON files that should be skipped
-	os.WriteFile(filepath.Join(dir, "readme.txt"), []byte("not a policy"), 0644)
-	os.WriteFile(filepath.Join(dir, "manifest.yaml"), []byte("not a policy"), 0644)
-	os.Mkdir(filepath.Join(dir, "subdir"), 0755)
+	if err := os.WriteFile(filepath.Join(dir, "readme.txt"), []byte("not a policy"), 0600); err != nil {
+		t.Fatalf("failed to write readme.txt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifest.yaml"), []byte("not a policy"), 0600); err != nil {
+		t.Fatalf("failed to write manifest.yaml: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "subdir"), 0755); err != nil {
+		t.Fatalf("failed to create subdir: %v", err)
+	}
 
 	docs, err := LoadPoliciesFromDir(dir)
 	if err != nil {
