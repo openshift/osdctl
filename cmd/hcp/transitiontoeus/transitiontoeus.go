@@ -31,8 +31,8 @@ type transitionOptions struct {
 
 // Service log template mappings
 var serviceLogTemplates = map[string]string{
-	"success":   "https://raw.githubusercontent.com/diakovnec/managed-notifications/refs/heads/ohss-49572-notification/hcp/eus_transition_success.json",
-	"attempted": "https://raw.githubusercontent.com/diakovnec/managed-notifications/refs/heads/ohss-49572-notification/hcp/eus_transition_attempted.json",
+	"success":   "https://raw.githubusercontent.com/openshift/managed-notifications/master/hcp/eus_transition_success.json",
+	"attempted": "https://raw.githubusercontent.com/openshift/managed-notifications/master/hcp/eus_transition_attempted.json",
 }
 
 // Regular expression for valid cluster IDs - alphanumeric characters and hyphens only
