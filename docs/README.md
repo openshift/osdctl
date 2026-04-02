@@ -3271,8 +3271,6 @@ policies are compared against the respective operator CredentialsRequests
 extracted from the release image.
 
 Examples:
-
-```bash
   # Compare all managed policies for a version against operator CRs
   osdctl iampermissions simulate \
     --release-version 4.17.0
@@ -3287,7 +3285,6 @@ Examples:
     --release-version 4.17.0 \
     --output junit \
     --output-file results.xml
-```
 
 ```
 osdctl iampermissions simulate [flags]
