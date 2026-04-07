@@ -35,6 +35,9 @@ var serviceLogTemplates = map[string]string{
 	"attempted": "https://raw.githubusercontent.com/openshift/managed-notifications/master/hcp/eus_transition_attempted.json",
 }
 
+// Template cache to avoid re-fetching the same templates in batch mode
+var templateCache = make(map[string][]byte)
+
 // Regular expression for valid cluster IDs - alphanumeric characters and hyphens only
 var validClusterIDRegex = regexp.MustCompile(`^[a-zA-Z0-9-]+$`)
 
@@ -421,9 +424,9 @@ func (o *transitionOptions) processCluster(ocmClient *sdk.Connection, cluster *v
 			return result
 		}
 
-		// Step 4: Verify channel change
-		time.Sleep(2 * time.Second) // Give OCM time to process
-		updatedCluster, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(cluster.ID()).Get().Send()
+		// Step 4: Verify channel change with bounded polling
+		fmt.Printf("  🔍 Verifying channel transition\n")
+		newChannel, err := o.pollChannelChange(ocmClient, cluster, "eus", 10, 2*time.Second)
 		if err != nil {
 			// Verification failed - try to restore policy if we deleted it
 			if result.policyWasModified {
@@ -441,25 +444,7 @@ func (o *transitionOptions) processCluster(ocmClient *sdk.Connection, cluster *v
 			return result
 		}
 
-		newChannel := updatedCluster.Body().Version().ChannelGroup()
-		if newChannel != "eus" {
-			// Verification failed - try to restore policy if we deleted it
-			if result.policyWasModified {
-				fmt.Printf("  🔁 Channel verification failed - attempting to restore upgrade policy\n")
-				if restoreErr := o.restoreUpgradePolicy(ocmClient, cluster, policy); restoreErr != nil {
-					result.err = fmt.Errorf("channel verification failed - expected 'eus' but got '%s' (CRITICAL: also failed to restore policy: %v)", newChannel, restoreErr)
-				} else {
-					result.policyWasRestored = true
-					result.err = fmt.Errorf("channel verification failed - expected 'eus' but got '%s' (upgrade policy was restored)", newChannel)
-					fmt.Printf("  ✓ Upgrade policy restored after failure\n")
-				}
-			} else {
-				result.err = fmt.Errorf("channel verification failed - expected 'eus' but got '%s'", newChannel)
-			}
-			return result
-		}
-
-		fmt.Printf("  ✓ Channel successfully transitioned to 'eus'\n")
+		fmt.Printf("  ✓ Channel successfully transitioned to 'eus' (verified: %s)\n", newChannel)
 	}
 
 	// Step 5: Restore recurring policy if it existed
@@ -549,7 +534,36 @@ func (o *transitionOptions) restoreUpgradePolicy(ocmClient *sdk.Connection, clus
 	return err
 }
 
+// pollChannelChange polls OCM to verify the channel change with bounded retries
+func (o *transitionOptions) pollChannelChange(ocmClient *sdk.Connection, cluster *v1.Cluster, expectedChannel string, maxAttempts int, interval time.Duration) (string, error) {
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		time.Sleep(interval)
+
+		updatedCluster, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(cluster.ID()).Get().Send()
+		if err != nil {
+			// Only fail on last attempt, otherwise retry
+			if attempt == maxAttempts {
+				return "", fmt.Errorf("failed to get cluster after %d attempts: %w", maxAttempts, err)
+			}
+			continue
+		}
+
+		currentChannel := updatedCluster.Body().Version().ChannelGroup()
+		if currentChannel == expectedChannel {
+			return currentChannel, nil
+		}
+
+		// Only fail on last attempt
+		if attempt == maxAttempts {
+			return currentChannel, fmt.Errorf("channel verification failed after %d attempts - expected '%s' but got '%s'", maxAttempts, expectedChannel, currentChannel)
+		}
+	}
+
+	return "", fmt.Errorf("unexpected error in polling loop")
+}
+
 // loadServiceLogTemplate loads a service log template from either a predefined template name or file path
+// Templates are cached to avoid re-fetching in batch mode
 func loadServiceLogTemplate(templateOrFile string) ([]byte, bool, error) {
 	var templateBytes []byte
 	var err error
@@ -557,14 +571,20 @@ func loadServiceLogTemplate(templateOrFile string) ([]byte, bool, error) {
 
 	// Check if it's a template name
 	if templateURL, exists := serviceLogTemplates[templateOrFile]; exists {
-		// Use predefined template URL
+		// Check cache first
+		if cached, found := templateCache[templateOrFile]; found {
+			return cached, true, nil
+		}
+
+		// Fetch and cache the template
 		templateBytes, err = utils.CurlThis(templateURL)
 		if err != nil {
 			return nil, false, fmt.Errorf("failed to fetch template from %s: %w", templateURL, err)
 		}
+		templateCache[templateOrFile] = templateBytes
 		usingDefaultTemplate = true
 	} else {
-		// Treat as file path
+		// Treat as file path - don't cache file-based templates as they may be edited between runs
 		templateBytes, err = os.ReadFile(templateOrFile)
 		if err != nil {
 			return nil, false, fmt.Errorf("failed to read template file %s: %w", templateOrFile, err)
@@ -588,9 +608,12 @@ func promptAndSendServiceLog(ocmClient *sdk.Connection, cluster *v1.Cluster, tem
 		return fmt.Errorf("failed to parse service log template: %w", err)
 	}
 
-	// Set cluster-specific fields
+	// Set cluster-specific fields (matching cmd/servicelog/post.go:612-617)
 	message.ClusterUUID = cluster.ExternalID()
 	message.ClusterID = cluster.ID()
+	if subscription := cluster.Subscription(); subscription != nil {
+		message.SubscriptionID = subscription.ID()
+	}
 
 	// Validate that all required parameters were replaced
 	if leftoverParams, found := message.FindLeftovers(); found {
@@ -632,6 +655,7 @@ func promptAndSendServiceLog(ocmClient *sdk.Connection, cluster *v1.Cluster, tem
 }
 
 // sendServiceLog sends the prepared service log message
+// Implementation aligned with cmd/servicelog/post.go:304-310
 func sendServiceLog(ocmClient *sdk.Connection, message *servicelog.Message) error {
 	request := ocmClient.Post()
 	if err := arguments.ApplyPathArg(request, "/api/service_logs/v1/cluster_logs"); err != nil {
@@ -650,7 +674,8 @@ func sendServiceLog(ocmClient *sdk.Connection, message *servicelog.Message) erro
 		return fmt.Errorf("failed to send service log: %w", err)
 	}
 
-	if response.Status() != 201 {
+	// Match existing implementation: accept any 2xx/3xx status as success
+	if response.Status() >= 400 {
 		return fmt.Errorf("service log request failed with status: %d", response.Status())
 	}
 
