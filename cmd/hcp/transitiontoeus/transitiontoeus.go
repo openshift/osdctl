@@ -347,12 +347,12 @@ func (o *transitionOptions) preValidateClusters(clusters []*v1.Cluster) ([]*v1.C
 
 // recurringPolicyBackup stores complete information needed to restore a recurring upgrade policy
 type recurringPolicyBackup struct {
-	id          string
-	schedule    string
+	id           string
+	schedule     string
 	scheduleType v1.ScheduleType
-	upgradeType v1.UpgradeType
-	enableMinor bool
-	version     string // May be empty for automatic policies
+	upgradeType  v1.UpgradeType
+	enableMinor  bool
+	version      string // May be empty for automatic policies
 }
 
 // policyDetails stores information about a cluster's upgrade policies
