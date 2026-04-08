@@ -483,15 +483,30 @@ func (o *transitionOptions) getUpgradePolicyDetails(ocmClient *sdk.Connection, c
 		return &policyDetails{hasRecurringPolicy: false}, nil
 	}
 
-	// Get the first policy (there should only be one)
-	policy := policies[0]
+	// Filter for recurring (automatic) policies only - ignore one-off manual upgrade policies
+	// One-off manual policies (ScheduleTypeManual) are customer-scheduled upgrades that should not be touched
+	var recurringPolicy *v1.ControlPlaneUpgradePolicy
+	for _, policy := range policies {
+		if policy.ScheduleType() == v1.ScheduleTypeAutomatic {
+			if recurringPolicy != nil {
+				return nil, fmt.Errorf("found multiple automatic recurring policies (IDs: %s, %s) - this is unexpected, please review cluster state manually", recurringPolicy.ID(), policy.ID())
+			}
+			recurringPolicy = policy
+		}
+		// Skip manual one-off policies - these are customer-scheduled and should not be deleted
+	}
+
+	// No recurring policies found - cluster uses individual updates or only has one-off manual upgrades
+	if recurringPolicy == nil {
+		return &policyDetails{hasRecurringPolicy: false}, nil
+	}
 
 	return &policyDetails{
 		hasRecurringPolicy: true,
-		policyID:           policy.ID(),
-		schedule:           policy.Schedule(),
-		scheduleType:       string(policy.ScheduleType()),
-		enableMinor:        policy.EnableMinorVersionUpgrades(),
+		policyID:           recurringPolicy.ID(),
+		schedule:           recurringPolicy.Schedule(),
+		scheduleType:       string(recurringPolicy.ScheduleType()),
+		enableMinor:        recurringPolicy.EnableMinorVersionUpgrades(),
 	}, nil
 }
 
