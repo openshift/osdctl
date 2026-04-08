@@ -35,13 +35,13 @@ SERVICE LOG BEHAVIOR:
 
 This approach extends the support lifecycle for clusters on even y-streams without forcing upgrades.
 
-```bash
+```
 osdctl hcp transition-to-eus [flags]
 ```
 
 ### Examples
 
-```bash
+```
   # Transition single cluster (will prompt to send service log after success)
   osdctl hcp transition-to-eus -C cluster123
 
@@ -55,7 +55,7 @@ osdctl hcp transition-to-eus [flags]
 
 ### Options
 
-```text
+```
   -C, --cluster-id string      ID of the target HCP cluster
   -c, --clusters-file string   JSON file containing cluster IDs (format: {"clusters":["$CLUSTERID1", "$CLUSTERID2"]})
       --dry-run                Simulate the transition without making any changes
@@ -64,7 +64,7 @@ osdctl hcp transition-to-eus [flags]
 
 ### Options inherited from parent commands
 
-```text
+```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
       --context string                   The name of the kubeconfig context to use

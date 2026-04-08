@@ -3268,13 +3268,13 @@ SERVICE LOG BEHAVIOR:
 
 This approach extends the support lifecycle for clusters on even y-streams without forcing upgrades.
 
-```bash
+```
 osdctl hcp transition-to-eus [flags]
 ```
 
 #### Flags
 
-```text
+```
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
   -C, --cluster-id string                ID of the target HCP cluster
