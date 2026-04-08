@@ -345,13 +345,20 @@ func (o *transitionOptions) preValidateClusters(clusters []*v1.Cluster) ([]*v1.C
 	return eligible, skipped
 }
 
-// policyDetails stores information about a cluster's upgrade policy
+// recurringPolicyBackup stores complete information needed to restore a recurring upgrade policy
+type recurringPolicyBackup struct {
+	id          string
+	schedule    string
+	scheduleType v1.ScheduleType
+	upgradeType v1.UpgradeType
+	enableMinor bool
+	version     string // May be empty for automatic policies
+}
+
+// policyDetails stores information about a cluster's upgrade policies
 type policyDetails struct {
-	hasRecurringPolicy bool
-	policyID           string
-	schedule           string
-	scheduleType       string
-	enableMinor        bool
+	hasRecurringPolicies bool
+	recurringPolicies    []recurringPolicyBackup
 }
 
 // clusterProcessResult contains the result of processing a cluster
@@ -383,23 +390,27 @@ func (o *transitionOptions) processCluster(ocmClient *sdk.Connection, cluster *v
 		return result
 	}
 
-	// Step 2: Delete recurring policy if it exists
-	if policy.hasRecurringPolicy {
-		fmt.Printf("  📋 Found recurring update policy (schedule: %s)\n", policy.schedule)
+	// Step 2: Delete recurring policies if they exist
+	if policy.hasRecurringPolicies {
+		if len(policy.recurringPolicies) == 1 {
+			fmt.Printf("  📋 Found recurring update policy (schedule: %s)\n", policy.recurringPolicies[0].schedule)
+		} else {
+			fmt.Printf("  📋 Found %d recurring update policies\n", len(policy.recurringPolicies))
+		}
 
 		if o.dryRun {
-			fmt.Printf("  🔍 DRY-RUN: Would delete upgrade policy\n")
+			fmt.Printf("  🔍 DRY-RUN: Would delete %d upgrade policy/policies\n", len(policy.recurringPolicies))
 		} else {
-			fmt.Printf("  🗑️  Deleting upgrade policy to allow channel transition\n")
-			if err := o.deleteUpgradePolicy(ocmClient, cluster, policy.policyID); err != nil {
-				result.err = fmt.Errorf("failed to delete upgrade policy: %w", err)
+			fmt.Printf("  🗑️  Deleting %d upgrade policy/policies to allow channel transition\n", len(policy.recurringPolicies))
+			if err := o.deleteUpgradePolicies(ocmClient, cluster, policy.recurringPolicies); err != nil {
+				result.err = fmt.Errorf("failed to delete upgrade policies: %w", err)
 				return result
 			}
-			// Mark that we've modified the policy
+			// Mark that we've modified the policies
 			result.policyWasModified = true
 		}
 	} else {
-		fmt.Printf("  ℹ️  Cluster uses individual updates (no policy to delete)\n")
+		fmt.Printf("  ℹ️  Cluster uses individual updates (no recurring policies to delete)\n")
 	}
 
 	// Step 3: Transition channel to EUS
@@ -408,15 +419,15 @@ func (o *transitionOptions) processCluster(ocmClient *sdk.Connection, cluster *v
 	} else {
 		fmt.Printf("  🔄 Transitioning channel from '%s' to 'eus'\n", currentChannel)
 		if err := o.transitionChannelToEUS(ocmClient, cluster); err != nil {
-			// Channel transition failed - try to restore policy if we deleted it
+			// Channel transition failed - try to restore policies if we deleted them
 			if result.policyWasModified {
-				fmt.Printf("  🔁 Channel transition failed - attempting to restore upgrade policy\n")
-				if restoreErr := o.restoreUpgradePolicy(ocmClient, cluster, policy); restoreErr != nil {
-					result.err = fmt.Errorf("failed to transition channel: %w (CRITICAL: also failed to restore policy: %v)", err, restoreErr)
+				fmt.Printf("  🔁 Channel transition failed - attempting to restore upgrade policies\n")
+				if restoreErr := o.restoreUpgradePolicies(ocmClient, cluster, policy.recurringPolicies); restoreErr != nil {
+					result.err = fmt.Errorf("failed to transition channel: %w (CRITICAL: also failed to restore policies: %v)", err, restoreErr)
 				} else {
 					result.policyWasRestored = true
-					result.err = fmt.Errorf("failed to transition channel: %w (upgrade policy was restored)", err)
-					fmt.Printf("  ✓ Upgrade policy restored after failure\n")
+					result.err = fmt.Errorf("failed to transition channel: %w (upgrade policies restored)", err)
+					fmt.Printf("  ✓ Upgrade policies restored after failure\n")
 				}
 			} else {
 				result.err = fmt.Errorf("failed to transition channel: %w", err)
@@ -428,15 +439,15 @@ func (o *transitionOptions) processCluster(ocmClient *sdk.Connection, cluster *v
 		fmt.Printf("  🔍 Verifying channel transition\n")
 		newChannel, err := o.pollChannelChange(ocmClient, cluster, "eus", 10, 2*time.Second)
 		if err != nil {
-			// Verification failed - try to restore policy if we deleted it
+			// Verification failed - try to restore policies if we deleted them
 			if result.policyWasModified {
-				fmt.Printf("  🔁 Channel verification failed - attempting to restore upgrade policy\n")
-				if restoreErr := o.restoreUpgradePolicy(ocmClient, cluster, policy); restoreErr != nil {
-					result.err = fmt.Errorf("failed to verify channel change: %w (CRITICAL: also failed to restore policy: %v)", err, restoreErr)
+				fmt.Printf("  🔁 Channel verification failed - attempting to restore upgrade policies\n")
+				if restoreErr := o.restoreUpgradePolicies(ocmClient, cluster, policy.recurringPolicies); restoreErr != nil {
+					result.err = fmt.Errorf("failed to verify channel change: %w (CRITICAL: also failed to restore policies: %v)", err, restoreErr)
 				} else {
 					result.policyWasRestored = true
-					result.err = fmt.Errorf("failed to verify channel change: %w (upgrade policy was restored)", err)
-					fmt.Printf("  ✓ Upgrade policy restored after failure\n")
+					result.err = fmt.Errorf("failed to verify channel change: %w (upgrade policies restored)", err)
+					fmt.Printf("  ✓ Upgrade policies restored after failure\n")
 				}
 			} else {
 				result.err = fmt.Errorf("failed to verify channel change: %w", err)
@@ -447,18 +458,18 @@ func (o *transitionOptions) processCluster(ocmClient *sdk.Connection, cluster *v
 		fmt.Printf("  ✓ Channel successfully transitioned to 'eus' (verified: %s)\n", newChannel)
 	}
 
-	// Step 5: Restore recurring policy if it existed
-	if policy.hasRecurringPolicy {
+	// Step 5: Restore recurring policies if they existed
+	if policy.hasRecurringPolicies {
 		if o.dryRun {
-			fmt.Printf("  🔍 DRY-RUN: Would restore upgrade policy\n")
+			fmt.Printf("  🔍 DRY-RUN: Would restore %d upgrade policy/policies\n", len(policy.recurringPolicies))
 		} else {
-			fmt.Printf("  🔁 Restoring upgrade policy\n")
-			if err := o.restoreUpgradePolicy(ocmClient, cluster, policy); err != nil {
-				result.err = fmt.Errorf("failed to restore upgrade policy: %w", err)
+			fmt.Printf("  🔁 Restoring %d upgrade policy/policies\n", len(policy.recurringPolicies))
+			if err := o.restoreUpgradePolicies(ocmClient, cluster, policy.recurringPolicies); err != nil {
+				result.err = fmt.Errorf("failed to restore upgrade policies: %w", err)
 				return result
 			}
 			result.policyWasRestored = true
-			fmt.Printf("  ✓ Upgrade policy restored\n")
+			fmt.Printf("  ✓ Upgrade policies restored\n")
 		}
 	}
 
@@ -480,40 +491,51 @@ func (o *transitionOptions) getUpgradePolicyDetails(ocmClient *sdk.Connection, c
 
 	policies := policiesResponse.Items().Slice()
 	if len(policies) == 0 {
-		return &policyDetails{hasRecurringPolicy: false}, nil
+		return &policyDetails{hasRecurringPolicies: false}, nil
 	}
 
-	// Filter for recurring (automatic) policies only - ignore one-off manual upgrade policies
+	// Filter and preserve all recurring (automatic) policies - ignore one-off manual upgrade policies
 	// One-off manual policies (ScheduleTypeManual) are customer-scheduled upgrades that should not be touched
-	var recurringPolicy *v1.ControlPlaneUpgradePolicy
+	var recurringPolicies []recurringPolicyBackup
 	for _, policy := range policies {
 		if policy.ScheduleType() == v1.ScheduleTypeAutomatic {
-			if recurringPolicy != nil {
-				return nil, fmt.Errorf("found multiple automatic recurring policies (IDs: %s, %s) - this is unexpected, please review cluster state manually", recurringPolicy.ID(), policy.ID())
+			// Preserve complete policy details for faithful restoration
+			backup := recurringPolicyBackup{
+				id:           policy.ID(),
+				schedule:     policy.Schedule(),
+				scheduleType: policy.ScheduleType(),
+				upgradeType:  policy.UpgradeType(),
+				enableMinor:  policy.EnableMinorVersionUpgrades(),
 			}
-			recurringPolicy = policy
+			// Version may be empty for automatic policies
+			if policy.Version() != "" {
+				backup.version = policy.Version()
+			}
+			recurringPolicies = append(recurringPolicies, backup)
 		}
 		// Skip manual one-off policies - these are customer-scheduled and should not be deleted
 	}
 
 	// No recurring policies found - cluster uses individual updates or only has one-off manual upgrades
-	if recurringPolicy == nil {
-		return &policyDetails{hasRecurringPolicy: false}, nil
+	if len(recurringPolicies) == 0 {
+		return &policyDetails{hasRecurringPolicies: false}, nil
 	}
 
 	return &policyDetails{
-		hasRecurringPolicy: true,
-		policyID:           recurringPolicy.ID(),
-		schedule:           recurringPolicy.Schedule(),
-		scheduleType:       string(recurringPolicy.ScheduleType()),
-		enableMinor:        recurringPolicy.EnableMinorVersionUpgrades(),
+		hasRecurringPolicies: true,
+		recurringPolicies:    recurringPolicies,
 	}, nil
 }
 
-func (o *transitionOptions) deleteUpgradePolicy(ocmClient *sdk.Connection, cluster *v1.Cluster, policyID string) error {
-	_, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(cluster.ID()).
-		ControlPlane().UpgradePolicies().ControlPlaneUpgradePolicy(policyID).Delete().Send()
-	return err
+func (o *transitionOptions) deleteUpgradePolicies(ocmClient *sdk.Connection, cluster *v1.Cluster, policies []recurringPolicyBackup) error {
+	for _, policy := range policies {
+		_, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(cluster.ID()).
+			ControlPlane().UpgradePolicies().ControlPlaneUpgradePolicy(policy.id).Delete().Send()
+		if err != nil {
+			return fmt.Errorf("failed to delete policy %s: %w", policy.id, err)
+		}
+	}
+	return nil
 }
 
 func (o *transitionOptions) transitionChannelToEUS(ocmClient *sdk.Connection, cluster *v1.Cluster) error {
@@ -528,25 +550,32 @@ func (o *transitionOptions) transitionChannelToEUS(ocmClient *sdk.Connection, cl
 	return err
 }
 
-func (o *transitionOptions) restoreUpgradePolicy(ocmClient *sdk.Connection, cluster *v1.Cluster, policy *policyDetails) error {
-	scheduleType := v1.ScheduleTypeAutomatic
-	if policy.scheduleType == "manual" {
-		scheduleType = v1.ScheduleTypeManual
-	}
+func (o *transitionOptions) restoreUpgradePolicies(ocmClient *sdk.Connection, cluster *v1.Cluster, policies []recurringPolicyBackup) error {
+	for _, backup := range policies {
+		// Build policy with all preserved fields
+		policyBuilder := v1.NewControlPlaneUpgradePolicy().
+			Schedule(backup.schedule).
+			ScheduleType(backup.scheduleType).
+			UpgradeType(backup.upgradeType).
+			EnableMinorVersionUpgrades(backup.enableMinor)
 
-	newPolicy, err := v1.NewControlPlaneUpgradePolicy().
-		Schedule(policy.schedule).
-		ScheduleType(scheduleType).
-		UpgradeType(v1.UpgradeTypeControlPlane).
-		EnableMinorVersionUpgrades(policy.enableMinor).
-		Build()
-	if err != nil {
-		return fmt.Errorf("failed to build upgrade policy: %w", err)
-	}
+		// Add version if it was present in the original policy
+		if backup.version != "" {
+			policyBuilder = policyBuilder.Version(backup.version)
+		}
 
-	_, err = ocmClient.ClustersMgmt().V1().Clusters().Cluster(cluster.ID()).
-		ControlPlane().UpgradePolicies().Add().Body(newPolicy).Send()
-	return err
+		newPolicy, err := policyBuilder.Build()
+		if err != nil {
+			return fmt.Errorf("failed to build upgrade policy: %w", err)
+		}
+
+		_, err = ocmClient.ClustersMgmt().V1().Clusters().Cluster(cluster.ID()).
+			ControlPlane().UpgradePolicies().Add().Body(newPolicy).Send()
+		if err != nil {
+			return fmt.Errorf("failed to restore policy: %w", err)
+		}
+	}
+	return nil
 }
 
 // pollChannelChange polls OCM to verify the channel change with bounded retries
