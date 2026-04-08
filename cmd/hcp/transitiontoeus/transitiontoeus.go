@@ -670,7 +670,7 @@ func promptAndSendServiceLog(ocmClient *sdk.Connection, cluster *v1.Cluster, tem
 }
 
 // sendServiceLog sends the prepared service log message
-// Implementation aligned with cmd/servicelog/post.go:304-310
+// Implementation aligned with cmd/servicelog/post.go:304-310 and common.go:24-56
 func sendServiceLog(ocmClient *sdk.Connection, message *servicelog.Message) error {
 	request := ocmClient.Post()
 	if err := arguments.ApplyPathArg(request, "/api/service_logs/v1/cluster_logs"); err != nil {
@@ -689,12 +689,70 @@ func sendServiceLog(ocmClient *sdk.Connection, message *servicelog.Message) erro
 		return fmt.Errorf("failed to send service log: %w", err)
 	}
 
-	// Match existing implementation: accept any 2xx/3xx status as success
-	if response.Status() >= 400 {
-		return fmt.Errorf("service log request failed with status: %d", response.Status())
+	body := response.Bytes()
+
+	// Validate response body - match cmd/servicelog/post.go:339-356
+	if response.Status() < 400 {
+		// Success response - validate that API echoed back expected fields
+		if err := validateServiceLogResponse(body, *message); err != nil {
+			return fmt.Errorf("service log sent but response validation failed: %w", err)
+		}
+		return nil
+	}
+
+	// Error response - parse and return the error reason
+	badReply, err := validateBadServiceLogResponse(body)
+	if err != nil {
+		return fmt.Errorf("service log request failed with status %d: %w", response.Status(), err)
+	}
+	return fmt.Errorf("service log request failed: %s (status: %d)", badReply.Reason, response.Status())
+}
+
+// validateServiceLogResponse validates that the API response echoes back the expected message fields
+// Implementation from cmd/servicelog/common.go:24-50
+func validateServiceLogResponse(body []byte, clusterMessage servicelog.Message) error {
+	if !json.Valid(body) {
+		return fmt.Errorf("server returned invalid JSON")
+	}
+
+	var goodReply servicelog.GoodReply
+	if err := json.Unmarshal(body, &goodReply); err != nil {
+		return fmt.Errorf("cannot parse the JSON response: %w", err)
+	}
+
+	// Validate that critical fields match what we sent
+	if goodReply.Severity != clusterMessage.Severity {
+		return fmt.Errorf("wrong severity echoed (sent %q, got %q)", clusterMessage.Severity, goodReply.Severity)
+	}
+	if goodReply.ServiceName != clusterMessage.ServiceName {
+		return fmt.Errorf("wrong service_name echoed (sent %q, got %q)", clusterMessage.ServiceName, goodReply.ServiceName)
+	}
+	if goodReply.ClusterUUID != clusterMessage.ClusterUUID {
+		return fmt.Errorf("wrong cluster_uuid echoed (sent %q, got %q)", clusterMessage.ClusterUUID, goodReply.ClusterUUID)
+	}
+	if goodReply.Summary != clusterMessage.Summary {
+		return fmt.Errorf("wrong summary echoed (sent %q, got %q)", clusterMessage.Summary, goodReply.Summary)
+	}
+	if goodReply.Description != clusterMessage.Description {
+		return fmt.Errorf("wrong description echoed (sent %q, got %q)", clusterMessage.Description, goodReply.Description)
 	}
 
 	return nil
+}
+
+// validateBadServiceLogResponse parses error response body
+// Implementation from cmd/servicelog/common.go:52-59
+func validateBadServiceLogResponse(body []byte) (*servicelog.BadReply, error) {
+	if !json.Valid(body) {
+		return nil, fmt.Errorf("server returned invalid JSON")
+	}
+
+	var badReply servicelog.BadReply
+	if err := json.Unmarshal(body, &badReply); err != nil {
+		return nil, fmt.Errorf("cannot parse error JSON response: %w", err)
+	}
+
+	return &badReply, nil
 }
 
 func (o *transitionOptions) printSummary(successful, failed []string) {
