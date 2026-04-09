@@ -29,6 +29,7 @@ type saasOptions struct {
 	gitHash                  string
 	namespaceRef             string
 	isHotfix                 bool
+	isPKO                    bool
 }
 
 func validateSaasServiceFilePath(filePath string) string {
@@ -270,7 +271,12 @@ func NewCmdSaas() *cobra.Command {
 
 				cmd.SilenceUsage = true
 
-				service, err := servicesRegistry.GetService(ops.serviceId)
+				serviceId := ops.serviceId
+				if ops.isPKO && !strings.HasSuffix(serviceId, "-pko") {
+					serviceId += "-pko"
+				}
+
+				service, err := servicesRegistry.GetService(serviceId)
 				if err != nil {
 					return err
 				}
@@ -291,6 +297,7 @@ func NewCmdSaas() *cobra.Command {
 	saasCmd.Flags().StringVarP(&ops.namespaceRef, "namespaceRef", "n", "", "SaaS target namespace reference name")
 	saasCmd.Flags().StringVarP(&ops.appInterfaceProvidedPath, "appInterfaceDir", "", "", "Location of app-interface checkout. Falls back to the current working directory")
 	saasCmd.Flags().BoolVarP(&ops.isHotfix, "hotfix", "", false, "Add gitHash to hotfixVersions in app.yml to bypass progressive delivery (requires --gitHash)")
+	saasCmd.Flags().BoolVarP(&ops.isPKO, "pko", "", false, "Promote the PKO variant of the service (appends -pko to serviceId)")
 	_ = saasCmd.Flags().MarkHidden("serviceName")
 
 	return saasCmd
