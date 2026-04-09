@@ -579,8 +579,9 @@ func (o *transitionOptions) restoreUpgradePolicies(ocmClient *sdk.Connection, cl
 			UpgradeType(backup.upgradeType).
 			EnableMinorVersionUpgrades(backup.enableMinor)
 
-		// Add version if it was present in the original policy
-		if backup.version != "" {
+		// Add version only for manual policies - automatic policies must not have version set
+		// Manual policies target a specific version, automatic policies use the latest available
+		if backup.version != "" && backup.scheduleType == v1.ScheduleTypeManual {
 			policyBuilder = policyBuilder.Version(backup.version)
 		}
 
