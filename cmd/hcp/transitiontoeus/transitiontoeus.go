@@ -205,19 +205,35 @@ func (o *transitionOptions) Run() error {
 			failed = append(failed, fmt.Sprintf("%s: %s", cluster.ExternalID(), result.err.Error()))
 			fmt.Printf("  ⚠️  Failed to transition: %v\n", result.err)
 
-			// Prompt to send "attempted" service log if we modified recurring policy and restored it
-			// This means we actually changed the customer's cluster configuration but transition failed
-			if result.policyWasModified && result.policyWasRestored {
-				if !o.dryRun {
-					fmt.Println()
-					fmt.Printf("  ℹ️  Note: The recurring upgrade policy was modified during this attempt but has been restored.\n")
+			// Handle service log notification based on policy modification state
+			if result.policyWasModified {
+				if result.policyWasRestored {
+					// Policy was modified and successfully restored - send "attempted" service log
+					if !o.dryRun {
+						fmt.Println()
+						fmt.Printf("  ℹ️  Note: The recurring upgrade policy was modified during this attempt but has been restored.\n")
 
-					// Show service log preview and prompt
-					if err := promptAndSendServiceLog(ocmClient, cluster, "attempted"); err != nil {
-						fmt.Printf("  ⚠️  Failed to send service log: %v\n", err)
+						// Show service log preview and prompt
+						if err := promptAndSendServiceLog(ocmClient, cluster, "attempted"); err != nil {
+							fmt.Printf("  ⚠️  Failed to send service log: %v\n", err)
+						}
+					} else {
+						fmt.Printf("  📧 DRY-RUN: Would prompt to send 'attempted' service log (policy was modified and restored)\n")
 					}
-				} else {
-					fmt.Printf("  📧 DRY-RUN: Would prompt to send 'attempted' service log (policy was modified and restored)\n")
+				} else if len(result.unrestoredPolicies) > 0 {
+					// CRITICAL: Policy was deleted but NOT restored - cluster is in bad state
+					if !o.dryRun {
+						fmt.Println()
+						fmt.Printf("  ⚠️  CRITICAL: %d recurring upgrade policy/policies were deleted but could not be restored!\n", len(result.unrestoredPolicies))
+						fmt.Printf("  ⚠️  Action required: Use the policy details printed above to manually restore.\n")
+
+						// Show service log preview and prompt for critical failure
+						if err := promptAndSendServiceLog(ocmClient, cluster, "attempted"); err != nil {
+							fmt.Printf("  ⚠️  Failed to send service log: %v\n", err)
+						}
+					} else {
+						fmt.Printf("  📧 DRY-RUN: Would prompt to send 'attempted' service log (CRITICAL: %d policies not restored)\n", len(result.unrestoredPolicies))
+					}
 				}
 			}
 		} else {
@@ -345,27 +361,18 @@ func (o *transitionOptions) preValidateClusters(clusters []*v1.Cluster) ([]*v1.C
 	return eligible, skipped
 }
 
-// recurringPolicyBackup stores complete information needed to restore a recurring upgrade policy
-type recurringPolicyBackup struct {
-	id           string
-	schedule     string
-	scheduleType v1.ScheduleType
-	upgradeType  v1.UpgradeType
-	enableMinor  bool
-	version      string // May be empty for automatic policies
-}
-
 // policyDetails stores information about a cluster's upgrade policies
 type policyDetails struct {
 	hasRecurringPolicies bool
-	recurringPolicies    []recurringPolicyBackup
+	recurringPolicies    []*v1.ControlPlaneUpgradePolicy
 }
 
 // clusterProcessResult contains the result of processing a cluster
 type clusterProcessResult struct {
-	err               error
-	policyWasModified bool // true if we deleted recurring policy (even if later restored)
-	policyWasRestored bool // true if we successfully restored the policy after modification
+	err                error
+	policyWasModified  bool                            // true if we deleted recurring policy (even if later restored)
+	policyWasRestored  bool                            // true if we successfully restored the policy after modification
+	unrestoredPolicies []*v1.ControlPlaneUpgradePolicy // policies that were deleted but could not be restored
 }
 
 func (o *transitionOptions) processCluster(ocmClient *sdk.Connection, cluster *v1.Cluster) *clusterProcessResult {
@@ -393,7 +400,7 @@ func (o *transitionOptions) processCluster(ocmClient *sdk.Connection, cluster *v
 	// Step 2: Delete recurring policies if they exist
 	if policy.hasRecurringPolicies {
 		if len(policy.recurringPolicies) == 1 {
-			fmt.Printf("  📋 Found recurring update policy (schedule: %s)\n", policy.recurringPolicies[0].schedule)
+			fmt.Printf("  📋 Found recurring update policy (schedule: %s)\n", policy.recurringPolicies[0].Schedule())
 		} else {
 			fmt.Printf("  📋 Found %d recurring update policies\n", len(policy.recurringPolicies))
 		}
@@ -411,13 +418,8 @@ func (o *transitionOptions) processCluster(ocmClient *sdk.Connection, cluster *v
 				// If we partially deleted policies, try to restore what we deleted
 				if len(deleted) > 0 {
 					fmt.Printf("  🔁 Deletion failed after deleting %d/%d policies - attempting to restore deleted policies\n", len(deleted), len(policy.recurringPolicies))
-					if restoreErr := o.restoreUpgradePolicies(ocmClient, cluster, deleted); restoreErr != nil {
-						result.err = fmt.Errorf("failed to delete upgrade policies: %w (CRITICAL: also failed to restore %d deleted policies: %v)", err, len(deleted), restoreErr)
-					} else {
-						result.policyWasRestored = true
-						result.err = fmt.Errorf("failed to delete upgrade policies: %w (deleted policies restored)", err)
-						fmt.Printf("  ✓ Deleted policies restored after failure\n")
-					}
+					result.err = o.attemptRestoreWithFallback(ocmClient, cluster, deleted, result,
+						fmt.Errorf("failed to delete upgrade policies: %w", err), "deletion failure")
 				} else {
 					result.err = fmt.Errorf("failed to delete upgrade policies: %w", err)
 				}
@@ -436,14 +438,8 @@ func (o *transitionOptions) processCluster(ocmClient *sdk.Connection, cluster *v
 		if err := o.transitionChannelToEUS(ocmClient, cluster); err != nil {
 			// Channel transition failed - try to restore policies if we deleted them
 			if result.policyWasModified {
-				fmt.Printf("  🔁 Channel transition failed - attempting to restore upgrade policies\n")
-				if restoreErr := o.restoreUpgradePolicies(ocmClient, cluster, policy.recurringPolicies); restoreErr != nil {
-					result.err = fmt.Errorf("failed to transition channel: %w (CRITICAL: also failed to restore policies: %v)", err, restoreErr)
-				} else {
-					result.policyWasRestored = true
-					result.err = fmt.Errorf("failed to transition channel: %w (upgrade policies restored)", err)
-					fmt.Printf("  ✓ Upgrade policies restored after failure\n")
-				}
+				result.err = o.attemptRestoreWithFallback(ocmClient, cluster, policy.recurringPolicies, result,
+					fmt.Errorf("failed to transition channel: %w", err), "channel transition failed")
 			} else {
 				result.err = fmt.Errorf("failed to transition channel: %w", err)
 			}
@@ -456,14 +452,8 @@ func (o *transitionOptions) processCluster(ocmClient *sdk.Connection, cluster *v
 		if err != nil {
 			// Verification failed - try to restore policies if we deleted them
 			if result.policyWasModified {
-				fmt.Printf("  🔁 Channel verification failed - attempting to restore upgrade policies\n")
-				if restoreErr := o.restoreUpgradePolicies(ocmClient, cluster, policy.recurringPolicies); restoreErr != nil {
-					result.err = fmt.Errorf("failed to verify channel change: %w (CRITICAL: also failed to restore policies: %v)", err, restoreErr)
-				} else {
-					result.policyWasRestored = true
-					result.err = fmt.Errorf("failed to verify channel change: %w (upgrade policies restored)", err)
-					fmt.Printf("  ✓ Upgrade policies restored after failure\n")
-				}
+				result.err = o.attemptRestoreWithFallback(ocmClient, cluster, policy.recurringPolicies, result,
+					fmt.Errorf("failed to verify channel change: %w", err), "channel verification failed")
 			} else {
 				result.err = fmt.Errorf("failed to verify channel change: %w", err)
 			}
@@ -511,22 +501,11 @@ func (o *transitionOptions) getUpgradePolicyDetails(ocmClient *sdk.Connection, c
 
 	// Filter and preserve all recurring (automatic) policies - ignore one-off manual upgrade policies
 	// One-off manual policies (ScheduleTypeManual) are customer-scheduled upgrades that should not be touched
-	var recurringPolicies []recurringPolicyBackup
+	var recurringPolicies []*v1.ControlPlaneUpgradePolicy
 	for _, policy := range policies {
 		if policy.ScheduleType() == v1.ScheduleTypeAutomatic {
-			// Preserve complete policy details for faithful restoration
-			backup := recurringPolicyBackup{
-				id:           policy.ID(),
-				schedule:     policy.Schedule(),
-				scheduleType: policy.ScheduleType(),
-				upgradeType:  policy.UpgradeType(),
-				enableMinor:  policy.EnableMinorVersionUpgrades(),
-			}
-			// Version may be empty for automatic policies
-			if policy.Version() != "" {
-				backup.version = policy.Version()
-			}
-			recurringPolicies = append(recurringPolicies, backup)
+			// Store the complete policy object from the SDK for faithful restoration
+			recurringPolicies = append(recurringPolicies, policy)
 		}
 		// Skip manual one-off policies - these are customer-scheduled and should not be deleted
 	}
@@ -542,13 +521,13 @@ func (o *transitionOptions) getUpgradePolicyDetails(ocmClient *sdk.Connection, c
 	}, nil
 }
 
-func (o *transitionOptions) deleteUpgradePolicies(ocmClient *sdk.Connection, cluster *v1.Cluster, policies []recurringPolicyBackup) ([]recurringPolicyBackup, error) {
-	deleted := make([]recurringPolicyBackup, 0, len(policies))
+func (o *transitionOptions) deleteUpgradePolicies(ocmClient *sdk.Connection, cluster *v1.Cluster, policies []*v1.ControlPlaneUpgradePolicy) ([]*v1.ControlPlaneUpgradePolicy, error) {
+	deleted := make([]*v1.ControlPlaneUpgradePolicy, 0, len(policies))
 	for _, policy := range policies {
 		_, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(cluster.ID()).
-			ControlPlane().UpgradePolicies().ControlPlaneUpgradePolicy(policy.id).Delete().Send()
+			ControlPlane().UpgradePolicies().ControlPlaneUpgradePolicy(policy.ID()).Delete().Send()
 		if err != nil {
-			return deleted, fmt.Errorf("failed to delete policy %s: %w", policy.id, err)
+			return deleted, fmt.Errorf("failed to delete policy %s: %w", policy.ID(), err)
 		}
 		deleted = append(deleted, policy)
 	}
@@ -567,22 +546,23 @@ func (o *transitionOptions) transitionChannelToEUS(ocmClient *sdk.Connection, cl
 	return err
 }
 
-func (o *transitionOptions) restoreUpgradePolicies(ocmClient *sdk.Connection, cluster *v1.Cluster, policies []recurringPolicyBackup) error {
+func (o *transitionOptions) restoreUpgradePolicies(ocmClient *sdk.Connection, cluster *v1.Cluster, policies []*v1.ControlPlaneUpgradePolicy) error {
 	// Track newly created policy IDs for rollback if needed
 	var restoredPolicyIDs []string
 
-	for i, backup := range policies {
-		// Build policy with all preserved fields
+	for i, originalPolicy := range policies {
+		// Build new policy from the original, preserving all fields except ID
+		// (ID will be generated by the API when we create it)
 		policyBuilder := v1.NewControlPlaneUpgradePolicy().
-			Schedule(backup.schedule).
-			ScheduleType(backup.scheduleType).
-			UpgradeType(backup.upgradeType).
-			EnableMinorVersionUpgrades(backup.enableMinor)
+			Schedule(originalPolicy.Schedule()).
+			ScheduleType(originalPolicy.ScheduleType()).
+			UpgradeType(originalPolicy.UpgradeType()).
+			EnableMinorVersionUpgrades(originalPolicy.EnableMinorVersionUpgrades())
 
 		// Add version only for manual policies - automatic policies must not have version set
 		// Manual policies target a specific version, automatic policies use the latest available
-		if backup.version != "" && backup.scheduleType == v1.ScheduleTypeManual {
-			policyBuilder = policyBuilder.Version(backup.version)
+		if originalPolicy.Version() != "" && originalPolicy.ScheduleType() == v1.ScheduleTypeManual {
+			policyBuilder = policyBuilder.Version(originalPolicy.Version())
 		}
 
 		newPolicy, err := policyBuilder.Build()
@@ -608,6 +588,90 @@ func (o *transitionOptions) restoreUpgradePolicies(ocmClient *sdk.Connection, cl
 		restoredPolicyIDs = append(restoredPolicyIDs, response.Body().ID())
 	}
 	return nil
+}
+
+// printPoliciesForManualRestore outputs policy details in YAML format so SRE can restore manually
+// and saves them to a file for later restoration
+func printPoliciesForManualRestore(policies []*v1.ControlPlaneUpgradePolicy, clusterID string) {
+	timestamp := time.Now().Format("20060102_150405")
+	filename := fmt.Sprintf("unrestored_policies_%s_%s.sh", clusterID, timestamp)
+
+	// Build the restoration script content
+	var scriptContent strings.Builder
+	scriptContent.WriteString("#!/bin/bash\n")
+	fmt.Fprintf(&scriptContent, "# Unrestored upgrade policies for cluster: %s\n", clusterID)
+	fmt.Fprintf(&scriptContent, "# Generated: %s\n", time.Now().Format(time.RFC3339))
+	fmt.Fprintf(&scriptContent, "# Total policies: %d\n\n", len(policies))
+	fmt.Fprintf(&scriptContent, "CLUSTER_ID=\"%s\"\n\n", clusterID)
+
+	for i, policy := range policies {
+		fmt.Fprintf(&scriptContent, "# Policy %d/%d\n", i+1, len(policies))
+		fmt.Fprintf(&scriptContent, "echo \"Restoring policy %d/%d...\"\n", i+1, len(policies))
+		scriptContent.WriteString("ocm post \"/api/clusters_mgmt/v1/clusters/${CLUSTER_ID}/control_plane/upgrade_policies\" <<'EOF'\n")
+		scriptContent.WriteString("{\n")
+		fmt.Fprintf(&scriptContent, "  \"schedule\": \"%s\",\n", policy.Schedule())
+		fmt.Fprintf(&scriptContent, "  \"schedule_type\": \"%s\",\n", policy.ScheduleType())
+		fmt.Fprintf(&scriptContent, "  \"upgrade_type\": \"%s\",\n", policy.UpgradeType())
+		fmt.Fprintf(&scriptContent, "  \"enable_minor_version_upgrades\": %t", policy.EnableMinorVersionUpgrades())
+		if policy.Version() != "" && policy.ScheduleType() == v1.ScheduleTypeManual {
+			fmt.Fprintf(&scriptContent, ",\n  \"version\": \"%s\"\n", policy.Version())
+		} else {
+			scriptContent.WriteString("\n")
+		}
+		scriptContent.WriteString("}\n")
+		scriptContent.WriteString("EOF\n")
+		if i < len(policies)-1 {
+			scriptContent.WriteString("\n")
+		}
+	}
+
+	// Save to file with read/write permissions (0600), then add execute permission
+	if err := os.WriteFile(filename, []byte(scriptContent.String()), 0600); err != nil {
+		fmt.Printf("  ⚠️  Warning: Failed to save policy restoration script to %s: %v\n", filename, err)
+	} else {
+		// Make the script executable by the owner
+		if err := os.Chmod(filename, 0700); err != nil {
+			fmt.Printf("  ⚠️  Warning: Failed to make script executable: %v\n", err)
+		}
+		fmt.Printf("  💾 Saved policy restoration script to: %s\n", filename)
+	}
+
+	// Also print to console
+	fmt.Println()
+	fmt.Printf("  📋 Policy details for manual restoration (cluster: %s):\n", clusterID)
+	fmt.Println("  " + strings.Repeat("-", 70))
+	for i, policy := range policies {
+		fmt.Printf("  Policy %d/%d:\n", i+1, len(policies))
+		fmt.Printf("    schedule: %s\n", policy.Schedule())
+		fmt.Printf("    schedule_type: %s\n", policy.ScheduleType())
+		fmt.Printf("    upgrade_type: %s\n", policy.UpgradeType())
+		fmt.Printf("    enable_minor_version_upgrades: %t\n", policy.EnableMinorVersionUpgrades())
+		if policy.Version() != "" && policy.ScheduleType() == v1.ScheduleTypeManual {
+			fmt.Printf("    version: %s\n", policy.Version())
+		}
+		fmt.Println()
+		fmt.Printf("    # To restore manually, run: ./%s\n", filename)
+		if i < len(policies)-1 {
+			fmt.Println("  " + strings.Repeat("-", 70))
+		}
+	}
+	fmt.Println("  " + strings.Repeat("-", 70))
+	fmt.Println()
+}
+
+// attemptRestoreWithFallback tries to restore policies and prints details if it fails
+func (o *transitionOptions) attemptRestoreWithFallback(ocmClient *sdk.Connection, cluster *v1.Cluster, policies []*v1.ControlPlaneUpgradePolicy, result *clusterProcessResult, contextErr error, context string) error {
+	fmt.Printf("  🔁 %s - attempting to restore upgrade policies\n", context)
+	if restoreErr := o.restoreUpgradePolicies(ocmClient, cluster, policies); restoreErr != nil {
+		// CRITICAL: Failed to restore policies - print details for manual restoration
+		fmt.Printf("  ⚠️  CRITICAL: Failed to restore policies after %s\n", context)
+		printPoliciesForManualRestore(policies, cluster.ID())
+		result.unrestoredPolicies = policies
+		return fmt.Errorf("%w (CRITICAL: also failed to restore %d policies: %v)", contextErr, len(policies), restoreErr)
+	}
+	result.policyWasRestored = true
+	fmt.Printf("  ✓ Upgrade policies restored after failure\n")
+	return fmt.Errorf("%w (upgrade policies restored)", contextErr)
 }
 
 // rollbackRestoredPolicies deletes policies that were just created during a failed restore operation
