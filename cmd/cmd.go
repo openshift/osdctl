@@ -35,6 +35,7 @@ import (
 	"github.com/openshift/osdctl/cmd/network"
 	"github.com/openshift/osdctl/cmd/org"
 	"github.com/openshift/osdctl/cmd/promote"
+	"github.com/openshift/osdctl/cmd/rhobs"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/cmd/setup"
 	"github.com/openshift/osdctl/cmd/swarm"
@@ -108,6 +109,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	rootCmd.AddCommand(swarm.Cmd)
 	rootCmd.AddCommand(iampermissions.NewCmdIamPermissions())
 	rootCmd.AddCommand(dynatrace.NewCmdDynatrace())
+	rootCmd.AddCommand(rhobs.NewCmdRhobs())
 
 	// Add cost command to use AWS Cost Manager
 	rootCmd.AddCommand(cost.NewCmdCost(streams, globalOpts))

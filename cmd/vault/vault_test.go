@@ -1,4 +1,4 @@
-package dynatrace
+package vault
 
 import (
 	"os"

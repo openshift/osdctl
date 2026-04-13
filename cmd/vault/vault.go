@@ -1,4 +1,4 @@
-package dynatrace
+package vault
 
 import (
 	"encoding/json"
@@ -7,12 +7,32 @@ import (
 	"os/exec"
 
 	ocmutils "github.com/openshift/ocm-container/pkg/utils"
+
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
-type response struct {
-	Data struct {
-		Data map[string]interface{} `json:"data"`
-	} `json:"data"`
+const (
+	VaultAddrKey string = "vault_address"
+)
+
+type VaultRef struct {
+	Addr string
+	Path string
+}
+
+func GetVaultRef(vaultPathKey string) (VaultRef, error) {
+	if !viper.IsSet(VaultAddrKey) {
+		return VaultRef{}, fmt.Errorf("key '%s' is not set in config file", VaultAddrKey)
+	}
+	vaultAddr := viper.GetString(VaultAddrKey)
+
+	if !viper.IsSet(vaultPathKey) {
+		return VaultRef{}, fmt.Errorf("key '%s' is not set in config file", vaultPathKey)
+	}
+	vaultPath := viper.GetString(vaultPathKey)
+
+	return VaultRef{Addr: vaultAddr, Path: vaultPath}, nil
 }
 
 // setupVaultToken ensures a valid Vault token exists by checking the current
@@ -26,7 +46,7 @@ func setupVaultToken(vaultAddr string) error {
 
 	versionCheckCmd := exec.Command("vault", "version")
 
-	versionCheckCmd.Stdout = os.Stdout
+	versionCheckCmd.Stdout = os.Stderr
 	versionCheckCmd.Stderr = os.Stderr
 
 	if err = versionCheckCmd.Run(); err != nil {
@@ -38,16 +58,16 @@ func setupVaultToken(vaultAddr string) error {
 	tokenCheckCmd.Stderr = nil
 	// get new token since old token has expired
 	if err = tokenCheckCmd.Run(); err != nil {
-		fmt.Println("Vault token no longer valid, requesting new token")
+		log.Infoln("Vault token no longer valid, requesting new token")
 
 		// Check if we're in a container environment (OCM_CONTAINER env var is set)
 		// If so, skip automatic browser launch and print the URL for manual authentication
 		loginArgs := []string{"login", "-method=oidc", "-no-print"}
 		if ocmutils.IsRunningInOcmContainer() {
-			fmt.Println("\nNOTE: Running in container mode - OIDC authentication requires port forwarding.")
-			fmt.Println("Ensure port 8250 is exposed in your ocm-container configuration:")
-			fmt.Println("  Add 'launch-opts: \"-p 8250:8250\"' to ~/.config/ocm-container/ocm-container.yaml")
-			fmt.Println("Then restart your ocm-container for the change to take effect.")
+			log.Infoln("\nNOTE: Running in container mode - OIDC authentication requires port forwarding.")
+			log.Infoln("Ensure port 8250 is exposed in your ocm-container configuration:")
+			log.Infoln("  Add 'launch-opts: \"-p 8250:8250\"' to ~/.config/ocm-container/ocm-container.yaml")
+			log.Infoln("Then restart your ocm-container for the change to take effect.")
 
 			// In container: skip browser launch and listen on all interfaces (0.0.0.0)
 			// so the callback can be reached from the host browser via localhost:8250
@@ -57,7 +77,7 @@ func setupVaultToken(vaultAddr string) error {
 
 		// Show output when using skip_browser so user can see the authentication URL
 		if ocmutils.IsRunningInOcmContainer() {
-			loginCmd.Stdout = os.Stdout
+			loginCmd.Stdout = os.Stderr
 			loginCmd.Stderr = os.Stderr
 		} else {
 			loginCmd.Stdout = nil
@@ -78,36 +98,61 @@ func setupVaultToken(vaultAddr string) error {
 			return fmt.Errorf("error running 'vault login': %v", err)
 		}
 
-		fmt.Println("Acquired vault token")
+		log.Infoln("Acquired vault token")
 	}
 
 	return nil
 }
 
-func getSecretFromVault(vaultAddr, vaultPath string) (id string, secret string, error error) {
-	err := os.Setenv("VAULT_ADDR", vaultAddr)
+type vaultOutput struct {
+	Data struct {
+		Data map[string]string `json:"data"`
+	} `json:"data"`
+}
+
+func GetSecretFromVault(vaultRef VaultRef) (*map[string]string, error) {
+	err := setupVaultToken(vaultRef.Addr)
 	if err != nil {
-		return "", "", fmt.Errorf("error setting environment variable: %v", err)
+		return nil, err
 	}
 
-	kvGetCommand := exec.Command("vault", "kv", "get", "-format=json", vaultPath)
+	err = os.Setenv("VAULT_ADDR", vaultRef.Addr)
+	if err != nil {
+		return nil, fmt.Errorf("error setting environment variable: %v", err)
+	}
+
+	kvGetCommand := exec.Command("vault", "kv", "get", "-format=json", vaultRef.Path)
 	output, err := kvGetCommand.Output()
 	if err != nil {
-		fmt.Println("Error running 'vault kv get':", err)
-		return "", "", nil
+		return nil, fmt.Errorf("error running 'vault kv get %s' (VAULT_ADDR: %s): %v", vaultRef.Path, vaultRef.Addr, err)
 	}
 
-	var resp response
-	if err := json.Unmarshal(output, &resp); err != nil {
-		return "", "", fmt.Errorf("error unmarshaling JSON response: %v", err)
+	var formattedOutput vaultOutput
+	if err := json.Unmarshal(output, &formattedOutput); err != nil {
+		return nil, fmt.Errorf("error unmarshaling JSON output: %v", err)
 	}
-	clientID, ok := resp.Data.Data["client_id"].(string)
-	if !ok {
-		return "", "", fmt.Errorf("error extracting secret data from JSON response")
+
+	return &formattedOutput.Data.Data, nil
+}
+
+func GetCredsFromVault(configKey string) (string, string, error) {
+	vaultRef, err := GetVaultRef(configKey)
+	if err != nil {
+		return "", "", err
 	}
-	clientSecret, ok := resp.Data.Data["client_secret"].(string)
+
+	secretData, err := GetSecretFromVault(vaultRef)
+	if err != nil {
+		return "", "", err
+	}
+
+	clientID, ok := (*secretData)["client_id"]
 	if !ok {
-		return "", "", fmt.Errorf("error extracting secret data from JSON response")
+		return "", "", fmt.Errorf("no 'client_id' in %s vault secret (VAULT_ADDR: %s)", vaultRef.Path, vaultRef.Addr)
+	}
+	clientSecret, ok := (*secretData)["client_secret"]
+	if !ok {
+		return "", "", fmt.Errorf("no 'client_secret' in %s vault secret (VAULT_ADDR: %s)", vaultRef.Path, vaultRef.Addr)
 	}
 
 	return clientID, clientSecret, nil

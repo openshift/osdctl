@@ -1,166 +1,34 @@
 package dynatrace
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"time"
 
-	"github.com/spf13/viper"
+	"github.com/openshift/osdctl/cmd/requester"
 )
 
 const (
-	VaultAddr string = "vault_address"
-
 	authURL string = "https://sso.dynatrace.com/sso/oauth2/token"
 
 	// Logs
-	DTStorageVaultPath string = "dt_vault_path"
-	DTStorageScopes    string = "storage:logs:read storage:events:read storage:buckets:read"
+	DTStorageVaultPathKey string = "dt_vault_path"
+	DTStorageScopes       string = "storage:logs:read storage:events:read storage:buckets:read"
 
 	// Dashboards
-	DTDocumentVaultPath string = "dt_document_vault_path"
-	DTDocumentScopes    string = "document:documents:read"
-	DTDashboardType     string = "dashboard"
+	DTDocumentVaultPathKey string = "dt_document_vault_path"
+	DTDocumentScopes       string = "document:documents:read"
+	DTDashboardType        string = "dashboard"
 )
 
-type DTRequestError struct {
-	Records json.RawMessage `json:"error"`
-}
-
-type Requester struct {
-	method      string
-	url         string
-	data        string
-	headers     map[string]string
-	successCode int
-}
-
-func (rh *Requester) send() (string, error) {
-	client := http.Client{
-		Timeout: time.Second * 600,
-	}
-
-	var req *http.Request
-	var err error
-	if rh.data != "" {
-		req, err = http.NewRequest(rh.method, rh.url, bytes.NewBuffer([]byte(rh.data)))
-	} else {
-		req, err = http.NewRequest(rh.method, rh.url, nil)
-	}
-
-	if err != nil {
-		return "", fmt.Errorf("failed to build request %v", err)
-	}
-
-	for hdr, val := range rh.headers {
-		req.Header.Set(hdr, val)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	if resp.StatusCode != rh.successCode {
-		var dtError DTRequestError
-		err = json.Unmarshal([]byte(body), &dtError)
-		if err != nil {
-			return "", err
-		}
-
-		return "", fmt.Errorf("request failed: %v %s", resp.Status, dtError)
-	}
-
-	return string(body), nil
-}
-
-func getVaultPath(vaultPathKey string) (addr, path string, error error) {
-	if !viper.IsSet(VaultAddr) {
-		return "", "", fmt.Errorf("key '%s' is not set in config file", VaultAddr)
-	}
-	vaultAddr := viper.GetString(VaultAddr)
-
-	if !viper.IsSet(vaultPathKey) {
-		return "", "", fmt.Errorf("key '%s' is not set in config file", vaultPathKey)
-	}
-	vaultPath := viper.GetString(vaultPathKey)
-
-	return vaultAddr, vaultPath, nil
-}
-
-// getScopedAccessToken gets an access token using the vault path in the configuration key specified
-// It will request any scopes listed in the scopes string
-func getScopedAccessToken(configKey string, scopes string) (string, error) {
-	vaultAddr, vaultPath, err := getVaultPath(configKey)
-	if err != nil {
-		return "", err
-	}
-
-	err = setupVaultToken(vaultAddr)
-	if err != nil {
-		return "", nil
-	}
-
-	clientId, clientSecret, err := getSecretFromVault(vaultAddr, vaultPath)
-	if err != nil {
-		return "", nil
-	}
-
-	reqData := url.Values{
-		"grant_type":    {"client_credentials"},
-		"scope":         {scopes},
-		"client_id":     {clientId},
-		"client_secret": {clientSecret},
-	}.Encode()
-
-	requester := Requester{
-		method: http.MethodPost,
-		url:    authURL,
-		data:   string(reqData),
-		headers: map[string]string{
-			"Content-Type": "application/x-www-form-urlencoded",
-		},
-		successCode: http.StatusOK,
-	}
-
-	resp, err := requester.send()
-	if err != nil {
-		return "", err
-	}
-
-	var respObj map[string]interface{}
-	err = json.Unmarshal([]byte(resp), &respObj)
-	if err != nil {
-		return "", err
-	}
-
-	token, ok := respObj["access_token"].(string)
-	if !ok {
-		return "", fmt.Errorf("access token not present in response")
-	}
-
-	fmt.Println("Successfully authenticated with DynaTrace")
-
-	return token, nil
-}
-
 func getDocumentAccessToken() (string, error) {
-	return getScopedAccessToken(DTDocumentVaultPath, DTDocumentScopes)
+	return requester.GetScopedAccessToken(authURL, DTDocumentVaultPathKey, DTDocumentScopes)
 }
 
 func getStorageAccessToken() (string, error) {
-	return getScopedAccessToken(DTStorageVaultPath, DTStorageScopes)
+	return requester.GetScopedAccessToken(authURL, DTStorageVaultPathKey, DTStorageScopes)
 }
 
 type DTQueryPayload struct {
@@ -234,20 +102,20 @@ func getDTQueryExecution(dtURL string, accessToken string, query string) (reqTok
 		return "", err
 	}
 
-	requester := Requester{
-		method: http.MethodPost,
-		url:    dtURL + "platform/storage/query/v1/query:execute",
-		data:   string(payloadJSON),
-		headers: map[string]string{
+	requester := requester.Requester{
+		Method: http.MethodPost,
+		Url:    dtURL + "platform/storage/query/v1/query:execute",
+		Data:   string(payloadJSON),
+		Headers: map[string]string{
 			"Content-Type":  "application/json",
 			"Authorization": "Bearer " + accessToken,
 		},
-		successCode: http.StatusAccepted,
+		SuccessCode: http.StatusAccepted,
 	}
 
 	var resp string
 	for {
-		resp, err = requester.send()
+		resp, err = requester.Send()
 		if err != nil {
 			return "", err
 		}
@@ -290,18 +158,18 @@ func getDTPollResults(dtURL string, requestToken string, accessToken string) (re
 		"request-token": {requestToken},
 	}.Encode()
 
-	requester := Requester{
-		method: http.MethodGet,
-		url:    dtURL + "platform/storage/query/v1/query:poll?" + reqData,
-		headers: map[string]string{
+	requester := requester.Requester{
+		Method: http.MethodGet,
+		Url:    dtURL + "platform/storage/query/v1/query:poll?" + reqData,
+		Headers: map[string]string{
 			"Content-Type":  "application/json",
 			"Authorization": "Bearer " + accessToken,
 		},
-		successCode: http.StatusOK,
+		SuccessCode: http.StatusOK,
 	}
 
 	for {
-		resp, err := requester.send()
+		resp, err := requester.Send()
 		if err != nil {
 			return "", err
 		}
@@ -334,17 +202,17 @@ func getDocumentIDByNameAndType(dtURL string, accessToken string, docName string
 		"filter": {dtDashFilter},
 	}.Encode()
 
-	requester := Requester{
-		method: http.MethodGet,
-		url:    dtURL + "platform/document/v1/documents?" + parameters,
-		headers: map[string]string{
+	requester := requester.Requester{
+		Method: http.MethodGet,
+		Url:    dtURL + "platform/document/v1/documents?" + parameters,
+		Headers: map[string]string{
 			"Content-Type":  "application/json",
 			"Authorization": "Bearer " + accessToken,
 		},
-		successCode: http.StatusOK,
+		SuccessCode: http.StatusOK,
 	}
 
-	result, err := requester.send()
+	result, err := requester.Send()
 	if err != nil {
 		return "", fmt.Errorf("could not search for dashboard: %w", err)
 	}
