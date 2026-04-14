@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 )
 
@@ -288,7 +289,7 @@ func getDocumentIDByNameAndType(dtURL string, accessToken string, docName string
 	return dtDashboard.Id, nil
 }
 
-func getLogs(dtURL string, accessToken string, requestToken string, dumpWriter io.Writer) error {
+func fetchAndWriteLogs(dtURL string, accessToken string, requestToken string, filePath string) error {
 	resp, err := getDTPollResults(dtURL, requestToken, accessToken)
 	if err != nil {
 		return err
@@ -300,19 +301,26 @@ func getLogs(dtURL string, accessToken string, requestToken string, dumpWriter i
 		return err
 	}
 
+	var w io.Writer = os.Stdout
+	if filePath != "" {
+		f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		w = f
+	}
+
 	for _, result := range dtPollRes.Result.Records {
-		content := result.Content
-		if dumpWriter != nil {
-			dumpWriter.Write([]byte(fmt.Sprintf("%s\n", content)))
-		} else {
-			fmt.Println(content)
+		if _, err := fmt.Fprintf(w, "%s\n", result.Content); err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
-func getEvents(dtURL string, accessToken string, requestToken string, dumpWriter io.Writer) error {
+func fetchAndWriteEvents(dtURL string, accessToken string, requestToken string, filePath string) error {
 	resp, err := getDTPollResults(dtURL, requestToken, accessToken)
 	if err != nil {
 		return err
@@ -324,11 +332,19 @@ func getEvents(dtURL string, accessToken string, requestToken string, dumpWriter
 		return err
 	}
 
+	var w io.Writer = os.Stdout
+	if filePath != "" {
+		f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		w = f
+	}
+
 	for _, result := range dtPollRes.Result.Records {
-		if dumpWriter != nil {
-			dumpWriter.Write([]byte(fmt.Sprintf("%s\n", result)))
-		} else {
-			fmt.Println(result)
+		if _, err := fmt.Fprintf(w, "%s\n", result); err != nil {
+			return err
 		}
 	}
 
