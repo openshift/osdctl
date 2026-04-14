@@ -65,7 +65,7 @@ func NewCmdHCPMustGather() *cobra.Command {
 func (g *GatherLogsOpts) GatherLogs(clusterID string, elevationReasons ...string) (error error) {
 	tokenProvider, err := getStorageTokenProvider()
 	if err != nil {
-		return fmt.Errorf("failed to setup access token provider: %v", err)
+		return fmt.Errorf("failed to setup Dynatrace access token provider (is the vault CLI installed and configured?): %v", err)
 	}
 
 	// Eagerly fetch the first token to fail fast on auth issues
@@ -179,7 +179,7 @@ func (g *GatherLogsOpts) dumpEvents(deploys *appsv1.DeploymentList, parentDir st
 
 		eventsRequestToken, err := getDTQueryExecution(DTURL, accessToken, eventQuery.finalQuery)
 		if err != nil {
-			log.Print("failed to get request token", err)
+			log.Printf("failed to get request token: %v", err)
 			continue
 		}
 		err = getEvents(DTURL, accessToken, eventsRequestToken, f)
@@ -239,7 +239,7 @@ func (g *GatherLogsOpts) dumpPodLogs(pods *corev1.PodList, parentDir string, tar
 
 		podLogsRequestToken, err := getDTQueryExecution(DTURL, accessToken, podLogsQuery.finalQuery)
 		if err != nil {
-			log.Print("failed to get request token", err)
+			log.Printf("failed to get request token: %v", err)
 			continue
 		}
 		err = getLogs(DTURL, accessToken, podLogsRequestToken, f)
@@ -285,7 +285,7 @@ func (g *GatherLogsOpts) dumpRestartedPodLogs(pods *corev1.PodList, parentDir st
 
 	podLogsRequestToken, err := getDTQueryExecution(DTURL, accessToken, restartedPodLogsQuery.finalQuery)
 	if err != nil {
-		log.Print("failed to get request token", err)
+		log.Printf("failed to get request token: %v", err)
 
 	}
 	err = getLogs(DTURL, accessToken, podLogsRequestToken, f)
