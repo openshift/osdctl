@@ -2,27 +2,23 @@ package account
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"os"
 	"strings"
-	"time"
 
 	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/iam"
-	iamTypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
-	stsTypes "github.com/aws/aws-sdk-go-v2/service/sts/types"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
-	hiveapiv1 "github.com/openshift/hive/apis/hive/v1"
-	hiveinternalv1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
 	"github.com/openshift/osdctl/cmd/common"
+	"github.com/openshift/osdctl/pkg/controller"
 	"github.com/openshift/osdctl/pkg/k8s"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/kubernetes/scheme"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -45,6 +41,8 @@ func newCmdRotateSecret(streams genericclioptions.IOStreams, client *k8s.LazyCli
 	rotateSecretCmd.Flags().BoolVar(&ops.updateCcsCreds, "ccs", false, "Also rotates osdCcsAdmin credential. Use caution.")
 	rotateSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
 	rotateSecretCmd.Flags().StringVar(&ops.osdManagedAdminUsername, "admin-username", "", "The admin username to use for generating access keys. Must be in the format of `osdManagedAdmin*`. If not specified, this is inferred from the account CR.")
+	rotateSecretCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "OCM internal/external cluster id or cluster name (required when using --hive-ocm-url)")
+	rotateSecretCmd.Flags().StringVar(&ops.hiveOcmUrl, "hive-ocm-url", "", "(optional) OCM environment URL for Hive operations. Aliases: 'production', 'staging', 'integration'. This only changes how the Hive cluster is resolved; the target cluster still comes from the current/default OCM environment.")
 	_ = rotateSecretCmd.MarkFlagRequired("reason")
 
 	return rotateSecretCmd
@@ -58,6 +56,8 @@ type rotateSecretOptions struct {
 	awsAccountTimeout       *int32
 	reason                  string
 	osdManagedAdminUsername string
+	clusterID               string
+	hiveOcmUrl              string
 
 	genericclioptions.IOStreams
 	kubeCli *k8s.LazyClient
@@ -72,53 +72,6 @@ func newRotateSecretOptions(streams genericclioptions.IOStreams, client *k8s.Laz
 
 func getSessionNameFromUserId(userid string) string {
 	return strings.Replace(userid, ":", "-", 1)
-}
-
-// verifyRotationPermissions checks if the assumed role has the necessary IAM permissions
-// to perform secret rotation by simulating the required actions on the osdManagedAdmin user
-func verifyRotationPermissions(awsClient awsprovider.Client, accountID string, osdManagedAdminUsername string) error {
-	// Define the required IAM actions for secret rotation
-	requiredActions := []string{
-		"iam:CreateAccessKey",
-		"iam:CreateUser",
-		"iam:DeleteAccessKey",
-		"iam:DeleteUser",
-		"iam:DeleteUserPolicy",
-		"iam:GetUser",
-		"iam:GetUserPolicy",
-		"iam:ListAccessKeys",
-		"iam:PutUserPolicy",
-		"iam:TagUser",
-	}
-
-	// Construct the ARN for the osdManagedAdmin user
-	userArn := fmt.Sprintf("arn:aws:iam::%s:user/%s", accountID, osdManagedAdminUsername)
-
-	fmt.Printf("Verifying IAM permissions for user %s...\n", osdManagedAdminUsername)
-
-	// Simulate the principal policy to check permissions
-	output, err := awsClient.SimulatePrincipalPolicy(&iam.SimulatePrincipalPolicyInput{
-		PolicySourceArn: awsSdk.String(userArn),
-		ActionNames:     requiredActions,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to simulate principal policy: %w", err)
-	}
-
-	// Check if all actions are allowed
-	var deniedActions []string
-	for _, result := range output.EvaluationResults {
-		if result.EvalDecision != iamTypes.PolicyEvaluationDecisionTypeAllowed {
-			deniedActions = append(deniedActions, *result.EvalActionName)
-		}
-	}
-
-	if len(deniedActions) > 0 {
-		return fmt.Errorf("insufficient permissions for secret rotation. Denied actions: %v", deniedActions)
-	}
-
-	fmt.Println("Permission verification successful. All required IAM actions are allowed.")
-	return nil
 }
 
 func (o *rotateSecretOptions) complete(cmd *cobra.Command, args []string) error {
@@ -137,6 +90,10 @@ func (o *rotateSecretOptions) complete(cmd *cobra.Command, args []string) error 
 		return cmdutil.UsageErrorf(cmd, "admin-username must start with %v", common.OSDManagedAdminIAM)
 	}
 
+	if o.hiveOcmUrl != "" && o.clusterID == "" {
+		return cmdutil.UsageErrorf(cmd, "--cluster-id is required when using --hive-ocm-url")
+	}
+
 	return nil
 }
 
@@ -145,24 +102,27 @@ func (o *rotateSecretOptions) run() error {
 	ctx := context.TODO()
 	var err error
 
-	// This action requires elevation
-	o.kubeCli.Impersonate("backplane-cluster-admin", o.reason, fmt.Sprintf("Elevation required to rotate secrets %s aws-account-cr-name", o.accountCRName))
+	// Resolve the k8s client for hive operations.
+	var kubeCli client.Client
+	if o.hiveOcmUrl != "" {
+		kubeCli, err = o.initHiveClient()
+		if err != nil {
+			return fmt.Errorf("failed to initialize hive client: %w", err)
+		}
+	} else {
+		o.kubeCli.Impersonate("backplane-cluster-admin", o.reason, fmt.Sprintf("Elevation required to rotate secrets %s aws-account-cr-name", o.accountCRName))
+		kubeCli = o.kubeCli
+	}
 
 	// Get the associated Account CR from the provided name
-	var accountID string
-	account, err := k8s.GetAWSAccount(ctx, o.kubeCli, common.AWSAccountNamespace, o.accountCRName)
+	account, err := k8s.GetAWSAccount(ctx, kubeCli, common.AWSAccountNamespace, o.accountCRName)
 	if err != nil {
 		return err
 	}
-	if account.Spec.ManualSTSMode {
-		return fmt.Errorf("Account %s is STS - No IAM User Credentials to Rotate", o.accountCRName)
-	}
 
-	// Set the account ID
-	accountID = account.Spec.AwsAccountID
+	accountID := account.Spec.AwsAccountID
 
-	// Get IAM user suffix from CR label
-
+	// Get IAM user suffix from CR label (needed for role chaining ARN)
 	accountIDSuffixLabel, ok := account.Labels["iamUserId"]
 	if !ok {
 		return fmt.Errorf("no label on Account CR for IAM User")
@@ -173,35 +133,61 @@ func (o *rotateSecretOptions) run() error {
 		return err
 	}
 
-	// Ensure AWS calls are successful with client
 	callerIdentityOutput, err := awsSetupClient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
 	if err != nil {
 		return err
 	}
 	roleSessionName := getSessionNameFromUserId(*callerIdentityOutput.UserId)
 
-	var credentials *stsTypes.Credentials
-	// Need to role chain if the cluster is CCS
+	// Build the final AWS client via role chaining
+	awsClient, err := o.buildAssumedRoleClient(ctx, kubeCli, awsSetupClient, account, accountID, accountIDSuffixLabel, &roleSessionName)
+	if err != nil {
+		return err
+	}
+
+	return controller.RotateSecret(ctx, &controller.RotateSecretInput{
+		AccountCRName:           o.accountCRName,
+		Account:                 account,
+		OsdManagedAdminUsername: o.osdManagedAdminUsername,
+		UpdateCcsCreds:          o.updateCcsCreds,
+		AwsClient:               awsClient,
+		HiveKubeClient:          kubeCli,
+		Out:                     os.Stdout,
+	})
+}
+
+// buildAssumedRoleClient performs the BYOC or non-BYOC role chain to get an
+// AWS client with permissions in the target account.
+func (o *rotateSecretOptions) buildAssumedRoleClient(
+	ctx context.Context,
+	kubeCli client.Client,
+	awsSetupClient awsprovider.Client,
+	account *awsv1alpha1.Account,
+	accountID string,
+	accountIDSuffixLabel string,
+	roleSessionName *string,
+) (awsprovider.Client, error) {
+
+	var credAccessKeyId, credSecretAccessKey, credSessionToken *string
+
 	if account.Spec.BYOC {
 		// Get the aws-account-operator configmap
 		cm := &corev1.ConfigMap{}
-		cmErr := o.kubeCli.Get(context.TODO(), types.NamespacedName{Namespace: common.AWSAccountNamespace, Name: common.DefaultConfigMap}, cm)
+		cmErr := kubeCli.Get(ctx, types.NamespacedName{Namespace: common.AWSAccountNamespace, Name: common.DefaultConfigMap}, cm)
 		if cmErr != nil {
-			return fmt.Errorf("there was an error getting the ConfigMap to get the SRE Access Role %s", cmErr)
+			return nil, fmt.Errorf("there was an error getting the ConfigMap to get the SRE Access Role %s", cmErr)
 		}
-		// Get the ARN value
+
 		SREAccessARN := cm.Data["CCS-Access-Arn"]
 		if SREAccessARN == "" {
-			return fmt.Errorf("SRE Access ARN is missing from configmap")
+			return nil, fmt.Errorf("SRE Access ARN is missing from configmap")
 		}
 
-		// Assume the ARN
-		srepRoleCredentials, err := awsprovider.GetAssumeRoleCredentials(awsSetupClient, o.awsAccountTimeout, &roleSessionName, &SREAccessARN)
+		srepRoleCredentials, err := awsprovider.GetAssumeRoleCredentials(awsSetupClient, o.awsAccountTimeout, roleSessionName, &SREAccessARN)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		// Create client with the SREP role
 		srepRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
 			AccessKeyID:     *srepRoleCredentials.AccessKeyId,
 			SecretAccessKey: *srepRoleCredentials.SecretAccessKey,
@@ -209,20 +195,19 @@ func (o *rotateSecretOptions) run() error {
 			Region:          "us-east-1",
 		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		// Get the Jump ARN value
 		JumpARN := cm.Data["support-jump-role"]
 		if JumpARN == "" {
-			return fmt.Errorf("jump Access ARN is missing from configmap")
+			return nil, fmt.Errorf("jump Access ARN is missing from configmap")
 		}
-		// Assume the ARN
-		jumpRoleCreds, err := awsprovider.GetAssumeRoleCredentials(srepRoleClient, o.awsAccountTimeout, &roleSessionName, &JumpARN)
+
+		jumpRoleCreds, err := awsprovider.GetAssumeRoleCredentials(srepRoleClient, o.awsAccountTimeout, roleSessionName, &JumpARN)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		// Create client with the Jump role
+
 		jumpRoleClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
 			AccessKeyID:     *jumpRoleCreds.AccessKeyId,
 			SecretAccessKey: *jumpRoleCreds.SecretAccessKey,
@@ -230,226 +215,78 @@ func (o *rotateSecretOptions) run() error {
 			Region:          "us-east-1",
 		})
 		if err != nil {
-			return err
-		}
-		// Role chain to assume ManagedOpenShift-Support-{uid}
-		roleArn := awsSdk.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, "ManagedOpenShift-Support-"+accountIDSuffixLabel))
-		credentials, err = awsprovider.GetAssumeRoleCredentials(jumpRoleClient, o.awsAccountTimeout,
-			&roleSessionName, roleArn)
-		if err != nil {
-			return err
+			return nil, err
 		}
 
-	} else {
-		// Assume the OrganizationAdminAccess role
-		roleArn := awsSdk.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, awsv1alpha1.AccountOperatorIAMRole))
-		credentials, err = awsprovider.GetAssumeRoleCredentials(awsSetupClient, o.awsAccountTimeout,
-			&roleSessionName, roleArn)
+		roleArn := awsSdk.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, "ManagedOpenShift-Support-"+accountIDSuffixLabel))
+		credentials, err := awsprovider.GetAssumeRoleCredentials(jumpRoleClient, o.awsAccountTimeout, roleSessionName, roleArn)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		credAccessKeyId = credentials.AccessKeyId
+		credSecretAccessKey = credentials.SecretAccessKey
+		credSessionToken = credentials.SessionToken
+	} else {
+		roleArn := awsSdk.String(fmt.Sprintf("arn:aws:iam::%s:role/%s", accountID, awsv1alpha1.AccountOperatorIAMRole))
+		credentials, err := awsprovider.GetAssumeRoleCredentials(awsSetupClient, o.awsAccountTimeout, roleSessionName, roleArn)
+		if err != nil {
+			return nil, err
+		}
+		credAccessKeyId = credentials.AccessKeyId
+		credSecretAccessKey = credentials.SecretAccessKey
+		credSessionToken = credentials.SessionToken
 	}
 
-	// Build a new client with the assumed role
-	awsClient, err := awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
-		AccessKeyID:     *credentials.AccessKeyId,
-		SecretAccessKey: *credentials.SecretAccessKey,
-		SessionToken:    *credentials.SessionToken,
+	return awsprovider.NewAwsClientWithInput(&awsprovider.ClientInput{
+		AccessKeyID:     *credAccessKeyId,
+		SecretAccessKey: *credSecretAccessKey,
+		SessionToken:    *credSessionToken,
 		Region:          "us-east-1",
 	})
+}
+
+// initHiveClient creates a k8s client connected to the hive cluster that manages the target cluster.
+func (o *rotateSecretOptions) initHiveClient() (client.Client, error) {
+	resolvedURL, err := utils.ValidateAndResolveOcmUrl(o.hiveOcmUrl)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("invalid --hive-ocm-url: %w", err)
 	}
 
-	// Update osdManagedAdmin secrets
-	osdManagedAdminUsername := o.osdManagedAdminUsername
-	if osdManagedAdminUsername == "" {
-		osdManagedAdminUsername = common.OSDManagedAdminIAM + "-" + accountIDSuffixLabel
-	}
-
-	// Verify that we have the necessary permissions to rotate secrets
-	err = verifyRotationPermissions(awsClient, accountID, osdManagedAdminUsername)
+	targetOCM, err := utils.CreateConnection()
 	if err != nil {
-		// If verification fails with the suffixed username, try without suffix
-		if osdManagedAdminUsername == common.OSDManagedAdminIAM+"-"+accountIDSuffixLabel {
-			fmt.Printf("Permission verification failed for %s, trying %s...\n", osdManagedAdminUsername, common.OSDManagedAdminIAM)
-			err = verifyRotationPermissions(awsClient, accountID, common.OSDManagedAdminIAM)
-			if err != nil {
-				return err
-			}
-			// Update username if verification succeeded without suffix
-			osdManagedAdminUsername = common.OSDManagedAdminIAM
-		} else {
-			return err
-		}
+		return nil, fmt.Errorf("failed to create target cluster OCM connection: %w", err)
 	}
+	defer targetOCM.Close()
 
-	// Create new access key
-	createAccessKeyOutput, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{UserName: awsSdk.String(osdManagedAdminUsername)})
+	hiveOCM, err := utils.CreateConnectionWithUrl(resolvedURL)
 	if err != nil {
-		var nse *iamTypes.NoSuchEntityException
-		if errors.As(err, &nse) {
-			// try removing accountIDSuffixLabel from the end of the username
-			osdManagedAdminUsername = common.OSDManagedAdminIAM
-			createAccessKeyOutput, err = awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{UserName: awsSdk.String(osdManagedAdminUsername)})
-			if err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
+		return nil, fmt.Errorf("failed to create hive OCM connection with URL '%s': %w", resolvedURL, err)
 	}
+	defer hiveOCM.Close()
 
-	// Place new credentials into body for secret
-	newOsdManagedAdminSecretData := map[string][]byte{
-		"aws_user_name":         []byte(*createAccessKeyOutput.AccessKey.UserName),
-		"aws_access_key_id":     []byte(*createAccessKeyOutput.AccessKey.AccessKeyId),
-		"aws_secret_access_key": []byte(*createAccessKeyOutput.AccessKey.SecretAccessKey),
-	}
-
-	// Update existing osdManagedAdmin secret
-	err = common.UpdateSecret(o.kubeCli, o.accountCRName+"-secret", common.AWSAccountNamespace, newOsdManagedAdminSecretData)
+	cluster, err := utils.GetClusterAnyStatus(targetOCM, o.clusterID)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to get OCM cluster info for %s: %w", o.clusterID, err)
 	}
 
-	// Update secret in ClusterDeployment's namespace
-	err = common.UpdateSecret(o.kubeCli, "aws", account.Spec.ClaimLinkNamespace, newOsdManagedAdminSecretData)
+	hive, err := utils.GetHiveClusterWithConn(cluster.ID(), targetOCM, hiveOCM)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to get hive cluster (OCM URL:'%s'): %w", resolvedURL, err)
 	}
 
-	fmt.Println("AWS creds updated on hive.")
+	fmt.Printf("Connecting to hive cluster %s via OCM URL: %s\n", hive.Name(), resolvedURL)
 
-	clusterDeployments := &hiveapiv1.ClusterDeploymentList{}
-	listOpts := []client.ListOption{
-		client.InNamespace(account.Spec.ClaimLinkNamespace),
-	}
-
-	err = o.kubeCli.List(ctx, clusterDeployments, listOpts...)
+	elevationMsg := fmt.Sprintf("Elevation required to rotate secrets for %s", o.accountCRName)
+	hiveClient, err := k8s.NewAsBackplaneClusterAdminWithConn(
+		hive.ID(),
+		client.Options{Scheme: scheme.Scheme},
+		hiveOCM,
+		o.reason,
+		elevationMsg,
+	)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to create hive k8s client (OCM URL:'%s'): %w", resolvedURL, err)
 	}
 
-	if len(clusterDeployments.Items) == 0 {
-		return fmt.Errorf("failed to retreive cluster deployments")
-	}
-	cdName := clusterDeployments.Items[0].ObjectMeta.Name
-
-	// Create syncset to deploy the updated creds to the cluster for CCO
-	syncSetName := "aws-sync"
-	syncSet := &hiveapiv1.SyncSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      syncSetName,
-			Namespace: account.Spec.ClaimLinkNamespace,
-		},
-		Spec: hiveapiv1.SyncSetSpec{
-			ClusterDeploymentRefs: []corev1.LocalObjectReference{
-				{
-					Name: cdName,
-				},
-			},
-			SyncSetCommonSpec: hiveapiv1.SyncSetCommonSpec{
-				ResourceApplyMode: "Upsert",
-				Secrets: []hiveapiv1.SecretMapping{
-					{
-						SourceRef: hiveapiv1.SecretReference{
-							Name: "aws",
-						},
-						TargetRef: hiveapiv1.SecretReference{
-							Name:      "aws-creds",
-							Namespace: "kube-system",
-						},
-					},
-				},
-			},
-		},
-	}
-	fmt.Println("Syncing AWS creds down to cluster.")
-	err = o.kubeCli.Create(ctx, syncSet)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Watching Cluster Sync Status for deployment...")
-	err = hiveinternalv1alpha1.AddToScheme(o.kubeCli.Scheme())
-	if err != nil {
-		return err
-	}
-
-	searchStatus := &hiveinternalv1alpha1.ClusterSync{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cdName,
-			Namespace: account.Spec.ClaimLinkNamespace,
-		},
-	}
-	foundStatus := &hiveinternalv1alpha1.ClusterSync{}
-	isSSSynced := false
-	for i := 0; i < 6; i++ {
-		err = o.kubeCli.Get(ctx, client.ObjectKeyFromObject(searchStatus), foundStatus)
-		if err != nil {
-			return err
-		}
-
-		for _, status := range foundStatus.Status.SyncSets {
-			if status.Name == syncSetName {
-				if status.FirstSuccessTime != nil {
-					isSSSynced = true
-					break
-				}
-			}
-		}
-
-		if isSSSynced {
-			fmt.Printf("\nSync completed...\n")
-			break
-		}
-
-		fmt.Printf(".")
-		time.Sleep(time.Second * 5)
-	}
-	if !isSSSynced {
-		return fmt.Errorf("syncset failed to sync. Please verify")
-	}
-
-	// Clean up the SS on hive
-	err = o.kubeCli.Delete(ctx, syncSet)
-	if err != nil {
-		return err
-	}
-
-	fmt.Printf("Successfully rotated secrets for %s\n", osdManagedAdminUsername)
-
-	// Only update osdCcsAdmin credential if specified
-	if o.updateCcsCreds {
-		// Only update if the Account CR is actually CCS
-		if account.Spec.BYOC {
-			// Rotate osdCcsAdmin creds
-			createAccessKeyOutputCCS, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{
-				UserName: awsSdk.String("osdCcsAdmin"),
-			})
-			if err != nil {
-				return err
-			}
-
-			newOsdCcsAdminSecretData := map[string][]byte{
-				"aws_user_name":         []byte(*createAccessKeyOutputCCS.AccessKey.UserName),
-				"aws_access_key_id":     []byte(*createAccessKeyOutputCCS.AccessKey.AccessKeyId),
-				"aws_secret_access_key": []byte(*createAccessKeyOutputCCS.AccessKey.SecretAccessKey),
-			}
-
-			// Update byoc secret with new creds
-			err = common.UpdateSecret(o.kubeCli, "byoc", account.Spec.ClaimLinkNamespace, newOsdCcsAdminSecretData)
-			if err != nil {
-				return err
-			}
-
-			fmt.Println("Successfully rotated secrets for osdCcsAdmin")
-		} else {
-			// Check yo self
-			fmt.Println("Account is not CCS, skipping osdCcsAdmin credential rotation")
-		}
-	}
-
-	return nil
+	return hiveClient, nil
 }
