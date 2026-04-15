@@ -2,15 +2,18 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	iamTypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
+	ccov1 "github.com/openshift/cloud-credential-operator/pkg/apis/cloudcredential/v1"
 	hiveapiv1 "github.com/openshift/hive/apis/hive/v1"
 	hiveinternalv1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
@@ -55,6 +58,11 @@ type RotateSecretInput struct {
 	// HiveKubeClient is the k8s client connected to the hive cluster.
 	HiveKubeClient client.Client
 
+	// ManagedClusterClient is the k8s client connected to the managed cluster
+	// (via backplane using the target OCM environment). Used to delete
+	// CredentialRequests so CCO recreates them with the new credentials.
+	ManagedClusterClient client.Client
+
 	// Out is the writer for informational output.
 	Out io.Writer
 }
@@ -91,6 +99,31 @@ func RotateSecret(ctx context.Context, input *RotateSecretInput) error {
 	adminUsername, err := resolveAdminUsername(input.Out, input.AwsClient, accountID, adminUsername, accountIDSuffixLabel)
 	if err != nil {
 		return err
+	}
+
+	if input.DryRun {
+		fmt.Fprintln(input.Out, "[Dry Run] Would create a new IAM access key for user:", adminUsername)
+		fmt.Fprintln(input.Out, "[Dry Run] Would list access keys and report old keys to remove via rh-aws-saml-login")
+		fmt.Fprintf(input.Out, "[Dry Run] Would update secret %s/%s with new credentials\n", awsAccountNamespace, input.AccountCRName+"-secret")
+		fmt.Fprintf(input.Out, "[Dry Run] Would update secret %s/%s with new credentials\n", account.Spec.ClaimLinkNamespace, "aws")
+		fmt.Fprintf(input.Out, "[Dry Run] Would create SyncSet %s/%s to sync credentials to cluster\n", account.Spec.ClaimLinkNamespace, "aws-sync")
+		fmt.Fprintf(input.Out, "[Dry Run] Would poll ClusterSync and then delete SyncSet %s/%s\n", account.Spec.ClaimLinkNamespace, "aws-sync")
+
+		if err := dryRunDeleteCredentialSecrets(ctx, input.ManagedClusterClient, input.Out); err != nil {
+			return err
+		}
+
+		if input.UpdateCcsCreds {
+			if account.Spec.BYOC {
+				fmt.Fprintln(input.Out, "[Dry Run] Would create a new IAM access key for user: osdCcsAdmin")
+				fmt.Fprintf(input.Out, "[Dry Run] Would update secret %s/%s with new osdCcsAdmin credentials\n", account.Spec.ClaimLinkNamespace, "byoc")
+			} else {
+				fmt.Fprintln(input.Out, "[Dry Run] Account is not CCS, would skip osdCcsAdmin credential rotation")
+			}
+		}
+
+		fmt.Fprintln(input.Out, "[Dry Run] No changes were made.")
+		return nil
 	}
 
 	// Create new access key
@@ -136,6 +169,12 @@ func RotateSecret(ctx context.Context, input *RotateSecretInput) error {
 	}
 
 	fmt.Fprintf(input.Out, "Successfully rotated secrets for %s\n", adminUsername)
+
+	// Delete the secrets referenced by AWS CredentialRequests so CCO recreates
+	// them with the newly synced credentials.
+	if err := deleteCredentialSecrets(ctx, input.ManagedClusterClient, input.Out); err != nil {
+		return err
+	}
 
 	if input.UpdateCcsCreds {
 		if err := rotateCcsAdminCredentials(ctx, input.AwsClient, input.HiveKubeClient, account, input.Out); err != nil {
@@ -330,5 +369,90 @@ func rotateCcsAdminCredentials(ctx context.Context, awsClient awsprovider.Client
 	}
 
 	fmt.Fprintln(out, "Successfully rotated secrets for osdCcsAdmin")
+	return nil
+}
+
+const (
+	credentialRequestNamespace = "openshift-cloud-credential-operator"
+	credentialRequestPrefix    = "openshift-"
+)
+
+// isAWSCredentialRequest returns true when the CredentialRequest has the
+// "openshift-" name prefix and its providerSpec.kind is "AWSProviderSpec".
+func isAWSCredentialRequest(cr *ccov1.CredentialsRequest) bool {
+	if !strings.HasPrefix(cr.Name, credentialRequestPrefix) {
+		return false
+	}
+	if cr.Spec.ProviderSpec == nil || cr.Spec.ProviderSpec.Raw == nil {
+		return false
+	}
+	var provider struct {
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(cr.Spec.ProviderSpec.Raw, &provider); err != nil {
+		return false
+	}
+	return provider.Kind == "AWSProviderSpec"
+}
+
+// dryRunDeleteCredentialSecrets lists the secrets referenced by AWS
+// CredentialRequests that would be deleted during a real rotation.
+func dryRunDeleteCredentialSecrets(ctx context.Context, managedClient client.Client, out io.Writer) error {
+	crList := &ccov1.CredentialsRequestList{}
+	if err := managedClient.List(ctx, crList, client.InNamespace(credentialRequestNamespace)); err != nil {
+		return fmt.Errorf("failed to list CredentialRequests in %s: %w", credentialRequestNamespace, err)
+	}
+
+	count := 0
+	for i := range crList.Items {
+		cr := &crList.Items[i]
+		if !isAWSCredentialRequest(cr) {
+			continue
+		}
+		fmt.Fprintf(out, "[Dry Run] Would delete secret %s/%s (referenced by CredentialRequest %s)\n",
+			cr.Spec.SecretRef.Namespace, cr.Spec.SecretRef.Name, cr.Name)
+		count++
+	}
+	fmt.Fprintf(out, "[Dry Run] Would delete %d credential secret(s) total\n", count)
+	return nil
+}
+
+// deleteCredentialSecrets lists AWS CredentialRequests on the managed cluster,
+// resolves the secret each one references via .spec.secretRef, and deletes
+// those secrets so CCO recreates them using the newly synced credentials.
+func deleteCredentialSecrets(ctx context.Context, managedClient client.Client, out io.Writer) error {
+	fmt.Fprintln(out, "The 'aws-creds' secret in 'kube-system' has been updated via SyncSet.")
+	fmt.Fprintln(out, "Deleting credential secrets so CCO recreates them with the new credentials...")
+
+	crList := &ccov1.CredentialsRequestList{}
+	if err := managedClient.List(ctx, crList, client.InNamespace(credentialRequestNamespace)); err != nil {
+		return fmt.Errorf("failed to list CredentialRequests in %s: %w", credentialRequestNamespace, err)
+	}
+
+	deletedCount := 0
+	for i := range crList.Items {
+		cr := &crList.Items[i]
+		if !isAWSCredentialRequest(cr) {
+			continue
+		}
+		ref := cr.Spec.SecretRef
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      ref.Name,
+				Namespace: ref.Namespace,
+			},
+		}
+		if err := managedClient.Delete(ctx, secret); err != nil {
+			if apierrors.IsNotFound(err) {
+				fmt.Fprintf(out, "  Secret %s/%s already absent, skipping\n", ref.Namespace, ref.Name)
+				continue
+			}
+			return fmt.Errorf("failed to delete secret %s/%s (from CredentialRequest %s): %w", ref.Namespace, ref.Name, cr.Name, err)
+		}
+		fmt.Fprintf(out, "  Deleted secret %s/%s (referenced by CredentialRequest %s)\n", ref.Namespace, ref.Name, cr.Name)
+		deletedCount++
+	}
+
+	fmt.Fprintf(out, "Deleted %d credential secret(s). CCO will recreate them with the updated credentials.\n", deletedCount)
 	return nil
 }

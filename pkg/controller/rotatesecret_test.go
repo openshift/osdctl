@@ -3,12 +3,14 @@ package controller
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"testing"
 
 	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	iamTypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
+	ccov1 "github.com/openshift/cloud-credential-operator/pkg/apis/cloudcredential/v1"
 	hiveapiv1 "github.com/openshift/hive/apis/hive/v1"
 	hiveinternalv1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
 	mock_aws "github.com/openshift/osdctl/pkg/provider/aws/mock"
@@ -18,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -28,6 +31,7 @@ func testScheme(t *testing.T) *runtime.Scheme {
 	require.NoError(t, awsv1alpha1.AddToScheme(s))
 	require.NoError(t, hiveapiv1.AddToScheme(s))
 	require.NoError(t, hiveinternalv1alpha1.AddToScheme(s))
+	require.NoError(t, ccov1.AddToScheme(s))
 	return s
 }
 
@@ -104,6 +108,13 @@ func testClusterSync(synced bool) *hiveinternalv1alpha1.ClusterSync {
 	return cs
 }
 
+// testManagedClient creates a fake managed cluster client with optional
+// CredentialRequest objects pre-seeded.
+func testManagedClient(t *testing.T, crs ...runtime.Object) client.Client {
+	t.Helper()
+	return fake.NewClientBuilder().WithScheme(testScheme(t)).WithRuntimeObjects(crs...).Build()
+}
+
 func mockSimulateAllAllowed(mockClient *mock_aws.MockClient) *gomock.Call {
 	return mockClient.EXPECT().
 		SimulatePrincipalPolicy(gomock.Any()).
@@ -148,11 +159,12 @@ func TestRotateSecret_STSAccount(t *testing.T) {
 	kubeCli := fake.NewClientBuilder().WithScheme(testScheme(t)).Build()
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:  "test-account",
-		Account:        account,
-		AwsClient:      mockClient,
-		HiveKubeClient: kubeCli,
-		Out:            out,
+		AccountCRName:        "test-account",
+		Account:              account,
+		AwsClient:            mockClient,
+		HiveKubeClient:       kubeCli,
+		ManagedClusterClient: testManagedClient(t),
+		Out:                  out,
 	})
 
 	assert.Error(t, err)
@@ -171,11 +183,12 @@ func TestRotateSecret_MissingIamUserIdLabel(t *testing.T) {
 	kubeCli := fake.NewClientBuilder().WithScheme(testScheme(t)).Build()
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:  "test-account",
-		Account:        account,
-		AwsClient:      mockClient,
-		HiveKubeClient: kubeCli,
-		Out:            out,
+		AccountCRName:        "test-account",
+		Account:              account,
+		AwsClient:            mockClient,
+		HiveKubeClient:       kubeCli,
+		ManagedClusterClient: testManagedClient(t),
+		Out:                  out,
 	})
 
 	assert.Error(t, err)
@@ -212,11 +225,12 @@ func TestRotateSecret_SuccessfulRotation(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:  "test-account",
-		Account:        account,
-		AwsClient:      mockClient,
-		HiveKubeClient: kubeCli,
-		Out:            out,
+		AccountCRName:        "test-account",
+		Account:              account,
+		AwsClient:            mockClient,
+		HiveKubeClient:       kubeCli,
+		ManagedClusterClient: testManagedClient(t),
+		Out:                  out,
 	})
 
 	assert.NoError(t, err)
@@ -267,12 +281,13 @@ func TestRotateSecret_SuccessfulRotationWithCCS(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:  "test-account",
-		Account:        account,
-		UpdateCcsCreds: true,
-		AwsClient:      mockClient,
-		HiveKubeClient: kubeCli,
-		Out:            out,
+		AccountCRName:        "test-account",
+		Account:              account,
+		UpdateCcsCreds:       true,
+		AwsClient:            mockClient,
+		HiveKubeClient:       kubeCli,
+		ManagedClusterClient: testManagedClient(t),
+		Out:                  out,
 	})
 
 	assert.NoError(t, err)
@@ -309,12 +324,13 @@ func TestRotateSecret_CCSFlagOnNonBYOCAccount(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:  "test-account",
-		Account:        account,
-		UpdateCcsCreds: true,
-		AwsClient:      mockClient,
-		HiveKubeClient: kubeCli,
-		Out:            out,
+		AccountCRName:        "test-account",
+		Account:              account,
+		UpdateCcsCreds:       true,
+		AwsClient:            mockClient,
+		HiveKubeClient:       kubeCli,
+		ManagedClusterClient: testManagedClient(t),
+		Out:                  out,
 	})
 
 	assert.NoError(t, err)
@@ -377,11 +393,12 @@ func TestRotateSecret_AdminUsernameFallback(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:  "test-account",
-		Account:        account,
-		AwsClient:      mockClient,
-		HiveKubeClient: kubeCli,
-		Out:            out,
+		AccountCRName:        "test-account",
+		Account:              account,
+		AwsClient:            mockClient,
+		HiveKubeClient:       kubeCli,
+		ManagedClusterClient: testManagedClient(t),
+		Out:                  out,
 	})
 
 	assert.NoError(t, err)
@@ -437,11 +454,12 @@ func TestRotateSecret_CreateAccessKeyNoSuchEntityFallback(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:  "test-account",
-		Account:        account,
-		AwsClient:      mockClient,
-		HiveKubeClient: kubeCli,
-		Out:            out,
+		AccountCRName:        "test-account",
+		Account:              account,
+		AwsClient:            mockClient,
+		HiveKubeClient:       kubeCli,
+		ManagedClusterClient: testManagedClient(t),
+		Out:                  out,
 	})
 
 	assert.NoError(t, err)
@@ -478,11 +496,12 @@ func TestRotateSecret_SyncSetTimeout(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:  "test-account",
-		Account:        account,
-		AwsClient:      mockClient,
-		HiveKubeClient: kubeCli,
-		Out:            out,
+		AccountCRName:        "test-account",
+		Account:              account,
+		AwsClient:            mockClient,
+		HiveKubeClient:       kubeCli,
+		ManagedClusterClient: testManagedClient(t),
+		Out:                  out,
 	})
 
 	assert.Error(t, err)
@@ -608,9 +627,234 @@ func TestRotateSecret_ExplicitAdminUsername(t *testing.T) {
 		OsdManagedAdminUsername: "osdManagedAdmin-custom",
 		AwsClient:               mockClient,
 		HiveKubeClient:          kubeCli,
+		ManagedClusterClient:    testManagedClient(t),
 		Out:                     out,
 	})
 
 	assert.NoError(t, err)
 	assert.Contains(t, out.String(), "Successfully rotated secrets for osdManagedAdmin-custom")
+}
+
+func TestRotateSecret_DryRun(t *testing.T) {
+	account := testAccount(false, false)
+	secrets := testSecrets()
+
+	objs := append(secrets, account)
+	scheme := testScheme(t)
+	kubeCli := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...).Build()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockClient := mock_aws.NewMockClient(ctrl)
+
+	// Only SimulatePrincipalPolicy should be called (read-only validation).
+	// No CreateAccessKey calls should happen.
+	mockSimulateAllAllowed(mockClient)
+
+	crIngress := &ccov1.CredentialsRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "openshift-ingress",
+			Namespace: credentialRequestNamespace,
+		},
+		Spec: ccov1.CredentialsRequestSpec{
+			SecretRef:    corev1.ObjectReference{Name: "ingress-creds", Namespace: "openshift-ingress-operator"},
+			ProviderSpec: awsProviderSpec(t),
+		},
+	}
+	crCustom := &ccov1.CredentialsRequest{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "custom-cr",
+			Namespace: credentialRequestNamespace,
+		},
+		Spec: ccov1.CredentialsRequestSpec{
+			SecretRef:    corev1.ObjectReference{Name: "custom-creds", Namespace: "custom-ns"},
+			ProviderSpec: awsProviderSpec(t),
+		},
+	}
+	managedClient := testManagedClient(t, crIngress, crCustom)
+
+	out := &bytes.Buffer{}
+
+	err := RotateSecret(context.Background(), &RotateSecretInput{
+		AccountCRName:        "test-account",
+		Account:              account,
+		DryRun:               true,
+		AwsClient:            mockClient,
+		HiveKubeClient:       kubeCli,
+		ManagedClusterClient: managedClient,
+		Out:                  out,
+	})
+
+	assert.NoError(t, err)
+	output := out.String()
+	assert.Contains(t, output, "[Dry Run] Would create a new IAM access key for user: osdManagedAdmin-abcd")
+	assert.Contains(t, output, "[Dry Run] Would update secret aws-account-operator/test-account-secret")
+	assert.Contains(t, output, "[Dry Run] Would update secret uhc-production-test/aws")
+	assert.Contains(t, output, "[Dry Run] Would create SyncSet")
+	assert.Contains(t, output, "[Dry Run] Would delete secret openshift-ingress-operator/ingress-creds (referenced by CredentialRequest openshift-ingress)")
+	assert.NotContains(t, output, "custom-creds")
+	assert.Contains(t, output, "[Dry Run] Would delete 1 credential secret(s) total")
+	assert.Contains(t, output, "[Dry Run] No changes were made.")
+
+	// Verify secrets were NOT modified
+	secret := &corev1.Secret{}
+	err = kubeCli.Get(context.Background(), types.NamespacedName{Name: "test-account-secret", Namespace: awsAccountNamespace}, secret)
+	assert.NoError(t, err)
+	assert.Equal(t, "old-key", string(secret.Data["aws_access_key_id"]))
+}
+
+func TestRotateSecret_DryRunWithCCS(t *testing.T) {
+	account := testAccount(true, false)
+	secrets := testSecrets()
+
+	objs := append(secrets, account)
+	scheme := testScheme(t)
+	kubeCli := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...).Build()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockClient := mock_aws.NewMockClient(ctrl)
+
+	mockSimulateAllAllowed(mockClient)
+
+	managedClient := testManagedClient(t)
+
+	out := &bytes.Buffer{}
+
+	err := RotateSecret(context.Background(), &RotateSecretInput{
+		AccountCRName:        "test-account",
+		Account:              account,
+		DryRun:               true,
+		UpdateCcsCreds:       true,
+		AwsClient:            mockClient,
+		HiveKubeClient:       kubeCli,
+		ManagedClusterClient: managedClient,
+		Out:                  out,
+	})
+
+	assert.NoError(t, err)
+	output := out.String()
+	assert.Contains(t, output, "[Dry Run] Would create a new IAM access key for user: osdCcsAdmin")
+	assert.Contains(t, output, "[Dry Run] Would update secret uhc-production-test/byoc")
+	assert.Contains(t, output, "[Dry Run] No changes were made.")
+}
+
+func awsProviderSpec(t *testing.T) *runtime.RawExtension {
+	t.Helper()
+	raw, err := json.Marshal(map[string]string{"kind": "AWSProviderSpec"})
+	require.NoError(t, err)
+	return &runtime.RawExtension{Raw: raw}
+}
+
+func gcpProviderSpec(t *testing.T) *runtime.RawExtension {
+	t.Helper()
+	raw, err := json.Marshal(map[string]string{"kind": "GCPProviderSpec"})
+	require.NoError(t, err)
+	return &runtime.RawExtension{Raw: raw}
+}
+
+func TestRotateSecret_CredentialSecretDeletion(t *testing.T) {
+	origInterval := SyncPollInterval
+	origRetries := SyncMaxRetries
+	SyncPollInterval = 0
+	SyncMaxRetries = 1
+	defer func() {
+		SyncPollInterval = origInterval
+		SyncMaxRetries = origRetries
+	}()
+
+	account := testAccount(false, false)
+	secrets := testSecrets()
+	cd := testClusterDeployment()
+	cs := testClusterSync(true)
+
+	objs := append(secrets, account, cd, cs)
+	scheme := testScheme(t)
+	kubeCli := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...).WithStatusSubresource(cs).Build()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockClient := mock_aws.NewMockClient(ctrl)
+
+	mockSimulateAllAllowed(mockClient)
+	mockCreateAccessKey(mockClient, "osdManagedAdmin-abcd")
+
+	// Two AWS CredentialRequests with "openshift-" prefix → their secrets should be deleted.
+	// One non-AWS CR with "openshift-" prefix → its secret should be kept.
+	// One CR without the prefix → its secret should be kept.
+	ingressSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "ingress-creds", Namespace: "openshift-ingress-operator"},
+	}
+	machineAPISecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "machine-api-creds", Namespace: "openshift-machine-api"},
+	}
+	gcpSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "gcp-creds", Namespace: "openshift-gcp"},
+	}
+	customSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "custom-creds", Namespace: "custom-ns"},
+	}
+
+	crIngress := &ccov1.CredentialsRequest{
+		ObjectMeta: metav1.ObjectMeta{Name: "openshift-ingress", Namespace: credentialRequestNamespace},
+		Spec: ccov1.CredentialsRequestSpec{
+			SecretRef:    corev1.ObjectReference{Name: "ingress-creds", Namespace: "openshift-ingress-operator"},
+			ProviderSpec: awsProviderSpec(t),
+		},
+	}
+	crMachineAPI := &ccov1.CredentialsRequest{
+		ObjectMeta: metav1.ObjectMeta{Name: "openshift-machine-api", Namespace: credentialRequestNamespace},
+		Spec: ccov1.CredentialsRequestSpec{
+			SecretRef:    corev1.ObjectReference{Name: "machine-api-creds", Namespace: "openshift-machine-api"},
+			ProviderSpec: awsProviderSpec(t),
+		},
+	}
+	crGCP := &ccov1.CredentialsRequest{
+		ObjectMeta: metav1.ObjectMeta{Name: "openshift-gcp-thing", Namespace: credentialRequestNamespace},
+		Spec: ccov1.CredentialsRequestSpec{
+			SecretRef:    corev1.ObjectReference{Name: "gcp-creds", Namespace: "openshift-gcp"},
+			ProviderSpec: gcpProviderSpec(t),
+		},
+	}
+	crCustom := &ccov1.CredentialsRequest{
+		ObjectMeta: metav1.ObjectMeta{Name: "custom-cr", Namespace: credentialRequestNamespace},
+		Spec: ccov1.CredentialsRequestSpec{
+			SecretRef:    corev1.ObjectReference{Name: "custom-creds", Namespace: "custom-ns"},
+			ProviderSpec: awsProviderSpec(t),
+		},
+	}
+
+	managedClient := testManagedClient(t,
+		ingressSecret, machineAPISecret, gcpSecret, customSecret,
+		crIngress, crMachineAPI, crGCP, crCustom,
+	)
+
+	out := &bytes.Buffer{}
+
+	err := RotateSecret(context.Background(), &RotateSecretInput{
+		AccountCRName:        "test-account",
+		Account:              account,
+		AwsClient:            mockClient,
+		HiveKubeClient:       kubeCli,
+		ManagedClusterClient: managedClient,
+		Out:                  out,
+	})
+
+	assert.NoError(t, err)
+	output := out.String()
+	assert.Contains(t, output, "Deleted secret openshift-ingress-operator/ingress-creds")
+	assert.Contains(t, output, "Deleted secret openshift-machine-api/machine-api-creds")
+	assert.NotContains(t, output, "gcp-creds")
+	assert.NotContains(t, output, "custom-creds")
+	assert.Contains(t, output, "Deleted 2 credential secret(s)")
+
+	// Verify that the GCP and custom secrets still exist
+	s := &corev1.Secret{}
+	assert.NoError(t, managedClient.Get(context.Background(), types.NamespacedName{Name: "gcp-creds", Namespace: "openshift-gcp"}, s))
+	assert.NoError(t, managedClient.Get(context.Background(), types.NamespacedName{Name: "custom-creds", Namespace: "custom-ns"}, s))
+
+	// Verify all CredentialRequests still exist (they should not be deleted)
+	remaining := &ccov1.CredentialsRequestList{}
+	assert.NoError(t, managedClient.List(context.Background(), remaining, client.InNamespace(credentialRequestNamespace)))
+	assert.Len(t, remaining.Items, 4)
 }

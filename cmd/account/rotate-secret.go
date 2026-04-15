@@ -9,6 +9,7 @@ import (
 	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	awsv1alpha1 "github.com/openshift/aws-account-operator/api/v1alpha1"
+	ccov1 "github.com/openshift/cloud-credential-operator/pkg/apis/cloudcredential/v1"
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/pkg/controller"
 	"github.com/openshift/osdctl/pkg/k8s"
@@ -16,6 +17,7 @@ import (
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -41,9 +43,10 @@ func newCmdRotateSecret(streams genericclioptions.IOStreams, client *k8s.LazyCli
 	rotateSecretCmd.Flags().BoolVar(&ops.updateCcsCreds, "ccs", false, "Also rotates osdCcsAdmin credential. Use caution.")
 	rotateSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
 	rotateSecretCmd.Flags().StringVar(&ops.osdManagedAdminUsername, "admin-username", "", "The admin username to use for generating access keys. Must be in the format of `osdManagedAdmin*`. If not specified, this is inferred from the account CR.")
-	rotateSecretCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "OCM internal/external cluster id or cluster name (required when using --hive-ocm-url)")
+	rotateSecretCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "OCM internal/external cluster id or cluster name")
 	rotateSecretCmd.Flags().StringVar(&ops.hiveOcmUrl, "hive-ocm-url", "", "(optional) OCM environment URL for Hive operations. Aliases: 'production', 'staging', 'integration'. This only changes how the Hive cluster is resolved; the target cluster still comes from the current/default OCM environment.")
 	_ = rotateSecretCmd.MarkFlagRequired("reason")
+	_ = rotateSecretCmd.MarkFlagRequired("cluster-id")
 
 	return rotateSecretCmd
 }
@@ -88,10 +91,6 @@ func (o *rotateSecretOptions) complete(cmd *cobra.Command, args []string) error 
 
 	if o.osdManagedAdminUsername != "" && !strings.HasPrefix(o.osdManagedAdminUsername, common.OSDManagedAdminIAM) {
 		return cmdutil.UsageErrorf(cmd, "admin-username must start with %v", common.OSDManagedAdminIAM)
-	}
-
-	if o.hiveOcmUrl != "" && o.clusterID == "" {
-		return cmdutil.UsageErrorf(cmd, "--cluster-id is required when using --hive-ocm-url")
 	}
 
 	return nil
@@ -145,14 +144,29 @@ func (o *rotateSecretOptions) run() error {
 		return err
 	}
 
+	// Create a k8s client for the managed cluster (uses the default/target OCM
+	// environment, not the hive one) to delete CredentialRequests after sync.
+	managedScheme := runtime.NewScheme()
+	_ = ccov1.AddToScheme(managedScheme)
+	managedClient, err := k8s.NewAsBackplaneClusterAdmin(
+		o.clusterID,
+		client.Options{Scheme: managedScheme},
+		o.reason,
+		fmt.Sprintf("Elevation required to rotate CredentialRequests for %s", o.accountCRName),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create managed cluster client: %w", err)
+	}
+
 	return controller.RotateSecret(ctx, &controller.RotateSecretInput{
-		AccountCRName:           o.accountCRName,
-		Account:                 account,
+		AccountCRName:          o.accountCRName,
+		Account:                account,
 		OsdManagedAdminUsername: o.osdManagedAdminUsername,
-		UpdateCcsCreds:          o.updateCcsCreds,
-		AwsClient:               awsClient,
-		HiveKubeClient:          kubeCli,
-		Out:                     os.Stdout,
+		UpdateCcsCreds:         o.updateCcsCreds,
+		AwsClient:              awsClient,
+		HiveKubeClient:         kubeCli,
+		ManagedClusterClient:   managedClient,
+		Out:                    os.Stdout,
 	})
 }
 
