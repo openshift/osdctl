@@ -530,6 +530,61 @@ func TestRotateSecret_SyncSetTimeout(t *testing.T) {
 	assert.Contains(t, err.Error(), "syncset failed to sync")
 }
 
+func TestRotateSecret_StaleSyncSetIsUpdated(t *testing.T) {
+	origInterval := SyncPollInterval
+	origRetries := SyncMaxRetries
+	SyncPollInterval = 0
+	SyncMaxRetries = 1
+	defer func() {
+		SyncPollInterval = origInterval
+		SyncMaxRetries = origRetries
+	}()
+
+	account := testAccount(false, false)
+	secrets := testSecrets()
+	cd := testClusterDeployment()
+	cs := testClusterSync(true)
+
+	// Pre-seed a stale SyncSet left behind by a previous run.
+	staleSyncSet := &hiveapiv1.SyncSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "aws-sync",
+			Namespace: "uhc-production-test",
+		},
+		Spec: hiveapiv1.SyncSetSpec{
+			ClusterDeploymentRefs: []corev1.LocalObjectReference{
+				{Name: "old-cd"},
+			},
+		},
+	}
+
+	objs := append(secrets, account, cd, cs, staleSyncSet)
+	scheme := testScheme(t)
+	kubeCli := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...).WithStatusSubresource(cs).Build()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockClient := mock_aws.NewMockClient(ctrl)
+
+	mockSimulateAllAllowed(mockClient)
+	mockCreateAccessKey(mockClient, "osdManagedAdmin-abcd")
+	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
+
+	out := &bytes.Buffer{}
+
+	err := RotateSecret(context.Background(), &RotateSecretInput{
+		AccountCRName:        "test-account",
+		Account:              account,
+		AwsClient:            mockClient,
+		HiveKubeClient:       kubeCli,
+		ManagedClusterClient: testManagedClient(t),
+		Out:                  out,
+	})
+
+	assert.NoError(t, err)
+	assert.Contains(t, out.String(), "Successfully rotated secrets for osdManagedAdmin-abcd")
+}
+
 func TestVerifyRotationPermissions(t *testing.T) {
 	tests := []struct {
 		name           string

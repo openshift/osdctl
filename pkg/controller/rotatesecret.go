@@ -18,6 +18,7 @@ import (
 	hiveinternalv1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,6 +28,16 @@ const (
 	awsAccountNamespace = "aws-account-operator"
 	osdManagedAdminIAM  = "osdManagedAdmin"
 )
+
+// InsufficientPermissionsError is returned when SimulatePrincipalPolicy
+// reports that one or more required IAM actions are denied.
+type InsufficientPermissionsError struct {
+	DeniedActions []string
+}
+
+func (e *InsufficientPermissionsError) Error() string {
+	return fmt.Sprintf("insufficient permissions for secret rotation. Denied actions: %v", e.DeniedActions)
+}
 
 // SyncPollInterval is the delay between ClusterSync status checks.
 var SyncPollInterval = 5 * time.Second
@@ -232,7 +243,7 @@ func VerifyRotationPermissions(out io.Writer, awsClient awsprovider.Client, acco
 	}
 
 	if len(deniedActions) > 0 {
-		return fmt.Errorf("insufficient permissions for secret rotation. Denied actions: %v", deniedActions)
+		return &InsufficientPermissionsError{DeniedActions: deniedActions}
 	}
 
 	fmt.Fprintln(out, "Permission verification successful. All required IAM actions are allowed.")
@@ -240,12 +251,14 @@ func VerifyRotationPermissions(out io.Writer, awsClient awsprovider.Client, acco
 }
 
 // resolveAdminUsername verifies rotation permissions for the given username,
-// falling back to the unsuffixed osdManagedAdmin if needed.
+// falling back to the unsuffixed osdManagedAdmin only when the suffixed user
+// has insufficient permissions. Transport or API errors are never retried
+// with a different principal.
 func resolveAdminUsername(out io.Writer, awsClient awsprovider.Client, accountID, username, suffix string) (string, error) {
 	err := VerifyRotationPermissions(out, awsClient, accountID, username)
 	if err != nil {
-		// If the suffixed username failed, try without the suffix
-		if username == osdManagedAdminIAM+"-"+suffix {
+		var permErr *InsufficientPermissionsError
+		if errors.As(err, &permErr) && username == osdManagedAdminIAM+"-"+suffix {
 			fmt.Fprintf(out, "Permission verification failed for %s, trying %s...\n", username, osdManagedAdminIAM)
 			if err := VerifyRotationPermissions(out, awsClient, accountID, osdManagedAdminIAM); err != nil {
 				return "", err
@@ -344,7 +357,16 @@ func syncCredentialsToCluster(ctx context.Context, kubeClient client.Client, cla
 	}
 
 	fmt.Fprintln(out, "Syncing AWS creds down to cluster.")
-	if err := kubeClient.Create(ctx, syncSet); err != nil {
+	if err := kubeClient.Create(ctx, syncSet); apierrors.IsAlreadyExists(err) {
+		existing := &hiveapiv1.SyncSet{}
+		if err := kubeClient.Get(ctx, client.ObjectKeyFromObject(syncSet), existing); err != nil {
+			return err
+		}
+		syncSet.ResourceVersion = existing.ResourceVersion
+		if err := kubeClient.Update(ctx, syncSet); err != nil {
+			return err
+		}
+	} else if err != nil {
 		return err
 	}
 
