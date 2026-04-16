@@ -16,7 +16,10 @@ osdctl account rotate-secret <aws-account-cr-name> [flags]
       --admin-username osdManagedAdmin*   The admin username to use for generating access keys. Must be in the format of osdManagedAdmin*. If not specified, this is inferred from the account CR.
   -p, --aws-profile string                specify AWS profile
       --ccs                               Also rotates osdCcsAdmin credential. Use caution.
+  -C, --cluster-id string                 OCM internal/external cluster id or cluster name
+      --dry-run                           Only print what actions would be taken without performing any mutations (no AWS key creation/deletion, no k8s resource changes)
   -h, --help                              help for rotate-secret
+      --hive-ocm-url string               (optional) OCM environment URL for Hive operations. Aliases: 'production', 'staging', 'integration'. This only changes how the Hive cluster is resolved; the target cluster still comes from the current/default OCM environment.
       --reason string                     The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)
 ```
 

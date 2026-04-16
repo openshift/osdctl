@@ -85,7 +85,7 @@ func RotateSecret(ctx context.Context, input *RotateSecretInput) error {
 	account := input.Account
 
 	if account.Spec.ManualSTSMode {
-		return fmt.Errorf("Account %s is STS - No IAM User Credentials to Rotate", input.AccountCRName)
+		return fmt.Errorf("account %s is STS - No IAM User Credentials to Rotate", input.AccountCRName)
 	}
 
 	accountID := account.Spec.AwsAccountID
@@ -312,9 +312,9 @@ func syncCredentialsToCluster(ctx context.Context, kubeClient client.Client, cla
 	}
 
 	if len(clusterDeployments.Items) == 0 {
-		return fmt.Errorf("failed to retreive cluster deployments")
+		return fmt.Errorf("failed to retrieve cluster deployments")
 	}
-	cdName := clusterDeployments.Items[0].ObjectMeta.Name
+	cdName := clusterDeployments.Items[0].Name
 
 	syncSetName := "aws-sync"
 	syncSet := &hiveapiv1.SyncSet{

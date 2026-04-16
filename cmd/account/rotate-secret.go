@@ -161,15 +161,15 @@ func (o *rotateSecretOptions) run() error {
 	}
 
 	return controller.RotateSecret(ctx, &controller.RotateSecretInput{
-		AccountCRName:          o.accountCRName,
-		Account:                account,
+		AccountCRName:           o.accountCRName,
+		Account:                 account,
 		OsdManagedAdminUsername: o.osdManagedAdminUsername,
-		UpdateCcsCreds:         o.updateCcsCreds,
-		DryRun:                 o.dryRun,
-		AwsClient:              awsClient,
-		HiveKubeClient:         kubeCli,
-		ManagedClusterClient:   managedClient,
-		Out:                    os.Stdout,
+		UpdateCcsCreds:          o.updateCcsCreds,
+		DryRun:                  o.dryRun,
+		AwsClient:               awsClient,
+		HiveKubeClient:          kubeCli,
+		ManagedClusterClient:    managedClient,
+		Out:                     os.Stdout,
 	})
 }
 

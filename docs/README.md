@@ -788,8 +788,11 @@ osdctl account rotate-secret <aws-account-cr-name> [flags]
   -p, --aws-profile string                specify AWS profile
       --ccs                               Also rotates osdCcsAdmin credential. Use caution.
       --cluster string                    The name of the kubeconfig cluster to use
+  -C, --cluster-id string                 OCM internal/external cluster id or cluster name
       --context string                    The name of the kubeconfig context to use
+      --dry-run                           Only print what actions would be taken without performing any mutations (no AWS key creation/deletion, no k8s resource changes)
   -h, --help                              help for rotate-secret
+      --hive-ocm-url string               (optional) OCM environment URL for Hive operations. Aliases: 'production', 'staging', 'integration'. This only changes how the Hive cluster is resolved; the target cluster still comes from the current/default OCM environment.
       --insecure-skip-tls-verify          If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                 Path to the kubeconfig file to use for CLI requests.
   -o, --output string                     Valid formats are ['', 'json', 'yaml', 'env']
