@@ -27,6 +27,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/servicequotas"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/spf13/viper"
 )
 
@@ -158,6 +159,7 @@ func addProxyConfigToSessionOptConfig(config *aws.Config) {
 		return
 	}
 
+	_ = osdctlConfig.EnsureConfigFile()
 	awsProxyUrl := viper.GetString(ProxyConfigKey)
 	if awsProxyUrl == "" {
 		_, _ = fmt.Fprintf(os.Stderr, "[ERROR] `%s` not configured. Please add this to your osdctl configuration to ensure traffic is routed though a proxy.\n", ProxyConfigKey)

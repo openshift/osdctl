@@ -41,6 +41,7 @@ func newCmdRotateSecret(streams genericclioptions.IOStreams, client *k8s.LazyCli
 
 	rotateSecretCmd.Flags().StringVarP(&ops.profile, "aws-profile", "p", "", "specify AWS profile")
 	rotateSecretCmd.Flags().BoolVar(&ops.updateCcsCreds, "ccs", false, "Also rotates osdCcsAdmin credential. Use caution.")
+	rotateSecretCmd.Flags().BoolVar(&ops.dryRun, "dry-run", false, "Only print what actions would be taken without performing any mutations (no AWS key creation/deletion, no k8s resource changes)")
 	rotateSecretCmd.Flags().StringVar(&ops.reason, "reason", "", "The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
 	rotateSecretCmd.Flags().StringVar(&ops.osdManagedAdminUsername, "admin-username", "", "The admin username to use for generating access keys. Must be in the format of `osdManagedAdmin*`. If not specified, this is inferred from the account CR.")
 	rotateSecretCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "OCM internal/external cluster id or cluster name")
@@ -56,6 +57,7 @@ type rotateSecretOptions struct {
 	accountCRName           string
 	profile                 string
 	updateCcsCreds          bool
+	dryRun                  bool
 	awsAccountTimeout       *int32
 	reason                  string
 	osdManagedAdminUsername string
@@ -163,6 +165,7 @@ func (o *rotateSecretOptions) run() error {
 		Account:                account,
 		OsdManagedAdminUsername: o.osdManagedAdminUsername,
 		UpdateCcsCreds:         o.updateCcsCreds,
+		DryRun:                 o.dryRun,
 		AwsClient:              awsClient,
 		HiveKubeClient:         kubeCli,
 		ManagedClusterClient:   managedClient,

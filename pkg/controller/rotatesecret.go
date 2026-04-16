@@ -63,6 +63,11 @@ type RotateSecretInput struct {
 	// CredentialRequests so CCO recreates them with the new credentials.
 	ManagedClusterClient client.Client
 
+	// DryRun, when true, prints what actions would be taken without performing
+	// any mutating operations (no AWS key creation/deletion, no k8s resource
+	// creation/deletion/updates).
+	DryRun bool
+
 	// Out is the writer for informational output.
 	Out io.Writer
 }
@@ -146,9 +151,15 @@ func RotateSecret(ctx context.Context, input *RotateSecretInput) error {
 		}
 	}
 
+	newKeyID := *createAccessKeyOutput.AccessKey.AccessKeyId
+
+	if err := reportAccessKeys(input.AwsClient, adminUsername, newKeyID, input.Out); err != nil {
+		return err
+	}
+
 	newSecretData := map[string][]byte{
 		"aws_user_name":         []byte(*createAccessKeyOutput.AccessKey.UserName),
-		"aws_access_key_id":     []byte(*createAccessKeyOutput.AccessKey.AccessKeyId),
+		"aws_access_key_id":     []byte(newKeyID),
 		"aws_secret_access_key": []byte(*createAccessKeyOutput.AccessKey.SecretAccessKey),
 	}
 
@@ -244,6 +255,41 @@ func resolveAdminUsername(out io.Writer, awsClient awsprovider.Client, accountID
 		return "", err
 	}
 	return username, nil
+}
+
+// reportAccessKeys lists all access keys for a user and prints each one,
+// highlighting which is the newly created key and which are old keys that
+// should be removed manually.
+func reportAccessKeys(awsClient awsprovider.Client, username, newKeyID string, out io.Writer) error {
+	listOutput, err := awsClient.ListAccessKeys(&iam.ListAccessKeysInput{
+		UserName: awsSdk.String(username),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list access keys for user %s: %w", username, err)
+	}
+
+	fmt.Fprintf(out, "\nAccess keys for IAM user %s:\n", username)
+	for _, key := range listOutput.AccessKeyMetadata {
+		if *key.AccessKeyId == newKeyID {
+			fmt.Fprintf(out, "  - %s (new - just created)\n", *key.AccessKeyId)
+		} else {
+			fmt.Fprintf(out, "  - %s (old - should be removed)\n", *key.AccessKeyId)
+		}
+	}
+
+	hasOldKeys := false
+	for _, key := range listOutput.AccessKeyMetadata {
+		if *key.AccessKeyId != newKeyID {
+			hasOldKeys = true
+			break
+		}
+	}
+	if hasOldKeys {
+		fmt.Fprintf(out, "\nThe old access key(s) listed above should now be removed.\n")
+		fmt.Fprintf(out, "Use 'rh-aws-saml-login' to gain access to the account and delete them.\n\n")
+	}
+
+	return nil
 }
 
 // updateSecret fetches an existing k8s secret and replaces its data.
@@ -351,16 +397,23 @@ func rotateCcsAdminCredentials(ctx context.Context, awsClient awsprovider.Client
 		return nil
 	}
 
+	ccsUsername := "osdCcsAdmin"
 	createAccessKeyOutput, err := awsClient.CreateAccessKey(&iam.CreateAccessKeyInput{
-		UserName: awsSdk.String("osdCcsAdmin"),
+		UserName: awsSdk.String(ccsUsername),
 	})
 	if err != nil {
 		return err
 	}
 
+	ccsNewKeyID := *createAccessKeyOutput.AccessKey.AccessKeyId
+
+	if err := reportAccessKeys(awsClient, ccsUsername, ccsNewKeyID, out); err != nil {
+		return err
+	}
+
 	newSecretData := map[string][]byte{
 		"aws_user_name":         []byte(*createAccessKeyOutput.AccessKey.UserName),
-		"aws_access_key_id":     []byte(*createAccessKeyOutput.AccessKey.AccessKeyId),
+		"aws_access_key_id":     []byte(ccsNewKeyID),
 		"aws_secret_access_key": []byte(*createAccessKeyOutput.AccessKey.SecretAccessKey),
 	}
 

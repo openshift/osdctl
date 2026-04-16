@@ -20,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -148,6 +149,17 @@ func mockCreateAccessKey(mockClient *mock_aws.MockClient, username string) *gomo
 		})
 }
 
+func mockListAccessKeys(mockClient *mock_aws.MockClient, oldKeyID, newKeyID string) *gomock.Call {
+	return mockClient.EXPECT().
+		ListAccessKeys(gomock.Any()).
+		Return(&iam.ListAccessKeysOutput{
+			AccessKeyMetadata: []iamTypes.AccessKeyMetadata{
+				{AccessKeyId: awsSdk.String(oldKeyID)},
+				{AccessKeyId: awsSdk.String(newKeyID)},
+			},
+		}, nil)
+}
+
 func TestRotateSecret_STSAccount(t *testing.T) {
 	account := testAccount(false, true)
 	out := &bytes.Buffer{}
@@ -221,6 +233,7 @@ func TestRotateSecret_SuccessfulRotation(t *testing.T) {
 
 	mockSimulateAllAllowed(mockClient)
 	mockCreateAccessKey(mockClient, "osdManagedAdmin-abcd")
+	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 
 	out := &bytes.Buffer{}
 
@@ -236,6 +249,9 @@ func TestRotateSecret_SuccessfulRotation(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, out.String(), "AWS creds updated on hive.")
 	assert.Contains(t, out.String(), "Successfully rotated secrets for osdManagedAdmin-abcd")
+	assert.Contains(t, out.String(), "OLDKEY999 (old - should be removed)")
+	assert.Contains(t, out.String(), "NEWKEY123 (new - just created)")
+	assert.Contains(t, out.String(), "rh-aws-saml-login")
 }
 
 func TestRotateSecret_SuccessfulRotationWithCCS(t *testing.T) {
@@ -275,8 +291,10 @@ func TestRotateSecret_SuccessfulRotationWithCCS(t *testing.T) {
 	mockSimulateAllAllowed(mockClient)
 	// First call: osdManagedAdmin key
 	mockCreateAccessKey(mockClient, "osdManagedAdmin-abcd")
+	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 	// Second call: osdCcsAdmin key
 	mockCreateAccessKey(mockClient, "osdCcsAdmin")
+	mockListAccessKeys(mockClient, "OLDCCSKEY", "NEWKEY123")
 
 	out := &bytes.Buffer{}
 
@@ -320,6 +338,7 @@ func TestRotateSecret_CCSFlagOnNonBYOCAccount(t *testing.T) {
 
 	mockSimulateAllAllowed(mockClient)
 	mockCreateAccessKey(mockClient, "osdManagedAdmin-abcd")
+	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 
 	out := &bytes.Buffer{}
 
@@ -389,6 +408,7 @@ func TestRotateSecret_AdminUsernameFallback(t *testing.T) {
 		}).Times(2)
 
 	mockCreateAccessKey(mockClient, "osdManagedAdmin")
+	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 
 	out := &bytes.Buffer{}
 
@@ -450,6 +470,7 @@ func TestRotateSecret_CreateAccessKeyNoSuchEntityFallback(t *testing.T) {
 				}, nil
 			}),
 	)
+	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 
 	out := &bytes.Buffer{}
 
@@ -492,6 +513,7 @@ func TestRotateSecret_SyncSetTimeout(t *testing.T) {
 
 	mockSimulateAllAllowed(mockClient)
 	mockCreateAccessKey(mockClient, "osdManagedAdmin-abcd")
+	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 
 	out := &bytes.Buffer{}
 
@@ -618,6 +640,7 @@ func TestRotateSecret_ExplicitAdminUsername(t *testing.T) {
 
 	mockSimulateAllAllowed(mockClient)
 	mockCreateAccessKey(mockClient, "osdManagedAdmin-custom")
+	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 
 	out := &bytes.Buffer{}
 
@@ -778,6 +801,7 @@ func TestRotateSecret_CredentialSecretDeletion(t *testing.T) {
 
 	mockSimulateAllAllowed(mockClient)
 	mockCreateAccessKey(mockClient, "osdManagedAdmin-abcd")
+	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 
 	// Two AWS CredentialRequests with "openshift-" prefix → their secrets should be deleted.
 	// One non-AWS CR with "openshift-" prefix → its secret should be kept.
