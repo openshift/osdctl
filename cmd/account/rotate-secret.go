@@ -147,8 +147,10 @@ func (o *rotateSecretOptions) run() error {
 	}
 
 	// Create a k8s client for the managed cluster (uses the default/target OCM
-	// environment, not the hive one) to delete CredentialRequests after sync.
+	// environment, not the hive one) to list CredentialRequests and delete
+	// the secrets they reference.
 	managedScheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(managedScheme)
 	_ = ccov1.AddToScheme(managedScheme)
 	managedClient, err := k8s.NewAsBackplaneClusterAdmin(
 		o.clusterID,
