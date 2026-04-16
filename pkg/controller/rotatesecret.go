@@ -204,6 +204,12 @@ func RotateSecret(ctx context.Context, input *RotateSecretInput) error {
 		}
 	}
 
+	if !input.DryRun {
+		fmt.Fprintln(input.Out, "The rotation should be successfully finished:- do not forget to remove the old access key!")
+		fmt.Fprintln(input.Out, "- Confirm secrets are recreated and new access key was used")
+		fmt.Fprintln(input.Out, "- Remove the old access key (use rh-aws-saml-login)")
+	}
+
 	return nil
 }
 
@@ -298,7 +304,7 @@ func reportAccessKeys(awsClient awsprovider.Client, username, newKeyID string, o
 		}
 	}
 	if hasOldKeys {
-		fmt.Fprintf(out, "\nThe old access key(s) listed above should now be removed.\n")
+		fmt.Fprintf(out, "\nThe old access key(s) listed above be removed once rotation is finished.\n")
 		fmt.Fprintf(out, "Use 'rh-aws-saml-login' to gain access to the account and delete them.\n\n")
 	}
 
