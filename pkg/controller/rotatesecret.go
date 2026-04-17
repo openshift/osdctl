@@ -150,6 +150,10 @@ func RotateSecret(ctx context.Context, input *RotateSecretInput) error {
 		var nse *iamTypes.NoSuchEntityException
 		if errors.As(err, &nse) {
 			// Retry without the suffix
+			// Retry without the suffix, re-verifying permissions first.
+			if err := VerifyRotationPermissions(input.Out, input.AwsClient, accountID, osdManagedAdminIAM); err != nil {
+				return err
+			}
 			adminUsername = osdManagedAdminIAM
 			createAccessKeyOutput, err = input.AwsClient.CreateAccessKey(&iam.CreateAccessKeyInput{
 				UserName: awsSdk.String(adminUsername),
@@ -163,6 +167,16 @@ func RotateSecret(ctx context.Context, input *RotateSecretInput) error {
 	}
 
 	newKeyID := *createAccessKeyOutput.AccessKey.AccessKeyId
+	rotationCommitted := false
+	defer func() {
+		if rotationCommitted {
+			return
+		}
+		_, _ = input.AwsClient.DeleteAccessKey(&iam.DeleteAccessKeyInput{
+			UserName:    awsSdk.String(adminUsername),
+			AccessKeyId: awsSdk.String(newKeyID),
+		})
+	}()
 
 	if err := reportAccessKeys(input.AwsClient, adminUsername, newKeyID, input.Out); err != nil {
 		return err
@@ -179,18 +193,24 @@ func RotateSecret(ctx context.Context, input *RotateSecretInput) error {
 		return err
 	}
 
+	// The AAO secret has been updated - if anything fails from this point onward it must either be manually fixed or rolled back
+	rotationCommitted = true
+
 	// Update the secret in ClusterDeployment's namespace
 	if err := updateSecret(ctx, input.HiveKubeClient, "aws", account.Spec.ClaimLinkNamespace, newSecretData); err != nil {
+		fmt.Fprintln(input.Out, "AWS creds updated for AAO account but failed for Cluster namespace")
+		fmt.Fprintln(input.Out, "Please update the cluster secret by hand and sync to cluster.")
 		return err
 	}
 
 	fmt.Fprintln(input.Out, "AWS creds updated on hive.")
 
 	if err := syncCredentialsToCluster(ctx, input.HiveKubeClient, account.Spec.ClaimLinkNamespace, input.Out); err != nil {
+		fmt.Fprintln(input.Out, "AWS creds updated on hive but not synced to cluster")
 		return err
 	}
 
-	fmt.Fprintf(input.Out, "Successfully rotated secrets for %s\n", adminUsername)
+	fmt.Fprintf(input.Out, "Successfully rotated access keys for %s\n", adminUsername)
 
 	// Delete the secrets referenced by AWS CredentialRequests so CCO recreates
 	// them with the newly synced credentials.
@@ -205,7 +225,8 @@ func RotateSecret(ctx context.Context, input *RotateSecretInput) error {
 	}
 
 	if !input.DryRun {
-		fmt.Fprintln(input.Out, "The rotation should be successfully finished:- do not forget to remove the old access key!")
+		fmt.Fprintln(input.Out, "The rotation should be successfully finished:")
+		fmt.Fprintln(input.Out, "- do not forget to remove the old access key in AWS!")
 		fmt.Fprintln(input.Out, "- Confirm secrets are recreated and new access key was used")
 		fmt.Fprintln(input.Out, "- Remove the old access key (use rh-aws-saml-login)")
 	}
@@ -304,7 +325,7 @@ func reportAccessKeys(awsClient awsprovider.Client, username, newKeyID string, o
 		}
 	}
 	if hasOldKeys {
-		fmt.Fprintf(out, "\nThe old access key(s) listed above be removed once rotation is finished.\n")
+		fmt.Fprintf(out, "\nThe old access key(s) listed above should be removed once rotation is finished.\n")
 		fmt.Fprintf(out, "Use 'rh-aws-saml-login' to gain access to the account and delete them.\n\n")
 	}
 
@@ -391,6 +412,12 @@ func syncCredentialsToCluster(ctx context.Context, kubeClient client.Client, cla
 	isSSSynced := false
 	for range SyncMaxRetries {
 		if err := kubeClient.Get(ctx, client.ObjectKeyFromObject(searchStatus), foundStatus); err != nil {
+			// Allow some time to pass before retrying - maybe object creation was slow.
+			if apierrors.IsNotFound(err) {
+				fmt.Fprintf(out, ".")
+				time.Sleep(SyncPollInterval)
+				continue
+			}
 			return err
 		}
 

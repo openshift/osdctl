@@ -135,7 +135,7 @@ func mockSimulateAllAllowed(mockClient *mock_aws.MockClient) *gomock.Call {
 		}, nil)
 }
 
-func mockCreateAccessKey(mockClient *mock_aws.MockClient, username string) *gomock.Call {
+func mockCreateAccessKey(mockClient *mock_aws.MockClient) *gomock.Call {
 	return mockClient.EXPECT().
 		CreateAccessKey(gomock.Any()).
 		DoAndReturn(func(input *iam.CreateAccessKeyInput) (*iam.CreateAccessKeyOutput, error) {
@@ -232,7 +232,7 @@ func TestRotateSecret_SuccessfulRotation(t *testing.T) {
 	mockClient := mock_aws.NewMockClient(ctrl)
 
 	mockSimulateAllAllowed(mockClient)
-	mockCreateAccessKey(mockClient, "osdManagedAdmin-abcd")
+	mockCreateAccessKey(mockClient)
 	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 
 	out := &bytes.Buffer{}
@@ -248,7 +248,7 @@ func TestRotateSecret_SuccessfulRotation(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Contains(t, out.String(), "AWS creds updated on hive.")
-	assert.Contains(t, out.String(), "Successfully rotated secrets for osdManagedAdmin-abcd")
+	assert.Contains(t, out.String(), "Successfully rotated access keys for osdManagedAdmin-abcd")
 	assert.Contains(t, out.String(), "OLDKEY999 (old - should be removed)")
 	assert.Contains(t, out.String(), "NEWKEY123 (new - just created)")
 	assert.Contains(t, out.String(), "rh-aws-saml-login")
@@ -290,10 +290,10 @@ func TestRotateSecret_SuccessfulRotationWithCCS(t *testing.T) {
 
 	mockSimulateAllAllowed(mockClient)
 	// First call: osdManagedAdmin key
-	mockCreateAccessKey(mockClient, "osdManagedAdmin-abcd")
+	mockCreateAccessKey(mockClient)
 	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 	// Second call: osdCcsAdmin key
-	mockCreateAccessKey(mockClient, "osdCcsAdmin")
+	mockCreateAccessKey(mockClient)
 	mockListAccessKeys(mockClient, "OLDCCSKEY", "NEWKEY123")
 
 	out := &bytes.Buffer{}
@@ -309,7 +309,7 @@ func TestRotateSecret_SuccessfulRotationWithCCS(t *testing.T) {
 	})
 
 	assert.NoError(t, err)
-	assert.Contains(t, out.String(), "Successfully rotated secrets for osdManagedAdmin-abcd")
+	assert.Contains(t, out.String(), "Successfully rotated access keys for osdManagedAdmin-abcd")
 	assert.Contains(t, out.String(), "Successfully rotated secrets for osdCcsAdmin")
 }
 
@@ -337,7 +337,7 @@ func TestRotateSecret_CCSFlagOnNonBYOCAccount(t *testing.T) {
 	mockClient := mock_aws.NewMockClient(ctrl)
 
 	mockSimulateAllAllowed(mockClient)
-	mockCreateAccessKey(mockClient, "osdManagedAdmin-abcd")
+	mockCreateAccessKey(mockClient)
 	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 
 	out := &bytes.Buffer{}
@@ -407,7 +407,7 @@ func TestRotateSecret_AdminUsernameFallback(t *testing.T) {
 			}, nil
 		}).Times(2)
 
-	mockCreateAccessKey(mockClient, "osdManagedAdmin")
+	mockCreateAccessKey(mockClient)
 	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 
 	out := &bytes.Buffer{}
@@ -423,7 +423,7 @@ func TestRotateSecret_AdminUsernameFallback(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Contains(t, out.String(), "Permission verification failed for osdManagedAdmin-abcd, trying osdManagedAdmin...")
-	assert.Contains(t, out.String(), "Successfully rotated secrets for osdManagedAdmin")
+	assert.Contains(t, out.String(), "Successfully rotated access keys for osdManagedAdmin")
 }
 
 func TestRotateSecret_CreateAccessKeyNoSuchEntityFallback(t *testing.T) {
@@ -449,6 +449,9 @@ func TestRotateSecret_CreateAccessKeyNoSuchEntityFallback(t *testing.T) {
 	defer ctrl.Finish()
 	mockClient := mock_aws.NewMockClient(ctrl)
 
+	// First SimulatePrincipalPolicy for the suffixed user (passes),
+	// second for the unsuffixed fallback user after CreateAccessKey returns NoSuchEntityException.
+	mockSimulateAllAllowed(mockClient)
 	mockSimulateAllAllowed(mockClient)
 
 	// First CreateAccessKey call fails with NoSuchEntityException
@@ -484,7 +487,7 @@ func TestRotateSecret_CreateAccessKeyNoSuchEntityFallback(t *testing.T) {
 	})
 
 	assert.NoError(t, err)
-	assert.Contains(t, out.String(), "Successfully rotated secrets for osdManagedAdmin")
+	assert.Contains(t, out.String(), "Successfully rotated access keys for osdManagedAdmin")
 }
 
 func TestRotateSecret_SyncSetTimeout(t *testing.T) {
@@ -512,7 +515,7 @@ func TestRotateSecret_SyncSetTimeout(t *testing.T) {
 	mockClient := mock_aws.NewMockClient(ctrl)
 
 	mockSimulateAllAllowed(mockClient)
-	mockCreateAccessKey(mockClient, "osdManagedAdmin-abcd")
+	mockCreateAccessKey(mockClient)
 	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 
 	out := &bytes.Buffer{}
@@ -567,7 +570,7 @@ func TestRotateSecret_StaleSyncSetIsUpdated(t *testing.T) {
 	mockClient := mock_aws.NewMockClient(ctrl)
 
 	mockSimulateAllAllowed(mockClient)
-	mockCreateAccessKey(mockClient, "osdManagedAdmin-abcd")
+	mockCreateAccessKey(mockClient)
 	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 
 	out := &bytes.Buffer{}
@@ -582,7 +585,7 @@ func TestRotateSecret_StaleSyncSetIsUpdated(t *testing.T) {
 	})
 
 	assert.NoError(t, err)
-	assert.Contains(t, out.String(), "Successfully rotated secrets for osdManagedAdmin-abcd")
+	assert.Contains(t, out.String(), "Successfully rotated access keys for osdManagedAdmin-abcd")
 }
 
 func TestVerifyRotationPermissions(t *testing.T) {
@@ -694,7 +697,7 @@ func TestRotateSecret_ExplicitAdminUsername(t *testing.T) {
 	mockClient := mock_aws.NewMockClient(ctrl)
 
 	mockSimulateAllAllowed(mockClient)
-	mockCreateAccessKey(mockClient, "osdManagedAdmin-custom")
+	mockCreateAccessKey(mockClient)
 	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 
 	out := &bytes.Buffer{}
@@ -710,7 +713,7 @@ func TestRotateSecret_ExplicitAdminUsername(t *testing.T) {
 	})
 
 	assert.NoError(t, err)
-	assert.Contains(t, out.String(), "Successfully rotated secrets for osdManagedAdmin-custom")
+	assert.Contains(t, out.String(), "Successfully rotated access keys for osdManagedAdmin-custom")
 }
 
 func TestRotateSecret_DryRun(t *testing.T) {
@@ -855,7 +858,7 @@ func TestRotateSecret_CredentialSecretDeletion(t *testing.T) {
 	mockClient := mock_aws.NewMockClient(ctrl)
 
 	mockSimulateAllAllowed(mockClient)
-	mockCreateAccessKey(mockClient, "osdManagedAdmin-abcd")
+	mockCreateAccessKey(mockClient)
 	mockListAccessKeys(mockClient, "OLDKEY999", "NEWKEY123")
 
 	// Two AWS CredentialRequests with "openshift-" prefix → their secrets should be deleted.
