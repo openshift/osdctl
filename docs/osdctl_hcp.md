@@ -31,4 +31,5 @@
 * [osdctl hcp get-cp-autoscaling-status](osdctl_hcp_get-cp-autoscaling-status.md)	 - Get control plane autoscaling status for hosted clusters on a management cluster
 * [osdctl hcp must-gather](osdctl_hcp_must-gather.md)	 - Create a must-gather for HCP cluster
 * [osdctl hcp status](osdctl_hcp_status.md)	 - Show HCP cluster health status from OCM live resources
+* [osdctl hcp transition-to-eus](osdctl_hcp_transition-to-eus.md)	 - Transition ROSA HCP clusters from stable to EUS channel (Even Y-Stream EOL handling)
 
