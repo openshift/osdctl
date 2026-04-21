@@ -27,6 +27,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/servicequotas"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/spf13/viper"
 )
 
@@ -84,6 +85,7 @@ type Client interface {
 	ListRoles(*iam.ListRolesInput) (*iam.ListRolesOutput, error)
 	DeleteRole(*iam.DeleteRoleInput) (*iam.DeleteRoleOutput, error)
 	DeleteUser(*iam.DeleteUserInput) (*iam.DeleteUserOutput, error)
+	SimulatePrincipalPolicy(*iam.SimulatePrincipalPolicyInput) (*iam.SimulatePrincipalPolicyOutput, error)
 
 	//ec2
 	DescribeInstances(*ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error)
@@ -157,6 +159,7 @@ func addProxyConfigToSessionOptConfig(config *aws.Config) {
 		return
 	}
 
+	_ = osdctlConfig.EnsureConfigFile()
 	awsProxyUrl := viper.GetString(ProxyConfigKey)
 	if awsProxyUrl == "" {
 		_, _ = fmt.Fprintf(os.Stderr, "[ERROR] `%s` not configured. Please add this to your osdctl configuration to ensure traffic is routed though a proxy.\n", ProxyConfigKey)
@@ -397,6 +400,10 @@ func (c *AwsClient) DeleteRole(input *iam.DeleteRoleInput) (*iam.DeleteRoleOutpu
 
 func (c *AwsClient) DeleteUser(input *iam.DeleteUserInput) (*iam.DeleteUserOutput, error) {
 	return c.iamClient.DeleteUser(context.TODO(), input)
+}
+
+func (c *AwsClient) SimulatePrincipalPolicy(input *iam.SimulatePrincipalPolicyInput) (*iam.SimulatePrincipalPolicyOutput, error) {
+	return c.iamClient.SimulatePrincipalPolicy(context.TODO(), input)
 }
 
 func (c *AwsClient) ListAccounts(input *organizations.ListAccountsInput) (*organizations.ListAccountsOutput, error) {

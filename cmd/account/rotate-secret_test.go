@@ -3,6 +3,7 @@ package account
 import (
 	"testing"
 
+	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
@@ -52,7 +53,7 @@ func TestRotateSecretOptions_Complete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ops := newRotateSecretOptions(genericclioptions.IOStreams{}, nil)
+			ops := newRotateSecretOptions(genericclioptions.IOStreams{}, (*k8s.LazyClient)(nil))
 			cmd := &cobra.Command{}
 			cmd.Flags().StringVar(&ops.profile, "aws-profile", "", "")
 			cmd.Flags().BoolVar(&ops.updateCcsCreds, "ccs", false, "")
