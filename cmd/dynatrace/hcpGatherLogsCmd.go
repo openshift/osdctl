@@ -65,7 +65,7 @@ func NewCmdHCPMustGather() *cobra.Command {
 func (g *GatherLogsOpts) GatherLogs(clusterID string, elevationReasons ...string) (error error) {
 	tokenProvider, err := getStorageTokenProvider()
 	if err != nil {
-		return fmt.Errorf("failed to setup access token provider: %v", err)
+		return fmt.Errorf("failed to setup Dynatrace access token provider (is the vault CLI installed and configured?): %v", err)
 	}
 
 	// Eagerly fetch the first token to fail fast on auth issues
@@ -157,20 +157,16 @@ func (g *GatherLogsOpts) dumpEvents(deploys *appsv1.DeploymentList, parentDir st
 		if err != nil {
 			return err
 		}
-		_, err = f.Write(deploymentYaml)
-		if err != nil {
-			return err
+		_, writeErr := f.Write(deploymentYaml)
+		closeErr := f.Close()
+		if writeErr != nil {
+			return writeErr
 		}
-		err = f.Close()
-		if err != nil {
-			return err
+		if closeErr != nil {
+			return closeErr
 		}
 
 		eventsFilePath := filepath.Join(eventsDirPath, eventsFileName)
-		f, err = os.OpenFile(eventsFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-		if err != nil {
-			return err
-		}
 
 		accessToken, err := tokenProvider.Token()
 		if err != nil {
@@ -179,11 +175,11 @@ func (g *GatherLogsOpts) dumpEvents(deploys *appsv1.DeploymentList, parentDir st
 
 		eventsRequestToken, err := getDTQueryExecution(DTURL, accessToken, eventQuery.finalQuery)
 		if err != nil {
-			log.Print("failed to get request token", err)
+			log.Printf("failed to get request token: %v", err)
 			continue
 		}
-		err = getEvents(DTURL, accessToken, eventsRequestToken, f)
-		_ = f.Close()
+
+		err = fetchAndWriteEvents(DTURL, accessToken, eventsRequestToken, eventsFilePath)
 		if err != nil {
 			log.Printf("failed to get logs, continuing: %v. Query: %v", err, eventQuery.finalQuery)
 			continue
@@ -220,17 +216,16 @@ func (g *GatherLogsOpts) dumpPodLogs(pods *corev1.PodList, parentDir string, tar
 		if err != nil {
 			return err
 		}
-		_, err = f.Write(podYaml)
-		if err != nil {
-			return err
+		_, writeErr := f.Write(podYaml)
+		closeErr := f.Close()
+		if writeErr != nil {
+			return writeErr
 		}
-		_ = f.Close()
+		if closeErr != nil {
+			return closeErr
+		}
 
 		podLogsFilePath := filepath.Join(podDirPath, podLogFileName)
-		f, err = os.OpenFile(podLogsFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-		if err != nil {
-			return err
-		}
 
 		accessToken, err := tokenProvider.Token()
 		if err != nil {
@@ -239,11 +234,11 @@ func (g *GatherLogsOpts) dumpPodLogs(pods *corev1.PodList, parentDir string, tar
 
 		podLogsRequestToken, err := getDTQueryExecution(DTURL, accessToken, podLogsQuery.finalQuery)
 		if err != nil {
-			log.Print("failed to get request token", err)
+			log.Printf("failed to get request token: %v", err)
 			continue
 		}
-		err = getLogs(DTURL, accessToken, podLogsRequestToken, f)
-		_ = f.Close()
+
+		err = fetchAndWriteLogs(DTURL, accessToken, podLogsRequestToken, podLogsFilePath)
 		if err != nil {
 			log.Printf("failed to get logs, continuing: %v. Query: %v", err, podLogsQuery.finalQuery)
 			continue
@@ -273,10 +268,6 @@ func (g *GatherLogsOpts) dumpRestartedPodLogs(pods *corev1.PodList, parentDir st
 	}
 
 	restartedPodLogsFilePath := filepath.Join(podDirPath, restartedPodLogFileName)
-	f, err := os.OpenFile(restartedPodLogsFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0655)
-	if err != nil {
-		return err
-	}
 
 	accessToken, err := tokenProvider.Token()
 	if err != nil {
@@ -285,11 +276,10 @@ func (g *GatherLogsOpts) dumpRestartedPodLogs(pods *corev1.PodList, parentDir st
 
 	podLogsRequestToken, err := getDTQueryExecution(DTURL, accessToken, restartedPodLogsQuery.finalQuery)
 	if err != nil {
-		log.Print("failed to get request token", err)
-
+		log.Printf("failed to get request token: %v", err)
+		return nil
 	}
-	err = getLogs(DTURL, accessToken, podLogsRequestToken, f)
-	f.Close()
+	err = fetchAndWriteLogs(DTURL, accessToken, podLogsRequestToken, restartedPodLogsFilePath)
 	if err != nil {
 		log.Printf("failed to get restarted pod logs: %v. Query: %v", err, restartedPodLogsQuery.finalQuery)
 	}
@@ -315,9 +305,12 @@ func addDir(dirs []string, filePaths []string) (path string, error error) {
 	}
 	for _, fp := range filePaths {
 		createdFile := filepath.Join(dirPath, fp)
-		_, err = os.Create(createdFile)
+		f, err := os.OpenFile(createdFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
 		if err != nil {
-			return "", fmt.Errorf("file to create file %v in %v", fp, err)
+			return "", fmt.Errorf("failed to create file %v: %v", fp, err)
+		}
+		if err := f.Close(); err != nil {
+			return "", fmt.Errorf("failed to close file %v: %w", fp, err)
 		}
 	}
 

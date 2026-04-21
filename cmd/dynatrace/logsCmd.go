@@ -195,7 +195,7 @@ func main(clusterID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get  vault token %v", err)
 	}
-	err = getLogs(hcpCluster.DynatraceURL, accessToken, requestToken, nil)
+	err = fetchAndWriteLogs(hcpCluster.DynatraceURL, accessToken, requestToken, "")
 	if err != nil {
 		return fmt.Errorf("failed to get logs %v", err)
 	}
