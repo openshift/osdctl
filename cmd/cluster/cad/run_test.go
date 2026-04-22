@@ -8,6 +8,62 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestValidateParams(t *testing.T) {
+	base := cadRunOptions{
+		clusterID:       "test-cluster",
+		investigation:   "chgm",
+		environment:     "production",
+		elevationReason: "OHSS-12345",
+	}
+
+	tests := []struct {
+		name    string
+		params  []string
+		wantErr string
+	}{
+		{
+			name:   "valid params",
+			params: []string{"KEY=value", "MASTER=true"},
+		},
+		{
+			name:   "no params",
+			params: nil,
+		},
+		{
+			name:    "missing value",
+			params:  []string{"foo"},
+			wantErr: `invalid param "foo": must be in KEY=VALUE format`,
+		},
+		{
+			name:    "empty key",
+			params:  []string{"=bar"},
+			wantErr: `invalid param "=bar": must be in KEY=VALUE format`,
+		},
+		{
+			name:    "empty value",
+			params:  []string{"KEY="},
+			wantErr: `invalid param "KEY=": must be in KEY=VALUE format`,
+		},
+		{
+			name:   "value containing equals sign",
+			params: []string{"KEY=val=ue"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := base
+			opts.params = tt.params
+			err := opts.validate()
+			if tt.wantErr != "" {
+				assert.EqualError(t, err, tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestGetCADClusterConfig(t *testing.T) {
 	tests := []struct {
 		name              string

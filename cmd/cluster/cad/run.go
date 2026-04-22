@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/openshift/osdctl/cmd/setup"
 	"github.com/openshift/osdctl/pkg/k8s"
@@ -34,6 +35,7 @@ var validInvestigations = []string{
 	"must-gather",
 	"upgrade-config",
 	"restart-controlplane",
+	"describe-nodes",
 }
 
 var validEnvironments = []string{
@@ -47,6 +49,7 @@ type cadRunOptions struct {
 	elevationReason string
 	environment     string
 	isDryRun        bool
+	params          []string
 }
 
 func newCmdRun() *cobra.Command {
@@ -66,7 +69,8 @@ Prerequisites:
 
 Available Investigations:
   chgm, cmbb, can-not-retrieve-updates, ai, cpd, etcd-quota-low,
-  insightsoperatordown, machine-health-check, must-gather, upgrade-config
+  insightsoperatordown, machine-health-check, must-gather, upgrade-config,
+  restart-controlplane, describe-nodes
 
 Examples:
 ` + "```bash" + `
@@ -84,6 +88,14 @@ osdctl cluster cad run \
   --environment production \
   --reason "OHSS-12345" \
   --dry-run
+
+# Run describe-nodes on master nodes only
+osdctl cluster cad run \
+  --cluster-id 1a2b3c4d5e6f7g8h9i0j \
+  --investigation describe-nodes \
+  --environment production \
+  --reason "OHSS-12345" \
+  --params MASTER=true
 ` + "```" + `
 
 Note:
@@ -105,6 +117,8 @@ osdctl cluster reports list -C <cluster-id> -l 1
 	runCmd.Flags().StringVarP(&opts.environment, "environment", "e", "", "Environment in which the target cluster runs. Allowed values: \"stage\" or \"production\"")
 	runCmd.Flags().BoolVarP(&opts.isDryRun, "dry-run", "d", false, "Dry-Run: Run the investigation with the dry-run flag. This will not create a report.")
 	runCmd.Flags().StringVar(&opts.elevationReason, "reason", "", "Provide a reason for running a manual investigation, used for backplane. Eg: 'OHSS-XXXX', or '#ITN-2024-XXXXX.")
+	runCmd.Flags().StringArrayVarP(&opts.params, "params", "p", nil,
+		"Investigation-specific parameters as KEY=VALUE (can be specified multiple times)")
 
 	_ = runCmd.MarkFlagRequired("cluster-id")
 	_ = runCmd.MarkFlagRequired("investigation")
@@ -198,6 +212,13 @@ func (o *cadRunOptions) validate() error {
 		return fmt.Errorf("elevation reason is required")
 	}
 
+	for _, p := range o.params {
+		parts := strings.SplitN(p, "=", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return fmt.Errorf("invalid param %q: must be in KEY=VALUE format", p)
+		}
+	}
+
 	return nil
 }
 
@@ -209,6 +230,28 @@ func (o *cadRunOptions) getCADClusterConfig() (clusterID, namespace string) {
 }
 
 func (o *cadRunOptions) pipelineRunTemplate(cadNamespace string) *unstructured.Unstructured {
+	pipelineParams := []map[string]interface{}{
+		{
+			"name":  "cluster-id",
+			"value": o.clusterID,
+		},
+		{
+			"name":  "investigation",
+			"value": o.investigation,
+		},
+		{
+			"name":  "dry-run",
+			"value": o.isDryRun,
+		},
+	}
+
+	if len(o.params) > 0 {
+		pipelineParams = append(pipelineParams, map[string]interface{}{
+			"name":  "investigation-params",
+			"value": strings.Join(o.params, ","),
+		})
+	}
+
 	u := unstructured.Unstructured{}
 	u.Object = map[string]interface{}{
 		"apiVersion": "tekton.dev/v1beta1",
@@ -218,23 +261,8 @@ func (o *cadRunOptions) pipelineRunTemplate(cadNamespace string) *unstructured.U
 			"namespace":    cadNamespace,
 		},
 		"spec": map[string]interface{}{
-			"params": []map[string]interface{}{
-				{
-					"name":  "cluster-id",
-					"value": o.clusterID,
-				},
-				{
-					"name":  "investigation",
-					"value": o.investigation,
-				},
-				{
-					"name":  "dry-run",
-					"value": o.isDryRun,
-				},
-			},
-			"pipelineRef": map[string]interface{}{
-				"name": "cad-manual-investigation-pipeline",
-			},
+			"params":             pipelineParams,
+			"pipelineRef":        map[string]interface{}{"name": "cad-manual-investigation-pipeline"},
 			"serviceAccountName": "cad-sa",
 			"timeout":            "30m",
 		},

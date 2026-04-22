@@ -1353,7 +1353,8 @@ Prerequisites:
 
 Available Investigations:
   chgm, cmbb, can-not-retrieve-updates, ai, cpd, etcd-quota-low,
-  insightsoperatordown, machine-health-check, must-gather, upgrade-config
+  insightsoperatordown, machine-health-check, must-gather, upgrade-config,
+  restart-controlplane, describe-nodes
 
 Examples:
 ```bash
@@ -1371,6 +1372,14 @@ osdctl cluster cad run \
   --environment production \
   --reason "OHSS-12345" \
   --dry-run
+
+# Run describe-nodes on master nodes only
+osdctl cluster cad run \
+  --cluster-id 1a2b3c4d5e6f7g8h9i0j \
+  --investigation describe-nodes \
+  --environment production \
+  --reason "OHSS-12345" \
+  --params MASTER=true
 ```
 
 Note:
@@ -1399,6 +1408,7 @@ osdctl cluster cad run [flags]
   -i, --investigation string             Investigation name
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+  -p, --params stringArray               Investigation-specific parameters as KEY=VALUE (can be specified multiple times)
       --reason string                    Provide a reason for running a manual investigation, used for backplane. Eg: 'OHSS-XXXX', or '#ITN-2024-XXXXX.
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
