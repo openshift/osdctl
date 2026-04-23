@@ -15,7 +15,8 @@ Prerequisites:
 
 Available Investigations:
   chgm, cmbb, can-not-retrieve-updates, ai, cpd, etcd-quota-low,
-  insightsoperatordown, machine-health-check, must-gather, upgrade-config
+  insightsoperatordown, machine-health-check, must-gather, upgrade-config,
+  restart-controlplane, describe-nodes
 
 Examples:
 ```bash
@@ -33,6 +34,14 @@ osdctl cluster cad run \
   --environment production \
   --reason "OHSS-12345" \
   --dry-run
+
+# Run describe-nodes on master nodes only
+osdctl cluster cad run \
+  --cluster-id 1a2b3c4d5e6f7g8h9i0j \
+  --investigation describe-nodes \
+  --environment production \
+  --reason "OHSS-12345" \
+  --params MASTER=true
 ```
 
 Note:
@@ -55,6 +64,7 @@ osdctl cluster cad run [flags]
   -e, --environment string     Environment in which the target cluster runs. Allowed values: "stage" or "production"
   -h, --help                   help for run
   -i, --investigation string   Investigation name
+  -p, --params stringArray     Investigation-specific parameters as KEY=VALUE (can be specified multiple times)
       --reason string          Provide a reason for running a manual investigation, used for backplane. Eg: 'OHSS-XXXX', or '#ITN-2024-XXXXX.
 ```
 
