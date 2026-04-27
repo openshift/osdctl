@@ -24,9 +24,9 @@ type fieldQuery struct {
 const (
 	JiraHandoverAnnouncementProjectName = "SRE Platform HandOver Announcements"
 	JiraBaseURL                         = "https://redhat.atlassian.net"
-	ProductCustomField                  = "customfield_12319040"
-	CustomerNameCustomField             = "customfield_12310160"
-	ClusterIDCustomField                = "customfield_12316349"
+	ProductCustomField                  = "customfield_10868"
+	CustomerNameCustomField             = "customfield_10746"
+	ClusterIDCustomField                = "customfield_10852"
 )
 
 var clusterKeyRE = regexp.MustCompile(`^(\w|-)+$`)
