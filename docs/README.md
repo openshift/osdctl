@@ -3935,7 +3935,7 @@ osdctl network verify-egress [flags]
       --namespace string                 (optional) Kubernetes namespace to run verification pods in (default "openshift-network-diagnostics")
       --no-tls                           (optional) if provided, ignore all ssl certificate validations on client-side.
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
-      --platform string                  (optional) override for cloud platform/product. E.g., 'aws-classic' (OSD/ROSA Classic), 'aws-hcp' (ROSA HCP), or 'aws-hcp-zeroegress'
+      --platform string                  (optional) override for cloud platform/product. E.g., 'aws-classic' (OSD/ROSA Classic), 'aws-hcp' (ROSA HCP), 'aws-hcp-zeroegress', 'aws-govcloud-classic' (AWS GovCloud), or 'gcp-classic'
       --pod-mode                         (optional) run verification using Kubernetes pods instead of cloud instances
       --probe string                     (optional) select the probe to be used for egress testing. Either 'curl' (default) or 'legacy' (default "curl")
       --region string                    (optional) AWS region, required for --pod-mode if not passing a --cluster-id

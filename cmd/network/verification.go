@@ -789,7 +789,7 @@ func (e *EgressVerification) setupPodModeVerification(ctx context.Context, platf
 	}
 
 	// For AWS-based platforms in pod mode, ensure region is set for proper egress list generation
-	if platform == cloud.AWSClassic || platform == cloud.AWSHCP || platform == cloud.AWSHCPZeroEgress {
+	if platform == cloud.AWSClassic || platform == cloud.AWSHCP || platform == cloud.AWSHCPZeroEgress || platform == cloud.AWSGovCloudClassic {
 		var region string
 
 		// Try to detect region from OCM cluster info first
