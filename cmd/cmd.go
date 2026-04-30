@@ -35,6 +35,7 @@ import (
 	"github.com/openshift/osdctl/cmd/network"
 	"github.com/openshift/osdctl/cmd/org"
 	"github.com/openshift/osdctl/cmd/promote"
+	"github.com/openshift/osdctl/cmd/rhobs"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/cmd/setup"
 	"github.com/openshift/osdctl/cmd/swarm"
@@ -55,19 +56,21 @@ func init() {
 
 // NewCmdRoot represents the base command when called without any subcommands
 func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
-	globalOpts := &globalflags.GlobalOptions{}
+	globalOpts := globalflags.NewGlobalOptions()
 	rootCmd := &cobra.Command{
 		Use:               "osdctl",
 		Short:             "OSD CLI",
 		Long:              `CLI tool to provide OSD related utilities`,
 		DisableAutoGenTag: true,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			noAwsProxy, err := cmd.Flags().GetBool(aws.NoProxyFlag)
-			if err != nil {
-				fmt.Printf("flag --%v undefined\n", aws.NoProxyFlag)
-				os.Exit(1)
+			if cmd.Flags().Lookup(aws.NoProxyFlag) != nil {
+				noAwsProxy, err := cmd.Flags().GetBool(aws.NoProxyFlag)
+				if err != nil {
+					fmt.Printf("flag --%v undefined\n", aws.NoProxyFlag)
+					os.Exit(1)
+				}
+				viper.Set(aws.NoProxyFlag, noAwsProxy)
 			}
-			viper.Set(aws.NoProxyFlag, noAwsProxy)
 
 			skipVersionCheck, err := cmd.Flags().GetBool("skip-version-check")
 			if err != nil {
@@ -82,35 +85,42 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 		},
 	}
 
-	globalflags.AddGlobalFlags(rootCmd, globalOpts)
-	kubeFlags := globalflags.GetFlags(rootCmd)
+	globalOpts.AddSkipVersionCheckFlag(rootCmd)
+	addToRootCmdWithOtherGlobalOpts := func(cmd *cobra.Command) {
+		globalOpts.AddOutputFlag(cmd)
+		globalOpts.AddNoAwsProxyFlag(cmd)
+		globalOpts.AddKubeFlags(cmd)
 
-	kubeClient := k8s.NewClient(kubeFlags)
+		rootCmd.AddCommand(cmd)
+	}
+
+	kubeClient := k8s.NewClient(&globalOpts.KubeFlags)
 
 	// add sub commands
-	rootCmd.AddCommand(aao.NewCmdAao(kubeClient))
-	rootCmd.AddCommand(account.NewCmdAccount(streams, kubeClient, globalOpts))
-	rootCmd.AddCommand(alerts.NewCmdAlerts())
-	rootCmd.AddCommand(cloudtrail.NewCloudtrailCmd())
-	rootCmd.AddCommand(cluster.NewCmdCluster(streams, kubeClient, globalOpts))
-	rootCmd.AddCommand(env.NewCmdEnv())
-	rootCmd.AddCommand(evidence.NewCmdEvidence())
-	rootCmd.AddCommand(hive.NewCmdHive(streams, kubeClient))
-	rootCmd.AddCommand(jira.Cmd)
-	rootCmd.AddCommand(jumphost.NewCmdJumphost())
-	rootCmd.AddCommand(mc.NewCmdMC())
-	rootCmd.AddCommand(hcp.NewCmdHCP())
-	rootCmd.AddCommand(network.NewCmdNetwork(streams, kubeClient))
-	rootCmd.AddCommand(org.NewCmdOrg())
+	addToRootCmdWithOtherGlobalOpts(aao.NewCmdAao(kubeClient))
+	addToRootCmdWithOtherGlobalOpts(account.NewCmdAccount(streams, kubeClient, globalOpts))
+	addToRootCmdWithOtherGlobalOpts(alerts.NewCmdAlerts())
+	addToRootCmdWithOtherGlobalOpts(cloudtrail.NewCloudtrailCmd())
+	addToRootCmdWithOtherGlobalOpts(cluster.NewCmdCluster(streams, kubeClient, globalOpts))
+	addToRootCmdWithOtherGlobalOpts(env.NewCmdEnv())
+	addToRootCmdWithOtherGlobalOpts(evidence.NewCmdEvidence())
+	addToRootCmdWithOtherGlobalOpts(hive.NewCmdHive(streams, kubeClient))
+	addToRootCmdWithOtherGlobalOpts(jira.Cmd)
+	addToRootCmdWithOtherGlobalOpts(jumphost.NewCmdJumphost())
+	addToRootCmdWithOtherGlobalOpts(mc.NewCmdMC())
+	addToRootCmdWithOtherGlobalOpts(hcp.NewCmdHCP())
+	addToRootCmdWithOtherGlobalOpts(network.NewCmdNetwork(streams, kubeClient))
+	addToRootCmdWithOtherGlobalOpts(org.NewCmdOrg())
 	rootCmd.AddCommand(promote.NewCmdPromote())
-	rootCmd.AddCommand(servicelog.NewCmdServiceLog())
-	rootCmd.AddCommand(setup.NewCmdSetup())
-	rootCmd.AddCommand(swarm.Cmd)
-	rootCmd.AddCommand(iampermissions.NewCmdIamPermissions())
+	addToRootCmdWithOtherGlobalOpts(servicelog.NewCmdServiceLog())
+	addToRootCmdWithOtherGlobalOpts(setup.NewCmdSetup())
+	addToRootCmdWithOtherGlobalOpts(swarm.Cmd)
+	addToRootCmdWithOtherGlobalOpts(iampermissions.NewCmdIamPermissions())
 	rootCmd.AddCommand(dynatrace.NewCmdDynatrace())
+	rootCmd.AddCommand(rhobs.NewCmdRhobs())
 
 	// Add cost command to use AWS Cost Manager
-	rootCmd.AddCommand(cost.NewCmdCost(streams, globalOpts))
+	addToRootCmdWithOtherGlobalOpts(cost.NewCmdCost(streams, globalOpts))
 
 	// Add version subcommand. Using the in-build --version flag does not work with cobra
 	// because there is no way to hook a function to the --version flag in cobra.

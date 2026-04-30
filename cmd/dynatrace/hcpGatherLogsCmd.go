@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/openshift/osdctl/cmd/common"
+	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
@@ -130,7 +131,7 @@ func (g *GatherLogsOpts) GatherLogs(clusterID string, elevationReasons ...string
 	return nil
 }
 
-func (g *GatherLogsOpts) dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS string, managementClusterName string, DTURL string, tokenProvider AccessTokenProvider, since int, tail int, sortOrder string) error {
+func (g *GatherLogsOpts) dumpEvents(deploys *appsv1.DeploymentList, parentDir string, targetNS string, managementClusterName string, DTURL string, tokenProvider utils.AccessTokenProvider, since int, tail int, sortOrder string) error {
 	totalDeployments := len(deploys.Items)
 	for k, d := range deploys.Items {
 		fmt.Printf("[%d/%d] Deployment events for %s\n", k+1, totalDeployments, d.Name)
@@ -189,7 +190,7 @@ func (g *GatherLogsOpts) dumpEvents(deploys *appsv1.DeploymentList, parentDir st
 	return nil
 }
 
-func (g *GatherLogsOpts) dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, managementClusterName string, DTURL string, tokenProvider AccessTokenProvider, since int, tail int, sortOrder string) error {
+func (g *GatherLogsOpts) dumpPodLogs(pods *corev1.PodList, parentDir string, targetNS string, managementClusterName string, DTURL string, tokenProvider utils.AccessTokenProvider, since int, tail int, sortOrder string) error {
 	totalPods := len(pods.Items)
 	for k, p := range pods.Items {
 		fmt.Printf("[%d/%d] Pod logs for %s\n", k+1, totalPods, p.Name)
@@ -248,7 +249,7 @@ func (g *GatherLogsOpts) dumpPodLogs(pods *corev1.PodList, parentDir string, tar
 	return nil
 }
 
-func (g *GatherLogsOpts) dumpRestartedPodLogs(pods *corev1.PodList, parentDir string, targetNS string, managementClusterName string, DTURL string, tokenProvider AccessTokenProvider) error {
+func (g *GatherLogsOpts) dumpRestartedPodLogs(pods *corev1.PodList, parentDir string, targetNS string, managementClusterName string, DTURL string, tokenProvider utils.AccessTokenProvider) error {
 	var podList []string
 	for _, p := range pods.Items {
 		podList = append(podList, p.Name)
