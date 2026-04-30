@@ -49,7 +49,7 @@ require (
 	github.com/openshift/hive/apis v0.0.0-20250206153200-5a34ea42e678
 	github.com/openshift/hypershift/api v0.0.0-20250208145556-2753dcc8cfb7
 	github.com/openshift/ocm-container v1.0.1-0.20260310005051-28d4fda21872
-	github.com/openshift/osd-network-verifier v1.6.1
+	github.com/openshift/osd-network-verifier v1.7.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/shopspring/decimal v1.4.0
 	github.com/sirupsen/logrus v1.9.4
