@@ -193,7 +193,7 @@ func NewCmdValidateEgress() *cobra.Command {
 	validateEgressCmd.Flags().StringVar(&e.Region, "region", "", "(optional) AWS region, required for --pod-mode if not passing a --cluster-id")
 	validateEgressCmd.Flags().BoolVar(&e.Debug, "debug", false, "(optional) if provided, enable additional debug-level logging")
 	validateEgressCmd.Flags().BoolVarP(&e.AllSubnets, "all-subnets", "A", false, "(optional) an option for AWS Privatelink clusters to run osd-network-verifier against all subnets listed by ocm.")
-	validateEgressCmd.Flags().StringVar(&e.platformName, "platform", "", "(optional) override for cloud platform/product. E.g., 'aws-classic' (OSD/ROSA Classic), 'aws-hcp' (ROSA HCP), or 'aws-hcp-zeroegress'")
+	validateEgressCmd.Flags().StringVar(&e.platformName, "platform", "", "(optional) override for cloud platform/product. E.g., 'aws-classic' (OSD/ROSA Classic), 'aws-hcp' (ROSA HCP), 'aws-hcp-zeroegress', 'aws-govcloud-classic' (AWS GovCloud), or 'gcp-classic'")
 	validateEgressCmd.Flags().DurationVar(&e.EgressTimeout, "egress-timeout", onv.DefaultTimeout, "(optional) timeout for individual egress verification requests")
 	validateEgressCmd.Flags().BoolVar(&e.Version, "version", false, "When present, prints out the version of osd-network-verifier being used")
 	validateEgressCmd.Flags().StringVar(&e.Probe, "probe", "curl", "(optional) select the probe to be used for egress testing. Either 'curl' (default) or 'legacy'")
@@ -789,7 +789,7 @@ func (e *EgressVerification) setupPodModeVerification(ctx context.Context, platf
 	}
 
 	// For AWS-based platforms in pod mode, ensure region is set for proper egress list generation
-	if platform == cloud.AWSClassic || platform == cloud.AWSHCP || platform == cloud.AWSHCPZeroEgress {
+	if platform == cloud.AWSClassic || platform == cloud.AWSHCP || platform == cloud.AWSHCPZeroEgress || platform == cloud.AWSGovCloudClassic {
 		var region string
 
 		// Try to detect region from OCM cluster info first
@@ -819,7 +819,7 @@ func (e *EgressVerification) setupPodModeVerification(ctx context.Context, platf
 // setupCloudProviderVerification sets up cloud provider-based verification and returns verifier and inputs
 func (e *EgressVerification) setupCloudProviderVerification(ctx context.Context, platform cloud.Platform) (networkVerifier, []*onv.ValidateEgressInput, error) {
 	switch platform {
-	case cloud.AWSHCP, cloud.AWSHCPZeroEgress, cloud.AWSClassic:
+	case cloud.AWSHCP, cloud.AWSHCPZeroEgress, cloud.AWSClassic, cloud.AWSGovCloudClassic:
 		cfg, err := e.setupForAws(ctx)
 		if err != nil {
 			return nil, nil, err
