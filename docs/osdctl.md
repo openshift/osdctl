@@ -9,17 +9,8 @@ CLI tool to provide OSD related utilities
 ### Options
 
 ```
-      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
-      --cluster string                   The name of the kubeconfig cluster to use
-      --context string                   The name of the kubeconfig context to use
-  -h, --help                             help for osdctl
-      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
-      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
-  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
-      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
-  -s, --server string                    The address and port of the Kubernetes API server
-      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
-  -S, --skip-version-check               skip checking to see if this is the most recent release
+  -h, --help                 help for osdctl
+  -S, --skip-version-check   skip checking to see if this is the most recent release
 ```
 
 ### SEE ALSO
@@ -42,6 +33,7 @@ CLI tool to provide OSD related utilities
 * [osdctl network](osdctl_network.md)	 - network related utilities
 * [osdctl org](osdctl_org.md)	 - Provides information for a specified organization
 * [osdctl promote](osdctl_promote.md)	 - Utilities to promote services/operators
+* [osdctl rhobs](osdctl_rhobs.md)	 - RHOBS.next related utilities
 * [osdctl servicelog](osdctl_servicelog.md)	 - OCM/Hive Service log
 * [osdctl setup](osdctl_setup.md)	 - Setup the configuration
 * [osdctl swarm](osdctl_swarm.md)	 - Provides a set of commands for swarming activity

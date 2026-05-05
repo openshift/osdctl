@@ -1,4 +1,4 @@
-package dynatrace
+package utils
 
 import (
 	"os"

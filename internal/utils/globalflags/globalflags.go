@@ -9,31 +9,37 @@ import (
 
 // GlobalOptions defines all available commands
 type GlobalOptions struct {
-	Output           string
 	SkipVersionCheck bool
+	Output           string
 	NoAwsProxy       bool
+	KubeFlags        genericclioptions.ConfigFlags
 }
 
-// AddGlobalFlags adds the Global Flags to the root command
-func AddGlobalFlags(cmd *cobra.Command, opts *GlobalOptions) {
-	cmd.PersistentFlags().StringVarP(&opts.Output, "output", "o", "", "Valid formats are ['', 'json', 'yaml', 'env']")
+func NewGlobalOptions() *GlobalOptions {
+	return &GlobalOptions{
+		KubeFlags: genericclioptions.ConfigFlags{
+			KubeConfig:  awsSdk.String(""),
+			ClusterName: awsSdk.String(""),
+			Context:     awsSdk.String(""),
+			APIServer:   awsSdk.String(""),
+			Timeout:     awsSdk.String("0"),
+			Insecure:    awsSdk.Bool(false),
+			Impersonate: awsSdk.String("")},
+	}
+}
+
+func (opts *GlobalOptions) AddSkipVersionCheckFlag(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVarP(&opts.SkipVersionCheck, "skip-version-check", "S", false, "skip checking to see if this is the most recent release")
+}
+
+func (opts *GlobalOptions) AddOutputFlag(cmd *cobra.Command) {
+	cmd.PersistentFlags().StringVarP(&opts.Output, "output", "o", "", "Valid formats are ['', 'json', 'yaml', 'env']")
+}
+
+func (opts *GlobalOptions) AddNoAwsProxyFlag(cmd *cobra.Command) {
 	cmd.PersistentFlags().BoolVar(&opts.NoAwsProxy, aws.NoProxyFlag, false, "Don't use the configured `aws_proxy` value")
 }
 
-// GetFlags adds the kubeFlags we care about and adds the flags from the provided command
-func GetFlags(cmd *cobra.Command) *genericclioptions.ConfigFlags {
-	// Reuse kubectl global flags to provide namespace, context and credential options.
-	// We are not using NewConfigFlags here to avoid adding too many flags
-	flags := &genericclioptions.ConfigFlags{
-		KubeConfig:  awsSdk.String(""),
-		ClusterName: awsSdk.String(""),
-		Context:     awsSdk.String(""),
-		APIServer:   awsSdk.String(""),
-		Timeout:     awsSdk.String("0"),
-		Insecure:    awsSdk.Bool(false),
-		Impersonate: awsSdk.String(""),
-	}
-	flags.AddFlags(cmd.PersistentFlags())
-	return flags
+func (opts *GlobalOptions) AddKubeFlags(cmd *cobra.Command) {
+	opts.KubeFlags.AddFlags(cmd.PersistentFlags())
 }
