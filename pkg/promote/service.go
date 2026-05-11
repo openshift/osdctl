@@ -77,6 +77,40 @@ func (c *CodeComponent) SetHotfixVersion(hotfixVersion string) error {
 	return nil
 }
 
+func (c *CodeComponent) AddBlockedVersion(blockedVersion string) error {
+	existingNode, err := kyaml.Lookup("blockedVersions").Filter(c.node)
+	if err != nil {
+		return fmt.Errorf("failed to lookup 'codeComponents[].blockedVersions' in '%s': %v", c.filePath, err)
+	}
+
+	if existingNode != nil {
+		elements, err := existingNode.Elements()
+		if err != nil {
+			return fmt.Errorf("failed to read 'codeComponents[].blockedVersions' in '%s': %v", c.filePath, err)
+		}
+		for _, elem := range elements {
+			val, err := elem.String()
+			if err != nil {
+				return fmt.Errorf("invalid non-string value in 'codeComponents[].blockedVersions' in '%s': %v", c.filePath, err)
+			}
+			val = strings.TrimSpace(val)
+			if val == blockedVersion {
+				return fmt.Errorf("version '%s' is already in 'codeComponents[].blockedVersions' in '%s'", blockedVersion, c.filePath)
+			}
+		}
+		err = existingNode.PipeE(kyaml.Append(kyaml.NewStringRNode(blockedVersion).YNode()))
+		if err != nil {
+			return fmt.Errorf("failed to append to 'codeComponents[].blockedVersions' in '%s': %v", c.filePath, err)
+		}
+	} else {
+		_, err = kyaml.SetField("blockedVersions", kyaml.NewListRNode(blockedVersion)).Filter(c.node)
+		if err != nil {
+			return fmt.Errorf("failed to set 'codeComponents[].blockedVersions' in '%s': %v", c.filePath, err)
+		}
+	}
+	return nil
+}
+
 type Application struct {
 	yamlDoc
 	componentsSequenceNode *kyaml.RNode
@@ -120,6 +154,33 @@ func (a *Application) GetComponent(componentUrl string) (*CodeComponent, error) 
 
 	if componentNode == nil {
 		return nil, fmt.Errorf("path 'codeComponents[].url' is never defined to '%s' in '%s'", componentUrl, a.filePath)
+	}
+
+	return newCodeComponent(a.filePath, componentNode)
+}
+
+func (a *Application) GetComponentByName(componentName string) (*CodeComponent, error) {
+	var componentNode *kyaml.RNode
+
+	err := a.componentsSequenceNode.VisitElements(func(visitedNode *kyaml.RNode) error {
+		visitedName, err := visitedNode.GetString("name")
+		if err != nil {
+			return fmt.Errorf("path 'codeComponents[].name' is not always defined as a string in '%s': %v", a.filePath, err)
+		}
+		if visitedName == componentName {
+			if componentNode != nil {
+				return fmt.Errorf("path 'codeComponents[].name' is defined to '%s' more than once in '%s'", componentName, a.filePath)
+			}
+			componentNode = visitedNode
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to iterate over 'codeComponents' in '%s': %v", a.filePath, err)
+	}
+
+	if componentNode == nil {
+		return nil, fmt.Errorf("component '%s' not found in '%s'", componentName, a.filePath)
 	}
 
 	return newCodeComponent(a.filePath, componentNode)

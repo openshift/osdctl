@@ -109,6 +109,165 @@ var _ = Describe("Application struct", func() {
 	})
 })
 
+var _ = Describe("Application.GetComponentByName", func() {
+	var data *TestData
+
+	BeforeEach(func() {
+		data = CreateDefaultTestData()
+	})
+
+	AfterEach(func() {
+		CleanupAllTestDataResources()
+	})
+
+	It("returns the component when found by name", func() {
+		application, err := readApplicationFromFile(filepath.Join(data.AppInterfacePath, "data/services/gen-app/app.yml"))
+		Expect(err).ShouldNot(HaveOccurred())
+
+		component, err := application.GetComponentByName("default-component")
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(component).ToNot(BeNil())
+		Expect(component.GetName()).To(Equal("default-component"))
+	})
+
+	It("returns the dummy-component when found by name", func() {
+		application, err := readApplicationFromFile(filepath.Join(data.AppInterfacePath, "data/services/gen-app/app.yml"))
+		Expect(err).ShouldNot(HaveOccurred())
+
+		component, err := application.GetComponentByName("dummy-component")
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(component).ToNot(BeNil())
+		Expect(component.GetName()).To(Equal("dummy-component"))
+	})
+
+	It("returns an error when the component name does not exist", func() {
+		application, err := readApplicationFromFile(filepath.Join(data.AppInterfacePath, "data/services/gen-app/app.yml"))
+		Expect(err).ShouldNot(HaveOccurred())
+
+		component, err := application.GetComponentByName("nonexistent-component")
+		Expect(err).Should(HaveOccurred())
+		Expect(component).To(BeNil())
+		Expect(err.Error()).To(ContainSubstring("nonexistent-component"))
+	})
+})
+
+var _ = Describe("CodeComponent.AddBlockedVersion", func() {
+	var data *TestData
+
+	BeforeEach(func() {
+		data = CreateDefaultTestData()
+	})
+
+	AfterEach(func() {
+		CleanupAllTestDataResources()
+	})
+
+	Context("when no blockedVersions field exists yet", func() {
+		It("creates the field with a single entry", func() {
+			application, err := readApplicationFromFile(filepath.Join(data.AppInterfacePath, "data/services/gen-app/app.yml"))
+			Expect(err).ShouldNot(HaveOccurred())
+
+			component, err := application.GetComponentByName("default-component")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			err = component.AddBlockedVersion("abc123")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			err = application.Save()
+			Expect(err).ShouldNot(HaveOccurred())
+
+			expectedProperties := InitProperties(data.TestRepoPath, "")
+			expectedProperties["blockedVersion"] = "abc123"
+			expectedAppFileContent := GetFileContent(AppFileContentTemplateWithBlockedVersion, "gen-app", expectedProperties)
+			Expect(data.ReadAppInterfaceFile("data/services/gen-app/app.yml")).To(Equal(expectedAppFileContent))
+		})
+	})
+
+	Context("when blockedVersions already has one entry", func() {
+		BeforeEach(func() {
+			properties := InitProperties(data.TestRepoPath, "")
+			properties["blockedVersion"] = "existing123"
+			appFileContent := GetFileContent(AppFileContentTemplateWithBlockedVersion, "gen-app", properties)
+			data.WriteAppInterfaceFile("data/services/gen-app/app.yml", appFileContent)
+		})
+
+		It("appends a second entry", func() {
+			application, err := readApplicationFromFile(filepath.Join(data.AppInterfacePath, "data/services/gen-app/app.yml"))
+			Expect(err).ShouldNot(HaveOccurred())
+
+			component, err := application.GetComponentByName("default-component")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			err = component.AddBlockedVersion("newblock456")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			err = application.Save()
+			Expect(err).ShouldNot(HaveOccurred())
+
+			expectedProperties := InitProperties(data.TestRepoPath, "")
+			expectedProperties["blockedVersion1"] = "existing123"
+			expectedProperties["blockedVersion2"] = "newblock456"
+			expectedAppFileContent := GetFileContent(AppFileContentTemplateWithBlockedVersions, "gen-app", expectedProperties)
+			Expect(data.ReadAppInterfaceFile("data/services/gen-app/app.yml")).To(Equal(expectedAppFileContent))
+		})
+
+		It("returns an error when the version already exists", func() {
+			application, err := readApplicationFromFile(filepath.Join(data.AppInterfacePath, "data/services/gen-app/app.yml"))
+			Expect(err).ShouldNot(HaveOccurred())
+
+			component, err := application.GetComponentByName("default-component")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			err = component.AddBlockedVersion("existing123")
+			Expect(err).Should(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("already in"))
+			Expect(err.Error()).To(ContainSubstring("existing123"))
+		})
+	})
+
+	Context("when blockedVersions already has two entries", func() {
+		BeforeEach(func() {
+			properties := InitProperties(data.TestRepoPath, "")
+			properties["blockedVersion1"] = "first111"
+			properties["blockedVersion2"] = "second222"
+			appFileContent := GetFileContent(AppFileContentTemplateWithBlockedVersions, "gen-app", properties)
+			data.WriteAppInterfaceFile("data/services/gen-app/app.yml", appFileContent)
+		})
+
+		It("appends a third entry", func() {
+			application, err := readApplicationFromFile(filepath.Join(data.AppInterfacePath, "data/services/gen-app/app.yml"))
+			Expect(err).ShouldNot(HaveOccurred())
+
+			component, err := application.GetComponentByName("default-component")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			err = component.AddBlockedVersion("third333")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			err = application.Save()
+			Expect(err).ShouldNot(HaveOccurred())
+
+			// Read back and verify all three are present
+			actualContent := data.ReadAppInterfaceFile("data/services/gen-app/app.yml")
+			Expect(actualContent).To(ContainSubstring("first111"))
+			Expect(actualContent).To(ContainSubstring("second222"))
+			Expect(actualContent).To(ContainSubstring("third333"))
+		})
+
+		It("rejects a duplicate of the first entry", func() {
+			application, err := readApplicationFromFile(filepath.Join(data.AppInterfacePath, "data/services/gen-app/app.yml"))
+			Expect(err).ShouldNot(HaveOccurred())
+
+			component, err := application.GetComponentByName("default-component")
+			Expect(err).ShouldNot(HaveOccurred())
+
+			err = component.AddBlockedVersion("second222")
+			Expect(err).Should(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("already in"))
+		})
+	})
+})
+
 var _ = Describe("Service struct", func() {
 	var data *TestData
 	var service *Service

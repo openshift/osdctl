@@ -67,6 +67,13 @@ codeComponents:
   - @hotfixVersion1@
   - @hotfixVersion2@
 `
+	AppFileContentTemplateWithBlockedVersion = AppFileContentTemplate + `  blockedVersions:
+  - @blockedVersion@
+`
+	AppFileContentTemplateWithBlockedVersions = AppFileContentTemplate + `  blockedVersions:
+  - @blockedVersion1@
+  - @blockedVersion2@
+`
 )
 
 func GetFileContent(template string, name string, properties map[string]string) string {
