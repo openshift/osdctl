@@ -135,6 +135,7 @@
   - `labels` - get organization labels
   - `users` - get organization users
 - `promote` - Utilities to promote services/operators
+  - `block` - Add a blocked version to a component in app.yaml
   - `dynatrace` - Utilities to promote dynatrace
   - `managedscripts` - Promote https://github.com/openshift/managed-scripts
   - `saas` - Utilities to promote SaaS services/operators
@@ -4163,6 +4164,36 @@ osdctl promote [flags]
 ```
   -h, --help                 help for promote
   -S, --skip-version-check   skip checking to see if this is the most recent release
+```
+
+### osdctl promote block
+
+Add a SHA commit hash to the blockedVersions list for a code component
+in the application's app.yaml file. This prevents the specified version
+from being promoted through progressive delivery.
+
+The command locates the app.yaml through the SaaS service file, finds
+the specified component by name, and appends the git hash to its
+codeComponents[].blockedVersions array. If the blockedVersions field
+does not yet exist, it will be created.
+
+Duplicate entries are rejected with an error.
+
+```
+osdctl promote block [flags]
+```
+
+#### Flags
+
+```
+  -a, --all                      Block the version for all components of the service (mutually exclusive with --component)
+      --appInterfaceDir string   Location of app-interface checkout. Falls back to the current working directory
+  -c, --component string         Name of the code component in app.yaml
+  -g, --gitHash string           SHA commit hash to add to blockedVersions
+  -h, --help                     help for block
+  -l, --list                     List all services and their components
+      --serviceId string         Name of the SaaS service file (without extension)
+  -S, --skip-version-check       skip checking to see if this is the most recent release
 ```
 
 ### osdctl promote dynatrace
