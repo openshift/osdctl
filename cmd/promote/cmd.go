@@ -22,7 +22,7 @@ func NewCmdPromote() *cobra.Command {
 	promoteCmd.AddCommand(saas.NewCmdSaas())
 	promoteCmd.AddCommand(dynatrace.NewCmdDynatrace())
 	promoteCmd.AddCommand(managedscripts.NewCmdManagedScripts())
-	promoteCmd.AddCommand(blocked.NewCmdBlocked())
+	promoteCmd.AddCommand(blocked.NewCmdBlock())
 
 	return promoteCmd
 }

@@ -19,11 +19,11 @@ type blockedOptions struct {
 	gitHash                  string
 }
 
-// NewCmdBlocked implements the blocked command to add a blocked version to a component in app.yaml
-func NewCmdBlocked() *cobra.Command {
+// NewCmdBlock implements the block command to add a blocked version to a component in app.yaml
+func NewCmdBlock() *cobra.Command {
 	ops := &blockedOptions{}
 	blockedCmd := &cobra.Command{
-		Use:   "blocked",
+		Use:   "block",
 		Short: "Add a blocked version to a component in app.yaml",
 		Long: `Add a SHA commit hash to the blockedVersions list for a code component
 in the application's app.yaml file. This prevents the specified version
@@ -39,16 +39,16 @@ Duplicate entries are rejected with an error.`,
 		DisableAutoGenTag: true,
 		Example: `
 		# List all services and their components
-		osdctl promote blocked --list
+		osdctl promote block --list
 
 		# Block a specific version for a single component
-		osdctl promote blocked --serviceId <service> --component <component-name> --gitHash <sha>
+		osdctl promote block --serviceId <service> --component <component-name> --gitHash <sha>
 
 		# Block a specific version for all components of a service
-		osdctl promote blocked --serviceId <service> --all --gitHash <sha>
+		osdctl promote block --serviceId <service> --all --gitHash <sha>
 
 		# With explicit app-interface path
-		osdctl promote blocked --serviceId <service> --component <component-name> --gitHash <sha> --appInterfaceDir /path/to/app-interface`,
+		osdctl promote block --serviceId <service> --component <component-name> --gitHash <sha> --appInterfaceDir /path/to/app-interface`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if ops.list {
 				if ops.serviceId != "" || ops.componentName != "" || ops.gitHash != "" || ops.all {
@@ -123,6 +123,12 @@ Duplicate entries are rejected with an error.`,
 				return fmt.Errorf("app-interface clone in '%s' has uncommitted changes, please commit or stash them before proceeding", appInterfaceClone.GetPath())
 			}
 
+			branchName := fmt.Sprintf("block-%s-%s", ops.serviceId, ops.gitHash)
+			err = appInterfaceClone.CheckoutNewBranch(branchName)
+			if err != nil {
+				return err
+			}
+
 			var components []*promote.CodeComponent
 
 			if ops.all {
@@ -153,11 +159,6 @@ Duplicate entries are rejected with an error.`,
 			}
 
 			targetLabel := strings.Join(blockedNames, ", ")
-			branchName := fmt.Sprintf("block-%s-%s", ops.serviceId, ops.gitHash)
-			err = appInterfaceClone.CheckoutNewBranch(branchName)
-			if err != nil {
-				return err
-			}
 
 			var commitMessage string
 			if ops.all {
