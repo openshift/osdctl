@@ -159,6 +159,24 @@ func (a *Application) GetComponent(componentUrl string) (*CodeComponent, error) 
 	return newCodeComponent(a.filePath, componentNode)
 }
 
+func (a *Application) GetComponentNames() ([]string, error) {
+	var names []string
+
+	err := a.componentsSequenceNode.VisitElements(func(visitedNode *kyaml.RNode) error {
+		name, err := visitedNode.GetString("name")
+		if err != nil || name == "" {
+			return fmt.Errorf("path 'codeComponents[].name' is not always defined as a non-empty string in '%s': %v", a.filePath, err)
+		}
+		names = append(names, name)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to iterate over 'codeComponents' in '%s': %v", a.filePath, err)
+	}
+
+	return names, nil
+}
+
 func (a *Application) GetComponentByName(componentName string) (*CodeComponent, error) {
 	var componentNode *kyaml.RNode
 

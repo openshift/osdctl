@@ -10,6 +10,8 @@ import (
 )
 
 type blockedOptions struct {
+	list bool
+
 	appInterfaceProvidedPath string
 	serviceId                string
 	componentName            string
@@ -35,20 +37,29 @@ Duplicate entries are rejected with an error.`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Example: `
+		# List all services and their components
+		osdctl promote blocked --list
+
 		# Block a specific version for a component
 		osdctl promote blocked --serviceId <service> --component <component-name> --gitHash <sha>
 
 		# With explicit app-interface path
 		osdctl promote blocked --serviceId <service> --component <component-name> --gitHash <sha> --appInterfaceDir /path/to/app-interface`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if ops.serviceId == "" {
-				return fmt.Errorf("--serviceId is required")
-			}
-			if ops.componentName == "" {
-				return fmt.Errorf("--component is required")
-			}
-			if ops.gitHash == "" {
-				return fmt.Errorf("--gitHash is required")
+			if ops.list {
+				if ops.serviceId != "" || ops.componentName != "" || ops.gitHash != "" {
+					return fmt.Errorf("--list cannot be used with --serviceId, --component or --gitHash")
+				}
+			} else {
+				if ops.serviceId == "" {
+					return fmt.Errorf("--serviceId is required (use --list to see available services and components)")
+				}
+				if ops.componentName == "" {
+					return fmt.Errorf("--component is required (use --list to see available services and components)")
+				}
+				if ops.gitHash == "" {
+					return fmt.Errorf("--gitHash is required")
+				}
 			}
 
 			cmd.SilenceUsage = true
@@ -56,14 +67,6 @@ Duplicate entries are rejected with an error.`,
 			appInterfaceClone, err := promote.FindAppInterfaceClone(ops.appInterfaceProvidedPath)
 			if err != nil {
 				return err
-			}
-
-			isClean, err := appInterfaceClone.IsClean()
-			if err != nil {
-				return err
-			}
-			if !isClean {
-				return fmt.Errorf("app-interface clone in '%s' has uncommitted changes, please commit or stash them before proceeding", appInterfaceClone.GetPath())
 			}
 
 			servicesRegistry, err := promote.NewServicesRegistry(
@@ -77,12 +80,41 @@ Duplicate entries are rejected with an error.`,
 				return err
 			}
 
+			if ops.list {
+				fmt.Println("### Services and their components ###")
+				for _, serviceId := range servicesRegistry.GetServicesIds() {
+					service, err := servicesRegistry.GetService(serviceId)
+					if err != nil {
+						fmt.Printf("  %s (error: %v)\n", serviceId, err)
+						continue
+					}
+					componentNames, err := service.GetApplication().GetComponentNames()
+					if err != nil {
+						fmt.Printf("  %s (error reading components: %v)\n", serviceId, err)
+						continue
+					}
+					fmt.Printf("  %s\n", serviceId)
+					for _, name := range componentNames {
+						fmt.Printf("    - %s\n", name)
+					}
+				}
+				return nil
+			}
+
 			service, err := servicesRegistry.GetService(ops.serviceId)
 			if err != nil {
 				return err
 			}
 
 			application := service.GetApplication()
+
+			isClean, err := appInterfaceClone.IsClean()
+			if err != nil {
+				return err
+			}
+			if !isClean {
+				return fmt.Errorf("app-interface clone in '%s' has uncommitted changes, please commit or stash them before proceeding", appInterfaceClone.GetPath())
+			}
 
 			component, err := application.GetComponentByName(ops.componentName)
 			if err != nil {
@@ -137,6 +169,7 @@ Duplicate entries are rejected with an error.`,
 		},
 	}
 
+	blockedCmd.Flags().BoolVarP(&ops.list, "list", "l", false, "List all services and their components")
 	blockedCmd.Flags().StringVarP(&ops.serviceId, "serviceId", "", "", "Name of the SaaS service file (without extension)")
 	blockedCmd.Flags().StringVarP(&ops.componentName, "component", "c", "", "Name of the code component in app.yaml")
 	blockedCmd.Flags().StringVarP(&ops.gitHash, "gitHash", "g", "", "SHA commit hash to add to blockedVersions")
