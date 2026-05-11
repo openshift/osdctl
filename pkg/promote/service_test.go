@@ -73,6 +73,20 @@ var _ = Describe("Application struct", func() {
 		})
 	})
 
+	Context("Using GetAllComponents", func() {
+		It("returns all components in order", func() {
+			application, err := readApplicationFromFile(filepath.Join(data.AppInterfacePath, "data/services/gen-app/app.yml"))
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(application).ToNot(BeNil())
+
+			components, err := application.GetAllComponents()
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(components).To(HaveLen(2))
+			Expect(components[0].GetName()).To(Equal("dummy-component"))
+			Expect(components[1].GetName()).To(Equal("default-component"))
+		})
+	})
+
 	Context("Using SetHotfixVersion and Save", func() {
 		var hotfixVersion string
 

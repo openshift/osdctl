@@ -177,6 +177,24 @@ func (a *Application) GetComponentNames() ([]string, error) {
 	return names, nil
 }
 
+func (a *Application) GetAllComponents() ([]*CodeComponent, error) {
+	var components []*CodeComponent
+
+	err := a.componentsSequenceNode.VisitElements(func(visitedNode *kyaml.RNode) error {
+		component, err := newCodeComponent(a.filePath, visitedNode)
+		if err != nil {
+			return err
+		}
+		components = append(components, component)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to iterate over 'codeComponents' in '%s': %v", a.filePath, err)
+	}
+
+	return components, nil
+}
+
 func (a *Application) GetComponentByName(componentName string) (*CodeComponent, error) {
 	var componentNode *kyaml.RNode
 

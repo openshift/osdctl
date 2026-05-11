@@ -11,6 +11,7 @@ import (
 
 type blockedOptions struct {
 	list bool
+	all  bool
 
 	appInterfaceProvidedPath string
 	serviceId                string
@@ -40,22 +41,28 @@ Duplicate entries are rejected with an error.`,
 		# List all services and their components
 		osdctl promote blocked --list
 
-		# Block a specific version for a component
+		# Block a specific version for a single component
 		osdctl promote blocked --serviceId <service> --component <component-name> --gitHash <sha>
+
+		# Block a specific version for all components of a service
+		osdctl promote blocked --serviceId <service> --all --gitHash <sha>
 
 		# With explicit app-interface path
 		osdctl promote blocked --serviceId <service> --component <component-name> --gitHash <sha> --appInterfaceDir /path/to/app-interface`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if ops.list {
-				if ops.serviceId != "" || ops.componentName != "" || ops.gitHash != "" {
-					return fmt.Errorf("--list cannot be used with --serviceId, --component or --gitHash")
+				if ops.serviceId != "" || ops.componentName != "" || ops.gitHash != "" || ops.all {
+					return fmt.Errorf("--list cannot be used with --serviceId, --component, --all or --gitHash")
 				}
 			} else {
 				if ops.serviceId == "" {
 					return fmt.Errorf("--serviceId is required (use --list to see available services and components)")
 				}
-				if ops.componentName == "" {
-					return fmt.Errorf("--component is required (use --list to see available services and components)")
+				if ops.all && ops.componentName != "" {
+					return fmt.Errorf("--all and --component are mutually exclusive")
+				}
+				if !ops.all && ops.componentName == "" {
+					return fmt.Errorf("--component or --all is required (use --list to see available services and components)")
 				}
 				if ops.gitHash == "" {
 					return fmt.Errorf("--gitHash is required")
@@ -116,14 +123,28 @@ Duplicate entries are rejected with an error.`,
 				return fmt.Errorf("app-interface clone in '%s' has uncommitted changes, please commit or stash them before proceeding", appInterfaceClone.GetPath())
 			}
 
-			component, err := application.GetComponentByName(ops.componentName)
-			if err != nil {
-				return err
+			var components []*promote.CodeComponent
+
+			if ops.all {
+				components, err = application.GetAllComponents()
+				if err != nil {
+					return err
+				}
+			} else {
+				component, err := application.GetComponentByName(ops.componentName)
+				if err != nil {
+					return err
+				}
+				components = []*promote.CodeComponent{component}
 			}
 
-			err = component.AddBlockedVersion(ops.gitHash)
-			if err != nil {
-				return err
+			var blockedNames []string
+			for _, component := range components {
+				err = component.AddBlockedVersion(ops.gitHash)
+				if err != nil {
+					return err
+				}
+				blockedNames = append(blockedNames, component.GetName())
 			}
 
 			err = application.Save()
@@ -131,19 +152,31 @@ Duplicate entries are rejected with an error.`,
 				return fmt.Errorf("failed to save application '%s': %v", application.GetFilePath(), err)
 			}
 
-			branchName := fmt.Sprintf("block-%s-%s", ops.componentName, ops.gitHash)
+			targetLabel := strings.Join(blockedNames, ", ")
+			branchName := fmt.Sprintf("block-%s-%s", ops.serviceId, ops.gitHash)
 			err = appInterfaceClone.CheckoutNewBranch(branchName)
 			if err != nil {
 				return err
 			}
 
-			commitMessage := fmt.Sprintf("Block version %s for %s\n\nAdd %s to blockedVersions for component '%s' in '%s'.",
-				ops.gitHash,
-				ops.componentName,
-				ops.gitHash,
-				ops.componentName,
-				filepath.Base(application.GetFilePath()),
-			)
+			var commitMessage string
+			if ops.all {
+				commitMessage = fmt.Sprintf("Block version %s for all components of %s\n\nAdd %s to blockedVersions for components [%s] in '%s'.",
+					ops.gitHash,
+					ops.serviceId,
+					ops.gitHash,
+					targetLabel,
+					filepath.Base(application.GetFilePath()),
+				)
+			} else {
+				commitMessage = fmt.Sprintf("Block version %s for %s\n\nAdd %s to blockedVersions for component '%s' in '%s'.",
+					ops.gitHash,
+					ops.componentName,
+					ops.gitHash,
+					ops.componentName,
+					filepath.Base(application.GetFilePath()),
+				)
+			}
 
 			err = appInterfaceClone.Commit(commitMessage)
 			if err != nil {
@@ -151,7 +184,7 @@ Duplicate entries are rejected with an error.`,
 			}
 
 			fmt.Println("SUCCESS!")
-			fmt.Printf("Blocked version %s for component %s\n", ops.gitHash, ops.componentName)
+			fmt.Printf("Blocked version %s for: %s\n", ops.gitHash, targetLabel)
 			fmt.Printf("Application file: %s\n", application.GetFilePath())
 			fmt.Println("")
 			fmt.Println("-------------    Commit message     -------------")
@@ -170,10 +203,12 @@ Duplicate entries are rejected with an error.`,
 	}
 
 	blockedCmd.Flags().BoolVarP(&ops.list, "list", "l", false, "List all services and their components")
+	blockedCmd.Flags().BoolVarP(&ops.all, "all", "a", false, "Block the version for all components of the service (mutually exclusive with --component)")
 	blockedCmd.Flags().StringVarP(&ops.serviceId, "serviceId", "", "", "Name of the SaaS service file (without extension)")
 	blockedCmd.Flags().StringVarP(&ops.componentName, "component", "c", "", "Name of the code component in app.yaml")
 	blockedCmd.Flags().StringVarP(&ops.gitHash, "gitHash", "g", "", "SHA commit hash to add to blockedVersions")
 	blockedCmd.Flags().StringVarP(&ops.appInterfaceProvidedPath, "appInterfaceDir", "", "", "Location of app-interface checkout. Falls back to the current working directory")
+	blockedCmd.MarkFlagsMutuallyExclusive("all", "component")
 
 	return blockedCmd
 }
