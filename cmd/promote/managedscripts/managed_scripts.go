@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/openshift/osdctl/cmd/promote/utils"
+	"github.com/openshift/osdctl/pkg/promote"
 	"github.com/spf13/cobra"
 
 	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
@@ -23,11 +23,11 @@ type managedScriptsOptions struct {
 }
 
 type promoteCallbacks struct {
-	utils.DefaultPromoteCallbacks
+	promote.DefaultPromoteCallbacks
 }
 
 func (c *promoteCallbacks) FilterTargets(targetNodes []*kyaml.RNode) ([]*kyaml.RNode, error) {
-	return utils.FilterTargetsContainingNamespaceRef(targetNodes, prodNamespaceRef)
+	return promote.FilterTargetsContainingNamespaceRef(targetNodes, prodNamespaceRef)
 }
 
 func (*promoteCallbacks) GetResourceTemplateRepoUrl(*kyaml.RNode) (string, error) {
@@ -68,14 +68,14 @@ func NewCmdManagedScripts() *cobra.Command {
 		# Promote managed-scripts repo
 		osdctl promote managedscripts --gitHash <git-hash>`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			appInterfaceClone, err := utils.FindAppInterfaceClone(ops.appInterfaceProvidedPath)
+			appInterfaceClone, err := promote.FindAppInterfaceClone(ops.appInterfaceProvidedPath)
 			if err != nil {
 				return err
 			}
 
 			cmd.SilenceUsage = true
 
-			service, err := utils.ReadServiceFromFile(
+			service, err := promote.ReadServiceFromFile(
 				appInterfaceClone,
 				filepath.Join(appInterfaceClone.GetPath(), serviceRelPath))
 			if err != nil {
@@ -83,7 +83,7 @@ func NewCmdManagedScripts() *cobra.Command {
 			}
 
 			return service.Promote(&promoteCallbacks{
-				DefaultPromoteCallbacks: utils.DefaultPromoteCallbacks{Service: service},
+				DefaultPromoteCallbacks: promote.DefaultPromoteCallbacks{Service: service},
 			}, ops.gitHash)
 		},
 	}

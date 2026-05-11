@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/openshift/osdctl/cmd/promote/iexec"
-	"github.com/openshift/osdctl/cmd/promote/utils"
+	"github.com/openshift/osdctl/pkg/promote"
 
 	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
 )
@@ -35,7 +35,7 @@ func validateDynatraceServiceFilePath(filePath string) string {
 	return filePath
 }
 
-func getResourceTemplatesPaths(serviceRegistry *utils.ServicesRegistry, serviceId string) string {
+func getResourceTemplatesPaths(serviceRegistry *promote.ServicesRegistry, serviceId string) string {
 	service, err := serviceRegistry.GetService(serviceId)
 	if err != nil {
 		return ""
@@ -58,7 +58,7 @@ func getResourceTemplatesPaths(serviceRegistry *utils.ServicesRegistry, serviceI
 	return strings.Join(paths, ", ")
 }
 
-func listServiceIds(serviceRegistry *utils.ServicesRegistry) error {
+func listServiceIds(serviceRegistry *promote.ServicesRegistry) error {
 	serviceIds := serviceRegistry.GetServicesIds()
 
 	fmt.Println("### Available Dynatrace components ###")

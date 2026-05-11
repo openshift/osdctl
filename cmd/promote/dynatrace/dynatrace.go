@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/openshift/osdctl/cmd/promote/utils"
+	"github.com/openshift/osdctl/pkg/promote"
 	"github.com/spf13/cobra"
 )
 
@@ -89,12 +89,12 @@ TERRAFORM MODULES:
 			} else {
 				ops.validateSaasFlow()
 
-				appInterfaceClone, err := utils.FindAppInterfaceClone(ops.appInterfaceProvidedPath)
+				appInterfaceClone, err := promote.FindAppInterfaceClone(ops.appInterfaceProvidedPath)
 				if err != nil {
 					return err
 				}
 
-				servicesRegistry, err := utils.NewServicesRegistry(
+				servicesRegistry, err := promote.NewServicesRegistry(
 					appInterfaceClone,
 					validateDynatraceServiceFilePath,
 					saasDynatraceDir,
@@ -122,7 +122,7 @@ TERRAFORM MODULES:
 					if err != nil {
 						return err
 					}
-					err = service.Promote(&utils.DefaultPromoteCallbacks{Service: service}, ops.gitHash)
+					err = service.Promote(&promote.DefaultPromoteCallbacks{Service: service}, ops.gitHash)
 
 					if err != nil {
 						return fmt.Errorf("error while promoting service: %v", err)

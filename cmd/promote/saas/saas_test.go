@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openshift/osdctl/cmd/promote/utils"
+	"github.com/openshift/osdctl/pkg/promote"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
-var serviceFileContentCanaryTemplate = strings.Replace(utils.ServiceFileContentTemplate,
+var serviceFileContentCanaryTemplate = strings.Replace(promote.ServiceFileContentTemplate,
 	"name: hivep01",
 	"name: hivep01"+defaultProdTargetNameSuffix,
 	1)
@@ -22,29 +22,29 @@ func TestSetup(t *testing.T) {
 }
 
 var _ = Describe("ServicesRegistry struct", func() {
-	var data *utils.TestData
-	var servicesRegistry *utils.ServicesRegistry
+	var data *promote.TestData
+	var servicesRegistry *promote.ServicesRegistry
 
 	BeforeEach(func() {
-		data = utils.CreateTestData(func(data *utils.TestData) map[string]string {
-			properties := utils.InitProperties(data.TestRepoPath, data.TestRepoHashes[0])
+		data = promote.CreateTestData(func(data *promote.TestData) map[string]string {
+			properties := promote.InitProperties(data.TestRepoPath, data.TestRepoHashes[0])
 			return map[string]string{
-				"data/services/gen-app/cicd/saas/saas-service-1.yaml":          utils.GetFileContent(utils.ServiceFileContentTemplate, "service-1", properties),
-				"data/services/gen-app/cicd/saas/service-2.yaml":               utils.GetFileContent(utils.ServiceFileContentTemplate, "service-2", properties),
-				"data/services/other-app/cicd/saas/saas-service-3/deploy.yaml": utils.GetFileContent(utils.ServiceFileContentTemplate, "service-3", properties),
-				"data/services/gen-app/cicd/saas/service-4/deploy.yaml":        utils.GetFileContent(utils.ServiceFileContentTemplate, "service-4", properties),
+				"data/services/gen-app/cicd/saas/saas-service-1.yaml":          promote.GetFileContent(promote.ServiceFileContentTemplate, "service-1", properties),
+				"data/services/gen-app/cicd/saas/service-2.yaml":               promote.GetFileContent(promote.ServiceFileContentTemplate, "service-2", properties),
+				"data/services/other-app/cicd/saas/saas-service-3/deploy.yaml": promote.GetFileContent(promote.ServiceFileContentTemplate, "service-3", properties),
+				"data/services/gen-app/cicd/saas/service-4/deploy.yaml":        promote.GetFileContent(promote.ServiceFileContentTemplate, "service-4", properties),
 
-				"data/services/gen-app/app.yml": utils.GetFileContent(utils.AppFileContentTemplate, "gen-app", properties),
+				"data/services/gen-app/app.yml": promote.GetFileContent(promote.AppFileContentTemplate, "gen-app", properties),
 			}
 		})
-		servicesRegistry = utils.CreateServiceRegistry(data,
+		servicesRegistry = promote.CreateServiceRegistry(data,
 			validateSaasServiceFilePath,
 			"data/services/gen-app/cicd/saas",
 			"data/services/other-app/cicd/saas")
 	})
 
 	AfterEach(func() {
-		utils.CleanupAllTestDataResources()
+		promote.CleanupAllTestDataResources()
 	})
 
 	When("querying the registry", func() {
@@ -64,16 +64,16 @@ var _ = Describe("ServicesRegistry struct", func() {
 })
 
 var _ = Describe("Service struct", func() {
-	var data *utils.TestData
-	var service *utils.Service
+	var data *promote.TestData
+	var service *promote.Service
 
 	BeforeEach(func() {
-		data = utils.CreateTestData(func(data *utils.TestData) map[string]string {
-			properties := utils.InitProperties(data.TestRepoPath, data.TestRepoHashes[0])
+		data = promote.CreateTestData(func(data *promote.TestData) map[string]string {
+			properties := promote.InitProperties(data.TestRepoPath, data.TestRepoHashes[0])
 
 			return map[string]string{
-				"data/services/gen-app/cicd/saas/service-1.yaml": utils.GetFileContent(serviceFileContentCanaryTemplate, "service-1", properties),
-				"data/services/gen-app/app.yml":                  utils.GetFileContent(utils.AppFileContentTemplate, "gen-app", properties),
+				"data/services/gen-app/cicd/saas/service-1.yaml": promote.GetFileContent(serviceFileContentCanaryTemplate, "service-1", properties),
+				"data/services/gen-app/app.yml":                  promote.GetFileContent(promote.AppFileContentTemplate, "gen-app", properties),
 			}
 		})
 	})
@@ -81,22 +81,22 @@ var _ = Describe("Service struct", func() {
 	JustBeforeEach(func() {
 		var err error
 
-		servicesRegistry := utils.CreateDefaultServiceRegistry(data)
+		servicesRegistry := promote.CreateDefaultServiceRegistry(data)
 		service, err = servicesRegistry.GetService("service-1")
 		Expect(err).ShouldNot(HaveOccurred())
 		Expect(service).ToNot(BeNil())
 	})
 
 	AfterEach(func() {
-		utils.CleanupAllTestDataResources()
+		promote.CleanupAllTestDataResources()
 	})
 
 	Context("Promote method", func() {
 		When("namespaceRef is set to 'hivep'", func() {
 			It("promotes all targets in all resource templates", func() { // because all namespaces have their ref contain that string
 				err := service.Promote(&promoteCallbacks{
-					DefaultPromoteCallbacks: utils.DefaultPromoteCallbacks{Service: service},
-					namespaceRef:            utils.DefaultProdNamespaceRef,
+					DefaultPromoteCallbacks: promote.DefaultPromoteCallbacks{Service: service},
+					namespaceRef:            promote.DefaultProdNamespaceRef,
 					isHotfix:                false,
 				}, data.TestRepoHashes[5])
 				Expect(err).ShouldNot(HaveOccurred())
@@ -114,8 +114,8 @@ var _ = Describe("Service struct", func() {
 
 				It("still promotes all targets in all resource templates but the links in the commit message change a bit", func() {
 					err := service.Promote(&promoteCallbacks{
-						DefaultPromoteCallbacks: utils.DefaultPromoteCallbacks{Service: service},
-						namespaceRef:            utils.DefaultProdNamespaceRef,
+						DefaultPromoteCallbacks: promote.DefaultPromoteCallbacks{Service: service},
+						namespaceRef:            promote.DefaultProdNamespaceRef,
 						isHotfix:                false,
 					}, data.TestRepoHashes[5])
 					Expect(err).ShouldNot(HaveOccurred())
@@ -127,7 +127,7 @@ var _ = Describe("Service struct", func() {
 			})
 
 			AfterEach(func() {
-				data.CheckAppInterfaceService1Content(serviceFileContentCanaryTemplate, utils.InitProperties(data.TestRepoPath, data.TestRepoHashes[5]))
+				data.CheckAppInterfaceService1Content(serviceFileContentCanaryTemplate, promote.InitProperties(data.TestRepoPath, data.TestRepoHashes[5]))
 
 				data.CheckAppInterfaceIsClean()
 				data.CheckAppInterfaceBranchName(fmt.Sprintf("promote-service-1-%s", data.TestRepoHashes[5]))
@@ -145,13 +145,13 @@ var _ = Describe("Service struct", func() {
 		When("namespaceRef is set to 'hivep02'", func() {
 			It("only promotes those hivep02 targets", func() {
 				err := service.Promote(&promoteCallbacks{
-					DefaultPromoteCallbacks: utils.DefaultPromoteCallbacks{Service: service},
+					DefaultPromoteCallbacks: promote.DefaultPromoteCallbacks{Service: service},
 					namespaceRef:            "hivep02",
 					isHotfix:                false,
 				}, data.TestRepoHashes[8])
 				Expect(err).ShouldNot(HaveOccurred())
 
-				expectedProperties := utils.InitProperties(data.TestRepoPath, data.TestRepoHashes[0])
+				expectedProperties := promote.InitProperties(data.TestRepoPath, data.TestRepoHashes[0])
 				expectedProperties["gitHashProd1Target2"] = data.TestRepoHashes[8]
 				expectedProperties["gitHashProd2Target2"] = data.TestRepoHashes[8]
 				data.CheckAppInterfaceService1Content(serviceFileContentCanaryTemplate, expectedProperties)
@@ -172,13 +172,13 @@ var _ = Describe("Service struct", func() {
 		When("namespaceRef is empty", func() {
 			It("only promotes the canary target", func() {
 				err := service.Promote(&promoteCallbacks{
-					DefaultPromoteCallbacks: utils.DefaultPromoteCallbacks{Service: service},
+					DefaultPromoteCallbacks: promote.DefaultPromoteCallbacks{Service: service},
 					namespaceRef:            "", // empty namespaceRef means only considering the canary target
 					isHotfix:                false,
 				}, data.TestRepoHashes[9])
 				Expect(err).ShouldNot(HaveOccurred())
 
-				expectedProperties := utils.InitProperties(data.TestRepoPath, data.TestRepoHashes[0])
+				expectedProperties := promote.InitProperties(data.TestRepoPath, data.TestRepoHashes[0])
 				expectedProperties["gitHashProd1Target1"] = data.TestRepoHashes[9]
 				data.CheckAppInterfaceService1Content(serviceFileContentCanaryTemplate, expectedProperties)
 
@@ -195,17 +195,17 @@ var _ = Describe("Service struct", func() {
 		When("there is a hotfix", func() {
 			It("promotes all targets in all resource templates & update the application file", func() {
 				err := service.Promote(&promoteCallbacks{
-					DefaultPromoteCallbacks: utils.DefaultPromoteCallbacks{Service: service},
+					DefaultPromoteCallbacks: promote.DefaultPromoteCallbacks{Service: service},
 					namespaceRef:            "", // empty namespaceRef normally means that only the canary target is considered, but in case of hotfix, this default to "hivep"
 					isHotfix:                true,
 				}, data.TestRepoHashes[9])
 				Expect(err).ShouldNot(HaveOccurred())
 
-				data.CheckAppInterfaceService1Content(serviceFileContentCanaryTemplate, utils.InitProperties(data.TestRepoPath, data.TestRepoHashes[9]))
+				data.CheckAppInterfaceService1Content(serviceFileContentCanaryTemplate, promote.InitProperties(data.TestRepoPath, data.TestRepoHashes[9]))
 
-				expectedAppProperties := utils.InitProperties(data.TestRepoPath, "")
+				expectedAppProperties := promote.InitProperties(data.TestRepoPath, "")
 				expectedAppProperties["hotfixVersion"] = data.TestRepoHashes[9]
-				data.CheckAppInterfaceFileContent("data/services/gen-app/app.yml", utils.AppFileContentTemplateWithHotfixVersion, "gen-app", expectedAppProperties)
+				data.CheckAppInterfaceFileContent("data/services/gen-app/app.yml", promote.AppFileContentTemplateWithHotfixVersion, "gen-app", expectedAppProperties)
 
 				data.CheckAppInterfaceIsClean()
 				data.CheckAppInterfaceBranchName(fmt.Sprintf("promote-service-1-%s", data.TestRepoHashes[9]))

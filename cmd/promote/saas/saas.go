@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/openshift/osdctl/cmd/promote/utils"
+	"github.com/openshift/osdctl/pkg/promote"
 	"github.com/spf13/cobra"
 
 	kyaml "sigs.k8s.io/kustomize/kyaml/yaml"
@@ -45,11 +45,11 @@ func validateSaasServiceFilePath(filePath string) string {
 }
 
 type promoteCallbacks struct {
-	utils.DefaultPromoteCallbacks
+	promote.DefaultPromoteCallbacks
 
 	namespaceRef string
 	isHotfix     bool
-	component    *utils.CodeComponent // not supposed to change on subsequent calls to ComputeCommitMessage
+	component    *promote.CodeComponent // not supposed to change on subsequent calls to ComputeCommitMessage
 }
 
 func (c *promoteCallbacks) FilterTargets(targetNodes []*kyaml.RNode) ([]*kyaml.RNode, error) {
@@ -88,11 +88,11 @@ func (c *promoteCallbacks) FilterTargets(targetNodes []*kyaml.RNode) ([]*kyaml.R
 				}
 			}
 
-			namespaceRef = utils.DefaultProdNamespaceRef
+			namespaceRef = promote.DefaultProdNamespaceRef
 		}
 	}
 
-	return utils.FilterTargetsContainingNamespaceRef(targetNodes, namespaceRef)
+	return promote.FilterTargetsContainingNamespaceRef(targetNodes, namespaceRef)
 }
 
 // readE2EServiceName reads the e2e test service file to find the actual
@@ -105,7 +105,7 @@ func (c *promoteCallbacks) FilterTargets(targetNodes []*kyaml.RNode) ([]*kyaml.R
 //	E2E service name: saas-configure-am-operator-e2e-test (abbreviated!)
 //
 // This function handles the inconsistency by reading the actual YAML file.
-func readE2EServiceName(service *utils.Service) (string, error) {
+func readE2EServiceName(service *promote.Service) (string, error) {
 	serviceFilePath := service.GetFilePath()
 	serviceDirPath := ""
 	if filepath.Base(serviceFilePath) == "deploy.yaml" {
@@ -116,7 +116,7 @@ func readE2EServiceName(service *utils.Service) (string, error) {
 
 	e2eTestPath := filepath.Join(serviceDirPath, "osde2e-focus-test.yaml")
 
-	e2eService, err := utils.ReadYamlDocFromFile(e2eTestPath)
+	e2eService, err := promote.ReadYamlDocFromFile(e2eTestPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read e2e test file: %w", err)
 	}
@@ -124,7 +124,7 @@ func readE2EServiceName(service *utils.Service) (string, error) {
 	return e2eService.GetName(), nil
 }
 
-func computeE2EServiceName(service *utils.Service, componentName string) string {
+func computeE2EServiceName(service *promote.Service, componentName string) string {
 	// Try to discover the actual e2e test service name from app-interface
 	e2eServiceName, err := readE2EServiceName(service)
 	if err != nil {
@@ -149,7 +149,7 @@ func computeE2EServiceName(service *utils.Service, componentName string) string 
 //   - 7-day time window
 //
 // If discovery fails, falls back to standard naming convention.
-func generateTestLogsURL(service *utils.Service, componentName, e2eServiceName, gitHash, env string) string {
+func generateTestLogsURL(service *promote.Service, componentName, e2eServiceName, gitHash, env string) string {
 	if env == "" {
 		env = "osd-stage-hives02ue1"
 	}
@@ -176,7 +176,7 @@ func generateTestLogsURL(service *utils.Service, componentName, e2eServiceName, 
 	return url
 }
 
-func (c *promoteCallbacks) ComputeCommitMessage(resourceTemplateRepo *utils.Repo, resourceTemplatePath, currentHash, newHash string) (*utils.CommitMessage, error) {
+func (c *promoteCallbacks) ComputeCommitMessage(resourceTemplateRepo *promote.Repo, resourceTemplatePath, currentHash, newHash string) (*promote.CommitMessage, error) {
 	commitMessage, err := c.DefaultPromoteCallbacks.ComputeCommitMessage(resourceTemplateRepo, resourceTemplatePath, currentHash, newHash)
 	if err != nil {
 		return nil, err
@@ -234,12 +234,12 @@ func NewCmdSaas() *cobra.Command {
 		# Promote a SaaS service/operator
 		osdctl promote saas --serviceId <service> --gitHash <git-hash>`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			appInterfaceClone, err := utils.FindAppInterfaceClone(ops.appInterfaceProvidedPath)
+			appInterfaceClone, err := promote.FindAppInterfaceClone(ops.appInterfaceProvidedPath)
 			if err != nil {
 				return err
 			}
 
-			servicesRegistry, err := utils.NewServicesRegistry(
+			servicesRegistry, err := promote.NewServicesRegistry(
 				appInterfaceClone,
 				validateSaasServiceFilePath,
 				osdSaasDirPath, BpSaasDirPath, cadSaasDirPath,
@@ -276,7 +276,7 @@ func NewCmdSaas() *cobra.Command {
 				}
 
 				return service.Promote(&promoteCallbacks{
-					DefaultPromoteCallbacks: utils.DefaultPromoteCallbacks{Service: service},
+					DefaultPromoteCallbacks: promote.DefaultPromoteCallbacks{Service: service},
 					namespaceRef:            ops.namespaceRef,
 					isHotfix:                ops.isHotfix,
 				}, ops.gitHash)
