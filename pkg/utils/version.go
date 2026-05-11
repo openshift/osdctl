@@ -22,7 +22,32 @@ var (
 	// Will be set during build process via GoReleaser
 	// See also: https://pkg.go.dev/cmd/link
 	Version string
+
+	// InstallMethod is set at build time via -X ldflags when osdctl is
+	// built by a package manager. Empty string (default) means the binary
+	// was built from source or via GoReleaser (GitHub releases).
+	// Known values: "copr", "homebrew".
+	InstallMethod string
 )
+
+// IsManagedInstall reports whether osdctl was installed via a package
+// manager (e.g. COPR/RPM, Homebrew) rather than from a GitHub release.
+func IsManagedInstall() bool {
+	return InstallMethod != ""
+}
+
+// UpgradeInstruction returns a human-readable upgrade command for the
+// current install method. Returns empty string for non-managed installs.
+func UpgradeInstruction() string {
+	switch InstallMethod {
+	case "copr":
+		return "dnf upgrade osdctl"
+	case "homebrew":
+		return "brew upgrade osdctl"
+	default:
+		return ""
+	}
+}
 
 // githubResponse is a necessary struct for the JSON unmarshalling that is happening
 // in the getLatestVersion().
