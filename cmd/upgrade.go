@@ -27,9 +27,13 @@ var upgradeCmd = &cobra.Command{
 
 func upgrade(cmd *cobra.Command, args []string) error {
 	if utils.IsManagedInstall() {
+		instruction, err := utils.UpgradeInstruction()
+		if err != nil {
+			return err
+		}
 		fmt.Fprintf(cmd.ErrOrStderr(),
 			"osdctl was installed via %s; self-upgrade is disabled.\nPlease upgrade using: %s\n",
-			utils.InstallMethod, utils.UpgradeInstruction())
+			utils.InstallMethod, instruction)
 		return nil
 	}
 

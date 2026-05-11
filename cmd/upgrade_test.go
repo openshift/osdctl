@@ -13,9 +13,11 @@ func TestUpgradeRefusesWhenManaged(t *testing.T) {
 		name          string
 		installMethod string
 		wantSubstring string
+		wantErr       bool
 	}{
-		{"copr", "copr", "dnf upgrade osdctl"},
-		{"homebrew", "homebrew", "brew upgrade osdctl"},
+		{"copr", "copr", "dnf upgrade osdctl", false},
+		{"homebrew", "homebrew", "brew upgrade osdctl", false},
+		{"unknown", "unknown", "unknown install method", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -28,6 +30,15 @@ func TestUpgradeRefusesWhenManaged(t *testing.T) {
 			defer upgradeCmd.SetErr(nil)
 
 			err := upgrade(upgradeCmd, nil)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if !strings.Contains(err.Error(), tt.wantSubstring) {
+					t.Errorf("error should contain %q, got: %s", tt.wantSubstring, err.Error())
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("expected nil error, got: %v", err)
 			}

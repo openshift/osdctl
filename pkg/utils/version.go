@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -37,15 +38,17 @@ func IsManagedInstall() bool {
 }
 
 // UpgradeInstruction returns a human-readable upgrade command for the
-// current install method. Returns empty string for non-managed installs.
-func UpgradeInstruction() string {
+// current install method.
+func UpgradeInstruction() (string, error) {
 	switch InstallMethod {
+	case "":
+		return "", nil
 	case "copr":
-		return "dnf upgrade osdctl"
+		return "dnf upgrade osdctl", nil
 	case "homebrew":
-		return "brew upgrade osdctl"
+		return "brew upgrade osdctl", nil
 	default:
-		return ""
+		return "", fmt.Errorf("unknown install method: %q", InstallMethod)
 	}
 }
 

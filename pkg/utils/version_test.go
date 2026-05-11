@@ -29,18 +29,24 @@ func TestUpgradeInstruction(t *testing.T) {
 		name          string
 		installMethod string
 		want          string
+		wantErr       bool
 	}{
-		{"copr", "copr", "dnf upgrade osdctl"},
-		{"homebrew", "homebrew", "brew upgrade osdctl"},
-		{"empty", "", ""},
-		{"unknown", "unknown", ""},
+		{"copr", "copr", "dnf upgrade osdctl", false},
+		{"homebrew", "homebrew", "brew upgrade osdctl", false},
+		{"empty", "", "", false},
+		{"unknown", "unknown", "", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			original := InstallMethod
 			defer func() { InstallMethod = original }()
 			InstallMethod = tt.installMethod
-			if got := UpgradeInstruction(); got != tt.want {
+			got, err := UpgradeInstruction()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("UpgradeInstruction() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
 				t.Errorf("UpgradeInstruction() = %q, want %q", got, tt.want)
 			}
 		})
