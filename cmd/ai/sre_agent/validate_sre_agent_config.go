@@ -42,12 +42,20 @@ func checkSreAgentConfig(homeDir string) bool {
 		return false
 	}
 
-	currentSopDir, _ := sop["directory"].(string)
+	currentSopDir, ok := sop["directory"].(string)
+	if !ok {
+		fmt.Fprintln(os.Stderr, "Invalid config: sop directory is not a string")
+		return false
+	}
 
 	// Ask user for ops-sop repository path
 	fmt.Fprintln(os.Stderr, "\nChecking ops-sop repository...")
 	fmt.Fprint(os.Stderr, "Enter the absolute path to ops-sop repository: ")
-	userOpsSopPath := promptUserInput()
+	userOpsSopPath, err := promptUserInput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to read input: %v\n", err)
+		return false
+	}
 
 	// Validate path exists
 	if !utils.FolderExists(userOpsSopPath) {

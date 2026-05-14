@@ -29,6 +29,8 @@
     - `describe` - Describe AWS service-quotas
   - `set <account name>` - Set AWS Account CR status
   - `verify-secrets [<account name>]` - Verify AWS Account CR IAM User credentials
+- `ai` - AI-powered tools for SRE automation
+  - `sre-agent` - Run SRE Agent for automated incident investigation
 - `alert` - List alerts
   - `list --cluster-id <cluster-id> --level [warning, critical, firing, pending, all]` - List all alerts or based on severity
   - `silence` - add, expire and list silence associated with alerts
@@ -906,6 +908,43 @@ osdctl account verify-secrets [<account name>] [flags]
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
   -S, --skip-version-check               skip checking to see if this is the most recent release
       --verbose                          Verbose output
+```
+
+### osdctl ai
+
+AI-powered tools for SRE automation
+
+```
+osdctl ai [flags]
+```
+
+#### Flags
+
+```
+  -h, --help                 help for ai
+  -S, --skip-version-check   skip checking to see if this is the most recent release
+```
+
+### osdctl ai sre-agent
+
+
+  SRE Agent is an AI-powered tool that helps SREs triage alerts and diagnose issues.
+  It automatically fetches incident details from PagerDuty, finds relevant SOPs,
+  and executes diagnostic commands on clusters.
+
+
+```
+osdctl ai sre-agent [flags]
+```
+
+#### Flags
+
+```
+      --auto-execute         Fully automated mode without confirmations
+  -h, --help                 help for sre-agent
+      --output string        Output directory for sre-agent files (default: current directory)
+      --pd-url string        PagerDuty incident URL (required)
+  -S, --skip-version-check   skip checking to see if this is the most recent release
 ```
 
 ### osdctl alert

@@ -48,7 +48,6 @@ func NewCmdSreAgent() *cobra.Command {
 			homeDir, err := os.UserHomeDir()
 			if err != nil {
 				cmdutil.CheckErr(fmt.Errorf("failed to get home directory: %w", err))
-				return
 			}
 
 			// Step 1: Validate sre-agent installation
@@ -77,7 +76,9 @@ func NewCmdSreAgent() *cobra.Command {
 	sreAgentCmd.Flags().StringVar(&outputDir, "output", "", "Output directory for sre-agent files (default: current directory)")
 
 	// Mark pd-url as required
-	sreAgentCmd.MarkFlagRequired("pd-url")
+	if err := sreAgentCmd.MarkFlagRequired("pd-url"); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to mark pd-url as required: %v\n", err)
+	}
 
 	return sreAgentCmd
 }

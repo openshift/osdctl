@@ -23,7 +23,11 @@ func validateSreAgent(homeDir string) bool {
 
 	// Ask for path to sre-agent venv
 	fmt.Fprint(os.Stderr, "Enter the absolute path to sre-agent venv directory: ")
-	userVenvPath := promptUserInput()
+	userVenvPath, err := promptUserInput()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to read input: %v\n", err)
+		return false
+	}
 
 	// Validate venv binary exists in provided path
 	userVenvBinary := filepath.Join(userVenvPath, "bin/sre-agent")
@@ -35,7 +39,6 @@ func validateSreAgent(homeDir string) bool {
 	// Create base directory
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		cmdutil.CheckErr(fmt.Errorf("failed to create base directory: %w", err))
-		return false
 	}
 
 	// Copy venv to ~/.local/share/sre-agent/venv

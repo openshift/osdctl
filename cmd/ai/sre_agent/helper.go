@@ -23,8 +23,11 @@ func copyRepository(sourcePath, destPath string) error {
 }
 
 // promptUserInput reads a line of user input from stdin
-func promptUserInput() string {
+func promptUserInput() (string, error) {
 	reader := bufio.NewReader(os.Stdin)
-	input, _ := reader.ReadString('\n')
-	return strings.ToLower(strings.TrimSpace(input))
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("failed to read input: %w", err)
+	}
+	return strings.ToLower(strings.TrimSpace(input)), nil
 }
