@@ -5,10 +5,14 @@ Extended checks to confirm pull-secret data is synced with current OCM data
 ### Synopsis
 
 
-	Attempts to validate if a cluster's pull-secret auth values are in sync with the account's email, 
-	registry_credential, and access token data stored in OCM.  
-	If this is being executed against a cluster which is not owned by the current OCM account, 
-	Region Lead permissions are required to view and validate the OCM AccessToken. 
+	Attempts to validate if a cluster's pull-secret auth values are in sync with the account's email,
+	registry_credential, and access token data stored in OCM.
+
+	Service logs are automatically sent for detected issues. Multiple failures are aggregated into
+	a single service log. Use --skip-service-logs to prevent sending service logs.
+
+	If this is being executed against a cluster which is not owned by the current OCM account,
+	Region Lead permissions are required to view and validate the OCM AccessToken.
 
 
 ```
@@ -25,6 +29,9 @@ osdctl cluster validate-pull-secret-ext --cluster-id $CLUSTER_ID [flags]
 	# Exclude Access-Token, and Registry-Credential checks...
 	osdctl cluster validate-pull-secret-ext --cluster-id ${CLUSTER_ID} --reason "OSD-XYZ" --skip-access-token --skip-registry-creds
 
+	# Skip sending service logs (useful for testing)
+	osdctl cluster validate-pull-secret-ext --cluster-id ${CLUSTER_ID} --reason "OSD-XYZ" --skip-service-logs
+
 ```
 
 ### Options
@@ -36,6 +43,7 @@ osdctl cluster validate-pull-secret-ext --cluster-id $CLUSTER_ID [flags]
       --reason string         Mandatory reason for this command to be run (usually includes an OHSS or PD ticket)
       --skip-access-token     Exclude OCM AccessToken checks against cluster secret
       --skip-registry-creds   Exclude OCM Registry Credentials checks against cluster secret
+      --skip-service-logs     Skip sending service logs (useful for testing/automation)
 ```
 
 ### Options inherited from parent commands

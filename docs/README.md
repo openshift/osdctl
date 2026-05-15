@@ -2510,10 +2510,14 @@ osdctl cluster validate-pull-secret --cluster-id <cluster-identifier> [flags]
 ### osdctl cluster validate-pull-secret-ext
 
 
-	Attempts to validate if a cluster's pull-secret auth values are in sync with the account's email, 
-	registry_credential, and access token data stored in OCM.  
-	If this is being executed against a cluster which is not owned by the current OCM account, 
-	Region Lead permissions are required to view and validate the OCM AccessToken. 
+	Attempts to validate if a cluster's pull-secret auth values are in sync with the account's email,
+	registry_credential, and access token data stored in OCM.
+
+	Service logs are automatically sent for detected issues. Multiple failures are aggregated into
+	a single service log. Use --skip-service-logs to prevent sending service logs.
+
+	If this is being executed against a cluster which is not owned by the current OCM account,
+	Region Lead permissions are required to view and validate the OCM AccessToken.
 
 
 ```
@@ -2538,6 +2542,7 @@ osdctl cluster validate-pull-secret-ext --cluster-id $CLUSTER_ID [flags]
       --skip-access-token                Exclude OCM AccessToken checks against cluster secret
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
       --skip-registry-creds              Exclude OCM Registry Credentials checks against cluster secret
+      --skip-service-logs                Skip sending service logs (useful for testing/automation)
   -S, --skip-version-check               skip checking to see if this is the most recent release
 ```
 
