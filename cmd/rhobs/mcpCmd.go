@@ -77,7 +77,8 @@ func newCmdMcpServer() *cobra.Command {
 			log.SetOutput(io.Discard)
 
 			if err := checkVaultToken(cmd.Context()); err != nil {
-				return err
+				fmt.Fprintln(os.Stderr, "WARNING:", err)
+				fmt.Fprintln(os.Stderr, "MCP server starting anyway. Tool calls will fail until vault is authenticated.")
 			}
 
 			server := mcp.NewServer(&mcp.Implementation{

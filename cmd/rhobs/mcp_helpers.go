@@ -1,9 +1,13 @@
 package rhobs
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
 	"sync"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/sync/singleflight"
@@ -11,6 +15,19 @@ import (
 
 var fetcherCache sync.Map
 var fetcherInit singleflight.Group
+
+func quickVaultCheck() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "vault", "token", "lookup")
+	cmd.Env = append(os.Environ(), "VAULT_ADDR=https://vault.devshift.net")
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("vault token expired or missing. Run: VAULT_ADDR=https://vault.devshift.net vault login -method=oidc")
+	}
+	return nil
+}
 
 func getCachedFetcher(clusterId string, usage RhobsFetchUsage) (*RhobsFetcher, error) {
 	key := fmt.Sprintf("%s:%s", clusterId, usage)
@@ -21,6 +38,9 @@ func getCachedFetcher(clusterId string, usage RhobsFetchUsage) (*RhobsFetcher, e
 	v, err, _ := fetcherInit.Do(key, func() (interface{}, error) {
 		if cached, ok := fetcherCache.Load(key); ok {
 			return cached, nil
+		}
+		if err := quickVaultCheck(); err != nil {
+			return nil, err
 		}
 		fetcher, err := CreateRhobsFetcher(clusterId, usage, commonOptions.hiveOcmUrl)
 		if err != nil {
