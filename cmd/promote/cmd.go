@@ -6,6 +6,7 @@ import (
 	"github.com/openshift/osdctl/cmd/promote/blocked"
 	"github.com/openshift/osdctl/cmd/promote/dynatrace"
 	"github.com/openshift/osdctl/cmd/promote/managedscripts"
+	"github.com/openshift/osdctl/cmd/promote/rhobs"
 	"github.com/openshift/osdctl/cmd/promote/saas"
 	"github.com/spf13/cobra"
 )
@@ -23,6 +24,7 @@ func NewCmdPromote() *cobra.Command {
 	promoteCmd.AddCommand(dynatrace.NewCmdDynatrace())
 	promoteCmd.AddCommand(managedscripts.NewCmdManagedScripts())
 	promoteCmd.AddCommand(blocked.NewCmdBlock())
+	promoteCmd.AddCommand(rhobs.NewCmdRhobs())
 
 	return promoteCmd
 }
