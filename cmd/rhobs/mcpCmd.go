@@ -76,10 +76,12 @@ func newCmdMcpServer() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			log.SetOutput(io.Discard)
 
-			if err := checkVaultToken(cmd.Context()); err != nil {
-				fmt.Fprintln(os.Stderr, "WARNING:", err)
-				fmt.Fprintln(os.Stderr, "MCP server starting anyway. Tool calls will fail until vault is authenticated.")
-			}
+			go func(ctx context.Context) {
+				if err := checkVaultToken(ctx); err != nil {
+					fmt.Fprintln(os.Stderr, "WARNING:", err)
+					fmt.Fprintln(os.Stderr, "MCP server starting anyway. Tool calls will fail until vault is authenticated.")
+				}
+			}(cmd.Context())
 
 			server := mcp.NewServer(&mcp.Implementation{
 				Name:    "osdctl-rhobs",

@@ -3,6 +3,7 @@ package rhobs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,6 +25,12 @@ func quickVaultCheck() error {
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	if err := cmd.Run(); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return fmt.Errorf("vault CLI not found in PATH; install Vault and retry")
+		}
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return fmt.Errorf("vault token lookup timed out; verify VAULT_ADDR and network connectivity")
+		}
 		return fmt.Errorf("vault token expired or missing. Run: VAULT_ADDR=https://vault.devshift.net vault login -method=oidc")
 	}
 	return nil
