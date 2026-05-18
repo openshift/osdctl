@@ -138,6 +138,7 @@
   - `block` - Add a blocked version to a component in app.yaml
   - `dynatrace` - Utilities to promote dynatrace
   - `managedscripts` - Promote https://github.com/openshift/managed-scripts
+  - `rhobs` - Promote RHOBS configuration to production
   - `saas` - Utilities to promote SaaS services/operators
 - `rhobs` - RHOBS.next related utilities
   - `cell` - Get the RHOBS cell for a given cluster
@@ -4258,6 +4259,26 @@ osdctl promote managedscripts [flags]
       --appInterfaceDir string   location of app-interface checkout. Falls back to current working directory
   -g, --gitHash string           Git hash of the managed-scripts repo commit getting promoted
   -h, --help                     help for managedscripts
+  -S, --skip-version-check       skip checking to see if this is the most recent release
+```
+
+### osdctl promote rhobs
+
+Promote RHOBS configuration to production
+
+```
+osdctl promote rhobs [flags]
+```
+
+#### Flags
+
+```
+      --appInterfaceDir string   Location of app-interface checkout
+      --configRepoDir string     Location of rhobs/configuration checkout (auto-detected from ~/src/)
+  -g, --gitHash string           Git hash of rhobs/configuration to promote to (required for bulk promotion; defaults to HEAD for --serviceId)
+  -h, --help                     help for rhobs
+  -l, --list                     List all RHOBS SaaS file names
+      --serviceId string         Name of the SaaS file (without extension)
   -S, --skip-version-check       skip checking to see if this is the most recent release
 ```
 
