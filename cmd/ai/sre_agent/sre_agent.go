@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/adrg/xdg"
 	"github.com/spf13/cobra"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
@@ -45,26 +46,21 @@ func NewCmdSreAgent() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Run: func(cmd *cobra.Command, args []string) {
-			homeDir, err := os.UserHomeDir()
-			if err != nil {
-				cmdutil.CheckErr(fmt.Errorf("failed to get home directory: %w", err))
-			}
-
 			// Step 1: Validate sre-agent installation
-			if !validateSreAgent(homeDir) {
+			if !validateSreAgent() {
 				return
 			}
 
 			// Step 2: Check/Setup config (includes ops-sop setup)
-			if !checkSreAgentConfig(homeDir) {
+			if !checkSreAgentConfig() {
 				return
 			}
 
 			// Step 3: Execute sre-agent
-			sreAgentPath := filepath.Join(homeDir, ".local/share/sre-agent/venv/bin/sre-agent")
+			sreAgentPath := filepath.Join(xdg.DataHome, "sre-agent/venv/bin/sre-agent")
 			sreAgentArgs := buildSreAgentArgs(args)
 
-			err = executeSreAgent(sreAgentPath, sreAgentArgs, outputDir)
+			err := executeSreAgent(sreAgentPath, sreAgentArgs, outputDir)
 			if err != nil {
 				cmdutil.CheckErr(err)
 			}

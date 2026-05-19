@@ -5,13 +5,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/adrg/xdg"
 	"github.com/openshift/osdctl/internal/utils"
-	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
 // validateSreAgent checks if sre-agent is installed
-func validateSreAgent(homeDir string) bool {
-	baseDir := filepath.Join(homeDir, ".local/share/sre-agent")
+func validateSreAgent() bool {
+	baseDir := filepath.Join(xdg.DataHome, "sre-agent")
 	venvBinary := filepath.Join(baseDir, "venv/bin/sre-agent")
 
 	// Check if sre-agent binary exists
@@ -19,7 +19,7 @@ func validateSreAgent(homeDir string) bool {
 		return true // Already installed
 	}
 
-	fmt.Fprintf(os.Stderr, "sre-agent is not found in ~/.local/share/sre-agent/venv/\n\n")
+	fmt.Fprintf(os.Stderr, "sre-agent is not found in %s\n\n", venvBinary)
 
 	// Ask for path to sre-agent venv
 	fmt.Fprint(os.Stderr, "Enter the absolute path to sre-agent venv directory: ")
@@ -38,10 +38,11 @@ func validateSreAgent(homeDir string) bool {
 
 	// Create base directory
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
-		cmdutil.CheckErr(fmt.Errorf("failed to create base directory: %w", err))
+		fmt.Fprintf(os.Stderr, "Failed to create base directory: %v\n", err)
+		return false
 	}
 
-	// Copy venv to ~/.local/share/sre-agent/venv
+	// Copy venv to XDG data directory
 	venvPath := filepath.Join(baseDir, "venv")
 	if err := copyRepository(userVenvPath, venvPath); err != nil {
 		fmt.Fprintf(os.Stderr, "\nCopy failed: %v\n", err)

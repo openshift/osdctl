@@ -5,14 +5,15 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/adrg/xdg"
 	"github.com/openshift/osdctl/internal/utils"
 	"gopkg.in/yaml.v3"
 )
 
 // checkSreAgentConfig validates config.yaml and updates ops-sop path if needed
-func checkSreAgentConfig(homeDir string) bool {
-	baseDir := filepath.Join(homeDir, ".local/share/sre-agent")
-	configPath := filepath.Join(homeDir, ".config/sre-agent/config.yaml")
+func checkSreAgentConfig() bool {
+	baseDir := filepath.Join(xdg.DataHome, "sre-agent")
+	configPath := filepath.Join(xdg.ConfigHome, "sre-agent/config.yaml")
 
 	// Check if config exists
 	if !utils.FileExists(configPath) {
