@@ -192,16 +192,12 @@ func updateProductionTargets(service *promote.Service, newHash string) (bool, er
 			if !strings.Contains(nsRef, rhobsProdNamespaceRef) {
 				return nil
 			}
-			currentRef, err := targetNode.GetString("ref")
-			if err != nil || currentRef == "" {
+			ref, err := targetNode.GetString("ref")
+			if err != nil || ref == "" || !isPinnedSHA(ref) || ref == newHash {
 				return nil
 			}
-			if !isPinnedSHA(currentRef) || currentRef == newHash {
-				return nil
-			}
-			_, err = kyaml.SetField("ref", kyaml.NewStringRNode(newHash)).Filter(targetNode)
-			if err != nil {
-				return err
+			if _, err := kyaml.SetField("ref", kyaml.NewStringRNode(newHash)).Filter(targetNode); err != nil {
+				return fmt.Errorf("failed to set ref in %s: %v", service.GetFilePath(), err)
 			}
 			updated = true
 			return nil
@@ -210,12 +206,13 @@ func updateProductionTargets(service *promote.Service, newHash string) (bool, er
 	if err != nil {
 		return false, err
 	}
-	if updated {
-		if err := service.Save(); err != nil {
-			return false, err
-		}
+	if !updated {
+		return false, nil
 	}
-	return updated, nil
+	if err := service.Save(); err != nil {
+		return false, fmt.Errorf("failed to save %s: %v", service.GetFilePath(), err)
+	}
+	return true, nil
 }
 
 func NewCmdRhobs() *cobra.Command {
