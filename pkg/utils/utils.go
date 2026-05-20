@@ -67,6 +67,7 @@ func GetCluster(connection *sdk.Connection, key string) (cluster *cmv1.Cluster, 
 	// Prepare the resources that we will be using:
 	subsResource := connection.AccountsMgmt().V1().Subscriptions()
 	clustersResource := connection.ClustersMgmt().V1().Clusters()
+	deletedClustersResource := connection.ClustersMgmt().V1().DeletedClusters()
 
 	// Try to find a matching subscription:
 	subsSearch := fmt.Sprintf(
@@ -141,6 +142,29 @@ func GetCluster(connection *sdk.Connection, key string) (cluster *cmv1.Cluster, 
 	if clustersTotal > 1 {
 		err = fmt.Errorf(
 			"There are %d clusters with identifier or name '%s'",
+			clustersTotal, key,
+		)
+		return
+	}
+
+	// If we get here we might still be able to get some information from the deleted_clusters information:
+	deletedClustersResponse, err := deletedClustersResource.List().Search(clustersSearch).Size(1).Send()
+	if err != nil {
+		err = fmt.Errorf("Can't retrieve deleted clusters for key '%s': '%v'", key, err)
+		return
+	}
+
+	// If there is exactly one cluster matching then return it:
+	clustersTotal = deletedClustersResponse.Total()
+	if clustersTotal == 1 {
+		cluster = deletedClustersResponse.Items().Slice()[0].Cluster()
+		return
+	}
+
+	// If there are multiple matching clusters then we should report it as an error:
+	if clustersTotal > 1 {
+		err = fmt.Errorf(
+			"There are %d deleted clusters with identifier or name '%s'",
 			clustersTotal, key,
 		)
 		return
