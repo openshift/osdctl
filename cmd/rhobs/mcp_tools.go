@@ -40,9 +40,8 @@ func registerMcpTools(s *mcp.Server) {
 				"cell":        {"type": "string", "description": "RHOBS cell URL (regional Thanos/Loki endpoint)"},
 				"cluster_id":  {"type": "string", "description": "Internal cluster ID"},
 				"environment": {"type": "string", "description": "OCM environment (production, stage, integration)"},
-				"results":     {"type": "array", "description": "Metric results with labels and values (instant query)"},
-				"count":       {"type": "integer", "description": "Number of results (instant query)"},
-				"result":      {"type": "object", "description": "Range query result (when start/end provided)"}
+				"results":     {"type": "array", "description": "Metric results with labels and values"},
+				"count":       {"type": "integer", "description": "Number of results"}
 			}
 		}`),
 	}, handleMetrics)
@@ -161,25 +160,24 @@ func handleMetrics(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallTool
 	}
 
 	if start != "" && end != "" {
-		rawResult, err := fetcher.QueryRangeMetrics(ctx, query, start, end, step)
+		results, err := fetcher.QueryRangeMetrics(ctx, query, NewRawMetricsTimeRange(start, end, step))
 		if err != nil {
 			return mcpError("Range metrics query failed: %v", err)
 		}
-		var parsed interface{}
-		if err := json.Unmarshal(rawResult, &parsed); err != nil {
-			cellInfo["result_raw"] = string(rawResult)
-			return mcpResultJSON(cellInfo)
-		}
-		cellInfo["result"] = parsed
+		results = filterMetricsResults(fetcher, results, filterCluster)
+		cellInfo["results"] = results
+		cellInfo["count"] = len(*results)
 		return mcpResultJSON(cellInfo)
 	}
 
-	results, err := fetcher.QueryInstantMetrics(ctx, query, filterCluster)
+	results, err := fetcher.QueryInstantMetrics(ctx, query, time.Time{})
 	if err != nil {
 		return mcpError("Metrics query failed: %v", err)
 	}
+	results = filterMetricsResults(fetcher, results, filterCluster)
+
 	cellInfo["results"] = results
-	cellInfo["count"] = len(results)
+	cellInfo["count"] = len(*results)
 	return mcpResultJSON(cellInfo)
 }
 
@@ -232,7 +230,17 @@ func handleLogs(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolRes
 	now := time.Now()
 	startTime := now.Add(-duration)
 
-	entries, err := fetcher.QueryLogs(ctx, lokiExpr, startTime, now, limit)
+	entries := []mcpLogEntry{}
+	err = fetcher.QueryLogs(ctx, lokiExpr, startTime, now, limit, false, func(result *logResult) {
+		entry := mcpLogEntry{
+			Timestamp: result.getTime(),
+			Message:   result.getMessage(),
+		}
+		if result.Stream != nil {
+			entry.Stream = *result.Stream
+		}
+		entries = append(entries, entry)
+	})
 	if err != nil {
 		return mcpError("Log query failed: %v", err)
 	}
