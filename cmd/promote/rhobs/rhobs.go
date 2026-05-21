@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/openshift/osdctl/pkg/promote"
@@ -180,50 +181,49 @@ func promoteAllServices(appInterfaceClone *promote.AppInterfaceClone, servicesRe
 	return nil
 }
 
-func targetHasSubscribe(targetNode *kyaml.RNode) bool {
-	promoNode, err := kyaml.Lookup("promotion", "subscribe").Filter(targetNode)
-	return err == nil && promoNode != nil
-}
+var shaRefPattern = regexp.MustCompile(`(\s+ref: )([0-9a-f]{40})`)
 
 func updateProductionTargets(service *promote.Service, newHash string) (bool, error) {
-	updated := false
-	err := service.GetResourceTemplatesSequenceNode().VisitElements(func(rtNode *kyaml.RNode) error {
-		targetsNode, err := kyaml.Lookup("targets").Filter(rtNode)
-		if err != nil || targetsNode == nil {
-			return nil
-		}
-		return targetsNode.VisitElements(func(targetNode *kyaml.RNode) error {
-			nsRef, _ := targetNode.GetString("namespace.$ref")
-			if !strings.Contains(nsRef, rhobsProdNamespaceRef) {
-				return nil
-			}
-			if targetHasSubscribe(targetNode) {
-				return nil
-			}
-			currentRef, err := targetNode.GetString("ref")
-			if err != nil || currentRef == "" {
-				return nil
-			}
-			if !isPinnedSHA(currentRef) || currentRef == newHash {
-				return nil
-			}
-			_, err = kyaml.SetField("ref", kyaml.NewStringRNode(newHash)).Filter(targetNode)
-			if err != nil {
-				return err
-			}
-			updated = true
-			return nil
-		})
-	})
+	filePath := service.GetFilePath()
+	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to read %s: %v", filePath, err)
 	}
+
+	lines := strings.Split(string(content), "\n")
+	updated := false
+
+	for i, line := range lines {
+		m := shaRefPattern.FindStringSubmatch(line)
+		if m == nil || m[2] == newHash {
+			continue
+		}
+		if targetBlockHasSubscribe(lines, i) {
+			continue
+		}
+		lines[i] = m[1] + newHash
+		updated = true
+	}
+
 	if updated {
-		if err := service.Save(); err != nil {
-			return false, err
+		if err := os.WriteFile(filePath, []byte(strings.Join(lines, "\n")), 0600); err != nil {
+			return false, fmt.Errorf("failed to write %s: %v", filePath, err)
 		}
 	}
 	return updated, nil
+}
+
+func targetBlockHasSubscribe(lines []string, refLineIdx int) bool {
+	for i := refLineIdx + 1; i < len(lines) && i < refLineIdx+15; i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed == "subscribe:" {
+			return true
+		}
+		if strings.HasPrefix(trimmed, "- name:") || strings.HasPrefix(lines[i], "- name:") {
+			break
+		}
+	}
+	return false
 }
 
 func NewCmdRhobs() *cobra.Command {
