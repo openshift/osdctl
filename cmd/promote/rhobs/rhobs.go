@@ -206,7 +206,7 @@ func updateProductionTargets(service *promote.Service, newHash string) (bool, er
 	}
 
 	if updated {
-		if err := os.WriteFile(filePath, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte(strings.Join(lines, "\n")), 0600); err != nil {
 			return false, fmt.Errorf("failed to write %s: %v", filePath, err)
 		}
 	}
