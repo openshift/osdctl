@@ -13,9 +13,10 @@ import (
 // versionResponse is necessary for the JSON version response. It uses the three
 // variables that get set during the build.
 type versionResponse struct {
-	Commit  string `json:"commit"`
-	Version string `json:"version"`
-	Latest  string `json:"latest"`
+	Commit        string `json:"commit"`
+	Version       string `json:"version"`
+	Latest        string `json:"latest"`
+	InstallMethod string `json:"install_method,omitempty"`
 }
 
 // versionCmd is the subcommand "osdctl version" for cobra.
@@ -41,9 +42,10 @@ func version(cmd *cobra.Command, args []string) error {
 
 	latest, _ := utils.GetLatestVersion() // let's ignore this error, just in case we have no internet access
 	ver, err := json.MarshalIndent(&versionResponse{
-		Commit:  gitCommit,
-		Version: utils.Version,
-		Latest:  strings.TrimPrefix(latest, "v"),
+		Commit:        gitCommit,
+		Version:       utils.Version,
+		Latest:        strings.TrimPrefix(latest, "v"),
+		InstallMethod: utils.InstallMethod,
 	}, "", "  ")
 	if err != nil {
 		return err
