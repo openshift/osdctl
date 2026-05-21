@@ -17,6 +17,7 @@ CLI tool to provide OSD related utilities
 
 * [osdctl aao](osdctl_aao.md)	 - AWS Account Operator Debugging Utilities
 * [osdctl account](osdctl_account.md)	 - AWS Account related utilities
+* [osdctl ai](osdctl_ai.md)	 - AI-powered tools for SRE automation
 * [osdctl alert](osdctl_alert.md)	 - List alerts
 * [osdctl cloudtrail](osdctl_cloudtrail.md)	 - AWS CloudTrail related utilities
 * [osdctl cluster](osdctl_cluster.md)	 - Provides information for a specified cluster

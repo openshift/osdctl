@@ -19,6 +19,7 @@ import (
 
 	"github.com/openshift/osdctl/cmd/aao"
 	"github.com/openshift/osdctl/cmd/account"
+	"github.com/openshift/osdctl/cmd/ai"
 	"github.com/openshift/osdctl/cmd/alerts"
 	"github.com/openshift/osdctl/cmd/cloudtrail"
 	"github.com/openshift/osdctl/cmd/cluster"
@@ -98,6 +99,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	// add sub commands
 	addToRootCmdWithOtherGlobalOpts(aao.NewCmdAao(kubeClient))
 	addToRootCmdWithOtherGlobalOpts(account.NewCmdAccount(streams, kubeClient, globalOpts))
+	rootCmd.AddCommand(ai.NewCmdAI())
 	addToRootCmdWithOtherGlobalOpts(alerts.NewCmdAlerts())
 	addToRootCmdWithOtherGlobalOpts(cloudtrail.NewCloudtrailCmd())
 	addToRootCmdWithOtherGlobalOpts(cluster.NewCmdCluster(streams, kubeClient, globalOpts))
