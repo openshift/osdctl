@@ -40,8 +40,6 @@ var sreOwnedServices = map[string]bool{
 	"saas-log-token-refresher-integration": true,
 	"saas-log-token-refresher-stage":       true,
 	"saas-log-token-refresher-production":  true,
-	"saas-dashboards":                      true,
-	"saas-servicemonitors":                 true,
 	"saas-synthetics-agent":                true,
 	"saas-synthetics-api":                  true,
 	"saas-ocm-log-collection":              true,
