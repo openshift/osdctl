@@ -180,6 +180,11 @@ func promoteAllServices(appInterfaceClone *promote.AppInterfaceClone, servicesRe
 	return nil
 }
 
+func targetHasSubscribe(targetNode *kyaml.RNode) bool {
+	promoNode, err := kyaml.Lookup("promotion", "subscribe").Filter(targetNode)
+	return err == nil && promoNode != nil
+}
+
 func updateProductionTargets(service *promote.Service, newHash string) (bool, error) {
 	updated := false
 	err := service.GetResourceTemplatesSequenceNode().VisitElements(func(rtNode *kyaml.RNode) error {
@@ -190,6 +195,9 @@ func updateProductionTargets(service *promote.Service, newHash string) (bool, er
 		return targetsNode.VisitElements(func(targetNode *kyaml.RNode) error {
 			nsRef, _ := targetNode.GetString("namespace.$ref")
 			if !strings.Contains(nsRef, rhobsProdNamespaceRef) {
+				return nil
+			}
+			if targetHasSubscribe(targetNode) {
 				return nil
 			}
 			currentRef, err := targetNode.GetString("ref")
