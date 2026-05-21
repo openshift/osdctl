@@ -50,7 +50,7 @@ func NewCmdMustGather() *cobra.Command {
 		},
 	}
 
-	defaultAcmImage := "quay.io/stolostron/must-gather:2.11.4-SNAPSHOT-2024-12-02-15-19-44"
+	defaultAcmImage := "quay.io/stolostron/must-gather:latest"
 	mustGatherCommand.Flags().StringVarP(&mg.clusterId, "cluster-id", "C", "", "Internal ID of the cluster to gather data from")
 	mustGatherCommand.Flags().StringVar(&mg.reason, "reason", "", "The reason for this command, which requires elevation (e.g., OHSS ticket or PD incident).")
 	mustGatherCommand.Flags().StringVar(&mg.gatherTargets, "gather", "hcp", "Comma-separated list of gather targets (available: sc, sc_acm, mc, hcp).")
@@ -194,10 +194,8 @@ func (mg *mustGather) Run() error {
 				hcName := cluster.DomainPrefix()
 				hcNamespace := strings.TrimSuffix(hcpNamespace, "-"+hcName)
 
-				// TODO(ACM-16170): replace this with an official ACM release image once it's available
-				acmHyperShiftImage := "quay.io/rokejungrh/must-gather:v2.13.0-33-linux"
 				gatherScript := fmt.Sprintf("/usr/bin/gather hosted-cluster-namespace=%s hosted-cluster-name=%s", hcNamespace, hcName)
-				if err := createMustGather(mcRestCfg, mcK8sCli, []string{"--dest-dir=" + destDir, "--image=" + acmHyperShiftImage, gatherScript}); err != nil {
+				if err := createMustGather(mcRestCfg, mcK8sCli, []string{"--dest-dir=" + destDir, "--image=" + mg.acmMustGatherImage, gatherScript}); err != nil {
 					fmt.Printf("collected HCP dynatrace logs but failed to gather %s: %v\n", gatherTarget, err.Error())
 				}
 
