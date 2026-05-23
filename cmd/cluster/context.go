@@ -806,7 +806,23 @@ func printJIRASupportExceptions(issues []jira.Issue, w io.Writer) {
 	fmt.Fprintln(w, delimiter+name)
 
 	for _, i := range issues {
-		fmt.Fprintf(w, "[%s](%s/%s): %+v [Status: %s]\n", i.Key, i.Fields.Type.Name, i.Fields.Priority.Name, i.Fields.Summary, i.Fields.Status.Name)
+		summary := "Unknown"
+		typeName := "Unknown"
+		priorityName := "Unknown"
+		statusName := "Unknown"
+		if i.Fields != nil {
+			summary = i.Fields.Summary
+			if i.Fields.Type.Name != "" {
+				typeName = i.Fields.Type.Name
+			}
+			if i.Fields.Priority != nil {
+				priorityName = i.Fields.Priority.Name
+			}
+			if i.Fields.Status != nil {
+				statusName = i.Fields.Status.Name
+			}
+		}
+		fmt.Fprintf(w, "[%s](%s/%s): %+v [Status: %s]\n", i.Key, typeName, priorityName, summary, statusName)
 		fmt.Fprintf(w, "- Link: %s/browse/%s\n\n", JiraBaseURL, i.Key)
 	}
 
