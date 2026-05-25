@@ -91,8 +91,26 @@ func PrintJiraIssues(issues []jira.Issue) {
 	fmt.Println(delimiter + name)
 
 	for _, i := range issues {
-		fmt.Printf("[%s|%s/browse/%s](%s/%s): %+v\n", i.Key, JiraBaseURL, i.Key, i.Fields.Type.Name, i.Fields.Priority.Name, i.Fields.Summary)
-		fmt.Printf("- Created: %s\tStatus: %s\n", time.Time(i.Fields.Created).Format("2006-01-02 15:04"), i.Fields.Status.Name)
+		summary := "Unknown"
+		created := "Unknown"
+		typeName := "Unknown"
+		priorityName := "Unknown"
+		statusName := "Unknown"
+		if i.Fields != nil {
+			summary = i.Fields.Summary
+			created = time.Time(i.Fields.Created).Format("2006-01-02 15:04")
+			if i.Fields.Type.Name != "" {
+				typeName = i.Fields.Type.Name
+			}
+			if i.Fields.Priority != nil {
+				priorityName = i.Fields.Priority.Name
+			}
+			if i.Fields.Status != nil {
+				statusName = i.Fields.Status.Name
+			}
+		}
+		fmt.Printf("[%s|%s/browse/%s](%s/%s): %+v\n", i.Key, JiraBaseURL, i.Key, typeName, priorityName, summary)
+		fmt.Printf("- Created: %s\tStatus: %s\n", created, statusName)
 	}
 
 	if len(issues) == 0 {
