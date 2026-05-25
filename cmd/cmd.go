@@ -133,9 +133,9 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 
 // Checks if the version check should be run
 func shouldRunVersionCheck(skipVersionCheckFlag bool, commandName string) bool {
-
-	// If either are true, then the version check should NOT run, hence negation
-	return !(skipVersionCheckFlag || canCommandSkipVersionCheck(commandName))
+	return !skipVersionCheckFlag &&
+		!canCommandSkipVersionCheck(commandName) &&
+		!utils.IsManagedInstall()
 }
 
 func canCommandSkipVersionCheck(commandName string) bool {

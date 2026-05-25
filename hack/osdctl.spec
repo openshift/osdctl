@@ -56,7 +56,7 @@ Source:         %{gosource}
 %if %{without bootstrap}
 %define gomodulesmode GO111MODULE=on
 %build
-export GO_LDFLAGS='-X "github.com/openshift/osdctl/pkg/utils.Version="@version@"'
+export GO_LDFLAGS='-X "github.com/openshift/osdctl/pkg/utils.Version=@version@" -X "github.com/openshift/osdctl/pkg/utils.InstallMethod=copr"'
 %gobuild -o %{gobuilddir}/bin/osdctl %{goipath}
 %endif
 
