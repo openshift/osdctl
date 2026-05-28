@@ -5,16 +5,23 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	. "github.com/onsi/gomega"
 	amv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	hiveinternalv1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
+	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/util/retry"
+	workv1 "open-cluster-management.io/api/work/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -84,6 +91,11 @@ func (m *MockClient) Get(ctx context.Context, key client.ObjectKey, obj client.O
 }
 
 func (m *MockClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+	args := m.Called(ctx, obj)
+	return args.Error(0)
+}
+
+func (m *MockClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
 	args := m.Called(ctx, obj)
 	return args.Error(0)
 }
@@ -353,4 +365,218 @@ func TestBuildNewSecret(t *testing.T) {
 			}
 		})
 	}
+}
+
+func buildTestManifestWork(secretName string, pullSecretData []byte, hcPullSecretRef string) *workv1.ManifestWork {
+	secret := &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: "clusters",
+		},
+		Data: map[string][]byte{
+			".dockerconfigjson": pullSecretData,
+		},
+	}
+	secretJSON, _ := json.Marshal(secret)
+
+	hc := &hypershiftv1beta1.HostedCluster{
+		TypeMeta: metav1.TypeMeta{Kind: "HostedCluster", APIVersion: "hypershift.openshift.io/v1beta1"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "clusters",
+		},
+		Spec: hypershiftv1beta1.HostedClusterSpec{
+			PullSecret: corev1.LocalObjectReference{Name: hcPullSecretRef},
+		},
+	}
+	hcJSON, _ := json.Marshal(hc)
+
+	cm := map[string]interface{}{
+		"kind":       "ConfigMap",
+		"apiVersion": "v1",
+		"metadata":   map[string]interface{}{"name": "unrelated-config", "namespace": "clusters"},
+		"data":       map[string]interface{}{"key": "value"},
+	}
+	cmJSON, _ := json.Marshal(cm)
+
+	return &workv1.ManifestWork{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test-cluster-id",
+			Namespace:       "test-mgmt",
+			ResourceVersion: "100",
+		},
+		Spec: workv1.ManifestWorkSpec{
+			Workload: workv1.ManifestsTemplate{
+				Manifests: []workv1.Manifest{
+					{RawExtension: runtime.RawExtension{Raw: cmJSON}},
+					{RawExtension: runtime.RawExtension{Raw: secretJSON}},
+					{RawExtension: runtime.RawExtension{Raw: hcJSON}},
+				},
+			},
+		},
+	}
+}
+
+func TestUpdateManifestWorkRetriesOnConflict(t *testing.T) {
+	oldPullSecret := []byte(`{"auths":{"old.registry":{"auth":"old-token","email":"old@test.com"}}}`)
+	newPullSecret := []byte(`{"auths":{"new.registry":{"auth":"new-token","email":"new@test.com"}}}`)
+
+	secretNamePrefix := "mycluster-pull"
+	oldSecretName := secretNamePrefix + "-abc123"
+	newSecretName := secretNamePrefix + "-def456"
+
+	originalCMRaw := func() []byte {
+		mw := buildTestManifestWork(oldSecretName, oldPullSecret, oldSecretName)
+		raw := make([]byte, len(mw.Spec.Workload.Manifests[0].Raw))
+		copy(raw, mw.Spec.Workload.Manifests[0].Raw)
+		return raw
+	}()
+
+	var getCalls atomic.Int32
+	var updateCalls atomic.Int32
+
+	conflictErr := apierrors.NewConflict(
+		schema.GroupResource{Group: "work.open-cluster-management.io", Resource: "manifestworks"},
+		"test-cluster-id",
+		errors.New("the object has been modified"),
+	)
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		getCalls.Add(1)
+
+		freshMW := buildTestManifestWork(oldSecretName, oldPullSecret, oldSecretName)
+
+		if err := updateManifestWorkPayloads(freshMW, secretNamePrefix, newSecretName, newPullSecret); err != nil {
+			return err
+		}
+
+		call := updateCalls.Add(1)
+		if call == 1 {
+			return conflictErr
+		}
+
+		// Verify final state on successful update
+		assert.Equal(t, originalCMRaw, freshMW.Spec.Workload.Manifests[0].Raw,
+			"unrelated manifest should not be modified")
+
+		var updatedSecret corev1.Secret
+		assert.NoError(t, json.Unmarshal(freshMW.Spec.Workload.Manifests[1].Raw, &updatedSecret))
+		assert.Equal(t, newSecretName, updatedSecret.Name)
+		var mergedAuths map[string]interface{}
+		assert.NoError(t, json.Unmarshal(updatedSecret.Data[".dockerconfigjson"], &mergedAuths))
+		auths := mergedAuths["auths"].(map[string]interface{})
+		assert.Contains(t, auths, "old.registry", "old registry auth should be preserved")
+		assert.Contains(t, auths, "new.registry", "new registry auth should be added")
+
+		var updatedHC hypershiftv1beta1.HostedCluster
+		assert.NoError(t, json.Unmarshal(freshMW.Spec.Workload.Manifests[2].Raw, &updatedHC))
+		assert.Equal(t, newSecretName, updatedHC.Spec.PullSecret.Name)
+
+		return nil
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, int32(2), getCalls.Load(), "should GET twice (initial + retry after conflict)")
+	assert.Equal(t, int32(2), updateCalls.Load(), "should UPDATE twice (conflict + success)")
+}
+
+func TestUpdateManifestWorkPreservesUnrelatedManifests(t *testing.T) {
+	oldPullSecret := []byte(`{"auths":{"registry.example.com":{"auth":"token","email":"e@e.com"}}}`)
+	newPullSecret := []byte(`{"auths":{"new.example.com":{"auth":"new-token","email":"n@n.com"}}}`)
+
+	secretNamePrefix := "mycluster-pull"
+	oldSecretName := secretNamePrefix + "-aaa111"
+	newSecretName := secretNamePrefix + "-bbb222"
+
+	mw := buildTestManifestWork(oldSecretName, oldPullSecret, oldSecretName)
+
+	originalRaws := make([][]byte, len(mw.Spec.Workload.Manifests))
+	for i, m := range mw.Spec.Workload.Manifests {
+		originalRaws[i] = make([]byte, len(m.Raw))
+		copy(originalRaws[i], m.Raw)
+	}
+
+	err := updateManifestWorkPayloads(mw, secretNamePrefix, newSecretName, newPullSecret)
+	assert.NoError(t, err)
+
+	assert.Equal(t, originalRaws[0], mw.Spec.Workload.Manifests[0].Raw,
+		"ConfigMap manifest bytes should be untouched")
+	assert.NotEqual(t, originalRaws[1], mw.Spec.Workload.Manifests[1].Raw,
+		"Secret manifest should be modified")
+	assert.NotEqual(t, originalRaws[2], mw.Spec.Workload.Manifests[2].Raw,
+		"HostedCluster manifest should be modified")
+	assert.Equal(t, len(originalRaws), len(mw.Spec.Workload.Manifests),
+		"manifest count should not change")
+}
+
+func TestUpdateManifestWorkIndexShiftSafety(t *testing.T) {
+	oldPullSecret := []byte(`{"auths":{"registry.example.com":{"auth":"token","email":"e@e.com"}}}`)
+	newPullSecret := []byte(`{"auths":{"new.example.com":{"auth":"new-token","email":"n@n.com"}}}`)
+
+	secretNamePrefix := "mycluster-pull"
+	oldSecretName := secretNamePrefix + "-aaa111"
+	newSecretName := secretNamePrefix + "-bbb222"
+
+	var updateCalls atomic.Int32
+
+	// Simulates a scenario where the ManifestWork gains a new manifest between retries.
+	// On first attempt: [ConfigMap, Secret, HostedCluster]
+	// On retry (after conflict): [NewNamespace, ConfigMap, Secret, HostedCluster]
+	// Content-based lookup (by Kind) finds resources regardless of position.
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		call := updateCalls.Add(1)
+
+		mw := buildTestManifestWork(oldSecretName, oldPullSecret, oldSecretName)
+
+		if call > 1 {
+			// Another controller prepended a Namespace manifest, shifting all indices
+			ns := map[string]interface{}{
+				"kind": "Namespace", "apiVersion": "v1",
+				"metadata": map[string]interface{}{"name": "new-namespace"},
+			}
+			nsJSON, _ := json.Marshal(ns)
+			shifted := make([]workv1.Manifest, 0, len(mw.Spec.Workload.Manifests)+1)
+			shifted = append(shifted, workv1.Manifest{RawExtension: runtime.RawExtension{Raw: nsJSON}})
+			shifted = append(shifted, mw.Spec.Workload.Manifests...)
+			mw.Spec.Workload.Manifests = shifted
+		}
+
+		if err := updateManifestWorkPayloads(mw, secretNamePrefix, newSecretName, newPullSecret); err != nil {
+			return err
+		}
+
+		if call == 1 {
+			return apierrors.NewConflict(
+				schema.GroupResource{Group: "work.open-cluster-management.io", Resource: "manifestworks"},
+				"test-cluster-id",
+				errors.New("the object has been modified"),
+			)
+		}
+
+		// On retry with shifted array: verify correct resources were updated
+		for _, manifest := range mw.Spec.Workload.Manifests {
+			var meta struct {
+				Kind string `json:"kind"`
+			}
+			json.Unmarshal(manifest.Raw, &meta)
+
+			switch meta.Kind {
+			case "Secret":
+				var s corev1.Secret
+				assert.NoError(t, json.Unmarshal(manifest.Raw, &s))
+				assert.Equal(t, newSecretName, s.Name, "Secret should have new name despite index shift")
+			case "HostedCluster":
+				var hc hypershiftv1beta1.HostedCluster
+				assert.NoError(t, json.Unmarshal(manifest.Raw, &hc))
+				assert.Equal(t, newSecretName, hc.Spec.PullSecret.Name,
+					"HostedCluster should reference new secret despite index shift")
+			}
+		}
+
+		return nil
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, int32(2), updateCalls.Load())
 }

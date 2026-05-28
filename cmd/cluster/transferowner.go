@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 	workv1 "open-cluster-management.io/api/work/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -321,12 +322,9 @@ func updateManifestWork(conn *sdk.Connection, kubeCli client.Client, clusterID, 
 		return fmt.Errorf("failed to get cluster: %w", err)
 	}
 
-	// Use domain prefix here instead of hostedcluster.Name, since the pull secret will follow the domain prefix
 	secretNamePrefix := hostedCluster.DomainPrefix() + "-pull"
 
-	// Generate a random new secret name based on the existing pull secret name
 	randomSuffix := func(chars string, length int) string {
-		rand.Seed(time.Now().UnixNano())
 		result := make([]byte, length)
 		for i := range result {
 			result[i] = chars[rand.Intn(len(chars))]
@@ -335,74 +333,74 @@ func updateManifestWork(conn *sdk.Connection, kubeCli client.Client, clusterID, 
 	}
 	newSecretName := secretNamePrefix + "-" + randomSuffix("0123456789abcdef", 6)
 
-	manifestWork := &workv1.ManifestWork{}
-	err = kubeCli.Get(context.TODO(), types.NamespacedName{Name: manifestWorkName, Namespace: manifestWorkNamespace}, manifestWork)
-	if err != nil {
-		return fmt.Errorf("failed to get the target manifestwork for given cluster %v: %w", clusterID, err)
-	}
-
-	for i, manifest := range manifestWork.Spec.Workload.Manifests {
-		if manifest.Raw != nil {
-			var manifestData map[string]interface{}
-			err := json.Unmarshal(manifest.Raw, &manifestData)
-			if err != nil {
-				return err
-			}
-
-			jsonData, err := json.Marshal(manifestData)
-			if err != nil {
-				return err
-			}
-
-			if manifestData["kind"] == "Secret" {
-				secret := &corev1.Secret{}
-				err = json.Unmarshal(jsonData, secret)
-				if err != nil {
-					return err
-				}
-				if strings.Contains(secret.Name, secretNamePrefix) {
-					// Firstly, get the ecr auth from the existing pull secret and append it to new pull secret
-					oldPullSecret := secret.Data[".dockerconfigjson"]
-					newPullSecret, err := buildNewSecret(oldPullSecret, pullsecret)
-					if err != nil {
-						return fmt.Errorf("cannot build the new pull secret: %w", err)
-					}
-					// Then, update the secret with new name and new value
-					secret.Name = newSecretName
-					secret.Data[".dockerconfigjson"] = newPullSecret
-				}
-				secretJson, err := json.Marshal(secret)
-				if err != nil {
-					return err
-				}
-				manifestWork.Spec.Workload.Manifests[i].Raw = secretJson
-			}
-			if manifestData["kind"] == "HostedCluster" {
-				hc := &hypershiftv1beta1.HostedCluster{}
-				err = json.Unmarshal(jsonData, hc)
-				if err != nil {
-					return err
-				}
-				// Update the hosted cluster reference secret name to the new name
-				hc.Spec.PullSecret.Name = newSecretName
-				hcJson, err := json.Marshal(hc)
-				if err != nil {
-					return err
-				}
-				manifestWork.Spec.Workload.Manifests[i].Raw = hcJson
-			}
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		manifestWork := &workv1.ManifestWork{}
+		if err := kubeCli.Get(context.TODO(), types.NamespacedName{Name: manifestWorkName, Namespace: manifestWorkNamespace}, manifestWork); err != nil {
+			return fmt.Errorf("failed to get the target manifestwork for given cluster %v: %w", clusterID, err)
 		}
-	}
 
-	err = kubeCli.Update(context.TODO(), manifestWork, &client.UpdateOptions{})
+		if err := updateManifestWorkPayloads(manifestWork, secretNamePrefix, newSecretName, pullsecret); err != nil {
+			return err
+		}
+
+		return kubeCli.Update(context.TODO(), manifestWork, &client.UpdateOptions{})
+	})
 	if err != nil {
 		return fmt.Errorf("cannot update the pull-secret within manifestwork: %w", err)
 	}
 
-	// The secret will be synced to the management cluster and guest cluster in a few seconds, wait here
 	fmt.Println("sleep 60 seconds here to make sure secret gets synced on guest cluster")
 	time.Sleep(time.Second * 60)
 
+	return nil
+}
+
+func updateManifestWorkPayloads(mw *workv1.ManifestWork, secretNamePrefix, newSecretName string, pullsecret []byte) error {
+	for i, manifest := range mw.Spec.Workload.Manifests {
+		if manifest.Raw == nil {
+			continue
+		}
+
+		var meta struct {
+			Kind string `json:"kind"`
+		}
+		if err := json.Unmarshal(manifest.Raw, &meta); err != nil {
+			return err
+		}
+
+		switch meta.Kind {
+		case "Secret":
+			secret := &corev1.Secret{}
+			if err := json.Unmarshal(manifest.Raw, secret); err != nil {
+				return err
+			}
+			if strings.Contains(secret.Name, secretNamePrefix) {
+				oldPullSecret := secret.Data[".dockerconfigjson"]
+				newPullSecret, err := buildNewSecret(oldPullSecret, pullsecret)
+				if err != nil {
+					return fmt.Errorf("cannot build the new pull secret: %w", err)
+				}
+				secret.Name = newSecretName
+				secret.Data[".dockerconfigjson"] = newPullSecret
+				secretJson, err := json.Marshal(secret)
+				if err != nil {
+					return err
+				}
+				mw.Spec.Workload.Manifests[i].Raw = secretJson
+			}
+		case "HostedCluster":
+			hc := &hypershiftv1beta1.HostedCluster{}
+			if err := json.Unmarshal(manifest.Raw, hc); err != nil {
+				return err
+			}
+			hc.Spec.PullSecret.Name = newSecretName
+			hcJson, err := json.Marshal(hc)
+			if err != nil {
+				return err
+			}
+			mw.Spec.Workload.Manifests[i].Raw = hcJson
+		}
+	}
 	return nil
 }
 
