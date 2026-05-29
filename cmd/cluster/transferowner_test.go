@@ -15,6 +15,7 @@ import (
 	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -367,7 +368,8 @@ func TestBuildNewSecret(t *testing.T) {
 	}
 }
 
-func buildTestManifestWork(secretName string, pullSecretData []byte, hcPullSecretRef string) *workv1.ManifestWork {
+func buildTestManifestWork(t *testing.T, secretName string, pullSecretData []byte, hcPullSecretRef string) *workv1.ManifestWork {
+	t.Helper()
 	secret := &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -378,7 +380,8 @@ func buildTestManifestWork(secretName string, pullSecretData []byte, hcPullSecre
 			".dockerconfigjson": pullSecretData,
 		},
 	}
-	secretJSON, _ := json.Marshal(secret)
+	secretJSON, err := json.Marshal(secret)
+	require.NoError(t, err)
 
 	hc := &hypershiftv1beta1.HostedCluster{
 		TypeMeta: metav1.TypeMeta{Kind: "HostedCluster", APIVersion: "hypershift.openshift.io/v1beta1"},
@@ -390,7 +393,8 @@ func buildTestManifestWork(secretName string, pullSecretData []byte, hcPullSecre
 			PullSecret: corev1.LocalObjectReference{Name: hcPullSecretRef},
 		},
 	}
-	hcJSON, _ := json.Marshal(hc)
+	hcJSON, err := json.Marshal(hc)
+	require.NoError(t, err)
 
 	cm := map[string]interface{}{
 		"kind":       "ConfigMap",
@@ -398,7 +402,8 @@ func buildTestManifestWork(secretName string, pullSecretData []byte, hcPullSecre
 		"metadata":   map[string]interface{}{"name": "unrelated-config", "namespace": "clusters"},
 		"data":       map[string]interface{}{"key": "value"},
 	}
-	cmJSON, _ := json.Marshal(cm)
+	cmJSON, err := json.Marshal(cm)
+	require.NoError(t, err)
 
 	return &workv1.ManifestWork{
 		ObjectMeta: metav1.ObjectMeta{
@@ -427,7 +432,7 @@ func TestUpdateManifestWorkRetriesOnConflict(t *testing.T) {
 	newSecretName := secretNamePrefix + "-def456"
 
 	originalCMRaw := func() []byte {
-		mw := buildTestManifestWork(oldSecretName, oldPullSecret, oldSecretName)
+		mw := buildTestManifestWork(t, oldSecretName, oldPullSecret, oldSecretName)
 		raw := make([]byte, len(mw.Spec.Workload.Manifests[0].Raw))
 		copy(raw, mw.Spec.Workload.Manifests[0].Raw)
 		return raw
@@ -445,7 +450,7 @@ func TestUpdateManifestWorkRetriesOnConflict(t *testing.T) {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		getCalls.Add(1)
 
-		freshMW := buildTestManifestWork(oldSecretName, oldPullSecret, oldSecretName)
+		freshMW := buildTestManifestWork(t, oldSecretName, oldPullSecret, oldSecretName)
 
 		if err := updateManifestWorkPayloads(freshMW, secretNamePrefix, newSecretName, newPullSecret); err != nil {
 			return err
@@ -489,7 +494,7 @@ func TestUpdateManifestWorkPreservesUnrelatedManifests(t *testing.T) {
 	oldSecretName := secretNamePrefix + "-aaa111"
 	newSecretName := secretNamePrefix + "-bbb222"
 
-	mw := buildTestManifestWork(oldSecretName, oldPullSecret, oldSecretName)
+	mw := buildTestManifestWork(t, oldSecretName, oldPullSecret, oldSecretName)
 
 	originalRaws := make([][]byte, len(mw.Spec.Workload.Manifests))
 	for i, m := range mw.Spec.Workload.Manifests {
@@ -527,7 +532,7 @@ func TestUpdateManifestWorkIndexShiftSafety(t *testing.T) {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		call := updateCalls.Add(1)
 
-		mw := buildTestManifestWork(oldSecretName, oldPullSecret, oldSecretName)
+		mw := buildTestManifestWork(t, oldSecretName, oldPullSecret, oldSecretName)
 
 		if call > 1 {
 			// Another controller prepended a Namespace manifest, shifting all indices
@@ -535,7 +540,8 @@ func TestUpdateManifestWorkIndexShiftSafety(t *testing.T) {
 				"kind": "Namespace", "apiVersion": "v1",
 				"metadata": map[string]interface{}{"name": "new-namespace"},
 			}
-			nsJSON, _ := json.Marshal(ns)
+			nsJSON, err := json.Marshal(ns)
+			require.NoError(t, err)
 			shifted := make([]workv1.Manifest, 0, len(mw.Spec.Workload.Manifests)+1)
 			shifted = append(shifted, workv1.Manifest{RawExtension: runtime.RawExtension{Raw: nsJSON}})
 			shifted = append(shifted, mw.Spec.Workload.Manifests...)
@@ -559,7 +565,7 @@ func TestUpdateManifestWorkIndexShiftSafety(t *testing.T) {
 			var meta struct {
 				Kind string `json:"kind"`
 			}
-			json.Unmarshal(manifest.Raw, &meta)
+			require.NoError(t, json.Unmarshal(manifest.Raw, &meta))
 
 			switch meta.Kind {
 			case "Secret":

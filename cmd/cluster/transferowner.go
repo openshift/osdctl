@@ -333,9 +333,12 @@ func updateManifestWork(conn *sdk.Connection, kubeCli client.Client, clusterID, 
 	}
 	newSecretName := secretNamePrefix + "-" + randomSuffix("0123456789abcdef", 6)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		manifestWork := &workv1.ManifestWork{}
-		if err := kubeCli.Get(context.TODO(), types.NamespacedName{Name: manifestWorkName, Namespace: manifestWorkNamespace}, manifestWork); err != nil {
+		if err := kubeCli.Get(ctx, types.NamespacedName{Name: manifestWorkName, Namespace: manifestWorkNamespace}, manifestWork); err != nil {
 			return fmt.Errorf("failed to get the target manifestwork for given cluster %v: %w", clusterID, err)
 		}
 
@@ -343,14 +346,18 @@ func updateManifestWork(conn *sdk.Connection, kubeCli client.Client, clusterID, 
 			return err
 		}
 
-		return kubeCli.Update(context.TODO(), manifestWork, &client.UpdateOptions{})
+		return kubeCli.Update(ctx, manifestWork, &client.UpdateOptions{})
 	})
 	if err != nil {
 		return fmt.Errorf("cannot update the pull-secret within manifestwork: %w", err)
 	}
 
-	fmt.Println("sleep 60 seconds here to make sure secret gets synced on guest cluster")
-	time.Sleep(time.Second * 60)
+	fmt.Println("waiting 60 seconds for secret to sync on guest cluster")
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("context cancelled while waiting for secret sync: %w", ctx.Err())
+	case <-time.After(60 * time.Second):
+	}
 
 	return nil
 }
@@ -375,6 +382,9 @@ func updateManifestWorkPayloads(mw *workv1.ManifestWork, secretNamePrefix, newSe
 				return err
 			}
 			if strings.Contains(secret.Name, secretNamePrefix) {
+				if secret.Data == nil {
+					secret.Data = map[string][]byte{}
+				}
 				oldPullSecret := secret.Data[".dockerconfigjson"]
 				newPullSecret, err := buildNewSecret(oldPullSecret, pullsecret)
 				if err != nil {
