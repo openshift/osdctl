@@ -3164,7 +3164,7 @@ osdctl hcp must-gather --cluster-id <cluster-identifier> [flags]
 #### Flags
 
 ```
-      --acm_image string                 Overrides the acm must-gather image being used for acm mc, sc as well as hcp must-gathers. (default "quay.io/stolostron/must-gather:2.11.4-SNAPSHOT-2024-12-02-15-19-44")
+      --acm_image string                 Overrides the acm must-gather image being used for acm mc, sc as well as hcp must-gathers. (default "registry.redhat.io/multicluster-engine/must-gather-rhel9:v2.9.4-1")
       --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
       --cluster string                   The name of the kubeconfig cluster to use
   -C, --cluster-id string                Internal ID of the cluster to gather data from
