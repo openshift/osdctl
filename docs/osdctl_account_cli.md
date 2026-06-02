@@ -11,7 +11,7 @@ osdctl account cli [flags]
 ```
   -i, --accountId string   AWS Account ID
   -h, --help               help for cli
-  -o, --output string      Output type
+  -o, --output string      Output type (env, json) (default "env")
   -p, --profile string     AWS Profile
   -r, --region string      Region
       --verbose            Verbose output
