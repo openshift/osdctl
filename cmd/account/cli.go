@@ -1,7 +1,9 @@
 package account
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/service/sts/types"
 	"github.com/openshift/osdctl/pkg/osdCloud"
@@ -27,7 +29,7 @@ func newCmdCli() *cobra.Command {
 	cliCmd.Flags().BoolVarP(&ops.verbose, "verbose", "", false, "Verbose output")
 	cliCmd.Flags().StringVarP(&ops.awsAccountID, "accountId", "i", "", "AWS Account ID")
 	cliCmd.Flags().StringVarP(&ops.awsProfile, "profile", "p", "", "AWS Profile")
-	cliCmd.Flags().StringVarP(&ops.output, "output", "o", "", "Output type")
+	cliCmd.Flags().StringVarP(&ops.output, "output", "o", "env", "Output type (env, json)")
 	cliCmd.Flags().StringVarP(&ops.region, "region", "r", "", "Region")
 
 	return cliCmd
@@ -87,26 +89,32 @@ func (o *cliOptions) run() error {
 		return err
 	}
 
-	// Output section
-	// Default to json
-	if o.output == "" || o.output == "json" {
-		fmt.Printf("{\n\"AccessKeyId\": %q, \n\"Expiration\": %q, \n\"SecretAccessKey\": %q, \n\"SessionToken\": %q, \n\"Region\": %q\n}",
-			*assumedRoleCreds.AccessKeyId,
-			*assumedRoleCreds.Expiration,
-			*assumedRoleCreds.SecretAccessKey,
-			*assumedRoleCreds.SessionToken,
-			o.region,
-		)
-	}
-
-	if o.output == "env" {
-		fmt.Printf("AWS_ACCESS_KEY_ID=%s\nAWS_SECRET_ACCESS_KEY=%s\nAWS_SESSION_TOKEN=%s\nAWS_DEFAULT_REGION=%s\nAWS_REGION=%s\n",
-			*assumedRoleCreds.AccessKeyId,
-			*assumedRoleCreds.SecretAccessKey,
-			*assumedRoleCreds.SessionToken,
-			o.region,
-			o.region,
-		)
+	switch o.output {
+	case "json":
+		out := struct {
+			AccessKeyId     string `json:"AccessKeyId"`
+			Expiration      string `json:"Expiration"`
+			SecretAccessKey string `json:"SecretAccessKey"`
+			SessionToken    string `json:"SessionToken"`
+			Region          string `json:"Region"`
+		}{
+			AccessKeyId:     *assumedRoleCreds.AccessKeyId,
+			Expiration:      assumedRoleCreds.Expiration.String(),
+			SecretAccessKey: *assumedRoleCreds.SecretAccessKey,
+			SessionToken:    *assumedRoleCreds.SessionToken,
+			Region:          o.region,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(out); err != nil {
+			return err
+		}
+	default:
+		fmt.Printf("export AWS_ACCESS_KEY_ID=%s\n", *assumedRoleCreds.AccessKeyId)
+		fmt.Printf("export AWS_SECRET_ACCESS_KEY=%s\n", *assumedRoleCreds.SecretAccessKey)
+		fmt.Printf("export AWS_SESSION_TOKEN=%s\n", *assumedRoleCreds.SessionToken)
+		fmt.Printf("export AWS_DEFAULT_REGION=%s\n", o.region)
+		fmt.Printf("export AWS_REGION=%s\n", o.region)
 	}
 
 	return nil
