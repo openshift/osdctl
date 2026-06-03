@@ -158,3 +158,56 @@ func TestBuildOIDCArgs(t *testing.T) {
 		})
 	}
 }
+
+func TestIsTokenFileError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "rename error",
+			err:      fmt.Errorf("rename /root/.vault-token.tmp /root/.vault-token: device or resource busy"),
+			expected: true,
+		},
+		{
+			name:     "device or resource busy",
+			err:      fmt.Errorf("device or resource busy"),
+			expected: true,
+		},
+		{
+			name:     "read-only file system",
+			err:      fmt.Errorf("read-only file system"),
+			expected: true,
+		},
+		{
+			name:     "permission denied",
+			err:      fmt.Errorf("permission denied"),
+			expected: true,
+		},
+		{
+			name:     "auth timeout",
+			err:      fmt.Errorf("context deadline exceeded"),
+			expected: false,
+		},
+		{
+			name:     "network error",
+			err:      fmt.Errorf("dial tcp: connection refused"),
+			expected: false,
+		},
+		{
+			name:     "generic vault error",
+			err:      fmt.Errorf("Error making API request"),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isTokenFileError(tt.err)
+			if result != tt.expected {
+				t.Errorf("isTokenFileError(%q) = %v, want %v", tt.err, result, tt.expected)
+			}
+		})
+	}
+}
