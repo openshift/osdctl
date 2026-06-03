@@ -21,7 +21,6 @@ CLI tool to provide OSD related utilities
 * [osdctl cloudtrail](osdctl_cloudtrail.md)	 - AWS CloudTrail related utilities
 * [osdctl cluster](osdctl_cluster.md)	 - Provides information for a specified cluster
 * [osdctl cost](osdctl_cost.md)	 - Cost Management related utilities
-* [osdctl dynatrace](osdctl_dynatrace.md)	 - Dynatrace related utilities
 * [osdctl env](osdctl_env.md)	 - Create an environment to interact with a cluster
 * [osdctl evidence](osdctl_evidence.md)	 - Evidence collection utilities for feature testing
 * [osdctl hcp](osdctl_hcp.md)	 - 
