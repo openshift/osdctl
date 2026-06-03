@@ -69,6 +69,10 @@ func mcpResultJSON(data interface{}) (*mcp.CallToolResult, error) {
 	}
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: string(jsonData)}},
+		// Because a JSON output schema is defined clients, e.g. opencode, expecting
+		// structured content will fail unless it is returned in the JSON RPC response
+		// alongside the text content
+		StructuredContent: data,
 	}, nil
 }
 
