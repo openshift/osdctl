@@ -29,9 +29,10 @@ import (
 func newCmdRotateSecret(streams genericclioptions.IOStreams, client *k8s.LazyClient) *cobra.Command {
 	ops := newRotateSecretOptions(streams, client)
 	rotateSecretCmd := &cobra.Command{
-		Use:   "rotate-secret ${AWS_ACCOUNT_CR_NAME}",
-		Short: "Rotate IAM credentials secret",
-		Long:  "When logged into a hive shard, this rotates IAM credential secrets for a given `account` CR.",
+		Use:        "rotate-secret ${AWS_ACCOUNT_CR_NAME}",
+		Short:      "Rotate IAM credentials secret",
+		Long:       "When logged into a hive shard, this rotates IAM credential secrets for a given `account` CR.",
+		Deprecated: "use 'osdctl account aws-creds rotate' instead. The newer command accepts a cluster ID, provides diagnostic reports, and handles account claim resolution automatically.",
 		Example: `  # Rotate IAM credentials for an account CR
   osdctl account rotate-secret ${AWS_ACCOUNT_CR_NAME} --cluster-id ${CLUSTER_ID} --reason "${REASON}"
 
@@ -174,11 +175,13 @@ func (o *rotateSecretOptions) run() error {
 		AccountCRName:           o.accountCRName,
 		Account:                 account,
 		OsdManagedAdminUsername: o.osdManagedAdminUsername,
+		UpdateManagedAdminCreds: true,
 		UpdateCcsCreds:          o.updateCcsCreds,
 		DryRun:                  o.dryRun,
 		AwsClient:               awsClient,
 		HiveKubeClient:          kubeCli,
 		ManagedClusterClient:    managedClient,
+		In:                      os.Stdin,
 		Out:                     os.Stdout,
 	})
 }
@@ -301,7 +304,7 @@ func (o *rotateSecretOptions) initHiveClient() (client.Client, error) {
 		return nil, fmt.Errorf("failed to get hive cluster (OCM URL:'%s'): %w", resolvedURL, err)
 	}
 
-	fmt.Printf("Connecting to hive cluster %s via OCM URL: %s\n", hive.Name(), resolvedURL)
+	fmt.Fprintf(os.Stderr, "Connecting to hive cluster %s via OCM URL: %s\n", hive.Name(), resolvedURL)
 
 	elevationMsg := fmt.Sprintf("Elevation required to rotate secrets for %s", o.accountCRName)
 	hiveClient, err := k8s.NewAsBackplaneClusterAdminWithConn(

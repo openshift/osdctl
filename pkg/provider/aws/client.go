@@ -63,6 +63,7 @@ type Client interface {
 	CreateAccessKey(*iam.CreateAccessKeyInput) (*iam.CreateAccessKeyOutput, error)
 	DeleteAccessKey(*iam.DeleteAccessKeyInput) (*iam.DeleteAccessKeyOutput, error)
 	ListAccessKeys(*iam.ListAccessKeysInput) (*iam.ListAccessKeysOutput, error)
+	GetAccessKeyLastUsed(ctx context.Context, input *iam.GetAccessKeyLastUsedInput) (*iam.GetAccessKeyLastUsedOutput, error)
 	GetUser(*iam.GetUserInput) (*iam.GetUserOutput, error)
 	CreateUser(*iam.CreateUserInput) (*iam.CreateUserOutput, error)
 	ListUsers(*iam.ListUsersInput) (*iam.ListUsersOutput, error)
@@ -312,6 +313,10 @@ func (c *AwsClient) DeleteAccessKey(input *iam.DeleteAccessKeyInput) (*iam.Delet
 
 func (c *AwsClient) ListAccessKeys(input *iam.ListAccessKeysInput) (*iam.ListAccessKeysOutput, error) {
 	return c.iamClient.ListAccessKeys(context.TODO(), input)
+}
+
+func (c *AwsClient) GetAccessKeyLastUsed(ctx context.Context, input *iam.GetAccessKeyLastUsedInput) (*iam.GetAccessKeyLastUsedOutput, error) {
+	return c.iamClient.GetAccessKeyLastUsed(ctx, input)
 }
 
 func (c *AwsClient) GetUser(input *iam.GetUserInput) (*iam.GetUserOutput, error) {
