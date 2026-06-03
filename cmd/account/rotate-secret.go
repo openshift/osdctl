@@ -29,11 +29,26 @@ import (
 func newCmdRotateSecret(streams genericclioptions.IOStreams, client *k8s.LazyClient) *cobra.Command {
 	ops := newRotateSecretOptions(streams, client)
 	rotateSecretCmd := &cobra.Command{
-		Use:               "rotate-secret <aws-account-cr-name>",
-		Short:             "Rotate IAM credentials secret",
-		Long:              "When logged into a hive shard, this rotates IAM credential secrets for a given `account` CR.",
+		Use:   "rotate-secret <aws-account-cr-name>",
+		Short: "Rotate IAM credentials secret (see also: osdctl account aws-creds)",
+		Long: `When logged into a hive shard, this rotates IAM credential secrets for a given account CR.
+
+NOTE: Consider using 'osdctl account aws-creds' instead. The newer command:
+  - Accepts a cluster ID (no need to look up the account CR name)
+  - Provides a diagnostic snapshot before rotation
+  - Handles account claim resolution automatically
+  - Supports interactive key management and CR secret health verification
+  - Validates IAM permissions via SimulatePrincipalPolicy
+
+Usage:
+  osdctl account aws-creds snapshot -C <cluster-id> --reason <ticket>
+  osdctl account aws-creds rotate -C <cluster-id> --reason <ticket> --managed-admin`,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Fprintln(os.Stderr, "WARNING: Consider using 'osdctl account aws-creds' instead.")
+			fmt.Fprintln(os.Stderr, "The newer command provides diagnostic reports, interactive key management,")
+			fmt.Fprintln(os.Stderr, "and CR secret health verification. Run 'osdctl account aws-creds -h' for details.")
+			fmt.Fprintln(os.Stderr, "")
 			cmdutil.CheckErr(ops.complete(cmd, args))
 			cmdutil.CheckErr(ops.run())
 		},
