@@ -48,10 +48,14 @@ func GetVaultRef(vaultPathKey string) (VaultRef, error) {
 	return VaultRef{Addr: vaultAddr, Path: vaultPath}, nil
 }
 
+// readFileFunc is the function used to read files. Replaced in tests
+// to avoid filesystem access.
+var readFileFunc = os.ReadFile
+
 // readCallbackPort reads the dynamically-assigned host port from the
 // portmap file written by ocm-container's ports feature.
 func readCallbackPort() string {
-	data, err := os.ReadFile(vaultCallbackPortFile)
+	data, err := readFileFunc(vaultCallbackPortFile)
 	if err != nil {
 		log.Debugf("could not read vault callback port file: %v", err)
 		return ""
@@ -114,11 +118,9 @@ func setupVaultTokenLocal() error {
 	return nil
 }
 
-// containerOIDCArgs builds the vault login args for container mode,
+// buildOIDCArgs builds the vault login args for container mode,
 // including the dynamic callback port if available.
-func containerOIDCArgs(noStore bool) []string {
-	callbackPort := readCallbackPort()
-
+func buildOIDCArgs(noStore bool, callbackPort string) []string {
 	args := []string{"login", "-method=oidc"}
 	if noStore {
 		args = append(args, "-no-store", "-field=token")
@@ -144,10 +146,12 @@ func containerOIDCArgs(noStore bool) []string {
 // fails (e.g., read-only bind mount), it falls back to capturing the token
 // in-process via VAULT_TOKEN environment variable.
 func setupVaultTokenContainer() error {
+	callbackPort := readCallbackPort()
+
 	log.Infoln("Complete the login via the URL printed below.")
 
 	// First attempt: normal login that writes ~/.vault-token
-	loginArgs := containerOIDCArgs(false)
+	loginArgs := buildOIDCArgs(false, callbackPort)
 	loginCmd := exec.Command("vault", loginArgs...)
 	loginCmd.Stdout = os.Stderr
 	loginCmd.Stderr = os.Stderr
@@ -163,7 +167,7 @@ func setupVaultTokenContainer() error {
 	log.Infoln("Token file write failed, capturing token in-process instead.")
 	log.Infoln("Complete the login via the URL printed below.")
 
-	loginArgs = containerOIDCArgs(true)
+	loginArgs = buildOIDCArgs(true, callbackPort)
 	loginCmd = exec.Command("vault", loginArgs...)
 
 	var tokenBuf bytes.Buffer

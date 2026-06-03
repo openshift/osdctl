@@ -1,145 +1,160 @@
 package utils
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
+	"fmt"
 	"testing"
 )
 
 func TestReadCallbackPort(t *testing.T) {
 	tests := []struct {
 		name     string
-		content  string
-		exists   bool
+		mockData []byte
+		mockErr  error
 		expected string
 	}{
 		{
 			name:     "reads port from file",
-			content:  "43210\n",
-			exists:   true,
+			mockData: []byte("43210\n"),
 			expected: "43210",
 		},
 		{
 			name:     "trims whitespace",
-			content:  "  12345  \n",
-			exists:   true,
+			mockData: []byte("  12345  \n"),
 			expected: "12345",
 		},
 		{
 			name:     "returns empty for missing file",
-			exists:   false,
+			mockErr:  fmt.Errorf("no such file"),
 			expected: "",
 		},
 		{
 			name:     "returns empty for empty file",
-			content:  "",
-			exists:   true,
+			mockData: []byte(""),
+			expected: "",
+		},
+		{
+			name:     "returns empty for whitespace-only file",
+			mockData: []byte("   \n"),
 			expected: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.exists {
-				tmpFile := filepath.Join(t.TempDir(), "vault_callback_port")
-				if err := os.WriteFile(tmpFile, []byte(tt.content), 0644); err != nil {
-					t.Fatal(err)
-				}
-				origPath := vaultCallbackPortFile
-				defer func() {
-					// Can't reassign const, so this test validates the
-					// readCallbackPort logic via direct file read
-				}()
-				_ = origPath
+			orig := readFileFunc
+			defer func() { readFileFunc = orig }()
 
-				data, _ := os.ReadFile(tmpFile)
-				port := strings.TrimSpace(string(data))
-				if port != tt.expected {
-					t.Errorf("expected %q, got %q", tt.expected, port)
+			readFileFunc = func(_ string) ([]byte, error) {
+				if tt.mockErr != nil {
+					return nil, tt.mockErr
 				}
+				return tt.mockData, nil
+			}
+
+			port := readCallbackPort()
+			if port != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, port)
 			}
 		})
 	}
 }
 
-func TestContainerOIDCArgs(t *testing.T) {
-	t.Setenv("IO_OPENSHIFT_MANAGED_NAME", "ocm-container")
-
+func TestBuildOIDCArgs(t *testing.T) {
 	tests := []struct {
-		name          string
-		noStore       bool
-		expectNoStore bool
-		expectField   bool
+		name             string
+		noStore          bool
+		callbackPort     string
+		expectNoStore    bool
+		expectFieldToken bool
+		expectPort       bool
+		expectCallback   bool
 	}{
 		{
-			name:          "with store (first attempt)",
-			noStore:       false,
-			expectNoStore: false,
-			expectField:   false,
+			name:           "with store, no callback port",
+			noStore:        false,
+			callbackPort:   "",
+			expectNoStore:  false,
+			expectPort:     false,
+			expectCallback: false,
 		},
 		{
-			name:          "without store (fallback)",
-			noStore:       true,
-			expectNoStore: true,
-			expectField:   true,
+			name:             "without store, no callback port",
+			noStore:          true,
+			callbackPort:     "",
+			expectNoStore:    true,
+			expectFieldToken: true,
+			expectPort:       false,
+			expectCallback:   false,
+		},
+		{
+			name:           "with store, with callback port",
+			noStore:        false,
+			callbackPort:   "43210",
+			expectNoStore:  false,
+			expectPort:     true,
+			expectCallback: true,
+		},
+		{
+			name:             "without store, with callback port",
+			noStore:          true,
+			callbackPort:     "43210",
+			expectNoStore:    true,
+			expectFieldToken: true,
+			expectPort:       true,
+			expectCallback:   true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := containerOIDCArgs(tt.noStore)
+			args := buildOIDCArgs(tt.noStore, tt.callbackPort)
 
-			hasSkipBrowser := false
-			hasListenAddress := false
-			hasNoStore := false
-			hasFieldToken := false
+			argSet := map[string]bool{}
 			for _, arg := range args {
-				switch arg {
-				case "skip_browser=true":
-					hasSkipBrowser = true
-				case "listenaddress=0.0.0.0":
-					hasListenAddress = true
-				case "-no-store":
-					hasNoStore = true
-				case "-field=token":
-					hasFieldToken = true
-				}
+				argSet[arg] = true
 			}
 
-			if !hasSkipBrowser {
+			if !argSet["skip_browser=true"] {
 				t.Errorf("expected skip_browser=true, got args: %v", args)
 			}
-			if !hasListenAddress {
+			if !argSet["listenaddress=0.0.0.0"] {
 				t.Errorf("expected listenaddress=0.0.0.0, got args: %v", args)
 			}
-			if tt.expectNoStore && !hasNoStore {
+			if !argSet["login"] {
+				t.Errorf("expected login, got args: %v", args)
+			}
+			if !argSet["-method=oidc"] {
+				t.Errorf("expected -method=oidc, got args: %v", args)
+			}
+
+			if tt.expectNoStore && !argSet["-no-store"] {
 				t.Errorf("expected -no-store, got args: %v", args)
 			}
-			if !tt.expectNoStore && hasNoStore {
+			if !tt.expectNoStore && argSet["-no-store"] {
 				t.Errorf("did not expect -no-store, got args: %v", args)
 			}
-			if tt.expectField && !hasFieldToken {
+			if tt.expectFieldToken && !argSet["-field=token"] {
 				t.Errorf("expected -field=token, got args: %v", args)
 			}
-			if !tt.expectField && hasFieldToken {
+			if !tt.expectFieldToken && argSet["-field=token"] {
 				t.Errorf("did not expect -field=token, got args: %v", args)
+			}
+
+			expectPortArg := fmt.Sprintf("port=%s", defaultVaultOIDCPort)
+			expectCallbackArg := fmt.Sprintf("callbackport=%s", tt.callbackPort)
+
+			if tt.expectPort && !argSet[expectPortArg] {
+				t.Errorf("expected %s, got args: %v", expectPortArg, args)
+			}
+			if !tt.expectPort && argSet[expectPortArg] {
+				t.Errorf("did not expect %s, got args: %v", expectPortArg, args)
+			}
+			if tt.expectCallback && !argSet[expectCallbackArg] {
+				t.Errorf("expected %s, got args: %v", expectCallbackArg, args)
+			}
+			if !tt.expectCallback && argSet[expectCallbackArg] {
+				t.Errorf("did not expect %s, got args: %v", expectCallbackArg, args)
 			}
 		})
 	}
-}
-
-func TestSetupVaultTokenLocal_ArgsShape(t *testing.T) {
-	t.Setenv("IO_OPENSHIFT_MANAGED_NAME", "")
-
-	// Verify that in non-container mode, the function signature is correct
-	// (we can't run vault login in tests, but we can verify the function exists)
-	_ = setupVaultTokenLocal
-}
-
-func TestSetupVaultTokenContainer_ArgsShape(t *testing.T) {
-	t.Setenv("IO_OPENSHIFT_MANAGED_NAME", "ocm-container")
-
-	// Verify that in container mode, the function signature is correct
-	_ = setupVaultTokenContainer
 }
