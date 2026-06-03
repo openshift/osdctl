@@ -1,15 +1,22 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	ocmutils "github.com/openshift/ocm-container/pkg/utils"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+)
+
+const (
+	vaultCallbackPortFile = "/tmp/vault_callback_port"
+	defaultVaultOIDCPort  = "8250"
 )
 
 const (
@@ -41,9 +48,28 @@ func GetVaultRef(vaultPathKey string) (VaultRef, error) {
 	return VaultRef{Addr: vaultAddr, Path: vaultPath}, nil
 }
 
+// readCallbackPort reads the dynamically-assigned host port from the
+// portmap file written by ocm-container's ports feature.
+func readCallbackPort() string {
+	data, err := os.ReadFile(vaultCallbackPortFile)
+	if err != nil {
+		log.Debugf("could not read vault callback port file: %v", err)
+		return ""
+	}
+	port := strings.TrimSpace(string(data))
+	if port == "" {
+		log.Debugf("vault callback port file is empty")
+		return ""
+	}
+	log.Debugf("read vault callback port: %s", port)
+	return port
+}
+
 // setupVaultToken ensures a valid Vault token exists by checking the current
 // token and requesting a new one via OIDC if needed. In container environments,
-// it configures authentication to work without browser auto-launch.
+// it uses the dynamically-assigned callback port from ocm-container's ports
+// feature and falls back to in-process token capture if the token file is
+// not writable.
 func setupVaultToken(vaultAddr string) error {
 	err := os.Setenv("VAULT_ADDR", vaultAddr)
 	if err != nil {
@@ -51,7 +77,6 @@ func setupVaultToken(vaultAddr string) error {
 	}
 
 	versionCheckCmd := exec.Command("vault", "version")
-
 	versionCheckCmd.Stdout = os.Stderr
 	versionCheckCmd.Stderr = os.Stderr
 
@@ -62,51 +87,107 @@ func setupVaultToken(vaultAddr string) error {
 	tokenCheckCmd := exec.Command("vault", "token", "lookup")
 	tokenCheckCmd.Stdout = nil
 	tokenCheckCmd.Stderr = nil
-	// get new token since old token has expired
 	if err = tokenCheckCmd.Run(); err != nil {
 		log.Infoln("Vault token no longer valid, requesting new token")
 
-		// Check if we're in a container environment (OCM_CONTAINER env var is set)
-		// If so, skip automatic browser launch and print the URL for manual authentication
-		loginArgs := []string{"login", "-method=oidc", "-no-print"}
 		if ocmutils.IsRunningInOcmContainer() {
-			log.Infoln("\nNOTE: Running in container mode - OIDC authentication requires port forwarding.")
-			log.Infoln("Ensure port 8250 is exposed in your ocm-container configuration:")
-			log.Infoln("  Add 'launch-opts: \"-p 8250:8250\"' to ~/.config/ocm-container/ocm-container.yaml")
-			log.Infoln("Then restart your ocm-container for the change to take effect.")
-
-			// In container: skip browser launch and listen on all interfaces (0.0.0.0)
-			// so the callback can be reached from the host browser via localhost:8250
-			loginArgs = []string{"login", "-method=oidc", "skip_browser=true", "listenaddress=0.0.0.0"}
-		}
-		loginCmd := exec.Command("vault", loginArgs...)
-
-		// Show output when using skip_browser so user can see the authentication URL
-		if ocmutils.IsRunningInOcmContainer() {
-			loginCmd.Stdout = os.Stderr
-			loginCmd.Stderr = os.Stderr
-		} else {
-			loginCmd.Stdout = nil
-			loginCmd.Stderr = nil
+			return setupVaultTokenContainer()
 		}
 
-		if err = loginCmd.Run(); err != nil {
-			if ocmutils.IsRunningInOcmContainer() {
-				return fmt.Errorf("vault login failed: %v\n\n"+
-					"If authentication timed out or the callback failed, this is likely because:\n"+
-					"  1. Port 8250 is not exposed in your ocm-container configuration\n"+
-					"  2. Your ocm-container was not restarted after adding the port\n\n"+
-					"To fix:\n"+
-					"  - Add 'launch-opts: \"-p 8250:8250\"' to ~/.config/ocm-container/ocm-container.yaml\n"+
-					"  - Exit and restart your ocm-container\n"+
-					"  - Try the authentication again", err)
-			}
-			return fmt.Errorf("error running 'vault login': %v", err)
-		}
-
-		log.Infoln("Acquired vault token")
+		return setupVaultTokenLocal()
 	}
 
+	return nil
+}
+
+// setupVaultTokenLocal handles vault OIDC login outside of a container.
+func setupVaultTokenLocal() error {
+	loginCmd := exec.Command("vault", "login", "-method=oidc", "-no-print")
+	loginCmd.Stdout = nil
+	loginCmd.Stderr = nil
+
+	if err := loginCmd.Run(); err != nil {
+		return fmt.Errorf("error running 'vault login': %v", err)
+	}
+
+	log.Infoln("Acquired vault token")
+	return nil
+}
+
+// containerOIDCArgs builds the vault login args for container mode,
+// including the dynamic callback port if available.
+func containerOIDCArgs(noStore bool) []string {
+	callbackPort := readCallbackPort()
+
+	args := []string{"login", "-method=oidc"}
+	if noStore {
+		args = append(args, "-no-store", "-field=token")
+	}
+	args = append(args, "skip_browser=true", "listenaddress=0.0.0.0")
+
+	if callbackPort != "" {
+		args = append(args,
+			fmt.Sprintf("port=%s", defaultVaultOIDCPort),
+			fmt.Sprintf("callbackport=%s", callbackPort),
+		)
+		log.Infof("Using dynamic vault OIDC callback port: %s", callbackPort)
+	} else {
+		log.Infoln("No dynamic callback port found, using default port 8250.")
+		log.Infoln("If running multiple containers, ensure ocm-container has the ports feature enabled.")
+	}
+
+	return args
+}
+
+// setupVaultTokenContainer handles vault OIDC login inside an ocm-container.
+// It first tries a normal vault login that writes ~/.vault-token. If that
+// fails (e.g., read-only bind mount), it falls back to capturing the token
+// in-process via VAULT_TOKEN environment variable.
+func setupVaultTokenContainer() error {
+	log.Infoln("Complete the login via the URL printed below.")
+
+	// First attempt: normal login that writes ~/.vault-token
+	loginArgs := containerOIDCArgs(false)
+	loginCmd := exec.Command("vault", loginArgs...)
+	loginCmd.Stdout = os.Stderr
+	loginCmd.Stderr = os.Stderr
+
+	if err := loginCmd.Run(); err == nil {
+		log.Infoln("Acquired vault token")
+		return nil
+	}
+
+	// If the normal login failed, it may be because ~/.vault-token is a
+	// read-only bind mount or has rename issues. Fall back to capturing
+	// the token in-process.
+	log.Infoln("Token file write failed, capturing token in-process instead.")
+	log.Infoln("Complete the login via the URL printed below.")
+
+	loginArgs = containerOIDCArgs(true)
+	loginCmd = exec.Command("vault", loginArgs...)
+
+	var tokenBuf bytes.Buffer
+	loginCmd.Stdout = &tokenBuf
+	loginCmd.Stderr = os.Stderr
+
+	if err := loginCmd.Run(); err != nil {
+		return fmt.Errorf("vault login failed: %v\n\n"+
+			"If authentication timed out or the callback failed:\n"+
+			"  1. Ensure ocm-container has the vault port enabled in the ports feature\n"+
+			"  2. Restart your ocm-container for the change to take effect\n"+
+			"  3. Try the authentication again", err)
+	}
+
+	token := strings.TrimSpace(tokenBuf.String())
+	if token == "" {
+		return fmt.Errorf("vault login succeeded but returned empty token")
+	}
+
+	if err := os.Setenv("VAULT_TOKEN", token); err != nil {
+		return fmt.Errorf("error setting VAULT_TOKEN: %v", err)
+	}
+
+	log.Infoln("Acquired vault token (in-process)")
 	return nil
 }
 
