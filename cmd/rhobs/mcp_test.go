@@ -237,6 +237,89 @@ func TestMcpResultJSON(t *testing.T) {
 			t.Errorf("expected '[]', got %q", text)
 		}
 	})
+
+	t.Run("structured content matches data", func(t *testing.T) {
+		data := map[string]interface{}{"key": "value", "count": float64(42)}
+		result, err := mcpResultJSON(data)
+		if err != nil {
+			t.Fatalf("mcpResultJSON returned error: %v", err)
+		}
+		if result.StructuredContent == nil {
+			t.Fatal("StructuredContent is nil; expected the original data value")
+		}
+		got, ok := result.StructuredContent.(map[string]interface{})
+		if !ok {
+			t.Fatalf("StructuredContent type = %T, want map[string]interface{}", result.StructuredContent)
+		}
+		if got["key"] != "value" {
+			t.Errorf("StructuredContent[key] = %v, want value", got["key"])
+		}
+		if got["count"] != float64(42) {
+			t.Errorf("StructuredContent[count] = %v, want 42", got["count"])
+		}
+	})
+
+	t.Run("structured content consistent with text content", func(t *testing.T) {
+		type payload struct {
+			Name  string `json:"name"`
+			Value int    `json:"value"`
+		}
+		data := payload{Name: "test", Value: 7}
+		result, err := mcpResultJSON(data)
+		if err != nil {
+			t.Fatalf("mcpResultJSON returned error: %v", err)
+		}
+
+		// Text content must be valid JSON matching the struct.
+		text := getResultText(result)
+		var fromText payload
+		if err := json.Unmarshal([]byte(text), &fromText); err != nil {
+			t.Fatalf("text content is not valid JSON: %v", err)
+		}
+		if fromText.Name != data.Name || fromText.Value != data.Value {
+			t.Errorf("text content = %+v, want %+v", fromText, data)
+		}
+
+		// StructuredContent must be the same original value.
+		if result.StructuredContent != data {
+			t.Errorf("StructuredContent = %+v, want %+v", result.StructuredContent, data)
+		}
+	})
+
+	t.Run("structured content present alongside text in content slice", func(t *testing.T) {
+		data := map[string]interface{}{"x": "y"}
+		result, err := mcpResultJSON(data)
+		if err != nil {
+			t.Fatalf("mcpResultJSON returned error: %v", err)
+		}
+		if len(result.Content) == 0 {
+			t.Fatal("Content slice is empty; text content must always be present")
+		}
+		if result.StructuredContent == nil {
+			t.Fatal("StructuredContent must not be nil")
+		}
+	})
+
+	t.Run("structured content serialises to valid JSON over wire", func(t *testing.T) {
+		// Verify that StructuredContent round-trips cleanly through JSON serialisation,
+		// which is what the MCP SDK does when sending the response over stdio/HTTP.
+		data := map[string]interface{}{"metric": "up", "value": float64(1)}
+		result, err := mcpResultJSON(data)
+		if err != nil {
+			t.Fatalf("mcpResultJSON returned error: %v", err)
+		}
+		b, err := json.Marshal(result.StructuredContent)
+		if err != nil {
+			t.Fatalf("failed to marshal StructuredContent: %v", err)
+		}
+		var roundTripped map[string]interface{}
+		if err := json.Unmarshal(b, &roundTripped); err != nil {
+			t.Fatalf("StructuredContent round-trip produced invalid JSON: %v", err)
+		}
+		if roundTripped["metric"] != "up" {
+			t.Errorf("round-tripped metric = %v, want up", roundTripped["metric"])
+		}
+	})
 }
 
 func TestMcpError(t *testing.T) {
@@ -881,6 +964,74 @@ func TestMcpConfigCommand(t *testing.T) {
 	}
 	if len(args) != 3 || args[0] != "rhobs" || args[1] != "mcp" || args[2] != "server" {
 		t.Errorf("args = %v, want [rhobs mcp server]", args)
+	}
+}
+
+// --- StructuredContent wire roundtrip test ---
+
+// TestStructuredContent_WireRoundtrip creates a minimal in-process MCP server
+// that returns a known mcpResultJSON payload and verifies that StructuredContent
+// survives the full in-memory transport (same wire serialisation used by stdio).
+// This guards against the SDK silently dropping the field on its way to the client.
+func TestStructuredContent_WireRoundtrip(t *testing.T) {
+	type response struct {
+		Metric string  `json:"metric"`
+		Value  float64 `json:"value"`
+	}
+
+	s := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1.0.0"}, nil)
+	s.AddTool(&mcp.Tool{
+		Name:        "echo_structured",
+		Description: "Returns a fixed structured payload for testing.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{}}`),
+	}, func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return mcpResultJSON(response{Metric: "up", Value: 1})
+	})
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = s.Run(ctx, serverTransport) }()
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1.0.0"}, nil)
+	session, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect failed: %v", err)
+	}
+	defer session.Close()
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "echo_structured"})
+	if err != nil {
+		t.Fatalf("CallTool failed: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("unexpected tool error: %v", getResultText(result))
+	}
+
+	// Text content must be present and parseable.
+	text := getResultText(result)
+	var fromText response
+	if err := json.Unmarshal([]byte(text), &fromText); err != nil {
+		t.Fatalf("text content not valid JSON: %v\ntext: %s", err, text)
+	}
+	if fromText.Metric != "up" || fromText.Value != 1 {
+		t.Errorf("text content = %+v, want {up 1}", fromText)
+	}
+
+	// StructuredContent must survive the wire.
+	if result.StructuredContent == nil {
+		t.Fatal("StructuredContent is nil after wire roundtrip; MCP clients relying on structured output will not receive data")
+	}
+	b, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		t.Fatalf("cannot marshal StructuredContent received from wire: %v", err)
+	}
+	var fromStructured response
+	if err := json.Unmarshal(b, &fromStructured); err != nil {
+		t.Fatalf("StructuredContent from wire is not valid JSON: %v", err)
+	}
+	if fromStructured.Metric != "up" || fromStructured.Value != 1 {
+		t.Errorf("StructuredContent from wire = %+v, want {up 1}", fromStructured)
 	}
 }
 
