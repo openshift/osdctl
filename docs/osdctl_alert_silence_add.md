@@ -4,7 +4,7 @@ Add new silence for alert
 
 ### Synopsis
 
-add new silence for specfic or all alert with comment and duration of alert
+Add a new silence for a specific alert or for all alerts, including a comment and duration.
 
 ```
 osdctl alert silence add --cluster-id <cluster-identifier> [--all --duration --comment | --alertname --duration --comment] [flags]

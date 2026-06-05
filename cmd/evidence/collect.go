@@ -607,18 +607,18 @@ func (o *collectOptions) saveSummary(evidence *EvidenceCollection, filename stri
 
 	sb.WriteString("EVIDENCE COLLECTION SUMMARY\n")
 	sb.WriteString("===========================\n\n")
-	sb.WriteString(fmt.Sprintf("Cluster: %s (%s)\n", evidence.Metadata.ClusterName, evidence.Metadata.ClusterID))
-	sb.WriteString(fmt.Sprintf("Platform: %s\n", evidence.Metadata.Platform))
-	sb.WriteString(fmt.Sprintf("Collection Time: %s\n", evidence.Metadata.CollectionTime.Format(time.RFC3339)))
-	sb.WriteString(fmt.Sprintf("Time Window Start: %s\n\n", evidence.Metadata.TimeWindowStart.Format(time.RFC3339)))
+	fmt.Fprintf(&sb, "Cluster: %s (%s)\n", evidence.Metadata.ClusterName, evidence.Metadata.ClusterID)
+	fmt.Fprintf(&sb, "Platform: %s\n", evidence.Metadata.Platform)
+	fmt.Fprintf(&sb, "Collection Time: %s\n", evidence.Metadata.CollectionTime.Format(time.RFC3339))
+	fmt.Fprintf(&sb, "Time Window Start: %s\n\n", evidence.Metadata.TimeWindowStart.Format(time.RFC3339))
 
 	if evidence.ClusterState != nil {
 		sb.WriteString("CLUSTER STATE\n")
 		sb.WriteString("-------------\n")
-		sb.WriteString(fmt.Sprintf("Nodes: %d\n", len(evidence.ClusterState.Nodes)))
-		sb.WriteString(fmt.Sprintf("Operators: %d\n", len(evidence.ClusterState.Operators)))
-		sb.WriteString(fmt.Sprintf("MachineConfigs: %d\n", len(evidence.ClusterState.MachineConfigs)))
-		sb.WriteString(fmt.Sprintf("Events: %d\n\n", len(evidence.ClusterState.Events)))
+		fmt.Fprintf(&sb, "Nodes: %d\n", len(evidence.ClusterState.Nodes))
+		fmt.Fprintf(&sb, "Operators: %d\n", len(evidence.ClusterState.Operators))
+		fmt.Fprintf(&sb, "MachineConfigs: %d\n", len(evidence.ClusterState.MachineConfigs))
+		fmt.Fprintf(&sb, "Events: %d\n\n", len(evidence.ClusterState.Events))
 
 		// Count degraded operators
 		degradedCount := 0
@@ -628,10 +628,10 @@ func (o *collectOptions) saveSummary(evidence *EvidenceCollection, filename stri
 			}
 		}
 		if degradedCount > 0 {
-			sb.WriteString(fmt.Sprintf("⚠️  Degraded Operators: %d\n", degradedCount))
+			fmt.Fprintf(&sb, "⚠️  Degraded Operators: %d\n", degradedCount)
 			for _, op := range evidence.ClusterState.Operators {
 				if op.Degraded {
-					sb.WriteString(fmt.Sprintf("   - %s\n", op.Name))
+					fmt.Fprintf(&sb, "   - %s\n", op.Name)
 				}
 			}
 			sb.WriteString("\n")
@@ -645,10 +645,10 @@ func (o *collectOptions) saveSummary(evidence *EvidenceCollection, filename stri
 			}
 		}
 		if notReadyCount > 0 {
-			sb.WriteString(fmt.Sprintf("⚠️  Not Ready Nodes: %d\n", notReadyCount))
+			fmt.Fprintf(&sb, "⚠️  Not Ready Nodes: %d\n", notReadyCount)
 			for _, node := range evidence.ClusterState.Nodes {
 				if node.Status != "Ready" {
-					sb.WriteString(fmt.Sprintf("   - %s\n", node.Name))
+					fmt.Fprintf(&sb, "   - %s\n", node.Name)
 				}
 			}
 			sb.WriteString("\n")
@@ -658,8 +658,8 @@ func (o *collectOptions) saveSummary(evidence *EvidenceCollection, filename stri
 	if evidence.CloudTrailData != nil {
 		sb.WriteString("CLOUDTRAIL DATA\n")
 		sb.WriteString("---------------\n")
-		sb.WriteString(fmt.Sprintf("Error Events: %d\n", len(evidence.CloudTrailData.ErrorEvents)))
-		sb.WriteString(fmt.Sprintf("Write Events: %d\n\n", len(evidence.CloudTrailData.WriteEvents)))
+		fmt.Fprintf(&sb, "Error Events: %d\n", len(evidence.CloudTrailData.ErrorEvents))
+		fmt.Fprintf(&sb, "Write Events: %d\n\n", len(evidence.CloudTrailData.WriteEvents))
 
 		if len(evidence.CloudTrailData.ErrorEvents) > 0 {
 			sb.WriteString("Recent Errors:\n")
@@ -669,7 +669,7 @@ func (o *collectOptions) saveSummary(evidence *EvidenceCollection, filename stri
 			}
 			for i := 0; i < maxErrors; i++ {
 				e := evidence.CloudTrailData.ErrorEvents[i]
-				sb.WriteString(fmt.Sprintf("   - %s: %s (%s)\n", e.EventTime, e.EventName, e.ErrorCode))
+				fmt.Fprintf(&sb, "   - %s: %s (%s)\n", e.EventTime, e.EventName, e.ErrorCode)
 			}
 			sb.WriteString("\n")
 		}

@@ -24,7 +24,9 @@ func main() {
 
 	resolved, err := command.ExecuteC()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Run '%s --help' for usage.\n", resolved.CommandPath())
+		if resolved != nil {
+			fmt.Fprintf(os.Stderr, "Run '%s --help' for usage.\n", resolved.CommandPath())
+		}
 		os.Exit(1)
 	}
 }

@@ -4,7 +4,7 @@ Add new silence for alert for org
 
 ### Synopsis
 
-add new silence for specfic or all alerts with comment and duration of alert for an organization. OHSS required for org-wide silence
+Add a new silence for specific alerts or all alerts with a comment and duration for an organization. OHSS required for org-wide silence.
 
 ```
 osdctl alert silence org <org-id> [--all --duration --comment | --alertname --duration --comment] [flags]

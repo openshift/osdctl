@@ -106,7 +106,7 @@ func (o *cliOptions) run() error {
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		if err := enc.Encode(out); err != nil {
+		if err := enc.Encode(out); err != nil { //nolint:gosec // G117 false positive — intentionally outputting AWS credentials
 			return err
 		}
 	default:

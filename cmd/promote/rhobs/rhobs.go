@@ -80,7 +80,7 @@ func resolveConfigRepoPath(provided string) (string, error) {
 		filepath.Join(os.Getenv("HOME"), "src", "rhobs-configuration-gitlab"),
 	}
 	for _, p := range candidates {
-		if _, err := os.Stat(filepath.Join(p, ".git")); err == nil {
+		if _, err := os.Stat(filepath.Join(p, ".git")); err == nil { //nolint:gosec // G703 false positive — paths are from hardcoded candidates, not user input
 			return p, nil
 		}
 	}
@@ -204,7 +204,7 @@ func updateProductionTargets(service *promote.Service, newHash string) (bool, er
 	}
 
 	if updated {
-		if err := os.WriteFile(filePath, []byte(strings.Join(lines, "\n")), 0600); err != nil {
+		if err := os.WriteFile(filePath, []byte(strings.Join(lines, "\n")), 0600); err != nil { //nolint:gosec // G703 false positive — filePath is from app-interface checkout, not user input
 			return false, fmt.Errorf("failed to write %s: %v", filePath, err)
 		}
 	}

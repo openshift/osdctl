@@ -986,7 +986,7 @@ osdctl alert silence [flags]
 
 ### osdctl alert silence add
 
-add new silence for specfic or all alert with comment and duration of alert
+Add a new silence for a specific alert or for all alerts, including a comment and duration.
 
 ```
 osdctl alert silence add --cluster-id <cluster-identifier> [--all --duration --comment | --alertname --duration --comment] [flags]
@@ -1016,7 +1016,7 @@ osdctl alert silence add --cluster-id <cluster-identifier> [--all --duration --c
 
 ### osdctl alert silence expire
 
-expire all silence or based on silenceid
+Expire all silences, or expire a specific silence by its silence ID.
 
 ```
 osdctl alert silence expire [--cluster-id <cluster-identifier>] [--all | --silence-id <silence-id>] [flags]
@@ -1070,7 +1070,7 @@ osdctl alert silence list --cluster-id <cluster-identifier> [flags]
 
 ### osdctl alert silence org
 
-add new silence for specfic or all alerts with comment and duration of alert for an organization. OHSS required for org-wide silence
+Add a new silence for specific alerts or all alerts with a comment and duration for an organization. OHSS required for org-wide silence.
 
 ```
 osdctl alert silence org <org-id> [--all --duration --comment | --alertname --duration --comment] [flags]
@@ -1605,7 +1605,7 @@ osdctl cluster etcd-health-check --cluster-id <cluster-id> --reason <reason for 
 
 ### osdctl cluster etcd-member-replace
 
-Replaces an unhealthy ectd node using the member id provided
+Replaces an unhealthy etcd node using the member id provided
 
 ```
 osdctl cluster etcd-member-replace --cluster-id <cluster-identifier> [flags]

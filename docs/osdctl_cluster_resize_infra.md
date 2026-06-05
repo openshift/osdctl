@@ -22,10 +22,10 @@ osdctl cluster resize infra [flags]
 
 ```
   # Automatically vertically scale infra nodes to the next size
-  osdctl cluster resize infra --cluster-id ${CLUSTER_ID} --reason "${REASON}" --justification "${JUSTIFICATION}" --ohss "${REASON}"
+  osdctl cluster resize infra --cluster-id ${CLUSTER_ID} --reason "${REASON}" --justification "${JUSTIFICATION}" --ohss "${OHSS}"
 
   # Resize infra nodes to a specific instance type
-  osdctl cluster resize infra --cluster-id ${CLUSTER_ID} --instance-type "r5.xlarge" --reason "${REASON}" --justification "${JUSTIFICATION}" --ohss "${REASON}"
+  osdctl cluster resize infra --cluster-id ${CLUSTER_ID} --instance-type "r5.xlarge" --reason "${REASON}" --justification "${JUSTIFICATION}" --ohss "${OHSS}"
 ```
 
 ### Options

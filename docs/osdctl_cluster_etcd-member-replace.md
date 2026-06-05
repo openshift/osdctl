@@ -4,7 +4,7 @@ Replaces an unhealthy etcd node
 
 ### Synopsis
 
-Replaces an unhealthy ectd node using the member id provided
+Replaces an unhealthy etcd node using the member id provided
 
 ```
 osdctl cluster etcd-member-replace --cluster-id <cluster-identifier> [flags]

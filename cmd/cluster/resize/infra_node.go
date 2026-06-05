@@ -72,10 +72,10 @@ func newCmdResizeInfra() *cobra.Command {
     https://github.com/openshift/ops-sop/blob/master/v4/howto/resize-infras-workers.md
 `,
 		Example: `  # Automatically vertically scale infra nodes to the next size
-  osdctl cluster resize infra --cluster-id ${CLUSTER_ID} --reason "${REASON}" --justification "${JUSTIFICATION}" --ohss "${REASON}"
+  osdctl cluster resize infra --cluster-id ${CLUSTER_ID} --reason "${REASON}" --justification "${JUSTIFICATION}" --ohss "${OHSS}"
 
   # Resize infra nodes to a specific instance type
-  osdctl cluster resize infra --cluster-id ${CLUSTER_ID} --instance-type "r5.xlarge" --reason "${REASON}" --justification "${JUSTIFICATION}" --ohss "${REASON}"`,
+  osdctl cluster resize infra --cluster-id ${CLUSTER_ID} --instance-type "r5.xlarge" --reason "${REASON}" --justification "${JUSTIFICATION}" --ohss "${OHSS}"`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return r.RunInfra(context.Background())
 		},

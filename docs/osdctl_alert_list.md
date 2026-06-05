@@ -13,8 +13,11 @@ osdctl alert list --cluster-id <cluster-id> --level [warning, critical, firing, 
 ### Examples
 
 ```
-  # List all firing alerts for a cluster
+  # List all alerts for a cluster
   osdctl alerts list --cluster-id ${CLUSTER_ID} --reason "${REASON}"
+
+  # List only firing alerts
+  osdctl alerts list --cluster-id ${CLUSTER_ID} --level firing --reason "${REASON}"
 
   # List only critical alerts
   osdctl alerts list --cluster-id ${CLUSTER_ID} --level critical --reason "${REASON}"
