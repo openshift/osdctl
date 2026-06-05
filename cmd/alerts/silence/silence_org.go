@@ -21,9 +21,9 @@ type AddOrgSilenceCmd struct {
 func NewCmdAddOrgSilence() *cobra.Command {
 	AddOrgSilenceCmd := &AddOrgSilenceCmd{}
 	cmd := &cobra.Command{
-		Use:               "org <org-id> [--all --duration --comment | --alertname --duration --comment]",
-		Short:             "Add new silence for alert for org",
-		Long: `Add a new silence for specific alerts or all alerts with a comment and duration for an organization. OHSS required for org-wide silence.`,
+		Use:   "org <org-id> [--all --duration --comment | --alertname --duration --comment]",
+		Short: "Add new silence for alert for org",
+		Long:  `Add a new silence for specific alerts or all alerts with a comment and duration for an organization. OHSS required for org-wide silence.`,
 		Example: `  # Silence all alerts for an organization
   osdctl alerts silence org ${ORG_ID} --all --comment "${REASON}: org-wide silence"
 

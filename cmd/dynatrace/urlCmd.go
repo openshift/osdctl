@@ -11,7 +11,7 @@ func newCmdURL() *cobra.Command {
 	var clusterID string
 
 	urlCmd := &cobra.Command{
-		Use:               "url --cluster-id <cluster-identifier>",
+		Use:   "url --cluster-id <cluster-identifier>",
 		Short: "Get the Dynatrace Tenant URL for a given MC or HCP cluster",
 		Example: `  # Get the Dynatrace URL for a cluster
   osdctl dynatrace url --cluster-id ${CLUSTER_ID}`,

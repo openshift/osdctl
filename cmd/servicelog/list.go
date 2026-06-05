@@ -22,7 +22,7 @@ type listCmdOptions struct {
 func newListCmd() *cobra.Command {
 	opts := &listCmdOptions{}
 	cmd := &cobra.Command{
-		Use: "list --cluster-id <cluster-identifier> [flags] [options]",
+		Use:   "list --cluster-id <cluster-identifier> [flags] [options]",
 		Long:  "Get service logs for a given cluster identifier.",
 		Short: "Get service logs for a given cluster identifier.",
 		Example: `  # List SRE-created service logs
@@ -33,7 +33,7 @@ func newListCmd() *cobra.Command {
 
   # List all service logs including internal
   osdctl servicelog list --cluster-id ${CLUSTER_ID} --all-messages --internal`,
-		Args:  cobra.NoArgs,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return listServiceLogs(opts.clusterID, opts)
 		},

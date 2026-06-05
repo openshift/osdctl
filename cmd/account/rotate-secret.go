@@ -29,9 +29,9 @@ import (
 func newCmdRotateSecret(streams genericclioptions.IOStreams, client *k8s.LazyClient) *cobra.Command {
 	ops := newRotateSecretOptions(streams, client)
 	rotateSecretCmd := &cobra.Command{
-		Use:               "rotate-secret ${AWS_ACCOUNT_CR_NAME}",
-		Short:             "Rotate IAM credentials secret",
-		Long: "When logged into a hive shard, this rotates IAM credential secrets for a given `account` CR.",
+		Use:   "rotate-secret ${AWS_ACCOUNT_CR_NAME}",
+		Short: "Rotate IAM credentials secret",
+		Long:  "When logged into a hive shard, this rotates IAM credential secrets for a given `account` CR.",
 		Example: `  # Rotate IAM credentials for an account CR
   osdctl account rotate-secret ${AWS_ACCOUNT_CR_NAME} --cluster-id ${CLUSTER_ID} --reason "${REASON}"
 

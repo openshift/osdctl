@@ -26,7 +26,7 @@ func newCmdGet() *cobra.Command {
 	}
 
 	policyCmd := &cobra.Command{
-		Use:               "get",
+		Use:   "get",
 		Short: "Get OCP CredentialsRequests",
 		Example: `  # Get IAM permissions for a specific OCP version
   osdctl iampermissions get --release-version 4.15.0`,

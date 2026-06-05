@@ -33,7 +33,7 @@ func newCmdDiff() *cobra.Command {
 	}
 
 	policyCmd := &cobra.Command{
-		Use:               "diff",
+		Use:   "diff",
 		Short: "Diff IAM permissions for cluster operators between two versions",
 		Example: `  # Diff IAM permissions between two OCP versions
   osdctl iampermissions diff --base-version 4.14.0 --target-version 4.15.0`,

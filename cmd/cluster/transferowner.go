@@ -61,7 +61,7 @@ type transferOwnerOptions struct {
 func newCmdTransferOwner(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	ops := newTransferOwnerOptions(streams, globalOpts)
 	transferOwnerCmd := &cobra.Command{
-		Use:               "transfer-owner",
+		Use:   "transfer-owner",
 		Short: "Transfer cluster ownership to a new user (to be done by Region Lead)",
 		Example: `  # Transfer cluster ownership
   osdctl cluster transfer-owner --cluster-id ${CLUSTER_ID} --old-owner ${OLD_OWNER} --new-owner ${NEW_OWNER} --reason "${REASON}"

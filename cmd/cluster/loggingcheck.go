@@ -27,7 +27,7 @@ type loggingCheckOptions struct {
 func newCmdLoggingCheck(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	ops := newloggingCheckOptions(streams, globalOpts)
 	loggingCheckCmd := &cobra.Command{
-		Use:               "logging-check --cluster-id <cluster-identifier>",
+		Use:   "logging-check --cluster-id <cluster-identifier>",
 		Short: "Shows the logging support status of a specified cluster",
 		Example: `  # Check logging support status for a cluster
   osdctl cluster logging-check --cluster-id ${CLUSTER_ID}`,

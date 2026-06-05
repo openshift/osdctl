@@ -18,9 +18,9 @@ type listSilenceCmd struct {
 func NewCmdListSilence() *cobra.Command {
 	listSilenceCmd := &listSilenceCmd{}
 	cmd := &cobra.Command{
-		Use:               "list --cluster-id <cluster-identifier>",
-		Short:             "List all silences",
-		Long: `print the list of silences`,
+		Use:   "list --cluster-id <cluster-identifier>",
+		Short: "List all silences",
+		Long:  `print the list of silences`,
 		Example: `  # List all active silences for a cluster
   osdctl alerts silence list --cluster-id ${CLUSTER_ID} --reason "${REASON}"`,
 		Args:              cobra.NoArgs,

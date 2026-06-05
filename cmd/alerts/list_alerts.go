@@ -23,7 +23,7 @@ func NewCmdListAlerts() *cobra.Command {
 	newCmd := &cobra.Command{
 		Use:   "list --cluster-id <cluster-id> --level [warning, critical, firing, pending, all]",
 		Short: "List all alerts or based on severity",
-		Long: `Checks the alerts for the cluster and print the list based on severity`,
+		Long:  `Checks the alerts for the cluster and print the list based on severity`,
 		Example: `  # List all alerts for a cluster
   osdctl alerts list --cluster-id ${CLUSTER_ID} --reason "${REASON}"
 

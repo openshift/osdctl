@@ -22,9 +22,9 @@ type silenceCmd struct {
 func NewCmdClearSilence() *cobra.Command {
 	silenceCmd := &silenceCmd{}
 	cmd := &cobra.Command{
-		Use:               "expire [--cluster-id <cluster-identifier>] [--all | --silence-id <silence-id>]",
-		Short:             "Expire Silence for alert",
-		Long: `Expire all silences, or expire a specific silence by its silence ID.`,
+		Use:   "expire [--cluster-id <cluster-identifier>] [--all | --silence-id <silence-id>]",
+		Short: "Expire Silence for alert",
+		Long:  `Expire all silences, or expire a specific silence by its silence ID.`,
 		Example: `  # Expire a specific silence by ID
   osdctl alerts silence expire --cluster-id ${CLUSTER_ID} --silence-id ${SILENCE_ID} --reason "${REASON}"
 
