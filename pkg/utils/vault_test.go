@@ -1,156 +1,212 @@
 package utils
 
 import (
-	"os"
-	"os/exec"
+	"fmt"
 	"testing"
-
-	ocmutils "github.com/openshift/ocm-container/pkg/utils"
 )
 
-// TestSetupVaultToken_ContainerEnvironment tests that the vault login command
-// uses the correct flags when running inside a container (IO_OPENSHIFT_MANAGED_NAME env var set)
-func TestSetupVaultToken_ContainerEnvironment(t *testing.T) {
+func TestReadCallbackPort(t *testing.T) {
 	tests := []struct {
-		name              string
-		containerEnvValue string
-		expectNoBrowser   bool
+		name     string
+		mockData []byte
+		mockErr  error
+		expected string
 	}{
 		{
-			name:              "Container environment with IO_OPENSHIFT_MANAGED_NAME=ocm-container",
-			containerEnvValue: "ocm-container",
-			expectNoBrowser:   true,
+			name:     "reads port from file",
+			mockData: []byte("43210\n"),
+			expected: "43210",
 		},
 		{
-			name:              "Non-container environment (empty)",
-			containerEnvValue: "",
-			expectNoBrowser:   false,
+			name:     "trims whitespace",
+			mockData: []byte("  12345  \n"),
+			expected: "12345",
+		},
+		{
+			name:     "returns empty for missing file",
+			mockErr:  fmt.Errorf("no such file"),
+			expected: "",
+		},
+		{
+			name:     "returns empty for empty file",
+			mockData: []byte(""),
+			expected: "",
+		},
+		{
+			name:     "returns empty for whitespace-only file",
+			mockData: []byte("   \n"),
+			expected: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set environment using t.Setenv - automatically cleaned up after test
-			// Always call t.Setenv to ensure clean environment, even for empty case
-			t.Setenv("IO_OPENSHIFT_MANAGED_NAME", tt.containerEnvValue)
+			orig := readFileFunc
+			defer func() { readFileFunc = orig }()
 
-			// Build the command args as the code does
-			loginArgs := []string{"login", "-method=oidc", "-no-print"}
-			if ocmutils.IsRunningInOcmContainer() {
-				loginArgs = []string{"login", "-method=oidc", "skip_browser=true", "listenaddress=0.0.0.0"}
+			readFileFunc = func(_ string) ([]byte, error) {
+				if tt.mockErr != nil {
+					return nil, tt.mockErr
+				}
+				return tt.mockData, nil
 			}
 
-			// Verify the correct parameter is used
-			cmd := exec.Command("vault", loginArgs...)
-			cmdArgs := cmd.Args[1:] // Skip the "vault" binary name
-
-			if tt.expectNoBrowser {
-				// Should have skip_browser=true and listenaddress=0.0.0.0 parameters
-				hasSkipBrowser := false
-				hasNoPrint := false
-				hasListenAddress := false
-				for _, arg := range cmdArgs {
-					if arg == "skip_browser=true" {
-						hasSkipBrowser = true
-					}
-					if arg == "-no-print" {
-						hasNoPrint = true
-					}
-					if arg == "listenaddress=0.0.0.0" {
-						hasListenAddress = true
-					}
-				}
-
-				if !hasSkipBrowser {
-					t.Errorf("Expected skip_browser=true parameter in container environment, got args: %v", cmdArgs)
-				}
-				if hasNoPrint {
-					t.Errorf("Did not expect -no-print flag in container environment, got args: %v", cmdArgs)
-				}
-				if !hasListenAddress {
-					t.Errorf("Expected listenaddress=0.0.0.0 parameter in container environment, got args: %v", cmdArgs)
-				}
-			} else {
-				// Should have -no-print flag
-				hasSkipBrowser := false
-				hasNoPrint := false
-				for _, arg := range cmdArgs {
-					if arg == "skip_browser=true" {
-						hasSkipBrowser = true
-					}
-					if arg == "-no-print" {
-						hasNoPrint = true
-					}
-				}
-
-				if hasSkipBrowser {
-					t.Errorf("Did not expect skip_browser=true parameter in non-container environment, got args: %v", cmdArgs)
-				}
-				if !hasNoPrint {
-					t.Errorf("Expected -no-print flag in non-container environment, got args: %v", cmdArgs)
-				}
+			port := readCallbackPort()
+			if port != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, port)
 			}
 		})
 	}
 }
 
-// TestSetupVaultToken_OutputRedirection tests that stdout/stderr are properly
-// redirected based on the environment
-func TestSetupVaultToken_OutputRedirection(t *testing.T) {
+func TestBuildOIDCArgs(t *testing.T) {
 	tests := []struct {
-		name              string
-		containerEnvValue string
-		expectOutput      bool
+		name             string
+		noStore          bool
+		callbackPort     string
+		expectNoStore    bool
+		expectFieldToken bool
+		expectPort       bool
+		expectCallback   bool
 	}{
 		{
-			name:              "Container environment shows output",
-			containerEnvValue: "ocm-container",
-			expectOutput:      true,
+			name:           "with store, no callback port",
+			noStore:        false,
+			callbackPort:   "",
+			expectNoStore:  false,
+			expectPort:     false,
+			expectCallback: false,
 		},
 		{
-			name:              "Non-container environment hides output",
-			containerEnvValue: "",
-			expectOutput:      false,
+			name:             "without store, no callback port",
+			noStore:          true,
+			callbackPort:     "",
+			expectNoStore:    true,
+			expectFieldToken: true,
+			expectPort:       false,
+			expectCallback:   false,
+		},
+		{
+			name:           "with store, with callback port",
+			noStore:        false,
+			callbackPort:   "43210",
+			expectNoStore:  false,
+			expectPort:     true,
+			expectCallback: true,
+		},
+		{
+			name:             "without store, with callback port",
+			noStore:          true,
+			callbackPort:     "43210",
+			expectNoStore:    true,
+			expectFieldToken: true,
+			expectPort:       true,
+			expectCallback:   true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set environment using t.Setenv - automatically cleaned up after test
-			// Always call t.Setenv to ensure clean environment, even for empty case
-			t.Setenv("IO_OPENSHIFT_MANAGED_NAME", tt.containerEnvValue)
+			args := buildOIDCArgs(tt.noStore, tt.callbackPort)
 
-			// Build the command as the code does
-			loginArgs := []string{"login", "-method=oidc", "-no-print"}
-			if ocmutils.IsRunningInOcmContainer() {
-				loginArgs = []string{"login", "-method=oidc", "skip_browser=true", "listenaddress=0.0.0.0"}
-			}
-			loginCmd := exec.Command("vault", loginArgs...)
-
-			// Set output redirection as the code does
-			if ocmutils.IsRunningInOcmContainer() {
-				loginCmd.Stdout = os.Stdout
-				loginCmd.Stderr = os.Stderr
-			} else {
-				loginCmd.Stdout = nil
-				loginCmd.Stderr = nil
+			argSet := map[string]bool{}
+			for _, arg := range args {
+				argSet[arg] = true
 			}
 
-			// Verify output redirection is correct
-			if tt.expectOutput {
-				if loginCmd.Stdout != os.Stdout {
-					t.Error("Expected Stdout to be os.Stdout in container environment")
-				}
-				if loginCmd.Stderr != os.Stderr {
-					t.Error("Expected Stderr to be os.Stderr in container environment")
-				}
-			} else {
-				if loginCmd.Stdout != nil {
-					t.Error("Expected Stdout to be nil in non-container environment")
-				}
-				if loginCmd.Stderr != nil {
-					t.Error("Expected Stderr to be nil in non-container environment")
-				}
+			if !argSet["skip_browser=true"] {
+				t.Errorf("expected skip_browser=true, got args: %v", args)
+			}
+			if !argSet["listenaddress=0.0.0.0"] {
+				t.Errorf("expected listenaddress=0.0.0.0, got args: %v", args)
+			}
+			if !argSet["login"] {
+				t.Errorf("expected login, got args: %v", args)
+			}
+			if !argSet["-method=oidc"] {
+				t.Errorf("expected -method=oidc, got args: %v", args)
+			}
+
+			if tt.expectNoStore && !argSet["-no-store"] {
+				t.Errorf("expected -no-store, got args: %v", args)
+			}
+			if !tt.expectNoStore && argSet["-no-store"] {
+				t.Errorf("did not expect -no-store, got args: %v", args)
+			}
+			if tt.expectFieldToken && !argSet["-field=token"] {
+				t.Errorf("expected -field=token, got args: %v", args)
+			}
+			if !tt.expectFieldToken && argSet["-field=token"] {
+				t.Errorf("did not expect -field=token, got args: %v", args)
+			}
+
+			expectPortArg := fmt.Sprintf("port=%s", defaultVaultOIDCPort)
+			expectCallbackArg := fmt.Sprintf("callbackport=%s", tt.callbackPort)
+
+			if tt.expectPort && !argSet[expectPortArg] {
+				t.Errorf("expected %s, got args: %v", expectPortArg, args)
+			}
+			if !tt.expectPort && argSet[expectPortArg] {
+				t.Errorf("did not expect %s, got args: %v", expectPortArg, args)
+			}
+			if tt.expectCallback && !argSet[expectCallbackArg] {
+				t.Errorf("expected %s, got args: %v", expectCallbackArg, args)
+			}
+			if !tt.expectCallback && argSet[expectCallbackArg] {
+				t.Errorf("did not expect %s, got args: %v", expectCallbackArg, args)
+			}
+		})
+	}
+}
+
+func TestIsTokenFileError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "rename error",
+			err:      fmt.Errorf("rename /root/.vault-token.tmp /root/.vault-token: device or resource busy"),
+			expected: true,
+		},
+		{
+			name:     "device or resource busy",
+			err:      fmt.Errorf("device or resource busy"),
+			expected: true,
+		},
+		{
+			name:     "read-only file system",
+			err:      fmt.Errorf("read-only file system"),
+			expected: true,
+		},
+		{
+			name:     "permission denied",
+			err:      fmt.Errorf("permission denied"),
+			expected: true,
+		},
+		{
+			name:     "auth timeout",
+			err:      fmt.Errorf("context deadline exceeded"),
+			expected: false,
+		},
+		{
+			name:     "network error",
+			err:      fmt.Errorf("dial tcp: connection refused"),
+			expected: false,
+		},
+		{
+			name:     "generic vault error",
+			err:      fmt.Errorf("Error making API request"),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isTokenFileError(tt.err)
+			if result != tt.expected {
+				t.Errorf("isTokenFileError(%q) = %v, want %v", tt.err, result, tt.expected)
 			}
 		})
 	}
