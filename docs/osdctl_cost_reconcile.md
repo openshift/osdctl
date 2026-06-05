@@ -6,6 +6,13 @@ Checks if there's a cost category for every OU. If an OU is missing a cost categ
 osdctl cost reconcile [flags]
 ```
 
+### Examples
+
+```
+  # Reconcile cost categories for an OU
+  osdctl cost reconcile --ou ${OU_ID}
+```
+
 ### Options
 
 ```

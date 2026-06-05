@@ -6,6 +6,13 @@ Create a cost category for the given OU
 osdctl cost create [flags]
 ```
 
+### Examples
+
+```
+  # Create a cost category for an organizational unit
+  osdctl cost create --ou ${OU_ID}
+```
+
 ### Options
 
 ```

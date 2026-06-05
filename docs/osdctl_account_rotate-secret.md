@@ -7,7 +7,20 @@ Rotate IAM credentials secret
 When logged into a hive shard, this rotates IAM credential secrets for a given `account` CR.
 
 ```
-osdctl account rotate-secret <aws-account-cr-name> [flags]
+osdctl account rotate-secret ${AWS_ACCOUNT_CR_NAME} [flags]
+```
+
+### Examples
+
+```
+  # Rotate IAM credentials for an account CR
+  osdctl account rotate-secret ${AWS_ACCOUNT_CR_NAME} --cluster-id ${CLUSTER_ID} --reason "${REASON}"
+
+  # Rotate including CCS admin credentials
+  osdctl account rotate-secret ${AWS_ACCOUNT_CR_NAME} --cluster-id ${CLUSTER_ID} --reason "${REASON}" --ccs
+
+  # Dry-run to preview without making changes
+  osdctl account rotate-secret ${AWS_ACCOUNT_CR_NAME} --cluster-id ${CLUSTER_ID} --reason "${REASON}" --dry-run
 ```
 
 ### Options

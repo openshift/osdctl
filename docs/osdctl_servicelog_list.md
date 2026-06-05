@@ -6,18 +6,21 @@ Get service logs for a given cluster identifier.
 
 Get service logs for a given cluster identifier.
 
-# To return just service logs created by SREs
-osdctl servicelog list --cluster-id=my-cluster-id
-
-# To return all service logs, including those by automated systems
-osdctl servicelog list --cluster-id=my-cluster-id --all-messages
-
-# To return all service logs, as well as internal service logs
-osdctl servicelog list --cluster-id=my-cluster-id --all-messages --internal
-
-
 ```
 osdctl servicelog list --cluster-id <cluster-identifier> [flags] [options]
+```
+
+### Examples
+
+```
+  # List SRE-created service logs
+  osdctl servicelog list --cluster-id ${CLUSTER_ID}
+
+  # List all service logs including automated
+  osdctl servicelog list --cluster-id ${CLUSTER_ID} --all-messages
+
+  # List all service logs including internal
+  osdctl servicelog list --cluster-id ${CLUSTER_ID} --all-messages --internal
 ```
 
 ### Options

@@ -11,6 +11,16 @@ It attempts to render the relationships as graphviz if that output format is cho
 osdctl cluster hypershift-info [flags]
 ```
 
+### Examples
+
+```
+  # Show hypershift cluster info as graphviz
+  osdctl cluster hypershift-info --cluster-id ${CLUSTER_ID}
+
+  # Show hypershift cluster info as table
+  osdctl cluster hypershift-info --cluster-id ${CLUSTER_ID} --output table
+```
+
 ### Options
 
 ```

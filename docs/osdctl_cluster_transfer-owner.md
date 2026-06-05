@@ -6,6 +6,16 @@ Transfer cluster ownership to a new user (to be done by Region Lead)
 osdctl cluster transfer-owner [flags]
 ```
 
+### Examples
+
+```
+  # Transfer cluster ownership
+  osdctl cluster transfer-owner --cluster-id ${CLUSTER_ID} --old-owner ${OLD_OWNER} --new-owner ${NEW_OWNER} --reason "${REASON}"
+
+  # Dry-run to preview the transfer without applying changes
+  osdctl cluster transfer-owner --cluster-id ${CLUSTER_ID} --old-owner ${OLD_OWNER} --new-owner ${NEW_OWNER} --reason "${REASON}" --dry-run
+```
+
 ### Options
 
 ```

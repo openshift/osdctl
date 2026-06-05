@@ -24,13 +24,13 @@ osdctl cluster validate-pull-secret-ext --cluster-id $CLUSTER_ID [flags]
 ```
 
 	# Compare OCM Access-Token, OCM Registry-Credentials, and OCM Account Email against cluster's pull secret
-	osdctl cluster validate-pull-secret-ext --cluster-id ${CLUSTER_ID} --reason "OSD-XYZ"
+	osdctl cluster validate-pull-secret-ext --cluster-id ${CLUSTER_ID} --reason "${REASON}"
 
 	# Exclude Access-Token, and Registry-Credential checks...
-	osdctl cluster validate-pull-secret-ext --cluster-id ${CLUSTER_ID} --reason "OSD-XYZ" --skip-access-token --skip-registry-creds
+	osdctl cluster validate-pull-secret-ext --cluster-id ${CLUSTER_ID} --reason "${REASON}" --skip-access-token --skip-registry-creds
 
 	# Skip sending service logs (useful for testing)
-	osdctl cluster validate-pull-secret-ext --cluster-id ${CLUSTER_ID} --reason "OSD-XYZ" --skip-service-logs
+	osdctl cluster validate-pull-secret-ext --cluster-id ${CLUSTER_ID} --reason "${REASON}" --skip-service-logs
 
 ```
 

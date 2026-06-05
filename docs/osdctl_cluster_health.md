@@ -6,6 +6,13 @@ Describes health of cluster nodes and provides other cluster vitals.
 osdctl cluster health [flags]
 ```
 
+### Examples
+
+```
+  # Check cluster health
+  osdctl cluster health --cluster-id ${CLUSTER_ID}
+```
+
 ### Options
 
 ```

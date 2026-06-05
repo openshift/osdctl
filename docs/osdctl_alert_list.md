@@ -10,6 +10,16 @@ Checks the alerts for the cluster and print the list based on severity
 osdctl alert list --cluster-id <cluster-id> --level [warning, critical, firing, pending, all] [flags]
 ```
 
+### Examples
+
+```
+  # List all firing alerts for a cluster
+  osdctl alerts list --cluster-id ${CLUSTER_ID} --reason "${REASON}"
+
+  # List only critical alerts
+  osdctl alerts list --cluster-id ${CLUSTER_ID} --level critical --reason "${REASON}"
+```
+
 ### Options
 
 ```

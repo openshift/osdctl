@@ -10,6 +10,13 @@ Replaces an unhealthy ectd node using the member id provided
 osdctl cluster etcd-member-replace --cluster-id <cluster-identifier> [flags]
 ```
 
+### Examples
+
+```
+  # Replace an unhealthy etcd member
+  osdctl cluster etcd-member-replace --cluster-id ${CLUSTER_ID} --node ${NODE_NAME} --reason "${REASON}"
+```
+
 ### Options
 
 ```

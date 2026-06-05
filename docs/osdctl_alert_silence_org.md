@@ -10,6 +10,16 @@ add new silence for specfic or all alerts with comment and duration of alert for
 osdctl alert silence org <org-id> [--all --duration --comment | --alertname --duration --comment] [flags]
 ```
 
+### Examples
+
+```
+  # Silence all alerts for an organization
+  osdctl alerts silence org ${ORG_ID} --all --comment "${REASON}: org-wide silence"
+
+  # Silence a specific alert for an organization
+  osdctl alerts silence org ${ORG_ID} --alertname "KubePodNotReady" --comment "${REASON}: investigating pod issue"
+```
+
 ### Options
 
 ```

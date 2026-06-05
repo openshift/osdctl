@@ -14,14 +14,11 @@ osdctl cluster support post --cluster-id <cluster-identifier> [flags]
 ### Examples
 
 ```
-# Post a limited support reason for a cluster misconfiguration
-osdctl cluster support post --cluster-id=1a2B3c4DefghIjkLMNOpQrSTUV5 --misconfiguration=cluster --problem="The cluster has a second failing ingress controller, which is not supported and can cause issues with SLA." \
---resolution="Remove the additional ingress controller 'my-custom-ingresscontroller'. 'oc get ingresscontroller -n openshift-ingress-operator' should yield only 'default'" \
---evidence="See OHSS-1234"
-
-Will result in the following limited-support text sent to the customer:
-The cluster has a second failing ingress controller, which is not supported and can cause issues with SLA. Remove the additional ingress controller 'my-custom-ingresscontroller'. 'oc get ingresscontroller -n openshift-ingress-operator' should yield only 'default'.
-
+  # Post a limited support reason for a cluster misconfiguration
+  osdctl cluster support post --cluster-id ${CLUSTER_ID} --misconfiguration=cluster \
+    --problem="The cluster has a second failing ingress controller" \
+    --resolution="Remove the additional ingress controller" \
+    --evidence="See ${REASON}"
 ```
 
 ### Options

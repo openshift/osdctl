@@ -10,6 +10,13 @@ print the list of silences
 osdctl alert silence list --cluster-id <cluster-identifier> [flags]
 ```
 
+### Examples
+
+```
+  # List all active silences for a cluster
+  osdctl alerts silence list --cluster-id ${CLUSTER_ID} --reason "${REASON}"
+```
+
 ### Options
 
 ```

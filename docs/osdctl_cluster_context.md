@@ -6,6 +6,16 @@ Shows the context of a specified cluster
 osdctl cluster context --cluster-id <cluster-identifier> [flags]
 ```
 
+### Examples
+
+```
+  # Show cluster context
+  osdctl cluster context --cluster-id ${CLUSTER_ID}
+
+  # Show cluster context with full checks
+  osdctl cluster context --cluster-id ${CLUSTER_ID} --full
+```
+
 ### Options
 
 ```

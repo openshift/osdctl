@@ -6,6 +6,13 @@ Diff IAM permissions for cluster operators between two versions
 osdctl iampermissions diff [flags]
 ```
 
+### Examples
+
+```
+  # Diff IAM permissions between two OCP versions
+  osdctl iampermissions diff --base-version 4.14.0 --target-version 4.15.0
+```
+
 ### Options
 
 ```

@@ -6,6 +6,13 @@ Detach openshift-monitoring namespace's volume from a cluster forcefully
 osdctl cluster detach-stuck-volume --cluster-id <cluster-identifier> [flags]
 ```
 
+### Examples
+
+```
+  # Detach stuck volumes in the openshift-monitoring namespace
+  osdctl cluster detach-stuck-volume --cluster-id ${CLUSTER_ID} --reason "${REASON}"
+```
+
 ### Options
 
 ```

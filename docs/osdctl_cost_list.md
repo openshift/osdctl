@@ -6,6 +6,16 @@ List the cost of each Account/OU under given OU
 osdctl cost list [flags]
 ```
 
+### Examples
+
+```
+  # List costs for an OU for the current month
+  osdctl cost list --ou ${OU_ID} --time MTD
+
+  # List costs for a date range
+  osdctl cost list --ou ${OU_ID} --start 2024-01-01 --end 2024-01-31
+```
+
 ### Options
 
 ```

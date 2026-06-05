@@ -23,13 +23,13 @@ osdctl cluster snapshot [flags]
 
 ```
   # Capture cluster snapshot to a file
-  osdctl cluster snapshot -C <cluster-id> -o before.yaml
+  osdctl cluster snapshot -C ${CLUSTER_ID} -o before.yaml
 
   # Capture snapshot with specific namespaces
-  osdctl cluster snapshot -C <cluster-id> -o snapshot.yaml --namespaces openshift-monitoring,openshift-operators
+  osdctl cluster snapshot -C ${CLUSTER_ID} -o snapshot.yaml --namespaces openshift-monitoring,openshift-operators
 
   # Capture additional resource types
-  osdctl cluster snapshot -C <cluster-id> -o snapshot.yaml --resources pods,deployments,services
+  osdctl cluster snapshot -C ${CLUSTER_ID} -o snapshot.yaml --resources pods,deployments,services
 ```
 
 ### Options
