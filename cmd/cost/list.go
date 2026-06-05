@@ -21,6 +21,11 @@ func newCmdList(streams genericclioptions.IOStreams, globalOpts *globalflags.Glo
 	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "List the cost of each Account/OU under given OU",
+		Example: `  # List costs for an OU for the current month
+  osdctl cost list --ou ${OU_ID} --time MTD
+
+  # List costs for a date range
+  osdctl cost list --ou ${OU_ID} --start 2024-01-01 --end 2024-01-31`,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.checkArgs(cmd, args))
 			cmdutil.CheckErr(ops.runList())

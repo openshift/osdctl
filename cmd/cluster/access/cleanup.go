@@ -25,7 +25,9 @@ func newCmdCleanup(client *k8s.LazyClient, streams genericclioptions.IOStreams) 
 	cleanupCmd := &cobra.Command{
 		Use:               "cleanup --cluster-id <cluster-identifier>",
 		Short:             "Drop emergency access to a cluster",
-		Long:              "Relinquish emergency access from the given cluster. If the cluster is PrivateLink, it deletes\nall jump pods in the cluster's namespace (because of this, you must be logged into the hive shard\nwhen dropping access for PrivateLink clusters). For non-PrivateLink clusters, the $KUBECONFIG\nenvironment variable is unset, if applicable.",
+		Long: "Relinquish emergency access from the given cluster. If the cluster is PrivateLink, it deletes\nall jump pods in the cluster's namespace (because of this, you must be logged into the hive shard\nwhen dropping access for PrivateLink clusters). For non-PrivateLink clusters, the $KUBECONFIG\nenvironment variable is unset, if applicable.",
+		Example: `  # Drop emergency access to a cluster
+  osdctl cluster break-glass cleanup --cluster-id ${CLUSTER_ID}`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {

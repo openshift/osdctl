@@ -14,7 +14,9 @@ func newCmdCheckBannedUser() *cobra.Command {
 	clusterID := ""
 	cmd := &cobra.Command{
 		Use:               "check-banned-user --cluster-id <cluster-identifier>",
-		Short:             "Checks if the cluster owner is a banned user.",
+		Short: "Checks if the cluster owner is a banned user.",
+		Example: `  # Check if the cluster owner is banned
+  osdctl cluster check-banned-user --cluster-id ${CLUSTER_ID}`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {

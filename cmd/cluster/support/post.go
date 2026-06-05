@@ -68,14 +68,11 @@ func newCmdPost() *cobra.Command {
 		Short: "Send limited support reason to a given cluster",
 		Long: `Sends limited support reason to a given cluster, along with an internal service log detailing why the cluster was placed into limited support.
 The caller will be prompted to continue before sending the limited support reason.`,
-		Example: `# Post a limited support reason for a cluster misconfiguration
-osdctl cluster support post --cluster-id=1a2B3c4DefghIjkLMNOpQrSTUV5 --misconfiguration=cluster --problem="The cluster has a second failing ingress controller, which is not supported and can cause issues with SLA." \
---resolution="Remove the additional ingress controller 'my-custom-ingresscontroller'. 'oc get ingresscontroller -n openshift-ingress-operator' should yield only 'default'" \
---evidence="See OHSS-1234"
-
-Will result in the following limited-support text sent to the customer:
-The cluster has a second failing ingress controller, which is not supported and can cause issues with SLA. Remove the additional ingress controller 'my-custom-ingresscontroller'. 'oc get ingresscontroller -n openshift-ingress-operator' should yield only 'default'.
-`,
+		Example: `  # Post a limited support reason for a cluster misconfiguration
+  osdctl cluster support post --cluster-id ${CLUSTER_ID} --misconfiguration=cluster \
+    --problem="The cluster has a second failing ingress controller" \
+    --resolution="Remove the additional ingress controller" \
+    --evidence="See ${REASON}"`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

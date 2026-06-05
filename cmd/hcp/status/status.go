@@ -21,11 +21,8 @@ func NewCmdStatus() *cobra.Command {
 		Long: `Display a comprehensive health overview of a ROSA HCP cluster using
 data from the OCM live resources endpoint. Shows ManifestWork sync status,
 HostedCluster conditions, certificate status, and NodePool health.`,
-		Example: `  # Show status by cluster name
-  osdctl hcp status --cluster-id my-cluster
-
-  # Show status by cluster ID
-  osdctl hcp status --cluster-id 2o9r9r1q4tp0bulsfksdc8fesls54sql`,
+		Example: `  # Show HCP cluster status
+  osdctl hcp status --cluster-id ${CLUSTER_ID}`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

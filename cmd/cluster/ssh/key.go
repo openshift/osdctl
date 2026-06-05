@@ -35,32 +35,14 @@ func NewCmdKey() *cobra.Command {
 		Use:   "key --reason $reason [--cluster-id $CLUSTER_ID]",
 		Short: "Retrieve a cluster's SSH key from Hive",
 		Long:  "Retrieve a cluster's SSH key from Hive. If a cluster-id is provided, then the key retrieved will be for that cluster. If no cluster-id is provided, then the key for the cluster backplane is currently logged into will be used instead. This command should only be used as a last resort, when all other means of accessing a node are lost.",
-		Example: `$ osdctl cluster ssh key --cluster-id $CLUSTER_ID --reason "OHSS-XXXX"
-INFO[0005] Backplane URL retrieved via OCM environment: https://api.backplane.openshift.com
------BEGIN RSA PRIVATE KEY-----
-...
------END RSA PRIVATE KEY-----
+		Example: `  # Retrieve SSH key for a specific cluster
+  osdctl cluster ssh key --cluster-id ${CLUSTER_ID} --reason "${REASON}"
 
-Providing a --cluster-id allows you to specify the cluster who's private ssh key you want to view, regardless if you're logged in or not.
+  # Retrieve SSH key for the currently logged-in cluster
+  osdctl cluster ssh key --reason "${REASON}"
 
-
-$ osdctl cluster ssh key --reason "OHSS-XXXX"
-INFO[0005] Backplane URL retrieved via OCM environment: https://api.backplane.openshift.com
------BEGIN RSA PRIVATE KEY-----
-...
------END RSA PRIVATE KEY-----
-
-Omitting --cluster-id will print the ssh key for the cluster you're currently logged into.
-
-
-$ osdctl cluster ssh key -y --reason "OHSS-XXXX" > /tmp/ssh.key
-INFO[0005] Backplane URL retrieved via OCM environment: https://api.backplane.openshift.com
-$ cat /tmp/ssh.key
------BEGIN RSA PRIVATE KEY-----
-...
------END RSA PRIVATE KEY-----
-
-Despite the logs from backplane, the ssh key is the only output channelled through stdout. This means you can safely redirect the output to a file for greater convienence.`,
+  # Save SSH key to a file
+  osdctl cluster ssh key -y --reason "${REASON}" > /tmp/ssh.key`,
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, args []string) error {
 			// Validate --hive-ocm-url if provided

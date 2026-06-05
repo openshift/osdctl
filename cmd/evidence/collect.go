@@ -155,16 +155,16 @@ This all-in-one command gathers:
 The collected evidence is saved to the specified output directory for
 inclusion in test reports and feature validation documentation.`,
 		Example: `  # Collect all evidence to a directory
-  osdctl evidence collect -C <cluster-id> --output ./evidence/
+  osdctl evidence collect -C ${CLUSTER_ID} --output ./evidence/
 
   # Collect evidence from the last 2 hours
-  osdctl evidence collect -C <cluster-id> --output ./evidence/ --since 2h
+  osdctl evidence collect -C ${CLUSTER_ID} --output ./evidence/ --since 2h
 
   # Collect evidence without CloudTrail (for non-AWS or limited access)
-  osdctl evidence collect -C <cluster-id> --output ./evidence/ --skip-cloudtrail
+  osdctl evidence collect -C ${CLUSTER_ID} --output ./evidence/ --skip-cloudtrail
 
   # Include Kubernetes events in collection
-  osdctl evidence collect -C <cluster-id> --output ./evidence/ --include-events`,
+  osdctl evidence collect -C ${CLUSTER_ID} --output ./evidence/ --include-events`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return opts.run()
 		},
@@ -569,7 +569,7 @@ func (o *collectOptions) collectKubernetesEvents(startTime time.Time) ([]EventIn
 func (o *collectOptions) collectCloudTrailData(startTime time.Time) (*CloudTrailData, error) {
 	// Note: Full CloudTrail error data collection is handled by 'osdctl cloudtrail errors'
 	// This function verifies AWS access is available
-	// For detailed CloudTrail analysis, use: osdctl cloudtrail errors -C <cluster-id> --since <duration>
+	// For detailed CloudTrail analysis, use: osdctl cloudtrail errors -C ${CLUSTER_ID} --since <duration>
 	_ = startTime
 
 	// Return nil to indicate CloudTrail was not collected (use dedicated command for details)

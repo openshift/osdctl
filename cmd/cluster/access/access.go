@@ -55,7 +55,9 @@ func NewCmdAccess(streams genericclioptions.IOStreams, client *k8s.LazyClient) *
 	accessCmd := &cobra.Command{
 		Use:               "break-glass --cluster-id <cluster-identifier>",
 		Short:             "Emergency access to a cluster",
-		Long:              "Obtain emergency credentials to access the given cluster. You must be logged into the cluster's hive shard",
+		Long: "Obtain emergency credentials to access the given cluster. You must be logged into the cluster's hive shard",
+		Example: `  # Obtain emergency break-glass access to a cluster
+  osdctl cluster break-glass --cluster-id ${CLUSTER_ID} --reason "${REASON}"`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(_ *cobra.Command, _ []string) {

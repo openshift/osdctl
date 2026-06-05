@@ -28,7 +28,15 @@ func NewCmdAddSilence() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "add --cluster-id <cluster-identifier> [--all --duration --comment | --alertname --duration --comment]",
 		Short:             "Add new silence for alert",
-		Long:              `add new silence for specfic or all alert with comment and duration of alert`,
+		Long: `add new silence for specfic or all alert with comment and duration of alert`,
+		Example: `  # Silence a specific alert
+  osdctl alerts silence add --cluster-id ${CLUSTER_ID} --alertname "KubePodNotReady" --reason "${REASON}"
+
+  # Silence all alerts for a cluster
+  osdctl alerts silence add --cluster-id ${CLUSTER_ID} --all --reason "${REASON}"
+
+  # Silence an alert with custom duration and comment
+  osdctl alerts silence add --cluster-id ${CLUSTER_ID} --alertname "KubePodNotReady" --duration 2h --comment "Investigating pod issue" --reason "${REASON}"`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {

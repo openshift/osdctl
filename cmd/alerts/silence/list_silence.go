@@ -20,7 +20,9 @@ func NewCmdListSilence() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "list --cluster-id <cluster-identifier>",
 		Short:             "List all silences",
-		Long:              `print the list of silences`,
+		Long: `print the list of silences`,
+		Example: `  # List all active silences for a cluster
+  osdctl alerts silence list --cluster-id ${CLUSTER_ID} --reason "${REASON}"`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {

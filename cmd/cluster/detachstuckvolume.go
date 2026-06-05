@@ -36,6 +36,8 @@ func newCmdDetachStuckVolume() *cobra.Command {
 	detachstuckvolumeCmd := &cobra.Command{
 		Use:               "detach-stuck-volume --cluster-id <cluster-identifier>",
 		Short:             "Detach openshift-monitoring namespace's volume from a cluster forcefully",
+		Example: `  # Detach stuck volumes in the openshift-monitoring namespace
+  osdctl cluster detach-stuck-volume --cluster-id ${CLUSTER_ID} --reason "${REASON}"`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {

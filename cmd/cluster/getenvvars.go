@@ -36,7 +36,12 @@ func newCmdGetEnvVars() *cobra.Command {
 	opts := newGetEnvVarsOptions()
 	getEnvVarsCmd := &cobra.Command{
 		Use:               "get-env-vars --cluster-id <cluster-identifier>",
-		Short:             "Print a cluster's ID/management namespaces, optionally as env variables",
+		Short: "Print a cluster's ID/management namespaces, optionally as env variables",
+		Example: `  # Print cluster environment variables
+  osdctl cluster get-env-vars --cluster-id ${CLUSTER_ID}
+
+  # Print as exportable env variables
+  osdctl cluster get-env-vars --cluster-id ${CLUSTER_ID} --output env`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

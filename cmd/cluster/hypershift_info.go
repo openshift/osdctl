@@ -41,6 +41,11 @@ func NewCmdHypershiftInfo(streams genericclioptions.IOStreams) *cobra.Command {
 		Short: "Pull information about AWS objects from the cluster, the management cluster and the privatelink cluster",
 		Long: `This command aggregates AWS objects from the cluster, management cluster and privatelink for hypershift cluster.
 It attempts to render the relationships as graphviz if that output format is chosen or will simply print the output as tables.`,
+		Example: `  # Show hypershift cluster info as graphviz
+  osdctl cluster hypershift-info --cluster-id ${CLUSTER_ID}
+
+  # Show hypershift cluster info as table
+  osdctl cluster hypershift-info --cluster-id ${CLUSTER_ID} --output table`,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ops.complete(cmd))

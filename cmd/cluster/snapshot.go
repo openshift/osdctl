@@ -96,13 +96,13 @@ This command captures the current state of key cluster resources including:
 The snapshot can be saved to a YAML file and later compared using 
 'osdctl cluster diff' to identify changes during feature testing.`,
 		Example: `  # Capture cluster snapshot to a file
-  osdctl cluster snapshot -C <cluster-id> -o before.yaml
+  osdctl cluster snapshot -C ${CLUSTER_ID} -o before.yaml
 
   # Capture snapshot with specific namespaces
-  osdctl cluster snapshot -C <cluster-id> -o snapshot.yaml --namespaces openshift-monitoring,openshift-operators
+  osdctl cluster snapshot -C ${CLUSTER_ID} -o snapshot.yaml --namespaces openshift-monitoring,openshift-operators
 
   # Capture additional resource types
-  osdctl cluster snapshot -C <cluster-id> -o snapshot.yaml --resources pods,deployments,services`,
+  osdctl cluster snapshot -C ${CLUSTER_ID} -o snapshot.yaml --resources pods,deployments,services`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return opts.run()
 		},
