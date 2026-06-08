@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"syscall"
 	"time"
 
@@ -274,24 +274,24 @@ func CreateRhobsFetcher(clusterKey string, rhobsFetchUse RhobsFetchUsage, hiveOc
 	}, nil
 }
 
-func (q *RhobsFetcher) getTokenProvider() (ocmutils.AccessTokenProvider, error) {
-	if q.tokenProvider == nil {
-		tokenProvider, err := ocmutils.GetScopedTokenProvider(authUrl, fmt.Sprintf(rhobsVaultPathKeyTemplate, q.ocmEnvName), "profile")
+func (f *RhobsFetcher) getTokenProvider() (ocmutils.AccessTokenProvider, error) {
+	if f.tokenProvider == nil {
+		tokenProvider, err := ocmutils.GetScopedTokenProvider(authUrl, fmt.Sprintf(rhobsVaultPathKeyTemplate, f.ocmEnvName), "profile")
 		if err != nil {
 			return nil, fmt.Errorf("failed to get access token provider: %v", err)
 		}
-		q.tokenProvider = tokenProvider
+		f.tokenProvider = tokenProvider
 	}
-	return q.tokenProvider, nil
+	return f.tokenProvider, nil
 }
 
-func (q *RhobsFetcher) getClient() (*rhobsclient.ClientWithResponses, error) {
-	tokenProvider, err := q.getTokenProvider()
+func (f *RhobsFetcher) getClient() (*rhobsclient.ClientWithResponses, error) {
+	tokenProvider, err := f.getTokenProvider()
 	if err != nil {
 		return nil, err
 	}
 
-	rhobsClient, err := rhobsclient.NewClientWithResponses(q.RhobsCell, func(rhobsClient *rhobsclient.Client) error {
+	rhobsClient, err := rhobsclient.NewClientWithResponses(f.RhobsCell, func(rhobsClient *rhobsclient.Client) error {
 		rhobsClient.RequestEditors = append(rhobsClient.RequestEditors, func(ctx context.Context, req *http.Request) error {
 			accessToken, err := tokenProvider.Token()
 			if err != nil {
@@ -321,22 +321,49 @@ type instantMetricResult struct {
 	Value  []interface{}     `json:"value"`
 }
 
-type tableColumn struct {
+type getRangeMetricsResponse struct {
+	Status string `json:"status"`
+	Data   struct {
+		ResultType string              `json:"resultType"`
+		Results    []rangeMetricResult `json:"result"`
+	} `json:"data"`
+}
+
+type rangeMetricResult struct {
+	Metric map[string]string `json:"metric"`
+	Values [][]interface{}   `json:"values"`
+}
+
+type metricsTableColumn struct {
 	name  string
 	width int
 }
 
-func getTableColumns(results *[]instantMetricResult) []tableColumn {
-	timeColumn := tableColumn{name: "TIME", width: len("TIME")}
-	valueColumn := tableColumn{name: "VALUE", width: len("VALUE")}
-	labelNameToColumn := make(map[string]*tableColumn)
+type timestampFormatter func(ts interface{}) string
+
+func machineReadableTimestampFormatter(ts interface{}) string {
+	return fmt.Sprintf("%.3f", ts)
+}
+
+func humanReadableTimestampFormatter(ts interface{}) string {
+	tsFloat, ok := ts.(float64)
+	if !ok {
+		return ""
+	}
+	return time.Unix(int64(tsFloat), 0).String()
+}
+
+func getMetricsTableColumns(results *[]instantMetricResult, tsFormatter timestampFormatter) []metricsTableColumn {
+	timeColumn := metricsTableColumn{name: "TIME", width: len("TIME")}
+	valueColumn := metricsTableColumn{name: "VALUE", width: len("VALUE")}
+	labelNameToColumn := make(map[string]*metricsTableColumn)
 	labelNames := []string{} // to maintain order of label columns
 
 	for _, result := range *results {
 		if len(result.Value) < 2 {
 			continue
 		}
-		time := fmt.Sprintf("%.3f", result.Value[0])
+		time := tsFormatter(result.Value[0])
 		if len(time) > timeColumn.width {
 			timeColumn.width = len(time)
 		}
@@ -347,7 +374,7 @@ func getTableColumns(results *[]instantMetricResult) []tableColumn {
 
 		for labelName, labelValue := range result.Metric {
 			if _, exists := labelNameToColumn[labelName]; !exists {
-				labelNameToColumn[labelName] = &tableColumn{name: labelName, width: len(labelName)}
+				labelNameToColumn[labelName] = &metricsTableColumn{name: labelName, width: len(labelName)}
 				labelNames = append(labelNames, labelName)
 			}
 			if len(labelValue) > labelNameToColumn[labelName].width {
@@ -356,7 +383,7 @@ func getTableColumns(results *[]instantMetricResult) []tableColumn {
 		}
 	}
 
-	columns := []tableColumn{timeColumn, valueColumn}
+	columns := []metricsTableColumn{timeColumn, valueColumn}
 
 	sort.Strings(labelNames)
 	for _, labelName := range labelNames {
@@ -369,7 +396,7 @@ func getTableColumns(results *[]instantMetricResult) []tableColumn {
 type metricsPrinter func(*[]instantMetricResult)
 
 func printMetricsAsTable(results *[]instantMetricResult) {
-	columns := getTableColumns(results)
+	columns := getMetricsTableColumns(results, humanReadableTimestampFormatter)
 	separatorLine := "+"
 	for _, column := range columns {
 		separatorLine += strings.Repeat("-", column.width+2) + "+"
@@ -390,7 +417,7 @@ func printMetricsAsTable(results *[]instantMetricResult) {
 		if len(result.Value) < 2 {
 			continue
 		}
-		time := fmt.Sprintf("%.3f", result.Value[0])
+		time := humanReadableTimestampFormatter(result.Value[0])
 		value := fmt.Sprintf("%s", result.Value[1])
 		fmt.Printf("| %*s | %*s |", columns[0].width, time, columns[1].width, value)
 
@@ -404,7 +431,7 @@ func printMetricsAsTable(results *[]instantMetricResult) {
 }
 
 func printMetricsAsCsv(results *[]instantMetricResult) {
-	columns := getTableColumns(results)
+	columns := getMetricsTableColumns(results, machineReadableTimestampFormatter)
 
 	writer := csv.NewWriter(os.Stdout)
 
@@ -422,7 +449,10 @@ func printMetricsAsCsv(results *[]instantMetricResult) {
 		if len(result.Value) < 2 {
 			continue
 		}
-		row := []string{fmt.Sprintf("%.3f", result.Value[0]), fmt.Sprintf("%s", result.Value[1])}
+		row := []string{
+			machineReadableTimestampFormatter(result.Value[0]),
+			fmt.Sprintf("%s", result.Value[1]),
+		}
 		for _, column := range columns[2:] {
 			row = append(row, result.Metric[column.name])
 		}
@@ -436,7 +466,7 @@ func printMetricsAsCsv(results *[]instantMetricResult) {
 	writer.Flush()
 }
 
-func printMetricsAsJson(results *[]instantMetricResult) {
+func printMetricsAsJson[Result instantMetricResult | rangeMetricResult](results *[]Result) {
 	metricsBytes, err := json.MarshalIndent(results, "", "  ")
 	if err == nil {
 		fmt.Println(string(metricsBytes))
@@ -445,70 +475,57 @@ func printMetricsAsJson(results *[]instantMetricResult) {
 	}
 }
 
-func createMetricsPrinter(format MetricsFormat) metricsPrinter {
+func createInstantMetricsPrinter(format MetricsFormat) metricsPrinter {
 	switch format {
 	case MetricsFormatCsv:
 		return printMetricsAsCsv
 	case MetricsFormatJson:
-		return printMetricsAsJson
+		return printMetricsAsJson[instantMetricResult]
 	default:
 		return printMetricsAsTable
 	}
 }
 
-func (q *RhobsFetcher) PrintMetrics(promExpr string, format MetricsFormat, isPrintingClusterResultsOnly bool) error {
-	client, err := q.getClient()
-	if err != nil {
-		return err
-	}
+type instantOrRangeMetricResult interface {
+	instantMetricResult | rangeMetricResult
 
-	log.Infoln("RHOBS cell:", q.RhobsCell)
+	getLabel(labelKey string) (string, bool)
+}
 
-	promQuery := rhobsparameters.PromqlQuery(promExpr)
-	queryParams := &rhobsclient.GetInstantQueryParams{Query: &promQuery}
+func (result instantMetricResult) getLabel(labelKey string) (string, bool) {
+	value, exists := result.Metric[labelKey]
+	return value, exists
+}
 
-	response, err := client.GetInstantQueryWithResponse(context.TODO(), "hcp", queryParams)
+func (result rangeMetricResult) getLabel(labelKey string) (string, bool) {
+	value, exists := result.Metric[labelKey]
+	return value, exists
+}
 
-	if err != nil {
-		return fmt.Errorf("failed to send request to RHOBS: %v", err)
-	}
-	if response.HTTPResponse.StatusCode != http.StatusOK {
-		return fmt.Errorf("RHOBS query failed with status code: %d - body: %s", response.HTTPResponse.StatusCode, string(response.Body))
-	}
-
-	var formattedResponse getInstantMetricsResponse
-	err = json.Unmarshal(response.Body, &formattedResponse)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal response from RHOBS: %v", err)
-	}
-
-	if formattedResponse.Status != "success" {
-		return fmt.Errorf("RHOBS query failed with status: %s", formattedResponse.Status)
-	}
-
+func filterMetricsResults[Result instantOrRangeMetricResult](fetcher *RhobsFetcher, results *[]Result, isPrintingClusterResultsOnly bool) *[]Result {
 	areSomeResultsForOtherClusters := false // If true, this means areFilteredResultsValid is also true
-	filteredResults := []instantMetricResult{}
-	areFilteredResultsValid := len(formattedResponse.Data.Results) == 0
+	filteredResults := []Result{}
+	areFilteredResultsValid := len(*results) == 0
 
-	for _, result := range formattedResponse.Data.Results {
-		if q.isManagementCluster {
-			mcId, hasMcId := result.Metric["_mc_id"]
-			mcName, hasMcName := result.Metric["mc_name"]
+	for _, result := range *results {
+		if fetcher.isManagementCluster {
+			mcId, hasMcId := result.getLabel("_mc_id")
+			mcName, hasMcName := result.getLabel("mc_name")
 			if !hasMcId && !hasMcName {
 				continue
 			}
 			areFilteredResultsValid = true
-			if mcId != q.clusterId && mcName != q.clusterName {
+			if mcId != fetcher.clusterId && mcName != fetcher.clusterName {
 				areSomeResultsForOtherClusters = mcId != "" || mcName != ""
 				continue
 			}
 		} else {
-			extId, hasExtId := result.Metric["_id"]
+			extId, hasExtId := result.getLabel("_id")
 			if !hasExtId {
 				continue
 			}
 			areFilteredResultsValid = true
-			if extId != q.clusterExternalId {
+			if extId != fetcher.clusterExternalId {
 				areSomeResultsForOtherClusters = extId != ""
 				continue
 			}
@@ -516,15 +533,15 @@ func (q *RhobsFetcher) PrintMetrics(promExpr string, format MetricsFormat, isPri
 		filteredResults = append(filteredResults, result)
 	}
 
-	var resultsToPrint *[]instantMetricResult
+	var returnedResults *[]Result
 
 	if isPrintingClusterResultsOnly && areFilteredResultsValid {
-		resultsToPrint = &filteredResults
+		returnedResults = &filteredResults
 	} else {
 		if isPrintingClusterResultsOnly {
 			log.Warnln("Results returned by RHOBS cannot be matched against the given cluster. Working as if --filter option was not set.")
 		}
-		resultsToPrint = &formattedResponse.Data.Results
+		returnedResults = results
 		if !isPrintingClusterResultsOnly && areSomeResultsForOtherClusters {
 			log.Warnln("Printing ALL RHOBS cell results even the ones not matching the given cluster. " +
 				"You could have used the --filter option to only print the results matching the given cluster.")
@@ -533,7 +550,174 @@ func (q *RhobsFetcher) PrintMetrics(promExpr string, format MetricsFormat, isPri
 		}
 	}
 
-	createMetricsPrinter(format)(resultsToPrint)
+	return returnedResults
+}
+
+func (f *RhobsFetcher) QueryInstantMetrics(ctx context.Context, promExpr string, evalTime time.Time) (*[]instantMetricResult, error) {
+	client, err := f.getClient()
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infoln("RHOBS cell:", f.RhobsCell)
+
+	promQuery := rhobsparameters.PromqlQuery(promExpr)
+	var evalTimePStr *string
+	if !evalTime.IsZero() {
+		evalTimeStr := strconv.FormatInt(evalTime.Unix(), 10)
+		evalTimePStr = &evalTimeStr
+	}
+
+	queryParams := &rhobsclient.GetInstantQueryParams{
+		Query: &promQuery,
+		Time:  evalTimePStr,
+	}
+
+	response, err := client.GetInstantQueryWithResponse(ctx, "hcp", queryParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request to RHOBS: %v", err)
+	}
+	if response.HTTPResponse.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("RHOBS query failed with status code: %d - body: %s", response.HTTPResponse.StatusCode, string(response.Body))
+	}
+
+	var formattedResponse getInstantMetricsResponse
+	if err := json.Unmarshal(response.Body, &formattedResponse); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response from RHOBS: %v", err)
+	}
+	if formattedResponse.Status != "success" {
+		return nil, fmt.Errorf("RHOBS query failed with status: %s", formattedResponse.Status)
+	}
+
+	return &formattedResponse.Data.Results, nil
+}
+
+func (f *RhobsFetcher) PrintInstantMetrics(ctx context.Context, promExpr string, evalTime time.Time, format MetricsFormat, isPrintingClusterResultsOnly bool) error {
+	results, err := f.QueryInstantMetrics(ctx, promExpr, evalTime)
+	if err != nil {
+		return err
+	}
+
+	results = filterMetricsResults(f, results, isPrintingClusterResultsOnly)
+	createInstantMetricsPrinter(format)(results)
+
+	return nil
+}
+
+type MetricsTimeRange struct {
+	rawStartTime    string
+	rawEndTime      string
+	rawStepDuration string
+	logCallback     func()
+}
+
+func (tr *MetricsTimeRange) Log() {
+	if tr.logCallback != nil {
+		tr.logCallback()
+	}
+}
+
+func NewMetricsTimeRange(startTime, endTime time.Time, stepDuration time.Duration) MetricsTimeRange {
+	if stepDuration == 0 {
+		stepDurationTarget := endTime.Sub(startTime) / 1000
+		stepDuration = stepDurationTarget
+		for _, stepDurationCandidate := range []time.Duration{
+			30 * time.Second,
+			time.Minute, 2 * time.Minute, 5 * time.Minute, 10 * time.Minute, 30 * time.Minute,
+			time.Hour, 2 * time.Hour, 6 * time.Hour, 12 * time.Hour, 24 * time.Hour,
+		} {
+			if stepDurationCandidate >= stepDurationTarget {
+				stepDuration = stepDurationCandidate
+				break
+			}
+		}
+	}
+
+	return MetricsTimeRange{
+		rawStartTime:    strconv.FormatInt(startTime.Unix(), 10),
+		rawEndTime:      strconv.FormatInt(endTime.Unix(), 10),
+		rawStepDuration: strconv.FormatFloat(stepDuration.Seconds(), 'f', -1, 64),
+		logCallback: func() {
+			log.Infoln("Start time:", startTime.Round(0))
+			log.Infoln("End time  :", endTime.Round(0))
+			log.Infoln("Step      :", stepDuration)
+		},
+	}
+}
+
+func NewRawMetricsTimeRange(start, end, step string) MetricsTimeRange {
+	return MetricsTimeRange{
+		rawStartTime:    start,
+		rawEndTime:      end,
+		rawStepDuration: step,
+	}
+}
+
+func (f *RhobsFetcher) QueryRangeMetrics(ctx context.Context, promExpr string, timeRange MetricsTimeRange) (*[]rangeMetricResult, error) {
+	client, err := f.getClient()
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infoln("RHOBS cell:", f.RhobsCell)
+	timeRange.Log()
+
+	promQuery := rhobsparameters.PromqlQuery(promExpr)
+
+	queryParams := &rhobsclient.GetRangeQueryParams{
+		Query: &promQuery,
+		Start: (*rhobsparameters.StartTS)(&timeRange.rawStartTime),
+		End:   (*rhobsparameters.EndTS)(&timeRange.rawEndTime),
+		Step:  &timeRange.rawStepDuration,
+	}
+
+	response, err := client.GetRangeQueryWithResponse(ctx, "hcp", queryParams)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request to RHOBS: %v", err)
+	}
+	if response.HTTPResponse.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("RHOBS query failed with status code: %d - body: %s", response.HTTPResponse.StatusCode, string(response.Body))
+	}
+
+	var formattedResponse getRangeMetricsResponse
+	err = json.Unmarshal(response.Body, &formattedResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response from RHOBS: %v", err)
+	}
+
+	if formattedResponse.Status != "success" {
+		return nil, fmt.Errorf("RHOBS query failed with status: %s", formattedResponse.Status)
+	}
+
+	return &formattedResponse.Data.Results, nil
+}
+
+func (f *RhobsFetcher) PrintRangeMetrics(ctx context.Context, promExpr string, timeRange MetricsTimeRange, format MetricsFormat, isPrintingClusterResultsOnly bool) error {
+	results, err := f.QueryRangeMetrics(ctx, promExpr, timeRange)
+	if err != nil {
+		return err
+	}
+
+	results = filterMetricsResults(f, results, isPrintingClusterResultsOnly)
+
+	if format == MetricsFormatJson {
+		printMetricsAsJson[rangeMetricResult](results)
+		return nil
+	}
+
+	instantResults := []instantMetricResult{}
+	for k := range *results {
+		result := &(*results)[k]
+		for l := range result.Values {
+			instantResults = append(instantResults, instantMetricResult{
+				Metric: result.Metric,
+				Value:  result.Values[l],
+			})
+		}
+	}
+
+	createInstantMetricsPrinter(format)(&instantResults)
 
 	return nil
 }
@@ -704,19 +888,18 @@ func createLogsPrinter(format LogsFormat, isPrintingTimeValue bool, fieldNames [
 	}
 }
 
-func (q *RhobsFetcher) PrintLogs(lokiExpr string, startTime, endTime time.Time, logsCount int, isGoingForward bool, format LogsFormat, isPrintingTimeValue bool, fieldNames []string) error {
-	client, err := q.getClient()
+type logHandler func(result *logResult)
+
+func (f *RhobsFetcher) QueryLogs(ctx context.Context, lokiExpr string, startTime, endTime time.Time, logsCount int, isGoingForward bool, logHandler logHandler) error {
+	client, err := f.getClient()
 	if err != nil {
 		return err
 	}
 
-	log.Infoln("RHOBS cell:", q.RhobsCell)
+	log.Infoln("RHOBS cell:", f.RhobsCell)
 	log.Infoln("Loki query:", lokiExpr)
 	log.Infoln("Start time:", startTime.Round(0))
 	log.Infoln("End time  :", endTime.Round(0))
-
-	logsPrinter := createLogsPrinter(format, isPrintingTimeValue, fieldNames)
-	logsPrinter.PrintHeader()
 
 	startTimeStamp := startTime.UnixNano()
 	endTimeStamp := endTime.UnixNano()
@@ -755,7 +938,7 @@ func (q *RhobsFetcher) PrintLogs(lokiExpr string, startTime, endTime time.Time, 
 			Limit:     (*rhobsparameters.Limit)(&limit),
 		}
 
-		response, err := client.GetLogRangeQueryWithResponse(context.TODO(), "hcp", queryParams)
+		response, err := client.GetLogRangeQueryWithResponse(ctx, "hcp", queryParams)
 
 		if err != nil {
 			return fmt.Errorf("failed to send request to RHOBS: %v", err)
@@ -817,7 +1000,7 @@ func (q *RhobsFetcher) PrintLogs(lokiExpr string, startTime, endTime time.Time, 
 				ts := result.getTimeStamp()
 
 				if ts != edgeTimeStamp {
-					logsPrinter.PrintResult(result)
+					logHandler(result)
 					logsCount--
 					if logsCount == 0 {
 						break
@@ -826,25 +1009,45 @@ func (q *RhobsFetcher) PrintLogs(lokiExpr string, startTime, endTime time.Time, 
 			}
 		}
 	}
-	logsPrinter.PrintTrailer()
 
 	return nil
 }
 
-func (q *RhobsFetcher) StreamLogs(lokiExpr string, startTime time.Time, format LogsFormat, isPrintingTimeValue bool, fieldNames []string) error {
-	tokenProvider, err := q.getTokenProvider()
+func (f *RhobsFetcher) PrintLogs(lokiExpr string, startTime, endTime time.Time, logsCount int, isGoingForward bool, format LogsFormat, isPrintingTimeValue bool, fieldNames []string) error {
+	logsPrinter := createLogsPrinter(format, isPrintingTimeValue, fieldNames)
+	logsPrinter.PrintHeader()
+	defer logsPrinter.PrintTrailer()
+
+	err := f.QueryLogs(context.TODO(), lokiExpr, startTime, endTime, logsCount, isGoingForward, func(result *logResult) {
+		logsPrinter.PrintResult(result)
+	})
 	if err != nil {
 		return err
 	}
 
-	log.Infoln("RHOBS cell:", q.RhobsCell)
+	return nil
+}
+
+type streamLogsContext struct {
+	isLooping bool
+	webSocket *websocket.Conn
+}
+
+func (f *RhobsFetcher) StreamLogs(lokiExpr string, format LogsFormat, isPrintingTimeValue bool, fieldNames []string) error {
+	startTime := time.Now().Add(-5 * time.Minute)
+	tokenProvider, err := f.getTokenProvider()
+	if err != nil {
+		return err
+	}
+
+	log.Infoln("RHOBS cell:", f.RhobsCell)
 	log.Infoln("Loki query:", lokiExpr)
-	log.Infoln("Start time:", startTime.Round(0))
 
 	logsPrinter := createLogsPrinter(format, isPrintingTimeValue, fieldNames)
 	logsPrinter.PrintHeader()
+	defer logsPrinter.PrintTrailer()
 
-	wsUrl, err := url.Parse(q.RhobsCell)
+	wsUrl, err := url.Parse(f.RhobsCell)
 	if err != nil {
 		return fmt.Errorf("failed to parse RHOBS cell URL: %v", err)
 	}
@@ -886,15 +1089,60 @@ func (q *RhobsFetcher) StreamLogs(lokiExpr string, startTime time.Time, format L
 	closeWebsocket := func(wsConn *websocket.Conn) {
 		err := wsConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 		if err != nil {
+			log.Infoln("Failed to send websocket close message:", err)
+		}
+		err = wsConn.Close()
+		if err != nil {
 			log.Infoln("Failed to close websocket:", err)
 		}
-		startTime = time.Now()
 	}
 
-	var isLooping atomic.Bool
-	var wsConn atomic.Pointer[websocket.Conn]
+	var mutex sync.Mutex
+	context := streamLogsContext{
+		isLooping: true,
+	}
 
-	isLooping.Store(true)
+	getContext := func() streamLogsContext {
+		mutex.Lock()
+		defer mutex.Unlock()
+
+		return context
+	}
+
+	closeWebSocketInContext := func(canContinueLooping bool) {
+		var currentWsConn *websocket.Conn
+
+		func() {
+			mutex.Lock()
+			defer mutex.Unlock()
+
+			if !canContinueLooping {
+				context.isLooping = false
+			}
+			currentWsConn = context.webSocket
+			context.webSocket = nil
+		}()
+
+		if currentWsConn != nil {
+			closeWebsocket(currentWsConn)
+		}
+	}
+
+	storeNewWebsocketInContext := func(newWsConn *websocket.Conn) {
+		func() {
+			mutex.Lock()
+			defer mutex.Unlock()
+
+			if context.isLooping {
+				context.webSocket = newWsConn
+				newWsConn = nil
+			}
+		}()
+
+		if newWsConn != nil {
+			closeWebsocket(newWsConn)
+		}
+	}
 
 	go func() { // Break below loop when the user interrupts the command (e.g. by pressing Ctrl+C)
 		stopChan := make(chan os.Signal, 1)
@@ -902,16 +1150,13 @@ func (q *RhobsFetcher) StreamLogs(lokiExpr string, startTime time.Time, format L
 		<-stopChan
 		signal.Reset(syscall.SIGTERM)
 
-		isLooping.Store(false)
-		actualWsConn := wsConn.Swap(nil)
-		if actualWsConn != nil {
-			closeWebsocket(actualWsConn)
-		}
+		closeWebSocketInContext(false)
 	}()
 
-	for isLooping.Load() {
+	for getContext().isLooping {
 		err := backoff.Retry(func() error {
-			if !isLooping.Load() || wsConn.Load() != nil {
+			currentContext := getContext()
+			if !currentContext.isLooping || currentContext.webSocket != nil {
 				return nil
 			}
 
@@ -919,11 +1164,7 @@ func (q *RhobsFetcher) StreamLogs(lokiExpr string, startTime time.Time, format L
 			if err != nil {
 				return err
 			}
-			if isLooping.Load() {
-				wsConn.Store(newWsConn)
-			} else {
-				closeWebsocket(newWsConn)
-			}
+			storeNewWebsocketInContext(newWsConn)
 
 			return nil
 		}, backoff.NewExponentialBackOff(
@@ -934,28 +1175,28 @@ func (q *RhobsFetcher) StreamLogs(lokiExpr string, startTime time.Time, format L
 			return fmt.Errorf("failed to establish websocket connection after retrying for 30s: %v", err)
 		}
 
-		currentWsConn := wsConn.Load()
-		if !isLooping.Load() || currentWsConn == nil {
+		currentWebSocket := getContext().webSocket
+		if currentWebSocket == nil {
 			break
 		}
 
 		var formattedResponse streamLogsResponse
 
-		err = currentWsConn.ReadJSON(&formattedResponse)
+		err = currentWebSocket.ReadJSON(&formattedResponse)
 		if err != nil {
-			currentWsConn = wsConn.Swap(nil)
-			if currentWsConn == nil {
+			if !getContext().isLooping {
 				break
 			}
 
 			if websocket.IsCloseError(err, websocket.CloseAbnormalClosure) {
 				log.Warnln("Unexpected websocket close:", err)
-				closeWebsocket(currentWsConn)
+				closeWebSocketInContext(true)
+				startTime = time.Now()
 				log.Infoln("Connecting again...")
 				continue
 			}
 
-			closeWebsocket(currentWsConn)
+			closeWebSocketInContext(false)
 			logsPrinter.PrintTrailer()
 
 			return fmt.Errorf("failed to read JSON from websocket: %v", err)
@@ -965,8 +1206,6 @@ func (q *RhobsFetcher) StreamLogs(lokiExpr string, startTime time.Time, format L
 			logsPrinter.PrintResult(result)
 		}
 	}
-
-	logsPrinter.PrintTrailer()
 
 	return nil
 }

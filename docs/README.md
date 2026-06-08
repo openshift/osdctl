@@ -141,7 +141,7 @@
   - `mcp` - RHOBS MCP server for AI agent integration
     - `config` - Print MCP client configuration JSON
     - `server` - Start the RHOBS MCP server
-  - `metrics prometheus-expression` - Fetch metrics from RHOBS for a given cluster
+  - `metrics PromQL-expression` - Fetch metrics from RHOBS for a given cluster
 - `servicelog` - OCM/Hive Service log
   - `list --cluster-id <cluster-identifier> [flags] [options]` - Get service logs for a given cluster identifier.
   - `post --cluster-id <cluster-identifier>` - Post a service log to a cluster or list of clusters
@@ -4229,7 +4229,7 @@ osdctl rhobs cell [flags]
 
 ### osdctl rhobs logs
 
-Fetch logs from RHOBS for a given cluster
+Fetch logs from RHOBS for a given cluster. The cluster can be a management cluster (MC) or whatever cluster sending logs to RHOBS; the command works as if the management cluster ID was passed if given a hosted cluster (HCP) ID. By default, logs from all the pods in the given namespace are returned but it is possible to specify a single pod as an argument or filter pods using their labels. Logs themselves can be also filtered to only keep the ones containing a given regexp (--contain-regex option) or a given log level (--level option).
 
 ```
 osdctl rhobs logs [pod] [flags]
@@ -4243,9 +4243,9 @@ osdctl rhobs logs [pod] [flags]
       --contain-regex stringArray       Regular expression the log message must contain - flag can be repeated
   -c, --container string                Name of the container - print all containers logs if not specified
       --direction string                Direction of the logs to return - allowed values: "forward" or "backward" - "backward" returns the most recent & interesting logs first, while "forward" matches the behavior of "kubectl logs" by returning the oldest logs first (default to "backward" unless --follow is set in which case it is forced to "forward")
-      --end-time time                   End time for the log query (default to now)
+      --end-time time                   End time for the logs (default to now)
       --field strings                   Fields to print with the log message - not possible with the "json" output format - flag can be repeated / values can also be aggregated with one flag using the comma as separator - possible values: "k8s_namespace_name", "k8s_pod_name", "k8s_container_name" - use the "json" output format to know about all possible fields (default [k8s_pod_name])
-  -f, --follow                          Specify if the logs should be streamed - exclusive with --end-time, --direction, --limit and --no-limit flags
+  -f, --follow                          Specify if the logs should be streamed - exclusive with --start-time, --end-time, --since, --direction, --limit and --no-limit flags
   -h, --help                            help for logs
       --hive-ocm-url string             OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
       --include-events                  Include events in the logs output - may add significant noise, use with caution
@@ -4256,11 +4256,11 @@ osdctl rhobs logs [pod] [flags]
       --not-contain stringArray         Text the log message must not contain - flag can be repeated
       --not-contain-regex stringArray   Regular expression the log message must not contain - flag can be repeated
   -o, --output string                   Format of the output - allowed values: "text", "csv" or "json" (default "text")
-  -q, --query string                    Loki query - exclusive with many other flags
+  -q, --query string                    LogQL expression - exclusive with many other flags
   -l, --selector string                 Label selector for filtering pods - exclusive with the pod argument
       --since duration                  Only return logs newer than a relative duration (e.g. 1h, 30m) - exclusive with --start-time & --end-time
   -S, --skip-version-check              skip checking to see if this is the most recent release
-      --start-time time                 Start time for the log query - alternate alias: --since-time (default to 5 minutes ago)
+      --start-time time                 Start time for the logs - alternate alias: --since-time (default to 5 minutes ago)
       --ts                              Print metadata timestamps - to be used when log messages do not have a timestamp - not possible with the "json" output format
 ```
 
@@ -4337,21 +4337,26 @@ osdctl rhobs mcp server [flags]
 
 ### osdctl rhobs metrics
 
-Fetch metrics from RHOBS for a given cluster
+Fetch metrics from RHOBS for a given cluster. The cluster can be a hosted cluster (HCP), a management cluster (MC) or whatever cluster sending metrics to RHOBS. The prometheus expression provided as an argument can be either an instant query or a range query. By default, the command will try to evaluate the expression as an instant query at the current time, but it is possible to specify a different evaluation time using the --time option or a time range using the --start-time, --end-time and --since options.Results can be filtered to only keep the ones matching the given cluster (--cluster-id option) with the --filter option even if it is more efficient to do that filtering at the prometheus expression level.
 
 ```
-osdctl rhobs metrics prometheus-expression [flags]
+osdctl rhobs metrics PromQL-expression [flags]
 ```
 
 #### Flags
 
 ```
   -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
+      --end-time time         End time at which the PromQL expression must be evaluated - can only be set if --start-time set (default to now)
   -f, --filter                Only keep the results matching the given cluster - only effective if some of those results have a _id, _mc_id or mc_name label
   -h, --help                  help for metrics
       --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
   -o, --output string         Format of the output - allowed values: "table", "csv" or "json" (default "table")
+      --since duration        Only return values newer than a relative duration (e.g. 1h, 30m) - enable time range mode - exclusive with --time, --start-time & --end-time
   -S, --skip-version-check    skip checking to see if this is the most recent release
+      --start-time time       Start time at which the PromQL expression must be evaluated - enable time range mode - exclusive with --time (default to 30 minutes ago)
+      --step duration         Duration between data points (e.g. 30s, 2m) - can only be set if in time range mode (i.e. --start-time or --since is set)
+      --time time             Time at which the PromQL expression must be evaluated (default to now)
 ```
 
 ### osdctl servicelog

@@ -36,12 +36,15 @@ func newCmdLogs() *cobra.Command {
 	var isPrintingTimestamp bool
 	var printedFields []string
 
-	nowTime := time.Now()
-	defaultStartTime := nowTime.Add(-5 * time.Minute)
-
 	cmd := &cobra.Command{
-		Use:           "logs [pod]",
-		Short:         "Fetch logs from RHOBS for a given cluster",
+		Use:   "logs [pod]",
+		Short: "Fetch logs from RHOBS for a given cluster",
+		Long: "Fetch logs from RHOBS for a given cluster. " +
+			"The cluster can be a management cluster (MC) or whatever cluster sending logs to RHOBS; " +
+			"the command works as if the management cluster ID was passed if given a hosted cluster (HCP) ID. " +
+			"By default, logs from all the pods in the given namespace are returned but it is possible to specify " +
+			"a single pod as an argument or filter pods using their labels. Logs themselves can be also filtered " +
+			"to only keep the ones containing a given regexp (--contain-regex option) or a given log level (--level option).",
 		Args:          cobra.RangeArgs(0, 1),
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -152,6 +155,9 @@ func newCmdLogs() *cobra.Command {
 				}
 			}
 
+			nowTime := time.Now()
+			defaultStartTime := nowTime.Add(-5 * time.Minute)
+
 			if cmd.Flags().Changed("since") {
 				startTime = nowTime.Add(-duration)
 			} else if !cmd.Flags().Changed("start-time") && !cmd.Flags().Changed("since-time") {
@@ -206,7 +212,7 @@ func newCmdLogs() *cobra.Command {
 			}
 
 			if isFollowing {
-				err = rhobsFetcher.StreamLogs(lokiExpr, startTime, outputFormat, isPrintingTimestamp, printedFields)
+				err = rhobsFetcher.StreamLogs(lokiExpr, outputFormat, isPrintingTimestamp, printedFields)
 			} else {
 				err = rhobsFetcher.PrintLogs(lokiExpr, startTime, endTime, logsCount, isGoingForward, outputFormat, isPrintingTimestamp, printedFields)
 			}
@@ -217,7 +223,7 @@ func newCmdLogs() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&lokiExpr, "query", "q", "", "Loki query - exclusive with many other flags")
+	cmd.Flags().StringVarP(&lokiExpr, "query", "q", "", "LogQL expression - exclusive with many other flags")
 	cmd.Flags().StringVarP(&namespace, "namespace", "n", "default", "Name of the namespace")
 	cmd.Flags().StringVarP(&labelSelectorStr, "selector", "l", "", "Label selector for filtering pods - exclusive with the pod argument")
 	cmd.Flags().StringVarP(&containerName, "container", "c", "", "Name of the container - print all containers logs if not specified")
@@ -238,8 +244,8 @@ func newCmdLogs() *cobra.Command {
 	cmd.MarkFlagsMutuallyExclusive("query", "container")
 	cmd.MarkFlagsMutuallyExclusive("query", "include-events")
 
-	cmd.Flags().TimeVar(&startTime, "start-time", time.Time{}, []string{time.RFC3339}, "Start time for the log query - alternate alias: --since-time (default to 5 minutes ago)")
-	cmd.Flags().TimeVar(&endTime, "end-time", time.Time{}, []string{time.RFC3339}, "End time for the log query (default to now)")
+	cmd.Flags().TimeVar(&startTime, "start-time", time.Time{}, []string{time.RFC3339}, "Start time for the logs - alternate alias: --since-time (default to 5 minutes ago)")
+	cmd.Flags().TimeVar(&endTime, "end-time", time.Time{}, []string{time.RFC3339}, "End time for the logs (default to now)")
 	cmd.Flags().TimeVar(&startTime, "since-time", time.Time{}, []string{time.RFC3339}, "Same as --start-time")
 	_ = cmd.Flags().MarkHidden("since-time")
 	cmd.Flags().DurationVar(&duration, "since", 0, "Only return logs newer than a relative duration (e.g. 1h, 30m) - exclusive with --start-time & --end-time")
@@ -251,8 +257,11 @@ func newCmdLogs() *cobra.Command {
 		`"backward" returns the most recent & interesting logs first, while "forward" matches the behavior of "kubectl logs" by returning the oldest logs first `+
 		`(default to "backward" unless --follow is set in which case it is forced to "forward")`)
 
-	cmd.Flags().BoolVarP(&isFollowing, "follow", "f", false, "Specify if the logs should be streamed - exclusive with --end-time, --direction, --limit and --no-limit flags")
+	cmd.Flags().BoolVarP(&isFollowing, "follow", "f", false, "Specify if the logs should be streamed - exclusive with --start-time, --end-time, --since, --direction, --limit and --no-limit flags")
+	cmd.MarkFlagsMutuallyExclusive("follow", "start-time")
+	cmd.MarkFlagsMutuallyExclusive("follow", "since-time")
 	cmd.MarkFlagsMutuallyExclusive("follow", "end-time")
+	cmd.MarkFlagsMutuallyExclusive("follow", "since")
 	cmd.MarkFlagsMutuallyExclusive("follow", "direction")
 
 	cmd.Flags().IntVar(&logsCount, "limit", 0, "Maximum number of logs to return - allowed range: [1 100000] (default to 10000 unless --follow is set in which case there is no limit)")

@@ -39,7 +39,7 @@ func newCmdCell() *cobra.Command {
 				fmt.Println("Logs RHOBS cell   :", logsRhobsFetcher.RhobsCell)
 			}
 
-			if metricsErr != nil && logsErr != nil {
+			if metricsErr != nil || logsErr != nil {
 				os.Exit(1)
 			}
 		},
