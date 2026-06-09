@@ -13,9 +13,9 @@ import (
 
 var (
 	awsAccountsCmd = &cobra.Command{
-		Use:           "aws-accounts",
-		Short:         "get organization AWS Accounts",
-		Args: cobra.ArbitraryArgs,
+		Use:   "aws-accounts",
+		Short: "get organization AWS Accounts",
+		Args:  cobra.ArbitraryArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(searchChildAwsAccounts(cmd))
 		},

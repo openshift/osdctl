@@ -14,9 +14,9 @@ import (
 
 var (
 	customersCmd = &cobra.Command{
-		Use:           "customers",
-		Short:         "get paying/non-paying organizations",
-		Args: cobra.ArbitraryArgs,
+		Use:   "customers",
+		Short: "get paying/non-paying organizations",
+		Args:  cobra.ArbitraryArgs,
 		Run: func(_ *cobra.Command, _ []string) {
 			ocmClient, err := utils.CreateConnection()
 			if err != nil {

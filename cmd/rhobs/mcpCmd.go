@@ -68,8 +68,8 @@ Prerequisites:
 
 func newCmdMcpServer() *cobra.Command {
 	return &cobra.Command{
-		Use:           "server",
-		Short:         "Start the RHOBS MCP server",
+		Use:          "server",
+		Short:        "Start the RHOBS MCP server",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

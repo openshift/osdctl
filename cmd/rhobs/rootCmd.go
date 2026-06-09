@@ -12,9 +12,9 @@ var commonOptions = struct {
 
 func NewCmdRhobs() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:           "rhobs",
-		Short:         "RHOBS.next related utilities",
-		Args: cobra.NoArgs,
+		Use:   "rhobs",
+		Short: "RHOBS.next related utilities",
+		Args:  cobra.NoArgs,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			for c := cmd; c != nil; c = c.Parent() {
 				if c.Name() == "mcp" {
