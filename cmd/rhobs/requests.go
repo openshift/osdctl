@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -44,6 +45,7 @@ const (
 	rhobsCellLogsCmNs         = "openshift-logging"
 	rhobsCellLogsCmName       = "rhobs-logs-destination"
 	rhobsCellCmAnnotation     = "rhobs.openshift.io/forwarding-destination"
+	grafanaBaseExploreUrl     = "https://grafana.app-sre.devshift.net/explore?"
 )
 
 type MetricsFormat string
@@ -272,6 +274,146 @@ func CreateRhobsFetcher(clusterKey string, rhobsFetchUse RhobsFetchUsage, hiveOc
 		ocmEnvName:          ocmutils.GetCurrentOCMEnv(ocmConn),
 		RhobsCell:           rhobsCell,
 	}, nil
+}
+
+func (f *RhobsFetcher) getRhobsCellName() (string, error) {
+	re := regexp.MustCompile("https://([^.]+).*")
+	matches := re.FindStringSubmatch(f.RhobsCell)
+	if len(matches) < 2 {
+		return "", fmt.Errorf("failed to extract RHOBS cell name from '%s'", f.RhobsCell)
+	}
+
+	return matches[1], nil
+}
+
+func (f *RhobsFetcher) getBaseGrafanaDataSource() (string, error) {
+	rhobsCellName, err := f.getRhobsCellName()
+	if err != nil {
+		return "", fmt.Errorf("failed to compute grafana datasource: %v", err)
+	}
+
+	return "rhobs-" + rhobsCellName + "-" + f.ocmEnvName + "-hcp-", nil
+}
+
+func (f *RhobsFetcher) getMetricsGrafanaDataSource() (string, error) {
+	baseDataSource, err := f.getBaseGrafanaDataSource()
+	if err != nil {
+		return "", err
+	}
+
+	return baseDataSource + "metrics", nil
+}
+
+func (f *RhobsFetcher) getLogsGrafanaDataSource() (string, error) {
+	baseDataSource, err := f.getBaseGrafanaDataSource()
+	if err != nil {
+		return "", err
+	}
+
+	return baseDataSource + "logs", nil
+}
+
+type grafanaMetricsExploreParams struct {
+	Panel struct {
+		DataSource string `json:"datasource"`
+		Queries    [1]struct {
+			RefId        string `json:"refId"`
+			Expr         string `json:"expr"`
+			Instant      bool   `json:"instant"`
+			Range        bool   `json:"range"`
+			EditorMode   string `json:"editorMode"`
+			LegendFormat string `json:"legendFormat"`
+		} `json:"queries"`
+		Range struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		} `json:"range"`
+	} `json:"aaa"`
+}
+
+type grafanaLogsExploreParams struct {
+	Panel struct {
+		DataSource string `json:"datasource"`
+		Queries    [1]struct {
+			RefId      string `json:"refId"`
+			Expr       string `json:"expr"`
+			QueryType  string `json:"queryType"`
+			EditorMode string `json:"editorMode"`
+			Direction  string `json:"direction"`
+		} `json:"queries"`
+		Range struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		} `json:"range"`
+	} `json:"aaa"`
+}
+
+func (f *RhobsFetcher) GetGrafanaMetricsUrl(promExpr string, startTime, endTime time.Time) (string, error) {
+	exploreParams := grafanaMetricsExploreParams{}
+
+	dataSource, err := f.getMetricsGrafanaDataSource()
+	if err != nil {
+		return "", err
+	}
+	exploreParams.Panel.DataSource = dataSource
+	exploreParams.Panel.Queries[0].RefId = "osdctl"
+	exploreParams.Panel.Queries[0].Expr = promExpr
+	exploreParams.Panel.Queries[0].Instant = true
+	exploreParams.Panel.Queries[0].Range = true
+	exploreParams.Panel.Queries[0].EditorMode = "code"
+	exploreParams.Panel.Queries[0].LegendFormat = "__auto"
+	exploreParams.Panel.Range.From = strconv.FormatInt(startTime.UnixMilli(), 10)
+	exploreParams.Panel.Range.To = strconv.FormatInt(endTime.UnixMilli(), 10)
+
+	exploreParamsBytes, err := json.Marshal(exploreParams)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal Grafana explore parameters: %v", err)
+	}
+
+	exploreParamsEncoded := url.Values{
+		"schemaVersion": {"1"},
+		"panes":         {string(exploreParamsBytes)},
+	}.Encode()
+
+	return grafanaBaseExploreUrl + exploreParamsEncoded, nil
+}
+
+func (f *RhobsFetcher) GetGrafanaLogsUrl(lokiExpr string, startTime, endTime time.Time, isGoingForward bool) (string, error) {
+	exploreParams := grafanaLogsExploreParams{}
+
+	dataSource, err := f.getLogsGrafanaDataSource()
+	if err != nil {
+		return "", err
+	}
+
+	var logsDir string
+
+	if isGoingForward {
+		logsDir = "forward"
+	} else {
+		logsDir = "backward"
+	}
+
+	exploreParams.Panel.DataSource = dataSource
+	exploreParams.Panel.Queries[0].RefId = "osdctl"
+	exploreParams.Panel.Queries[0].Expr = lokiExpr
+	exploreParams.Panel.Queries[0].QueryType = "range"
+	exploreParams.Panel.Queries[0].EditorMode = "code"
+	exploreParams.Panel.Queries[0].Direction = logsDir
+	exploreParams.Panel.Range.From = strconv.FormatInt(startTime.UnixMilli(), 10)
+	exploreParams.Panel.Range.To = strconv.FormatInt(endTime.UnixMilli(), 10)
+
+	exploreParamsBytes, err := json.Marshal(exploreParams)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal Grafana explore parameters: %v", err)
+	}
+
+	exploreParamsEncoded := url.Values{
+		"schemaVersion": {"1"},
+		"panes":         {string(exploreParamsBytes)},
+	}.Encode()
+
+	return grafanaBaseExploreUrl + exploreParamsEncoded, nil
 }
 
 func (f *RhobsFetcher) getTokenProvider() (ocmutils.AccessTokenProvider, error) {

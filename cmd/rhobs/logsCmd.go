@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -15,6 +16,8 @@ import (
 var allowedLogLevels = []string{"default", "trace", "info", "warn", "error"}
 
 func newCmdLogs() *cobra.Command {
+	var isComputingGrafanaUrl bool
+	var isOpeningGrafanaUrl bool
 	var lokiExpr string
 	var namespace string
 	var labelSelectorStr string
@@ -45,9 +48,13 @@ func newCmdLogs() *cobra.Command {
 			"By default, logs from all the pods in the given namespace are returned but it is possible to specify " +
 			"a single pod as an argument or filter pods using their labels. Logs themselves can be also filtered " +
 			"to only keep the ones containing a given regexp (--contain-regex option) or a given log level (--level option).",
-		Args:          cobra.RangeArgs(0, 1),
+		Args:          cobra.MaximumNArgs(1),
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if isOpeningGrafanaUrl && !isComputingGrafanaUrl {
+				return fmt.Errorf("--browser can only be set if --url is set")
+			}
+
 			if cmd.Flags().Changed("query") {
 				if len(args) > 0 {
 					return errors.New("pod argument cannot be used with --query flag")
@@ -159,12 +166,18 @@ func newCmdLogs() *cobra.Command {
 			defaultStartTime := nowTime.Add(-5 * time.Minute)
 
 			if cmd.Flags().Changed("since") {
+				if duration <= 0 {
+					return fmt.Errorf("--since must be greater than 0")
+				}
 				startTime = nowTime.Add(-duration)
 			} else if !cmd.Flags().Changed("start-time") && !cmd.Flags().Changed("since-time") {
 				startTime = defaultStartTime
 			}
 			if !cmd.Flags().Changed("end-time") {
 				endTime = nowTime
+			}
+			if startTime.After(endTime) {
+				return fmt.Errorf("value passed to --start-time must be before the value passed to --end-time")
 			}
 
 			isGoingForward := false
@@ -211,17 +224,35 @@ func newCmdLogs() *cobra.Command {
 				lokiExpr += fmt.Sprintf(` | openshift_cluster_id = "%s"`, rhobsFetcher.clusterExternalId)
 			}
 
-			if isFollowing {
-				err = rhobsFetcher.StreamLogs(lokiExpr, outputFormat, isPrintingTimestamp, printedFields)
+			if isComputingGrafanaUrl {
+				grafanaUrl, err := rhobsFetcher.GetGrafanaLogsUrl(lokiExpr, startTime, endTime, isGoingForward)
+				if err != nil {
+					return fmt.Errorf("failed to compute Grafana URL: %v", err)
+				}
+				if isOpeningGrafanaUrl {
+					err = browser.OpenURL(grafanaUrl)
+					if err != nil {
+						return fmt.Errorf("failed to open Grafana URL in browser: %v", err)
+					}
+				} else {
+					fmt.Println(grafanaUrl)
+				}
 			} else {
-				err = rhobsFetcher.PrintLogs(lokiExpr, startTime, endTime, logsCount, isGoingForward, outputFormat, isPrintingTimestamp, printedFields)
-			}
-			if err != nil {
-				return fmt.Errorf("failed to print logs: %v", err)
+				if isFollowing {
+					err = rhobsFetcher.StreamLogs(lokiExpr, outputFormat, isPrintingTimestamp, printedFields)
+				} else {
+					err = rhobsFetcher.PrintLogs(lokiExpr, startTime, endTime, logsCount, isGoingForward, outputFormat, isPrintingTimestamp, printedFields)
+				}
+				if err != nil {
+					return fmt.Errorf("failed to print logs: %v", err)
+				}
 			}
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVarP(&isComputingGrafanaUrl, "url", "u", false, "Only compute and print the grafana URL")
+	cmd.Flags().BoolVarP(&isOpeningGrafanaUrl, "browser", "b", false, "Open in the default browser the URL computed with the --url option - only applicable if --url is set")
 
 	cmd.Flags().StringVarP(&lokiExpr, "query", "q", "", "LogQL expression - exclusive with many other flags")
 	cmd.Flags().StringVarP(&namespace, "namespace", "n", "default", "Name of the namespace")
@@ -257,21 +288,25 @@ func newCmdLogs() *cobra.Command {
 		`"backward" returns the most recent & interesting logs first, while "forward" matches the behavior of "kubectl logs" by returning the oldest logs first `+
 		`(default to "backward" unless --follow is set in which case it is forced to "forward")`)
 
-	cmd.Flags().BoolVarP(&isFollowing, "follow", "f", false, "Specify if the logs should be streamed - exclusive with --start-time, --end-time, --since, --direction, --limit and --no-limit flags")
+	cmd.Flags().BoolVarP(&isFollowing, "follow", "f", false, "Specify if the logs should be streamed - exclusive with --url, --start-time, --end-time, --since, --direction, --limit and --no-limit flags")
 	cmd.MarkFlagsMutuallyExclusive("follow", "start-time")
 	cmd.MarkFlagsMutuallyExclusive("follow", "since-time")
 	cmd.MarkFlagsMutuallyExclusive("follow", "end-time")
 	cmd.MarkFlagsMutuallyExclusive("follow", "since")
 	cmd.MarkFlagsMutuallyExclusive("follow", "direction")
 
-	cmd.Flags().IntVar(&logsCount, "limit", 0, "Maximum number of logs to return - allowed range: [1 100000] (default to 10000 unless --follow is set in which case there is no limit)")
-	cmd.Flags().BoolVar(&isNotLimitingLogsCount, "no-limit", false, "Do not limit the number of logs to return - exclusive with --limit flag")
-	cmd.MarkFlagsMutuallyExclusive("limit", "no-limit", "follow")
+	cmd.Flags().IntVar(&logsCount, "limit", 0, "Maximum number of logs to return - allowed range: [1 100000] - exclusive with --no-limit, --url & --follow flags (default to 10000, no limit if --follow is set)")
+	cmd.Flags().BoolVar(&isNotLimitingLogsCount, "no-limit", false, "Do not limit the number of logs to return - exclusive with --limit, --url & --follow flags")
+	cmd.MarkFlagsMutuallyExclusive("limit", "no-limit", "url", "follow")
 
-	cmd.Flags().StringVarP(&outputFormatStr, "output", "o", string(LogsFormatText), `Format of the output - allowed values: "text", "csv" or "json"`)
-	cmd.Flags().BoolVar(&isPrintingTimestamp, "ts", false, `Print metadata timestamps - to be used when log messages do not have a timestamp - not possible with the "json" output format`)
+	cmd.Flags().StringVarP(&outputFormatStr, "output", "o", string(LogsFormatText), `Format of the output - allowed values: "text", "csv" or "json" - exclusive with --url`)
+	cmd.MarkFlagsMutuallyExclusive("output", "url")
+	cmd.Flags().BoolVar(&isPrintingTimestamp, "ts", false, `Print metadata timestamps - to be used when log messages do not have a timestamp - not possible with the "json" output format - exclusive with --url`)
+	cmd.MarkFlagsMutuallyExclusive("ts", "url")
 	cmd.Flags().StringSliceVar(&printedFields, "field", []string{"k8s_pod_name"}, `Fields to print with the log message - not possible with the "json" output format - `+
-		`flag can be repeated / values can also be aggregated with one flag using the comma as separator - possible values: "k8s_namespace_name", "k8s_pod_name", "k8s_container_name" - use the "json" output format to know about all possible fields`)
+		`flag can be repeated / values can also be aggregated with one flag using the comma as separator - possible values: "k8s_namespace_name", "k8s_pod_name", "k8s_container_name" - `+
+		`use the "json" output format to know about all possible fields - exclusive with --url`)
+	cmd.MarkFlagsMutuallyExclusive("field", "url")
 
 	return cmd
 }
