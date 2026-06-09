@@ -18,6 +18,8 @@ import (
 	"syscall"
 	"time"
 
+	ocmsdk "github.com/openshift-online/ocm-sdk-go"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/cmd/dynatrace"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
@@ -45,7 +47,6 @@ func NewCmdMustGather() *cobra.Command {
 		Long:    "Create a must-gather for an HCP cluster with optional gather targets",
 		Example: "osdctl hcp must-gather --cluster-id CLUSTER_ID --gather sc,mc,sc_acm --reason OHSS-1234",
 		RunE: func(cmd *cobra.Command, args []string) error {
-
 			return mg.Run()
 		},
 	}
@@ -75,26 +76,6 @@ func (mg *mustGather) Run() error {
 		return fmt.Errorf("failed to get OCM cluster info for %s: %s", mg.clusterId, err)
 	}
 
-	mc, err := utils.GetManagementCluster(cluster.ID())
-	if err != nil {
-		return err
-	}
-
-	sc, err := utils.GetServiceCluster(cluster.ID())
-	if err != nil {
-		return err
-	}
-
-	_, mcRestCfg, mcK8sCli, err := common.GetKubeConfigAndClient(mc.ID(), mg.reason)
-	if err != nil {
-		return err
-	}
-
-	_, scRestCfg, scK8sCli, err := common.GetKubeConfigAndClient(sc.ID(), mg.reason)
-	if err != nil {
-		return err
-	}
-
 	// hack(typeid): work around backplane overwriting our config
 	err = osdctlConfig.EnsureConfigFile()
 	if err != nil {
@@ -108,7 +89,7 @@ func (mg *mustGather) Run() error {
 	tarballName := fmt.Sprintf("cluster_dump_%s_%s.tar.gz", mg.clusterId, timestamp)
 	outputTarballTmp := fmt.Sprintf("%s/%s", baseDir, tarballName)
 	outputTarballPath := fmt.Sprintf("%s/%s", outputDir, tarballName)
-	err = os.MkdirAll(outputDir, 0750)
+	err = os.MkdirAll(outputDir, 0o750)
 	if err != nil {
 		return err
 	}
@@ -119,7 +100,7 @@ func (mg *mustGather) Run() error {
 
 	// Progress tracking
 	var completed sync.Map
-	var totalGatherTargets = len(gatherTargets)
+	totalGatherTargets := len(gatherTargets)
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
@@ -157,20 +138,40 @@ func (mg *mustGather) Run() error {
 			switch gatherTarget {
 			case "sc":
 				destDir := outputDir + "/sc_infra"
+				scRestCfg, scK8sCli, err := resolveSCRestConfig(ocmClient, cluster, mg.reason)
+				if err != nil {
+					fmt.Printf("failed to resolve service cluster for %s: %v\n", gatherTarget, err)
+					return
+				}
 				if err := createMustGather(scRestCfg, scK8sCli, []string{"--dest-dir=" + destDir}); err != nil {
 					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
 				}
 			case "sc_acm":
 				destDir := outputDir + "/sc_acm"
+				scRestCfg, scK8sCli, err := resolveSCRestConfig(ocmClient, cluster, mg.reason)
+				if err != nil {
+					fmt.Printf("failed to resolve service cluster for %s: %v\n", gatherTarget, err)
+					return
+				}
 				if err := createMustGather(scRestCfg, scK8sCli, []string{"--dest-dir=" + destDir, "--image=" + mg.acmMustGatherImage}); err != nil {
 					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
 				}
 			case "mc":
 				destDir := outputDir + "/mc_infra"
+				mcRestCfg, mcK8sCli, err := resolveMCRestConfig(ocmClient, cluster, mg.reason)
+				if err != nil {
+					fmt.Printf("failed to resolve management cluster for %s: %v\n", gatherTarget, err)
+					return
+				}
 				if err := createMustGather(mcRestCfg, mcK8sCli, []string{"--dest-dir=" + destDir}); err != nil {
 					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
 				}
 			case "hcp":
+				if !cluster.Hypershift().Enabled() {
+					fmt.Printf("--gather hcp requires an HCP cluster ID; %s is not an HCP cluster\n", mg.clusterId)
+					return
+				}
+
 				destDir := outputDir + "/hcp"
 
 				// 1. Gather logs from DT
@@ -194,6 +195,12 @@ func (mg *mustGather) Run() error {
 
 				hcName := cluster.DomainPrefix()
 				hcNamespace := strings.TrimSuffix(hcpNamespace, "-"+hcName)
+
+				mcRestCfg, mcK8sCli, err := resolveMCRestConfig(ocmClient, cluster, mg.reason)
+				if err != nil {
+					fmt.Printf("gathered DT logs but failed to resolve MC for ACM must-gather: %v\n", err)
+					return
+				}
 
 				gatherScript := fmt.Sprintf("/usr/bin/gather hosted-cluster-namespace=%s hosted-cluster-name=%s", hcNamespace, hcName)
 				if err := createMustGather(mcRestCfg, mcK8sCli, []string{"--dest-dir=" + destDir, "--image=" + mg.acmMustGatherImage, gatherScript}); err != nil {
@@ -225,6 +232,90 @@ func (mg *mustGather) Run() error {
 	fmt.Println("Compressed archive has been created at:", outputTarballPath)
 
 	return nil
+}
+
+// resolveMCRestConfig returns the REST config and k8s client for the management cluster.
+func resolveMCRestConfig(ocmClient *ocmsdk.Connection, cluster *cmv1.Cluster, reason string) (*rest.Config, *kubernetes.Clientset, error) {
+	mcID := cluster.ID()
+
+	if cluster.Hypershift().Enabled() {
+		hypershiftResp, err := ocmClient.ClustersMgmt().V1().Clusters().
+			Cluster(cluster.ID()).
+			Hypershift().
+			Get().
+			Send()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get hypershift info for %s: %w", cluster.ID(), err)
+		}
+
+		mgmtClusterName, ok := hypershiftResp.Body().GetManagementCluster()
+		if !ok || mgmtClusterName == "" {
+			return nil, nil, fmt.Errorf("no management cluster found for %s", cluster.ID())
+		}
+
+		mc, err := utils.GetClusterAnyStatus(ocmClient, mgmtClusterName)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get management cluster %s: %w", mgmtClusterName, err)
+		}
+		mcID = mc.ID()
+	}
+
+	_, restCfg, k8sCli, err := common.GetKubeConfigAndClientWithConn(mcID, ocmClient, reason)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get kubeconfig for management cluster %s: %w", mcID, err)
+	}
+
+	return restCfg, k8sCli, nil
+}
+
+// resolveSCRestConfig returns the REST config and k8s client for the service cluster.
+func resolveSCRestConfig(ocmClient *ocmsdk.Connection, cluster *cmv1.Cluster, reason string) (*rest.Config, *kubernetes.Clientset, error) {
+	scID := cluster.ID()
+
+	if cluster.Hypershift().Enabled() {
+		hypershiftResp, err := ocmClient.ClustersMgmt().V1().Clusters().
+			Cluster(cluster.ID()).
+			Hypershift().
+			Get().
+			Send()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get hypershift info for %s: %w", cluster.ID(), err)
+		}
+
+		mgmtClusterName := hypershiftResp.Body().ManagementCluster()
+		if mgmtClusterName == "" {
+			return nil, nil, fmt.Errorf("failed to lookup management cluster for cluster %s", cluster.ID())
+		}
+
+		ofmResp, err := ocmClient.OSDFleetMgmt().V1().ManagementClusters().
+			List().
+			Parameter("search", fmt.Sprintf("name='%s'", mgmtClusterName)).
+			Send()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get fleet manager info for management cluster %s: %w", mgmtClusterName, err)
+		}
+
+		var svcClusterName string
+		if kind := ofmResp.Items().Get(0).Parent().Kind(); kind == "ServiceCluster" {
+			svcClusterName = ofmResp.Items().Get(0).Parent().Name()
+		}
+		if svcClusterName == "" {
+			return nil, nil, fmt.Errorf("no service cluster found for management cluster %s", mgmtClusterName)
+		}
+
+		sc, err := utils.GetClusterAnyStatus(ocmClient, svcClusterName)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get service cluster %s: %w", svcClusterName, err)
+		}
+		scID = sc.ID()
+	}
+
+	_, restCfg, k8sCli, err := common.GetKubeConfigAndClientWithConn(scID, ocmClient, reason)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get kubeconfig for service cluster %s: %w", scID, err)
+	}
+
+	return restCfg, k8sCli, nil
 }
 
 func createMustGather(restCfg *rest.Config, k8sCli *kubernetes.Clientset, additionalFlags []string) error {
@@ -378,7 +469,6 @@ func createTarball(sourceDir, tarballName string) error {
 
 		return nil
 	})
-
 	if err != nil {
 		return fmt.Errorf("error walking source directory: %v", err)
 	}
