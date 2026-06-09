@@ -15,8 +15,7 @@ var (
 	awsAccountsCmd = &cobra.Command{
 		Use:           "aws-accounts",
 		Short:         "get organization AWS Accounts",
-		Args:          cobra.ArbitraryArgs,
-		SilenceErrors: true,
+		Args: cobra.ArbitraryArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(searchChildAwsAccounts(cmd))
 		},

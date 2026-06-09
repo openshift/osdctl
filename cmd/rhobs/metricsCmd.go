@@ -29,8 +29,7 @@ func newCmdMetrics() *cobra.Command {
 			"but it is possible to specify a different evaluation time using the --time option or a time range using the --start-time, --end-time and --since options. " +
 			"Results can be filtered to only keep the ones matching the given cluster (--cluster-id option) with the --filter option " +
 			"even if it is more efficient to do that filtering at the prometheus expression level.",
-		Args:          cobra.MaximumNArgs(1),
-		SilenceErrors: true,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !isComputingGrafanaUrl {
 				if isOpeningGrafanaUrl {

@@ -23,8 +23,7 @@ var (
 	getCmd = &cobra.Command{
 		Use:           "get",
 		Short:         "get organization by users",
-		Args:          cobra.ArbitraryArgs,
-		SilenceErrors: true,
+		Args: cobra.ArbitraryArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			ocmClient, err := utils.CreateConnection()
 			if err != nil {

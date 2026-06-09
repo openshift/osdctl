@@ -24,7 +24,10 @@ func main() {
 
 	resolved, err := command.ExecuteC()
 	if err != nil {
-		if resolved != nil {
+		if resolved != nil && resolved.SilenceErrors {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		}
+		if resolved != nil && resolved.SilenceUsage {
 			fmt.Fprintf(os.Stderr, "Run '%s --help' for usage.\n", resolved.CommandPath())
 		}
 		os.Exit(1)

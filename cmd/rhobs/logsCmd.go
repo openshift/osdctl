@@ -48,8 +48,7 @@ func newCmdLogs() *cobra.Command {
 			"By default, logs from all the pods in the given namespace are returned but it is possible to specify " +
 			"a single pod as an argument or filter pods using their labels. Logs themselves can be also filtered " +
 			"to only keep the ones containing a given regexp (--contain-regex option) or a given log level (--level option).",
-		Args:          cobra.MaximumNArgs(1),
-		SilenceErrors: true,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if isOpeningGrafanaUrl && !isComputingGrafanaUrl {
 				return fmt.Errorf("--browser can only be set if --url is set")

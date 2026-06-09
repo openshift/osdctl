@@ -21,8 +21,7 @@ var upgradeCmd = &cobra.Command{
 	Use:           "upgrade",
 	Short:         "Upgrade osdctl",
 	Long:          "Fetch latest osdctl from GitHub and replace the running binary",
-	RunE:          upgrade,
-	SilenceErrors: true,
+	RunE: upgrade,
 }
 
 func upgrade(cmd *cobra.Command, args []string) error {
