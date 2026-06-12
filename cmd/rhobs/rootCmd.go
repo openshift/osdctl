@@ -38,6 +38,7 @@ func NewCmdRhobs() *cobra.Command {
 	cmd.AddCommand(newCmdCell())
 	cmd.AddCommand(newCmdLogs())
 	cmd.AddCommand(newCmdMetrics())
+	cmd.AddCommand(newCmdHcpDashboard())
 	cmd.AddCommand(newCmdMcp())
 
 	cmd.PersistentFlags().StringVarP(&commonOptions.clusterId, "cluster-id", "C", "", "Name or Internal ID of the cluster (defaults to current cluster context)")
