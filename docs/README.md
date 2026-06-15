@@ -60,6 +60,10 @@
   - `logging-check --cluster-id <cluster-identifier>` - Shows the logging support status of a specified cluster
   - `orgId --cluster-id <cluster-identifier` - Get the OCM org ID for a given cluster
   - `owner` - List the clusters owned by the user (can be specified to any user, not only yourself)
+  - `pull-secret` - Diagnose and manage cluster pull secrets
+    - `audit` - Audit pull secret status for all clusters owned by an account
+    - `update` - Refresh a cluster's pull secret from the cluster owner's OCM account
+    - `validate` - Extended checks to confirm pull-secret data is synced with current OCM data
   - `reports` - Manage cluster reports in backplane-api
     - `create` - Create a new cluster report in backplane-api
     - `get` - Get a specific cluster report from backplane-api
@@ -81,7 +85,6 @@
     - `status --cluster-id <cluster-identifier>` - Shows the support status of a specified cluster
   - `transfer-owner` - Transfer cluster ownership to a new user (to be done by Region Lead)
   - `validate-pull-secret --cluster-id <cluster-identifier>` - Checks if the pull secret email matches the owner email
-  - `validate-pull-secret-ext --cluster-id $CLUSTER_ID` - Extended checks to confirm pull-secret data is synced with current OCM data
   - `verify-dns --cluster-id <cluster-id>` - Verify DNS resolution for HCP cluster public endpoints
 - `cost` - Cost Management related utilities
   - `carbon-report` - Generate carbon emissions report csv to stdout for a given AWS Account and Usage Period
@@ -1842,6 +1845,147 @@ osdctl cluster owner [flags]
   -u, --user-id string                   user to check the cluster owner on
 ```
 
+### osdctl cluster pull-secret
+
+Diagnose and manage cluster pull secrets.
+
+```
+osdctl cluster pull-secret [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for pull-secret
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+```
+
+### osdctl cluster pull-secret audit
+
+Audit pull secret status for all clusters sharing the same OCM account.
+
+Given a cluster ID or account ID, resolves the owner account and lists all
+clusters owned by that account. Compares cluster creation dates against the
+account's registry credential update timestamps to flag clusters that may
+have stale pull secrets.
+
+Use --validate to connect to each cluster and compare its pull secret
+against the OCM access token and registry credential auths.
+
+For validating a single cluster, use 'osdctl cluster pull-secret validate'.
+
+```
+osdctl cluster pull-secret audit [flags]
+```
+
+#### Flags
+
+```
+  -A, --account-id string                OCM account ID directly
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+  -C, --cluster-id string                Any cluster owned by the account (used to resolve the owner)
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for audit
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --reason string                    Elevation reason for cluster connections
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+      --validate                         Validate all clusters' pull secrets against OCM
+```
+
+### osdctl cluster pull-secret update
+
+Refresh a cluster's pull secret from the cluster owner's OCM account.
+
+This updates the pull secret on a ROSA HCP or Classic cluster without performing
+an ownership transfer. The pull secret is rebuilt from the latest credentials
+in the cluster owner's OCM account.
+
+A pre-flight check always runs first. If any checks fail, the command exits
+unless --force is specified (requires typing YES to confirm).
+
+See documentation prior to executing:
+https://github.com/openshift/ops-sop/blob/master/hypershift/knowledge_base/howto/replace-pull-secret.md
+https://github.com/openshift/ops-sop/blob/master/v4/howto/transfer_cluster_ownership.md
+
+```
+osdctl cluster pull-secret update [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+  -C, --cluster-id string                The Internal/External Cluster ID or Cluster Name
+      --context string                   The name of the kubeconfig context to use
+  -d, --dry-run                          Dry-run - show what would change but do not apply
+      --force                            Proceed despite pre-flight failures or no-op detection (requires YES confirmation)
+  -h, --help                             help for update
+      --hive-ocm-url string              OCM environment for Hive operations (aliases: production, staging, integration)
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --reason string                    The reason for this command (usually an OHSS or PD ticket)
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+```
+
+### osdctl cluster pull-secret validate
+
+
+	Attempts to validate if a cluster's pull-secret auth values are in sync with the account's email,
+	registry_credential, and access token data stored in OCM.
+
+	Service logs are automatically sent for detected issues. Multiple failures are aggregated into
+	a single service log. Use --skip-service-logs to prevent sending service logs.
+
+	If this is being executed against a cluster which is not owned by the current OCM account,
+	Region Lead permissions are required to view and validate the OCM AccessToken.
+
+
+```
+osdctl cluster pull-secret validate [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+  -C, --cluster-id string                Provide internal ID of the cluster
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for validate
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -l, --log-level string                 debug, info, warn, error. (default=info) (default "info")
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --reason string                    Mandatory reason for this command to be run (usually includes an OHSS or PD ticket)
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-access-token                Exclude OCM AccessToken checks against cluster secret
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+      --skip-registry-creds              Exclude OCM Registry Credentials checks against cluster secret
+      --skip-service-logs                Skip sending service logs (useful for testing/automation)
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+```
+
 ### osdctl cluster reports
 
 Manage cluster reports stored in backplane-api.
@@ -2505,45 +2649,6 @@ osdctl cluster validate-pull-secret --cluster-id <cluster-identifier> [flags]
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
-  -S, --skip-version-check               skip checking to see if this is the most recent release
-```
-
-### osdctl cluster validate-pull-secret-ext
-
-
-	Attempts to validate if a cluster's pull-secret auth values are in sync with the account's email,
-	registry_credential, and access token data stored in OCM.
-
-	Service logs are automatically sent for detected issues. Multiple failures are aggregated into
-	a single service log. Use --skip-service-logs to prevent sending service logs.
-
-	If this is being executed against a cluster which is not owned by the current OCM account,
-	Region Lead permissions are required to view and validate the OCM AccessToken.
-
-
-```
-osdctl cluster validate-pull-secret-ext --cluster-id $CLUSTER_ID [flags]
-```
-
-#### Flags
-
-```
-      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
-      --cluster string                   The name of the kubeconfig cluster to use
-  -C, --cluster-id string                Provide internal ID of the cluster
-      --context string                   The name of the kubeconfig context to use
-  -h, --help                             help for validate-pull-secret-ext
-      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
-      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
-  -l, --log-level string                 debug, info, warn, error. (default=info) (default "info")
-  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
-      --reason string                    Mandatory reason for this command to be run (usually includes an OHSS or PD ticket)
-      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
-  -s, --server string                    The address and port of the Kubernetes API server
-      --skip-access-token                Exclude OCM AccessToken checks against cluster secret
-      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
-      --skip-registry-creds              Exclude OCM Registry Credentials checks against cluster secret
-      --skip-service-logs                Skip sending service logs (useful for testing/automation)
   -S, --skip-version-check               skip checking to see if this is the most recent release
 ```
 
