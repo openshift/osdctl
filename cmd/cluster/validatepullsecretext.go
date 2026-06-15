@@ -72,6 +72,12 @@ const VPSExample string = `
 	osdctl cluster validate-pull-secret-ext --cluster-id ${CLUSTER_ID} --reason "OSD-XYZ" --skip-service-logs
 `
 
+func newCmdValidatePullSecretExtDeprecated() *cobra.Command {
+	cmd := newCmdValidatePullSecretExt()
+	cmd.Deprecated = "use 'osdctl cluster pull-secret validate' instead"
+	return cmd
+}
+
 func newCmdValidatePullSecretExt() *cobra.Command {
 	ops := newValidatePullSecretExtOptions()
 	validatePullSecretCmd := &cobra.Command{
