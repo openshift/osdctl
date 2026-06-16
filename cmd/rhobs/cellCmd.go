@@ -2,9 +2,7 @@ package rhobs
 
 import (
 	"fmt"
-	"os"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -14,34 +12,24 @@ func newCmdCell() *cobra.Command {
 		Short:         "Get the RHOBS cell for a given cluster",
 		Args:          cobra.NoArgs,
 		SilenceErrors: true,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.SilenceUsage = true
 
-			metricsRhobsFetcher, metricsErr := CreateRhobsFetcher(commonOptions.clusterId, RhobsFetchForMetrics, commonOptions.hiveOcmUrl)
-			if metricsErr != nil {
-				log.Errorf("Error while computing metrics RHOBS cell: %v", metricsErr)
-			}
-
-			logsRhobsFetcher, logsErr := CreateRhobsFetcher(commonOptions.clusterId, RhobsFetchForLogs, commonOptions.hiveOcmUrl)
-			if logsErr != nil {
-				log.Errorf("Error while computing logs RHOBS cell: %v", logsErr)
-			}
-
-			if metricsErr == nil {
-				if logsErr == nil && metricsRhobsFetcher.RhobsCell == logsRhobsFetcher.RhobsCell {
+			metricsRhobsFetcher, logsRhobsFetcher, err := CreateMetricsAndLogsRhobsFetchers(commonOptions.clusterId, commonOptions.hiveOcmUrl)
+			if metricsRhobsFetcher != nil {
+				if logsRhobsFetcher != nil && metricsRhobsFetcher.RhobsCell == logsRhobsFetcher.RhobsCell {
 					fmt.Println("Metrics & logs RHOBS cell:", metricsRhobsFetcher.RhobsCell)
-					return
+					return nil
 				}
+
 				fmt.Println("Metrics RHOBS cell:", metricsRhobsFetcher.RhobsCell)
 			}
 
-			if logsErr == nil {
+			if logsRhobsFetcher != nil {
 				fmt.Println("Logs RHOBS cell   :", logsRhobsFetcher.RhobsCell)
 			}
 
-			if metricsErr != nil || logsErr != nil {
-				os.Exit(1)
-			}
+			return err
 		},
 	}
 

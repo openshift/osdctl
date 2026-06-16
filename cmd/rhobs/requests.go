@@ -45,7 +45,14 @@ const (
 	rhobsCellLogsCmNs         = "openshift-logging"
 	rhobsCellLogsCmName       = "rhobs-logs-destination"
 	rhobsCellCmAnnotation     = "rhobs.openshift.io/forwarding-destination"
-	grafanaBaseExploreUrl     = "https://grafana.app-sre.devshift.net/explore?"
+	grafanaBaseUrl            = "https://grafana.app-sre.devshift.net/"
+)
+
+type RhobsFetchUsage string
+
+const (
+	RhobsFetchForMetrics RhobsFetchUsage = "metrics"
+	RhobsFetchForLogs    RhobsFetchUsage = "logs"
 )
 
 type MetricsFormat string
@@ -90,17 +97,248 @@ func GetLogsFormatFromString(formatStr string) (LogsFormat, error) {
 	}
 }
 
-type RhobsFetchUsage string
+type GrafanaDashboard struct {
+	name                 string
+	pathId               string
+	pathName             string
+	validateAndGetParams func(metricsFetcher, logsFetcher *RhobsFetcher) (url.Values, error)
+}
 
-const (
-	RhobsFetchForMetrics RhobsFetchUsage = "metrics"
-	RhobsFetchForLogs    RhobsFetchUsage = "logs"
-)
+const defaultGrafanaDashboardShortName = "hosted-cluster"
+
+func eventuallyWarnAboutWiderDashboardScope(fetcher *RhobsFetcher) {
+	if fetcher.clusterId != "" {
+		log.Warnf("Dashboard will contain data for clusters other than the provided cluster. "+
+			"Works as if the --rhobs-cell option was set to the %s cluster RHOBS cell(s).\n", fetcher.clusterId)
+	}
+}
+
+var allowedGrafanaDashboard = []*GrafanaDashboard{
+	{
+		name:     defaultGrafanaDashboardShortName,
+		pathId:   "cf6ntunq7rb40c",
+		pathName: "rosa-hcp-central-cluster-dashboard",
+		validateAndGetParams: func(metricsFetcher, logsFetcher *RhobsFetcher) (url.Values, error) {
+			if !metricsFetcher.IsHostedCluster {
+				return nil, fmt.Errorf("'%s' dashboard must be used with a hosted cluster", defaultGrafanaDashboardShortName)
+			}
+
+			region, shard, err := metricsFetcher.getRhobsRegionAndShard()
+			if err != nil {
+				return nil, err
+			}
+
+			return url.Values{
+				"var-environment": {metricsFetcher.ocmEnvName},
+				"var-region":      {region},
+				"var-shard":       {shard},
+				"var-_id":         {metricsFetcher.clusterExternalId},
+			}, nil
+		},
+	}, {
+		name:     "management-cluster",
+		pathId:   "rosa-hcp-mc-dashboard",
+		pathName: "rosa-hcp-management-cluster-dashboard",
+		validateAndGetParams: func(metricsFetcher, logsFetcher *RhobsFetcher) (url.Values, error) {
+			mcName := metricsFetcher.clusterName
+
+			if !metricsFetcher.isManagementCluster {
+				if metricsFetcher.IsHostedCluster {
+					managementCluster, err := ocmutils.GetManagementCluster(metricsFetcher.clusterId)
+					if err != nil {
+						return nil, fmt.Errorf("failed to retrieve management cluster for cluster '%s': %v", metricsFetcher.clusterId, err)
+					}
+					mcName = managementCluster.Name()
+					log.Warnf("Dashboard will contain data for the %s management cluster; not just for the provided hosted cluster: %s", managementCluster.ID(), metricsFetcher.clusterId)
+				} else {
+					return nil, fmt.Errorf("'%s' dashboard must be used with a management cluster", "management-cluster")
+				}
+			}
+
+			region, _, err := metricsFetcher.getRhobsRegionAndShard()
+			if err != nil {
+				return nil, err
+			}
+
+			return url.Values{
+				"var-environment": {metricsFetcher.ocmEnvName},
+				"var-region":      {region},
+				"var-mc_name":     {mcName},
+			}, nil
+		},
+	}, {
+		name:     "kube-apis-slo",
+		pathId:   "cfmgzo0gsak1sd",
+		pathName: "drill-down3a-rosa-hcp-api-server-availability",
+		validateAndGetParams: func(metricsFetcher, logsFetcher *RhobsFetcher) (url.Values, error) {
+			eventuallyWarnAboutWiderDashboardScope(metricsFetcher)
+
+			metricsDataSource, err := metricsFetcher.getMetricsGrafanaDataSource()
+			if err != nil {
+				return nil, err
+			}
+			return url.Values{
+				"var-environment":       {metricsFetcher.ocmEnvName},
+				"var-datasource_global": {metricsDataSource},
+			}, nil
+		},
+	}, {
+		name:     "clusters-creation-slo",
+		pathId:   "fdmk9z8ucodtsa",
+		pathName: "drill-down3a-rosa-hcp-cluster-creation",
+		validateAndGetParams: func(metricsFetcher, logsFetcher *RhobsFetcher) (url.Values, error) {
+			eventuallyWarnAboutWiderDashboardScope(metricsFetcher)
+
+			region, _, err := metricsFetcher.getRhobsRegionAndShard()
+			if err != nil {
+				return nil, err
+			}
+
+			metricsDataSource, err := metricsFetcher.getMetricsGrafanaDataSource()
+			if err != nil {
+				return nil, err
+			}
+
+			logsDataSource, err := logsFetcher.getLogsGrafanaDataSource()
+			if err != nil {
+				return nil, err
+			}
+
+			return url.Values{
+				"var-environment":         {metricsFetcher.ocmEnvName},
+				"var-region":              {region},
+				"var-datasource_regional": {metricsDataSource},
+				"var-datasource_global":   {metricsDataSource},
+				"var-datasource_logs":     {logsDataSource},
+			}, nil
+		},
+	}, {
+		name:     "control-planes-upgrade-slo",
+		pathId:   "efmgzo0i3qmm8d",
+		pathName: "drill-down3a-rosa-hcp-control-plane-upgrades",
+		validateAndGetParams: func(metricsFetcher, logsFetcher *RhobsFetcher) (url.Values, error) {
+			region, _, err := metricsFetcher.getRhobsRegionAndShard()
+			if err != nil {
+				return nil, err
+			}
+
+			metricsDataSource, err := metricsFetcher.getMetricsGrafanaDataSource()
+			if err != nil {
+				return nil, err
+			}
+
+			clusterId := metricsFetcher.clusterId
+			if !metricsFetcher.IsHostedCluster {
+				clusterId = "$__all"
+			}
+
+			return url.Values{
+				"var-environment":         {metricsFetcher.ocmEnvName},
+				"var-region":              {region},
+				"var-datasource_regional": {metricsDataSource},
+				"var-datasource_global":   {metricsDataSource},
+				"var-clusterid":           {clusterId},
+			}, nil
+		},
+	}, {
+		name:     "nodepools-upgrade-slo",
+		pathId:   "919c6ec2b6d74bdf",
+		pathName: "drill-down3a-rosa-hcp-nodepool-upgrades",
+		validateAndGetParams: func(metricsFetcher, logsFetcher *RhobsFetcher) (url.Values, error) {
+			metricsDataSource, err := metricsFetcher.getMetricsGrafanaDataSource()
+			if err != nil {
+				return nil, err
+			}
+
+			clusterId := metricsFetcher.clusterId
+			if !metricsFetcher.IsHostedCluster {
+				clusterId = "$__all"
+			}
+			mcName := metricsFetcher.clusterName
+			if !metricsFetcher.isManagementCluster {
+				mcName = "$__all"
+			}
+
+			return url.Values{
+				"var-datasource":        {metricsDataSource},
+				"var-namespace":         {"uhc-" + metricsFetcher.ocmEnvName},
+				"var-clusterid":         {clusterId},
+				"var-managementcluster": {mcName},
+			}, nil
+		},
+	}, {
+		name:     "nodepools-slo",
+		pathId:   "cdtg6ugw1a03ka",
+		pathName: "drill-down3a-rosa-hcp-nodepools",
+		validateAndGetParams: func(metricsFetcher, logsFetcher *RhobsFetcher) (url.Values, error) {
+			eventuallyWarnAboutWiderDashboardScope(metricsFetcher)
+
+			region, _, err := metricsFetcher.getRhobsRegionAndShard()
+			if err != nil {
+				return nil, err
+			}
+
+			metricsDataSource, err := metricsFetcher.getMetricsGrafanaDataSource()
+			if err != nil {
+				return nil, err
+			}
+
+			return url.Values{
+				"var-environment":         {metricsFetcher.ocmEnvName},
+				"var-region":              {region},
+				"var-datasource_regional": {metricsDataSource},
+			}, nil
+		},
+	}, {
+		name:     "counters",
+		pathId:   "bfmgzo0f6uw3kc",
+		pathName: "rosa-hcp-counter",
+		validateAndGetParams: func(metricsFetcher, logsFetcher *RhobsFetcher) (url.Values, error) {
+			eventuallyWarnAboutWiderDashboardScope(metricsFetcher)
+
+			region, _, err := metricsFetcher.getRhobsRegionAndShard()
+			if err != nil {
+				return nil, err
+			}
+
+			metricsDataSource, err := metricsFetcher.getMetricsGrafanaDataSource()
+			if err != nil {
+				return nil, err
+			}
+
+			return url.Values{
+				"var-environment":         {metricsFetcher.ocmEnvName},
+				"var-region":              {region},
+				"var-datasource_regional": {metricsDataSource},
+			}, nil
+		},
+	},
+} // Make sure to run `make generate-docs` when editing this list
+
+func GetAllowedGrafanaDashboardsShortNames() []string {
+	result := []string{}
+
+	for _, grafanaDashboard := range allowedGrafanaDashboard {
+		result = append(result, grafanaDashboard.name)
+	}
+
+	return result
+}
+
+func GetGrafanaDashboardForShortName(shortName string) *GrafanaDashboard {
+	for _, grafanaDashboard := range allowedGrafanaDashboard {
+		if grafanaDashboard.name == shortName {
+			return grafanaDashboard
+		}
+	}
+	return nil
+}
 
 type RhobsFetcher struct {
 	clusterId           string
 	clusterExternalId   string
 	clusterName         string
+	IsHostedCluster     bool
 	isManagementCluster bool
 	ocmEnvName          string
 	RhobsCell           string
@@ -128,26 +366,7 @@ func getRhobsCellFromConfigMap(clusterId string, ocmConn *sdk.Connection, config
 	return rhobsCell, nil
 }
 
-func getMetricsRhobsCellFromConfigMap(clusterId string, ocmConn *sdk.Connection) (string, error) {
-	return getRhobsCellFromConfigMap(clusterId, ocmConn, rhobsCellMetricsCmNs, rhobsCellMetricsCmName, rhobsCellCmAnnotation)
-}
-
-func getLogsRhobsCellFromConfigMap(clusterId string, ocmConn *sdk.Connection) (string, error) {
-	return getRhobsCellFromConfigMap(clusterId, ocmConn, rhobsCellLogsCmNs, rhobsCellLogsCmName, rhobsCellCmAnnotation)
-}
-
-func getRhobsCellFromUsage(clusterId string, ocmConn *sdk.Connection, usage RhobsFetchUsage) (string, error) {
-	switch usage {
-	case RhobsFetchForMetrics:
-		return getMetricsRhobsCellFromConfigMap(clusterId, ocmConn)
-	case RhobsFetchForLogs:
-		return getLogsRhobsCellFromConfigMap(clusterId, ocmConn)
-	default:
-		return "", fmt.Errorf("unsupported RhobsFetchUsage: %s", usage)
-	}
-}
-
-func getOtherUsage(usage RhobsFetchUsage) RhobsFetchUsage {
+func getFallbackUsage(usage RhobsFetchUsage) RhobsFetchUsage {
 	if usage == RhobsFetchForMetrics {
 		return RhobsFetchForLogs
 	} else {
@@ -199,40 +418,16 @@ func getRhobsCellFromHiveClusterDeployment(clusterId string, ocmConn *sdk.Connec
 	return "https://" + rhobsCell, nil
 }
 
-func getRhobsCell(clusterId string, ocmConn *sdk.Connection, usage RhobsFetchUsage, hiveOcmUrl string) (string, error) {
-	rhobsCell, err := getRhobsCellFromUsage(clusterId, ocmConn, usage)
-	if err == nil {
-		return rhobsCell, nil
-	}
-	log.Warnf("Failed to get RHOBS cell from %s config map for cluster '%s': %v\n", usage, clusterId, err)
-	log.Infoln("Trying to get the RHOBS cell from the hive cluster deployment instead...")
-
-	rhobsCell, err = getRhobsCellFromHiveClusterDeployment(clusterId, ocmConn, hiveOcmUrl)
-	if err == nil {
-		return rhobsCell, nil
-	}
-	log.Warnf("Failed to get RHOBS cell from hive cluster deployment for cluster '%s': %v\n", clusterId, err)
-	otherUsage := getOtherUsage(usage)
-	log.Infof("Trying to get the RHOBS cell from the %s config map instead...", otherUsage)
-
-	rhobsCell, err = getRhobsCellFromUsage(clusterId, ocmConn, otherUsage)
-	if err == nil {
-		return rhobsCell, nil
-	}
-
-	return "", fmt.Errorf("failed to get RHOBS cell for cluster '%s' despite trying all methods", clusterId)
-}
-
-func CreateRhobsFetcher(clusterKey string, rhobsFetchUse RhobsFetchUsage, hiveOcmUrl string) (*RhobsFetcher, error) {
+func populateRhobsFetchers(clusterKey string, hiveOcmUrl string, usageToFetcher *map[RhobsFetchUsage]*RhobsFetcher) error {
 	ocmConn, err := ocmutils.CreateConnection()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer ocmConn.Close()
 
 	cluster, err := ocmutils.GetCluster(ocmConn, clusterKey)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	var monitoredClusterId string
@@ -242,7 +437,7 @@ func CreateRhobsFetcher(clusterKey string, rhobsFetchUse RhobsFetchUsage, hiveOc
 	if isHcp {
 		managementCluster, err := ocmutils.GetManagementCluster(cluster.ID())
 		if err != nil {
-			return nil, fmt.Errorf("failed to retrieve management cluster for cluster '%s': %v", cluster.ID(), err)
+			return fmt.Errorf("failed to retrieve management cluster for cluster '%s': %v", cluster.ID(), err)
 		}
 		monitoredClusterId = managementCluster.ID()
 		log.Infof("Cluster %s is managed by MC cluster %s - using the MC cluster for RHOBS cell resolution\n", cluster.ID(), monitoredClusterId)
@@ -250,29 +445,143 @@ func CreateRhobsFetcher(clusterKey string, rhobsFetchUse RhobsFetchUsage, hiveOc
 		monitoredClusterId = cluster.ID()
 		isMC, err = ocmutils.IsManagementCluster(cluster.ID())
 		if err != nil {
-			return nil, fmt.Errorf("failed to determine if cluster '%s' is a management cluster: %v", cluster.ID(), err)
+			return fmt.Errorf("failed to determine if cluster '%s' is a management cluster: %v", cluster.ID(), err)
 		}
 	}
 
-	rhobsCell, err := getRhobsCell(monitoredClusterId, ocmConn, rhobsFetchUse, hiveOcmUrl)
-	if err != nil {
-		return nil, err
+	usageToRhobsCell := map[RhobsFetchUsage]*string{}
+
+	getRhobsCell := func(usage RhobsFetchUsage) string {
+		rhobsCellPtr := usageToRhobsCell[usage]
+		if rhobsCellPtr != nil {
+			return *rhobsCellPtr
+		}
+
+		var cmNs, cmName, rhobsCell string
+		var err error
+
+		switch usage {
+		case RhobsFetchForMetrics:
+			cmNs, cmName = rhobsCellMetricsCmNs, rhobsCellMetricsCmName
+		case RhobsFetchForLogs:
+			cmNs, cmName = rhobsCellLogsCmNs, rhobsCellLogsCmName
+		}
+
+		if usage == "CD" {
+			rhobsCell, err = getRhobsCellFromHiveClusterDeployment(monitoredClusterId, ocmConn, hiveOcmUrl)
+
+			if err != nil {
+				log.Warnf("Failed to get RHOBS cell from hive cluster deployment for cluster '%s': %v\n", monitoredClusterId, err)
+			}
+		} else {
+			rhobsCell, err = getRhobsCellFromConfigMap(monitoredClusterId, ocmConn, cmNs, cmName, rhobsCellCmAnnotation)
+
+			if err != nil {
+				log.Warnf("Failed to get RHOBS cell from %s config map in %s namespace for cluster '%s': %v\n", cmName, cmNs, monitoredClusterId, err)
+				log.Infoln("Trying to get the RHOBS cell from the hive cluster deployment instead...")
+			}
+		}
+
+		usageToRhobsCell[usage] = &rhobsCell // Can be the empty string in case of error
+
+		return rhobsCell
+	}
+
+	resolveRhobsCell := func(usage RhobsFetchUsage) (string, error) { // Must be called for either the metrics or the logs usage
+		rhobsCell := getRhobsCell(usage)
+
+		if rhobsCell == "" {
+			log.Infoln("Trying to get the RHOBS cell from the hive cluster deployment instead...")
+			rhobsCell = getRhobsCell("CD")
+		}
+
+		if rhobsCell == "" {
+			log.Infoln("Still failing - trying to get the RHOBS cell from another config map instead...")
+			fallbackUsage := getFallbackUsage(usage)
+			if fallbackUsage != "" {
+				rhobsCell = getRhobsCell(fallbackUsage)
+			}
+		}
+
+		if rhobsCell == "" {
+			return "", fmt.Errorf("failed to get RHOBS cell for cluster '%s' despite trying all possible methods", monitoredClusterId)
+		}
+
+		return rhobsCell, nil
+	}
+
+	baseFetcher := RhobsFetcher{
+		clusterId:           cluster.ID(),
+		clusterExternalId:   cluster.ExternalID(),
+		clusterName:         cluster.Name(),
+		IsHostedCluster:     isHcp,
+		isManagementCluster: isMC,
+		ocmEnvName:          ocmutils.GetCurrentOCMEnv(ocmConn),
+	}
+
+	var resolveErr error
+
+	for usage := range *usageToFetcher {
+		rhobsCell, err := resolveRhobsCell(usage)
+		if err != nil {
+			resolveErr = err
+			continue
+		}
+
+		fetcher := baseFetcher
+		fetcher.RhobsCell = rhobsCell
+		(*usageToFetcher)[usage] = &fetcher
 	}
 
 	// We have to overwrite the fact that backplane just mangled our configuration.
 	// TODO: Do not use the global configuration instead (https://issues.redhat.com/browse/OSD-19773)
 	err = osdctlConfig.EnsureConfigFile()
 	if err != nil {
-		return nil, fmt.Errorf("failed to reload osdctl config: %v", err)
+		log.Warnf("failed to reload osdctl config: %v", err)
+	}
+
+	return resolveErr
+}
+
+func CreateMetricsAndLogsRhobsFetchers(clusterKey string, hiveOcmUrl string) (*RhobsFetcher, *RhobsFetcher, error) {
+	usageToFetcher := map[RhobsFetchUsage]*RhobsFetcher{
+		RhobsFetchForMetrics: nil,
+		RhobsFetchForLogs:    nil,
+	}
+	err := populateRhobsFetchers(clusterKey, hiveOcmUrl, &usageToFetcher)
+
+	return usageToFetcher[RhobsFetchForMetrics], usageToFetcher[RhobsFetchForLogs], err
+}
+
+func CreateRhobsFetcher(clusterKey string, usage RhobsFetchUsage, hiveOcmUrl string) (*RhobsFetcher, error) {
+	usageToFetcher := map[RhobsFetchUsage]*RhobsFetcher{
+		usage: nil,
+	}
+	err := populateRhobsFetchers(clusterKey, hiveOcmUrl, &usageToFetcher)
+
+	return usageToFetcher[usage], err
+}
+
+func CreateRhobsFetcherFromCell(rhobsCell string) (*RhobsFetcher, error) {
+	envName := ""
+
+	if strings.HasSuffix(rhobsCell, ".rhobs.api.openshift.com") {
+		envName = "production"
+	} else {
+		for _, currentEnvName := range []string{"stage", "integration"} {
+			if strings.HasSuffix(rhobsCell, ".rhobs.api."+currentEnvName+".openshift.com") {
+				envName = currentEnvName
+			}
+		}
+	}
+
+	if envName == "" {
+		return nil, fmt.Errorf("failed to determine OCM environment from RHOBS cell URL '%s'", rhobsCell)
 	}
 
 	return &RhobsFetcher{
-		clusterId:           cluster.ID(),
-		clusterExternalId:   cluster.ExternalID(),
-		clusterName:         cluster.Name(),
-		isManagementCluster: isMC,
-		ocmEnvName:          ocmutils.GetCurrentOCMEnv(ocmConn),
-		RhobsCell:           rhobsCell,
+		ocmEnvName: envName,
+		RhobsCell:  rhobsCell,
 	}, nil
 }
 
@@ -284,6 +593,16 @@ func (f *RhobsFetcher) getRhobsCellName() (string, error) {
 	}
 
 	return matches[1], nil
+}
+
+func (f *RhobsFetcher) getRhobsRegionAndShard() (string, string, error) {
+	rhobsCellName, err := f.getRhobsCellName()
+	lastDashIdx := strings.LastIndex(rhobsCellName, "-")
+	if err != nil || lastDashIdx == -1 {
+		return "", "", fmt.Errorf("failed to extract RHOBS cell region & shard from '%s'", f.RhobsCell)
+	}
+
+	return rhobsCellName[:lastDashIdx], rhobsCellName[lastDashIdx+1:], nil
 }
 
 func (f *RhobsFetcher) getBaseGrafanaDataSource() (string, error) {
@@ -375,7 +694,7 @@ func (f *RhobsFetcher) GetGrafanaMetricsUrl(promExpr string, startTime, endTime 
 		"panes":         {string(exploreParamsBytes)},
 	}.Encode()
 
-	return grafanaBaseExploreUrl + exploreParamsEncoded, nil
+	return grafanaBaseUrl + "explore?" + exploreParamsEncoded, nil
 }
 
 func (f *RhobsFetcher) GetGrafanaLogsUrl(lokiExpr string, startTime, endTime time.Time, isGoingForward bool) (string, error) {
@@ -413,7 +732,16 @@ func (f *RhobsFetcher) GetGrafanaLogsUrl(lokiExpr string, startTime, endTime tim
 		"panes":         {string(exploreParamsBytes)},
 	}.Encode()
 
-	return grafanaBaseExploreUrl + exploreParamsEncoded, nil
+	return grafanaBaseUrl + "explore?" + exploreParamsEncoded, nil
+}
+
+func GetGrafanaDashboardUrl(metricsFetcher, logsFetcher *RhobsFetcher, grafanaDashboard *GrafanaDashboard) (string, error) {
+	dashboardParams, err := grafanaDashboard.validateAndGetParams(metricsFetcher, logsFetcher)
+	if err != nil {
+		return "", fmt.Errorf("failed to get parameters for Grafana dashboard: %v", err)
+	}
+
+	return grafanaBaseUrl + "d/" + grafanaDashboard.pathId + "/" + grafanaDashboard.pathName + "?" + dashboardParams.Encode(), nil
 }
 
 func (f *RhobsFetcher) getTokenProvider() (ocmutils.AccessTokenProvider, error) {
@@ -681,12 +1009,12 @@ func filterMetricsResults[Result instantOrRangeMetricResult](fetcher *RhobsFetch
 		returnedResults = &filteredResults
 	} else {
 		if isPrintingClusterResultsOnly {
-			log.Warnln("Results returned by RHOBS cannot be matched against the given cluster. Working as if --filter option was not set.")
+			log.Warnln("Results returned by RHOBS cannot be matched against the provided cluster. Working as if --filter option was not set.")
 		}
 		returnedResults = results
 		if !isPrintingClusterResultsOnly && areSomeResultsForOtherClusters {
-			log.Warnln("Printing ALL RHOBS cell results even the ones not matching the given cluster. " +
-				"You could have used the --filter option to only print the results matching the given cluster.")
+			log.Warnln("Printing ALL RHOBS cell results even the ones not matching the provided cluster. " +
+				"You could have used the --filter option to only print the results matching the provided cluster.")
 		} else {
 			log.Infoln("Printing ALL RHOBS cell results")
 		}

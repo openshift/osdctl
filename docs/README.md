@@ -137,6 +137,7 @@
   - `saas` - Utilities to promote SaaS services/operators
 - `rhobs` - RHOBS.next related utilities
   - `cell` - Get the RHOBS cell for a given cluster
+  - `hcp-dashboard [dashboard-name]` - Get the HCP dashboard URL for a given HCP cluster
   - `logs [pod]` - Fetch logs from RHOBS for a given cluster
   - `mcp` - RHOBS MCP server for AI agent integration
     - `config` - Print MCP client configuration JSON
@@ -4224,6 +4225,25 @@ osdctl rhobs cell [flags]
   -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
   -h, --help                  help for cell
       --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check    skip checking to see if this is the most recent release
+```
+
+### osdctl rhobs hcp-dashboard
+
+Get the HCP dashboard URL for a given HCP cluster. The dashboard name is optional and defaults to the hosted cluster dashboard. Allowed values for the dashboard name are: hosted-cluster, management-cluster, kube-apis-slo, clusters-creation-slo, control-planes-upgrade-slo, nodepools-upgrade-slo, nodepools-slo, counters. The URL of the RHOBS cell(s) to use can be specified with the --rhobs-cell option, but it is usually more convenient to specify the cluster with the --cluster-id option and let the command figure out the RHOBS cell(s) to use. Note that the --rhobs-cell option is not working with all dashboards and cannot be used together with the --cluster-id option.
+
+```
+osdctl rhobs hcp-dashboard [dashboard-name] [flags]
+```
+
+#### Flags
+
+```
+  -b, --browser               Open in the URL in the default browser
+  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                  help for hcp-dashboard
+      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -c, --rhobs-cell string     RHOBS cell URL - for instance: https://us-east-1-0.rhobs.api.stage.openshift.com - use a comma to separate the RHOBS cell to use for metrics from the logs RHOBS cell if they are different - this option is not working with all dashboards - exclusive with --cluster-id
   -S, --skip-version-check    skip checking to see if this is the most recent release
 ```
 
