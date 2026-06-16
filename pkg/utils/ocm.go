@@ -20,7 +20,12 @@ import (
 
 	ocmConfig "github.com/openshift-online/ocm-common/pkg/ocm/config"
 	ocmConnBuilder "github.com/openshift-online/ocm-common/pkg/ocm/connection-builder"
+	srelibpkg "github.com/openshift/osdctl/pkg/srelib"
 )
+
+var activeSrelibClient *srelibpkg.Client
+
+func SetSrelibClient(c *srelibpkg.Client) { activeSrelibClient = c }
 
 const ClusterServiceClusterSearch = "id = '%s' or name = '%s' or external_id = '%s'"
 
@@ -59,36 +64,17 @@ var urlAliases = map[string]string{
 	stagingGovURL:     stagingGovURL,
 }
 
-// GetClusterAnyStatus returns an OCM cluster object given an OCM connection and cluster id
+// GetClusterAnyStatus returns an OCM cluster object given a cluster id
 // (internal id, external id, and name all supported).
 func GetClusterAnyStatus(conn *sdk.Connection, clusterId string) (*cmv1.Cluster, error) {
-	// identifier in the accounts management service. To find those clusters we need to check
-	// directly in the clusters management service.
-	clustersSearch := fmt.Sprintf(ClusterServiceClusterSearch, clusterId, clusterId, clusterId)
-	clustersListResponse, err := conn.ClustersMgmt().V1().Clusters().List().Search(clustersSearch).Size(1).Send()
-	if err != nil {
-		return nil, fmt.Errorf("can't retrieve clusters for clusterId '%s': %w", clusterId, err)
-	}
-
-	// If there is exactly one cluster matching then return it:
-	clustersTotal := clustersListResponse.Total()
-	if clustersTotal == 1 {
-		return clustersListResponse.Items().Slice()[0], nil
-	}
-
-	return nil, fmt.Errorf("there are %d clusters with identifier or name '%s', expected 1", clustersTotal, clusterId)
+	return activeSrelibClient.GetClusterAnyStatus(clusterId)
 }
 
 func GetClusters(ocmClient *sdk.Connection, clusterIds []string) []*cmv1.Cluster {
-	for i, id := range clusterIds {
-		clusterIds[i] = GenerateQuery(id)
-	}
-
-	clusters, err := ApplyFilters(ocmClient, []string{strings.Join(clusterIds, " or ")})
+	clusters, err := activeSrelibClient.GetClusters(clusterIds)
 	if err != nil {
-		log.Fatalf("error while retrieving cluster(s) from ocm: %[1]s", err)
+		log.Fatalf("error retrieving cluster(s) via srelib: %s", err)
 	}
-
 	return clusters
 }
 
