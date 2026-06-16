@@ -26,6 +26,7 @@ AWS Account related utilities
 ### SEE ALSO
 
 * [osdctl](osdctl.md)	 - OSD CLI
+* [osdctl account aws-creds](osdctl_account_aws-creds.md)	 - Diagnose and manage AWS IAM credentials for a cluster
 * [osdctl account clean-velero-snapshots](osdctl_account_clean-velero-snapshots.md)	 - Cleans up S3 buckets whose name start with managed-velero
 * [osdctl account cli](osdctl_account_cli.md)	 - Generate temporary AWS CLI credentials on demand
 * [osdctl account console](osdctl_account_console.md)	 - Generate an AWS console URL on the fly
@@ -34,7 +35,6 @@ AWS Account related utilities
 * [osdctl account list](osdctl_account_list.md)	 - List resources
 * [osdctl account mgmt](osdctl_account_mgmt.md)	 - AWS Account Management
 * [osdctl account reset](osdctl_account_reset.md)	 - Reset AWS Account CR
-* [osdctl account rotate-secret](osdctl_account_rotate-secret.md)	 - Rotate IAM credentials secret
 * [osdctl account servicequotas](osdctl_account_servicequotas.md)	 - Interact with AWS service-quotas
 * [osdctl account set](osdctl_account_set.md)	 - Set AWS Account CR status
 * [osdctl account verify-secrets](osdctl_account_verify-secrets.md)	 - Verify AWS Account CR IAM User credentials

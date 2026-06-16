@@ -10,6 +10,7 @@
 package mock
 
 import (
+	context "context"
 	reflect "reflect"
 
 	cloudtrail "github.com/aws/aws-sdk-go-v2/service/cloudtrail"
@@ -544,6 +545,21 @@ func (m *MockClient) DetachUserPolicy(arg0 *iam.DetachUserPolicyInput) (*iam.Det
 func (mr *MockClientMockRecorder) DetachUserPolicy(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DetachUserPolicy", reflect.TypeOf((*MockClient)(nil).DetachUserPolicy), arg0)
+}
+
+// GetAccessKeyLastUsed mocks base method.
+func (m *MockClient) GetAccessKeyLastUsed(ctx context.Context, input *iam.GetAccessKeyLastUsedInput) (*iam.GetAccessKeyLastUsedOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAccessKeyLastUsed", ctx, input)
+	ret0, _ := ret[0].(*iam.GetAccessKeyLastUsedOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAccessKeyLastUsed indicates an expected call of GetAccessKeyLastUsed.
+func (mr *MockClientMockRecorder) GetAccessKeyLastUsed(ctx, input any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAccessKeyLastUsed", reflect.TypeOf((*MockClient)(nil).GetAccessKeyLastUsed), ctx, input)
 }
 
 // GetCallerIdentity mocks base method.

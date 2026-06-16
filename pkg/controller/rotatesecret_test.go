@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 
 	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
@@ -118,7 +120,7 @@ func testManagedClient(t *testing.T, crs ...runtime.Object) client.Client {
 
 func mockSimulateAllAllowed(mockClient *mock_aws.MockClient) *gomock.Call {
 	return mockClient.EXPECT().
-		SimulatePrincipalPolicy(gomock.Any()).
+		SimulatePrincipalPolicy(gomock.Any()).AnyTimes().
 		Return(&iam.SimulatePrincipalPolicyOutput{
 			EvaluationResults: []iamTypes.EvaluationResult{
 				{EvalActionName: awsSdk.String("iam:CreateAccessKey"), EvalDecision: iamTypes.PolicyEvaluationDecisionTypeAllowed},
@@ -151,7 +153,7 @@ func mockCreateAccessKey(mockClient *mock_aws.MockClient) *gomock.Call {
 
 func mockListAccessKeys(mockClient *mock_aws.MockClient, oldKeyID, newKeyID string) *gomock.Call {
 	return mockClient.EXPECT().
-		ListAccessKeys(gomock.Any()).
+		ListAccessKeys(gomock.Any()).AnyTimes().
 		Return(&iam.ListAccessKeysOutput{
 			AccessKeyMetadata: []iamTypes.AccessKeyMetadata{
 				{AccessKeyId: awsSdk.String(oldKeyID)},
@@ -167,16 +169,18 @@ func TestRotateSecret_STSAccount(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
 
 	kubeCli := fake.NewClientBuilder().WithScheme(testScheme(t)).Build()
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:        "test-account",
-		Account:              account,
-		AwsClient:            mockClient,
-		HiveKubeClient:       kubeCli,
-		ManagedClusterClient: testManagedClient(t),
-		Out:                  out,
+		UpdateManagedAdminCreds: true,
+		AccountCRName:           "test-account",
+		Account:                 account,
+		AwsClient:               mockClient,
+		HiveKubeClient:          kubeCli,
+		ManagedClusterClient:    testManagedClient(t),
+		Out:                     out,
 	})
 
 	assert.Error(t, err)
@@ -191,16 +195,18 @@ func TestRotateSecret_MissingIamUserIdLabel(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
 
 	kubeCli := fake.NewClientBuilder().WithScheme(testScheme(t)).Build()
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:        "test-account",
-		Account:              account,
-		AwsClient:            mockClient,
-		HiveKubeClient:       kubeCli,
-		ManagedClusterClient: testManagedClient(t),
-		Out:                  out,
+		UpdateManagedAdminCreds: true,
+		AccountCRName:           "test-account",
+		Account:                 account,
+		AwsClient:               mockClient,
+		HiveKubeClient:          kubeCli,
+		ManagedClusterClient:    testManagedClient(t),
+		Out:                     out,
 	})
 
 	assert.Error(t, err)
@@ -230,6 +236,7 @@ func TestRotateSecret_SuccessfulRotation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
 
 	mockSimulateAllAllowed(mockClient)
 	mockCreateAccessKey(mockClient)
@@ -238,20 +245,21 @@ func TestRotateSecret_SuccessfulRotation(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:        "test-account",
-		Account:              account,
-		AwsClient:            mockClient,
-		HiveKubeClient:       kubeCli,
-		ManagedClusterClient: testManagedClient(t),
-		Out:                  out,
+		AccountCRName:           "test-account",
+		Account:                 account,
+		UpdateManagedAdminCreds: true,
+		AwsClient:               mockClient,
+		HiveKubeClient:          kubeCli,
+		ManagedClusterClient:    testManagedClient(t),
+		Out:                     out,
 	})
 
 	assert.NoError(t, err)
 	assert.Contains(t, out.String(), "AWS creds updated on hive.")
 	assert.Contains(t, out.String(), "Successfully rotated access keys for osdManagedAdmin-abcd")
-	assert.Contains(t, out.String(), "OLDKEY999 (old - should be removed)")
-	assert.Contains(t, out.String(), "NEWKEY123 (new - just created)")
-	assert.Contains(t, out.String(), "rh-aws-saml-login")
+	assert.Contains(t, out.String(), "OLDK...Y999 (old - should be removed)")
+	assert.Contains(t, out.String(), "NEWK...Y123 (new - just created)")
+	assert.Contains(t, out.String(), "old - should be removed")
 }
 
 func TestRotateSecret_SuccessfulRotationWithCCS(t *testing.T) {
@@ -287,6 +295,7 @@ func TestRotateSecret_SuccessfulRotationWithCCS(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
 
 	mockSimulateAllAllowed(mockClient)
 	// First call: osdManagedAdmin key
@@ -299,18 +308,19 @@ func TestRotateSecret_SuccessfulRotationWithCCS(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:        "test-account",
-		Account:              account,
-		UpdateCcsCreds:       true,
-		AwsClient:            mockClient,
-		HiveKubeClient:       kubeCli,
-		ManagedClusterClient: testManagedClient(t),
-		Out:                  out,
+		AccountCRName:           "test-account",
+		Account:                 account,
+		UpdateManagedAdminCreds: true,
+		UpdateCcsCreds:          true,
+		AwsClient:               mockClient,
+		HiveKubeClient:          kubeCli,
+		ManagedClusterClient:    testManagedClient(t),
+		Out:                     out,
 	})
 
 	assert.NoError(t, err)
 	assert.Contains(t, out.String(), "Successfully rotated access keys for osdManagedAdmin-abcd")
-	assert.Contains(t, out.String(), "Successfully rotated secrets for osdCcsAdmin")
+	assert.Contains(t, out.String(), "Successfully rotated credentials for osdCcsAdmin")
 }
 
 func TestRotateSecret_CCSFlagOnNonBYOCAccount(t *testing.T) {
@@ -335,6 +345,7 @@ func TestRotateSecret_CCSFlagOnNonBYOCAccount(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
 
 	mockSimulateAllAllowed(mockClient)
 	mockCreateAccessKey(mockClient)
@@ -343,13 +354,14 @@ func TestRotateSecret_CCSFlagOnNonBYOCAccount(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:        "test-account",
-		Account:              account,
-		UpdateCcsCreds:       true,
-		AwsClient:            mockClient,
-		HiveKubeClient:       kubeCli,
-		ManagedClusterClient: testManagedClient(t),
-		Out:                  out,
+		AccountCRName:           "test-account",
+		Account:                 account,
+		UpdateManagedAdminCreds: true,
+		UpdateCcsCreds:          true,
+		AwsClient:               mockClient,
+		HiveKubeClient:          kubeCli,
+		ManagedClusterClient:    testManagedClient(t),
+		Out:                     out,
 	})
 
 	assert.NoError(t, err)
@@ -378,6 +390,7 @@ func TestRotateSecret_AdminUsernameFallback(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
 
 	// First simulate call fails (suffixed username)
 	mockClient.EXPECT().
@@ -413,12 +426,13 @@ func TestRotateSecret_AdminUsernameFallback(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:        "test-account",
-		Account:              account,
-		AwsClient:            mockClient,
-		HiveKubeClient:       kubeCli,
-		ManagedClusterClient: testManagedClient(t),
-		Out:                  out,
+		UpdateManagedAdminCreds: true,
+		AccountCRName:           "test-account",
+		Account:                 account,
+		AwsClient:               mockClient,
+		HiveKubeClient:          kubeCli,
+		ManagedClusterClient:    testManagedClient(t),
+		Out:                     out,
 	})
 
 	assert.NoError(t, err)
@@ -448,6 +462,7 @@ func TestRotateSecret_CreateAccessKeyNoSuchEntityFallback(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
 
 	// First SimulatePrincipalPolicy for the suffixed user (passes),
 	// second for the unsuffixed fallback user after CreateAccessKey returns NoSuchEntityException.
@@ -478,12 +493,13 @@ func TestRotateSecret_CreateAccessKeyNoSuchEntityFallback(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:        "test-account",
-		Account:              account,
-		AwsClient:            mockClient,
-		HiveKubeClient:       kubeCli,
-		ManagedClusterClient: testManagedClient(t),
-		Out:                  out,
+		UpdateManagedAdminCreds: true,
+		AccountCRName:           "test-account",
+		Account:                 account,
+		AwsClient:               mockClient,
+		HiveKubeClient:          kubeCli,
+		ManagedClusterClient:    testManagedClient(t),
+		Out:                     out,
 	})
 
 	assert.NoError(t, err)
@@ -513,6 +529,7 @@ func TestRotateSecret_SyncSetTimeout(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
 
 	mockSimulateAllAllowed(mockClient)
 	mockCreateAccessKey(mockClient)
@@ -521,12 +538,13 @@ func TestRotateSecret_SyncSetTimeout(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:        "test-account",
-		Account:              account,
-		AwsClient:            mockClient,
-		HiveKubeClient:       kubeCli,
-		ManagedClusterClient: testManagedClient(t),
-		Out:                  out,
+		UpdateManagedAdminCreds: true,
+		AccountCRName:           "test-account",
+		Account:                 account,
+		AwsClient:               mockClient,
+		HiveKubeClient:          kubeCli,
+		ManagedClusterClient:    testManagedClient(t),
+		Out:                     out,
 	})
 
 	assert.Error(t, err)
@@ -568,6 +586,7 @@ func TestRotateSecret_StaleSyncSetIsUpdated(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
 
 	mockSimulateAllAllowed(mockClient)
 	mockCreateAccessKey(mockClient)
@@ -576,12 +595,13 @@ func TestRotateSecret_StaleSyncSetIsUpdated(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:        "test-account",
-		Account:              account,
-		AwsClient:            mockClient,
-		HiveKubeClient:       kubeCli,
-		ManagedClusterClient: testManagedClient(t),
-		Out:                  out,
+		UpdateManagedAdminCreds: true,
+		AccountCRName:           "test-account",
+		Account:                 account,
+		AwsClient:               mockClient,
+		HiveKubeClient:          kubeCli,
+		ManagedClusterClient:    testManagedClient(t),
+		Out:                     out,
 	})
 
 	assert.NoError(t, err)
@@ -649,6 +669,7 @@ func TestVerifyRotationPermissions(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockClient := mock_aws.NewMockClient(ctrl)
+			mockGetCallerIdentity(mockClient)
 
 			expectedArn := "arn:aws:iam::" + tt.accountID + ":user/" + tt.username
 			mockClient.EXPECT().
@@ -695,6 +716,7 @@ func TestRotateSecret_ExplicitAdminUsername(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
 
 	mockSimulateAllAllowed(mockClient)
 	mockCreateAccessKey(mockClient)
@@ -703,6 +725,7 @@ func TestRotateSecret_ExplicitAdminUsername(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
+		UpdateManagedAdminCreds: true,
 		AccountCRName:           "test-account",
 		Account:                 account,
 		OsdManagedAdminUsername: "osdManagedAdmin-custom",
@@ -720,17 +743,17 @@ func TestRotateSecret_DryRun(t *testing.T) {
 	account := testAccount(false, false)
 	secrets := testSecrets()
 
-	objs := append(secrets, account)
+	objs := append(secrets, account, testClusterDeployment())
 	scheme := testScheme(t)
 	kubeCli := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...).Build()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
 
-	// Only SimulatePrincipalPolicy should be called (read-only validation).
-	// No CreateAccessKey calls should happen.
 	mockSimulateAllAllowed(mockClient)
+	mockListAccessKeys(mockClient, "AKIAEXISTING01", "AKIAEXISTING02")
 
 	crIngress := &ccov1.CredentialsRequest{
 		ObjectMeta: metav1.ObjectMeta{
@@ -745,7 +768,7 @@ func TestRotateSecret_DryRun(t *testing.T) {
 	crCustom := &ccov1.CredentialsRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "custom-cr",
-			Namespace: credentialRequestNamespace,
+			Namespace: "customer-namespace",
 		},
 		Spec: ccov1.CredentialsRequestSpec{
 			SecretRef:    corev1.ObjectReference{Name: "custom-creds", Namespace: "custom-ns"},
@@ -757,13 +780,14 @@ func TestRotateSecret_DryRun(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:        "test-account",
-		Account:              account,
-		DryRun:               true,
-		AwsClient:            mockClient,
-		HiveKubeClient:       kubeCli,
-		ManagedClusterClient: managedClient,
-		Out:                  out,
+		UpdateManagedAdminCreds: true,
+		AccountCRName:           "test-account",
+		Account:                 account,
+		DryRun:                  true,
+		AwsClient:               mockClient,
+		HiveKubeClient:          kubeCli,
+		ManagedClusterClient:    managedClient,
+		Out:                     out,
 	})
 
 	assert.NoError(t, err)
@@ -775,7 +799,7 @@ func TestRotateSecret_DryRun(t *testing.T) {
 	assert.Contains(t, output, "[Dry Run] Would delete secret openshift-ingress-operator/ingress-creds (referenced by CredentialRequest openshift-ingress)")
 	assert.NotContains(t, output, "custom-creds")
 	assert.Contains(t, output, "[Dry Run] Would delete 1 credential secret(s) total")
-	assert.Contains(t, output, "[Dry Run] No changes were made.")
+	assert.Contains(t, output, "All pre-flight checks passed")
 
 	// Verify secrets were NOT modified
 	secret := &corev1.Secret{}
@@ -787,37 +811,57 @@ func TestRotateSecret_DryRun(t *testing.T) {
 func TestRotateSecret_DryRunWithCCS(t *testing.T) {
 	account := testAccount(true, false)
 	secrets := testSecrets()
+	byocSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "byoc", Namespace: "uhc-production-test"},
+		Data:       map[string][]byte{"aws_access_key_id": []byte("AKIACCS001")},
+	}
 
-	objs := append(secrets, account)
+	objs := append(secrets, account, testClusterDeployment(), byocSecret)
 	scheme := testScheme(t)
 	kubeCli := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...).Build()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
 
 	mockSimulateAllAllowed(mockClient)
+	mockClient.EXPECT().ListAccessKeys(&iam.ListAccessKeysInput{
+		UserName: awsSdk.String("osdManagedAdmin-abcd"),
+	}).Return(&iam.ListAccessKeysOutput{
+		AccessKeyMetadata: []iamTypes.AccessKeyMetadata{
+			{UserName: awsSdk.String("osdManagedAdmin-abcd"), AccessKeyId: awsSdk.String("AKIAMANAGED01")},
+		},
+	}, nil)
+	mockClient.EXPECT().ListAccessKeys(&iam.ListAccessKeysInput{
+		UserName: awsSdk.String("osdCcsAdmin"),
+	}).Return(&iam.ListAccessKeysOutput{
+		AccessKeyMetadata: []iamTypes.AccessKeyMetadata{
+			{UserName: awsSdk.String("osdCcsAdmin"), AccessKeyId: awsSdk.String("AKIACCS001")},
+		},
+	}, nil)
 
 	managedClient := testManagedClient(t)
 
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:        "test-account",
-		Account:              account,
-		DryRun:               true,
-		UpdateCcsCreds:       true,
-		AwsClient:            mockClient,
-		HiveKubeClient:       kubeCli,
-		ManagedClusterClient: managedClient,
-		Out:                  out,
+		UpdateManagedAdminCreds: true,
+		AccountCRName:           "test-account",
+		Account:                 account,
+		DryRun:                  true,
+		UpdateCcsCreds:          true,
+		AwsClient:               mockClient,
+		HiveKubeClient:          kubeCli,
+		ManagedClusterClient:    managedClient,
+		Out:                     out,
 	})
 
 	assert.NoError(t, err)
 	output := out.String()
 	assert.Contains(t, output, "[Dry Run] Would create a new IAM access key for user: osdCcsAdmin")
 	assert.Contains(t, output, "[Dry Run] Would update secret uhc-production-test/byoc")
-	assert.Contains(t, output, "[Dry Run] No changes were made.")
+	assert.Contains(t, output, "All pre-flight checks passed")
 }
 
 func awsProviderSpec(t *testing.T) *runtime.RawExtension {
@@ -837,11 +881,17 @@ func gcpProviderSpec(t *testing.T) *runtime.RawExtension {
 func TestRotateSecret_CredentialSecretDeletion(t *testing.T) {
 	origInterval := SyncPollInterval
 	origRetries := SyncMaxRetries
+	origCRInterval := CRSecretPollInterval
+	origCRTimeout := CRSecretPollTimeout
 	SyncPollInterval = 0
 	SyncMaxRetries = 1
+	CRSecretPollInterval = 1 * time.Millisecond
+	CRSecretPollTimeout = 0
 	defer func() {
 		SyncPollInterval = origInterval
 		SyncMaxRetries = origRetries
+		CRSecretPollInterval = origCRInterval
+		CRSecretPollTimeout = origCRTimeout
 	}()
 
 	account := testAccount(false, false)
@@ -856,6 +906,7 @@ func TestRotateSecret_CredentialSecretDeletion(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
 
 	mockSimulateAllAllowed(mockClient)
 	mockCreateAccessKey(mockClient)
@@ -899,7 +950,7 @@ func TestRotateSecret_CredentialSecretDeletion(t *testing.T) {
 		},
 	}
 	crCustom := &ccov1.CredentialsRequest{
-		ObjectMeta: metav1.ObjectMeta{Name: "custom-cr", Namespace: credentialRequestNamespace},
+		ObjectMeta: metav1.ObjectMeta{Name: "custom-cr", Namespace: "customer-namespace"},
 		Spec: ccov1.CredentialsRequestSpec{
 			SecretRef:    corev1.ObjectReference{Name: "custom-creds", Namespace: "custom-ns"},
 			ProviderSpec: awsProviderSpec(t),
@@ -914,29 +965,225 @@ func TestRotateSecret_CredentialSecretDeletion(t *testing.T) {
 	out := &bytes.Buffer{}
 
 	err := RotateSecret(context.Background(), &RotateSecretInput{
-		AccountCRName:        "test-account",
-		Account:              account,
-		AwsClient:            mockClient,
-		HiveKubeClient:       kubeCli,
-		ManagedClusterClient: managedClient,
-		Out:                  out,
+		AccountCRName:           "test-account",
+		Account:                 account,
+		UpdateManagedAdminCreds: true,
+		AwsClient:               mockClient,
+		HiveKubeClient:          kubeCli,
+		ManagedClusterClient:    managedClient,
+		In:                      strings.NewReader("n\n"),
+		Out:                     out,
 	})
 
 	assert.NoError(t, err)
 	output := out.String()
+
+	// With no CCO in tests, the first secret deletion triggers a timeout
+	// and the user declines to continue, pausing the operation.
 	assert.Contains(t, output, "Deleted secret openshift-ingress-operator/ingress-creds")
-	assert.Contains(t, output, "Deleted secret openshift-machine-api/machine-api-creds")
+	assert.Contains(t, output, "[TIMEOUT]")
+	assert.Contains(t, output, "Operation paused")
+	assert.Contains(t, output, "oc delete secret machine-api-creds")
 	assert.NotContains(t, output, "gcp-creds")
 	assert.NotContains(t, output, "custom-creds")
-	assert.Contains(t, output, "Deleted 2 credential secret(s)")
 
 	// Verify that the GCP and custom secrets still exist
 	s := &corev1.Secret{}
 	assert.NoError(t, managedClient.Get(context.Background(), types.NamespacedName{Name: "gcp-creds", Namespace: "openshift-gcp"}, s))
 	assert.NoError(t, managedClient.Get(context.Background(), types.NamespacedName{Name: "custom-creds", Namespace: "custom-ns"}, s))
 
+	// Second AWS secret should NOT have been deleted (operation was paused)
+	assert.NoError(t, managedClient.Get(context.Background(), types.NamespacedName{Name: "machine-api-creds", Namespace: "openshift-machine-api"}, s))
+
 	// Verify all CredentialRequests still exist (they should not be deleted)
 	remaining := &ccov1.CredentialsRequestList{}
-	assert.NoError(t, managedClient.List(context.Background(), remaining, client.InNamespace(credentialRequestNamespace)))
+	assert.NoError(t, managedClient.List(context.Background(), remaining))
 	assert.Len(t, remaining.Items, 4)
+}
+
+func TestRotateSecret_CCSOnlyRotation(t *testing.T) {
+	origInterval := SyncPollInterval
+	origRetries := SyncMaxRetries
+	SyncPollInterval = 0
+	SyncMaxRetries = 1
+	defer func() {
+		SyncPollInterval = origInterval
+		SyncMaxRetries = origRetries
+	}()
+
+	account := testAccount(true, false)
+	// Remove iamUserId label — CCS-only should not require it
+	delete(account.Labels, "iamUserId")
+
+	byocSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "byoc", Namespace: "uhc-production-test"},
+		Data: map[string][]byte{
+			"aws_user_name":         []byte("old-ccs-user"),
+			"aws_access_key_id":     []byte("old-ccs-key"),
+			"aws_secret_access_key": []byte("old-ccs-secret"),
+		},
+	}
+
+	objs := []runtime.Object{account, byocSecret}
+	scheme := testScheme(t)
+	kubeCli := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...).Build()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
+
+	// CCS-only: should NOT call SimulatePrincipalPolicy for managed-admin
+	// Only CreateAccessKey + ListAccessKeys for osdCcsAdmin
+	mockClient.EXPECT().CreateAccessKey(&iam.CreateAccessKeyInput{
+		UserName: awsSdk.String("osdCcsAdmin"),
+	}).Return(&iam.CreateAccessKeyOutput{
+		AccessKey: &iamTypes.AccessKey{
+			UserName:        awsSdk.String("osdCcsAdmin"),
+			AccessKeyId:     awsSdk.String("NEWCCSKEY123"),
+			SecretAccessKey: awsSdk.String("NEWCCSSECRET456"),
+		},
+	}, nil)
+	mockClient.EXPECT().ListAccessKeys(gomock.Any()).AnyTimes().Return(&iam.ListAccessKeysOutput{
+		AccessKeyMetadata: []iamTypes.AccessKeyMetadata{
+			{UserName: awsSdk.String("osdCcsAdmin"), AccessKeyId: awsSdk.String("NEWCCSKEY123")},
+		},
+	}, nil)
+
+	out := &bytes.Buffer{}
+
+	err := RotateSecret(context.Background(), &RotateSecretInput{
+		AccountCRName:  "test-account",
+		Account:        account,
+		UpdateCcsCreds: true,
+		AwsClient:      mockClient,
+		HiveKubeClient: kubeCli,
+		Out:            out,
+	})
+
+	assert.NoError(t, err)
+	output := out.String()
+	assert.Contains(t, output, "Successfully rotated credentials for osdCcsAdmin")
+	assert.NotContains(t, output, "Phase 1")
+	assert.NotContains(t, output, "Phase 2")
+	assert.NotContains(t, output, "osdManagedAdmin")
+}
+
+func TestRotateSecret_CCSOnlyDryRun(t *testing.T) {
+	account := testAccount(true, false)
+	// Remove iamUserId label — CCS-only dry-run should not require it
+	delete(account.Labels, "iamUserId")
+
+	byocSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "byoc", Namespace: "uhc-production-test"},
+		Data:       map[string][]byte{"aws_access_key_id": []byte("AKIACCS001")},
+	}
+
+	objs := []runtime.Object{account, byocSecret}
+	scheme := testScheme(t)
+	kubeCli := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...).Build()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
+
+	// CCS-only dry-run: should only ListAccessKeys for osdCcsAdmin
+	mockClient.EXPECT().ListAccessKeys(&iam.ListAccessKeysInput{
+		UserName: awsSdk.String("osdCcsAdmin"),
+	}).Return(&iam.ListAccessKeysOutput{
+		AccessKeyMetadata: []iamTypes.AccessKeyMetadata{
+			{UserName: awsSdk.String("osdCcsAdmin"), AccessKeyId: awsSdk.String("AKIACCS001")},
+		},
+	}, nil)
+
+	out := &bytes.Buffer{}
+
+	err := RotateSecret(context.Background(), &RotateSecretInput{
+		AccountCRName:  "test-account",
+		Account:        account,
+		DryRun:         true,
+		UpdateCcsCreds: true,
+		AwsClient:      mockClient,
+		HiveKubeClient: kubeCli,
+		Out:            out,
+	})
+
+	assert.NoError(t, err)
+	output := out.String()
+	assert.Contains(t, output, "Would create a new IAM access key for user: osdCcsAdmin")
+	assert.Contains(t, output, "All pre-flight checks passed")
+	// Should NOT contain managed-admin preflight
+	assert.NotContains(t, output, "osdManagedAdmin")
+}
+
+func TestRotateSecret_CreateAccessKeyNoFallbackForCCS(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockClient := mock_aws.NewMockClient(ctrl)
+
+	nse := &iamTypes.NoSuchEntityException{Message: awsSdk.String("user not found")}
+	mockClient.EXPECT().CreateAccessKey(&iam.CreateAccessKeyInput{
+		UserName: awsSdk.String("osdCcsAdmin"),
+	}).Return(nil, nse)
+
+	out := &bytes.Buffer{}
+	_, err := createAccessKeyWithRetry(mockClient, "osdCcsAdmin", "123456789012", nil, nil, out)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "IAM user osdCcsAdmin not found")
+	assert.NotContains(t, out.String(), "osdManagedAdmin")
+}
+
+func TestRotateSecret_PostRotationValidationFailure(t *testing.T) {
+	origInterval := SyncPollInterval
+	origRetries := SyncMaxRetries
+	SyncPollInterval = 0
+	SyncMaxRetries = 1
+	defer func() {
+		SyncPollInterval = origInterval
+		SyncMaxRetries = origRetries
+	}()
+
+	account := testAccount(false, false)
+	secrets := testSecrets()
+	cd := testClusterDeployment()
+	cs := testClusterSync(true)
+
+	objs := append(secrets, account, cd, cs)
+	scheme := testScheme(t)
+	kubeCli := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...).Build()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockClient := mock_aws.NewMockClient(ctrl)
+	mockGetCallerIdentity(mockClient)
+	mockSimulateAllAllowed(mockClient)
+	mockCreateAccessKey(mockClient)
+
+	// Post-rotation ListAccessKeys returns a key that doesn't match the new key
+	now := time.Now()
+	mockClient.EXPECT().ListAccessKeys(gomock.Any()).AnyTimes().Return(&iam.ListAccessKeysOutput{
+		AccessKeyMetadata: []iamTypes.AccessKeyMetadata{
+			{UserName: awsSdk.String("osdManagedAdmin-abcd"), AccessKeyId: awsSdk.String("WRONGKEY999"), CreateDate: &now, Status: iamTypes.StatusTypeActive},
+		},
+	}, nil)
+
+	out := &bytes.Buffer{}
+
+	err := RotateSecret(context.Background(), &RotateSecretInput{
+		UpdateManagedAdminCreds: true,
+		AccountCRName:           "test-account",
+		Account:                 account,
+		AwsClient:               mockClient,
+		HiveKubeClient:          kubeCli,
+		ManagedClusterClient:    testManagedClient(t),
+		Out:                     out,
+	})
+
+	// Rotation itself succeeds; post-rotation check finds key mismatch and logs a warning
+	assert.NoError(t, err)
+	output := out.String()
+	assert.Contains(t, output, "key does not match newest key")
+	assert.Contains(t, output, "Post-rotation check encountered issues")
 }
