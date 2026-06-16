@@ -40,6 +40,7 @@ Provides information for a specified cluster
 * [osdctl cluster get-env-vars](osdctl_cluster_get-env-vars.md)	 - Print a cluster's ID/management namespaces, optionally as env variables
 * [osdctl cluster health](osdctl_cluster_health.md)	 - Describes health of cluster nodes and provides other cluster vitals.
 * [osdctl cluster hypershift-info](osdctl_cluster_hypershift-info.md)	 - Pull information about AWS objects from the cluster, the management cluster and the privatelink cluster
+* [osdctl cluster imdsv2](osdctl_cluster_imdsv2.md)	 - Migrate cluster nodes to enforce IMDSv2 (Instance Metadata Service v2)
 * [osdctl cluster logging-check](osdctl_cluster_logging-check.md)	 - Shows the logging support status of a specified cluster
 * [osdctl cluster orgId](osdctl_cluster_orgId.md)	 - Get the OCM org ID for a given cluster
 * [osdctl cluster owner](osdctl_cluster_owner.md)	 - List the clusters owned by the user (can be specified to any user, not only yourself)
