@@ -58,9 +58,11 @@ type etcdHealthCheckOptions struct {
 func newCmdEtcdHealthCheck() *cobra.Command {
 	opts := etcdHealthCheckOptions{}
 	cmd := &cobra.Command{
-		Use:               "etcd-health-check --cluster-id <cluster-id> --reason <reason for escalation>",
-		Short:             "Checks the etcd components and member health",
-		Long:              `Checks etcd component health status for member replacement`,
+		Use:   "etcd-health-check --cluster-id <cluster-id> --reason <reason for escalation>",
+		Short: "Checks the etcd components and member health",
+		Long:  `Checks etcd component health status for member replacement`,
+		Example: `  # Check etcd health for a cluster
+  osdctl cluster etcd-health-check --cluster-id ${CLUSTER_ID} --reason "${REASON}"`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {

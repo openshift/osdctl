@@ -63,13 +63,13 @@ replace all infra nodes with new ones using the target volume type.
 
 Pre-flight checks are performed automatically before making changes.`,
 		Example: `  # Change both control plane and infra volumes to gp3
-  osdctl cluster change-ebs-volume-type -C ${CLUSTER_ID} --type gp3 --reason "SREP-3811"
+  osdctl cluster change-ebs-volume-type -C ${CLUSTER_ID} --type gp3 --reason "${REASON}"
 
   # Change only control plane volumes to gp3
-  osdctl cluster change-ebs-volume-type -C ${CLUSTER_ID} --type gp3 --role control-plane --reason "SREP-3811"
+  osdctl cluster change-ebs-volume-type -C ${CLUSTER_ID} --type gp3 --role control-plane --reason "${REASON}"
 
   # Change only infra volumes to gp3
-  osdctl cluster change-ebs-volume-type -C ${CLUSTER_ID} --type gp3 --role infra --reason "SREP-3811"`,
+  osdctl cluster change-ebs-volume-type -C ${CLUSTER_ID} --type gp3 --role infra --reason "${REASON}"`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

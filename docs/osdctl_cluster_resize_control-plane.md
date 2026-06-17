@@ -17,9 +17,8 @@ osdctl cluster resize control-plane [flags]
 ### Examples
 
 ```
-
   # Resize all control plane instances to m5.4xlarge using control plane machine sets
-  osdctl cluster resize control-plane -c "${CLUSTER_ID}" --machine-type m5.4xlarge --reason "${OHSS}"
+  osdctl cluster resize control-plane --cluster-id "${CLUSTER_ID}" --machine-type m5.4xlarge --reason "${REASON}"
 ```
 
 ### Options

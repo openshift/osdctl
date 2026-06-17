@@ -39,9 +39,11 @@ func openBrowser(url string) error {
 
 func newCmdDashboard() *cobra.Command {
 	urlCmd := &cobra.Command{
-		Use:               "dashboard --cluster-id CLUSTER_ID",
-		Aliases:           []string{"dash"},
-		Short:             "Get the Dynatrace Cluster Overview Dashboard for a given MC or HCP cluster",
+		Use:     "dashboard --cluster-id CLUSTER_ID",
+		Aliases: []string{"dash"},
+		Short:   "Get the Dynatrace Cluster Overview Dashboard for a given MC or HCP cluster",
+		Example: `  # Open the Dynatrace dashboard for a cluster
+  osdctl dynatrace dashboard --cluster-id ${CLUSTER_ID}`,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
 			// We need the Dynatrace URL

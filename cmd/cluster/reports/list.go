@@ -30,17 +30,12 @@ func newCmdList() *cobra.Command {
 
 This command retrieves and displays all reports associated with a cluster,
 showing the report ID, summary, and creation timestamp. You can optionally
-limit the number of reports returned to the most recent N reports.
-
-Examples:
-  # List all reports for a cluster (defaults to 10 most recent)
-  osdctl cluster reports list --cluster-id 1a2b3c4d
+limit the number of reports returned to the most recent N reports.`,
+		Example: `  # List reports for a cluster
+  osdctl cluster reports list --cluster-id ${CLUSTER_ID}
 
   # List the 5 most recent reports
-  osdctl cluster reports list --cluster-id 1a2b3c4d --last 5
-
-  # List reports with JSON output
-  osdctl cluster reports list --cluster-id my-cluster --output json`,
+  osdctl cluster reports list --cluster-id ${CLUSTER_ID} --last 5`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

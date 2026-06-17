@@ -41,9 +41,11 @@ const (
 func newCmdEtcdMemberReplacement() *cobra.Command {
 	opts := &etcdOptions{}
 	replaceCmd := &cobra.Command{
-		Use:               "etcd-member-replace --cluster-id <cluster-identifier>",
-		Short:             "Replaces an unhealthy etcd node",
-		Long:              `Replaces an unhealthy ectd node using the member id provided`,
+		Use:   "etcd-member-replace --cluster-id <cluster-identifier>",
+		Short: "Replaces an unhealthy etcd node",
+		Long:  `Replaces an unhealthy etcd node using the member id provided`,
+		Example: `  # Replace an unhealthy etcd member
+  osdctl cluster etcd-member-replace --cluster-id ${CLUSTER_ID} --node ${NODE_NAME} --reason "${REASON}"`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {

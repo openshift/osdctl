@@ -26,6 +26,11 @@ func newCmdPermissionDenied() *cobra.Command {
 	permissionDeniedCmd := &cobra.Command{
 		Use:   "permission-denied-events",
 		Short: "Prints cloudtrail permission-denied events to console.",
+		Example: `  # Check for permission-denied events in the last 5 minutes
+  osdctl cloudtrail permission-denied-events --cluster-id ${CLUSTER_ID}
+
+  # Check for permission-denied events in the last hour with URLs
+  osdctl cloudtrail permission-denied-events --cluster-id ${CLUSTER_ID} --since 1h --url`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return opts.run()
 		},

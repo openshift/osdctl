@@ -13,6 +13,13 @@ environment variable is unset, if applicable.
 osdctl cluster break-glass cleanup --cluster-id <cluster-identifier> [flags]
 ```
 
+### Examples
+
+```
+  # Drop emergency access to a cluster
+  osdctl cluster break-glass cleanup --cluster-id ${CLUSTER_ID}
+```
+
 ### Options
 
 ```

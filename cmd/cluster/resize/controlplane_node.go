@@ -56,9 +56,8 @@ func newCmdResizeControlPlane() *cobra.Command {
   Requires previous login to the api server via "ocm backplane login".
   The user will be prompted to send a service log after initiating the resize. The resize process runs asynchronously,
   and this command exits immediately after sending the service log. Any issues with the resize will be reported via PagerDuty.`,
-		Example: `
-  # Resize all control plane instances to m5.4xlarge using control plane machine sets
-  osdctl cluster resize control-plane -c "${CLUSTER_ID}" --machine-type m5.4xlarge --reason "${OHSS}"`,
+		Example: `  # Resize all control plane instances to m5.4xlarge using control plane machine sets
+  osdctl cluster resize control-plane --cluster-id "${CLUSTER_ID}" --machine-type m5.4xlarge --reason "${REASON}"`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

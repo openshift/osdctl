@@ -18,6 +18,8 @@ func newCmdReconcile(streams genericclioptions.IOStreams) *cobra.Command {
 	reconcileCmd := &cobra.Command{
 		Use:   "reconcile",
 		Short: "Checks if there's a cost category for every OU. If an OU is missing a cost category, creates the cost category",
+		Example: `  # Reconcile cost categories for an OU
+  osdctl cost reconcile --ou ${OU_ID}`,
 		Run: func(cmd *cobra.Command, args []string) {
 
 			awsClient, err := opsCost.initAWSClients()

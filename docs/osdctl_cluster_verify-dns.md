@@ -27,6 +27,16 @@ Output Formats:
 osdctl cluster verify-dns --cluster-id <cluster-id> [flags]
 ```
 
+### Examples
+
+```
+  # Verify DNS for an HCP cluster
+  osdctl cluster verify-dns --cluster-id ${CLUSTER_ID}
+
+  # Verify DNS with JSON output
+  osdctl cluster verify-dns --cluster-id ${CLUSTER_ID} --output json
+```
+
 ### Options
 
 ```

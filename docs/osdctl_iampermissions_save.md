@@ -6,6 +6,13 @@ Save iam permissions for use in mcc
 osdctl iampermissions save [flags]
 ```
 
+### Examples
+
+```
+  # Save IAM permissions to a directory
+  osdctl iampermissions save --dir /tmp/policies --release-version 4.15.0
+```
+
 ### Options
 
 ```

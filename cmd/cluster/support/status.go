@@ -24,8 +24,10 @@ type statusOptions struct {
 func newCmdstatus(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	ops := newStatusOptions(streams, globalOpts)
 	statusCmd := &cobra.Command{
-		Use:               "status --cluster-id <cluster-identifier>",
-		Short:             "Shows the support status of a specified cluster",
+		Use:   "status --cluster-id <cluster-identifier>",
+		Short: "Shows the support status of a specified cluster",
+		Example: `  # Check cluster support status
+  osdctl cluster support status --cluster-id ${CLUSTER_ID}`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {

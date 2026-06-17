@@ -72,32 +72,6 @@ Available Investigations:
   insightsoperatordown, machine-health-check, must-gather, upgrade-config,
   restart-controlplane, describe-nodes
 
-Examples:
-` + "```bash" + `
-# Run a change management investigation on a production cluster
-osdctl cluster cad run \
-  --cluster-id 1a2b3c4d5e6f7g8h9i0j \
-  --investigation chgm \
-  --environment production \
-  --reason "OHSS-12345"
-
-# Run a dry-run investigation (does not create a report)
-osdctl cluster cad run \
-  --cluster-id 1a2b3c4d5e6f7g8h9i0j \
-  --investigation chgm \
-  --environment production \
-  --reason "OHSS-12345" \
-  --dry-run
-
-# Run describe-nodes on master nodes only
-osdctl cluster cad run \
-  --cluster-id 1a2b3c4d5e6f7g8h9i0j \
-  --investigation describe-nodes \
-  --environment production \
-  --reason "OHSS-12345" \
-  --params MASTER=true
-` + "```" + `
-
 Note:
   After the investigation completes (may take several minutes), view results using:
 ` + "```bash" + `
@@ -105,6 +79,14 @@ osdctl cluster reports list -C <cluster-id> -l 1
 ` + "```" + `
 
   You must be connected to the target cluster's OCM environment to view its reports.`,
+		Example: `  # Run a change management investigation on a production cluster
+  osdctl cluster cad run --cluster-id ${CLUSTER_ID} --investigation chgm --environment production --reason "${REASON}"
+
+  # Run a dry-run investigation (does not create a report)
+  osdctl cluster cad run --cluster-id ${CLUSTER_ID} --investigation chgm --environment production --reason "${REASON}" --dry-run
+
+  # Run describe-nodes with parameters
+  osdctl cluster cad run --cluster-id ${CLUSTER_ID} --investigation describe-nodes --environment production --reason "${REASON}" --params MASTER=true`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

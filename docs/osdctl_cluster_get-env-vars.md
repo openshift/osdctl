@@ -6,6 +6,16 @@ Print a cluster's ID/management namespaces, optionally as env variables
 osdctl cluster get-env-vars --cluster-id <cluster-identifier> [flags]
 ```
 
+### Examples
+
+```
+  # Print cluster environment variables
+  osdctl cluster get-env-vars --cluster-id ${CLUSTER_ID}
+
+  # Print as exportable env variables
+  osdctl cluster get-env-vars --cluster-id ${CLUSTER_ID} --output env
+```
+
 ### Options
 
 ```

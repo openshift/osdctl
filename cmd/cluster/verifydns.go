@@ -42,9 +42,14 @@ func NewCmdVerifyDNS(streams genericclioptions.IOStreams) *cobra.Command {
 	}
 
 	verifyDNSCmd := &cobra.Command{
-		Use:               "verify-dns --cluster-id <cluster-id>",
-		Short:             "Verify DNS resolution for HCP cluster public endpoints",
-		Long:              verifyDNSLongDescription,
+		Use:   "verify-dns --cluster-id <cluster-id>",
+		Short: "Verify DNS resolution for HCP cluster public endpoints",
+		Long:  verifyDNSLongDescription,
+		Example: `  # Verify DNS for an HCP cluster
+  osdctl cluster verify-dns --cluster-id ${CLUSTER_ID}
+
+  # Verify DNS with JSON output
+  osdctl cluster verify-dns --cluster-id ${CLUSTER_ID} --output json`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {

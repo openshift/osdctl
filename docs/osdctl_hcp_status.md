@@ -15,11 +15,8 @@ osdctl hcp status [flags]
 ### Examples
 
 ```
-  # Show status by cluster name
-  osdctl hcp status --cluster-id my-cluster
-
-  # Show status by cluster ID
-  osdctl hcp status --cluster-id 2o9r9r1q4tp0bulsfksdc8fesls54sql
+  # Show HCP cluster status
+  osdctl hcp status --cluster-id ${CLUSTER_ID}
 ```
 
 ### Options

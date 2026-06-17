@@ -15,10 +15,9 @@ import (
 
 var (
 	usersCmd = &cobra.Command{
-		Use:           "users",
-		Short:         "get organization users",
-		Args:          cobra.ArbitraryArgs,
-		SilenceErrors: true,
+		Use:   "users",
+		Short: "get organization users",
+		Args:  cobra.ArbitraryArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(checkOrgId(args))
 			cmdutil.CheckErr(getUsers(args[0]))

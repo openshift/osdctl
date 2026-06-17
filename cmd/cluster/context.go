@@ -132,8 +132,13 @@ type contextData struct {
 func newCmdContext() *cobra.Command {
 	options := &contextOptions{}
 	contextCmd := &cobra.Command{
-		Use:               "context --cluster-id <cluster-identifier>",
-		Short:             "Shows the context of a specified cluster",
+		Use:   "context --cluster-id <cluster-identifier>",
+		Short: "Shows the context of a specified cluster",
+		Example: `  # Show cluster context
+  osdctl cluster context --cluster-id ${CLUSTER_ID}
+
+  # Show cluster context with full checks
+  osdctl cluster context --cluster-id ${CLUSTER_ID} --full`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

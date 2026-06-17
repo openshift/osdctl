@@ -22,10 +22,13 @@ func main() {
 	cobra.EnableTraverseRunHooks = true
 	command := cmd.NewCmdRoot(genericclioptions.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr})
 
-	if err := command.Execute(); err != nil {
-		_, err := fmt.Fprintf(os.Stderr, "%v\n", err)
-		if err != nil {
-			fmt.Println("Error while printing to stderr: ", err.Error())
+	resolved, err := command.ExecuteC()
+	if err != nil {
+		if resolved != nil && resolved.SilenceErrors {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		}
+		if resolved != nil && resolved.SilenceUsage {
+			fmt.Fprintf(os.Stderr, "Run '%s --help' for usage.\n", resolved.CommandPath())
 		}
 		os.Exit(1)
 	}

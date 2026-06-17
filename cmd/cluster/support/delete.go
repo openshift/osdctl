@@ -34,8 +34,13 @@ func newCmddelete(streams genericclioptions.IOStreams, globalOpts *globalflags.G
 
 	ops := newDeleteOptions(streams, globalOpts)
 	deleteCmd := &cobra.Command{
-		Use:               "delete --cluster-id <cluster-identifier>",
-		Short:             "Delete specified limited support reason for a given cluster",
+		Use:   "delete --cluster-id <cluster-identifier>",
+		Short: "Delete specified limited support reason for a given cluster",
+		Example: `  # Remove a specific limited support reason
+  osdctl cluster support delete --cluster-id ${CLUSTER_ID} --limited-support-reason-id ${REASON_ID}
+
+  # Remove all limited support reasons
+  osdctl cluster support delete --cluster-id ${CLUSTER_ID} --all`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {

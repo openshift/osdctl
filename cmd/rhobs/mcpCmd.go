@@ -68,11 +68,10 @@ Prerequisites:
 
 func newCmdMcpServer() *cobra.Command {
 	return &cobra.Command{
-		Use:           "server",
-		Short:         "Start the RHOBS MCP server",
-		Args:          cobra.NoArgs,
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		Use:          "server",
+		Short:        "Start the RHOBS MCP server",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			log.SetOutput(io.Discard)
 
@@ -105,9 +104,8 @@ Usage with Claude Code:
   claude --mcp-config "$(osdctl rhobs mcp config)"
 
 Or add to ~/.claude/mcp_settings.json manually.`,
-		Args:          cobra.NoArgs,
-		SilenceErrors: true,
-		SilenceUsage:  true,
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			execPath, err := os.Executable()
 			if err != nil {

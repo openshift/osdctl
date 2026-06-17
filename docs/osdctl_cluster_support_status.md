@@ -6,6 +6,13 @@ Shows the support status of a specified cluster
 osdctl cluster support status --cluster-id <cluster-identifier> [flags]
 ```
 
+### Examples
+
+```
+  # Check cluster support status
+  osdctl cluster support status --cluster-id ${CLUSTER_ID}
+```
+
 ### Options
 
 ```

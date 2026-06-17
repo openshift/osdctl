@@ -13,10 +13,9 @@ import (
 
 var (
 	currentCmd = &cobra.Command{
-		Use:           "current",
-		Short:         "gets current organization",
-		Args:          cobra.ArbitraryArgs,
-		SilenceErrors: true,
+		Use:   "current",
+		Short: "gets current organization",
+		Args:  cobra.ArbitraryArgs,
 		Run: func(_ *cobra.Command, _ []string) {
 			ocmClient, err := utils.CreateConnection()
 			if err != nil {

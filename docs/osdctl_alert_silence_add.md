@@ -4,10 +4,23 @@ Add new silence for alert
 
 ### Synopsis
 
-add new silence for specfic or all alert with comment and duration of alert
+Add a new silence for a specific alert or for all alerts, including a comment and duration.
 
 ```
 osdctl alert silence add --cluster-id <cluster-identifier> [--all --duration --comment | --alertname --duration --comment] [flags]
+```
+
+### Examples
+
+```
+  # Silence a specific alert
+  osdctl alerts silence add --cluster-id ${CLUSTER_ID} --alertname "KubePodNotReady" --reason "${REASON}"
+
+  # Silence all alerts for a cluster
+  osdctl alerts silence add --cluster-id ${CLUSTER_ID} --all --reason "${REASON}"
+
+  # Silence an alert with custom duration and comment
+  osdctl alerts silence add --cluster-id ${CLUSTER_ID} --alertname "KubePodNotReady" --duration 2h --comment "Investigating pod issue" --reason "${REASON}"
 ```
 
 ### Options

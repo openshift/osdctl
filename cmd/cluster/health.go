@@ -29,8 +29,10 @@ type healthOptions struct {
 func newCmdHealth() *cobra.Command {
 	ops := newHealthOptions()
 	healthCmd := &cobra.Command{
-		Use:               "health",
-		Short:             "Describes health of cluster nodes and provides other cluster vitals.",
+		Use:   "health",
+		Short: "Describes health of cluster nodes and provides other cluster vitals.",
+		Example: `  # Check cluster health
+  osdctl cluster health --cluster-id ${CLUSTER_ID}`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {

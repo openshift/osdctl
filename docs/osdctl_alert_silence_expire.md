@@ -4,10 +4,20 @@ Expire Silence for alert
 
 ### Synopsis
 
-expire all silence or based on silenceid
+Expire all silences, or expire a specific silence by its silence ID.
 
 ```
 osdctl alert silence expire [--cluster-id <cluster-identifier>] [--all | --silence-id <silence-id>] [flags]
+```
+
+### Examples
+
+```
+  # Expire a specific silence by ID
+  osdctl alerts silence expire --cluster-id ${CLUSTER_ID} --silence-id ${SILENCE_ID} --reason "${REASON}"
+
+  # Expire all silences for a cluster
+  osdctl alerts silence expire --cluster-id ${CLUSTER_ID} --all --reason "${REASON}"
 ```
 
 ### Options

@@ -6,6 +6,16 @@ Delete specified limited support reason for a given cluster
 osdctl cluster support delete --cluster-id <cluster-identifier> [flags]
 ```
 
+### Examples
+
+```
+  # Remove a specific limited support reason
+  osdctl cluster support delete --cluster-id ${CLUSTER_ID} --limited-support-reason-id ${REASON_ID}
+
+  # Remove all limited support reasons
+  osdctl cluster support delete --cluster-id ${CLUSTER_ID} --all
+```
+
 ### Options
 
 ```

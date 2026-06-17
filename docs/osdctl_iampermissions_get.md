@@ -6,6 +6,13 @@ Get OCP CredentialsRequests
 osdctl iampermissions get [flags]
 ```
 
+### Examples
+
+```
+  # Get IAM permissions for a specific OCP version
+  osdctl iampermissions get --release-version 4.15.0
+```
+
 ### Options
 
 ```

@@ -31,9 +31,9 @@ osdctl hcp backup --cluster-id <cluster-id> --reason <reason> [flags]
 ### Examples
 
 ```
-  osdctl hcp backup --cluster-id 1abc2def3ghi --reason OHSS-12345
-  osdctl hcp backup --cluster-id 1abc2def3ghi --reason OHSS-12345 --label env=prod --label incident=OHSS-12345
-  osdctl hcp backup --cluster-id 1abc2def3ghi --reason OHSS-12345 --annotation owner=sre-team
+  osdctl hcp backup --cluster-id ${CLUSTER_ID} --reason ${REASON}
+  osdctl hcp backup --cluster-id ${CLUSTER_ID} --reason ${REASON} --label env=prod --label incident=${REASON}
+  osdctl hcp backup --cluster-id ${CLUSTER_ID} --reason ${REASON} --annotation owner=sre-team
 ```
 
 ### Options

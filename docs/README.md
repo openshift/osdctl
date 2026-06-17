@@ -24,7 +24,7 @@
     - `list` - List out accounts for username
     - `unassign` - Unassign account to user
   - `reset <account name>` - Reset AWS Account CR
-  - `rotate-secret <aws-account-cr-name>` - Rotate IAM credentials secret
+  - `rotate-secret ${AWS_ACCOUNT_CR_NAME}` - Rotate IAM credentials secret
   - `servicequotas` - Interact with AWS service-quotas
     - `describe` - Describe AWS service-quotas
   - `set <account name>` - Set AWS Account CR status
@@ -774,7 +774,7 @@ osdctl account reset <account name> [flags]
 When logged into a hive shard, this rotates IAM credential secrets for a given `account` CR.
 
 ```
-osdctl account rotate-secret <aws-account-cr-name> [flags]
+osdctl account rotate-secret ${AWS_ACCOUNT_CR_NAME} [flags]
 ```
 
 #### Flags
@@ -986,7 +986,7 @@ osdctl alert silence [flags]
 
 ### osdctl alert silence add
 
-add new silence for specfic or all alert with comment and duration of alert
+Add a new silence for a specific alert or for all alerts, including a comment and duration.
 
 ```
 osdctl alert silence add --cluster-id <cluster-identifier> [--all --duration --comment | --alertname --duration --comment] [flags]
@@ -1016,7 +1016,7 @@ osdctl alert silence add --cluster-id <cluster-identifier> [--all --duration --c
 
 ### osdctl alert silence expire
 
-expire all silence or based on silenceid
+Expire all silences, or expire a specific silence by its silence ID.
 
 ```
 osdctl alert silence expire [--cluster-id <cluster-identifier>] [--all | --silence-id <silence-id>] [flags]
@@ -1070,7 +1070,7 @@ osdctl alert silence list --cluster-id <cluster-identifier> [flags]
 
 ### osdctl alert silence org
 
-add new silence for specfic or all alerts with comment and duration of alert for an organization. OHSS required for org-wide silence
+Add a new silence for specific alerts or all alerts with a comment and duration for an organization. OHSS required for org-wide silence.
 
 ```
 osdctl alert silence org <org-id> [--all --duration --comment | --alertname --duration --comment] [flags]
@@ -1352,32 +1352,6 @@ Available Investigations:
   insightsoperatordown, machine-health-check, must-gather, upgrade-config,
   restart-controlplane, describe-nodes
 
-Examples:
-```bash
-# Run a change management investigation on a production cluster
-osdctl cluster cad run \
-  --cluster-id 1a2b3c4d5e6f7g8h9i0j \
-  --investigation chgm \
-  --environment production \
-  --reason "OHSS-12345"
-
-# Run a dry-run investigation (does not create a report)
-osdctl cluster cad run \
-  --cluster-id 1a2b3c4d5e6f7g8h9i0j \
-  --investigation chgm \
-  --environment production \
-  --reason "OHSS-12345" \
-  --dry-run
-
-# Run describe-nodes on master nodes only
-osdctl cluster cad run \
-  --cluster-id 1a2b3c4d5e6f7g8h9i0j \
-  --investigation describe-nodes \
-  --environment production \
-  --reason "OHSS-12345" \
-  --params MASTER=true
-```
-
 Note:
   After the investigation completes (may take several minutes), view results using:
 ```bash
@@ -1631,7 +1605,7 @@ osdctl cluster etcd-health-check --cluster-id <cluster-id> --reason <reason for 
 
 ### osdctl cluster etcd-member-replace
 
-Replaces an unhealthy ectd node using the member id provided
+Replaces an unhealthy etcd node using the member id provided
 
 ```
 osdctl cluster etcd-member-replace --cluster-id <cluster-identifier> [flags]
@@ -1875,23 +1849,6 @@ includes a summary (title) and data content. You can provide the data either
 directly as a string using --data, or from a file using --file. The data
 will be automatically base64-encoded before storage.
 
-Examples:
-  # Create a report with inline data
-  osdctl cluster reports create --cluster-id 1a2b3c4d \
-    --summary "Network diagnostic results" \
-    --data "All network checks passed successfully"
-
-  # Create a report from a file
-  osdctl cluster reports create -C my-cluster \
-    --summary "Pod logs from incident" \
-    --file /tmp/pod-logs.txt
-
-  # Create a report and output as JSON
-  osdctl cluster reports create --cluster-id 1a2b3c4d \
-    --summary "Cluster health check" \
-    --data "CPU: 45%, Memory: 67%, Disk: 23%" \
-    --output json
-
 ```
 osdctl cluster reports create [flags]
 ```
@@ -1923,16 +1880,6 @@ Retrieve and display a specific report by its ID.
 This command fetches a report by its report ID and displays the decoded
 report data. Use 'list' to find available report IDs.
 
-Examples:
-  # Get a specific report and display its contents
-  osdctl cluster reports get --cluster-id 1a2b3c4d --report-id abc-123-def
-
-  # Get a report with JSON output (includes encoded data)
-  osdctl cluster reports get -C my-cluster -r report-456 --output json
-
-  # Get a report and pipe the output to a file
-  osdctl cluster reports get -C 1a2b3c4d -r abc-123 > report-output.txt
-
 ```
 osdctl cluster reports get [flags]
 ```
@@ -1962,16 +1909,6 @@ List all reports for a specific cluster.
 This command retrieves and displays all reports associated with a cluster,
 showing the report ID, summary, and creation timestamp. You can optionally
 limit the number of reports returned to the most recent N reports.
-
-Examples:
-  # List all reports for a cluster (defaults to 10 most recent)
-  osdctl cluster reports list --cluster-id 1a2b3c4d
-
-  # List the 5 most recent reports
-  osdctl cluster reports list --cluster-id 1a2b3c4d --last 5
-
-  # List reports with JSON output
-  osdctl cluster reports list --cluster-id my-cluster --output json
 
 ```
 osdctl cluster reports list [flags]
@@ -4410,16 +4347,6 @@ osdctl servicelog [flags]
 ### osdctl servicelog list
 
 Get service logs for a given cluster identifier.
-
-# To return just service logs created by SREs
-osdctl servicelog list --cluster-id=my-cluster-id
-
-# To return all service logs, including those by automated systems
-osdctl servicelog list --cluster-id=my-cluster-id --all-messages
-
-# To return all service logs, as well as internal service logs
-osdctl servicelog list --cluster-id=my-cluster-id --all-messages --internal
-
 
 ```
 osdctl servicelog list --cluster-id <cluster-identifier> [flags] [options]

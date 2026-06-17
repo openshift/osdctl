@@ -64,16 +64,16 @@ By default, matches these error patterns:
 
 Use --error-types to filter for specific error patterns.`,
 		Example: `  # Check for permission errors in the last hour
-  osdctl cloudtrail errors -C <cluster-id> --since 1h
+  osdctl cloudtrail errors -C ${CLUSTER_ID} --since 1h
 
   # Check for specific error types only
-  osdctl cloudtrail errors -C <cluster-id> --error-types AccessDenied,Forbidden
+  osdctl cloudtrail errors -C ${CLUSTER_ID} --error-types AccessDenied,Forbidden
 
   # Output as JSON for scripting
-  osdctl cloudtrail errors -C <cluster-id> --json
+  osdctl cloudtrail errors -C ${CLUSTER_ID} --json
 
   # Include console links for each event
-  osdctl cloudtrail errors -C <cluster-id> --url`,
+  osdctl cloudtrail errors -C ${CLUSTER_ID} --url`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return opts.run()
 		},

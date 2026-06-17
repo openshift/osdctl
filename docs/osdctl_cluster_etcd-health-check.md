@@ -10,6 +10,13 @@ Checks etcd component health status for member replacement
 osdctl cluster etcd-health-check --cluster-id <cluster-id> --reason <reason for escalation> [flags]
 ```
 
+### Examples
+
+```
+  # Check etcd health for a cluster
+  osdctl cluster etcd-health-check --cluster-id ${CLUSTER_ID} --reason "${REASON}"
+```
+
 ### Options
 
 ```

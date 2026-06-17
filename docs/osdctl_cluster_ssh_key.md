@@ -13,32 +13,14 @@ osdctl cluster ssh key --reason $reason [--cluster-id $CLUSTER_ID] [flags]
 ### Examples
 
 ```
-$ osdctl cluster ssh key --cluster-id $CLUSTER_ID --reason "OHSS-XXXX"
-INFO[0005] Backplane URL retrieved via OCM environment: https://api.backplane.openshift.com
------BEGIN RSA PRIVATE KEY-----
-...
------END RSA PRIVATE KEY-----
+  # Retrieve SSH key for a specific cluster
+  osdctl cluster ssh key --cluster-id ${CLUSTER_ID} --reason "${REASON}"
 
-Providing a --cluster-id allows you to specify the cluster who's private ssh key you want to view, regardless if you're logged in or not.
+  # Retrieve SSH key for the currently logged-in cluster
+  osdctl cluster ssh key --reason "${REASON}"
 
-
-$ osdctl cluster ssh key --reason "OHSS-XXXX"
-INFO[0005] Backplane URL retrieved via OCM environment: https://api.backplane.openshift.com
------BEGIN RSA PRIVATE KEY-----
-...
------END RSA PRIVATE KEY-----
-
-Omitting --cluster-id will print the ssh key for the cluster you're currently logged into.
-
-
-$ osdctl cluster ssh key -y --reason "OHSS-XXXX" > /tmp/ssh.key
-INFO[0005] Backplane URL retrieved via OCM environment: https://api.backplane.openshift.com
-$ cat /tmp/ssh.key
------BEGIN RSA PRIVATE KEY-----
-...
------END RSA PRIVATE KEY-----
-
-Despite the logs from backplane, the ssh key is the only output channelled through stdout. This means you can safely redirect the output to a file for greater convienence.
+  # Save SSH key to a file
+  osdctl cluster ssh key -y --reason "${REASON}" > /tmp/ssh.key
 ```
 
 ### Options

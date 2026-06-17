@@ -18,6 +18,8 @@ func newCmdCreate(streams genericclioptions.IOStreams) *cobra.Command {
 	createCmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a cost category for the given OU",
+		Example: `  # Create a cost category for an organizational unit
+  osdctl cost create --ou ${OU_ID}`,
 		Run: func(cmd *cobra.Command, args []string) {
 
 			awsClient, err := opsCost.initAWSClients()

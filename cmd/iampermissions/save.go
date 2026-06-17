@@ -44,8 +44,10 @@ func newCmdSave() *cobra.Command {
 	}
 
 	saveCmd := &cobra.Command{
-		Use:               "save",
-		Short:             "Save iam permissions for use in mcc",
+		Use:   "save",
+		Short: "Save iam permissions for use in mcc",
+		Example: `  # Save IAM permissions to a directory
+  osdctl iampermissions save --dir /tmp/policies --release-version 4.15.0`,
 		Args:              cobra.ExactArgs(0),
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, _ []string) {

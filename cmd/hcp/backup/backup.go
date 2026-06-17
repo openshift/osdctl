@@ -21,9 +21,9 @@ func NewCmdBackup() *cobra.Command {
 		Use:   "backup --cluster-id <cluster-id> --reason <reason>",
 		Short: "Trigger a Velero backup for an HCP cluster",
 		Long:  longDescription,
-		Example: "  osdctl hcp backup --cluster-id 1abc2def3ghi --reason OHSS-12345\n" +
-			"  osdctl hcp backup --cluster-id 1abc2def3ghi --reason OHSS-12345 --label env=prod --label incident=OHSS-12345\n" +
-			"  osdctl hcp backup --cluster-id 1abc2def3ghi --reason OHSS-12345 --annotation owner=sre-team",
+		Example: "  osdctl hcp backup --cluster-id ${CLUSTER_ID} --reason ${REASON}\n" +
+			"  osdctl hcp backup --cluster-id ${CLUSTER_ID} --reason ${REASON} --label env=prod --label incident=${REASON}\n" +
+			"  osdctl hcp backup --cluster-id ${CLUSTER_ID} --reason ${REASON} --annotation owner=sre-team",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

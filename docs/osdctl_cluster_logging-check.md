@@ -6,6 +6,13 @@ Shows the logging support status of a specified cluster
 osdctl cluster logging-check --cluster-id <cluster-identifier> [flags]
 ```
 
+### Examples
+
+```
+  # Check logging support status for a cluster
+  osdctl cluster logging-check --cluster-id ${CLUSTER_ID}
+```
+
 ### Options
 
 ```

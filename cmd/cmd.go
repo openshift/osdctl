@@ -63,6 +63,8 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 		Long:              `CLI tool to provide OSD related utilities`,
 		DisableAutoGenTag: true,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			cmd.SilenceUsage = true
+
 			if cmd.Flags().Lookup(aws.NoProxyFlag) != nil {
 				noAwsProxy, err := cmd.Flags().GetBool(aws.NoProxyFlag)
 				if err != nil {

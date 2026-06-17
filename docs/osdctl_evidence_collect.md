@@ -23,16 +23,16 @@ osdctl evidence collect [flags]
 
 ```
   # Collect all evidence to a directory
-  osdctl evidence collect -C <cluster-id> --output ./evidence/
+  osdctl evidence collect -C ${CLUSTER_ID} --output ./evidence/
 
   # Collect evidence from the last 2 hours
-  osdctl evidence collect -C <cluster-id> --output ./evidence/ --since 2h
+  osdctl evidence collect -C ${CLUSTER_ID} --output ./evidence/ --since 2h
 
   # Collect evidence without CloudTrail (for non-AWS or limited access)
-  osdctl evidence collect -C <cluster-id> --output ./evidence/ --skip-cloudtrail
+  osdctl evidence collect -C ${CLUSTER_ID} --output ./evidence/ --skip-cloudtrail
 
   # Include Kubernetes events in collection
-  osdctl evidence collect -C <cluster-id> --output ./evidence/ --include-events
+  osdctl evidence collect -C ${CLUSTER_ID} --output ./evidence/ --include-events
 ```
 
 ### Options

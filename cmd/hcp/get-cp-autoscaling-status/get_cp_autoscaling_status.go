@@ -67,19 +67,19 @@ This command is useful for checking the autoscaling configuration status of host
 on a specific management cluster during day-to-day operations.`,
 		Example: `
   # Get autoscaling status for all hosted clusters on a management cluster
-  osdctl hcp get-cp-autoscaling-status --mgmt-cluster-id <cluster-id>
+  osdctl hcp get-cp-autoscaling-status --mgmt-cluster-id ${MGMT_CLUSTER_ID}
 
   # Get status with CSV output
-  osdctl hcp get-cp-autoscaling-status --mgmt-cluster-id <cluster-id> --output csv > status.csv
+  osdctl hcp get-cp-autoscaling-status --mgmt-cluster-id ${MGMT_CLUSTER_ID} --output csv > status.csv
 
   # Show only clusters ready for migration
-  osdctl hcp get-cp-autoscaling-status --mgmt-cluster-id <cluster-id> --show-only ready-for-migration
+  osdctl hcp get-cp-autoscaling-status --mgmt-cluster-id ${MGMT_CLUSTER_ID} --show-only ready-for-migration
 
   # Show only clusters that need annotation removal
-  osdctl hcp get-cp-autoscaling-status --mgmt-cluster-id <cluster-id> --show-only needs-removal
+  osdctl hcp get-cp-autoscaling-status --mgmt-cluster-id ${MGMT_CLUSTER_ID} --show-only needs-removal
 
   # Show only clusters safe to remove override
-  osdctl hcp get-cp-autoscaling-status --mgmt-cluster-id <cluster-id> --show-only safe-to-remove-override`,
+  osdctl hcp get-cp-autoscaling-status --mgmt-cluster-id ${MGMT_CLUSTER_ID} --show-only safe-to-remove-override`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

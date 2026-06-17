@@ -11,25 +11,18 @@ includes a summary (title) and data content. You can provide the data either
 directly as a string using --data, or from a file using --file. The data
 will be automatically base64-encoded before storage.
 
-Examples:
-  # Create a report with inline data
-  osdctl cluster reports create --cluster-id 1a2b3c4d \
-    --summary "Network diagnostic results" \
-    --data "All network checks passed successfully"
-
-  # Create a report from a file
-  osdctl cluster reports create -C my-cluster \
-    --summary "Pod logs from incident" \
-    --file /tmp/pod-logs.txt
-
-  # Create a report and output as JSON
-  osdctl cluster reports create --cluster-id 1a2b3c4d \
-    --summary "Cluster health check" \
-    --data "CPU: 45%, Memory: 67%, Disk: 23%" \
-    --output json
-
 ```
 osdctl cluster reports create [flags]
+```
+
+### Examples
+
+```
+  # Create a report with inline data
+  osdctl cluster reports create --cluster-id ${CLUSTER_ID} --summary "Network diagnostic results" --data "All network checks passed"
+
+  # Create a report from a file
+  osdctl cluster reports create --cluster-id ${CLUSTER_ID} --summary "Pod logs from incident" --file /tmp/pod-logs.txt
 ```
 
 ### Options

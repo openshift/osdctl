@@ -6,6 +6,16 @@ Prints cloudtrail permission-denied events to console.
 osdctl cloudtrail permission-denied-events [flags]
 ```
 
+### Examples
+
+```
+  # Check for permission-denied events in the last 5 minutes
+  osdctl cloudtrail permission-denied-events --cluster-id ${CLUSTER_ID}
+
+  # Check for permission-denied events in the last hour with URLs
+  osdctl cloudtrail permission-denied-events --cluster-id ${CLUSTER_ID} --since 1h --url
+```
+
 ### Options
 
 ```

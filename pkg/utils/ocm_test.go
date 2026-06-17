@@ -88,7 +88,7 @@ func TestGetOcmConfigFromFilePath(t *testing.T) {
 					ClientID:     "test-client-id",
 					ClientSecret: "test-client-secret",
 				}
-				data, err := json.Marshal(config)
+				data, err := json.Marshal(config) //nolint:gosec // G117 false positive — test fixture with fake credentials
 				if err != nil {
 					t.Fatalf("failed to marshal config: %v", err)
 				}
@@ -255,7 +255,7 @@ func TestGetOCMSdkConnBuilderFromFilePath(t *testing.T) {
 					ClientID:     "test-client-id",
 					ClientSecret: "test-client-secret",
 				}
-				data, err := json.Marshal(config)
+				data, err := json.Marshal(config) //nolint:gosec // G117 false positive — test fixture with fake credentials
 				if err != nil {
 					t.Fatalf("failed to marshal config: %v", err)
 				}
@@ -445,7 +445,7 @@ func TestGetOCMConfigFromEnv(t *testing.T) {
 					RefreshToken: "test-refresh",
 					URL:          "https://api.openshift.com",
 				}
-				data, err := json.Marshal(config)
+				data, err := json.Marshal(config) //nolint:gosec // G117 false positive — test fixture with fake credentials
 				if err != nil {
 					t.Fatalf("failed to marshal config: %v", err)
 				}
