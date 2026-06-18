@@ -288,7 +288,7 @@ type metricsTableColumn struct {
 	width int
 }
 
-func getMetricsTableColumns(results *[]*jsonInterceptor[instantMetricResult], tsFormatter metricTimestampFormatter) []metricsTableColumn {
+func getMetricsTableColumns(results *[]*jsonInterceptor[instantMetricResult], tsFormatter metricTimestampFormatter) *[]metricsTableColumn {
 	timeColumn := metricsTableColumn{name: "TIME", width: len("TIME")}
 	valueColumn := metricsTableColumn{name: "VALUE", width: len("VALUE")}
 	labelNameToColumn := make(map[string]*metricsTableColumn)
@@ -312,9 +312,7 @@ func getMetricsTableColumns(results *[]*jsonInterceptor[instantMetricResult], ts
 				labelNameToColumn[labelName] = &metricsTableColumn{name: labelName, width: len(labelName)}
 				labelNames = append(labelNames, labelName)
 			}
-			if len(labelValue) > labelNameToColumn[labelName].width {
-				labelNameToColumn[labelName].width = len(labelValue)
-			}
+			labelNameToColumn[labelName].width = max(labelNameToColumn[labelName].width, len(labelValue))
 		}
 	}
 
@@ -325,7 +323,7 @@ func getMetricsTableColumns(results *[]*jsonInterceptor[instantMetricResult], ts
 		columns = append(columns, *labelNameToColumn[labelName])
 	}
 
-	return columns
+	return &columns
 }
 
 type instantMetricsPrinter func(*[]*jsonInterceptor[instantMetricResult])
@@ -333,7 +331,7 @@ type instantMetricsPrinter func(*[]*jsonInterceptor[instantMetricResult])
 func printMetricsAsTable(results *[]*jsonInterceptor[instantMetricResult]) {
 	columns := getMetricsTableColumns(results, func(d *metricData) string { return d.getHumanReadableTime() })
 	separatorLine := "+"
-	for _, column := range columns {
+	for _, column := range *columns {
 		separatorLine += strings.Repeat("-", column.width+2) + "+"
 	}
 
@@ -341,7 +339,7 @@ func printMetricsAsTable(results *[]*jsonInterceptor[instantMetricResult]) {
 
 	// Header
 	fmt.Print("|")
-	for _, column := range columns {
+	for _, column := range *columns {
 		fmt.Printf(" %-*s |", column.width, column.name)
 	}
 	fmt.Println()
@@ -354,9 +352,9 @@ func printMetricsAsTable(results *[]*jsonInterceptor[instantMetricResult]) {
 		}
 		time := result.decoded.Value.getHumanReadableTime()
 		value := result.decoded.Value.getValue()
-		fmt.Printf("| %*s | %*s |", columns[0].width, time, columns[1].width, value)
+		fmt.Printf("| %*s | %*s |", (*columns)[0].width, time, (*columns)[1].width, value)
 
-		for _, column := range columns[2:] {
+		for _, column := range (*columns)[2:] {
 			labelValue := result.decoded.Metric[column.name]
 			fmt.Printf(" %*s |", column.width, labelValue)
 		}
@@ -371,7 +369,7 @@ func printMetricsAsCsv(results *[]*jsonInterceptor[instantMetricResult]) {
 	writer := csv.NewWriter(os.Stdout)
 
 	header := []string{}
-	for _, column := range columns {
+	for _, column := range *columns {
 		header = append(header, column.name)
 	}
 	err := writer.Write(header)
@@ -388,7 +386,7 @@ func printMetricsAsCsv(results *[]*jsonInterceptor[instantMetricResult]) {
 			result.decoded.Value.getMachineReadableTime(),
 			result.decoded.Value.getValue(),
 		}
-		for _, column := range columns[2:] {
+		for _, column := range (*columns)[2:] {
 			row = append(row, result.decoded.Metric[column.name])
 		}
 		err := writer.Write(row)
@@ -401,28 +399,19 @@ func printMetricsAsCsv(results *[]*jsonInterceptor[instantMetricResult]) {
 	writer.Flush()
 }
 
-func printMetricsAsJson[metricResult instantMetricResult | rangeMetricResult](results *[]*jsonInterceptor[metricResult]) {
-	metricsBytes, err := json.MarshalIndent(results, "", "  ")
-	if err == nil {
-		fmt.Println(string(metricsBytes))
-	} else {
-		log.Warnln("Failed to marshal metrics data:", err)
-	}
-}
-
 func createInstantMetricsPrinter(format MetricsFormat) instantMetricsPrinter {
 	switch format {
 	case MetricsFormatCsv:
 		return printMetricsAsCsv
 	case MetricsFormatJson:
-		return printMetricsAsJson[instantMetricResult]
+		return printResultsAsJson[instantMetricResult]
 	default:
 		return printMetricsAsTable
 	}
 }
 
-type instantOrRangeMetricResult interface {
-	instantMetricResult | rangeMetricResult
+type resultWithLabel interface {
+	instantMetricResult | rangeMetricResult | alertResult
 
 	getLabel(labelKey string) (string, bool)
 }
@@ -437,7 +426,7 @@ func (result rangeMetricResult) getLabel(labelKey string) (string, bool) {
 	return value, exists
 }
 
-func filterMetricsResults[metricResult instantOrRangeMetricResult](fetcher *RhobsFetcher, results *[]*jsonInterceptor[metricResult], isPrintingClusterResultsOnly bool) *[]*jsonInterceptor[metricResult] {
+func filterMetricsResults[metricResult resultWithLabel](fetcher *RhobsFetcher, results *[]*jsonInterceptor[metricResult], isPrintingClusterResultsOnly bool) *[]*jsonInterceptor[metricResult] {
 	areSomeResultsForOtherClusters := false // If true, this means areFilteredResultsValid is also true
 	filteredResults := []*jsonInterceptor[metricResult]{}
 	areFilteredResultsValid := len(*results) == 0
@@ -637,7 +626,7 @@ func (f *RhobsFetcher) PrintRangeMetrics(ctx context.Context, promExpr string, t
 	results = filterMetricsResults(f, results, isPrintingClusterResultsOnly)
 
 	if format == MetricsFormatJson {
-		printMetricsAsJson[rangeMetricResult](results)
+		printResultsAsJson[rangeMetricResult](results)
 		return nil
 	}
 

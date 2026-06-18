@@ -433,15 +433,14 @@ type logResult struct {
 func (l *logResult) getTimeStamp() int64 {
 	if l.timeStamp == 0 {
 		l.timeStamp = -1
-		values := l.Values[0]
-		if len(*values) == 0 {
+		if len(l.Values) == 0 || len(*l.Values[0]) == 0 {
 			log.Warnln("Log entry does not have a timestamp")
 			return -1
 		}
-
-		ts, err := strconv.ParseInt((*values)[0], 10, 64)
+		tsStr := (*l.Values[0])[0]
+		ts, err := strconv.ParseInt(tsStr, 10, 64)
 		if err != nil {
-			log.Warnf("Error parsing timestamp '%s' as an integer: %v", (*values)[0], err)
+			log.Warnf("Error parsing timestamp '%s' as an integer: %v", tsStr, err)
 			return -1
 		}
 		l.timeStamp = ts
@@ -458,13 +457,12 @@ func (l *logResult) getHumanReadableTime() string {
 }
 
 func (l *logResult) getMessage() string {
-	values := l.Values[0]
-	if len(*values) < 2 {
+	if len(l.Values) == 0 || len(*l.Values[0]) < 2 {
 		log.Warnln("No message available for log entry")
 		return ""
 	}
 
-	return (*values)[1]
+	return (*l.Values[0])[1]
 }
 
 type logsPrinter interface {

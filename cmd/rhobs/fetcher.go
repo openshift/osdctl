@@ -186,7 +186,6 @@ func populateRhobsFetchers(ctx context.Context, clusterKey string, hiveOcmUrl st
 
 			if err != nil {
 				log.Warnf("Failed to get RHOBS cell from %s config map in %s namespace for cluster '%s': %v\n", cmName, cmNs, monitoredClusterId, err)
-				log.Infoln("Trying to get the RHOBS cell from the hive cluster deployment instead...")
 			}
 		}
 
@@ -368,4 +367,17 @@ func (w *jsonInterceptor[T]) UnmarshalJSON(raw []byte) error {
 
 func (w *jsonInterceptor[T]) MarshalJSON() ([]byte, error) {
 	return w.raw, nil
+}
+
+func printAsJson(data interface{}) {
+	content, err := json.MarshalIndent(data, "", "  ")
+	if err == nil {
+		fmt.Println(string(content))
+	} else {
+		log.Warnln("Failed to marshal json:", err)
+	}
+}
+
+func printResultsAsJson[result any](results *[]*jsonInterceptor[result]) {
+	printAsJson(results)
 }
