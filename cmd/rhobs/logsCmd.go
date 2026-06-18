@@ -1,13 +1,30 @@
 package rhobs
 
 import (
+	"context"
+	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"os/signal"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
+	"github.com/gorilla/websocket"
+	rhobsclient "github.com/observatorium/api/client"
+	rhobsparameters "github.com/observatorium/api/client/parameters"
 	"github.com/pkg/browser"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -308,4 +325,581 @@ func newCmdLogs() *cobra.Command {
 	cmd.MarkFlagsMutuallyExclusive("field", "url")
 
 	return cmd
+}
+
+type LogsFormat string
+
+const (
+	LogsFormatText LogsFormat = "text"
+	LogsFormatCsv  LogsFormat = "csv"
+	LogsFormatJson LogsFormat = "json"
+)
+
+func GetLogsFormatFromString(formatStr string) (LogsFormat, error) {
+	switch formatStr {
+	case string(LogsFormatText):
+		return LogsFormatText, nil
+	case string(LogsFormatCsv):
+		return LogsFormatCsv, nil
+	case string(LogsFormatJson):
+		return LogsFormatJson, nil
+	default:
+		return LogsFormatText, fmt.Errorf("invalid output format: %s", formatStr)
+	}
+}
+
+func (f *RhobsFetcher) getLogsGrafanaDataSource() (string, error) {
+	baseDataSource, err := f.getBaseGrafanaDataSource()
+	if err != nil {
+		return "", err
+	}
+
+	return baseDataSource + "logs", nil
+}
+
+type grafanaLogsExploreParams struct {
+	Panel struct {
+		DataSource string `json:"datasource"`
+		Queries    [1]struct {
+			RefId      string `json:"refId"`
+			Expr       string `json:"expr"`
+			QueryType  string `json:"queryType"`
+			EditorMode string `json:"editorMode"`
+			Direction  string `json:"direction"`
+		} `json:"queries"`
+		Range struct {
+			From string `json:"from"`
+			To   string `json:"to"`
+		} `json:"range"`
+	} `json:"aaa"`
+}
+
+func (f *RhobsFetcher) GetGrafanaLogsUrl(lokiExpr string, startTime, endTime time.Time, isGoingForward bool) (string, error) {
+	exploreParams := grafanaLogsExploreParams{}
+
+	dataSource, err := f.getLogsGrafanaDataSource()
+	if err != nil {
+		return "", err
+	}
+
+	var logsDir string
+
+	if isGoingForward {
+		logsDir = "forward"
+	} else {
+		logsDir = "backward"
+	}
+
+	exploreParams.Panel.DataSource = dataSource
+	exploreParams.Panel.Queries[0].RefId = "osdctl"
+	exploreParams.Panel.Queries[0].Expr = lokiExpr
+	exploreParams.Panel.Queries[0].QueryType = "range"
+	exploreParams.Panel.Queries[0].EditorMode = "code"
+	exploreParams.Panel.Queries[0].Direction = logsDir
+	exploreParams.Panel.Range.From = strconv.FormatInt(startTime.UnixMilli(), 10)
+	exploreParams.Panel.Range.To = strconv.FormatInt(endTime.UnixMilli(), 10)
+
+	exploreParamsBytes, err := json.Marshal(exploreParams)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal Grafana explore parameters: %v", err)
+	}
+
+	exploreParamsEncoded := url.Values{
+		"schemaVersion": {"1"},
+		"panes":         {string(exploreParamsBytes)},
+	}.Encode()
+
+	return grafanaBaseUrl + "explore?" + exploreParamsEncoded, nil
+}
+
+type getLogsResponse struct {
+	Status string `json:"status"`
+	Data   struct {
+		ResultType string       `json:"resultType"`
+		Results    []*logResult `json:"result"`
+	} `json:"data"`
+}
+
+type streamLogsResponse struct {
+	Streams []*logResult `json:"streams"`
+}
+
+type logResult struct {
+	Stream    *map[string]string `json:"stream"`
+	Values    []*[]string        `json:"values"`
+	timeStamp int64              `json:"-"`
+}
+
+func (l *logResult) getTimeStamp() int64 {
+	if l.timeStamp == 0 {
+		l.timeStamp = -1
+		values := l.Values[0]
+		if len(*values) == 0 {
+			log.Warnln("Log entry does not have a timestamp")
+			return -1
+		}
+
+		ts, err := strconv.ParseInt((*values)[0], 10, 64)
+		if err != nil {
+			log.Warnf("Error parsing timestamp '%s' as an integer: %v", (*values)[0], err)
+			return -1
+		}
+		l.timeStamp = ts
+	}
+	return l.timeStamp
+}
+
+func (l *logResult) getTime() time.Time {
+	return time.Unix(0, l.getTimeStamp())
+}
+
+func (l *logResult) getHumanReadableTime() string {
+	return l.getTime().String()
+}
+
+func (l *logResult) getMessage() string {
+	values := l.Values[0]
+	if len(*values) < 2 {
+		log.Warnln("No message available for log entry")
+		return ""
+	}
+
+	return (*values)[1]
+}
+
+type logsPrinter interface {
+	PrintHeader()
+	PrintResult(result *logResult)
+	PrintTrailer()
+}
+
+type textLogsPrinter struct {
+	isPrintingTimeValue bool
+	fieldNames          []string
+}
+
+func (p *textLogsPrinter) PrintHeader() {
+}
+
+func (p *textLogsPrinter) PrintResult(result *logResult) {
+	var sb strings.Builder
+
+	if p.isPrintingTimeValue {
+		sb.WriteString(result.getHumanReadableTime())
+		sb.WriteString(" ")
+	}
+	for _, fieldName := range p.fieldNames {
+		sb.WriteString((*result.Stream)[fieldName])
+		sb.WriteString(" ")
+	}
+	sb.WriteString(result.getMessage())
+
+	fmt.Println(sb.String())
+}
+
+func (p *textLogsPrinter) PrintTrailer() {
+}
+
+type csvLogsPrinter struct {
+	writer              *csv.Writer
+	isPrintingTimeValue bool
+	fieldNames          []string
+}
+
+func (p *csvLogsPrinter) PrintHeader() {
+	header := []string{}
+	if p.isPrintingTimeValue {
+		header = append(header, "TIME")
+	}
+	header = append(header, p.fieldNames...)
+	header = append(header, "MESSAGE")
+
+	err := p.writer.Write(header)
+	if err != nil {
+		log.Warnln("Failed to write CSV header:", err)
+		return
+	}
+}
+
+func (p *csvLogsPrinter) PrintResult(result *logResult) {
+	row := []string{}
+	if p.isPrintingTimeValue {
+		row = append(row, result.getHumanReadableTime())
+	}
+	for _, fieldName := range p.fieldNames {
+		row = append(row, (*result.Stream)[fieldName])
+	}
+	row = append(row, result.getMessage())
+
+	err := p.writer.Write(row)
+	if err != nil {
+		log.Warnln("Failed to write CSV row:", err)
+	}
+}
+
+func (p *csvLogsPrinter) PrintTrailer() {
+	p.writer.Flush()
+}
+
+type jsonLogsPrinter struct {
+	isFirstLogPrinted bool
+}
+
+func (p *jsonLogsPrinter) PrintHeader() {
+	fmt.Print("[")
+}
+
+func (p *jsonLogsPrinter) PrintResult(result *logResult) {
+	if p.isFirstLogPrinted {
+		fmt.Print(",")
+	}
+	fmt.Println()
+
+	logBytes, err := json.MarshalIndent(result, "  ", "  ")
+	if err != nil {
+		log.Warnln("Error marshaling json:", err)
+		return
+	}
+	fmt.Print("  ")
+	fmt.Print(string(logBytes))
+
+	p.isFirstLogPrinted = true
+}
+
+func (p *jsonLogsPrinter) PrintTrailer() {
+	fmt.Println()
+	fmt.Println("]")
+}
+
+func createLogsPrinter(format LogsFormat, isPrintingTimeValue bool, fieldNames []string) logsPrinter {
+	switch format {
+	case LogsFormatCsv:
+		return &csvLogsPrinter{writer: csv.NewWriter(os.Stdout), isPrintingTimeValue: isPrintingTimeValue, fieldNames: fieldNames}
+	case LogsFormatJson:
+		return &jsonLogsPrinter{}
+	default:
+		return &textLogsPrinter{isPrintingTimeValue: isPrintingTimeValue, fieldNames: fieldNames}
+	}
+}
+
+type logHandler func(result *logResult)
+
+func (f *RhobsFetcher) queryLogs(ctx context.Context, lokiExpr string, startTime, endTime time.Time, logsCount int, isGoingForward bool, logHandler logHandler) error {
+	client, err := f.getClient()
+	if err != nil {
+		return err
+	}
+
+	log.Infoln("RHOBS cell:", f.RhobsCell)
+	log.Infoln("Loki query:", lokiExpr)
+	log.Infoln("Start time:", startTime.Round(0))
+	log.Infoln("End time  :", endTime.Round(0))
+
+	startTimeStamp := startTime.UnixNano()
+	endTimeStamp := endTime.UnixNano()
+
+	var logsDir string
+	var cmpTimeStamps func(int64, int64) bool
+
+	if isGoingForward {
+		logsDir = "forward"
+		cmpTimeStamps = func(ts1 int64, ts2 int64) bool {
+			return ts1 < ts2
+		}
+	} else {
+		logsDir = "backward"
+		cmpTimeStamps = func(ts1 int64, ts2 int64) bool {
+			return ts1 > ts2
+		}
+	}
+
+	for logsCount != 0 {
+		lokiQuery := rhobsparameters.LogqlQuery(lokiExpr)
+
+		startTimeStr := strconv.FormatInt(startTimeStamp, 10)
+		endTimeStr := strconv.FormatInt(endTimeStamp, 10)
+
+		limit := float32(500)
+		if 0 < logsCount && logsCount < 500 {
+			limit = float32(logsCount)
+		}
+
+		queryParams := &rhobsclient.GetLogRangeQueryParams{
+			Query:     &lokiQuery,
+			Start:     (*rhobsparameters.StartTS)(&startTimeStr),
+			End:       (*rhobsparameters.EndTS)(&endTimeStr),
+			Direction: &logsDir,
+			Limit:     (*rhobsparameters.Limit)(&limit),
+		}
+
+		response, err := client.GetLogRangeQueryWithResponse(ctx, "hcp", queryParams)
+
+		if err != nil {
+			return fmt.Errorf("failed to send request to RHOBS: %v", err)
+		}
+		if response.HTTPResponse.StatusCode != http.StatusOK {
+			return fmt.Errorf("RHOBS query failed with status code: %d - body: %s", response.HTTPResponse.StatusCode, string(response.Body))
+		}
+
+		var formattedResponse getLogsResponse
+		err = json.Unmarshal(response.Body, &formattedResponse)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal response from RHOBS: %v", err)
+		}
+
+		if formattedResponse.Status != "success" {
+			return fmt.Errorf("RHOBS query failed with status: %s", formattedResponse.Status)
+		}
+
+		if len(formattedResponse.Data.Results) == 0 {
+			break
+		}
+
+		{
+			var flattenedResults []*logResult
+
+			for _, result := range formattedResponse.Data.Results {
+				for valIdx := range result.Values {
+					flattenedResults = append(flattenedResults, &logResult{
+						Stream: result.Stream,
+						Values: []*[]string{result.Values[valIdx]},
+					})
+				}
+			}
+
+			sort.Slice(flattenedResults, func(i, j int) bool {
+				return cmpTimeStamps(flattenedResults[i].getTimeStamp(), flattenedResults[j].getTimeStamp())
+			})
+
+			edgeTimeStamp := flattenedResults[len(flattenedResults)-1].getTimeStamp()
+
+			if flattenedResults[0].getTimeStamp() == edgeTimeStamp {
+				// All logs have the same timestamp, we need to move the time window to some uncharted time to avoid getting stuck
+				// We may skip some logs with this approach, but there's no way to get all of them anyway
+				if isGoingForward {
+					startTimeStamp = edgeTimeStamp + 1
+				} else {
+					endTimeStamp = edgeTimeStamp - 1
+				}
+				edgeTimeStamp = 0
+			} else {
+				if isGoingForward {
+					startTimeStamp = edgeTimeStamp
+				} else {
+					endTimeStamp = edgeTimeStamp
+				}
+			}
+
+			for _, result := range flattenedResults {
+				ts := result.getTimeStamp()
+
+				if ts != edgeTimeStamp {
+					logHandler(result)
+					logsCount--
+					if logsCount == 0 {
+						break
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (f *RhobsFetcher) PrintLogs(ctx context.Context, lokiExpr string, startTime, endTime time.Time, logsCount int, isGoingForward bool, format LogsFormat, isPrintingTimeValue bool, fieldNames []string) error {
+	logsPrinter := createLogsPrinter(format, isPrintingTimeValue, fieldNames)
+	logsPrinter.PrintHeader()
+	defer logsPrinter.PrintTrailer()
+
+	err := f.queryLogs(ctx, lokiExpr, startTime, endTime, logsCount, isGoingForward, func(result *logResult) {
+		logsPrinter.PrintResult(result)
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type streamLogsContext struct {
+	isLooping bool
+	webSocket *websocket.Conn
+}
+
+func (f *RhobsFetcher) StreamLogs(lokiExpr string, format LogsFormat, isPrintingTimeValue bool, fieldNames []string) error {
+	startTime := time.Now().Add(-5 * time.Minute)
+	tokenProvider, err := f.getTokenProvider()
+	if err != nil {
+		return err
+	}
+
+	log.Infoln("RHOBS cell:", f.RhobsCell)
+	log.Infoln("Loki query:", lokiExpr)
+
+	logsPrinter := createLogsPrinter(format, isPrintingTimeValue, fieldNames)
+	logsPrinter.PrintHeader()
+	defer logsPrinter.PrintTrailer()
+
+	wsUrl, err := url.Parse(f.RhobsCell)
+	if err != nil {
+		return fmt.Errorf("failed to parse RHOBS cell URL: %v", err)
+	}
+
+	wsUrl.Scheme = "wss"
+	wsUrl.Path = "/api/logs/v1/hcp/loki/api/v1/tail"
+
+	createWebsocket := func() (*websocket.Conn, error) {
+		accessToken, err := tokenProvider.Token()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get access token: %v", err)
+		}
+
+		wsUrl.RawQuery = url.Values{
+			"query": {lokiExpr},
+			"start": {strconv.FormatInt(startTime.UnixNano(), 10)},
+			"limit": {"500"},
+		}.Encode()
+
+		header := make(http.Header)
+		header.Set("Accept", "application/json")
+		header.Set("Content-Type", "application/json")
+		header.Set("Authorization", "Bearer "+accessToken)
+
+		wsConn, resp, err := websocket.DefaultDialer.Dial(wsUrl.String(), header)
+		if err != nil || wsConn == nil {
+			if resp != nil {
+				buf, _ := io.ReadAll(resp.Body) // nolint
+
+				return nil, fmt.Errorf("failed to connect to websocket: %s (%v)", string(buf), err)
+			} else {
+				return nil, fmt.Errorf("failed to connect to websocket: %v", err)
+			}
+		}
+
+		return wsConn, nil
+	}
+
+	closeWebsocket := func(wsConn *websocket.Conn) {
+		err := wsConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		if err != nil {
+			log.Infoln("Failed to send websocket close message:", err)
+		}
+		err = wsConn.Close()
+		if err != nil {
+			log.Infoln("Failed to close websocket:", err)
+		}
+	}
+
+	var mutex sync.Mutex
+	context := streamLogsContext{
+		isLooping: true,
+	}
+
+	getContext := func() streamLogsContext {
+		mutex.Lock()
+		defer mutex.Unlock()
+
+		return context
+	}
+
+	closeWebSocketInContext := func(canContinueLooping bool) {
+		var currentWsConn *websocket.Conn
+
+		func() {
+			mutex.Lock()
+			defer mutex.Unlock()
+
+			if !canContinueLooping {
+				context.isLooping = false
+			}
+			currentWsConn = context.webSocket
+			context.webSocket = nil
+		}()
+
+		if currentWsConn != nil {
+			closeWebsocket(currentWsConn)
+		}
+	}
+
+	storeNewWebsocketInContext := func(newWsConn *websocket.Conn) {
+		func() {
+			mutex.Lock()
+			defer mutex.Unlock()
+
+			if context.isLooping {
+				context.webSocket = newWsConn
+				newWsConn = nil
+			}
+		}()
+
+		if newWsConn != nil {
+			closeWebsocket(newWsConn)
+		}
+	}
+
+	go func() { // Break below loop when the user interrupts the command (e.g. by pressing Ctrl+C)
+		stopChan := make(chan os.Signal, 1)
+		signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
+		<-stopChan
+		signal.Reset(syscall.SIGTERM)
+
+		closeWebSocketInContext(false)
+	}()
+
+	for getContext().isLooping {
+		err := backoff.Retry(func() error {
+			currentContext := getContext()
+			if !currentContext.isLooping || currentContext.webSocket != nil {
+				return nil
+			}
+
+			newWsConn, err := createWebsocket()
+			if err != nil {
+				return err
+			}
+			storeNewWebsocketInContext(newWsConn)
+
+			return nil
+		}, backoff.NewExponentialBackOff(
+			backoff.WithInitialInterval(500*time.Millisecond),
+			backoff.WithMaxInterval(5*time.Second),
+			backoff.WithMaxElapsedTime(30*time.Second)))
+		if err != nil {
+			return fmt.Errorf("failed to establish websocket connection after retrying for 30s: %v", err)
+		}
+
+		currentWebSocket := getContext().webSocket
+		if currentWebSocket == nil {
+			break
+		}
+
+		var formattedResponse streamLogsResponse
+
+		err = currentWebSocket.ReadJSON(&formattedResponse)
+		if err != nil {
+			if !getContext().isLooping {
+				break
+			}
+
+			if websocket.IsCloseError(err, websocket.CloseAbnormalClosure) {
+				log.Warnln("Unexpected websocket close:", err)
+				closeWebSocketInContext(true)
+				startTime = time.Now()
+				log.Infoln("Connecting again...")
+				continue
+			}
+
+			closeWebSocketInContext(false)
+			logsPrinter.PrintTrailer()
+
+			return fmt.Errorf("failed to read JSON from websocket: %v", err)
+		}
+
+		for _, result := range formattedResponse.Streams {
+			logsPrinter.PrintResult(result)
+		}
+	}
+
+	return nil
 }
