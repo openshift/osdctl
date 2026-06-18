@@ -17,7 +17,7 @@ osdctl rhobs metrics [PromQL-expression] [flags]
       --end-time time     End time at which the PromQL expression must be evaluated - can only be set if --start-time or --url is set (default to now)
   -f, --filter            Only keep the results matching the given cluster - only effective if some of those results have a _id, _mc_id or mc_name label - exclusive with --url
   -h, --help              help for metrics
-  -o, --output string     Format of the output - allowed values: "table", "csv" or "json" - exclusive with --url (default "table")
+  -o, --output string     Format of the output - allowed values: "table", "csv" or "json" - "json" prints raw API data and as such is forward compatible - exclusive with --url (default "table")
       --since duration    Only return values newer than a relative duration (e.g. 1h, 30m) - enable time range mode - exclusive with --time, --start-time & --end-time
       --start-time time   Start time at which the PromQL expression must be evaluated - enable time range mode - exclusive with --time (default to 30 minutes ago)
       --step duration     Duration between data points (e.g. 30s, 2m) - can only be set if in time range mode (i.e. --start-time or --since is set)

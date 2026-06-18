@@ -345,7 +345,7 @@ type RhobsFetcher struct {
 	tokenProvider       ocmutils.AccessTokenProvider
 }
 
-func getRhobsCellFromConfigMap(clusterId string, ocmConn *sdk.Connection, configMapNamespace, configMapName, configMapAnnotationKey string) (string, error) {
+func getRhobsCellFromConfigMap(ctx context.Context, clusterId string, ocmConn *sdk.Connection, configMapNamespace, configMapName, configMapAnnotationKey string) (string, error) {
 	client, err := k8s.NewWithConn(clusterId, client.Options{}, ocmConn)
 	if err != nil {
 		return "", fmt.Errorf("failed to create kube client for cluster '%s': %v", clusterId, err)
@@ -353,7 +353,7 @@ func getRhobsCellFromConfigMap(clusterId string, ocmConn *sdk.Connection, config
 
 	var configMap corev1.ConfigMap
 
-	err = client.Get(context.TODO(), types.NamespacedName{Namespace: configMapNamespace, Name: configMapName}, &configMap)
+	err = client.Get(ctx, types.NamespacedName{Namespace: configMapNamespace, Name: configMapName}, &configMap)
 	if err != nil {
 		return "", fmt.Errorf("failed to retrieve config map named '%s' in namespace '%s' for cluster '%s': %v", configMapName, configMapNamespace, clusterId, err)
 	}
@@ -374,7 +374,7 @@ func getFallbackUsage(usage RhobsFetchUsage) RhobsFetchUsage {
 	}
 }
 
-func getRhobsCellFromHiveClusterDeployment(clusterId string, ocmConn *sdk.Connection, hiveOcmUrl string) (string, error) {
+func getRhobsCellFromHiveClusterDeployment(ctx context.Context, clusterId string, ocmConn *sdk.Connection, hiveOcmUrl string) (string, error) {
 	hiveOcmConn, err := ocmutils.CreateConnectionWithUrl(hiveOcmUrl)
 	if err != nil {
 		return "", err
@@ -400,7 +400,7 @@ func getRhobsCellFromHiveClusterDeployment(clusterId string, ocmConn *sdk.Connec
 
 	var clusterDeployments hivev1.ClusterDeploymentList
 
-	err = hiveClient.List(context.TODO(), &clusterDeployments, &client.ListOptions{LabelSelector: clusterSelector})
+	err = hiveClient.List(ctx, &clusterDeployments, &client.ListOptions{LabelSelector: clusterSelector})
 	if err != nil {
 		return "", fmt.Errorf("failed to list cluster deployments for cluster '%s': %v", clusterId, err)
 	}
@@ -418,7 +418,7 @@ func getRhobsCellFromHiveClusterDeployment(clusterId string, ocmConn *sdk.Connec
 	return "https://" + rhobsCell, nil
 }
 
-func populateRhobsFetchers(clusterKey string, hiveOcmUrl string, usageToFetcher *map[RhobsFetchUsage]*RhobsFetcher) error {
+func populateRhobsFetchers(ctx context.Context, clusterKey string, hiveOcmUrl string, usageToFetcher *map[RhobsFetchUsage]*RhobsFetcher) error {
 	ocmConn, err := ocmutils.CreateConnection()
 	if err != nil {
 		return err
@@ -468,13 +468,13 @@ func populateRhobsFetchers(clusterKey string, hiveOcmUrl string, usageToFetcher 
 		}
 
 		if usage == "CD" {
-			rhobsCell, err = getRhobsCellFromHiveClusterDeployment(monitoredClusterId, ocmConn, hiveOcmUrl)
+			rhobsCell, err = getRhobsCellFromHiveClusterDeployment(ctx, monitoredClusterId, ocmConn, hiveOcmUrl)
 
 			if err != nil {
 				log.Warnf("Failed to get RHOBS cell from hive cluster deployment for cluster '%s': %v\n", monitoredClusterId, err)
 			}
 		} else {
-			rhobsCell, err = getRhobsCellFromConfigMap(monitoredClusterId, ocmConn, cmNs, cmName, rhobsCellCmAnnotation)
+			rhobsCell, err = getRhobsCellFromConfigMap(ctx, monitoredClusterId, ocmConn, cmNs, cmName, rhobsCellCmAnnotation)
 
 			if err != nil {
 				log.Warnf("Failed to get RHOBS cell from %s config map in %s namespace for cluster '%s': %v\n", cmName, cmNs, monitoredClusterId, err)
@@ -543,21 +543,21 @@ func populateRhobsFetchers(clusterKey string, hiveOcmUrl string, usageToFetcher 
 	return resolveErr
 }
 
-func CreateMetricsAndLogsRhobsFetchers(clusterKey string, hiveOcmUrl string) (*RhobsFetcher, *RhobsFetcher, error) {
+func CreateMetricsAndLogsRhobsFetchers(ctx context.Context, clusterKey string, hiveOcmUrl string) (*RhobsFetcher, *RhobsFetcher, error) {
 	usageToFetcher := map[RhobsFetchUsage]*RhobsFetcher{
 		RhobsFetchForMetrics: nil,
 		RhobsFetchForLogs:    nil,
 	}
-	err := populateRhobsFetchers(clusterKey, hiveOcmUrl, &usageToFetcher)
+	err := populateRhobsFetchers(ctx, clusterKey, hiveOcmUrl, &usageToFetcher)
 
 	return usageToFetcher[RhobsFetchForMetrics], usageToFetcher[RhobsFetchForLogs], err
 }
 
-func CreateRhobsFetcher(clusterKey string, usage RhobsFetchUsage, hiveOcmUrl string) (*RhobsFetcher, error) {
+func CreateRhobsFetcher(ctx context.Context, clusterKey string, usage RhobsFetchUsage, hiveOcmUrl string) (*RhobsFetcher, error) {
 	usageToFetcher := map[RhobsFetchUsage]*RhobsFetcher{
 		usage: nil,
 	}
-	err := populateRhobsFetchers(clusterKey, hiveOcmUrl, &usageToFetcher)
+	err := populateRhobsFetchers(ctx, clusterKey, hiveOcmUrl, &usageToFetcher)
 
 	return usageToFetcher[usage], err
 }
@@ -778,71 +778,101 @@ func (f *RhobsFetcher) getClient() (*rhobsclient.ClientWithResponses, error) {
 	return rhobsClient, nil
 }
 
-type getInstantMetricsResponse struct {
+type jsonInterceptor[T any] struct {
+	raw     []byte // Used by json format - preserve undecoded fields
+	decoded T
+}
+
+func (w *jsonInterceptor[T]) UnmarshalJSON(raw []byte) error {
+	w.raw = raw
+	return json.Unmarshal(raw, &w.decoded)
+}
+
+func (w *jsonInterceptor[T]) MarshalJSON() ([]byte, error) {
+	return w.raw, nil
+}
+
+type getMetricsResponse[metricResult instantMetricResult | rangeMetricResult] struct {
 	Status string `json:"status"`
 	Data   struct {
-		ResultType string                `json:"resultType"`
-		Results    []instantMetricResult `json:"result"`
+		ResultType string                           `json:"resultType"`
+		Results    []*jsonInterceptor[metricResult] `json:"result"`
 	} `json:"data"`
 }
 
 type instantMetricResult struct {
 	Metric map[string]string `json:"metric"`
-	Value  []interface{}     `json:"value"`
-}
-
-type getRangeMetricsResponse struct {
-	Status string `json:"status"`
-	Data   struct {
-		ResultType string              `json:"resultType"`
-		Results    []rangeMetricResult `json:"result"`
-	} `json:"data"`
+	Value  metricData        `json:"value"`
+	// No native histograms support just yet but can be seen using json format
 }
 
 type rangeMetricResult struct {
 	Metric map[string]string `json:"metric"`
-	Values [][]interface{}   `json:"values"`
+	Values []metricData      `json:"values"`
+	// No native histograms support just yet but can be seen using json format
 }
 
-type metricsTableColumn struct {
-	name  string
-	width int
+type metricData []interface{}
+
+func (d *metricData) isValid() bool {
+	return len(*d) == 2
 }
 
-type timestampFormatter func(ts interface{}) string
+func (d *metricData) getHumanReadableTime() string {
+	if len(*d) < 1 {
+		return ""
+	}
 
-func machineReadableTimestampFormatter(ts interface{}) string {
-	return fmt.Sprintf("%.3f", ts)
-}
-
-func humanReadableTimestampFormatter(ts interface{}) string {
-	tsFloat, ok := ts.(float64)
+	tsFloat, ok := (*d)[0].(float64)
 	if !ok {
 		return ""
 	}
 	return time.Unix(int64(tsFloat), 0).String()
 }
 
-func getMetricsTableColumns(results *[]instantMetricResult, tsFormatter timestampFormatter) []metricsTableColumn {
+func (d *metricData) getMachineReadableTime() string {
+	if len(*d) < 1 {
+		return ""
+	}
+
+	return fmt.Sprintf("%.3f", (*d)[0])
+}
+
+func (d *metricData) getValue() string {
+	if len(*d) < 2 {
+		return ""
+	}
+
+	return (*d)[1].(string)
+}
+
+type timestampFormatter func(d *metricData) string
+
+type metricsTableColumn struct {
+	name  string
+	width int
+}
+
+func getMetricsTableColumns(results *[]*jsonInterceptor[instantMetricResult], tsFormatter timestampFormatter) []metricsTableColumn {
 	timeColumn := metricsTableColumn{name: "TIME", width: len("TIME")}
 	valueColumn := metricsTableColumn{name: "VALUE", width: len("VALUE")}
 	labelNameToColumn := make(map[string]*metricsTableColumn)
 	labelNames := []string{} // to maintain order of label columns
 
 	for _, result := range *results {
-		if len(result.Value) < 2 {
+		if !result.decoded.Value.isValid() {
 			continue
 		}
-		time := tsFormatter(result.Value[0])
+		time := tsFormatter(&result.decoded.Value)
 		if len(time) > timeColumn.width {
 			timeColumn.width = len(time)
 		}
-		value := fmt.Sprintf("%s", result.Value[1])
+		value := result.decoded.Value.getValue()
 		if len(value) > valueColumn.width {
 			valueColumn.width = len(value)
 		}
 
-		for labelName, labelValue := range result.Metric {
+		for labelName, labelValue := range result.decoded.Metric {
 			if _, exists := labelNameToColumn[labelName]; !exists {
 				labelNameToColumn[labelName] = &metricsTableColumn{name: labelName, width: len(labelName)}
 				labelNames = append(labelNames, labelName)
@@ -863,10 +893,10 @@ func getMetricsTableColumns(results *[]instantMetricResult, tsFormatter timestam
 	return columns
 }
 
-type metricsPrinter func(*[]instantMetricResult)
+type instantMetricsPrinter func(*[]*jsonInterceptor[instantMetricResult])
 
-func printMetricsAsTable(results *[]instantMetricResult) {
-	columns := getMetricsTableColumns(results, humanReadableTimestampFormatter)
+func printMetricsAsTable(results *[]*jsonInterceptor[instantMetricResult]) {
+	columns := getMetricsTableColumns(results, func(d *metricData) string { return d.getHumanReadableTime() })
 	separatorLine := "+"
 	for _, column := range columns {
 		separatorLine += strings.Repeat("-", column.width+2) + "+"
@@ -884,15 +914,15 @@ func printMetricsAsTable(results *[]instantMetricResult) {
 
 	// Rows
 	for _, result := range *results {
-		if len(result.Value) < 2 {
+		if !result.decoded.Value.isValid() {
 			continue
 		}
-		time := humanReadableTimestampFormatter(result.Value[0])
-		value := fmt.Sprintf("%s", result.Value[1])
+		time := result.decoded.Value.getHumanReadableTime()
+		value := result.decoded.Value.getValue()
 		fmt.Printf("| %*s | %*s |", columns[0].width, time, columns[1].width, value)
 
 		for _, column := range columns[2:] {
-			labelValue := result.Metric[column.name]
+			labelValue := result.decoded.Metric[column.name]
 			fmt.Printf(" %*s |", column.width, labelValue)
 		}
 		fmt.Println()
@@ -900,8 +930,8 @@ func printMetricsAsTable(results *[]instantMetricResult) {
 	fmt.Println(separatorLine)
 }
 
-func printMetricsAsCsv(results *[]instantMetricResult) {
-	columns := getMetricsTableColumns(results, machineReadableTimestampFormatter)
+func printMetricsAsCsv(results *[]*jsonInterceptor[instantMetricResult]) {
+	columns := getMetricsTableColumns(results, func(d *metricData) string { return d.getMachineReadableTime() })
 
 	writer := csv.NewWriter(os.Stdout)
 
@@ -916,15 +946,15 @@ func printMetricsAsCsv(results *[]instantMetricResult) {
 	}
 
 	for _, result := range *results {
-		if len(result.Value) < 2 {
+		if !result.decoded.Value.isValid() {
 			continue
 		}
 		row := []string{
-			machineReadableTimestampFormatter(result.Value[0]),
-			fmt.Sprintf("%s", result.Value[1]),
+			result.decoded.Value.getMachineReadableTime(),
+			result.decoded.Value.getValue(),
 		}
 		for _, column := range columns[2:] {
-			row = append(row, result.Metric[column.name])
+			row = append(row, result.decoded.Metric[column.name])
 		}
 		err := writer.Write(row)
 		if err != nil {
@@ -936,7 +966,7 @@ func printMetricsAsCsv(results *[]instantMetricResult) {
 	writer.Flush()
 }
 
-func printMetricsAsJson[Result instantMetricResult | rangeMetricResult](results *[]Result) {
+func printMetricsAsJson[metricResult instantMetricResult | rangeMetricResult](results *[]*jsonInterceptor[metricResult]) {
 	metricsBytes, err := json.MarshalIndent(results, "", "  ")
 	if err == nil {
 		fmt.Println(string(metricsBytes))
@@ -945,7 +975,7 @@ func printMetricsAsJson[Result instantMetricResult | rangeMetricResult](results 
 	}
 }
 
-func createInstantMetricsPrinter(format MetricsFormat) metricsPrinter {
+func createInstantMetricsPrinter(format MetricsFormat) instantMetricsPrinter {
 	switch format {
 	case MetricsFormatCsv:
 		return printMetricsAsCsv
@@ -972,15 +1002,15 @@ func (result rangeMetricResult) getLabel(labelKey string) (string, bool) {
 	return value, exists
 }
 
-func filterMetricsResults[Result instantOrRangeMetricResult](fetcher *RhobsFetcher, results *[]Result, isPrintingClusterResultsOnly bool) *[]Result {
+func filterMetricsResults[metricResult instantOrRangeMetricResult](fetcher *RhobsFetcher, results *[]*jsonInterceptor[metricResult], isPrintingClusterResultsOnly bool) *[]*jsonInterceptor[metricResult] {
 	areSomeResultsForOtherClusters := false // If true, this means areFilteredResultsValid is also true
-	filteredResults := []Result{}
+	filteredResults := []*jsonInterceptor[metricResult]{}
 	areFilteredResultsValid := len(*results) == 0
 
 	for _, result := range *results {
 		if fetcher.isManagementCluster {
-			mcId, hasMcId := result.getLabel("_mc_id")
-			mcName, hasMcName := result.getLabel("mc_name")
+			mcId, hasMcId := result.decoded.getLabel("_mc_id")
+			mcName, hasMcName := result.decoded.getLabel("mc_name")
 			if !hasMcId && !hasMcName {
 				continue
 			}
@@ -990,7 +1020,7 @@ func filterMetricsResults[Result instantOrRangeMetricResult](fetcher *RhobsFetch
 				continue
 			}
 		} else {
-			extId, hasExtId := result.getLabel("_id")
+			extId, hasExtId := result.decoded.getLabel("_id")
 			if !hasExtId {
 				continue
 			}
@@ -1003,7 +1033,7 @@ func filterMetricsResults[Result instantOrRangeMetricResult](fetcher *RhobsFetch
 		filteredResults = append(filteredResults, result)
 	}
 
-	var returnedResults *[]Result
+	var returnedResults *[]*jsonInterceptor[metricResult]
 
 	if isPrintingClusterResultsOnly && areFilteredResultsValid {
 		returnedResults = &filteredResults
@@ -1023,7 +1053,7 @@ func filterMetricsResults[Result instantOrRangeMetricResult](fetcher *RhobsFetch
 	return returnedResults
 }
 
-func (f *RhobsFetcher) QueryInstantMetrics(ctx context.Context, promExpr string, evalTime time.Time) (*[]instantMetricResult, error) {
+func (f *RhobsFetcher) queryInstantMetrics(ctx context.Context, promExpr string, evalTime time.Time) (*[]*jsonInterceptor[instantMetricResult], error) {
 	client, err := f.getClient()
 	if err != nil {
 		return nil, err
@@ -1051,7 +1081,7 @@ func (f *RhobsFetcher) QueryInstantMetrics(ctx context.Context, promExpr string,
 		return nil, fmt.Errorf("RHOBS query failed with status code: %d - body: %s", response.HTTPResponse.StatusCode, string(response.Body))
 	}
 
-	var formattedResponse getInstantMetricsResponse
+	var formattedResponse getMetricsResponse[instantMetricResult]
 	if err := json.Unmarshal(response.Body, &formattedResponse); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response from RHOBS: %v", err)
 	}
@@ -1063,7 +1093,7 @@ func (f *RhobsFetcher) QueryInstantMetrics(ctx context.Context, promExpr string,
 }
 
 func (f *RhobsFetcher) PrintInstantMetrics(ctx context.Context, promExpr string, evalTime time.Time, format MetricsFormat, isPrintingClusterResultsOnly bool) error {
-	results, err := f.QueryInstantMetrics(ctx, promExpr, evalTime)
+	results, err := f.queryInstantMetrics(ctx, promExpr, evalTime)
 	if err != nil {
 		return err
 	}
@@ -1115,7 +1145,7 @@ func NewMetricsTimeRange(startTime, endTime time.Time, stepDuration time.Duratio
 	}
 }
 
-func NewRawMetricsTimeRange(start, end, step string) MetricsTimeRange {
+func newRawMetricsTimeRange(start, end, step string) MetricsTimeRange {
 	return MetricsTimeRange{
 		rawStartTime:    start,
 		rawEndTime:      end,
@@ -1123,7 +1153,7 @@ func NewRawMetricsTimeRange(start, end, step string) MetricsTimeRange {
 	}
 }
 
-func (f *RhobsFetcher) QueryRangeMetrics(ctx context.Context, promExpr string, timeRange MetricsTimeRange) (*[]rangeMetricResult, error) {
+func (f *RhobsFetcher) queryRangeMetrics(ctx context.Context, promExpr string, timeRange MetricsTimeRange) (*[]*jsonInterceptor[rangeMetricResult], error) {
 	client, err := f.getClient()
 	if err != nil {
 		return nil, err
@@ -1150,7 +1180,7 @@ func (f *RhobsFetcher) QueryRangeMetrics(ctx context.Context, promExpr string, t
 		return nil, fmt.Errorf("RHOBS query failed with status code: %d - body: %s", response.HTTPResponse.StatusCode, string(response.Body))
 	}
 
-	var formattedResponse getRangeMetricsResponse
+	var formattedResponse getMetricsResponse[rangeMetricResult]
 	err = json.Unmarshal(response.Body, &formattedResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response from RHOBS: %v", err)
@@ -1164,7 +1194,7 @@ func (f *RhobsFetcher) QueryRangeMetrics(ctx context.Context, promExpr string, t
 }
 
 func (f *RhobsFetcher) PrintRangeMetrics(ctx context.Context, promExpr string, timeRange MetricsTimeRange, format MetricsFormat, isPrintingClusterResultsOnly bool) error {
-	results, err := f.QueryRangeMetrics(ctx, promExpr, timeRange)
+	results, err := f.queryRangeMetrics(ctx, promExpr, timeRange)
 	if err != nil {
 		return err
 	}
@@ -1176,13 +1206,16 @@ func (f *RhobsFetcher) PrintRangeMetrics(ctx context.Context, promExpr string, t
 		return nil
 	}
 
-	instantResults := []instantMetricResult{}
+	instantResults := []*jsonInterceptor[instantMetricResult]{}
 	for k := range *results {
 		result := &(*results)[k]
-		for l := range result.Values {
-			instantResults = append(instantResults, instantMetricResult{
-				Metric: result.Metric,
-				Value:  result.Values[l],
+		for l := range (*result).decoded.Values {
+			instantResults = append(instantResults, &jsonInterceptor[instantMetricResult]{
+				// 'raw' field not defined - that's ok we are not gonna encode json
+				decoded: instantMetricResult{
+					Metric: (*result).decoded.Metric,
+					Value:  (*result).decoded.Values[l],
+				},
 			})
 		}
 	}
@@ -1360,7 +1393,7 @@ func createLogsPrinter(format LogsFormat, isPrintingTimeValue bool, fieldNames [
 
 type logHandler func(result *logResult)
 
-func (f *RhobsFetcher) QueryLogs(ctx context.Context, lokiExpr string, startTime, endTime time.Time, logsCount int, isGoingForward bool, logHandler logHandler) error {
+func (f *RhobsFetcher) queryLogs(ctx context.Context, lokiExpr string, startTime, endTime time.Time, logsCount int, isGoingForward bool, logHandler logHandler) error {
 	client, err := f.getClient()
 	if err != nil {
 		return err
@@ -1483,12 +1516,12 @@ func (f *RhobsFetcher) QueryLogs(ctx context.Context, lokiExpr string, startTime
 	return nil
 }
 
-func (f *RhobsFetcher) PrintLogs(lokiExpr string, startTime, endTime time.Time, logsCount int, isGoingForward bool, format LogsFormat, isPrintingTimeValue bool, fieldNames []string) error {
+func (f *RhobsFetcher) PrintLogs(ctx context.Context, lokiExpr string, startTime, endTime time.Time, logsCount int, isGoingForward bool, format LogsFormat, isPrintingTimeValue bool, fieldNames []string) error {
 	logsPrinter := createLogsPrinter(format, isPrintingTimeValue, fieldNames)
 	logsPrinter.PrintHeader()
 	defer logsPrinter.PrintTrailer()
 
-	err := f.QueryLogs(context.TODO(), lokiExpr, startTime, endTime, logsCount, isGoingForward, func(result *logResult) {
+	err := f.queryLogs(ctx, lokiExpr, startTime, endTime, logsCount, isGoingForward, func(result *logResult) {
 		logsPrinter.PrintResult(result)
 	})
 	if err != nil {

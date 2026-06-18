@@ -78,7 +78,7 @@ func newCmdMetrics() *cobra.Command {
 
 			cmd.SilenceUsage = true
 
-			rhobsFetcher, err := CreateRhobsFetcher(commonOptions.clusterId, RhobsFetchForMetrics, commonOptions.hiveOcmUrl)
+			rhobsFetcher, err := CreateRhobsFetcher(cmd.Context(), commonOptions.clusterId, RhobsFetchForMetrics, commonOptions.hiveOcmUrl)
 			if err != nil {
 				return err
 			}
@@ -127,7 +127,8 @@ func newCmdMetrics() *cobra.Command {
 	cmd.MarkFlagsMutuallyExclusive("time", "start-time", "since")
 	cmd.MarkFlagsMutuallyExclusive("time", "end-time", "since")
 
-	cmd.Flags().StringVarP(&outputFormatStr, "output", "o", string(MetricsFormatTable), `Format of the output - allowed values: "table", "csv" or "json" - exclusive with --url`)
+	cmd.Flags().StringVarP(&outputFormatStr, "output", "o", string(MetricsFormatTable), `Format of the output - allowed values: "table", "csv" or "json" - `+
+		`"json" prints raw API data and as such is forward compatible - exclusive with --url`)
 	cmd.MarkFlagsMutuallyExclusive("output", "url")
 	cmd.Flags().BoolVarP(&isPrintingClusterResultsOnly, "filter", "f", false, "Only keep the results matching the given cluster - "+
 		"only effective if some of those results have a _id, _mc_id or mc_name label - exclusive with --url")

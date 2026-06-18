@@ -214,7 +214,7 @@ func newCmdLogs() *cobra.Command {
 
 			cmd.SilenceUsage = true
 
-			rhobsFetcher, err := CreateRhobsFetcher(commonOptions.clusterId, RhobsFetchForLogs, commonOptions.hiveOcmUrl)
+			rhobsFetcher, err := CreateRhobsFetcher(cmd.Context(), commonOptions.clusterId, RhobsFetchForLogs, commonOptions.hiveOcmUrl)
 			if err != nil {
 				return err
 			}
@@ -240,7 +240,7 @@ func newCmdLogs() *cobra.Command {
 				if isFollowing {
 					err = rhobsFetcher.StreamLogs(lokiExpr, outputFormat, isPrintingTimestamp, printedFields)
 				} else {
-					err = rhobsFetcher.PrintLogs(lokiExpr, startTime, endTime, logsCount, isGoingForward, outputFormat, isPrintingTimestamp, printedFields)
+					err = rhobsFetcher.PrintLogs(cmd.Context(), lokiExpr, startTime, endTime, logsCount, isGoingForward, outputFormat, isPrintingTimestamp, printedFields)
 				}
 				if err != nil {
 					return fmt.Errorf("failed to print logs: %v", err)

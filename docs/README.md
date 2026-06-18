@@ -4311,7 +4311,7 @@ osdctl rhobs metrics [PromQL-expression] [flags]
   -f, --filter                Only keep the results matching the given cluster - only effective if some of those results have a _id, _mc_id or mc_name label - exclusive with --url
   -h, --help                  help for metrics
       --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -o, --output string         Format of the output - allowed values: "table", "csv" or "json" - exclusive with --url (default "table")
+  -o, --output string         Format of the output - allowed values: "table", "csv" or "json" - "json" prints raw API data and as such is forward compatible - exclusive with --url (default "table")
       --since duration        Only return values newer than a relative duration (e.g. 1h, 30m) - enable time range mode - exclusive with --time, --start-time & --end-time
   -S, --skip-version-check    skip checking to see if this is the most recent release
       --start-time time       Start time at which the PromQL expression must be evaluated - enable time range mode - exclusive with --time (default to 30 minutes ago)

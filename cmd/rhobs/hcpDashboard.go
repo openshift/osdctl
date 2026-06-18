@@ -66,7 +66,7 @@ func newCmdHcpDashboard() *cobra.Command {
 					logsRhobsFetcher = metricsRhobsFetcher
 				}
 			} else {
-				metricsRhobsFetcher, logsRhobsFetcher, err = CreateMetricsAndLogsRhobsFetchers(commonOptions.clusterId, commonOptions.hiveOcmUrl)
+				metricsRhobsFetcher, logsRhobsFetcher, err = CreateMetricsAndLogsRhobsFetchers(cmd.Context(), commonOptions.clusterId, commonOptions.hiveOcmUrl)
 				if err != nil {
 					return err
 				}
