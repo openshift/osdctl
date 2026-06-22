@@ -1,10 +1,8 @@
 package cluster
 
 import (
-	"fmt"
-	"github.com/openshift/osdctl/cmd/cluster/cad"
-
 	"github.com/openshift/osdctl/cmd/cluster/access"
+	"github.com/openshift/osdctl/cmd/cluster/cad"
 	"github.com/openshift/osdctl/cmd/cluster/reports"
 	"github.com/openshift/osdctl/cmd/cluster/resize"
 	"github.com/openshift/osdctl/cmd/cluster/sre_operators"
@@ -55,11 +53,4 @@ func NewCmdCluster(streams genericclioptions.IOStreams, client *k8s.LazyClient, 
 	clusterCmd.AddCommand(newCmdDiff())
 	clusterCmd.AddCommand(newCmdIMDSv2())
 	return clusterCmd
-}
-
-func help(cmd *cobra.Command, _ []string) {
-	err := cmd.Help()
-	if err != nil {
-		fmt.Println("Error while calling cmd.Help(): ", err.Error())
-	}
 }
