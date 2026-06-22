@@ -512,6 +512,10 @@ func (o *imdsv2Options) updateCPMSForIMDSv2(ctx context.Context) (bool, error) {
 	}
 
 	// Parse the AWS provider spec from CPMS template
+	if cpms.Spec.Template.OpenShiftMachineV1Beta1Machine.Spec.ProviderSpec.Value == nil {
+		return false, fmt.Errorf("CPMS ProviderSpec.Value is nil")
+	}
+
 	awsSpec := &machinev1beta1.AWSMachineProviderConfig{}
 	if err := json.Unmarshal(cpms.Spec.Template.OpenShiftMachineV1Beta1Machine.Spec.ProviderSpec.Value.Raw, awsSpec); err != nil {
 		return false, fmt.Errorf("failed to unmarshal CPMS provider spec: %w", err)

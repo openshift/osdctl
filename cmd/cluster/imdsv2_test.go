@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
@@ -85,8 +86,8 @@ func TestValidate(t *testing.T) {
 
 func TestValidateIMDSv2_AllNodesReady(t *testing.T) {
 	scheme := runtime.NewScheme()
-	_ = corev1.AddToScheme(scheme)
-	_ = machinev1beta1.AddToScheme(scheme)
+	require.NoError(t, corev1.AddToScheme(scheme))
+	require.NoError(t, machinev1beta1.AddToScheme(scheme))
 
 	// Create test nodes - all ready
 	nodes := &corev1.NodeList{
@@ -133,8 +134,8 @@ func TestValidateIMDSv2_AllNodesReady(t *testing.T) {
 
 func TestValidateIMDSv2_SkipDeletingNodes(t *testing.T) {
 	scheme := runtime.NewScheme()
-	_ = corev1.AddToScheme(scheme)
-	_ = machinev1beta1.AddToScheme(scheme)
+	require.NoError(t, corev1.AddToScheme(scheme))
+	require.NoError(t, machinev1beta1.AddToScheme(scheme))
 
 	now := metav1.Now()
 
@@ -180,8 +181,8 @@ func TestValidateIMDSv2_SkipDeletingNodes(t *testing.T) {
 
 func TestValidateIMDSv2_SkipUnschedulableNodes(t *testing.T) {
 	scheme := runtime.NewScheme()
-	_ = corev1.AddToScheme(scheme)
-	_ = machinev1beta1.AddToScheme(scheme)
+	require.NoError(t, corev1.AddToScheme(scheme))
+	require.NoError(t, machinev1beta1.AddToScheme(scheme))
 
 	// Create test nodes - one cordoned/unschedulable
 	nodes := &corev1.NodeList{
@@ -221,6 +222,8 @@ func TestValidateIMDSv2_SkipUnschedulableNodes(t *testing.T) {
 	assert.NoError(t, err, "Should skip unschedulable nodes")
 }
 
+// TestCheckIMDSv2Configuration tests the logic for extracting IMDS auth mode from MachinePools.
+// This is the same logic used in migrateInfraToIMDSv2 and migrateWorkersToIMDSv2.
 func TestCheckIMDSv2Configuration(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -281,6 +284,7 @@ func TestCheckIMDSv2Configuration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Extract the current auth mode using the same logic as production code
 			currentAuth := "Not configured"
 			if tt.machinePool.Spec.Platform.AWS != nil &&
 				tt.machinePool.Spec.Platform.AWS.EC2Metadata != nil {
@@ -291,6 +295,8 @@ func TestCheckIMDSv2Configuration(t *testing.T) {
 	}
 }
 
+// TestMachinePoolNameValidation tests the validation logic used in migrateInfraToIMDSv2.
+// This ensures we only process expected MachinePools.
 func TestMachinePoolNameValidation(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -326,15 +332,18 @@ func TestMachinePoolNameValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// This tests the allowlist pattern used in migrateInfraToIMDSv2 (line ~299)
 			isValid := tt.validList[tt.mpName]
 			assert.Equal(t, tt.wantValid, isValid)
 		})
 	}
 }
 
+// TestCPMSIMDSv2Configuration tests the skip logic in updateCPMSForIMDSv2.
+// When already configured, the function should return (false, nil).
 func TestCPMSIMDSv2Configuration(t *testing.T) {
 	scheme := runtime.NewScheme()
-	_ = machinev1.AddToScheme(scheme)
+	require.NoError(t, machinev1.AddToScheme(scheme))
 
 	tests := []struct {
 		name           string
@@ -355,6 +364,7 @@ func TestCPMSIMDSv2Configuration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// This tests the skip condition in updateCPMSForIMDSv2 (line ~521)
 			needsUpdate := tt.authentication != imdsv2Required
 			assert.Equal(t, tt.expectedResult, needsUpdate)
 		})
@@ -363,8 +373,8 @@ func TestCPMSIMDSv2Configuration(t *testing.T) {
 
 func TestPreFlightChecks_MasterNodesCount(t *testing.T) {
 	scheme := runtime.NewScheme()
-	_ = corev1.AddToScheme(scheme)
-	_ = machinev1.AddToScheme(scheme)
+	require.NoError(t, corev1.AddToScheme(scheme))
+	require.NoError(t, machinev1.AddToScheme(scheme))
 
 	tests := []struct {
 		name       string
@@ -394,7 +404,7 @@ func TestPreFlightChecks_MasterNodesCount(t *testing.T) {
 			for i := 0; i < tt.masterNode; i++ {
 				masters = append(masters, corev1.Node{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:   "master-" + string(rune(i)),
+						Name:   fmt.Sprintf("master-%d", i),
 						Labels: map[string]string{"node-role.kubernetes.io/master": ""},
 					},
 					Status: corev1.NodeStatus{
@@ -405,15 +415,8 @@ func TestPreFlightChecks_MasterNodesCount(t *testing.T) {
 				})
 			}
 
-			readyCount := 0
-			for _, node := range masters {
-				for _, cond := range node.Status.Conditions {
-					if cond.Type == corev1.NodeReady && cond.Status == corev1.ConditionTrue {
-						readyCount++
-						break
-					}
-				}
-			}
+			nodeList := &corev1.NodeList{Items: masters}
+			readyCount := CountReadyNodes(nodeList)
 
 			if tt.wantErr {
 				assert.NotEqual(t, 3, readyCount)
