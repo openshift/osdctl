@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
@@ -431,12 +430,7 @@ func (o *imdsv2Options) migrateWorkersToIMDSv2(ctx context.Context) (bool, error
 	}
 
 	// Display worker MachinePools that need IMDSv2
-	fmt.Println("\nWorker MachinePools requiring IMDSv2 configuration:")
-	fmt.Printf("%-20s %-10s %-15s %-20s\n", "NAME", "REPLICAS", "INSTANCE TYPE", "CURRENT IMDS")
-	fmt.Println(strings.Repeat("-", 70))
-	for _, mp := range workersNeedingUpdate {
-		fmt.Printf("%-20s %-10d %-15s %-20s\n", mp.name, mp.replicas, mp.instanceType, mp.currentIMDS)
-	}
+	fmt.Printf("\n%d worker MachinePool(s) requiring IMDSv2 configuration\n", len(workersNeedingUpdate))
 	fmt.Println()
 
 	// Ask for confirmation
@@ -451,8 +445,10 @@ func (o *imdsv2Options) migrateWorkersToIMDSv2(ctx context.Context) (bool, error
 
 	// Patch each worker MachinePool
 	anyPatched := false
+	patchedCount := 0
 	for _, mpInfo := range workersNeedingUpdate {
-		fmt.Printf("\nPatching machinepool/%s...\n", mpInfo.name)
+		patchedCount++
+		fmt.Printf("\nPatching worker MachinePool %d of %d...\n", patchedCount, len(workersNeedingUpdate))
 
 		// Get current MachinePool
 		mp := &hivev1.MachinePool{}
@@ -482,7 +478,7 @@ func (o *imdsv2Options) migrateWorkersToIMDSv2(ctx context.Context) (bool, error
 			return false, fmt.Errorf("failed to patch MachinePool %s: %w", mpInfo.name, err)
 		}
 
-		fmt.Printf("  ✓ Patched machinepool/%s\n", mpInfo.name)
+		fmt.Printf("  ✓ MachinePool patched successfully\n")
 
 		// Remove the override annotation now that the patch is applied
 		// Re-fetch to get latest version before removing annotation
@@ -497,7 +493,7 @@ func (o *imdsv2Options) migrateWorkersToIMDSv2(ctx context.Context) (bool, error
 			return false, fmt.Errorf("failed to remove override annotation from MachinePool %s: %w", mpInfo.name, err)
 		}
 
-		fmt.Printf("  ✓ Removed override annotation from machinepool/%s\n", mpInfo.name)
+		fmt.Printf("  ✓ Override annotation removed\n")
 		anyPatched = true
 	}
 
@@ -672,7 +668,7 @@ func (o *imdsv2Options) validateIMDSv2(ctx context.Context) error {
 
 		awsSpec := &machinev1beta1.AWSMachineProviderConfig{}
 		if err := json.Unmarshal(machine.Spec.ProviderSpec.Value.Raw, awsSpec); err != nil {
-			log.Printf("Warning: failed to unmarshal provider spec for machine %s: %v", machine.Name, err)
+			log.Printf("Warning: failed to unmarshal provider spec for a machine: %v", err)
 			continue
 		}
 
