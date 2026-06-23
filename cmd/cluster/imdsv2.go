@@ -159,9 +159,7 @@ func (o *imdsv2Options) run(ctx context.Context) error {
 		return err
 	}
 
-	fmt.Printf("Cluster: %s (%s)\n", o.cluster.Name(), o.clusterID)
-	fmt.Printf("Node Roles: %s\n", o.nodeRoles)
-	fmt.Printf("Reason: %s\n\n", o.reason)
+	fmt.Printf("Node Roles: %s\n\n", o.nodeRoles)
 
 	// Verify cluster health before making changes
 	if err := o.preFlightChecks(ctx); err != nil {
@@ -612,10 +610,10 @@ func (o *imdsv2Options) validateIMDSv2(ctx context.Context) error {
 		}
 
 		if len(deletingNodes) > 0 {
-			fmt.Printf("  ⏳ Nodes being deleted: %s\n", strings.Join(deletingNodes, ", "))
+			fmt.Printf("  ⏳ %d node(s) being deleted\n", len(deletingNodes))
 		}
 		if len(unschedulableNodes) > 0 {
-			fmt.Printf("  ⏳ Nodes being drained: %s\n", strings.Join(unschedulableNodes, ", "))
+			fmt.Printf("  ⏳ %d node(s) being drained\n", len(unschedulableNodes))
 		}
 
 		// If all active nodes are ready, we're good
@@ -627,8 +625,8 @@ func (o *imdsv2Options) validateIMDSv2(ctx context.Context) error {
 
 		// If we have NotReady nodes and haven't exhausted retries, wait and retry
 		if attempt < maxRetries {
-			fmt.Printf("  ⏳ Waiting for %d nodes to become Ready (attempt %d/%d): %s\n",
-				len(notReadyNodes), attempt, maxRetries, strings.Join(notReadyNodes, ", "))
+			fmt.Printf("  ⏳ Waiting for %d node(s) to become Ready (attempt %d/%d)\n",
+				len(notReadyNodes), attempt, maxRetries)
 
 			// Context-aware sleep to handle cancellation (SIGINT, timeout, etc.)
 			select {
@@ -641,7 +639,7 @@ func (o *imdsv2Options) validateIMDSv2(ctx context.Context) error {
 		}
 
 		// Final attempt failed
-		return fmt.Errorf("nodes not Ready after %d attempts: %s", maxRetries, strings.Join(notReadyNodes, ", "))
+		return fmt.Errorf("%d node(s) not Ready after %d attempts", len(notReadyNodes), maxRetries)
 	}
 
 	// Verify all machines have IMDSv2 configured in their spec
@@ -669,7 +667,7 @@ func (o *imdsv2Options) validateIMDSv2(ctx context.Context) error {
 	}
 
 	if len(nonIMDSv2Machines) > 0 {
-		fmt.Printf("  ⚠ Machines not configured for IMDSv2: %s\n", strings.Join(nonIMDSv2Machines, ", "))
+		fmt.Printf("  ⚠ %d machine(s) not configured for IMDSv2\n", len(nonIMDSv2Machines))
 		fmt.Println("  (This is expected for worker nodes - customer must replace them)")
 	} else {
 		fmt.Printf("  ✓ All %d machines configured for IMDSv2\n", len(machines.Items))

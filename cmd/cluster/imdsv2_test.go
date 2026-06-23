@@ -78,7 +78,7 @@ func TestValidate(t *testing.T) {
 					assert.Contains(t, err.Error(), tt.errMsg)
 				}
 			} else {
-				assert.NoError(t, err)
+				assert.NoError(t, err, "validate() should not return error for valid input")
 			}
 		})
 	}
@@ -129,7 +129,7 @@ func TestValidateIMDSv2_AllNodesReady(t *testing.T) {
 	}
 
 	err := ops.validateIMDSv2(context.Background())
-	assert.NoError(t, err)
+	assert.NoError(t, err, "validateIMDSv2 should succeed when all nodes are ready")
 }
 
 func TestValidateIMDSv2_SkipDeletingNodes(t *testing.T) {
@@ -570,7 +570,7 @@ func TestValidateAWSClassicCluster(t *testing.T) {
 					assert.Contains(t, err.Error(), tt.errSubstr)
 				}
 			} else {
-				assert.NoError(t, err)
+				assert.NoError(t, err, "ValidateAWSClassicCluster should not return error for valid AWS Classic cluster")
 			}
 		})
 	}
