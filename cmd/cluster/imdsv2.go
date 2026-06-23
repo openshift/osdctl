@@ -453,7 +453,7 @@ func (o *imdsv2Options) migrateWorkersToIMDSv2(ctx context.Context) (bool, error
 		// Get current MachinePool
 		mp := &hivev1.MachinePool{}
 		if err := o.hiveClient.Get(ctx, client.ObjectKey{Namespace: hiveNamespace, Name: mpInfo.name}, mp); err != nil {
-			return false, fmt.Errorf("failed to get MachinePool %s: %w", mpInfo.name, err)
+			return false, fmt.Errorf("failed to get worker MachinePool %d of %d: %w", patchedCount, len(workersNeedingUpdate), err)
 		}
 
 		patch := client.MergeFrom(mp.DeepCopy())
@@ -475,7 +475,7 @@ func (o *imdsv2Options) migrateWorkersToIMDSv2(ctx context.Context) (bool, error
 		mp.Spec.Platform.AWS.EC2Metadata.Authentication = imdsv2Required
 
 		if err := o.hiveAdminClient.Patch(ctx, mp, patch); err != nil {
-			return false, fmt.Errorf("failed to patch MachinePool %s: %w", mpInfo.name, err)
+			return false, fmt.Errorf("failed to patch worker MachinePool %d of %d: %w", patchedCount, len(workersNeedingUpdate), err)
 		}
 
 		fmt.Printf("  ✓ MachinePool patched successfully\n")
@@ -483,14 +483,14 @@ func (o *imdsv2Options) migrateWorkersToIMDSv2(ctx context.Context) (bool, error
 		// Remove the override annotation now that the patch is applied
 		// Re-fetch to get latest version before removing annotation
 		if err := o.hiveClient.Get(ctx, client.ObjectKey{Namespace: hiveNamespace, Name: mpInfo.name}, mp); err != nil {
-			return false, fmt.Errorf("failed to re-fetch MachinePool %s: %w", mpInfo.name, err)
+			return false, fmt.Errorf("failed to re-fetch worker MachinePool %d of %d: %w", patchedCount, len(workersNeedingUpdate), err)
 		}
 
 		patch = client.MergeFrom(mp.DeepCopy())
 		delete(mp.Annotations, hiveOverrideAnnotation)
 
 		if err := o.hiveAdminClient.Patch(ctx, mp, patch); err != nil {
-			return false, fmt.Errorf("failed to remove override annotation from MachinePool %s: %w", mpInfo.name, err)
+			return false, fmt.Errorf("failed to remove override annotation from worker MachinePool %d of %d: %w", patchedCount, len(workersNeedingUpdate), err)
 		}
 
 		fmt.Printf("  ✓ Override annotation removed\n")
