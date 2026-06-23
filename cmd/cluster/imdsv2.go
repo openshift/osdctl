@@ -294,7 +294,7 @@ func (o *imdsv2Options) migrateInfraToIMDSv2(ctx context.Context) (bool, error) 
 	// Validate MachinePool name (Comment #5: MachinePool matching safety)
 	validMpNames := map[string]bool{"infra": true}
 	if !validMpNames[infraMp.Spec.Name] {
-		return false, fmt.Errorf("unexpected MachinePool name: %s (expected: infra)", infraMp.Spec.Name)
+		return false, fmt.Errorf("unexpected infra MachinePool configuration (expected name: infra)")
 	}
 
 	// Check if already configured for IMDSv2
