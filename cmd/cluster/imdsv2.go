@@ -483,6 +483,21 @@ func (o *imdsv2Options) migrateWorkersToIMDSv2(ctx context.Context) (bool, error
 		}
 
 		fmt.Printf("  ✓ Patched machinepool/%s\n", mpInfo.name)
+
+		// Remove the override annotation now that the patch is applied
+		// Re-fetch to get latest version before removing annotation
+		if err := o.hiveClient.Get(ctx, client.ObjectKey{Namespace: hiveNamespace, Name: mpInfo.name}, mp); err != nil {
+			return false, fmt.Errorf("failed to re-fetch MachinePool %s: %w", mpInfo.name, err)
+		}
+
+		patch = client.MergeFrom(mp.DeepCopy())
+		delete(mp.Annotations, hiveOverrideAnnotation)
+
+		if err := o.hiveAdminClient.Patch(ctx, mp, patch); err != nil {
+			return false, fmt.Errorf("failed to remove override annotation from MachinePool %s: %w", mpInfo.name, err)
+		}
+
+		fmt.Printf("  ✓ Removed override annotation from machinepool/%s\n", mpInfo.name)
 		anyPatched = true
 	}
 
