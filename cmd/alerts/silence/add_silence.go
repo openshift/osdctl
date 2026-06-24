@@ -95,6 +95,11 @@ func AddSilence(cmd *addSilenceCmd) {
 func AddAllSilence(clusterID, duration, comment, username, clustername string, kubeconfig *rest.Config, clientset *kubernetes.Clientset) error {
 	alerts := fetchAllAlerts(kubeconfig, clientset)
 	for _, alert := range alerts {
+		if alert.Labels.Alertname == "Watchdog" {
+			fmt.Println("Skipping Watchdog alert")
+			continue
+		}
+
 		addCmd := []string{
 			"amtool",
 			"silence",
