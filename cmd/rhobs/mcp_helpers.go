@@ -36,7 +36,7 @@ func quickVaultCheck() error {
 	return nil
 }
 
-func getCachedFetcher(clusterId string, usage RhobsFetchUsage) (*RhobsFetcher, error) {
+func getCachedFetcher(ctx context.Context, clusterId string, usage RhobsFetchUsage) (*RhobsFetcher, error) {
 	key := fmt.Sprintf("%s:%s", clusterId, usage)
 	if cached, ok := fetcherCache.Load(key); ok {
 		return cached.(*RhobsFetcher), nil
@@ -49,7 +49,7 @@ func getCachedFetcher(clusterId string, usage RhobsFetchUsage) (*RhobsFetcher, e
 		if err := quickVaultCheck(); err != nil {
 			return nil, err
 		}
-		fetcher, err := CreateRhobsFetcher(clusterId, usage, commonOptions.hiveOcmUrl)
+		fetcher, err := CreateRhobsFetcher(ctx, clusterId, usage, commonOptions.hiveOcmUrl)
 		if err != nil {
 			return nil, err
 		}

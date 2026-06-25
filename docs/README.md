@@ -137,6 +137,14 @@
   - `rhobs` - Promote RHOBS configuration to production
   - `saas` - Utilities to promote SaaS services/operators
 - `rhobs` - RHOBS.next related utilities
+  - `alerts` - List or silence RHOBS alerts
+    - `get` - List alerts from RHOBS for a given cluster
+    - `prom-rules` - The Prometheus rules (alerts & recording rules) defined on the RHOBS cell
+      - `get` - List the Prometheus rules defined on the RHOBS cell
+    - `silences` - The alerts silences defined at RHOBS cell level
+      - `create selector` - Create a silence at RHOBS cell level
+      - `delete [silence-id]` - Expire the given silence from the RHOBS cell
+      - `get` - List RHOBS cell silences
   - `cell` - Get the RHOBS cell for a given cluster
   - `hcp-dashboard [dashboard-name]` - Get the HCP dashboard URL for a given HCP cluster
   - `logs [pod]` - Fetch logs from RHOBS for a given cluster
@@ -4184,6 +4192,149 @@ osdctl rhobs [flags]
   -S, --skip-version-check    skip checking to see if this is the most recent release
 ```
 
+### osdctl rhobs alerts
+
+List or silence RHOBS alerts
+
+```
+osdctl rhobs alerts [flags]
+```
+
+#### Flags
+
+```
+  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                  help for alerts
+      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check    skip checking to see if this is the most recent release
+```
+
+### osdctl rhobs alerts get
+
+List alerts from RHOBS for a given cluster
+
+```
+osdctl rhobs alerts get [flags]
+```
+
+#### Flags
+
+```
+  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
+  -f, --filter                Only keep the results matching the given cluster - only effective if some of those results have a _id, _mc_id or mc_name label
+  -h, --help                  help for get
+      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -o, --output string         Format of the output - allowed values: "text", "csv" or "json" (default "text")
+  -S, --skip-version-check    skip checking to see if this is the most recent release
+```
+
+### osdctl rhobs alerts prom-rules
+
+The Prometheus rules (alerts & recording rules) defined on the RHOBS cell
+
+```
+osdctl rhobs alerts prom-rules [flags]
+```
+
+#### Flags
+
+```
+  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                  help for prom-rules
+      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check    skip checking to see if this is the most recent release
+```
+
+### osdctl rhobs alerts prom-rules get
+
+List the Prometheus rules defined on the RHOBS cell
+
+```
+osdctl rhobs alerts prom-rules get [flags]
+```
+
+#### Flags
+
+```
+  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                  help for get
+      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check    skip checking to see if this is the most recent release
+```
+
+### osdctl rhobs alerts silences
+
+The alerts silences defined at RHOBS cell level
+
+```
+osdctl rhobs alerts silences [flags]
+```
+
+#### Flags
+
+```
+  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                  help for silences
+      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check    skip checking to see if this is the most recent release
+```
+
+### osdctl rhobs alerts silences create
+
+Create a silence at RHOBS cell level. The mandatory selector argument filters the alerts on which the silence will apply; Use ==, !=, =~ and !~ as an operator between a label key and its value; for instance: key1=value1,key2!=value2; Use a comma to separate the constraints if more than one or repeat this argument: key1==value1 key2!=value2; Special characters (like the ones used in operators) need to be back-slashed if present in a key or, more likely, in a value; same applies to the backslash character itself.
+
+```
+osdctl rhobs alerts silences create selector [flags]
+```
+
+#### Flags
+
+```
+      --author string           Name of the person creating the silence (default to the OS user name)
+  -C, --cluster-id string       Name or Internal ID of the cluster (defaults to current cluster context)
+      --comment string          Some free text giving some context around why the silence is created - you can give JIRA or other references there
+      --end-time time           Time at which the silence will expire - Mandatory unless --expire-after is set
+      --expire-after duration   Duration (e.g. 24h, 30m) after which the silence will expire - exclusive with --start-time & --end-time
+  -h, --help                    help for create
+      --hive-ocm-url string     OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check      skip checking to see if this is the most recent release
+      --start-time time         Time at which the silence will start to take effect (defaults to now)
+```
+
+### osdctl rhobs alerts silences delete
+
+Expire the given silence from the RHOBS cell
+
+```
+osdctl rhobs alerts silences delete [silence-id] [flags]
+```
+
+#### Flags
+
+```
+  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                  help for delete
+      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check    skip checking to see if this is the most recent release
+```
+
+### osdctl rhobs alerts silences get
+
+List RHOBS cell silences
+
+```
+osdctl rhobs alerts silences get [flags]
+```
+
+#### Flags
+
+```
+  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                  help for get
+      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check    skip checking to see if this is the most recent release
+```
+
 ### osdctl rhobs cell
 
 Get the RHOBS cell for a given cluster
@@ -4347,7 +4498,7 @@ osdctl rhobs metrics [PromQL-expression] [flags]
   -f, --filter                Only keep the results matching the given cluster - only effective if some of those results have a _id, _mc_id or mc_name label - exclusive with --url
   -h, --help                  help for metrics
       --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -o, --output string         Format of the output - allowed values: "table", "csv" or "json" - exclusive with --url (default "table")
+  -o, --output string         Format of the output - allowed values: "table", "csv" or "json" - "json" prints raw API data and as such is forward compatible - exclusive with --url (default "table")
       --since duration        Only return values newer than a relative duration (e.g. 1h, 30m) - enable time range mode - exclusive with --time, --start-time & --end-time
   -S, --skip-version-check    skip checking to see if this is the most recent release
       --start-time time       Start time at which the PromQL expression must be evaluated - enable time range mode - exclusive with --time (default to 30 minutes ago)

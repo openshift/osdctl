@@ -9,6 +9,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+type mcpLogEntry struct {
+	Timestamp time.Time         `json:"timestamp"`
+	Message   string            `json:"message"`
+	Stream    map[string]string `json:"stream,omitempty"`
+}
+
 var readOnlyAnnotations = &mcp.ToolAnnotations{
 	ReadOnlyHint:    true,
 	DestructiveHint: boolPtr(false),
@@ -97,7 +103,8 @@ func registerMcpTools(s *mcp.Server) {
 				"cell":        {"type": "string", "description": "RHOBS cell URL (regional Thanos/Loki endpoint)"},
 				"cluster_id":  {"type": "string", "description": "Internal cluster ID"},
 				"environment": {"type": "string", "description": "OCM environment (production, stage, integration)"},
-				"alerts":      {"type": "array", "description": "Firing alerts with labels and annotations"}
+				"alerts":      {"type": "array", "description": "Firing alerts with labels and annotations"},
+				"count":       {"type": "integer", "description": "Number of alerts returned"}
 			}
 		}`),
 	}, handleAlerts)
@@ -148,7 +155,7 @@ func handleMetrics(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallTool
 		return mcpError("start and end must be provided together for range queries")
 	}
 
-	fetcher, err := getCachedFetcher(clusterId, RhobsFetchForMetrics)
+	fetcher, err := getCachedFetcher(ctx, clusterId, RhobsFetchForMetrics)
 	if err != nil {
 		return mcpError("Failed to initialize RHOBS fetcher: %v", err)
 	}
@@ -160,7 +167,7 @@ func handleMetrics(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallTool
 	}
 
 	if start != "" && end != "" {
-		results, err := fetcher.QueryRangeMetrics(ctx, query, NewRawMetricsTimeRange(start, end, step))
+		results, err := fetcher.queryRangeMetrics(ctx, query, newRawMetricsTimeRange(start, end, step))
 		if err != nil {
 			return mcpError("Range metrics query failed: %v", err)
 		}
@@ -170,7 +177,7 @@ func handleMetrics(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallTool
 		return mcpResultJSON(cellInfo)
 	}
 
-	results, err := fetcher.QueryInstantMetrics(ctx, query, time.Time{})
+	results, err := fetcher.queryInstantMetrics(ctx, query, time.Time{})
 	if err != nil {
 		return mcpError("Metrics query failed: %v", err)
 	}
@@ -211,7 +218,7 @@ func handleLogs(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolRes
 		return mcpError("'since' must be greater than 0")
 	}
 
-	fetcher, err := getCachedFetcher(clusterId, RhobsFetchForLogs)
+	fetcher, err := getCachedFetcher(ctx, clusterId, RhobsFetchForLogs)
 	if err != nil {
 		return mcpError("Failed to initialize RHOBS fetcher: %v", err)
 	}
@@ -231,7 +238,7 @@ func handleLogs(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolRes
 	startTime := now.Add(-duration)
 
 	entries := []mcpLogEntry{}
-	err = fetcher.QueryLogs(ctx, lokiExpr, startTime, now, limit, false, func(result *logResult) {
+	err = fetcher.queryLogs(ctx, lokiExpr, startTime, now, limit, false, func(result *logResult) {
 		entry := mcpLogEntry{
 			Timestamp: result.getTime(),
 			Message:   result.getMessage(),
@@ -263,28 +270,21 @@ func handleAlerts(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolR
 		return mcpError("cluster_id is required")
 	}
 
-	fetcher, err := getCachedFetcher(clusterId, RhobsFetchForMetrics)
+	fetcher, err := getCachedFetcher(ctx, clusterId, RhobsFetchForMetrics)
 	if err != nil {
 		return mcpError("Failed to initialize RHOBS fetcher: %v", err)
 	}
 
-	rawResult, err := fetcher.QueryAlerts(ctx)
+	alerts, err := fetcher.queryAlerts(ctx)
 	if err != nil {
 		return mcpError("Alerts query failed: %v", err)
 	}
 
-	result := map[string]interface{}{
+	return mcpResultJSON(map[string]interface{}{
 		"cell":        fetcher.RhobsCell,
 		"cluster_id":  fetcher.clusterId,
 		"environment": fetcher.ocmEnvName,
-	}
-
-	var parsed interface{}
-	if err := json.Unmarshal(rawResult, &parsed); err != nil {
-		result["alerts_raw"] = string(rawResult)
-	} else {
-		result["alerts"] = parsed
-	}
-
-	return mcpResultJSON(result)
+		"alerts":      alerts,
+		"count":       len(*alerts),
+	})
 }
