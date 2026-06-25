@@ -12,8 +12,6 @@ func newCmdCell() *cobra.Command {
 		Short: "Get the RHOBS cell for a given cluster",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cmd.SilenceUsage = true
-
 			metricsRhobsFetcher, logsRhobsFetcher, err := CreateMetricsAndLogsRhobsFetchers(cmd.Context(), commonOptions.clusterId, commonOptions.hiveOcmUrl)
 			if metricsRhobsFetcher != nil {
 				if logsRhobsFetcher != nil && metricsRhobsFetcher.RhobsCell == logsRhobsFetcher.RhobsCell {

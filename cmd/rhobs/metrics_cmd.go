@@ -43,6 +43,8 @@ func newCmdMetrics() *cobra.Command {
 			"even if it is more efficient to do that filtering at the prometheus expression level.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = false
+
 			if !isComputingGrafanaUrl {
 				if isOpeningGrafanaUrl {
 					return fmt.Errorf("--browser can only be set if --url is set")

@@ -67,6 +67,8 @@ func newCmdLogs() *cobra.Command {
 			"to only keep the ones containing a given regexp (--contain-regex option) or a given log level (--level option).",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = false
+
 			if isOpeningGrafanaUrl && !isComputingGrafanaUrl {
 				return fmt.Errorf("--browser can only be set if --url is set")
 			}

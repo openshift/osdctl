@@ -25,9 +25,10 @@ func newCmdHcpDashboard() *cobra.Command {
 			"The URL of the RHOBS cell(s) to use can be specified with the --rhobs-cell option, " +
 			"but it is usually more convenient to specify the cluster with the --cluster-id option and let the command figure out the RHOBS cell(s) to use. " +
 			"Note that the --rhobs-cell option is not working with all dashboards and cannot be used together with the --cluster-id option.",
-		Args:          cobra.MaximumNArgs(1),
-		SilenceErrors: true,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = false
+
 			dashboardName = defaultGrafanaDashboardShortName
 			if len(args) == 1 {
 				dashboardName = args[0]
