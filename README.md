@@ -12,8 +12,9 @@ Currently, it mainly supports related work for AWS, especially [aws-account-oper
 
 ### MacOS
 
-```
-$ brew install osdctl
+```brew
+brew tap openshift-online/sre-tools
+brew install openshift-online/sre-tools/osdctl
 ```
 
 ### Build from source
