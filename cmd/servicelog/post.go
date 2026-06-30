@@ -52,6 +52,10 @@ type PostCmdOptions struct {
 	failedClusters     map[string]string
 }
 
+func (o *PostCmdOptions) SetDryRun(dryRun bool) {
+	o.isDryRun = dryRun
+}
+
 const documentationBaseURL = "https://docs.openshift.com"
 
 func newPostCmd() *cobra.Command {
