@@ -9,6 +9,8 @@ Retrieve and display a specific report by its ID.
 This command fetches a report by its report ID and displays the decoded
 report data. Use 'list' to find available report IDs.
 
+If no report ID is provided, the latest report for the cluster is returned.
+
 ```
 osdctl cluster reports get [flags]
 ```
@@ -18,6 +20,9 @@ osdctl cluster reports get [flags]
 ```
   # Get a specific report
   osdctl cluster reports get --cluster-id ${CLUSTER_ID} --report-id ${REPORT_ID}
+
+  # Get the latest report
+  osdctl cluster reports get --cluster-id ${CLUSTER_ID}
 
   # Get a report with JSON output
   osdctl cluster reports get --cluster-id ${CLUSTER_ID} --report-id ${REPORT_ID} --output json
@@ -29,7 +34,7 @@ osdctl cluster reports get [flags]
   -C, --cluster-id string   Cluster ID (internal or external)
   -h, --help                help for get
   -o, --output string       Output format: text or json (default "text")
-  -r, --report-id string    Report ID to retrieve
+  -r, --report-id string    Report ID to retrieve (defaults to the latest report if omitted)
 ```
 
 ### Options inherited from parent commands
