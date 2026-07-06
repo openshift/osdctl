@@ -1285,10 +1285,10 @@ osdctl cluster break-glass --cluster-id <cluster-identifier> [flags]
 
 ### osdctl cluster break-glass cleanup
 
-Relinquish emergency access from the given cluster. If the cluster is PrivateLink, it deletes
-all jump pods in the cluster's namespace (because of this, you must be logged into the hive shard
-when dropping access for PrivateLink clusters). For non-PrivateLink clusters, the $KUBECONFIG
-environment variable is unset, if applicable.
+Relinquish emergency access from the given cluster. If the cluster is PrivateLink or Private
+Service Connect (PSC), it deletes all jump pods in the cluster's namespace (because of this, you
+must be logged into the hive shard when dropping access for PrivateLink/PSC clusters). For other
+clusters, the $KUBECONFIG environment variable is unset, if applicable.
 
 ```
 osdctl cluster break-glass cleanup --cluster-id <cluster-identifier> [flags]
@@ -1302,10 +1302,11 @@ osdctl cluster break-glass cleanup --cluster-id <cluster-identifier> [flags]
   -C, --cluster-id string                [Mandatory] Provide the Internal ID of the cluster
       --context string                   The name of the kubeconfig context to use
   -h, --help                             help for cleanup
+      --hive-ocm-url string              (optional) OCM environment URL for Hive operations. Aliases: 'production', 'staging', 'integration'. This only changes how the Hive cluster is resolved; the target cluster still comes from the current/default OCM environment.
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
-      --reason string                    [Mandatory for PrivateLink clusters] The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
+      --reason string                    [Mandatory for PrivateLink/PSC clusters] The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
