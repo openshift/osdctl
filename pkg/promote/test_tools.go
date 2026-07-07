@@ -262,7 +262,7 @@ func (d *TestData) CommitAppInterfaceChanges(commitMessage string) {
 	Expect(err).ShouldNot(HaveOccurred())
 	Expect(appInterfaceWorkTree).NotTo(BeNil())
 
-	err = appInterfaceWorkTree.AddGlob("*")
+	err = appInterfaceWorkTree.AddGlob(".")
 	Expect(err).ShouldNot(HaveOccurred())
 
 	_, err = appInterfaceWorkTree.Commit(commitMessage, &git.CommitOptions{})
