@@ -2014,6 +2014,8 @@ Retrieve and display a specific report by its ID.
 This command fetches a report by its report ID and displays the decoded
 report data. Use 'list' to find available report IDs.
 
+If no report ID is provided, the latest report for the cluster is returned.
+
 ```
 osdctl cluster reports get [flags]
 ```
@@ -2029,7 +2031,7 @@ osdctl cluster reports get [flags]
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
   -o, --output string                    Output format: text or json (default "text")
-  -r, --report-id string                 Report ID to retrieve
+  -r, --report-id string                 Report ID to retrieve (defaults to the latest report if omitted)
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
