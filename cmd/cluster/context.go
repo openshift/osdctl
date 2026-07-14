@@ -47,7 +47,7 @@ const (
 	longOutputConfigValue         = "long"
 	jsonOutputConfigValue         = "json"
 	delimiter                     = ">> "
-	rhobsUnsupportedClusterMsg   = "not an HCP or MC Cluster"
+	rhobsUnsupportedClusterMsg    = "not an HCP or MC Cluster"
 )
 
 type contextOptions struct {
@@ -633,56 +633,56 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			}
 		}
 
-	// Logs URL
-	// NOTE: 'osdctl rhobs logs -C <hcp-cluster-id> --url' has a bug: it filters by the HCP cluster's
-	// external UUID, but HCP control-plane logs on the MC are labeled with the MC's openshift_cluster_id.
-	// We intentionally work around that bug here by using the correct MC external UUID and HCP namespace.
-	logsFetcher, logsFetchErr := rhobs.CreateRhobsFetcher(ctx, o.clusterID, rhobs.RhobsFetchForLogs, "production")
-	if logsFetchErr != nil {
-		mu.Lock()
-		dataErrors = append(dataErrors, fmt.Errorf("failed to get RHOBS logs fetcher: %v", logsFetchErr))
-		mu.Unlock()
-	} else {
-		var lokiNamespace, clusterExtID string
-		if isHCP {
-			// HCP control-plane logs live in the HCP namespace on the MC and are indexed
-			// under the MC's openshift_cluster_id, not the HCP cluster's.
-			mc, mcErr := utils.GetManagementCluster(o.clusterID)
-			if mcErr != nil {
-				mu.Lock()
-				dataErrors = append(dataErrors, fmt.Errorf("failed to get management cluster for RHOBS logs URL: %v", mcErr))
-				mu.Unlock()
-			} else {
-				clusterExtID = mc.ExternalID()
-			}
-			hcpNamespace, nsErr := utils.GetHCPNamespace(o.clusterID)
-			if nsErr != nil {
-				mu.Lock()
-				dataErrors = append(dataErrors, fmt.Errorf("failed to get HCP namespace for RHOBS logs URL: %v", nsErr))
-				mu.Unlock()
-				lokiNamespace = "default"
-			} else {
-				lokiNamespace = hcpNamespace
-			}
+		// Logs URL
+		// NOTE: 'osdctl rhobs logs -C <hcp-cluster-id> --url' has a bug: it filters by the HCP cluster's
+		// external UUID, but HCP control-plane logs on the MC are labeled with the MC's openshift_cluster_id.
+		// We intentionally work around that bug here by using the correct MC external UUID and HCP namespace.
+		logsFetcher, logsFetchErr := rhobs.CreateRhobsFetcher(ctx, o.clusterID, rhobs.RhobsFetchForLogs, "production")
+		if logsFetchErr != nil {
+			mu.Lock()
+			dataErrors = append(dataErrors, fmt.Errorf("failed to get RHOBS logs fetcher: %v", logsFetchErr))
+			mu.Unlock()
 		} else {
-			clusterExtID = o.cluster.ExternalID()
-			lokiNamespace = "default"
-		}
-
-		if clusterExtID != "" {
-			lokiExpr := fmt.Sprintf(`{k8s_namespace_name="%s"} | json json_kind="kind" | json_kind != "Event" | openshift_cluster_id = "%s"`, lokiNamespace, clusterExtID)
-			now := time.Now()
-			logsURL, logsErr := logsFetcher.GetGrafanaLogsUrl(lokiExpr, now.Add(-5*time.Minute), now, false)
-			if logsErr != nil {
-				mu.Lock()
-				dataErrors = append(dataErrors, fmt.Errorf("failed to get RHOBS logs URL: %v", logsErr))
-				mu.Unlock()
+			var lokiNamespace, clusterExtID string
+			if isHCP {
+				// HCP control-plane logs live in the HCP namespace on the MC and are indexed
+				// under the MC's openshift_cluster_id, not the HCP cluster's.
+				mc, mcErr := utils.GetManagementCluster(o.clusterID)
+				if mcErr != nil {
+					mu.Lock()
+					dataErrors = append(dataErrors, fmt.Errorf("failed to get management cluster for RHOBS logs URL: %v", mcErr))
+					mu.Unlock()
+				} else {
+					clusterExtID = mc.ExternalID()
+				}
+				hcpNamespace, nsErr := utils.GetHCPNamespace(o.clusterID)
+				if nsErr != nil {
+					mu.Lock()
+					dataErrors = append(dataErrors, fmt.Errorf("failed to get HCP namespace for RHOBS logs URL: %v", nsErr))
+					mu.Unlock()
+					lokiNamespace = "default"
+				} else {
+					lokiNamespace = hcpNamespace
+				}
 			} else {
-				data.RhobsLogsURL = logsURL
+				clusterExtID = o.cluster.ExternalID()
+				lokiNamespace = "default"
+			}
+
+			if clusterExtID != "" {
+				lokiExpr := fmt.Sprintf(`{k8s_namespace_name="%s"} | json json_kind="kind" | json_kind != "Event" | openshift_cluster_id = "%s"`, lokiNamespace, clusterExtID)
+				now := time.Now()
+				logsURL, logsErr := logsFetcher.GetGrafanaLogsUrl(lokiExpr, now.Add(-5*time.Minute), now, false)
+				if logsErr != nil {
+					mu.Lock()
+					dataErrors = append(dataErrors, fmt.Errorf("failed to get RHOBS logs URL: %v", logsErr))
+					mu.Unlock()
+				} else {
+					data.RhobsLogsURL = logsURL
+				}
 			}
 		}
 	}
-}
 
 	GetPagerDutyAlerts := func() {
 		defer wg.Done()
@@ -1111,12 +1111,12 @@ func printDynatraceResources(data *contextData, w io.Writer) {
 }
 
 func printRhobsResources(data *contextData, w io.Writer) {
-	var name string = "RHOBS Details"
+	name := "RHOBS Details"
 	fmt.Fprintln(w, "\n"+delimiter+name)
 
 	links := map[string]string{
 		"Cluster Dashboard URL": data.RhobsDashboardURL,
-		"Logs URL":             data.RhobsLogsURL,
+		"Logs URL":              data.RhobsLogsURL,
 	}
 
 	var keys []string
