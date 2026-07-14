@@ -132,12 +132,12 @@ var _ = Describe("Service struct", func() {
 				data.CheckAppInterfaceIsClean()
 				data.CheckAppInterfaceBranchName(fmt.Sprintf("promote-service-1-%s", data.TestRepoHashes[5]))
 
-				data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(5, 2))
+				data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(5, 4, 3, 2, 1))
 				data.CheckAppInterfaceCommitMessage(0, "?var-namespace=default-component-pipelines&")
 
 				data.CheckAppInterfaceCommitStats(0, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 2, 2)
 
-				data.CheckAppInterfaceCommitMessage(1, data.GetTestRepoFormattedLog(4, 1))
+				data.CheckAppInterfaceCommitMessage(1, data.GetTestRepoFormattedLog(5, 4, 3, 2, 1))
 				data.CheckAppInterfaceCommitStats(1, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 2, 2)
 			})
 		})
@@ -161,10 +161,10 @@ var _ = Describe("Service struct", func() {
 
 				Expect(data.GetAppInterfaceCommitsCount()).To(Equal(3))
 
-				data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(5, 2))
+				data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(8, 7, 6, 5, 4, 3, 2, 1))
 				data.CheckAppInterfaceCommitStats(0, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 1, 1)
 
-				data.CheckAppInterfaceCommitMessage(1, data.GetTestRepoFormattedLog(4, 1))
+				data.CheckAppInterfaceCommitMessage(1, data.GetTestRepoFormattedLog(8, 7, 6, 5, 4, 3, 2, 1))
 				data.CheckAppInterfaceCommitStats(1, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 1, 1)
 			})
 		})
@@ -187,7 +187,7 @@ var _ = Describe("Service struct", func() {
 
 				Expect(data.GetAppInterfaceCommitsCount()).To(Equal(2))
 
-				data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(7, 4, 1))
+				data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(9, 8, 7, 6, 5, 4, 3, 2, 1))
 				data.CheckAppInterfaceCommitStats(0, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 1, 1)
 			})
 		})
@@ -212,10 +212,10 @@ var _ = Describe("Service struct", func() {
 
 				Expect(data.GetAppInterfaceCommitsCount()).To(Equal(3))
 
-				data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(8, 5, 2))
+				data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(9, 8, 7, 6, 5, 4, 3, 2, 1))
 				data.CheckAppInterfaceCommitStats(0, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 2, 2)
 
-				data.CheckAppInterfaceCommitMessage(1, data.GetTestRepoFormattedLog(7, 4, 1))
+				data.CheckAppInterfaceCommitMessage(1, data.GetTestRepoFormattedLog(9, 8, 7, 6, 5, 4, 3, 2, 1))
 				data.CheckAppInterfaceCommitStats(1, 2, "data/services/gen-app/cicd/saas/service-1.yaml", 2, 2)
 				data.CheckAppInterfaceCommitStats(1, 2, "data/services/gen-app/app.yml", 2, 0)
 			})

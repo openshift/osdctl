@@ -210,18 +210,13 @@ func CreateDefaultTestData() *TestData {
 	})
 }
 
-const CommitTemplate = `commit %s
-Author: John Doe <john.doe@company.com>
-Date:   Thu Jan 01 00:00:00 1970 +0000
-
-    Commit #%d
-`
+const CommitTemplate = "%s Commit #%d\n"
 
 func (d *TestData) GetTestRepoFormattedLog(hashIndexes ...int) string {
 	var sb strings.Builder
 
 	for _, idx := range hashIndexes {
-		fmt.Fprintf(&sb, CommitTemplate, d.TestRepoHashes[idx], idx)
+		fmt.Fprintf(&sb, CommitTemplate, d.TestRepoHashes[idx][:7], idx)
 	}
 
 	return sb.String()
