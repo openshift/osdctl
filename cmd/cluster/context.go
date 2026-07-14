@@ -600,6 +600,8 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 				mu.Lock()
 				dataErrors = append(dataErrors, fmt.Errorf("failed to check if cluster is a management cluster for RHOBS: %v", mcErr))
 				mu.Unlock()
+				// Return early: can't determine cluster type, so don't mislabel as unsupported.
+				return
 			}
 		}
 
@@ -608,22 +610,31 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			return
 		}
 
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 
-		// Dashboard URL — same code path as 'osdctl rhobs hcp-dashboard'
+		// Create both fetchers up front so the logs fetcher can be passed to
+		// GetGrafanaDashboardUrl (some dashboards use it for the logs datasource).
 		var dashboardName string
 		if isHCP {
 			dashboardName = "hosted-cluster"
 		} else {
 			dashboardName = "management-cluster"
 		}
-		metricsFetcher, dashFetchErr := rhobs.CreateRhobsFetcher(ctx, o.clusterID, rhobs.RhobsFetchForMetrics, "production")
-		if dashFetchErr != nil {
+		metricsFetcher, metricsFetchErr := rhobs.CreateRhobsFetcher(ctx, o.clusterID, rhobs.RhobsFetchForMetrics, data.OCMEnv)
+		logsFetcher, logsFetchErr := rhobs.CreateRhobsFetcher(ctx, o.clusterID, rhobs.RhobsFetchForLogs, data.OCMEnv)
+
+		// Dashboard URL — same code path as 'osdctl rhobs hcp-dashboard'
+		if metricsFetchErr != nil {
 			mu.Lock()
-			dataErrors = append(dataErrors, fmt.Errorf("failed to get RHOBS metrics fetcher: %v", dashFetchErr))
+			dataErrors = append(dataErrors, fmt.Errorf("failed to get RHOBS metrics fetcher: %v", metricsFetchErr))
 			mu.Unlock()
 		} else if dashboard := rhobs.GetGrafanaDashboardForShortName(dashboardName); dashboard != nil {
-			dashboardURL, dashErr := rhobs.GetGrafanaDashboardUrl(metricsFetcher, metricsFetcher, dashboard)
+			logsF := metricsFetcher // fallback if logs fetcher unavailable
+			if logsFetchErr == nil {
+				logsF = logsFetcher
+			}
+			dashboardURL, dashErr := rhobs.GetGrafanaDashboardUrl(metricsFetcher, logsF, dashboard)
 			if dashErr != nil {
 				mu.Lock()
 				dataErrors = append(dataErrors, fmt.Errorf("failed to get RHOBS dashboard URL: %v", dashErr))
@@ -634,10 +645,9 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		}
 
 		// Logs URL
-		// NOTE: 'osdctl rhobs logs -C <hcp-cluster-id> --url' has a bug: it filters by the HCP cluster's
-		// external UUID, but HCP control-plane logs on the MC are labeled with the MC's openshift_cluster_id.
-		// We intentionally work around that bug here by using the correct MC external UUID and HCP namespace.
-		logsFetcher, logsFetchErr := rhobs.CreateRhobsFetcher(ctx, o.clusterID, rhobs.RhobsFetchForLogs, "production")
+		// NOTE: 'osdctl rhobs logs -C <hcp-cluster-id> --url' has a bug: it filters by the HCP
+		// cluster's external UUID, but HCP control-plane logs on the MC are labeled with the MC's
+		// openshift_cluster_id. We intentionally work around that bug here (tracked in #932).
 		if logsFetchErr != nil {
 			mu.Lock()
 			dataErrors = append(dataErrors, fmt.Errorf("failed to get RHOBS logs fetcher: %v", logsFetchErr))
@@ -660,7 +670,9 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 					mu.Lock()
 					dataErrors = append(dataErrors, fmt.Errorf("failed to get HCP namespace for RHOBS logs URL: %v", nsErr))
 					mu.Unlock()
-					lokiNamespace = "default"
+					// Don't fall back to "default": for HCP clusters that namespace won't
+					// contain control-plane logs, so a URL would silently show no results.
+					clusterExtID = ""
 				} else {
 					lokiNamespace = hcpNamespace
 				}
