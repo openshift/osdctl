@@ -24,6 +24,7 @@ import (
 	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	backplaneapi "github.com/openshift/backplane-api/pkg/client"
 	"github.com/openshift/osdctl/cmd/dynatrace"
+	"github.com/openshift/osdctl/cmd/rhobs"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/backplane"
 	"github.com/openshift/osdctl/pkg/osdCloud"
@@ -46,6 +47,7 @@ const (
 	longOutputConfigValue         = "long"
 	jsonOutputConfigValue         = "json"
 	delimiter                     = ">> "
+	rhobsUnsupportedClusterMsg    = "not an HCP or MC Cluster"
 )
 
 type contextOptions struct {
@@ -84,6 +86,10 @@ type contextData struct {
 	// Dynatrace Environment URL and Logs URL
 	DyntraceEnvURL  string
 	DyntraceLogsURL string
+
+	// RHOBS Dashboard URL and Logs URL
+	RhobsDashboardURL string
+	RhobsLogsURL      string
 
 	// limited Support Status
 	LimitedSupportReasons []*cmv1.LimitedSupportReason
@@ -283,6 +289,9 @@ func (o *contextOptions) printLongOutput(data *contextData, w io.Writer) {
 
 	// Print Dynatrace URL
 	printDynatraceResources(data, w)
+
+	// Print RHOBS URLs
+	printRhobsResources(data, w)
 
 	// Print User Banned Details
 	printUserBannedStatus(data, w)
@@ -578,6 +587,115 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 
 	}
 
+	GetRhobsDetails := func() {
+		defer wg.Done()
+		defer utils.StartDelayTracker(o.verbose, "RHOBS URLs").End()
+
+		isHCP := o.cluster.Hypershift().Enabled()
+		isMC := false
+		if !isHCP {
+			var mcErr error
+			isMC, mcErr = utils.IsManagementCluster(o.clusterID)
+			if mcErr != nil {
+				mu.Lock()
+				dataErrors = append(dataErrors, fmt.Errorf("failed to check if cluster is a management cluster for RHOBS: %v", mcErr))
+				mu.Unlock()
+				// Return early: can't determine cluster type, so don't mislabel as unsupported.
+				return
+			}
+		}
+
+		if !isHCP && !isMC {
+			data.RhobsDashboardURL = rhobsUnsupportedClusterMsg
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		// Create both fetchers up front so the logs fetcher can be passed to
+		// GetGrafanaDashboardUrl (some dashboards use it for the logs datasource).
+		var dashboardName string
+		if isHCP {
+			dashboardName = "hosted-cluster"
+		} else {
+			dashboardName = "management-cluster"
+		}
+		metricsFetcher, metricsFetchErr := rhobs.CreateRhobsFetcher(ctx, o.clusterID, rhobs.RhobsFetchForMetrics, data.OCMEnv)
+		logsFetcher, logsFetchErr := rhobs.CreateRhobsFetcher(ctx, o.clusterID, rhobs.RhobsFetchForLogs, data.OCMEnv)
+
+		// Dashboard URL — same code path as 'osdctl rhobs hcp-dashboard'
+		if metricsFetchErr != nil {
+			mu.Lock()
+			dataErrors = append(dataErrors, fmt.Errorf("failed to get RHOBS metrics fetcher: %v", metricsFetchErr))
+			mu.Unlock()
+		} else if dashboard := rhobs.GetGrafanaDashboardForShortName(dashboardName); dashboard != nil {
+			logsF := metricsFetcher // fallback if logs fetcher unavailable
+			if logsFetchErr == nil {
+				logsF = logsFetcher
+			}
+			dashboardURL, dashErr := rhobs.GetGrafanaDashboardUrl(metricsFetcher, logsF, dashboard)
+			if dashErr != nil {
+				mu.Lock()
+				dataErrors = append(dataErrors, fmt.Errorf("failed to get RHOBS dashboard URL: %v", dashErr))
+				mu.Unlock()
+			} else {
+				data.RhobsDashboardURL = dashboardURL
+			}
+		}
+
+		// Logs URL
+		// NOTE: 'osdctl rhobs logs -C <hcp-cluster-id> --url' has a bug: it filters by the HCP
+		// cluster's external UUID, but HCP control-plane logs on the MC are labeled with the MC's
+		// openshift_cluster_id. We intentionally work around that bug here (tracked in #932).
+		if logsFetchErr != nil {
+			mu.Lock()
+			dataErrors = append(dataErrors, fmt.Errorf("failed to get RHOBS logs fetcher: %v", logsFetchErr))
+			mu.Unlock()
+		} else {
+			var lokiNamespace, clusterExtID string
+			if isHCP {
+				// HCP control-plane logs live in the HCP namespace on the MC and are indexed
+				// under the MC's openshift_cluster_id, not the HCP cluster's.
+				mc, mcErr := utils.GetManagementCluster(o.clusterID)
+				if mcErr != nil {
+					mu.Lock()
+					dataErrors = append(dataErrors, fmt.Errorf("failed to get management cluster for RHOBS logs URL: %v", mcErr))
+					mu.Unlock()
+				} else {
+					clusterExtID = mc.ExternalID()
+				}
+				hcpNamespace, nsErr := utils.GetHCPNamespace(o.clusterID)
+				if nsErr != nil {
+					mu.Lock()
+					dataErrors = append(dataErrors, fmt.Errorf("failed to get HCP namespace for RHOBS logs URL: %v", nsErr))
+					mu.Unlock()
+					// Don't fall back to "default": for HCP clusters that namespace won't
+					// contain control-plane logs, so a URL would silently show no results.
+					clusterExtID = ""
+				} else {
+					lokiNamespace = hcpNamespace
+				}
+			} else {
+				clusterExtID = o.cluster.ExternalID()
+				lokiNamespace = "default"
+			}
+
+			if clusterExtID != "" {
+				lokiExpr := fmt.Sprintf(`{k8s_namespace_name="%s"} | json json_kind="kind" | json_kind != "Event" | openshift_cluster_id = "%s"`, lokiNamespace, clusterExtID)
+				now := time.Now()
+				logsURL, logsErr := logsFetcher.GetGrafanaLogsUrl(lokiExpr, now.Add(-5*time.Minute), now, false)
+				if logsErr != nil {
+					mu.Lock()
+					dataErrors = append(dataErrors, fmt.Errorf("failed to get RHOBS logs URL: %v", logsErr))
+					mu.Unlock()
+				} else {
+					data.RhobsLogsURL = logsURL
+				}
+			}
+		}
+	}
+
 	GetPagerDutyAlerts := func() {
 		defer wg.Done()
 		defer pdwg.Done()
@@ -662,6 +780,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		GetSupportExceptions,
 		GetPagerDutyAlerts,
 		GetDynatraceDetails,
+		GetRhobsDetails,
 		GetBannedUser,
 		GetMigrationInfo,
 		GetClusterReports,
@@ -992,6 +1111,37 @@ func printDynatraceResources(data *contextData, w io.Writer) {
 		url := strings.TrimSpace(links[link])
 		if url == dynatrace.ErrUnsupportedCluster.Error() {
 			fmt.Fprintln(w, dynatrace.ErrUnsupportedCluster.Error())
+			break
+		} else if url != "" {
+			table.AddRow([]string{link, url})
+		}
+	}
+
+	if err := table.Flush(); err != nil {
+		fmt.Fprintf(w, "Error printing %s: %v\n", name, err)
+	}
+}
+
+func printRhobsResources(data *contextData, w io.Writer) {
+	name := "RHOBS Details"
+	fmt.Fprintln(w, "\n"+delimiter+name)
+
+	links := map[string]string{
+		"Cluster Dashboard URL": data.RhobsDashboardURL,
+		"Logs URL":              data.RhobsLogsURL,
+	}
+
+	var keys []string
+	for k := range links {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	table := printer.NewTablePrinter(w, 20, 1, 3, ' ')
+	for _, link := range keys {
+		url := strings.TrimSpace(links[link])
+		if url == rhobsUnsupportedClusterMsg {
+			fmt.Fprintln(w, rhobsUnsupportedClusterMsg)
 			break
 		} else if url != "" {
 			table.AddRow([]string{link, url})
