@@ -105,6 +105,70 @@ func TestPrintDynatraceResources(t *testing.T) {
 	}
 }
 
+func TestPrintRhobsResources(t *testing.T) {
+	tests := []struct {
+		name            string
+		data            contextData
+		expectedStrings []string
+		absentStrings   []string
+	}{
+		{
+			name: "both URLs populated",
+			data: contextData{
+				RhobsDashboardURL: "https://grafana.example.com/dashboard",
+				RhobsLogsURL:      "https://grafana.example.com/logs",
+			},
+			expectedStrings: []string{
+				"RHOBS Details",
+				"Cluster Dashboard URL",
+				"https://grafana.example.com/dashboard",
+				"Logs URL",
+				"https://grafana.example.com/logs",
+			},
+			absentStrings: []string{rhobsUnsupportedClusterMsg},
+		},
+		{
+			name: "unsupported cluster type",
+			data: contextData{
+				RhobsDashboardURL: rhobsUnsupportedClusterMsg,
+			},
+			expectedStrings: []string{
+				"RHOBS Details",
+				rhobsUnsupportedClusterMsg,
+			},
+			absentStrings: []string{
+				"Cluster Dashboard URL",
+				"Logs URL",
+			},
+		},
+		{
+			name:            "no data set",
+			data:            contextData{},
+			expectedStrings: []string{"RHOBS Details"},
+			absentStrings: []string{
+				"Cluster Dashboard URL",
+				"Logs URL",
+				rhobsUnsupportedClusterMsg,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			printRhobsResources(&tt.data, &buf)
+			output := buf.String()
+
+			for _, expected := range tt.expectedStrings {
+				assert.Contains(t, output, expected, "output should contain %q", expected)
+			}
+			for _, absent := range tt.absentStrings {
+				assert.NotContains(t, output, absent, "output should not contain %q", absent)
+			}
+		})
+	}
+}
+
 func TestSkippableEvent(t *testing.T) {
 	testCases := []struct {
 		eventName string
