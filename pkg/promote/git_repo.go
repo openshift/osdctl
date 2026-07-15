@@ -3,7 +3,6 @@ package promote
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
@@ -106,8 +105,8 @@ func (r *Repo) ResolveHash(hashOrBranchName string) string {
 	return hashOrBranchName
 }
 
-func (r *Repo) FormattedLog(fileRelPath, commonAncestorHash, targetHash string) (string, error) {
-	// Be aware that calling 'Log' as follows is not equivalent to calling 'git log commonAncestorHash..targetHash -- fileRelPath':
+func (r *Repo) FormattedLog(commonAncestorHash, targetHash string) (string, error) {
+	// Be aware that calling 'Log' as follows is not equivalent to calling 'git log commonAncestorHash..targetHash':
 	// (the 'Log' method only returns the descendants of 'commonAncestorHash' while 'git log' returns all the commits which are not ancestor of  'commonAncestorHash')
 	//
 	// r.rawRepo.Log(&git.LogOptions{
@@ -118,7 +117,6 @@ func (r *Repo) FormattedLog(fileRelPath, commonAncestorHash, targetHash string) 
 	//
 	// Hence the below code which is a bit complex but equally fast to the 'Log' method.
 
-	fileRelPath = strings.TrimPrefix(fileRelPath, string(filepath.Separator))
 	commonAncestorCommit, err := r.rawRepo.CommitObject(plumbing.NewHash(commonAncestorHash))
 	if commonAncestorCommit == nil || err != nil {
 		return "", fmt.Errorf("common ancestor commit '%s' does not exist in '%s': %v", commonAncestorHash, r.url, err)
@@ -160,15 +158,8 @@ func (r *Repo) FormattedLog(fileRelPath, commonAncestorHash, targetHash string) 
 
 		if !isAncestor {
 			if len(commit.ParentHashes) < 2 {
-				stats, err := commit.Stats()
-				if err != nil {
-					return "", fmt.Errorf("unable to get stats for commit '%s' in '%s': %v", hash.String(), r.url, err)
-				}
-				for _, stat := range stats {
-					if stat.Name == fileRelPath {
-						sb.WriteString(commit.String())
-					}
-				}
+				firstLine := strings.SplitN(strings.TrimSpace(commit.Message), "\n", 2)[0]
+				fmt.Fprintf(&sb, "%s %s\n", commit.Hash.String()[:7], firstLine)
 			}
 
 			queue = append(queue, commit.ParentHashes...)

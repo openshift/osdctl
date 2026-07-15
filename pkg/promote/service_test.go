@@ -338,10 +338,10 @@ var _ = Describe("Service struct", func() {
 
 					Expect(data.GetAppInterfaceCommitsCount()).To(Equal(3))
 
-					data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(5, 2))
+					data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(7, 6, 5, 4, 3, 2, 1))
 					data.CheckAppInterfaceCommitStats(0, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 2, 2)
 
-					data.CheckAppInterfaceCommitMessage(1, data.GetTestRepoFormattedLog(7, 4, 1))
+					data.CheckAppInterfaceCommitMessage(1, data.GetTestRepoFormattedLog(7, 6, 5, 4, 3, 2, 1))
 					data.CheckAppInterfaceCommitStats(1, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 2, 2)
 				})
 			})
@@ -364,16 +364,16 @@ var _ = Describe("Service struct", func() {
 
 					Expect(data.GetAppInterfaceCommitsCount()).To(Equal(6))
 
-					data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(5))
+					data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(7, 6, 5, 4))
 					data.CheckAppInterfaceCommitStats(0, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 1, 1)
 
-					data.CheckAppInterfaceCommitMessage(1, data.GetTestRepoFormattedLog(5))
+					data.CheckAppInterfaceCommitMessage(1, data.GetTestRepoFormattedLog(7, 6, 5, 4))
 					data.CheckAppInterfaceCommitStats(1, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 1, 1)
 
-					data.CheckAppInterfaceCommitMessage(2, data.GetTestRepoFormattedLog(7, 4))
+					data.CheckAppInterfaceCommitMessage(2, data.GetTestRepoFormattedLog(7, 6, 5, 4, 3, 2))
 					data.CheckAppInterfaceCommitStats(2, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 1, 1)
 
-					data.CheckAppInterfaceCommitMessage(3, data.GetTestRepoFormattedLog(7, 4))
+					data.CheckAppInterfaceCommitMessage(3, data.GetTestRepoFormattedLog(7, 6, 5, 4, 3, 2))
 					data.CheckAppInterfaceCommitStats(3, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 1, 1)
 				})
 			})
@@ -435,10 +435,10 @@ var _ = Describe("Service struct", func() {
 
 					Expect(data.GetAppInterfaceCommitsCount()).To(Equal(4))
 
-					data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(5, 2))
+					data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(7, 6, 5, 4, 3, 2, 1))
 					data.CheckAppInterfaceCommitStats(0, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 2, 2)
 
-					data.CheckAppInterfaceCommitMessage(1, data.GetTestRepoFormattedLog(7, 4, 1))
+					data.CheckAppInterfaceCommitMessage(1, data.GetTestRepoFormattedLog(7, 6, 5, 4, 3, 2, 1))
 					data.CheckAppInterfaceCommitStats(1, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 2, 2)
 				})
 			})
@@ -465,10 +465,10 @@ var _ = Describe("Service struct", func() {
 
 				Expect(data.GetAppInterfaceCommitsCount()).To(Equal(3))
 
-				data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(5, 2))
+				data.CheckAppInterfaceCommitMessage(0, data.GetTestRepoFormattedLog(6, 5, 4, 3, 2, 1))
 				data.CheckAppInterfaceCommitStats(0, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 1, 1)
 
-				data.CheckAppInterfaceCommitMessage(1, data.GetTestRepoFormattedLog(4, 1))
+				data.CheckAppInterfaceCommitMessage(1, data.GetTestRepoFormattedLog(6, 5, 4, 3, 2, 1))
 				data.CheckAppInterfaceCommitStats(1, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 1, 1)
 			})
 		})

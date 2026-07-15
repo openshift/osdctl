@@ -348,7 +348,7 @@ func (c *DefaultPromoteCallbacks) SetTargetHash(targetNode *kyaml.RNode, newHash
 }
 
 func (c *DefaultPromoteCallbacks) ComputeCommitMessage(resourceTemplateRepo *Repo, resourceTemplatePath, oldHash, newHash string) (*CommitMessage, error) {
-	changeLog, err := resourceTemplateRepo.FormattedLog(resourceTemplatePath, oldHash, newHash)
+	changeLog, err := resourceTemplateRepo.FormattedLog(oldHash, newHash)
 	if err != nil {
 		return nil, err
 	}

@@ -98,7 +98,7 @@ func (d *managedScriptsTestData) GetManagedScriptsRepoFormattedLog(hashIndexes .
 	var sb strings.Builder
 
 	for _, idx := range hashIndexes {
-		fmt.Fprintf(&sb, promote.CommitTemplate, d.managedScriptsRepoHashes[idx], idx)
+		fmt.Fprintf(&sb, promote.CommitTemplate, d.managedScriptsRepoHashes[idx][:7], idx)
 	}
 
 	return sb.String()
@@ -169,7 +169,7 @@ var _ = Describe("Service struct", func() {
 
 				Expect(data.GetAppInterfaceCommitsCount()).To(Equal(3))
 
-				data.CheckAppInterfaceCommitMessage(0, data.GetManagedScriptsRepoFormattedLog(8, 6, 4))
+				data.CheckAppInterfaceCommitMessage(0, data.GetManagedScriptsRepoFormattedLog(8, 7, 6, 5, 4, 3))
 				data.CheckAppInterfaceCommitStats(0, 1, serviceRelPath, 2, 2)
 			})
 		})
