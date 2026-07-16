@@ -231,7 +231,7 @@ func handleLogs(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolRes
 		if containRegex != "" {
 			lokiExpr += fmt.Sprintf(` |~ "%s"`, containRegex)
 		}
-		lokiExpr += fmt.Sprintf(` | openshift_cluster_id = "%s"`, fetcher.clusterExternalId)
+		lokiExpr += fmt.Sprintf(` | openshift_cluster_id = "%s"`, fetcher.logsClusterExtId())
 	}
 
 	now := time.Now()

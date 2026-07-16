@@ -239,7 +239,19 @@ func newCmdLogs() *cobra.Command {
 			}
 
 			if !cmd.Flags().Changed("query") {
-				lokiExpr += fmt.Sprintf(` | openshift_cluster_id = "%s"`, rhobsFetcher.clusterExternalId)
+				if rhobsFetcher.IsHostedCluster {
+					log.Infof("HCP cluster: MC external UUID = %q, HCP namespace = %q\n",
+						rhobsFetcher.mcExternalId, rhobsFetcher.HcpNamespace)
+				}
+				effectiveNs := resolveLogsNamespace(rhobsFetcher, cmd.Flags().Changed("namespace"), namespace)
+				if effectiveNs != namespace {
+					log.Infof("HCP cluster detected - using namespace '%s' for logs query\n", effectiveNs)
+					lokiExpr = strings.Replace(lokiExpr,
+						fmt.Sprintf(`{k8s_namespace_name="%s"}`, namespace),
+						fmt.Sprintf(`{k8s_namespace_name="%s"}`, effectiveNs),
+						1)
+				}
+				lokiExpr += fmt.Sprintf(` | openshift_cluster_id = "%s"`, rhobsFetcher.logsClusterExtId())
 			}
 
 			if isComputingGrafanaUrl {
