@@ -77,34 +77,6 @@ func TestPrintClusterHeader(t *testing.T) {
 	}
 }
 
-func TestPrintDynatraceResources(t *testing.T) {
-	data := &contextData{
-		DyntraceEnvURL:  "https://dynatrace.com/env",
-		DyntraceLogsURL: "https://dynatrace.com/logs",
-	}
-
-	var buf bytes.Buffer
-	printDynatraceResources(data, &buf)
-	output := buf.String()
-
-	expectedHeader := "Dynatrace Details"
-	expectedLines := []string{
-		"Dynatrace Tenant URL   https://dynatrace.com/env",
-		"Logs App URL           https://dynatrace.com/logs",
-	}
-
-	outputStr := string(output)
-	if !strings.Contains(outputStr, expectedHeader) {
-		t.Errorf("Expected output to contain header:\n%s\nGot:\n%s", expectedHeader, outputStr)
-	}
-
-	for _, expectedLine := range expectedLines {
-		if !strings.Contains(outputStr, expectedLine) {
-			t.Errorf("Expected output to contain:\n%s\nGot:\n%s", expectedLine, outputStr)
-		}
-	}
-}
-
 func TestPrintRhobsResources(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -520,12 +492,10 @@ func TestPrintLongOutput(t *testing.T) {
 	eventTime := time.Now()
 
 	mockData := &contextData{
-		ClusterName:     "ClusterABC",
-		ClusterVersion:  "1.2.3",
-		ClusterID:       "cluster-123",
-		OCMEnv:          "production",
-		DyntraceEnvURL:  "http://dynatrace.example.com",
-		DyntraceLogsURL: "http://logs.dynatrace.example.com",
+		ClusterName:    "ClusterABC",
+		ClusterVersion: "1.2.3",
+		ClusterID:      "cluster-123",
+		OCMEnv:         "production",
 		LimitedSupportReasons: []*v1.LimitedSupportReason{
 			limitedSupportReason1},
 		ServiceLogs: []*v2.LogEntry{serviceLog1, serviceLog2},
