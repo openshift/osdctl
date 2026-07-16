@@ -77,7 +77,6 @@ func TestPrintClusterHeader(t *testing.T) {
 	}
 }
 
-
 func TestPrintRhobsResources(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -493,10 +492,10 @@ func TestPrintLongOutput(t *testing.T) {
 	eventTime := time.Now()
 
 	mockData := &contextData{
-		ClusterName:     "ClusterABC",
-		ClusterVersion:  "1.2.3",
-		ClusterID:       "cluster-123",
-		OCMEnv: "production",
+		ClusterName:    "ClusterABC",
+		ClusterVersion: "1.2.3",
+		ClusterID:      "cluster-123",
+		OCMEnv:         "production",
 		LimitedSupportReasons: []*v1.LimitedSupportReason{
 			limitedSupportReason1},
 		ServiceLogs: []*v2.LogEntry{serviceLog1, serviceLog2},

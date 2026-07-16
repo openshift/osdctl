@@ -44,8 +44,8 @@ const (
 	shortOutputConfigValue        = "short"
 	longOutputConfigValue         = "long"
 	jsonOutputConfigValue         = "json"
-	delimiter                  = ">> "
-	rhobsUnsupportedClusterMsg = "not an HCP or MC Cluster"
+	delimiter                     = ">> "
+	rhobsUnsupportedClusterMsg    = "not an HCP or MC Cluster"
 )
 
 type contextOptions struct {
@@ -280,9 +280,6 @@ func (o *contextOptions) printLongOutput(data *contextData, w io.Writer) {
 	// Print other helpful links
 	o.printOtherLinks(data, w)
 	fmt.Println()
-
-	// Print RHOBS URLs
-	printRhobsResources(data, w)
 
 	// Print RHOBS URLs
 	printRhobsResources(data, w)
@@ -648,8 +645,8 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 				} else {
 					data.RhobsLogsURL = logsURL
 				}
+			}
 		}
-	}
 	}
 
 	GetPagerDutyAlerts := func() {
@@ -1044,7 +1041,6 @@ func printNetworkInfo(data *contextData, w io.Writer) {
 		fmt.Fprintf(w, "Error printing %s: %v\n", name, err)
 	}
 }
-
 
 func printRhobsResources(data *contextData, w io.Writer) {
 	name := "RHOBS Details"
