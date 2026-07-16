@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -23,7 +22,6 @@ import (
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	backplaneapi "github.com/openshift/backplane-api/pkg/client"
-	"github.com/openshift/osdctl/cmd/dynatrace"
 	"github.com/openshift/osdctl/cmd/rhobs"
 	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/backplane"
@@ -46,8 +44,8 @@ const (
 	shortOutputConfigValue        = "short"
 	longOutputConfigValue         = "long"
 	jsonOutputConfigValue         = "json"
-	delimiter                     = ">> "
-	rhobsUnsupportedClusterMsg    = "not an HCP or MC Cluster"
+	delimiter                  = ">> "
+	rhobsUnsupportedClusterMsg = "not an HCP or MC Cluster"
 )
 
 type contextOptions struct {
@@ -82,10 +80,6 @@ type contextData struct {
 
 	// RegionID (used for region-locked clusters)
 	RegionID string
-
-	// Dynatrace Environment URL and Logs URL
-	DyntraceEnvURL  string
-	DyntraceLogsURL string
 
 	// RHOBS Dashboard URL and Logs URL
 	RhobsDashboardURL string
@@ -287,8 +281,8 @@ func (o *contextOptions) printLongOutput(data *contextData, w io.Writer) {
 	o.printOtherLinks(data, w)
 	fmt.Println()
 
-	// Print Dynatrace URL
-	printDynatraceResources(data, w)
+	// Print RHOBS URLs
+	printRhobsResources(data, w)
 
 	// Print RHOBS URLs
 	printRhobsResources(data, w)
@@ -549,44 +543,6 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		}
 	}
 
-	GetDynatraceDetails := func() {
-		var clusterID string = o.clusterID
-		defer wg.Done()
-		defer utils.StartDelayTracker(o.verbose, "Dynatrace URL").End()
-
-		hcpCluster, err := dynatrace.FetchClusterDetails(clusterID)
-		if err != nil {
-			if errors.Is(err, dynatrace.ErrUnsupportedCluster) {
-				data.DyntraceEnvURL = dynatrace.ErrUnsupportedCluster.Error()
-			} else {
-				mu.Lock()
-				dataErrors = append(dataErrors, fmt.Errorf("failed to acquire cluster details %v", err))
-				mu.Unlock()
-				data.DyntraceEnvURL = "Failed to fetch Dynatrace URL"
-			}
-			return
-		}
-		query, err := dynatrace.GetQuery(hcpCluster, time.Time{}, time.Time{}, 1) // passing nil from/to values to use --since behaviour
-		if err != nil {
-			mu.Lock()
-			dataErrors = append(dataErrors, fmt.Errorf("failed to build query for Dynatrace %v", err))
-			mu.Unlock()
-			data.DyntraceEnvURL = fmt.Sprintf("Failed to build Dynatrace query: %v", err)
-			return
-		}
-		queryTxt := query.Build()
-		data.DyntraceEnvURL = hcpCluster.DynatraceURL
-		logsURL, dtErr := dynatrace.GetLinkToWebConsole(hcpCluster.DynatraceURL, "now()-10h", "now()", queryTxt)
-		if dtErr != nil {
-			mu.Lock()
-			dataErrors = append(dataErrors, fmt.Errorf("failed to get url: %v", dtErr))
-			mu.Unlock()
-		} else {
-			data.DyntraceLogsURL = logsURL
-		}
-
-	}
-
 	GetRhobsDetails := func() {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "RHOBS URLs").End()
@@ -692,8 +648,8 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 				} else {
 					data.RhobsLogsURL = logsURL
 				}
-			}
 		}
+	}
 	}
 
 	GetPagerDutyAlerts := func() {
@@ -779,7 +735,6 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		GetHandoverAnnouncements,
 		GetSupportExceptions,
 		GetPagerDutyAlerts,
-		GetDynatraceDetails,
 		GetRhobsDetails,
 		GetBannedUser,
 		GetMigrationInfo,
@@ -1090,37 +1045,6 @@ func printNetworkInfo(data *contextData, w io.Writer) {
 	}
 }
 
-func printDynatraceResources(data *contextData, w io.Writer) {
-	var name string = "Dynatrace Details"
-	fmt.Fprintln(w, delimiter+name)
-
-	links := map[string]string{
-		"Dynatrace Tenant URL": data.DyntraceEnvURL,
-		"Logs App URL":         data.DyntraceLogsURL,
-	}
-
-	// Sort, so it's always a predictable order
-	var keys []string
-	for k := range links {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	table := printer.NewTablePrinter(w, 20, 1, 3, ' ')
-	for _, link := range keys {
-		url := strings.TrimSpace(links[link])
-		if url == dynatrace.ErrUnsupportedCluster.Error() {
-			fmt.Fprintln(w, dynatrace.ErrUnsupportedCluster.Error())
-			break
-		} else if url != "" {
-			table.AddRow([]string{link, url})
-		}
-	}
-
-	if err := table.Flush(); err != nil {
-		fmt.Fprintf(w, "Error printing %s: %v\n", name, err)
-	}
-}
 
 func printRhobsResources(data *contextData, w io.Writer) {
 	name := "RHOBS Details"
