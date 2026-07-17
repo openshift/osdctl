@@ -227,7 +227,8 @@ func handleLogs(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolRes
 	if rawQuery != "" {
 		lokiExpr = rawQuery
 	} else {
-		lokiExpr = fmt.Sprintf(`{k8s_namespace_name="%s"}`, namespace)
+		effectiveNs := resolveLogsNamespace(fetcher, namespace != "default" && namespace != "", namespace)
+		lokiExpr = fmt.Sprintf(`{k8s_namespace_name="%s"}`, effectiveNs)
 		if containRegex != "" {
 			lokiExpr += fmt.Sprintf(` |~ "%s"`, containRegex)
 		}
