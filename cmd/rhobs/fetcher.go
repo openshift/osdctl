@@ -45,12 +45,34 @@ const (
 type RhobsFetcher struct {
 	clusterId           string
 	clusterExternalId   string
+	mcExternalId        string // MC's external UUID; set for HCP clusters, used for Loki openshift_cluster_id filter
 	clusterName         string
 	IsHostedCluster     bool
 	isManagementCluster bool
 	ocmEnvName          string
 	RhobsCell           string
+	HcpNamespace        string // HCP control-plane namespace on the MC; set for HCP clusters
 	tokenProvider       ocmutils.AccessTokenProvider
+}
+
+// logsClusterExtId returns the cluster external UUID to use in Loki's openshift_cluster_id filter.
+// HCP control-plane logs are indexed in RHOBS under the MC's openshift_cluster_id, not the HCP
+// cluster's own UUID, so for HCP clusters this returns the MC's external UUID.
+func (f *RhobsFetcher) logsClusterExtId() string {
+	if f.IsHostedCluster && f.mcExternalId != "" {
+		return f.mcExternalId
+	}
+	return f.clusterExternalId
+}
+
+// resolveLogsNamespace returns the namespace to use in the Loki stream selector.
+// When the caller has not explicitly set a namespace and the fetcher belongs to an HCP cluster,
+// the HCP control-plane namespace on the MC is returned so that logs are actually found.
+func resolveLogsNamespace(fetcher *RhobsFetcher, namespaceExplicitlySet bool, defaultNamespace string) string {
+	if !namespaceExplicitlySet && fetcher.IsHostedCluster && fetcher.HcpNamespace != "" {
+		return fetcher.HcpNamespace
+	}
+	return defaultNamespace
 }
 
 func getRhobsCellFromConfigMap(ctx context.Context, clusterId string, ocmConn *sdk.Connection, configMapNamespace, configMapName, configMapAnnotationKey string) (string, error) {
@@ -139,6 +161,8 @@ func populateRhobsFetchers(ctx context.Context, clusterKey string, hiveOcmUrl st
 	}
 
 	var monitoredClusterId string
+	var mcExtId string
+	var hcpNamespace string
 	isHcp := cluster.Hypershift().Enabled()
 	isMC := false
 
@@ -148,7 +172,15 @@ func populateRhobsFetchers(ctx context.Context, clusterKey string, hiveOcmUrl st
 			return fmt.Errorf("failed to retrieve management cluster for cluster '%s': %v", cluster.ID(), err)
 		}
 		monitoredClusterId = managementCluster.ID()
+		mcExtId = managementCluster.ExternalID()
 		log.Infof("Cluster %s is managed by MC cluster %s - using the MC cluster for RHOBS cell resolution\n", cluster.ID(), monitoredClusterId)
+
+		hcpNs, nsErr := ocmutils.GetHCPNamespace(cluster.ID())
+		if nsErr != nil {
+			log.Warnf("Failed to get HCP namespace for cluster '%s': %v\n", cluster.ID(), nsErr)
+		} else {
+			hcpNamespace = hcpNs
+		}
 	} else {
 		monitoredClusterId = cluster.ID()
 		isMC, err = ocmutils.IsManagementCluster(cluster.ID())
@@ -220,10 +252,12 @@ func populateRhobsFetchers(ctx context.Context, clusterKey string, hiveOcmUrl st
 	baseFetcher := RhobsFetcher{
 		clusterId:           cluster.ID(),
 		clusterExternalId:   cluster.ExternalID(),
+		mcExternalId:        mcExtId,
 		clusterName:         cluster.Name(),
 		IsHostedCluster:     isHcp,
 		isManagementCluster: isMC,
 		ocmEnvName:          ocmutils.GetCurrentOCMEnv(ocmConn),
+		HcpNamespace:        hcpNamespace,
 	}
 
 	var resolveErr error
