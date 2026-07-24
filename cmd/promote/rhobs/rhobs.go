@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -25,6 +26,7 @@ const (
 // RHOBS Platform Team and promoted separately.
 var sreOwnedServices = map[string]bool{
 	"saas-hcp-rules":                       true,
+	"saas-mc-rules":                        true,
 	"saas-sc-rules":                        true,
 	"saas-hcp-loki-alerts":                 true,
 	"saas-hcp-loki-recording-rules":        true,
@@ -47,7 +49,8 @@ var sreOwnedServices = map[string]bool{
 }
 
 type rhobsOptions struct {
-	list bool
+	list   bool
+	latest bool
 
 	appInterfaceProvidedPath string
 	configRepoPath           string
@@ -107,7 +110,19 @@ func (c *rhobsPromoteCallbacks) GetResourceTemplateRepoUrl(resourceTemplateNode 
 }
 
 func (c *rhobsPromoteCallbacks) FilterTargets(targetNodes []*kyaml.RNode) ([]*kyaml.RNode, error) {
-	return promote.FilterTargetsContainingNamespaceRef(targetNodes, rhobsProdNamespaceRef)
+	prodTargets, err := promote.FilterTargetsContainingNamespaceRef(targetNodes, rhobsProdNamespaceRef)
+	if err != nil {
+		return nil, err
+	}
+	var filtered []*kyaml.RNode
+	for _, t := range prodTargets {
+		subscribeNode, _ := kyaml.Lookup("promotion", "subscribe").Filter(t)
+		if subscribeNode != nil {
+			continue
+		}
+		filtered = append(filtered, t)
+	}
+	return filtered, nil
 }
 
 func (c *rhobsPromoteCallbacks) ComputeCommitMessage(resourceTemplateRepo *promote.Repo, resourceTemplatePath, oldHash, newHash string) (*promote.CommitMessage, error) {
@@ -133,6 +148,49 @@ func isPinnedSHA(ref string) bool {
 	return true
 }
 
+var configRepoURLPatterns = []string{
+	"gitlab.cee.redhat.com/rhobs/configuration",
+	"gitlab.cee.redhat.com:rhobs/configuration",
+}
+
+func findUpstreamRemote(repoPath string) (string, error) {
+	out, err := exec.Command("git", "-C", repoPath, "remote", "-v").Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to list remotes in %s: %v", repoPath, err)
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.Contains(line, "(fetch)") {
+			continue
+		}
+		for _, pattern := range configRepoURLPatterns {
+			if strings.Contains(line, pattern) {
+				return strings.Fields(line)[0], nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no remote pointing to gitlab.cee.redhat.com/rhobs/configuration found in %s", repoPath)
+}
+
+func resolveLatestHash(repoPath string) (string, error) {
+	remote, err := findUpstreamRemote(repoPath)
+	if err != nil {
+		return "", err
+	}
+	if err := exec.Command("git", "-C", repoPath, "fetch", remote, "main").Run(); err != nil {
+		return "", fmt.Errorf("failed to fetch %s/main: %v", remote, err)
+	}
+	out, err := exec.Command("git", "-C", repoPath, "rev-parse", remote+"/main").Output() //nolint:gosec // G204 — remote is from findUpstreamRemote which validates against configRepoURLPatterns
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve %s/main: %v", remote, err)
+	}
+	hash := strings.TrimSpace(string(out))
+	if !isPinnedSHA(hash) {
+		return "", fmt.Errorf("resolved hash %q is not a valid 40-char SHA", hash)
+	}
+	fmt.Printf("Fetched %s/main from %s\n", remote, repoPath)
+	return hash, nil
+}
+
 func shortHash(hash string) string {
 	if len(hash) > 12 {
 		return hash[:12]
@@ -140,10 +198,21 @@ func shortHash(hash string) string {
 	return hash
 }
 
-func promoteAllServices(appInterfaceClone *promote.AppInterfaceClone, servicesRegistry *promote.ServicesRegistry, gitHash string) error {
+func promoteAllServices(appInterfaceClone *promote.AppInterfaceClone, servicesRegistry *promote.ServicesRegistry, gitHash, configRepoPath string) error {
 	branchName := fmt.Sprintf("promote-rhobs-%s", shortHash(gitHash))
 	if err := appInterfaceClone.CheckoutNewBranch(branchName); err != nil {
 		return err
+	}
+
+	oldHash := getCurrentProductionHash(servicesRegistry)
+
+	changeLog := ""
+	if configRepoPath != "" && oldHash != "" {
+		out, err := exec.Command("git", "-C", configRepoPath, "log", "--oneline", "--no-merges", oldHash+".."+gitHash).Output() //nolint:gosec // G204 — oldHash and gitHash are validated 40-char hex SHAs
+		if err != nil {
+			return fmt.Errorf("failed to generate changelog (%s..%s): %v", shortHash(oldHash), shortHash(gitHash), err)
+		}
+		changeLog = strings.TrimSpace(string(out))
 	}
 
 	var promotedIds []string
@@ -162,10 +231,6 @@ func promoteAllServices(appInterfaceClone *promote.AppInterfaceClone, servicesRe
 			continue
 		}
 
-		commitMsg := fmt.Sprintf("Promote %s to %s", id, shortHash(gitHash))
-		if err := appInterfaceClone.Commit(commitMsg); err != nil {
-			return fmt.Errorf("failed to commit %s: %v", id, err)
-		}
 		promotedIds = append(promotedIds, id)
 		fmt.Printf("Promoted %s\n", id)
 	}
@@ -174,9 +239,41 @@ func promoteAllServices(appInterfaceClone *promote.AppInterfaceClone, servicesRe
 		return errors.New("no RHOBS services had production targets to promote")
 	}
 
+	changesURL := fmt.Sprintf("https://gitlab.cee.redhat.com/rhobs/configuration/-/commit/%s", gitHash)
+	if oldHash != "" {
+		changesURL = fmt.Sprintf("https://gitlab.cee.redhat.com/rhobs/configuration/-/compare/%s...%s", oldHash, gitHash)
+	}
+
+	formattedMsg := fmt.Sprintf("Promote RHOBS configuration to %s\n\n", gitHash)
+	formattedMsg += "## Changes\n\n"
+	formattedMsg += fmt.Sprintf("[Compare changes](%s)\n\n", changesURL)
+	formattedMsg += "### Commit Log\n\n```\n" + changeLog + "\n```"
+
+	if err := appInterfaceClone.Commit(formattedMsg); err != nil {
+		return fmt.Errorf("failed to commit: %v", err)
+	}
+
 	fmt.Printf("\nPromoted %d service(s) on branch: %s\n", len(promotedIds), branchName)
 	fmt.Printf("Push the branch and create a MR from: %s\n", appInterfaceClone.GetPath())
 	return nil
+}
+
+func getCurrentProductionHash(registry *promote.ServicesRegistry) string {
+	service, err := registry.GetService("saas-hcp-rules")
+	if err != nil {
+		return ""
+	}
+	content, err := os.ReadFile(service.GetFilePath())
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(content), "\n") {
+		m := shaRefPattern.FindStringSubmatch(line)
+		if m != nil {
+			return m[2]
+		}
+	}
+	return ""
 }
 
 var shaRefPattern = regexp.MustCompile(`(\s+ref: )([0-9a-f]{40})`)
@@ -235,6 +332,9 @@ func NewCmdRhobs() *cobra.Command {
 		# List all RHOBS services
 		osdctl promote rhobs --list
 
+		# Promote all RHOBS services to the latest rhobs/configuration main
+		osdctl promote rhobs --latest
+
 		# Promote all RHOBS services to a specific git hash
 		osdctl promote rhobs --gitHash <git-hash>
 
@@ -256,8 +356,8 @@ func NewCmdRhobs() *cobra.Command {
 			}
 
 			if ops.list {
-				if ops.serviceId != "" || ops.gitHash != "" {
-					return errors.New("--list cannot be used with --serviceId or --gitHash")
+				if ops.serviceId != "" || ops.gitHash != "" || ops.latest {
+					return errors.New("--list cannot be used with --serviceId, --gitHash, or --latest")
 				}
 
 				fmt.Println("### Available RHOBS services ###")
@@ -275,6 +375,21 @@ func NewCmdRhobs() *cobra.Command {
 			}
 			if localRepoPath != "" {
 				fmt.Printf("Using local rhobs/configuration checkout: %s\n\n", localRepoPath)
+			}
+
+			if ops.latest {
+				if ops.gitHash != "" {
+					return errors.New("--latest cannot be used with --gitHash")
+				}
+				if localRepoPath == "" {
+					return errors.New("--latest requires a local rhobs/configuration checkout (set --configRepoDir or clone to ~/src/configuration)")
+				}
+				hash, err := resolveLatestHash(localRepoPath)
+				if err != nil {
+					return err
+				}
+				ops.gitHash = hash
+				fmt.Printf("Resolved latest: %s\n\n", shortHash(hash))
 			}
 
 			if ops.serviceId != "" {
@@ -295,11 +410,12 @@ func NewCmdRhobs() *cobra.Command {
 				return errors.New("--gitHash must be a 40-character lowercase commit SHA when promoting all services")
 			}
 
-			return promoteAllServices(appInterfaceClone, servicesRegistry, ops.gitHash)
+			return promoteAllServices(appInterfaceClone, servicesRegistry, ops.gitHash, localRepoPath)
 		},
 	}
 
 	rhobsCmd.Flags().BoolVarP(&ops.list, "list", "l", false, "List all RHOBS SaaS file names")
+	rhobsCmd.Flags().BoolVar(&ops.latest, "latest", false, "Promote all services to the latest rhobs/configuration origin/main HEAD")
 	rhobsCmd.Flags().StringVarP(&ops.serviceId, "serviceId", "", "", "Name of the SaaS file (without extension)")
 	rhobsCmd.Flags().StringVarP(&ops.gitHash, "gitHash", "g", "", "Git hash of rhobs/configuration to promote to (required for bulk promotion; defaults to HEAD for --serviceId)")
 	rhobsCmd.Flags().StringVarP(&ops.appInterfaceProvidedPath, "appInterfaceDir", "", "", "Location of app-interface checkout")
