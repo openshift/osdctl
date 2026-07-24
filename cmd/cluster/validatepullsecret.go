@@ -44,6 +44,8 @@ elevation by setting --managed-script=false.
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Fprintln(os.Stderr, "Tip: For extended validation, use 'osdctl cluster pull-secret validate'")
+			fmt.Fprintln(os.Stderr, "     For account-wide pull secret audit, use 'osdctl cluster pull-secret audit'")
 			cmdutil.CheckErr(ops.run())
 		},
 	}
