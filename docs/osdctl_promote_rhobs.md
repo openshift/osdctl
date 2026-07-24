@@ -13,6 +13,9 @@ osdctl promote rhobs [flags]
 		# List all RHOBS services
 		osdctl promote rhobs --list
 
+		# Promote all RHOBS services to the latest rhobs/configuration main
+		osdctl promote rhobs --latest
+
 		# Promote all RHOBS services to a specific git hash
 		osdctl promote rhobs --gitHash <git-hash>
 
@@ -27,6 +30,7 @@ osdctl promote rhobs [flags]
       --configRepoDir string     Location of rhobs/configuration checkout (auto-detected from ~/src/)
   -g, --gitHash string           Git hash of rhobs/configuration to promote to (required for bulk promotion; defaults to HEAD for --serviceId)
   -h, --help                     help for rhobs
+      --latest                   Promote all services to the latest rhobs/configuration origin/main HEAD
   -l, --list                     List all RHOBS SaaS file names
       --serviceId string         Name of the SaaS file (without extension)
 ```
