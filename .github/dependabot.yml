@@ -10,4 +10,7 @@ updates:
       - dependency-name: "github.com/openshift/backplane-cli"
     schedule:
       interval: 'weekly'
+    # Align with MintMaker minimumReleaseAge (~3 days) for supply-chain delay
+    cooldown:
+      default-days: 3
     open-pull-requests-limit: 10
