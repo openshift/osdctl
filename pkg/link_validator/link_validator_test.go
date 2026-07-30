@@ -185,7 +185,7 @@ func TestLinkValidator_ValidateLinks(t *testing.T) {
 		},
 		{
 			name:             "message with network error URL",
-			message:          "Check http://this-domain-should-not-exist-12345.com",
+			message:          "Check http://this-domain-should-not-exist-12345.invalid",
 			expectError:      true,
 			expectedWarnings: 0,
 		},
