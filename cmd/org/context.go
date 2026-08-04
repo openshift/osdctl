@@ -41,7 +41,7 @@ type DefaultContextFetcher struct {
 	GetLimitedSupport   func(*sdk.Connection, string) ([]*cmv1.LimitedSupportReason, error)
 	GetServiceLogs      func(string, time.Time, bool, bool) ([]*v1.LogEntry, error)
 	GetJiraIssues       func(clusterID, externalID, filter string) ([]jira.Issue, error)
-	NewPDClient         func(baseDomain string) (PDClient, error)
+	NewPDClient         func(baseDomain, clusterID string) (PDClient, error)
 }
 
 type PDClient interface {
@@ -83,9 +83,10 @@ func NewDefaultContextFetcher() *DefaultContextFetcher {
 		GetLimitedSupport:   utils.GetClusterLimitedSupportReasons,
 		GetServiceLogs:      servicelog.GetServiceLogsSince,
 		GetJiraIssues:       utils.GetJiraIssuesForCluster,
-		NewPDClient: func(baseDomain string) (PDClient, error) {
+		NewPDClient: func(baseDomain, clusterID string) (PDClient, error) {
 			return pdProvider.NewClient().
 				WithBaseDomain(baseDomain).
+				WithClusterID(clusterID).
 				WithUserToken(viper.GetString(pdProvider.PagerDutyUserTokenConfigKey)).
 				WithOauthToken(viper.GetString(pdProvider.PagerDutyOauthTokenConfigKey)).
 				Init()
@@ -207,7 +208,16 @@ func (f *DefaultContextFetcher) FetchContext(orgID string, output io.Writer) ([]
 			})
 			// PagerDuty alerts
 			dataEg.Go(func() error {
-				pdClient, err := f.NewPDClient(cluster.DNS().BaseDomain())
+				// For HCP clusters, PD services are organized by region
+				// rather than per-cluster DNS domain. Use the region as
+				// the query and filter incidents by cluster ID.
+				baseDomain := cluster.DNS().BaseDomain()
+				var clusterID string
+				if cluster.Hypershift().Enabled() && cluster.Region() != nil && cluster.Region().ID() != "" {
+					baseDomain = cluster.Region().ID()
+					clusterID = cluster.ID()
+				}
+				pdClient, err := f.NewPDClient(baseDomain, clusterID)
 				if err != nil {
 					return fmt.Errorf("failed to build PD client")
 				}
