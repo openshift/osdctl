@@ -135,3 +135,108 @@ func TestCleanupAccessOptions_dropPrivateLinkAccess(t *testing.T) {
 		}
 	}
 }
+
+func TestCleanupAccessOptions_dropPrivateLinkAccess_PSCCluster(t *testing.T) {
+	const (
+		clusterid = "fake-psc-cluster-uuid-12345"
+	)
+
+	tests := []struct {
+		Name              string
+		Pods              []metav1.ObjectMeta
+		ExpectedPodsAfter []string
+	}{
+		{
+			Name: "PSC Single Jump Pod",
+			Pods: []metav1.ObjectMeta{
+				{
+					Name:   "jump",
+					Labels: map[string]string{jumpPodLabelKey: clusterid},
+				},
+			},
+			ExpectedPodsAfter: []string{},
+		},
+		{
+			Name:              "PSC No pods",
+			Pods:              []metav1.ObjectMeta{},
+			ExpectedPodsAfter: []string{},
+		},
+		{
+			Name: "PSC Mixed use pods",
+			Pods: []metav1.ObjectMeta{
+				{
+					Name:   "jump",
+					Labels: map[string]string{jumpPodLabelKey: clusterid},
+				},
+				{
+					Name:   "provision",
+					Labels: map[string]string{"a-provisioning-pod-label": "testing"},
+				},
+			},
+			ExpectedPodsAfter: []string{"provision"},
+		},
+	}
+
+	for _, test := range tests {
+		fmt.Printf("Testing '%s'\n", test.Name)
+
+		// Generate test objects
+		objs := []runtime.Object{}
+		ns := corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   fmt.Sprintf("uhc-staging-%s", clusterid),
+				Labels: map[string]string{"api.openshift.com/id": clusterid},
+			},
+		}
+		objs = append(objs, &ns)
+
+		for _, objMeta := range test.Pods {
+			pod := corev1.Pod{
+				ObjectMeta: objMeta,
+			}
+			pod.Namespace = ns.Name
+			objs = append(objs, &pod)
+		}
+
+		// Setup Environment
+		scheme := runtime.NewScheme()
+		err := corev1.AddToScheme(scheme)
+		if err != nil {
+			t.Fatalf("Failed '%s': to add corev1 to scheme: %v", test.Name, err)
+		}
+
+		client := k8s.NewFakeClient(fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...))
+		streams := genericclioptions.IOStreams{In: strings.NewReader("y\n"), Out: os.Stdout, ErrOut: os.Stderr}
+		cleanupAccess := newCleanupAccessOptions(client, streams)
+
+		// Set the required "reason" flag for PSC clusters
+		cleanupAccess.reason = "testing-reason"
+
+		cluster := generatePSCClusterObjectForTesting("fake-psc-cluster", clusterid)
+
+		// Run test
+		err = cleanupAccess.dropPrivateLinkAccess(&cluster)
+
+		// Verify results
+		if err != nil {
+			t.Fatalf("Failed '%s': unexpected error encountered: %v", test.Name, err)
+		}
+
+		// Verify only expected pods remain
+		podsAfter := corev1.PodList{}
+		err = cleanupAccess.kubeCli.List(context.TODO(), &podsAfter)
+		if err != nil {
+			t.Fatalf("Failed '%s': error while listing pods after testing: %v", test.Name, err)
+		}
+
+		if len(podsAfter.Items) != len(test.ExpectedPodsAfter) {
+			t.Errorf("Failed '%s': unexpected number of pods remain after test: expected %d, got %d", test.Name, len(test.ExpectedPodsAfter), len(podsAfter.Items))
+		}
+
+		for _, pod := range podsAfter.Items {
+			if !slices.Contains(test.ExpectedPodsAfter, pod.Name) {
+				t.Errorf("Failed '%s': unexpected pod remains after test: %s", test.Name, pod.Name)
+			}
+		}
+	}
+}

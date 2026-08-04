@@ -25,7 +25,7 @@ func newCmdCleanup(client *k8s.LazyClient, streams genericclioptions.IOStreams) 
 	cleanupCmd := &cobra.Command{
 		Use:   "cleanup --cluster-id <cluster-identifier>",
 		Short: "Drop emergency access to a cluster",
-		Long:  "Relinquish emergency access from the given cluster. If the cluster is PrivateLink, it deletes\nall jump pods in the cluster's namespace (because of this, you must be logged into the hive shard\nwhen dropping access for PrivateLink clusters). For non-PrivateLink clusters, the $KUBECONFIG\nenvironment variable is unset, if applicable.",
+		Long:  "Relinquish emergency access from the given cluster. If the cluster is PrivateLink or\nGCP Private Service Connect (PSC), it deletes all jump pods in the cluster's namespace\n(because of this, you must be logged into the hive shard when dropping access for\nPrivateLink/PSC clusters). For non-PrivateLink/non-PSC clusters, the $KUBECONFIG\nenvironment variable is unset, if applicable.",
 		Example: `  # Drop emergency access to a cluster
   osdctl cluster break-glass cleanup --cluster-id ${CLUSTER_ID}`,
 		Args:              cobra.NoArgs,
@@ -36,7 +36,7 @@ func newCmdCleanup(client *k8s.LazyClient, streams genericclioptions.IOStreams) 
 		},
 	}
 	cleanupCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "[Mandatory] Provide the Internal ID of the cluster")
-	cleanupCmd.Flags().StringVar(&ops.reason, "reason", "", "[Mandatory for PrivateLink clusters] The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	cleanupCmd.Flags().StringVar(&ops.reason, "reason", "", "[Mandatory for PrivateLink/PSC clusters] The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
 
 	_ = cleanupCmd.MarkFlagRequired("cluster-id")
 
@@ -106,23 +106,24 @@ func (c *cleanupAccessOptions) Run(cmd *cobra.Command) error {
 		return err
 	}
 	c.Println(fmt.Sprintf("Dropping access to cluster '%s'", cluster.Name()))
-	if cluster.AWS().PrivateLink() {
+	isPscCluster := cluster.GCP().PrivateServiceConnect().ServiceAttachmentSubnet() != ""
+	if cluster.AWS().PrivateLink() || isPscCluster {
 		return c.dropPrivateLinkAccess(cluster)
 	} else {
 		return c.dropLocalAccess(cluster)
 	}
 }
 
-// dropPrivateLinkAccess removes access to a PrivateLink cluster.
+// dropPrivateLinkAccess removes access to a PrivateLink or PSC cluster.
 // This primarily consists of deleting any jump pods found to be running against the cluster in hive.
 func (c *cleanupAccessOptions) dropPrivateLinkAccess(cluster *clustersmgmtv1.Cluster) error {
 	if c.reason == "" {
-		c.Errorln("flag \"reason\" not set and is required when Cluster is PrivateLink")
-		return fmt.Errorf("flag \"reason\" not set and is required when Cluster is PrivateLink")
+		c.Errorln("flag \"reason\" not set and is required when Cluster is PrivateLink or PSC")
+		return fmt.Errorf("flag \"reason\" not set and is required when Cluster is PrivateLink or PSC")
 	}
-	c.kubeCli.Impersonate("backplane-cluster-admin", c.reason, fmt.Sprintf("Elevation required to clean break-glass on PrivateLink Clusters"))
+	c.kubeCli.Impersonate("backplane-cluster-admin", c.reason, "Elevation required to clean break-glass on PrivateLink/PSC Clusters")
 
-	c.Println("Cluster is PrivateLink - removing jump pods in the cluster's namespace.")
+	c.Println("Cluster is PrivateLink or PSC - removing jump pods in the cluster's namespace.")
 	ns, err := getClusterNamespace(c.kubeCli, cluster.ID())
 	if err != nil {
 		c.Errorln("Failed to retrieve cluster namespace")
