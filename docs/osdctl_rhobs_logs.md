@@ -1,10 +1,10 @@
 ## osdctl rhobs logs
 
-Fetch logs from RHOBS for a given cluster
+Fetch logs from RHOBS for a given cluster or cell
 
 ### Synopsis
 
-Fetch logs from RHOBS for a given cluster. The cluster can be a management cluster (MC) or whatever cluster sending logs to RHOBS; the command works as if the management cluster ID was passed if given a hosted cluster (HCP) ID. By default, logs from all the pods in the given namespace are returned but it is possible to specify a single pod as an argument or filter pods using their labels. Logs themselves can be also filtered to only keep the ones containing a given regexp (--contain-regex option) or a given log level (--level option).
+Fetch logs from RHOBS for a given cluster or RHOBS cell. The cluster can be a management cluster (MC) or whatever cluster sending logs to RHOBS; the command works as if the management cluster ID was passed if given a hosted cluster (HCP) ID. Alternatively, use --rhobs-cell to query a specific RHOBS cell directly without a cluster ID (useful for app-sre services like Clusters Service that send logs to the global cell). By default, logs from all the pods in the given namespace are returned but it is possible to specify a single pod as an argument or filter pods using their labels. Logs themselves can be also filtered to only keep the ones containing a given regexp (--contain-regex option) or a given log level (--level option).
 
 ```
 osdctl rhobs logs [pod] [flags]
@@ -31,6 +31,7 @@ osdctl rhobs logs [pod] [flags]
       --not-contain-regex stringArray   Regular expression the log message must not contain - flag can be repeated
   -o, --output string                   Format of the output - allowed values: "text", "csv" or "json" - exclusive with --url (default "text")
   -q, --query string                    LogQL expression - exclusive with many other flags
+      --rhobs-cell string               RHOBS cell URL (e.g., https://us-east-1-0.rhobs.api.stage.openshift.com) - query logs directly without a cluster ID - exclusive with --cluster-id
   -l, --selector string                 Label selector for filtering pods - exclusive with the pod argument
       --since duration                  Only return logs newer than a relative duration (e.g. 1h, 30m) - exclusive with --start-time & --end-time
       --start-time time                 Start time for the logs - alternate alias: --since-time (default to 5 minutes ago)

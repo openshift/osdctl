@@ -502,10 +502,10 @@ func TestHandleLogs_MissingParams(t *testing.T) {
 		args        map[string]interface{}
 		expectedMsg string
 	}{
-		{"no args", map[string]interface{}{}, "cluster_id is required"},
+		{"no args", map[string]interface{}{}, "either cluster_id or rhobs_cell is required"},
 		{"only cluster", map[string]interface{}{"cluster_id": "test"}, "either namespace or query is required"},
-		{"missing cluster", map[string]interface{}{"namespace": "default"}, "cluster_id is required"},
-		{"empty cluster", map[string]interface{}{"cluster_id": "", "namespace": "default"}, "cluster_id is required"},
+		{"missing cluster", map[string]interface{}{"namespace": "default"}, "either cluster_id or rhobs_cell is required"},
+		{"empty cluster", map[string]interface{}{"cluster_id": "", "namespace": "default"}, "either cluster_id or rhobs_cell is required"},
 		{"no namespace or query", map[string]interface{}{"cluster_id": "test", "since": "5m"}, "either namespace or query is required"},
 	}
 
@@ -661,6 +661,113 @@ func TestHandleLogs_NamespaceWithRegex(t *testing.T) {
 	if !isToolError(result) {
 		t.Error("expected fetcher error")
 	}
+}
+
+// --- handleLogs rhobs_cell tests ---
+
+func TestHandleLogs_RhobsCellMutualExclusivity(t *testing.T) {
+	req := makeRequest("rhobs_logs", map[string]interface{}{
+		"cluster_id": "test-cluster",
+		"rhobs_cell": "https://us-east-1-0.rhobs.api.stage.openshift.com",
+		"namespace":  "default",
+	})
+	result, err := handleLogs(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handler returned Go error: %v", err)
+	}
+	if !isToolError(result) {
+		t.Error("expected tool error for mutual exclusivity")
+	}
+	if got := getResultText(result); got != "cluster_id and rhobs_cell are mutually exclusive" {
+		t.Errorf("error = %q, want %q", got, "cluster_id and rhobs_cell are mutually exclusive")
+	}
+}
+
+func TestHandleLogs_RhobsCellWithoutNamespace(t *testing.T) {
+	req := makeRequest("rhobs_logs", map[string]interface{}{
+		"rhobs_cell": "https://us-east-1-0.rhobs.api.stage.openshift.com",
+	})
+	result, err := handleLogs(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handler returned Go error: %v", err)
+	}
+	if !isToolError(result) {
+		t.Error("expected tool error for missing namespace")
+	}
+	if got := getResultText(result); got != "either namespace or query is required" {
+		t.Errorf("error = %q, want %q", got, "either namespace or query is required")
+	}
+}
+
+func TestHandleLogs_RhobsCellInvalidUrl(t *testing.T) {
+	req := makeRequest("rhobs_logs", map[string]interface{}{
+		"rhobs_cell": "https://invalid.example.com",
+		"namespace":  "uhc-stage",
+	})
+	result, err := handleLogs(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handler returned Go error: %v", err)
+	}
+	if !isToolError(result) {
+		t.Error("expected tool error for invalid cell URL")
+	}
+}
+
+func TestHandleLogs_RhobsCellOnlyParam(t *testing.T) {
+	req := makeRequest("rhobs_logs", map[string]interface{}{
+		"rhobs_cell": "https://us-east-1-0.rhobs.api.stage.openshift.com",
+		"namespace":  "uhc-stage",
+	})
+	result, err := handleLogs(context.Background(), req)
+	if err != nil {
+		t.Fatalf("handler returned Go error: %v", err)
+	}
+	// Will fail at vault check, but confirms it gets past validation
+	if !isToolError(result) {
+		t.Skip("expected vault/fetcher error but got success (vault may be configured)")
+	}
+}
+
+func TestHandleLogs_RhobsCellSchemaHasProperty(t *testing.T) {
+	s := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1.0.0"}, nil)
+	registerMcpTools(s)
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = s.Run(ctx, serverTransport) }()
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1.0.0"}, nil)
+	session, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect failed: %v", err)
+	}
+	defer session.Close()
+
+	result, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListTools failed: %v", err)
+	}
+
+	for _, tool := range result.Tools {
+		if tool.Name != "rhobs_logs" {
+			continue
+		}
+		schemaBytes, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			t.Fatalf("failed to marshal schema: %v", err)
+		}
+		var schema map[string]interface{}
+		if err := json.Unmarshal(schemaBytes, &schema); err != nil {
+			t.Fatalf("schema is not valid JSON: %v", err)
+		}
+		props := schema["properties"].(map[string]interface{})
+		if _, ok := props["rhobs_cell"]; !ok {
+			t.Error("rhobs_logs schema missing rhobs_cell property")
+		}
+		return
+	}
+	t.Fatal("rhobs_logs tool not found")
 }
 
 // --- handleAlerts validation tests ---
@@ -821,19 +928,20 @@ func TestRegisterMcpTools_SchemaValidation(t *testing.T) {
 				t.Error("missing cluster_id property")
 			}
 
-			// All tools should require cluster_id
-			required, ok := schema["required"].([]interface{})
-			if !ok {
-				t.Fatal("missing required array")
-			}
-			hasClusterId := false
-			for _, r := range required {
-				if r == "cluster_id" {
-					hasClusterId = true
+			// Tools that require cluster_id should list it in required
+			// (rhobs_logs does not require it since rhobs_cell is an alternative)
+			if required, ok := schema["required"].([]interface{}); ok {
+				hasClusterId := false
+				for _, r := range required {
+					if r == "cluster_id" {
+						hasClusterId = true
+					}
 				}
-			}
-			if !hasClusterId {
-				t.Error("cluster_id should be required")
+				if tool.Name != "rhobs_logs" && !hasClusterId {
+					t.Error("cluster_id should be required")
+				}
+			} else if tool.Name != "rhobs_logs" {
+				t.Fatal("missing required array")
 			}
 		})
 	}

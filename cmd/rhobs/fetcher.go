@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -304,13 +305,27 @@ func CreateRhobsFetcher(ctx context.Context, clusterKey string, usage RhobsFetch
 }
 
 func CreateRhobsFetcherFromCell(rhobsCell string) (*RhobsFetcher, error) {
+	parsed, err := url.Parse(rhobsCell)
+	if err != nil {
+		return nil, fmt.Errorf("invalid RHOBS cell URL '%s': %v", rhobsCell, err)
+	}
+	if parsed.Scheme != "https" || parsed.User != nil ||
+		(parsed.Path != "" && parsed.Path != "/") ||
+		parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" ||
+		parsed.Port() != "" {
+		return nil, fmt.Errorf("invalid RHOBS cell URL '%s': must be https with no path, query, fragment, port, or credentials", rhobsCell)
+	}
+
+	host := parsed.Hostname()
 	envName := ""
 
-	if strings.HasSuffix(rhobsCell, ".rhobs.api.openshift.com") {
+	prodSuffix := ".rhobs.api.openshift.com"
+	if strings.HasSuffix(host, prodSuffix) && len(host) > len(prodSuffix) {
 		envName = "production"
 	} else {
 		for _, currentEnvName := range []string{"stage", "integration"} {
-			if strings.HasSuffix(rhobsCell, ".rhobs.api."+currentEnvName+".openshift.com") {
+			suffix := ".rhobs.api." + currentEnvName + ".openshift.com"
+			if strings.HasSuffix(host, suffix) && len(host) > len(suffix) {
 				envName = currentEnvName
 			}
 		}
@@ -320,9 +335,10 @@ func CreateRhobsFetcherFromCell(rhobsCell string) (*RhobsFetcher, error) {
 		return nil, fmt.Errorf("failed to determine OCM environment from RHOBS cell URL '%s'", rhobsCell)
 	}
 
+	canonicalUrl := "https://" + host
 	return &RhobsFetcher{
 		ocmEnvName: envName,
-		RhobsCell:  rhobsCell,
+		RhobsCell:  canonicalUrl,
 	}, nil
 }
 

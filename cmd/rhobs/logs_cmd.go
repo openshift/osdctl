@@ -55,13 +55,16 @@ func newCmdLogs() *cobra.Command {
 	var outputFormatStr string
 	var isPrintingTimestamp bool
 	var printedFields []string
+	var rhobsCell string
 
 	cmd := &cobra.Command{
 		Use:   "logs [pod]",
-		Short: "Fetch logs from RHOBS for a given cluster",
-		Long: "Fetch logs from RHOBS for a given cluster. " +
+		Short: "Fetch logs from RHOBS for a given cluster or cell",
+		Long: "Fetch logs from RHOBS for a given cluster or RHOBS cell. " +
 			"The cluster can be a management cluster (MC) or whatever cluster sending logs to RHOBS; " +
 			"the command works as if the management cluster ID was passed if given a hosted cluster (HCP) ID. " +
+			"Alternatively, use --rhobs-cell to query a specific RHOBS cell directly without a cluster ID " +
+			"(useful for app-sre services like Clusters Service that send logs to the global cell). " +
 			"By default, logs from all the pods in the given namespace are returned but it is possible to specify " +
 			"a single pod as an argument or filter pods using their labels. Logs themselves can be also filtered " +
 			"to only keep the ones containing a given regexp (--contain-regex option) or a given log level (--level option).",
@@ -71,6 +74,10 @@ func newCmdLogs() *cobra.Command {
 
 			if isOpeningGrafanaUrl && !isComputingGrafanaUrl {
 				return fmt.Errorf("--browser can only be set if --url is set")
+			}
+
+			if cmd.Flags().Changed("rhobs-cell") && cmd.Parent().PersistentFlags().Changed("cluster-id") {
+				return fmt.Errorf("--rhobs-cell and --cluster-id options cannot be used together")
 			}
 
 			if cmd.Flags().Changed("query") {
@@ -233,12 +240,17 @@ func newCmdLogs() *cobra.Command {
 
 			cmd.SilenceUsage = true
 
-			rhobsFetcher, err := CreateRhobsFetcher(cmd.Context(), commonOptions.clusterId, RhobsFetchForLogs, commonOptions.hiveOcmUrl)
+			var rhobsFetcher *RhobsFetcher
+			if cmd.Flags().Changed("rhobs-cell") {
+				rhobsFetcher, err = CreateRhobsFetcherFromCell(rhobsCell)
+			} else {
+				rhobsFetcher, err = CreateRhobsFetcher(cmd.Context(), commonOptions.clusterId, RhobsFetchForLogs, commonOptions.hiveOcmUrl)
+			}
 			if err != nil {
 				return err
 			}
 
-			if !cmd.Flags().Changed("query") {
+			if !cmd.Flags().Changed("query") && !cmd.Flags().Changed("rhobs-cell") {
 				if rhobsFetcher.IsHostedCluster {
 					log.Infof("HCP cluster: MC external UUID = %q, HCP namespace = %q\n",
 						rhobsFetcher.mcExternalId, rhobsFetcher.HcpNamespace)
@@ -337,6 +349,9 @@ func newCmdLogs() *cobra.Command {
 		`flag can be repeated / values can also be aggregated with one flag using the comma as separator - possible values: "k8s_namespace_name", "k8s_pod_name", "k8s_container_name" - `+
 		`use the "json" output format to know about all possible fields - exclusive with --url`)
 	cmd.MarkFlagsMutuallyExclusive("field", "url")
+
+	cmd.Flags().StringVar(&rhobsCell, "rhobs-cell", "", "RHOBS cell URL (e.g., https://us-east-1-0.rhobs.api.stage.openshift.com) - "+
+		"query logs directly without a cluster ID - exclusive with --cluster-id")
 
 	return cmd
 }

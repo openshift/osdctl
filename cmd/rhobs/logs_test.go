@@ -128,6 +128,125 @@ func TestResolveLogsNamespace(t *testing.T) {
 	}
 }
 
+// --- CreateRhobsFetcherFromCell ---
+
+func TestCreateRhobsFetcherFromCell(t *testing.T) {
+	tests := []struct {
+		name      string
+		cellUrl   string
+		wantEnv   string
+		wantError bool
+	}{
+		{
+			name:    "production cell",
+			cellUrl: "https://us-east-1-0.rhobs.api.openshift.com",
+			wantEnv: "production",
+		},
+		{
+			name:    "stage cell",
+			cellUrl: "https://us-east-1-0.rhobs.api.stage.openshift.com",
+			wantEnv: "stage",
+		},
+		{
+			name:    "integration cell",
+			cellUrl: "https://eu-central-1-0.rhobs.api.integration.openshift.com",
+			wantEnv: "integration",
+		},
+		{
+			name:      "invalid cell URL",
+			cellUrl:   "https://invalid.example.com",
+			wantError: true,
+		},
+		{
+			name:      "URL with query string bypass",
+			cellUrl:   "https://attacker.invalid/?x=.rhobs.api.openshift.com",
+			wantError: true,
+		},
+		{
+			name:      "URL with path bypass",
+			cellUrl:   "https://attacker.invalid/path.rhobs.api.openshift.com",
+			wantError: true,
+		},
+		{
+			name:      "URL with userinfo",
+			cellUrl:   "https://user:pass@us-east-1-0.rhobs.api.stage.openshift.com",
+			wantError: true,
+		},
+		{
+			name:      "non-https scheme",
+			cellUrl:   "http://us-east-1-0.rhobs.api.stage.openshift.com",
+			wantError: true,
+		},
+		{
+			name:      "URL with trailing empty query",
+			cellUrl:   "https://us-east-1-0.rhobs.api.stage.openshift.com?",
+			wantError: true,
+		},
+		{
+			name:      "URL with custom port",
+			cellUrl:   "https://us-east-1-0.rhobs.api.stage.openshift.com:8443",
+			wantError: true,
+		},
+		{
+			name:      "URL with default port",
+			cellUrl:   "https://us-east-1-0.rhobs.api.stage.openshift.com:443",
+			wantError: true,
+		},
+		{
+			name:      "bare production suffix",
+			cellUrl:   "https://.rhobs.api.openshift.com",
+			wantError: true,
+		},
+		{
+			name:      "bare stage suffix",
+			cellUrl:   "https://.rhobs.api.stage.openshift.com",
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fetcher, err := CreateRhobsFetcherFromCell(tt.cellUrl)
+			if tt.wantError {
+				if err == nil {
+					t.Error("expected error for invalid cell URL")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if fetcher.ocmEnvName != tt.wantEnv {
+				t.Errorf("ocmEnvName = %q, want %q", fetcher.ocmEnvName, tt.wantEnv)
+			}
+			if fetcher.RhobsCell != tt.cellUrl {
+				t.Errorf("RhobsCell = %q, want %q", fetcher.RhobsCell, tt.cellUrl)
+			}
+			if fetcher.clusterExternalId != "" {
+				t.Error("clusterExternalId should be empty for cell-based fetcher")
+			}
+			if fetcher.clusterId != "" {
+				t.Error("clusterId should be empty for cell-based fetcher")
+			}
+		})
+	}
+}
+
+// --- CLI --rhobs-cell flag ---
+
+func TestLogsCommand_RhobsCellFlag(t *testing.T) {
+	cmd := newCmdLogs()
+
+	// Verify --rhobs-cell flag exists
+	flag := cmd.Flags().Lookup("rhobs-cell")
+	if flag == nil {
+		t.Fatal("--rhobs-cell flag not found on logs command")
+	}
+	if flag.DefValue != "" {
+		t.Errorf("--rhobs-cell default should be empty, got %q", flag.DefValue)
+	}
+}
+
 // --- GetGrafanaLogsUrl ---
 
 func TestGetGrafanaLogsUrl(t *testing.T) {

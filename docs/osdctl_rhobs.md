@@ -22,7 +22,7 @@ RHOBS.next related utilities
 * [osdctl rhobs alerts](osdctl_rhobs_alerts.md)	 - List or silence RHOBS alerts
 * [osdctl rhobs cell](osdctl_rhobs_cell.md)	 - Get the RHOBS cell for a given cluster
 * [osdctl rhobs hcp-dashboard](osdctl_rhobs_hcp-dashboard.md)	 - Get the HCP dashboard URL for a given HCP cluster
-* [osdctl rhobs logs](osdctl_rhobs_logs.md)	 - Fetch logs from RHOBS for a given cluster
+* [osdctl rhobs logs](osdctl_rhobs_logs.md)	 - Fetch logs from RHOBS for a given cluster or cell
 * [osdctl rhobs mcp](osdctl_rhobs_mcp.md)	 - RHOBS MCP server for AI agent integration
 * [osdctl rhobs metrics](osdctl_rhobs_metrics.md)	 - Fetch metrics from RHOBS for a given cluster
 
