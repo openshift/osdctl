@@ -1,0 +1,53 @@
+# Build and publish a GitHub release when a version tag is pushed.
+#
+# This replaces the manual, owner-only `make release` step. It runs goreleaser
+# with the built-in GITHUB_TOKEN, so no personal token is needed. Tags are
+# normally created by release-on-version-bump.yaml (on a VERSION bump), but
+# pushing a `v*` tag by hand still works as a fallback.
+#
+# The existing trigger_copr.yaml workflow also fires on this same tag push, so
+# the Fedora COPR build keeps working with no change.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # needed to create the GitHub release and upload archives
+
+jobs:
+  goreleaser:
+    name: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate tag format
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # The 'v*' event filter can't enforce semver, so reject anything that
+          # isn't a plain vMAJOR.MINOR.PATCH release tag (no prerelease suffixes).
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag '$TAG' is not a vMAJOR.MINOR.PATCH release tag; refusing to release." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0 # goreleaser needs full history + tags for the changelog
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run goreleaser
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
+        with:
+          version: "v2.11.2" # keep in sync with the Makefile download-goreleaser target
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,107 @@
+# Cut a release when a VERSION bump lands on master.
+#
+# A maintainer opens a PR bumping the VERSION file (e.g. 0.62.0 -> 0.63.0). Once
+# it's approved and merged, this workflow tags v<VERSION>, publishes the GitHub
+# release with goreleaser, and kicks the Fedora COPR build. It all runs with the
+# built-in GITHUB_TOKEN plus the already-present COPR_URL secret, so there are no
+# extra secrets or admin setup required.
+#
+# The tag, release, and COPR call are done inline here (rather than letting a tag
+# push trigger release.yaml / trigger_copr.yaml) because GitHub deliberately does
+# not re-trigger workflows for refs pushed by GITHUB_TOKEN. Pushing a v* tag by
+# hand still triggers release.yaml and trigger_copr.yaml the normal way.
+name: release-on-version-bump
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "VERSION"
+
+permissions:
+  contents: write # create/push the tag and publish the release
+
+jobs:
+  release:
+    name: tag and release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0 # goreleaser needs full history + tags for the changelog
+          persist-credentials: false # the tag-push step below authenticates explicitly instead
+
+      - name: Resolve version
+        id: version
+        run: |
+          set -euo pipefail
+          # Read the raw first line; do NOT normalize before validating, or a
+          # value like "0. 63.0" would be silently turned into a real tag.
+          version="$(head -n1 VERSION)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "VERSION '${version}' must be MAJOR.MINOR.PATCH (e.g. 0.63.0)." >&2
+            echo "Prerelease/build suffixes are not supported (they break the COPR tag contract)." >&2
+            exit 1
+          fi
+          tag="v${version}"
+          if remote_sha="$(git ls-remote --exit-code origin "refs/tags/${tag}" | cut -f1)"; then
+            # A tag can exist because a prior run tagged it but failed before
+            # goreleaser/COPR completed. Only treat it as "already released" if
+            # it points at the commit we're releasing; otherwise this is a
+            # conflicting tag and we shouldn't silently skip the release.
+            if [[ "$remote_sha" == "$(git rev-parse HEAD)" ]]; then
+              echo "Tag ${tag} already exists at HEAD, nothing to release."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "Tag ${tag} already exists but points at a different commit (${remote_sha}) than HEAD." >&2
+              echo "Refusing to proceed; delete or fix the conflicting tag manually." >&2
+              exit 1
+            fi
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        if: steps.version.outputs.skip == 'false'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG}" -m "Release ${TAG}"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "${TAG}"
+
+      - name: Set up Go
+        if: steps.version.outputs.skip == 'false'
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run goreleaser
+        if: steps.version.outputs.skip == 'false'
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
+        with:
+          version: "v2.11.2" # keep in sync with the Makefile download-goreleaser target
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger COPR build
+        if: steps.version.outputs.skip == 'false'
+        env:
+          COPR_URL: ${{ secrets.COPR_URL }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # --fail + --show-error so an HTTP 4xx/5xx from the webhook fails the
+          # job instead of silently reporting a successful release.
+          curl --fail --show-error --connect-timeout 10 --max-time 60 --request POST \
+            --header "Content-Type: application/json" \
+            --header "Accept: application/json" \
+            --data "{\"ref_type\": \"tag\", \"ref\": \"${TAG}\"}" \
+            --url "$COPR_URL"

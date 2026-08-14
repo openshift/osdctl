@@ -55,36 +55,46 @@ Release are available on Github
 
 ### Creating a release
 
+Releases are automated. Any maintainer can cut a release by opening a PR that bumps the
+`VERSION` file, no personal token or local `goreleaser` run required.
+
+1. Open a PR that updates the `VERSION` file to the new version (e.g. `0.62.0` -> `0.63.0`).
+   You can edit `VERSION` directly, or run `make new-release RELEASE_VERSION=0.63.0` to
+   bump it for you.
+2. Get it reviewed and merged to `master` the usual way (`/lgtm`, `/approve`).
+3. On merge, the `release-on-version-bump` workflow tags `vX.Y.Z`, publishes the
+   GitHub release with `goreleaser`, and kicks the Fedora COPR build.
+
+No secrets or admin setup are required: the workflow uses the built-in `GITHUB_TOKEN`
+and the `COPR_URL` secret that already powers `trigger_copr_on_tag`. The tag, release,
+and COPR call are done inline in one job because GitHub doesn't re-trigger workflows
+for tags pushed by `GITHUB_TOKEN`.
+
 #### For Fedora
 
-Fedora releases can automatically be build in a COPR repository by using a [custom
+Fedora releases are built in a COPR repository via a [custom
 webhook](https://docs.pagure.org/copr.copr/user_documentation.html#custom-webhook) and the `hack/copr.sh` script as
-build method.
+build method. The automated flow above calls this webhook as part of the release job.
+Pushing a `vX.Y.Z` tag by hand instead triggers the `trigger_copr_on_tag` workflow,
+which calls the same webhook.
 
-This expects the webhook to be configured to only react to tag events. If setup this will automatically trigger a
-rebuild of the package in the COPR project that receives the custom webhook.
+#### Manually (fallback)
 
-#### Manually
-
-Repository owners can create a new `osdctl` release with the `make release` target. An API token with `repo` permissions is required. [See: https://goreleaser.com/environment/#api-tokens](https://goreleaser.com/environment/#api-tokens)
-
-The goreleaser config (`.goreleaser.yaml`) will look for the token in `~/.config/goreleaser/token`.
-
-Goreleaser uses the latest Git tag from the repository to create a release. To make a new release, create a new Git tag:
+Pushing a `vX.Y.Z` tag directly still works and triggers the same `release` and COPR
+workflows. Push it to the remote that points at `openshift/osdctl` (this is `upstream`
+if you cloned a fork, or `origin` if you cloned `openshift/osdctl` directly), using the
+same remote for both commands:
 
 ```shell
-# Creating a new osdctl Github release
-
-# Ensure you have the latest set of tags pulled
-git fetch upstream --tags
-
-# Create a git tag to be the basis of the release
+git fetch <remote> --tags
 git tag -a vX.Y.Z -m "new release message"
-git push origin vX.Y.Z
-
-# Create the release
-make release
+git push <remote> vX.Y.Z
 ```
+
+If you need to build a release entirely from your machine (e.g. the Action is
+unavailable), the `make release` target still works. It requires a GitHub API token
+with `repo` permissions, which the goreleaser config reads from
+`~/.config/goreleaser/token`. [See: https://goreleaser.com/environment/#api-tokens](https://goreleaser.com/environment/#api-tokens)
 
 ## Run tests
 

@@ -57,7 +57,27 @@ SINGLE_TARGET ?= false
 build: ## Compile osdctl
 	goreleaser build --clean --snapshot --single-target=${SINGLE_TARGET}
 
-release: ## Create a release
+# Preferred way to cut a release: bump the VERSION file on a branch and open a PR.
+# Once merged to master, GitHub Actions tags vX.Y.Z and publishes the release
+# (and triggers the Fedora COPR build). See README "Creating a release".
+.PHONY: new-release
+new-release: ## Bump VERSION for a new release (RELEASE_VERSION=x.y.z), then open a PR
+	@if [ -z "$(RELEASE_VERSION)" ]; then \
+		echo "Usage: make new-release RELEASE_VERSION=x.y.z (current: $$(cat VERSION))"; \
+		exit 1; \
+	fi
+	@if ! echo "$(RELEASE_VERSION)" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		echo "RELEASE_VERSION must be MAJOR.MINOR.PATCH (e.g. 0.63.0), got '$(RELEASE_VERSION)'"; \
+		exit 1; \
+	fi
+	@echo "$(RELEASE_VERSION)" > VERSION
+	@echo "Updated VERSION -> $(RELEASE_VERSION)."
+	@echo "Commit this on a branch and open a PR. Merging it tags v$(RELEASE_VERSION) and publishes the release."
+
+# Manual fallback: build and publish a release from your machine with goreleaser.
+# Normally the 'release' GitHub Action does this on tag push; use this only if the
+# Action is unavailable. Requires a GitHub token in ~/.config/goreleaser/token.
+release: ## Create a release locally (manual fallback; prefer 'make new-release')
 	goreleaser release --clean
 
 install: ## Install osdctl to GOPATH/bin
