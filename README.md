@@ -62,26 +62,17 @@ Releases are automated. Any maintainer can cut a release by opening a PR that bu
    You can edit `VERSION` directly, or run `make new-release RELEASE_VERSION=0.63.0` to
    bump it for you.
 2. Get it reviewed and merged to `master` the usual way (`/lgtm`, `/approve`).
-3. On merge, the `release-on-version-bump` workflow tags `vX.Y.Z`, publishes the
-   GitHub release with `goreleaser`, and kicks the Fedora COPR build.
+3. On merge, the `release-on-version-bump` workflow tags `vX.Y.Z` and publishes the
+   GitHub release with `goreleaser`.
 
-No secrets or admin setup are required: the workflow uses the built-in `GITHUB_TOKEN`
-and the `COPR_URL` secret that already powers `trigger_copr_on_tag`. The tag, release,
-and COPR call are done inline in one job because GitHub doesn't re-trigger workflows
-for tags pushed by `GITHUB_TOKEN`.
-
-#### For Fedora
-
-Fedora releases are built in a COPR repository via a [custom
-webhook](https://docs.pagure.org/copr.copr/user_documentation.html#custom-webhook) and the `hack/copr.sh` script as
-build method. The automated flow above calls this webhook as part of the release job.
-Pushing a `vX.Y.Z` tag by hand instead triggers the `trigger_copr_on_tag` workflow,
-which calls the same webhook.
+No secrets or admin setup are required: the workflow uses the built-in `GITHUB_TOKEN`.
+The tag and release are done inline in one job because GitHub doesn't re-trigger
+workflows for tags pushed by `GITHUB_TOKEN`.
 
 #### Manually (fallback)
 
-Pushing a `vX.Y.Z` tag directly still works and triggers the same `release` and COPR
-workflows. Push it to the remote that points at `openshift/osdctl` (this is `upstream`
+Pushing a `vX.Y.Z` tag directly still works and triggers the same `release` workflow.
+Push it to the remote that points at `openshift/osdctl` (this is `upstream`
 if you cloned a fork, or `origin` if you cloned `openshift/osdctl` directly), using the
 same remote for both commands:
 

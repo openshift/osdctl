@@ -27,12 +27,12 @@ var (
 	// InstallMethod is set at build time via -X ldflags when osdctl is
 	// built by a package manager. Empty string (default) means the binary
 	// was built from source or via GoReleaser (GitHub releases).
-	// Known values: "copr", "homebrew".
+	// Known values: "homebrew".
 	InstallMethod string
 )
 
 // IsManagedInstall reports whether osdctl was installed via a package
-// manager (e.g. COPR/RPM, Homebrew) rather than from a GitHub release.
+// manager (e.g. Homebrew) rather than from a GitHub release.
 func IsManagedInstall() bool {
 	return InstallMethod != ""
 }
@@ -43,8 +43,6 @@ func UpgradeInstruction() (string, error) {
 	switch InstallMethod {
 	case "":
 		return "", nil
-	case "copr":
-		return "dnf upgrade osdctl", nil
 	case "homebrew":
 		return "brew upgrade osdctl", nil
 	default:

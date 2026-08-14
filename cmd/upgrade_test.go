@@ -15,7 +15,6 @@ func TestUpgradeRefusesWhenManaged(t *testing.T) {
 		wantSubstring string
 		wantErr       bool
 	}{
-		{"copr", "copr", "dnf upgrade osdctl", false},
 		{"homebrew", "homebrew", "brew upgrade osdctl", false},
 		{"unknown", "unknown", "unknown install method", true},
 	}

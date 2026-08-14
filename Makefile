@@ -58,8 +58,8 @@ build: ## Compile osdctl
 	goreleaser build --clean --snapshot --single-target=${SINGLE_TARGET}
 
 # Preferred way to cut a release: bump the VERSION file on a branch and open a PR.
-# Once merged to master, GitHub Actions tags vX.Y.Z and publishes the release
-# (and triggers the Fedora COPR build). See README "Creating a release".
+# Once merged to master, GitHub Actions tags vX.Y.Z and publishes the release.
+# See README "Creating a release".
 .PHONY: new-release
 new-release: ## Bump VERSION for a new release (RELEASE_VERSION=x.y.z), then open a PR
 	@if [ -z "$(RELEASE_VERSION)" ]; then \

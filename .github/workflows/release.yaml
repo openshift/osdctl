@@ -4,9 +4,6 @@
 # with the built-in GITHUB_TOKEN, so no personal token is needed. Tags are
 # normally created by release-on-version-bump.yaml (on a VERSION bump), but
 # pushing a `v*` tag by hand still works as a fallback.
-#
-# The existing trigger_copr.yaml workflow also fires on this same tag push, so
-# the Fedora COPR build keeps working with no change.
 name: release
 
 on:

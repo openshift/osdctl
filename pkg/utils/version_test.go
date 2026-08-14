@@ -9,7 +9,6 @@ func TestIsManagedInstall(t *testing.T) {
 		want          bool
 	}{
 		{"empty (GitHub release)", "", false},
-		{"copr", "copr", true},
 		{"homebrew", "homebrew", true},
 	}
 	for _, tt := range tests {
@@ -31,7 +30,6 @@ func TestUpgradeInstruction(t *testing.T) {
 		want          string
 		wantErr       bool
 	}{
-		{"copr", "copr", "dnf upgrade osdctl", false},
 		{"homebrew", "homebrew", "brew upgrade osdctl", false},
 		{"empty", "", "", false},
 		{"unknown", "unknown", "", true},
