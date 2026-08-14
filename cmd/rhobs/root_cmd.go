@@ -24,6 +24,15 @@ func NewCmdRhobs() *cobra.Command {
 					return nil
 				}
 			}
+			viper.SetDefault(utils.VaultAddrKey, "https://vault.devshift.net/")
+			viper.SetDefault("rhobs_integration_vault_path", "osd-sre/rhobs/sd-sre-integration-creds")
+			viper.SetDefault("rhobs_stage_vault_path", "osd-sre/rhobs/sd-sre-stage-creds")
+			viper.SetDefault("rhobs_production_vault_path", "osd-sre/rhobs/sd-sre-prod-creds")
+
+			if rhobsCellFlag := cmd.Flags().Lookup("rhobs-cell"); rhobsCellFlag != nil && rhobsCellFlag.Changed && rhobsCellFlag.Value.String() != "" {
+				return nil
+			}
+
 			if commonOptions.clusterId == "" {
 				var err error
 
@@ -32,12 +41,6 @@ func NewCmdRhobs() *cobra.Command {
 					return err
 				}
 			}
-
-			// Default config
-			viper.SetDefault(utils.VaultAddrKey, "https://vault.devshift.net/")
-			viper.SetDefault("rhobs_integration_vault_path", "osd-sre/rhobs/sd-sre-integration-creds")
-			viper.SetDefault("rhobs_stage_vault_path", "osd-sre/rhobs/sd-sre-stage-creds")
-			viper.SetDefault("rhobs_production_vault_path", "osd-sre/rhobs/sd-sre-prod-creds")
 
 			return nil
 		},

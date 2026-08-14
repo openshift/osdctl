@@ -62,6 +62,32 @@ func getCachedFetcher(ctx context.Context, clusterId string, usage RhobsFetchUsa
 	return v.(*RhobsFetcher), nil
 }
 
+func getCachedFetcherFromCell(rhobsCell string) (*RhobsFetcher, error) {
+	key := "cell:" + rhobsCell
+	if cached, ok := fetcherCache.Load(key); ok {
+		return cached.(*RhobsFetcher), nil
+	}
+
+	v, err, _ := fetcherInit.Do(key, func() (interface{}, error) {
+		if cached, ok := fetcherCache.Load(key); ok {
+			return cached, nil
+		}
+		if err := quickVaultCheck(); err != nil {
+			return nil, err
+		}
+		fetcher, err := CreateRhobsFetcherFromCell(rhobsCell)
+		if err != nil {
+			return nil, err
+		}
+		actual, _ := fetcherCache.LoadOrStore(key, fetcher)
+		return actual, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.(*RhobsFetcher), nil
+}
+
 func mcpResultJSON(data interface{}) (*mcp.CallToolResult, error) {
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {

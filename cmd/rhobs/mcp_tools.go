@@ -57,19 +57,21 @@ func registerMcpTools(s *mcp.Server) {
 		Description: "Query RHOBS Loki logs for ROSA HCP infrastructure. " +
 			"Covers HCP hosted clusters, Management Clusters (MC), and Service Clusters (SC). " +
 			"Accepts any cluster ID; HCP IDs are automatically resolved to their parent MC. " +
-			"The correct RHOBS cell is resolved automatically.",
+			"The correct RHOBS cell is resolved automatically. " +
+			"Alternatively, use rhobs_cell to query a specific cell directly without a cluster ID " +
+			"(useful for app-sre services like Clusters Service that send logs to the global cell).",
 		Annotations: readOnlyAnnotations,
 		InputSchema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
-				"cluster_id":     {"type": "string", "description": "Cluster ID or name (HCP, MC, or SC). HCP IDs auto-resolve to their parent MC."},
+				"cluster_id":     {"type": "string", "description": "Cluster ID or name (HCP, MC, or SC). HCP IDs auto-resolve to their parent MC. Exclusive with rhobs_cell."},
+				"rhobs_cell":     {"type": "string", "description": "RHOBS cell URL (e.g., https://us-east-1-0.rhobs.api.stage.openshift.com). Query logs directly without a cluster ID. No openshift_cluster_id filter is applied. Exclusive with cluster_id."},
 				"namespace":      {"type": "string", "description": "Kubernetes namespace. Required unless query is set."},
 				"query":          {"type": "string", "description": "Raw LogQL expression (overrides namespace)"},
 				"contain_regex":  {"type": "string", "description": "Server-side regex filter (e.g., (?i)(error|timeout))"},
 				"since":          {"type": "string", "description": "Duration string (e.g., 1h, 30m). Default: 5m"},
 				"limit":          {"type": "number", "description": "Max log entries. Default: 500, max: 10000"}
-			},
-			"required": ["cluster_id"]
+			}
 		}`),
 		OutputSchema: json.RawMessage(`{
 			"type": "object",
@@ -191,14 +193,18 @@ func handleMetrics(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallTool
 func handleLogs(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	args := getArgs(req)
 	clusterId := getStringArg(args, "cluster_id", "")
+	rhobsCell := getStringArg(args, "rhobs_cell", "")
 	namespace := getStringArg(args, "namespace", "")
 	rawQuery := getStringArg(args, "query", "")
 	containRegex := getStringArg(args, "contain_regex", "")
 	sinceStr := getStringArg(args, "since", "5m")
 	limit := getIntArg(args, "limit", 500)
 
-	if clusterId == "" {
-		return mcpError("cluster_id is required")
+	if clusterId == "" && rhobsCell == "" {
+		return mcpError("either cluster_id or rhobs_cell is required")
+	}
+	if clusterId != "" && rhobsCell != "" {
+		return mcpError("cluster_id and rhobs_cell are mutually exclusive")
 	}
 	if namespace == "" && rawQuery == "" {
 		return mcpError("either namespace or query is required")
@@ -218,7 +224,12 @@ func handleLogs(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolRes
 		return mcpError("'since' must be greater than 0")
 	}
 
-	fetcher, err := getCachedFetcher(ctx, clusterId, RhobsFetchForLogs)
+	var fetcher *RhobsFetcher
+	if rhobsCell != "" {
+		fetcher, err = getCachedFetcherFromCell(rhobsCell)
+	} else {
+		fetcher, err = getCachedFetcher(ctx, clusterId, RhobsFetchForLogs)
+	}
 	if err != nil {
 		return mcpError("Failed to initialize RHOBS fetcher: %v", err)
 	}
@@ -227,12 +238,17 @@ func handleLogs(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolRes
 	if rawQuery != "" {
 		lokiExpr = rawQuery
 	} else {
-		effectiveNs := resolveLogsNamespace(fetcher, namespace != "default" && namespace != "", namespace)
+		effectiveNs := namespace
+		if rhobsCell == "" {
+			effectiveNs = resolveLogsNamespace(fetcher, namespace != "default" && namespace != "", namespace)
+		}
 		lokiExpr = fmt.Sprintf(`{k8s_namespace_name="%s"}`, effectiveNs)
 		if containRegex != "" {
 			lokiExpr += fmt.Sprintf(` |~ "%s"`, containRegex)
 		}
-		lokiExpr += fmt.Sprintf(` | openshift_cluster_id = "%s"`, fetcher.logsClusterExtId())
+		if rhobsCell == "" {
+			lokiExpr += fmt.Sprintf(` | openshift_cluster_id = "%s"`, fetcher.logsClusterExtId())
+		}
 	}
 
 	now := time.Now()
