@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	sdk "github.com/openshift-online/ocm-sdk-go"
@@ -28,9 +29,14 @@ func newCmdGet() *cobra.Command {
 		Long: `Retrieve and display a specific report by its ID.
 
 This command fetches a report by its report ID and displays the decoded
-report data. Use 'list' to find available report IDs.`,
+report data. Use 'list' to find available report IDs.
+
+If no report ID is provided, the latest report for the cluster is returned.`,
 		Example: `  # Get a specific report
   osdctl cluster reports get --cluster-id ${CLUSTER_ID} --report-id ${REPORT_ID}
+
+  # Get the latest report
+  osdctl cluster reports get --cluster-id ${CLUSTER_ID}
 
   # Get a report with JSON output
   osdctl cluster reports get --cluster-id ${CLUSTER_ID} --report-id ${REPORT_ID} --output json`,
@@ -48,10 +54,9 @@ report data. Use 'list' to find available report IDs.`,
 	}
 
 	getCmd.Flags().StringVarP(&opts.clusterID, "cluster-id", "C", "", "Cluster ID (internal or external)")
-	getCmd.Flags().StringVarP(&opts.reportID, "report-id", "r", "", "Report ID to retrieve")
+	getCmd.Flags().StringVarP(&opts.reportID, "report-id", "r", "", "Report ID to retrieve (defaults to the latest report if omitted)")
 	getCmd.Flags().StringVarP(&opts.output, "output", "o", "text", "Output format: text or json")
 	_ = getCmd.MarkFlagRequired("cluster-id")
-	_ = getCmd.MarkFlagRequired("report-id")
 
 	return getCmd
 }
@@ -68,9 +73,25 @@ func (o *getOptions) run(ocmClient *sdk.Connection) error {
 		return fmt.Errorf("failed to create backplane client: %w", err)
 	}
 
-	// Fetch the specific report
 	ctx := context.Background()
-	report, err := backplaneClient.GetReport(ctx, o.reportID)
+
+	reportID := o.reportID
+	if reportID == "" {
+		fmt.Fprintln(os.Stderr, "No report ID provided; searching for the latest report.")
+
+		latestID, err := latestReportID(ctx, backplaneClient)
+		if err != nil {
+			return err
+		}
+		if latestID == "" {
+			fmt.Fprintln(os.Stderr, "No reports found for cluster.")
+			return nil
+		}
+		reportID = latestID
+	}
+
+	// Fetch the specific report
+	report, err := backplaneClient.GetReport(ctx, reportID)
 	if err != nil {
 		return fmt.Errorf("failed to get report: %w", err)
 	}
@@ -93,4 +114,31 @@ func (o *getOptions) run(ocmClient *sdk.Connection) error {
 	fmt.Println(string(decodedData))
 
 	return nil
+}
+
+// latestReportID returns the report ID of the most recently created report for
+// the cluster. It returns an empty string if the cluster has no reports.
+func latestReportID(ctx context.Context, backplaneClient *backplane.Client) (string, error) {
+	reports, err := backplaneClient.ListReports(ctx, 0)
+	if err != nil {
+		return "", fmt.Errorf("failed to list reports: %w", err)
+	}
+
+	if reports == nil || len(reports.Reports) == 0 {
+		return "", nil
+	}
+
+	var latestID string
+	var latestTime time.Time
+	for _, report := range reports.Reports {
+		if report.ReportId == nil || report.CreatedAt == nil {
+			continue
+		}
+		if latestID == "" || report.CreatedAt.After(latestTime) {
+			latestID = *report.ReportId
+			latestTime = *report.CreatedAt
+		}
+	}
+
+	return latestID, nil
 }

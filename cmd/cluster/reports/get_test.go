@@ -55,11 +55,11 @@ func TestGetOptions_Validation(t *testing.T) {
 			wantErr:   true,
 		},
 		{
-			name:      "missing report ID",
+			name:      "missing report ID is allowed",
 			clusterID: "test-cluster-123",
 			reportID:  "",
 			output:    "table",
-			wantErr:   true,
+			wantErr:   false,
 		},
 	}
 
@@ -71,8 +71,9 @@ func TestGetOptions_Validation(t *testing.T) {
 				output:    tt.output,
 			}
 
-			// Basic validation
-			hasError := opts.clusterID == "" || opts.reportID == ""
+			// Basic validation: only cluster-id is required; report-id is optional
+			// and defaults to the latest report when omitted.
+			hasError := opts.clusterID == ""
 			assert.Equal(t, tt.wantErr, hasError)
 
 			assert.Equal(t, tt.clusterID, opts.clusterID)
