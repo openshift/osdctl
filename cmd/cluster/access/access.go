@@ -175,11 +175,13 @@ func (c *clusterAccessOptions) Run(ctx context.Context) error {
 		// Original path - backward compatible
 		hive, err = osdctlutil.GetHiveCluster(cluster.ID())
 		if err != nil {
+			c.Errorln("Hint: if the cluster's hive shard is in a different OCM environment, use --hive-ocm-url (e.g. --hive-ocm-url production)")
 			return fmt.Errorf("failed to retrieve hive shard for %q: %w", c.clusterID, err)
 		}
 
 		hiveClient, err = k8s.NewAsBackplaneClusterAdmin(hive.ID(), kclient.Options{Scheme: scheme.Scheme}, c.reason, fmt.Sprintf("Elevation required to break-glass on %q cluster", c.clusterID))
 		if err != nil {
+			c.Errorln("Hint: if the cluster's hive shard is in a different OCM environment, use --hive-ocm-url (e.g. --hive-ocm-url production)")
 			return fmt.Errorf("failed to login to hive shard %q: %w", hive.Name(), err)
 		}
 	}
