@@ -10,6 +10,12 @@
 # push trigger release.yaml / trigger_copr.yaml) because GitHub deliberately does
 # not re-trigger workflows for refs pushed by GITHUB_TOKEN. Pushing a v* tag by
 # hand still triggers release.yaml and trigger_copr.yaml the normal way.
+#
+# Tag creation and release publication each have their own skip condition so
+# a re-run after a partial failure only redoes what didn't already succeed.
+# The COPR trigger has no skip condition: the webhook has no way to check
+# "did this already fire," so it always re-runs rather than being gated on
+# anything.
 name: release-on-version-bump
 
 on:
@@ -46,26 +52,45 @@ jobs:
             exit 1
           fi
           tag="v${version}"
-          if remote_sha="$(git ls-remote --exit-code origin "refs/tags/${tag}" | cut -f1)"; then
+          if remote_output="$(git ls-remote --exit-code origin "refs/tags/${tag}" "refs/tags/${tag}^{}" 2>&1)"; then
+            # The tag we create below is annotated, so refs/tags/${tag} resolves
+            # to the tag object's own SHA, not the commit it points at -- only
+            # the peeled refs/tags/${tag}^{} line gives the commit SHA. Prefer
+            # that; fall back to the plain line for a (non-annotated) tag.
+            remote_sha="$(awk -v r="refs/tags/${tag}^{}" '$2==r{print $1}' <<<"$remote_output")"
+            if [[ -z "$remote_sha" ]]; then
+              remote_sha="$(awk -v r="refs/tags/${tag}" '$2==r{print $1}' <<<"$remote_output")"
+            fi
             # A tag can exist because a prior run tagged it but failed before
             # goreleaser/COPR completed. Only treat it as "already released" if
             # it points at the commit we're releasing; otherwise this is a
             # conflicting tag and we shouldn't silently skip the release.
             if [[ "$remote_sha" == "$(git rev-parse HEAD)" ]]; then
-              echo "Tag ${tag} already exists at HEAD, nothing to release."
-              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "Tag ${tag} already exists at HEAD, nothing to tag."
+              echo "tag_exists=true" >> "$GITHUB_OUTPUT"
             else
               echo "Tag ${tag} already exists but points at a different commit (${remote_sha}) than HEAD." >&2
               echo "Refusing to proceed; delete or fix the conflicting tag manually." >&2
               exit 1
             fi
           else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+            status=$?
+            # --exit-code makes git ls-remote exit 2 specifically for "no
+            # matching ref". Any other non-zero status is a real failure
+            # (auth, network, etc.) and must fail the job instead of being
+            # silently treated as "tag doesn't exist yet".
+            if [[ "$status" -eq 2 ]]; then
+              echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "Failed to check for existing tag ${tag} (git ls-remote exited ${status}):" >&2
+              echo "$remote_output" >&2
+              exit 1
+            fi
           fi
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
-        if: steps.version.outputs.skip == 'false'
+        if: steps.version.outputs.tag_exists == 'false'
         env:
           TAG: ${{ steps.version.outputs.tag }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -76,14 +101,50 @@ jobs:
           git tag -a "${TAG}" -m "Release ${TAG}"
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "${TAG}"
 
+      - name: Check for existing release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Always runs (even if tag creation above was skipped) so a re-run
+          # after a goreleaser failure can tell whether it already published.
+          #
+          # A non-404 error (auth, rate-limit, network) must fail the job
+          # instead of being treated as "no release yet" -- otherwise a
+          # transient API hiccup would make us silently re-run goreleaser
+          # against a release that actually exists.
+          if output="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,assets 2>&1)"; then
+            is_draft="$(jq -r '.isDraft' <<<"$output")"
+            asset_count="$(jq -r '.assets | length' <<<"$output")"
+            # A release can exist but be incomplete if a prior goreleaser run
+            # was interrupted after creating it but before uploading assets.
+            # Treating that as "done" would leave a broken release forever.
+            if [[ "$is_draft" == "true" || "$asset_count" -eq 0 ]]; then
+              echo "Release ${TAG} exists but looks incomplete (draft=${is_draft}, assets=${asset_count})." >&2
+              echo "This likely means a previous goreleaser run failed partway through." >&2
+              echo "Delete the incomplete release manually, then re-run this workflow." >&2
+              exit 1
+            fi
+            echo "Release ${TAG} already exists and is complete, skipping goreleaser."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif grep -qi "release not found" <<<"$output"; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Failed to check for existing release ${TAG}:" >&2
+            echo "$output" >&2
+            exit 1
+          fi
+
       - name: Set up Go
-        if: steps.version.outputs.skip == 'false'
+        if: steps.release.outputs.exists == 'false'
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
 
       - name: Run goreleaser
-        if: steps.version.outputs.skip == 'false'
+        if: steps.release.outputs.exists == 'false'
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
         with:
           version: "v2.11.2" # keep in sync with the Makefile download-goreleaser target
@@ -92,7 +153,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trigger COPR build
-        if: steps.version.outputs.skip == 'false'
+        # No skip condition: there's no reliable way to check whether a prior
+        # run's webhook call already landed, so this always re-fires on retry.
         env:
           COPR_URL: ${{ secrets.COPR_URL }}
           TAG: ${{ steps.version.outputs.tag }}
