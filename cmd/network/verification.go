@@ -253,6 +253,9 @@ func (e *EgressVerification) Run(ctx context.Context) {
 	}
 
 	if !e.PodMode && platform == cloud.AWSHCP {
+		if e.ClusterId != "" && e.Reason == "" && e.KubeConfig == "" {
+			log.Fatalf("HCP cluster detected (pod mode required). Please provide --reason for elevation (write operations need backplane-cluster-admin). Example: --reason 'OHSS-12345'")
+		}
 		e.log.Info(ctx, "Cluster is HCP - forcing pod mode.")
 		e.PodMode = true
 	}
