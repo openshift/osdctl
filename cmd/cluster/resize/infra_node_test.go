@@ -173,6 +173,21 @@ func TestValidateInstanceSize(t *testing.T) {
 			nodeType:     "controlplane",
 			expectErr:    true,
 		},
+		{
+			instanceSize: "r7i.2xlarge",
+			nodeType:     "infra",
+			expectErr:    false,
+		},
+		{
+			instanceSize: "r7i.8xlarge",
+			nodeType:     "infra",
+			expectErr:    false,
+		},
+		{
+			instanceSize: "r7i.4xlarge",
+			nodeType:     "controlplane",
+			expectErr:    true,
+		},
 	}
 
 	for _, test := range tests {
