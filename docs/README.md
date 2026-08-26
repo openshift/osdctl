@@ -38,6 +38,8 @@
     - `expire [--cluster-id <cluster-identifier>] [--all | --silence-id <silence-id>]` - Expire Silence for alert
     - `list --cluster-id <cluster-identifier>` - List all silences
     - `org <org-id> [--all --duration --comment | --alertname --duration --comment]` - Add new silence for alert for org
+- `ci` - Commands for managing CI pipelines and jobs
+  - `retrigger-pipeline` - Retrigger a failed SAPM Tekton PipelineRun on appsrep09ue1
 - `cloudtrail` - AWS CloudTrail related utilities
   - `errors` - Prints CloudTrail error events (permission/IAM issues) to console.
   - `permission-denied-events` - Prints cloudtrail permission-denied events to console.
@@ -1196,6 +1198,50 @@ osdctl alert silence org <org-id> [--all --duration --comment | --alertname --du
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
   -S, --skip-version-check               skip checking to see if this is the most recent release
+```
+
+### osdctl ci
+
+Commands for managing CI pipelines and jobs
+
+```
+osdctl ci [flags]
+```
+
+#### Flags
+
+```
+  -h, --help                 help for ci
+  -S, --skip-version-check   skip checking to see if this is the most recent release
+```
+
+### osdctl ci retrigger-pipeline
+
+Retrigger a failed SAPM Tekton PipelineRun on appsrep09ue1.
+
+Use this when a PipelineRun fails for infrastructure reasons unrelated to the operator code
+or e2e tests (e.g. network blip, transient API failure). A successful retrigger publishes
+to the SAPM success channel, unblocking downstream promotions.
+
+To find the failed PipelineRun name:
+  ocm backplane login --multi 29nmp5rhf8rgclg4a02lju4eld79js9e
+  kubectl get pipelineruns -n <operator>-pipelines --sort-by=.metadata.creationTimestamp
+
+Common namespaces: certman-operator-pipelines, cloud-ingress-operator-pipelines,
+  rbac-permissions-operator-pipelines, ocm-agent-operator-pipelines
+
+```
+osdctl ci retrigger-pipeline [flags]
+```
+
+#### Flags
+
+```
+  -h, --help                 help for retrigger-pipeline
+  -n, --namespace string     Namespace containing the failed PipelineRun (e.g. certman-operator-pipelines)
+      --reason string        Backplane elevation reason (Jira key, PD URL, or ITN key)
+  -r, --run string           Name of the failed PipelineRun
+  -S, --skip-version-check   skip checking to see if this is the most recent release
 ```
 
 ### osdctl cloudtrail
