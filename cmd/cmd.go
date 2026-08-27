@@ -20,6 +20,7 @@ import (
 	"github.com/openshift/osdctl/cmd/aao"
 	"github.com/openshift/osdctl/cmd/account"
 	"github.com/openshift/osdctl/cmd/alerts"
+	"github.com/openshift/osdctl/cmd/ci"
 	"github.com/openshift/osdctl/cmd/cloudtrail"
 	"github.com/openshift/osdctl/cmd/cluster"
 	"github.com/openshift/osdctl/cmd/cost"
@@ -112,6 +113,7 @@ func NewCmdRoot(streams genericclioptions.IOStreams) *cobra.Command {
 	addToRootCmdWithOtherGlobalOpts(hcp.NewCmdHCP())
 	addToRootCmdWithOtherGlobalOpts(network.NewCmdNetwork(streams, kubeClient))
 	addToRootCmdWithOtherGlobalOpts(org.NewCmdOrg())
+	rootCmd.AddCommand(ci.NewCmdCI())
 	rootCmd.AddCommand(promote.NewCmdPromote())
 	addToRootCmdWithOtherGlobalOpts(servicelog.NewCmdServiceLog())
 	addToRootCmdWithOtherGlobalOpts(setup.NewCmdSetup())
