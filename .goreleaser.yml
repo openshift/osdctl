@@ -1,7 +1,8 @@
 version: 2
 project_name: osdctl
 builds:
-  - env:
+  - parallelism: 2
+    env:
       - CGO_ENABLED=0
       - "GO111MODULE=on" # make sure to use go modules
       - "GOFLAGS=-mod=readonly -trimpath" # trimpath helps with producing verifiable binaries
