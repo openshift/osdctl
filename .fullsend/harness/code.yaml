@@ -1,0 +1,54 @@
+# .fullsend/harness/code.yaml
+#
+# Composes the upstream fullsend code harness (pinned to agents v0.38.0) and
+# adds the local dispatch trigger plus the env overrides the Jira-poll dispatch
+# path still needs. v0.38.0 fetches the work item host-side (pre-code-jira.sh)
+# and sets ISSUE_URL / FULLSEND_TRACKER, but the reusable-dispatch harness-run
+# job does not map every host variable the base env references on the
+# pre-computed (jira-poll) matrix path, so those references are overridden here.
+base: https://raw.githubusercontent.com/fullsend-ai/agents/48511880eaea5ef01f80b69ba4f228147611db33/harness/code.yaml#sha256=4f0d9425d5ee1fa86e21d3b6d1ac9bd086da2f59de9d80a311f753c00d99303d
+
+trigger: >
+  event.entity.kind == "work_item"
+    && (
+      (event.transition.kind == "comment_added"
+        && has(event.transition.comment.command)
+        && event.transition.comment.command == "/fs-code")
+      ||
+      (event.transition.kind == "label_changed"
+        && event.transition.label.name == "ready-to-code"
+        && event.transition.label.action == "added")
+    )
+
+allowed_remote_resources: [https://raw.githubusercontent.com/fullsend-ai/agents/]
+
+env:
+  runner:
+    FULLSEND_TRACKER: jira
+    # Placeholder to satisfy the base code harness's ISSUE_NUMBER validation.
+    # The reusable-dispatch harness-run job doesn't map ISSUE_NUMBER from the
+    # pre-computed (jira-poll) matrix, so the base harness's "${ISSUE_NUMBER}"
+    # reference would fail. On the Jira path the issue is identified via
+    # FULLSEND_WORK_ITEM_URL / ISSUE_URL, not ISSUE_NUMBER.
+    ISSUE_NUMBER: "0"
+    CODE_ALLOWED_TARGET_BRANCHES: master
+    # The base code harness sets GIT_COMMITTER_EMAIL from GIT_BOT_EMAIL, which
+    # the GitHub code job normally sets from the App bot identity but the
+    # jira-poll harness-run job does not. Provide a default bot identity.
+    GIT_BOT_EMAIL: "fullsend[bot]@users.noreply.github.com"
+    JIRA_USER_EMAIL: "${JIRA_USER_EMAIL}"
+    JIRA_TOKEN: "${JIRA_TOKEN}"
+  # Runner env vars don't flow into the OpenShell sandbox automatically; pass
+  # the Jira credentials through explicitly so the agent can reach Jira Cloud.
+  sandbox:
+    # The base code harness references "${ISSUE_NUMBER}" in env.sandbox too (not
+    # just env.runner), so the sandbox scope needs its own placeholder override.
+    ISSUE_NUMBER: "0"
+    # The base code harness sets env.sandbox GIT_COMMITTER_EMAIL from
+    # "${GIT_BOT_EMAIL}", which isn't set as a host var on the jira-poll path.
+    # Override with a literal so the sandbox scope resolves.
+    GIT_COMMITTER_EMAIL: "fullsend[bot]@users.noreply.github.com"
+    CODE_ALLOWED_TARGET_BRANCHES: master
+    JIRA_TOKEN: "${JIRA_TOKEN}"
+    JIRA_USER_EMAIL: "${JIRA_USER_EMAIL}"
+    JIRA_BASE_URL: "${JIRA_BASE_URL}"
