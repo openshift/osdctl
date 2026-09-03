@@ -33,6 +33,7 @@ type pdClientInterface interface {
 type client struct {
 	pdclient   pdClientInterface
 	baseDomain string
+	clusterID  string
 	teamIds    []string
 	userToken  string
 	oauthToken string
@@ -44,6 +45,11 @@ func NewClient() *client {
 
 func (c *client) WithBaseDomain(baseDomain string) *client {
 	c.baseDomain = baseDomain
+	return c
+}
+
+func (c *client) WithClusterID(clusterID string) *client {
+	c.clusterID = clusterID
 	return c
 }
 
@@ -106,21 +112,33 @@ func (c *client) GetFiringAlertsForCluster(pdServiceIDs []string) (map[string][]
 	var incidentListOffset uint = 0
 	for _, pdServiceID := range pdServiceIDs {
 		for {
+			opts := pd.ListIncidentsOptions{
+				ServiceIDs: []string{pdServiceID},
+				Statuses:   []string{"triggered", "acknowledged"},
+				SortBy:     "urgency:DESC",
+				Limit:      incidentLimit,
+				Offset:     incidentListOffset,
+			}
+			// For HCP clusters, include first_trigger_log_entries so
+			// we can filter incidents by cluster ID in EventDetails.
+			if c.clusterID != "" {
+				opts.Includes = []string{"first_trigger_log_entries"}
+			}
+
 			listIncidentsResponse, err := c.pdclient.ListIncidentsWithContext(
 				context.TODO(),
-				pd.ListIncidentsOptions{
-					ServiceIDs: []string{pdServiceID},
-					Statuses:   []string{"triggered", "acknowledged"},
-					SortBy:     "urgency:DESC",
-					Limit:      incidentLimit,
-					Offset:     incidentListOffset,
-				},
+				opts,
 			)
 			if err != nil {
 				return nil, err
 			}
 
-			incidents[pdServiceID] = append(incidents[pdServiceID], listIncidentsResponse.Incidents...)
+			for _, incident := range listIncidentsResponse.Incidents {
+				if c.clusterID != "" && !incidentMatchesCluster(incident, c.clusterID) {
+					continue
+				}
+				incidents[pdServiceID] = append(incidents[pdServiceID], incident)
+			}
 
 			if !listIncidentsResponse.More {
 				break
@@ -129,6 +147,23 @@ func (c *client) GetFiringAlertsForCluster(pdServiceIDs []string) (map[string][]
 		}
 	}
 	return incidents, nil
+}
+
+// incidentMatchesCluster checks whether a PagerDuty incident belongs to the
+// given cluster by inspecting the first trigger log entry's EventDetails for
+// a matching cluster_id value. This is used for HCP clusters where PD services
+// are region-based and contain incidents for multiple clusters.
+func incidentMatchesCluster(incident pd.Incident, clusterID string) bool {
+	ed := incident.FirstTriggerLogEntry.EventDetails
+	if ed == nil {
+		return false
+	}
+	for _, key := range []string{"cluster_id", "clusterID", "cluster-id"} {
+		if v, ok := ed[key]; ok && v == clusterID {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *client) GetHistoricalAlertsForCluster(pdServiceIDs []string) (map[string][]*IncidentOccurrenceTracker, error) {
