@@ -76,7 +76,7 @@ func (a *DefaultAnalyzer) Analyze(cluster *cmv1.Cluster, results []VerifyResult)
 		},
 		Results:         results,
 		Summary:         a.populateSummary(results),
-		Recommendations: a.generateRecommendations(results),
+		Recommendations: a.generateRecommendations(cluster, results),
 	}
 }
 
@@ -116,6 +116,6 @@ type summaryStats struct {
 	Skipped int `json:"skipped"`
 }
 
-func (a *DefaultAnalyzer) generateRecommendations(results []VerifyResult) []string {
-	return a.cfg.Recommender.MakeRecommendations(results)
+func (a *DefaultAnalyzer) generateRecommendations(cluster *cmv1.Cluster, results []VerifyResult) []string {
+	return a.cfg.Recommender.MakeRecommendations(results, WithCluster{Cluster: cluster})
 }

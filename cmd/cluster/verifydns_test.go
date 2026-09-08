@@ -67,6 +67,7 @@ func TestVerifyDNSOptions_BuildTestCases(t *testing.T) {
 	tests := []struct {
 		name                string
 		clusterName         string
+		domainPrefix        string
 		clusterID           string
 		baseDomain          string
 		consoleURL          string
@@ -78,9 +79,10 @@ func TestVerifyDNSOptions_BuildTestCases(t *testing.T) {
 		{
 			name:                "HCP cluster without PrivateLink created after cutoff",
 			clusterName:         "test-cluster",
+			domainPrefix:        "test-cluster-abc123",
 			clusterID:           "abc123",
 			baseDomain:          "example.com",
-			consoleURL:          "https://console-openshift-console.apps.rosa.test-cluster.example.com",
+			consoleURL:          "https://console-openshift-console.apps.rosa.test-cluster-abc123.example.com",
 			isPrivateLink:       false,
 			creationDate:        time.Date(2025, time.March, 11, 0, 0, 0, 0, time.UTC),
 			expectedTestCount:   7,
@@ -89,9 +91,10 @@ func TestVerifyDNSOptions_BuildTestCases(t *testing.T) {
 		{
 			name:                "HCP cluster with PrivateLink created before cutoff",
 			clusterName:         "test-cluster",
+			domainPrefix:        "test-cluster-abc123",
 			clusterID:           "abc123",
 			baseDomain:          "example.com",
-			consoleURL:          "https://console-openshift-console.apps.rosa.test-cluster.example.com",
+			consoleURL:          "https://console-openshift-console.apps.rosa.test-cluster-abc123.example.com",
 			isPrivateLink:       true,
 			creationDate:        time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC),
 			expectedTestCount:   7,
@@ -100,9 +103,10 @@ func TestVerifyDNSOptions_BuildTestCases(t *testing.T) {
 		{
 			name:                "HCP cluster without PrivateLink created before cutoff",
 			clusterName:         "my-cluster",
+			domainPrefix:        "my-cluster-xyz789",
 			clusterID:           "xyz789",
 			baseDomain:          "test.io",
-			consoleURL:          "https://console-openshift-console.apps.rosa.my-cluster.test.io",
+			consoleURL:          "https://console-openshift-console.apps.rosa.my-cluster-xyz789.test.io",
 			isPrivateLink:       false,
 			creationDate:        time.Date(2024, time.December, 1, 0, 0, 0, 0, time.UTC),
 			expectedTestCount:   7,
@@ -115,6 +119,7 @@ func TestVerifyDNSOptions_BuildTestCases(t *testing.T) {
 			t.Parallel()
 			cluster := createTestHCPCluster(
 				tt.clusterName,
+				tt.domainPrefix,
 				tt.clusterID,
 				tt.baseDomain,
 				tt.consoleURL,
@@ -127,6 +132,10 @@ func TestVerifyDNSOptions_BuildTestCases(t *testing.T) {
 
 			// Verify the correct number of test cases were created
 			assert.Equal(t, tt.expectedTestCount, len(testCases))
+			for _, testCase := range testCases {
+				assert.Contains(t, testCase.description, "<domain-prefix>")
+				assert.NotContains(t, testCase.description, "<cluster-name>")
+			}
 
 			// Verify console test case
 			g.Expect(testCases).Should(HaveKey("console"))
@@ -137,38 +146,41 @@ func TestVerifyDNSOptions_BuildTestCases(t *testing.T) {
 			// Verify default ingress test case
 			g.Expect(testCases).Should(HaveKey("default_ingress"))
 			defaultIngressTest := testCases["default_ingress"]
-			expectedDefaultIngress := "apps.rosa." + tt.clusterName + "." + tt.baseDomain
+			expectedDefaultIngress := "apps.rosa." + tt.domainPrefix + "." + tt.baseDomain
 			assert.Equal(t, expectedDefaultIngress, defaultIngressTest.name)
 			assert.Equal(t, dns.RecordTypeCNAME, defaultIngressTest.recordType)
-			assert.Equal(t, tt.clusterName+"."+tt.baseDomain, defaultIngressTest.expectedTarget)
+			assert.Equal(t, tt.domainPrefix+"."+tt.baseDomain, defaultIngressTest.expectedTarget)
 
 			// Verify default ingress challenge test case
 			g.Expect(testCases).Should(HaveKey("default_ingress_challenge"))
 			defaultIngressChallengeTest := testCases["default_ingress_challenge"]
-			expectedChallenge := "_acme-challenge.apps.rosa." + tt.clusterName + "." + tt.baseDomain
+			expectedChallenge := "_acme-challenge.apps.rosa." + tt.domainPrefix + "." + tt.baseDomain
 			assert.Equal(t, expectedChallenge, defaultIngressChallengeTest.name)
 			assert.Equal(t, dns.RecordTypeCNAME, defaultIngressChallengeTest.recordType)
+			assert.Equal(t, "_acme-challenge."+tt.domainPrefix+"."+tt.baseDomain, defaultIngressChallengeTest.expectedTarget)
 
 			// Verify unique FQDN test case
 			g.Expect(testCases).Should(HaveKey("unique"))
 			uniqueTest := testCases["unique"]
-			expectedUnique := tt.clusterID + ".rosa." + tt.clusterName + "." + tt.baseDomain
+			expectedUnique := tt.clusterID + ".rosa." + tt.domainPrefix + "." + tt.baseDomain
 			assert.Equal(t, expectedUnique, uniqueTest.name)
 			assert.Equal(t, dns.RecordTypeCNAME, uniqueTest.recordType)
+			assert.Equal(t, tt.domainPrefix+"."+tt.baseDomain, uniqueTest.expectedTarget)
 			assert.Equal(t, tt.expectUniqueSkipped, uniqueTest.skip)
 
 			// Verify unique challenge test case
 			g.Expect(testCases).Should(HaveKey("unique_challenge"))
 			uniqueChallengeTest := testCases["unique_challenge"]
-			expectedUniqueChallenge := "_acme-challenge." + tt.clusterID + ".rosa." + tt.clusterName + "." + tt.baseDomain
+			expectedUniqueChallenge := "_acme-challenge." + tt.clusterID + ".rosa." + tt.domainPrefix + "." + tt.baseDomain
 			assert.Equal(t, expectedUniqueChallenge, uniqueChallengeTest.name)
 			assert.Equal(t, dns.RecordTypeCNAME, uniqueChallengeTest.recordType)
+			assert.Equal(t, "_acme-challenge."+tt.domainPrefix+"."+tt.baseDomain, uniqueChallengeTest.expectedTarget)
 			assert.Equal(t, tt.expectUniqueSkipped, uniqueChallengeTest.skip)
 
 			// Verify API and OAuth test cases based on PrivateLink
 			g.Expect(testCases).Should(HaveKey("api"))
 			apiTest := testCases["api"]
-			expectedAPI := "api." + tt.clusterName + "." + tt.baseDomain
+			expectedAPI := "api." + tt.domainPrefix + "." + tt.baseDomain
 			assert.Equal(t, expectedAPI, apiTest.name)
 			if tt.isPrivateLink {
 				assert.Equal(t, dns.RecordTypeCNAME, apiTest.recordType)
@@ -178,7 +190,7 @@ func TestVerifyDNSOptions_BuildTestCases(t *testing.T) {
 
 			g.Expect(testCases).Should(HaveKey("oauth"))
 			oauthTest := testCases["oauth"]
-			expectedOAuth := "oauth." + tt.clusterName + "." + tt.baseDomain
+			expectedOAuth := "oauth." + tt.domainPrefix + "." + tt.baseDomain
 			assert.Equal(t, expectedOAuth, oauthTest.name)
 			if tt.isPrivateLink {
 				assert.Equal(t, dns.RecordTypeCNAME, oauthTest.recordType)
@@ -271,6 +283,26 @@ func TestRecommender_MakeRecommendations(t *testing.T) {
 			shouldContain:           []string{"default ingress", "Route 53"},
 		},
 		{
+			name: "default ingress failures produce one recommendation",
+			results: []dns.VerifyResult{
+				{Name: "apps.rosa.test.example.com", Status: dns.VerifyResultStatusFail},
+				{Name: "_acme-challenge.apps.rosa.test.example.com", Status: dns.VerifyResultStatusFail},
+			},
+			clusterID:               "test-cluster",
+			expectedRecommendations: 1,
+			shouldContain:           []string{"One or more default ingress FQDNs failed to resolve.", "OCM creates these records during provisioning", "_acme-challenge.apps.rosa.<domain-prefix>.<base-domain> CNAME record"},
+		},
+		{
+			name: "unique failures produce one recommendation",
+			results: []dns.VerifyResult{
+				{Name: "test-cluster.rosa.prefix.example.com", Status: dns.VerifyResultStatusFail},
+				{Name: "_acme-challenge.test-cluster.rosa.prefix.example.com", Status: dns.VerifyResultStatusFail},
+			},
+			clusterID:               "test-cluster",
+			expectedRecommendations: 1,
+			shouldContain:           []string{"One or more unique FQDNs failed to resolve.", "Verify that both CNAME records exist", "they are required"},
+		},
+		{
 			name: "API/OAuth failure",
 			results: []dns.VerifyResult{
 				{
@@ -359,9 +391,10 @@ func (m *MockAnalyzer) Analyze(cluster *cmv1.Cluster, results []dns.VerifyResult
 
 // Helper functions
 
-func createTestHCPCluster(name, id, baseDomain, consoleURL string, isPrivateLink bool, creationDate time.Time) *cmv1.Cluster {
+func createTestHCPCluster(name, domainPrefix, id, baseDomain, consoleURL string, isPrivateLink bool, creationDate time.Time) *cmv1.Cluster {
 	clusterBuilder := cmv1.NewCluster().
 		Name(name).
+		DomainPrefix(domainPrefix).
 		ID(id).
 		DNS(cmv1.NewDNS().BaseDomain(baseDomain)).
 		Console(cmv1.NewClusterConsole().URL(consoleURL)).
@@ -384,6 +417,8 @@ func TestNewCmdVerifyDNS(t *testing.T) {
 	g.Expect(cmd).ShouldNot(BeNil())
 	g.Expect(cmd.Use).Should(ContainSubstring("verify-dns"))
 	g.Expect(cmd.Short).Should(ContainSubstring("DNS resolution"))
+	g.Expect(cmd.Long).Should(ContainSubstring("<domain-prefix>"))
+	g.Expect(cmd.Long).ShouldNot(ContainSubstring("<cluster-name>"))
 
 	// Verify flags are registered
 	clusterIDFlag := cmd.Flags().Lookup("cluster-id")

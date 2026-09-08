@@ -181,40 +181,40 @@ func (v *verifyDNSOptions) buildTestCases(cluster *cmv1.Cluster) map[string]dnst
 	tests["console"] = dnstestCase{
 		name:       cluster.Console().URL(),
 		recordType: "A",
-		description: "Test Console A record: console-openshift-console.apps.rosa.<cluster-name>.<base-domain>." +
+		description: "Test Console A record: console-openshift-console.apps.rosa.<domain-prefix>.<base-domain>." +
 			"This verifies the presence of the A record for the wildcard domain " +
-			"*.apps.rosa.<cluster-name>.<base-domain>",
+			"*.apps.rosa.<domain-prefix>.<base-domain>",
 	}
 
-	name := cluster.Name()
+	domainPrefix := cluster.DomainPrefix()
 	id := cluster.ID()
 	domain := cluster.DNS().BaseDomain()
 
-	clusterSubDomain := fmt.Sprintf("%s.%s", name, domain)
-	actualChallengeRecord := fmt.Sprintf("_acme-challenge.%s.%s", name, domain)
+	clusterSubDomain := fmt.Sprintf("%s.%s", domainPrefix, domain)
+	actualChallengeRecord := fmt.Sprintf("_acme-challenge.%s.%s", domainPrefix, domain)
 
-	defaultIngressFQDN := fmt.Sprintf("apps.rosa.%s.%s", name, domain)
+	defaultIngressFQDN := fmt.Sprintf("apps.rosa.%s.%s", domainPrefix, domain)
 	tests["default_ingress"] = dnstestCase{
 		name:           defaultIngressFQDN,
 		recordType:     dns.RecordTypeCNAME,
-		description:    "Test CNAME: apps.rosa.<cluster-name>.<base-domain> -> <cluster-name>.<base-domain>",
+		description:    "Test CNAME: apps.rosa.<domain-prefix>.<base-domain> -> <domain-prefix>.<base-domain>",
 		expectedTarget: clusterSubDomain,
 	}
 
-	// 3. Test CNAME: _acme-challenge.apps.rosa.<cluster-name>.<base-domain> -> _acme-challenge.<cluster-name>.<base-domain>
-	defaultIngressChallengePointer := fmt.Sprintf("_acme-challenge.apps.rosa.%s.%s", name, domain)
+	// 3. Test CNAME: _acme-challenge.apps.rosa.<domain-prefix>.<base-domain> -> _acme-challenge.<domain-prefix>.<base-domain>
+	defaultIngressChallengePointer := fmt.Sprintf("_acme-challenge.apps.rosa.%s.%s", domainPrefix, domain)
 	tests["default_ingress_challenge"] = dnstestCase{
 		name:           defaultIngressChallengePointer,
 		recordType:     dns.RecordTypeCNAME,
-		description:    "Test CNAME: _acme-challenge.apps.rosa.<cluster-name>.<base-domain> -> _acme-challenge.<cluster-name>.<base-domain>",
+		description:    "Test CNAME: _acme-challenge.apps.rosa.<domain-prefix>.<base-domain> -> _acme-challenge.<domain-prefix>.<base-domain>",
 		expectedTarget: actualChallengeRecord,
 	}
 
-	uniqueFQDN := fmt.Sprintf("%s.rosa.%s.%s", id, name, domain)
+	uniqueFQDN := fmt.Sprintf("%s.rosa.%s.%s", id, domainPrefix, domain)
 	uniqueTest := dnstestCase{
 		name:           uniqueFQDN,
 		recordType:     dns.RecordTypeCNAME,
-		description:    "Test CNAME: <cluster-id>.rosa.<cluster-name>.<base-domain> -> <cluster-name>.<base-domain>",
+		description:    "Test CNAME: <cluster-id>.rosa.<domain-prefix>.<base-domain> -> <domain-prefix>.<base-domain>",
 		expectedTarget: clusterSubDomain,
 	}
 
@@ -224,11 +224,11 @@ func (v *verifyDNSOptions) buildTestCases(cluster *cmv1.Cluster) map[string]dnst
 	}
 	tests["unique"] = uniqueTest
 
-	uniqueChallengePointer := fmt.Sprintf("_acme-challenge.%s.rosa.%s.%s", id, name, domain)
+	uniqueChallengePointer := fmt.Sprintf("_acme-challenge.%s.rosa.%s.%s", id, domainPrefix, domain)
 	uniqueChallengeTest := dnstestCase{
 		name:           uniqueChallengePointer,
 		recordType:     dns.RecordTypeCNAME,
-		description:    "Test CNAME: _acme-challenge.<cluster-id>.rosa.<cluster-name>.<base-domain> -> _acme-challenge.<cluster-name>.<base-domain>",
+		description:    "Test CNAME: _acme-challenge.<cluster-id>.rosa.<domain-prefix>.<base-domain> -> _acme-challenge.<domain-prefix>.<base-domain>",
 		expectedTarget: actualChallengeRecord,
 	}
 	if shouldSkipUnique {
@@ -236,26 +236,26 @@ func (v *verifyDNSOptions) buildTestCases(cluster *cmv1.Cluster) map[string]dnst
 	}
 	tests["unique_challenge"] = uniqueChallengeTest
 
-	apiFQDN := fmt.Sprintf("api.%s.%s", name, domain)
+	apiFQDN := fmt.Sprintf("api.%s.%s", domainPrefix, domain)
 	apiFQDNTest := dnstestCase{
 		name: apiFQDN,
 	}
 
-	oauthFQDN := fmt.Sprintf("oauth.%s.%s", name, domain)
+	oauthFQDN := fmt.Sprintf("oauth.%s.%s", domainPrefix, domain)
 	oauthFQDNTest := dnstestCase{
 		name: oauthFQDN,
 	}
 
 	if cluster.AWS().PrivateLink() {
 		apiFQDNTest.recordType = dns.RecordTypeCNAME
-		apiFQDNTest.description = "Test CNAME: api.<cluster-name>.<base-domain>"
+		apiFQDNTest.description = "Test CNAME: api.<domain-prefix>.<base-domain>"
 		oauthFQDNTest.recordType = dns.RecordTypeCNAME
-		oauthFQDNTest.description = "Test CNAME: oauth.<cluster-name>.<base-domain>"
+		oauthFQDNTest.description = "Test CNAME: oauth.<domain-prefix>.<base-domain>"
 	} else {
 		oauthFQDNTest.recordType = dns.RecordTypeA
-		oauthFQDNTest.description = "Test A record: oauth.<cluster-name>.<base-domain>"
+		oauthFQDNTest.description = "Test A record: oauth.<domain-prefix>.<base-domain>"
 		apiFQDNTest.recordType = dns.RecordTypeA
-		apiFQDNTest.description = "Test A record: api.<cluster-name>.<base-domain>"
+		apiFQDNTest.description = "Test A record: api.<domain-prefix>.<base-domain>"
 	}
 	tests["api"] = apiFQDNTest
 	tests["oauth"] = oauthFQDNTest
@@ -285,45 +285,37 @@ func (r *recommender) MakeRecommendations(results []dns.VerifyResult, opts ...dn
 	var cfg dns.MakeRecommendationsConfig
 	cfg.Option(opts...)
 
-	var recommendations []string
+	var consoleFailed, defaultIngressFailed, uniqueFailed, apiOrOAuthFailed bool
 	for _, res := range results {
 		if res.Status != dns.VerifyResultStatusFail {
 			continue
 		}
 
 		if strings.HasPrefix(res.Name, "console") {
-			recommendations = append(recommendations, strings.Join([]string{
-				"If the console FQDN is not resolving then there is likely an issue with",
-				"CIO on the HCP cluster. Check if the A record <*.apps.rosa.<cluster-name>.<base-domain>",
-				"is defined in the Route 53 Public Hosted Zone in the customer AWS account.",
-				"If not check the health of CIO in the customer cluster.",
-			}, " "))
+			consoleFailed = true
 		} else if strings.HasPrefix(res.Name, "apps.rosa") || strings.HasPrefix(res.Name, "_acme-challenge.apps.rosa") {
-			recommendations = append(recommendations, strings.Join([]string{
-				"If the default ingress FQDNs are not resolving then there is likely an issue with",
-				"the Route 53 configuration in the customer AWS account. These records are created",
-				"once during provisioning by OCM and are not reconciled afterwards. Check the Route 53",
-				"public hosted zone in the customer AWS account to ensure these records exist.",
-				"The CNAME record <_acme-challenge.apps.rosa.<cluster-name>.<base-domain> in particular",
-				"must exist for ingress certificate issuance and renewal to succeed.",
-			}, " "))
-		} else if strings.HasPrefix(res.Name, cfg.Cluster.ID()) || strings.HasPrefix(res.Name, "_acme-challenge."+cfg.Cluster.ID()) {
-			recommendations = append(recommendations, strings.Join([]string{
-				"If the unique FQDNs are not resolving then there is likely an issue with",
-				"the Route 53 configuration in the customer AWS account. These records are created",
-				"once during provisioning by OCM and are not reconciled afterwards. Check the Route 53",
-				"public hosted zone in the customer AWS account to ensure these records exist.",
-				"The both CNAME records must exist for ingress certificate issuance and renewal to succeed.",
-			}, " "))
+			defaultIngressFailed = true
+		} else if cfg.Cluster != nil && (strings.HasPrefix(res.Name, cfg.Cluster.ID()) || strings.HasPrefix(res.Name, "_acme-challenge."+cfg.Cluster.ID())) {
+			uniqueFailed = true
 		} else if strings.HasPrefix(res.Name, "api") || strings.HasPrefix(res.Name, "oauth") {
-			recommendations = append(recommendations, strings.Join([]string{
-				"If the API or OAuth FQDNs are not resolving then there is likely an issue with",
-				"the external-dns operator on the parent Management Cluster of this HCP cluster.",
-				"Check the external-dns operator in the HyperShift namespace to ensure it has valid",
-				"AWS credentials and is running.",
-			}, " "))
+			apiOrOAuthFailed = true
 		}
 	}
+
+	var recommendations []string
+	if consoleFailed {
+		recommendations = append(recommendations, "The console FQDN failed to resolve. This likely indicates an issue with CIO on the HCP cluster. Verify that the *.apps.rosa.<domain-prefix>.<base-domain> A record exists in the customer AWS account's Route 53 public hosted zone. If it does not, check CIO health in the customer cluster.")
+	}
+	if defaultIngressFailed {
+		recommendations = append(recommendations, "One or more default ingress FQDNs failed to resolve. This likely indicates an issue with the Route 53 configuration in the customer AWS account. OCM creates these records during provisioning but does not reconcile them afterwards. Verify that the records exist in the Route 53 public hosted zone. In particular, the _acme-challenge.apps.rosa.<domain-prefix>.<base-domain> CNAME record is required for ingress certificate issuance and renewal.")
+	}
+	if uniqueFailed {
+		recommendations = append(recommendations, "One or more unique FQDNs failed to resolve. This likely indicates an issue with the Route 53 configuration in the customer AWS account. OCM creates these records during provisioning but does not reconcile them afterwards. Verify that both CNAME records exist in the Route 53 public hosted zone; they are required for ingress certificate issuance and renewal.")
+	}
+	if apiOrOAuthFailed {
+		recommendations = append(recommendations, "One or more API or OAuth FQDNs failed to resolve. This likely indicates an issue with the external-dns operator on the parent management cluster. Verify that the external-dns operator in the HyperShift namespace has valid AWS credentials and is running.")
+	}
+
 	return recommendations
 }
 

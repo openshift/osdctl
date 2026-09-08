@@ -279,6 +279,17 @@ func TestWithCluster(t *testing.T) {
 	assert.Equal(t, cluster, cfg.Cluster)
 }
 
+func TestDefaultAnalyzer_PassesClusterToRecommender(t *testing.T) {
+	t.Parallel()
+	cluster := createTestCluster("test", "id123", "us-east-1")
+	recommender := &recordingRecommender{}
+	analyzer := NewDefaultAnalyzer(WithRecommender{Recommender: recommender})
+
+	analyzer.Analyze(cluster, []VerifyResult{{Status: VerifyResultStatusFail}})
+
+	assert.Equal(t, cluster, recommender.cluster)
+}
+
 // Helper functions and mocks
 
 func createTestCluster(name, id, region string) *cmv1.Cluster {
@@ -296,4 +307,15 @@ type mockRecommender struct {
 
 func (m *mockRecommender) MakeRecommendations(results []VerifyResult, opts ...MakeRecommendationsOption) []string {
 	return m.recommendations
+}
+
+type recordingRecommender struct {
+	cluster *cmv1.Cluster
+}
+
+func (r *recordingRecommender) MakeRecommendations(_ []VerifyResult, opts ...MakeRecommendationsOption) []string {
+	var cfg MakeRecommendationsConfig
+	cfg.Option(opts...)
+	r.cluster = cfg.Cluster
+	return nil
 }
