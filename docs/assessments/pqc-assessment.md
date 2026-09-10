@@ -126,7 +126,8 @@ the `osd-network-verifier` library via the `proxy.ProxyConfig` struct.
 **File:** `cmd/hcp/status/parser.go` (lines 312-357)
 
 The `parseCertificate()` function parses and displays ingress certificate
-status (`NotAfter`, `RenewalTime`, `DNSNames`) from ManifestWork resources.
+status (`NotAfter`, `RenewalTime`, `DNSNames`) from standalone certificate
+resources in the OCM live resources map (keys with a `certificate-` prefix).
 This is read-only monitoring — it displays certificate metadata but does not
 validate signatures or handle key material.
 
