@@ -6,6 +6,7 @@ package pagerduty
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -136,7 +137,6 @@ func (c *client) GetFiringAlertsForCluster(pdServiceIDs []string) (map[string][]
 
 			for _, incident := range listIncidentsResponse.Incidents {
 				if c.clusterID != "" && !incidentMatchesCluster(incident, c.clusterID) {
-					fmt.Printf("Skipping incident %d (%s): does not match cluster %s\n", incident.IncidentNumber, incident.Title, c.clusterID)
 					continue
 				}
 				incidents[pdServiceID] = append(incidents[pdServiceID], incident)
@@ -158,6 +158,7 @@ func (c *client) GetFiringAlertsForCluster(pdServiceIDs []string) (map[string][]
 func incidentMatchesCluster(incident pd.Incident, clusterID string) bool {
 	ed := incident.FirstTriggerLogEntry.EventDetails
 	if ed == nil {
+		fmt.Fprintf(os.Stderr, "Warning: incident %d (%s) has no EventDetails; cannot determine cluster ownership, skipping\n", incident.IncidentNumber, incident.Title)
 		return false
 	}
 	for _, key := range []string{"cluster_id", "clusterID", "cluster-id"} {
@@ -207,7 +208,6 @@ func (c *client) GetHistoricalAlertsForCluster(pdServiceIDs []string) (map[strin
 
 			for _, incident := range liResponse.Incidents {
 				if c.clusterID != "" && !incidentMatchesCluster(incident, c.clusterID) {
-					fmt.Printf("Skipping incident %d (%s): does not match cluster %s\n", incident.IncidentNumber, incident.Title, c.clusterID)
 					continue
 				}
 				incidents = append(incidents, incident)

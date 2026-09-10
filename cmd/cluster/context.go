@@ -67,6 +67,7 @@ type contextOptions struct {
 	jiratoken         string
 	teamIds           []string
 	regionID          string
+	isHCPRegionBased  bool
 }
 
 type contextData struct {
@@ -198,7 +199,8 @@ func (o *contextOptions) setup() error {
 	// HCP clusters use region-based PD services rather than per-cluster
 	// services keyed by DNS base domain. Use the region ID as the PD
 	// service query for HCP clusters.
-	if o.cluster.Hypershift().Enabled() && o.cluster.Region() != nil && o.cluster.Region().ID() != "" {
+	o.isHCPRegionBased = o.cluster.Hypershift().Enabled() && o.cluster.Region() != nil && o.cluster.Region().ID() != ""
+	if o.isHCPRegionBased {
 		o.baseDomain = o.cluster.Region().ID()
 	}
 	o.infraID = o.cluster.InfraID()
@@ -388,10 +390,8 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	// For HCP clusters, set the cluster ID so PD incidents are filtered
 	// to only those belonging to this cluster within the region-based
 	// PD service. Use the external ID because PD alerts reference the
-	// cluster's external UUID, not the internal OCM ID. Guard on region
-	// availability to stay consistent with the baseDomain override in
-	// setup().
-	if o.cluster.Hypershift().Enabled() && o.cluster.Region() != nil && o.cluster.Region().ID() != "" {
+	// cluster's external UUID, not the internal OCM ID.
+	if o.isHCPRegionBased {
 		pdClientBuilder = pdClientBuilder.WithClusterID(o.externalClusterID)
 	}
 	pdProvider, err := pdClientBuilder.Init()

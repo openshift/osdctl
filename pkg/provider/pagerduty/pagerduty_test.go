@@ -44,6 +44,12 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 				Expect(pdProvider.oauthToken).To(Equal("oauth_token"))
 			})
 		})
+		Context("WithClusterID", func() {
+			It("Should correctly populate the clusterID", func() {
+				pdProvider.WithClusterID("test-cluster-123")
+				Expect(pdProvider.clusterID).To(Equal("test-cluster-123"))
+			})
+		})
 		Context("Building the Client", func() {
 			It("Should build the user_token client when the user client is called", func() {
 				err := pdProvider.WithUserToken("token").buildClient()
@@ -68,13 +74,6 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 
 		AfterEach(func() {
 			ctrl.Finish()
-		})
-
-		Context("WithClusterID", func() {
-			It("Should correctly populate the clusterID", func() {
-				pdProvider.WithClusterID("test-cluster-123")
-				Expect(pdProvider.clusterID).To(Equal("test-cluster-123"))
-			})
 		})
 
 		Context("incidentMatchesCluster", func() {
