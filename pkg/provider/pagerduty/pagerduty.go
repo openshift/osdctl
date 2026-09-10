@@ -136,6 +136,7 @@ func (c *client) GetFiringAlertsForCluster(pdServiceIDs []string) (map[string][]
 
 			for _, incident := range listIncidentsResponse.Incidents {
 				if c.clusterID != "" && !incidentMatchesCluster(incident, c.clusterID) {
+					fmt.Printf("Skipping incident %d (%s): does not match cluster %s\n", incident.IncidentNumber, incident.Title, c.clusterID)
 					continue
 				}
 				incidents[pdServiceID] = append(incidents[pdServiceID], incident)
@@ -176,6 +177,7 @@ func (c *client) GetHistoricalAlertsForCluster(pdServiceIDs []string) (map[strin
 	incidentMap := map[string][]*IncidentOccurrenceTracker{}
 
 	for _, pdServiceID := range pdServiceIDs {
+		incidents = incidents[:0]
 		for currentOffset = 0; true; currentOffset += limit {
 			opts := pd.ListIncidentsOptions{
 				ServiceIDs: []string{pdServiceID},
@@ -205,6 +207,7 @@ func (c *client) GetHistoricalAlertsForCluster(pdServiceIDs []string) (map[strin
 
 			for _, incident := range liResponse.Incidents {
 				if c.clusterID != "" && !incidentMatchesCluster(incident, c.clusterID) {
+					fmt.Printf("Skipping incident %d (%s): does not match cluster %s\n", incident.IncidentNumber, incident.Title, c.clusterID)
 					continue
 				}
 				incidents = append(incidents, incident)

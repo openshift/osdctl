@@ -20,78 +20,6 @@ func generateIncident() pd.Incident {
 	}
 }
 
-var _ = Describe("incidentMatchesCluster", func() {
-	It("Returns true when cluster_id matches", func() {
-		incident := pd.Incident{
-			FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
-				CommonLogEntryField: pd.CommonLogEntryField{
-					EventDetails: map[string]string{
-						"cluster_id": "abc-123",
-					},
-				},
-			},
-		}
-		Expect(incidentMatchesCluster(incident, "abc-123")).To(BeTrue())
-	})
-
-	It("Returns true when clusterID key matches", func() {
-		incident := pd.Incident{
-			FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
-				CommonLogEntryField: pd.CommonLogEntryField{
-					EventDetails: map[string]string{
-						"clusterID": "abc-123",
-					},
-				},
-			},
-		}
-		Expect(incidentMatchesCluster(incident, "abc-123")).To(BeTrue())
-	})
-
-	It("Returns true when cluster-id key matches", func() {
-		incident := pd.Incident{
-			FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
-				CommonLogEntryField: pd.CommonLogEntryField{
-					EventDetails: map[string]string{
-						"cluster-id": "abc-123",
-					},
-				},
-			},
-		}
-		Expect(incidentMatchesCluster(incident, "abc-123")).To(BeTrue())
-	})
-
-	It("Returns false when cluster ID does not match", func() {
-		incident := pd.Incident{
-			FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
-				CommonLogEntryField: pd.CommonLogEntryField{
-					EventDetails: map[string]string{
-						"cluster_id": "different-cluster",
-					},
-				},
-			},
-		}
-		Expect(incidentMatchesCluster(incident, "abc-123")).To(BeFalse())
-	})
-
-	It("Returns false when EventDetails is nil", func() {
-		incident := pd.Incident{}
-		Expect(incidentMatchesCluster(incident, "abc-123")).To(BeFalse())
-	})
-
-	It("Returns false when no cluster ID key is present", func() {
-		incident := pd.Incident{
-			FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
-				CommonLogEntryField: pd.CommonLogEntryField{
-					EventDetails: map[string]string{
-						"some_other_key": "abc-123",
-					},
-				},
-			},
-		}
-		Expect(incidentMatchesCluster(incident, "abc-123")).To(BeFalse())
-	})
-})
-
 var _ = Describe("Tests the Pagerduty Provider", func() {
 	var pdProvider *client
 	BeforeEach(func() {
@@ -146,6 +74,78 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 			It("Should correctly populate the clusterID", func() {
 				pdProvider.WithClusterID("test-cluster-123")
 				Expect(pdProvider.clusterID).To(Equal("test-cluster-123"))
+			})
+		})
+
+		Context("incidentMatchesCluster", func() {
+			It("Returns true when cluster_id matches", func() {
+				incident := pd.Incident{
+					FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+						CommonLogEntryField: pd.CommonLogEntryField{
+							EventDetails: map[string]string{
+								"cluster_id": "abc-123",
+							},
+						},
+					},
+				}
+				Expect(incidentMatchesCluster(incident, "abc-123")).To(BeTrue())
+			})
+
+			It("Returns true when clusterID key matches", func() {
+				incident := pd.Incident{
+					FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+						CommonLogEntryField: pd.CommonLogEntryField{
+							EventDetails: map[string]string{
+								"clusterID": "abc-123",
+							},
+						},
+					},
+				}
+				Expect(incidentMatchesCluster(incident, "abc-123")).To(BeTrue())
+			})
+
+			It("Returns true when cluster-id key matches", func() {
+				incident := pd.Incident{
+					FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+						CommonLogEntryField: pd.CommonLogEntryField{
+							EventDetails: map[string]string{
+								"cluster-id": "abc-123",
+							},
+						},
+					},
+				}
+				Expect(incidentMatchesCluster(incident, "abc-123")).To(BeTrue())
+			})
+
+			It("Returns false when cluster ID does not match", func() {
+				incident := pd.Incident{
+					FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+						CommonLogEntryField: pd.CommonLogEntryField{
+							EventDetails: map[string]string{
+								"cluster_id": "different-cluster",
+							},
+						},
+					},
+				}
+				Expect(incidentMatchesCluster(incident, "abc-123")).To(BeFalse())
+			})
+
+			It("Returns false when EventDetails is nil", func() {
+				incident := pd.Incident{}
+				Expect(incidentMatchesCluster(incident, "abc-123")).To(BeFalse())
+			})
+
+			It("Returns false when no cluster ID key is present", func() {
+				incident := pd.Incident{
+					FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+						CommonLogEntryField: pd.CommonLogEntryField{
+							EventDetails: map[string]string{
+								"some_other_key": "abc-123",
+							},
+						},
+					},
+				}
+				Expect(incidentMatchesCluster(incident, "abc-123")).To(BeFalse())
 			})
 		})
 
