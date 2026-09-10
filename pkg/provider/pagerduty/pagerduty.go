@@ -109,8 +109,9 @@ func (c *client) GetFiringAlertsForCluster(pdServiceIDs []string) (map[string][]
 	incidents := map[string][]pd.Incident{}
 
 	var incidentLimit uint = 25
-	var incidentListOffset uint = 0
+	var incidentListOffset uint
 	for _, pdServiceID := range pdServiceIDs {
+		incidentListOffset = 0
 		for {
 			opts := pd.ListIncidentsOptions{
 				ServiceIDs: []string{pdServiceID},
@@ -176,15 +177,22 @@ func (c *client) GetHistoricalAlertsForCluster(pdServiceIDs []string) (map[strin
 
 	for _, pdServiceID := range pdServiceIDs {
 		for currentOffset = 0; true; currentOffset += limit {
+			opts := pd.ListIncidentsOptions{
+				ServiceIDs: []string{pdServiceID},
+				Statuses:   []string{"resolved", "triggered", "acknowledged"},
+				Offset:     currentOffset,
+				Limit:      limit,
+				SortBy:     "created_at:desc",
+			}
+			// For HCP clusters, include first_trigger_log_entries so
+			// we can filter incidents by cluster ID in EventDetails.
+			if c.clusterID != "" {
+				opts.Includes = []string{"first_trigger_log_entries"}
+			}
+
 			liResponse, err := c.pdclient.ListIncidentsWithContext(
 				ctx,
-				pd.ListIncidentsOptions{
-					ServiceIDs: []string{pdServiceID},
-					Statuses:   []string{"resolved", "triggered", "acknowledged"},
-					Offset:     currentOffset,
-					Limit:      limit,
-					SortBy:     "created_at:desc",
-				},
+				opts,
 			)
 
 			if err != nil {
@@ -195,7 +203,12 @@ func (c *client) GetHistoricalAlertsForCluster(pdServiceIDs []string) (map[strin
 				break
 			}
 
-			incidents = append(incidents, liResponse.Incidents...)
+			for _, incident := range liResponse.Incidents {
+				if c.clusterID != "" && !incidentMatchesCluster(incident, c.clusterID) {
+					continue
+				}
+				incidents = append(incidents, incident)
+			}
 		}
 
 		incidentCounter := make(map[string]*IncidentOccurrenceTracker)

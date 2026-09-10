@@ -378,5 +378,80 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 				})
 			})
 		})
+
+		Context("GetHistoricalAlertsForCluster HCP filtering", func() {
+			It("Returns only incidents matching the cluster ID in historical data", func() {
+				matchingIncident := pd.Incident{
+					IncidentNumber: 1,
+					Title:          "MatchingAlert is firing",
+					CreatedAt:      "2024-01-15T10:00:00Z",
+					FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+						CommonLogEntryField: pd.CommonLogEntryField{
+							EventDetails: map[string]string{
+								"cluster_id": "hcp-cluster-123",
+							},
+						},
+					},
+				}
+				nonMatchingIncident := pd.Incident{
+					IncidentNumber: 2,
+					Title:          "OtherClusterAlert is firing",
+					CreatedAt:      "2024-01-15T11:00:00Z",
+					FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+						CommonLogEntryField: pd.CommonLogEntryField{
+							EventDetails: map[string]string{
+								"cluster_id": "hcp-cluster-999",
+							},
+						},
+					},
+				}
+				mixedResponse := &pd.ListIncidentsResponse{
+					Incidents: []pd.Incident{matchingIncident, nonMatchingIncident},
+				}
+				emptyResponse := &pd.ListIncidentsResponse{
+					Incidents: []pd.Incident{},
+				}
+
+				m := pdMock.NewMockpdClientInterface(ctrl)
+				m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(mixedResponse, nil)
+				m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(emptyResponse, nil)
+				pdProvider.pdclient = m
+				pdProvider.clusterID = "hcp-cluster-123"
+
+				result, err := pdProvider.GetHistoricalAlertsForCluster([]string{"region-svc"})
+				Expect(err).To(BeNil())
+				Expect(result["region-svc"]).To(HaveLen(1))
+				Expect(result["region-svc"][0].IncidentName).To(Equal("MatchingAlert"))
+			})
+
+			It("Returns all incidents when clusterID is empty (classic cluster)", func() {
+				incident1 := pd.Incident{
+					IncidentNumber: 1,
+					Title:          "Alert1 is firing",
+					CreatedAt:      "2024-01-15T10:00:00Z",
+				}
+				incident2 := pd.Incident{
+					IncidentNumber: 2,
+					Title:          "Alert2 is firing",
+					CreatedAt:      "2024-01-15T11:00:00Z",
+				}
+				response := &pd.ListIncidentsResponse{
+					Incidents: []pd.Incident{incident1, incident2},
+				}
+				emptyResponse := &pd.ListIncidentsResponse{
+					Incidents: []pd.Incident{},
+				}
+
+				m := pdMock.NewMockpdClientInterface(ctrl)
+				m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(response, nil)
+				m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(emptyResponse, nil)
+				pdProvider.pdclient = m
+				pdProvider.clusterID = ""
+
+				result, err := pdProvider.GetHistoricalAlertsForCluster([]string{"classic-svc"})
+				Expect(err).To(BeNil())
+				Expect(result["classic-svc"]).To(HaveLen(2))
+			})
+		})
 	})
 })
