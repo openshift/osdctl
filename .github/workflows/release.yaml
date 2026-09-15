@@ -19,6 +19,7 @@ permissions:
 
 jobs:
   goreleaser:
+    if: github.repository == 'openshift/osdctl'
     name: goreleaser
     runs-on: ubuntu-latest
     steps:

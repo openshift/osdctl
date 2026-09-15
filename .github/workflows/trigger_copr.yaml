@@ -9,6 +9,7 @@ on:
 
 jobs:
   build:
+    if: github.repository == 'openshift/osdctl'
     name: trigger_copr_on_tag
     runs-on: ubuntu-latest
     permissions:
