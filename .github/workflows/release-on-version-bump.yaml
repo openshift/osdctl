@@ -30,6 +30,7 @@ permissions:
 
 jobs:
   release:
+    if: github.repository == 'openshift/osdctl'
     name: tag and release
     runs-on: ubuntu-latest
     steps:
