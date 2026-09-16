@@ -648,6 +648,7 @@ func TestWaitForPodReady(t *testing.T) {
 						Namespace:         "openshift-ocm-agent-operator",
 						Labels:            map[string]string{"app": "ocm-agent-operator"},
 						DeletionTimestamp: &metav1.Time{Time: time.Now()},
+						Finalizers:        []string{"test/keep"},
 					},
 					Status: corev1.PodStatus{
 						Conditions: []corev1.PodCondition{

@@ -283,7 +283,10 @@ func rolloutPods(clientset *kubernetes.Clientset, namespace, selector string) er
 func waitForPodReady(ctx context.Context, clientset kubernetes.Interface, namespace, selector string, timeout time.Duration) error {
 	pollInterval := 5 * time.Second
 
-	return wait.PollUntilContextTimeout(ctx, pollInterval, timeout, true, func(ctx context.Context) (bool, error) {
+	// Track the last observed state so the timeout error can report why it failed.
+	var lastTotal, lastTerminating, lastNotReady int
+
+	err := wait.PollUntilContextTimeout(ctx, pollInterval, timeout, true, func(ctx context.Context) (bool, error) {
 		pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 			LabelSelector: selector,
 		})
@@ -292,10 +295,15 @@ func waitForPodReady(ctx context.Context, clientset kubernetes.Interface, namesp
 			return false, nil
 		}
 
+		lastTotal = len(pods.Items)
+		lastTerminating = 0
+		lastNotReady = 0
+
 		for _, pod := range pods.Items {
 			// Skip pods that are being terminated — their Ready condition
 			// may still be true during the graceful shutdown window.
 			if pod.DeletionTimestamp != nil {
+				lastTerminating++
 				continue
 			}
 			for _, cond := range pod.Status.Conditions {
@@ -304,9 +312,19 @@ func waitForPodReady(ctx context.Context, clientset kubernetes.Interface, namesp
 					return true, nil
 				}
 			}
+			lastNotReady++
 		}
 		return false, nil
 	})
+
+	if err != nil {
+		if lastTotal == 0 {
+			return fmt.Errorf("no pods found in namespace '%s' with selector '%s' within %v: %w", namespace, selector, timeout, err)
+		}
+		return fmt.Errorf("found %d pod(s) in namespace '%s' with selector '%s' (%d terminating, %d not ready) but none became Ready within %v: %w",
+			lastTotal, namespace, selector, lastTerminating, lastNotReady, timeout, err)
+	}
+	return nil
 }
 
 func verifyClusterPullSecret(clientset *kubernetes.Clientset, expectedPullSecret string) error {
