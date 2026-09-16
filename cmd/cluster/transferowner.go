@@ -280,10 +280,10 @@ func rolloutPods(clientset *kubernetes.Clientset, namespace, selector string) er
 // waitForPodReady polls until at least one pod matching the label selector in
 // the given namespace reaches the Ready condition. This is used to ensure an
 // operator pod has fully restarted before proceeding with dependent rollouts.
-func waitForPodReady(clientset kubernetes.Interface, namespace, selector string, timeout time.Duration) error {
+func waitForPodReady(ctx context.Context, clientset kubernetes.Interface, namespace, selector string, timeout time.Duration) error {
 	pollInterval := 5 * time.Second
 
-	return wait.PollUntilContextTimeout(context.TODO(), pollInterval, timeout, true, func(ctx context.Context) (bool, error) {
+	return wait.PollUntilContextTimeout(ctx, pollInterval, timeout, true, func(ctx context.Context) (bool, error) {
 		pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 			LabelSelector: selector,
 		})
@@ -863,7 +863,7 @@ func (o *transferOwnerOptions) run() error {
 
 		// Wait for the operator pod to become Ready before rolling the agent
 		// pods — the operator must reconcile with the new pull secret first.
-		err = waitForPodReady(targetClientSet, "openshift-ocm-agent-operator", "app=ocm-agent-operator", 2*time.Minute)
+		err = waitForPodReady(context.TODO(), targetClientSet, "openshift-ocm-agent-operator", "app=ocm-agent-operator", 2*time.Minute)
 		if err != nil {
 			return fmt.Errorf("timed out waiting for OCM Agent Operator pod to become Ready in namespace 'openshift-ocm-agent-operator': %w", err)
 		}

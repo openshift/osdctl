@@ -700,7 +700,7 @@ func TestWaitForPodReady(t *testing.T) {
 			}
 			fakeClient := k8sfake.NewSimpleClientset(objs...)
 
-			err := waitForPodReady(fakeClient, "openshift-ocm-agent-operator", "app=ocm-agent-operator", tt.timeout)
+			err := waitForPodReady(context.Background(), fakeClient, "openshift-ocm-agent-operator", "app=ocm-agent-operator", tt.timeout)
 			if tt.expectErr {
 				assert.Error(t, err)
 			} else {
