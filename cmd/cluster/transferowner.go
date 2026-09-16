@@ -818,8 +818,16 @@ func (o *transferOwnerOptions) run() error {
 		fmt.Print("Re-registered cluster\n")
 	}
 
-	// Rollout the ocmAgent pods for non HCP clusters
+	// Rollout the ocm-agent-operator and ocm-agent pods for non HCP clusters.
+	// The operator must be restarted first so it picks up the new pull secret
+	// and reconciles with fresh state; otherwise the recreated agent pods
+	// inherit stale configuration and enter CrashLoopBackOff.
 	if !o.hypershift {
+		err = rolloutPods(targetClientSet, "openshift-ocm-agent-operator", "app=ocm-agent-operator")
+		if err != nil {
+			return fmt.Errorf("failed to roll out OCM Agent Operator pod in namespace 'openshift-ocm-agent-operator' with label selector 'app=ocm-agent-operator': %w", err)
+		}
+
 		err = rolloutPods(targetClientSet, "openshift-ocm-agent-operator", "app=ocm-agent")
 		if err != nil {
 			return fmt.Errorf("failed to roll out OCM Agent pods in namespace 'openshift-ocm-agent-operator' with label selector 'app=ocm-agent': %w", err)
