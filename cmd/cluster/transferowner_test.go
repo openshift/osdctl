@@ -640,6 +640,26 @@ func TestWaitForPodReady(t *testing.T) {
 			expectErr: true,
 		},
 		{
+			name: "terminating pod still ready - times out",
+			pods: []corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "ocm-agent-operator-abc123",
+						Namespace:         "openshift-ocm-agent-operator",
+						Labels:            map[string]string{"app": "ocm-agent-operator"},
+						DeletionTimestamp: &metav1.Time{Time: time.Now()},
+					},
+					Status: corev1.PodStatus{
+						Conditions: []corev1.PodCondition{
+							{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+						},
+					},
+				},
+			},
+			timeout:   2 * time.Second,
+			expectErr: true,
+		},
+		{
 			name: "multiple pods one ready",
 			pods: []corev1.Pod{
 				{

@@ -293,6 +293,11 @@ func waitForPodReady(clientset kubernetes.Interface, namespace, selector string,
 		}
 
 		for _, pod := range pods.Items {
+			// Skip pods that are being terminated — their Ready condition
+			// may still be true during the graceful shutdown window.
+			if pod.DeletionTimestamp != nil {
+				continue
+			}
 			for _, cond := range pod.Status.Conditions {
 				if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
 					fmt.Printf("Pod %s in namespace %s is Ready.\n", pod.Name, namespace)
