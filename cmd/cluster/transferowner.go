@@ -17,6 +17,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
 	workv1 "open-cluster-management.io/api/work/v1"
@@ -274,6 +275,35 @@ func rolloutPods(clientset *kubernetes.Clientset, namespace, selector string) er
 
 	fmt.Printf("Pods in namespace %s with label selector '%s' have been deleted.\n", namespace, selector)
 	return nil
+}
+
+// waitForPodReady polls until at least one pod matching the label selector in
+// the given namespace reaches the Ready condition. This is used to ensure an
+// operator pod has fully restarted before proceeding with dependent rollouts.
+func waitForPodReady(clientset *kubernetes.Clientset, namespace, selector string, timeout time.Duration) error {
+	pollInterval := 5 * time.Second
+	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
+	defer cancel()
+
+	return wait.PollUntilContextTimeout(ctx, pollInterval, timeout, true, func(ctx context.Context) (bool, error) {
+		pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: selector,
+		})
+		if err != nil {
+			fmt.Printf("Warning: error listing pods in namespace '%s' with selector '%s' (will retry): %v\n", namespace, selector, err)
+			return false, nil
+		}
+
+		for _, pod := range pods.Items {
+			for _, cond := range pod.Status.Conditions {
+				if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
+					fmt.Printf("Pod %s in namespace %s is Ready.\n", pod.Name, namespace)
+					return true, nil
+				}
+			}
+		}
+		return false, nil
+	})
 }
 
 func verifyClusterPullSecret(clientset *kubernetes.Clientset, expectedPullSecret string) error {
@@ -828,9 +858,16 @@ func (o *transferOwnerOptions) run() error {
 			return fmt.Errorf("failed to roll out OCM Agent Operator pod in namespace 'openshift-ocm-agent-operator' with label selector 'app=ocm-agent-operator': %w", err)
 		}
 
+		// Wait for the operator pod to become Ready before rolling the agent
+		// pods — the operator must reconcile with the new pull secret first.
+		err = waitForPodReady(targetClientSet, "openshift-ocm-agent-operator", "app=ocm-agent-operator", 2*time.Minute)
+		if err != nil {
+			return fmt.Errorf("timed out waiting for OCM Agent Operator pod to become Ready in namespace 'openshift-ocm-agent-operator': %w", err)
+		}
+
 		err = rolloutPods(targetClientSet, "openshift-ocm-agent-operator", "app=ocm-agent")
 		if err != nil {
-			return fmt.Errorf("failed to roll out OCM Agent pods in namespace 'openshift-ocm-agent-operator' with label selector 'app=ocm-agent': %w", err)
+			return fmt.Errorf("failed to roll out OCM Agent pods in namespace 'openshift-ocm-agent-operator' with label selector 'app=ocm-agent' (note: the ocm-agent-operator was already restarted successfully): %w", err)
 		}
 	}
 
