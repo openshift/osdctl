@@ -336,6 +336,23 @@ func generateClusterObjectForTesting(name string, id string, privateLink bool, p
 	return *cluster
 }
 
+// generatePSCClusterObjectForTesting creates a non-functional GCP PSC cluster object solely for testing purposes
+func generatePSCClusterObjectForTesting(name string, id string) clustersmgmtv1.Cluster {
+	cluster, err := clustersmgmtv1.NewCluster().
+		Name(name).
+		ID(id).
+		GCP(clustersmgmtv1.NewGCP().PrivateServiceConnect(
+			clustersmgmtv1.NewGcpPrivateServiceConnect().ServiceAttachmentSubnet("psc-subnet"),
+		)).
+		API(clustersmgmtv1.NewClusterAPI().Listening(clustersmgmtv1.ListeningMethodExternal)).
+		Build()
+
+	if err != nil {
+		panic(fmt.Sprintf("Failed to build cluster: %v", err))
+	}
+	return *cluster
+}
+
 // generateKubeconfigSecretObjectForTesting creates a Secret containing a kubeconfig file for testing purposes
 func generateKubeconfigSecretObjectForTesting(name, namespace, key, serverURL string) (corev1.Secret, clientcmdapiv1.Config) {
 	kubeconfig := clientcmdapiv1.Config{
