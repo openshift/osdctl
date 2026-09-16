@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/util/retry"
 	workv1 "open-cluster-management.io/api/work/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -585,4 +586,106 @@ func TestUpdateManifestWorkIndexShiftSafety(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, int32(2), updateCalls.Load())
+}
+
+func TestWaitForPodReady(t *testing.T) {
+	tests := []struct {
+		name      string
+		pods      []corev1.Pod
+		timeout   time.Duration
+		expectErr bool
+	}{
+		{
+			name: "pod is already ready",
+			pods: []corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ocm-agent-operator-abc123",
+						Namespace: "openshift-ocm-agent-operator",
+						Labels:    map[string]string{"app": "ocm-agent-operator"},
+					},
+					Status: corev1.PodStatus{
+						Conditions: []corev1.PodCondition{
+							{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+						},
+					},
+				},
+			},
+			timeout:   10 * time.Second,
+			expectErr: false,
+		},
+		{
+			name:      "no pods - times out",
+			pods:      []corev1.Pod{},
+			timeout:   2 * time.Second,
+			expectErr: true,
+		},
+		{
+			name: "pod exists but not ready - times out",
+			pods: []corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ocm-agent-operator-abc123",
+						Namespace: "openshift-ocm-agent-operator",
+						Labels:    map[string]string{"app": "ocm-agent-operator"},
+					},
+					Status: corev1.PodStatus{
+						Conditions: []corev1.PodCondition{
+							{Type: corev1.PodReady, Status: corev1.ConditionFalse},
+						},
+					},
+				},
+			},
+			timeout:   2 * time.Second,
+			expectErr: true,
+		},
+		{
+			name: "multiple pods one ready",
+			pods: []corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ocm-agent-operator-old",
+						Namespace: "openshift-ocm-agent-operator",
+						Labels:    map[string]string{"app": "ocm-agent-operator"},
+					},
+					Status: corev1.PodStatus{
+						Conditions: []corev1.PodCondition{
+							{Type: corev1.PodReady, Status: corev1.ConditionFalse},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ocm-agent-operator-new",
+						Namespace: "openshift-ocm-agent-operator",
+						Labels:    map[string]string{"app": "ocm-agent-operator"},
+					},
+					Status: corev1.PodStatus{
+						Conditions: []corev1.PodCondition{
+							{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+						},
+					},
+				},
+			},
+			timeout:   10 * time.Second,
+			expectErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			objs := make([]runtime.Object, len(tt.pods))
+			for i := range tt.pods {
+				objs[i] = &tt.pods[i]
+			}
+			fakeClient := k8sfake.NewSimpleClientset(objs...)
+
+			err := waitForPodReady(fakeClient, "openshift-ocm-agent-operator", "app=ocm-agent-operator", tt.timeout)
+			if tt.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }

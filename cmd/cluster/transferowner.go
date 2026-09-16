@@ -280,12 +280,10 @@ func rolloutPods(clientset *kubernetes.Clientset, namespace, selector string) er
 // waitForPodReady polls until at least one pod matching the label selector in
 // the given namespace reaches the Ready condition. This is used to ensure an
 // operator pod has fully restarted before proceeding with dependent rollouts.
-func waitForPodReady(clientset *kubernetes.Clientset, namespace, selector string, timeout time.Duration) error {
+func waitForPodReady(clientset kubernetes.Interface, namespace, selector string, timeout time.Duration) error {
 	pollInterval := 5 * time.Second
-	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
-	defer cancel()
 
-	return wait.PollUntilContextTimeout(ctx, pollInterval, timeout, true, func(ctx context.Context) (bool, error) {
+	return wait.PollUntilContextTimeout(context.TODO(), pollInterval, timeout, true, func(ctx context.Context) (bool, error) {
 		pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 			LabelSelector: selector,
 		})
