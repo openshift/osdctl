@@ -6,7 +6,7 @@
 # and sets ISSUE_URL / FULLSEND_TRACKER, but the reusable-dispatch harness-run
 # job does not map every host variable the base env references on the
 # pre-computed (jira-poll) matrix path, so those references are overridden here.
-base: https://raw.githubusercontent.com/fullsend-ai/agents/48511880eaea5ef01f80b69ba4f228147611db33/harness/code.yaml#sha256=4f0d9425d5ee1fa86e21d3b6d1ac9bd086da2f59de9d80a311f753c00d99303d
+base: https://raw.githubusercontent.com/fullsend-ai/agents/7ab05564b3c9c0ab20197e0c8572b5905ffd75ca/harness/code.yaml#sha256=d10044d419789b3b965490a20f3ee58640e8fe3c708afc62b3b7abb3b89224a3
 
 trigger: >
   event.entity.kind == "work_item"

@@ -8,7 +8,7 @@
 # Jira credentials are passed through explicitly here. The base sandbox policy
 # does not permit egress to Jira Cloud, so policies/triage.yaml is required to
 # let the sandbox reach redhat.atlassian.net (read-only) for issue fetching.
-base: https://raw.githubusercontent.com/fullsend-ai/agents/48511880eaea5ef01f80b69ba4f228147611db33/harness/triage.yaml#sha256=30e51cc0b5fe86306189b4b3485366831c10c75fbcc9b8273e1e760103bf9d19
+base: https://raw.githubusercontent.com/fullsend-ai/agents/7ab05564b3c9c0ab20197e0c8572b5905ffd75ca/harness/triage.yaml#sha256=3aa32e9f66ad6a9b60a75f50d3adc6ae39ebfb425c3928381e019436498bf2aa
 
 policy: policies/triage.yaml
 
