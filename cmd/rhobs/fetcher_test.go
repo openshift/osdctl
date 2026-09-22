@@ -27,10 +27,10 @@ func TestGetTokenProvider_CredentialResolution(t *testing.T) {
 			wantErr:          false,
 		},
 		{
-			name:             "both env vars provided - should succeed",
-			envClientID:      "test-id",
-			envClientSecret:  "test-secret",
-			wantErr:          false,
+			name:            "both env vars provided - should succeed",
+			envClientID:     "test-id",
+			envClientSecret: "test-secret",
+			wantErr:         false,
 		},
 		{
 			name:             "flags override env vars - should succeed",
