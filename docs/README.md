@@ -4431,10 +4431,12 @@ osdctl rhobs [flags]
 #### Flags
 
 ```
-  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
-  -h, --help                  help for rhobs
-      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -S, --skip-version-check    skip checking to see if this is the most recent release
+      --client-id string       RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string   RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
+  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                   help for rhobs
+      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check     skip checking to see if this is the most recent release
 ```
 
 ### osdctl rhobs alerts
@@ -4448,10 +4450,12 @@ osdctl rhobs alerts [flags]
 #### Flags
 
 ```
-  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
-  -h, --help                  help for alerts
-      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -S, --skip-version-check    skip checking to see if this is the most recent release
+      --client-id string       RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string   RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
+  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                   help for alerts
+      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check     skip checking to see if this is the most recent release
 ```
 
 ### osdctl rhobs alerts get
@@ -4465,12 +4469,14 @@ osdctl rhobs alerts get [flags]
 #### Flags
 
 ```
-  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
-  -f, --filter                Only keep the results matching the given cluster - only effective if some of those results have a _id, _mc_id or mc_name label
-  -h, --help                  help for get
-      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -o, --output string         Format of the output - allowed values: "text", "csv" or "json" (default "text")
-  -S, --skip-version-check    skip checking to see if this is the most recent release
+      --client-id string       RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string   RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
+  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
+  -f, --filter                 Only keep the results matching the given cluster - only effective if some of those results have a _id, _mc_id or mc_name label
+  -h, --help                   help for get
+      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -o, --output string          Format of the output - allowed values: "text", "csv" or "json" (default "text")
+  -S, --skip-version-check     skip checking to see if this is the most recent release
 ```
 
 ### osdctl rhobs alerts prom-rules
@@ -4484,10 +4490,12 @@ osdctl rhobs alerts prom-rules [flags]
 #### Flags
 
 ```
-  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
-  -h, --help                  help for prom-rules
-      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -S, --skip-version-check    skip checking to see if this is the most recent release
+      --client-id string       RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string   RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
+  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                   help for prom-rules
+      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check     skip checking to see if this is the most recent release
 ```
 
 ### osdctl rhobs alerts prom-rules get
@@ -4501,10 +4509,12 @@ osdctl rhobs alerts prom-rules get [flags]
 #### Flags
 
 ```
-  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
-  -h, --help                  help for get
-      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -S, --skip-version-check    skip checking to see if this is the most recent release
+      --client-id string       RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string   RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
+  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                   help for get
+      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check     skip checking to see if this is the most recent release
 ```
 
 ### osdctl rhobs alerts silences
@@ -4518,10 +4528,12 @@ osdctl rhobs alerts silences [flags]
 #### Flags
 
 ```
-  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
-  -h, --help                  help for silences
-      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -S, --skip-version-check    skip checking to see if this is the most recent release
+      --client-id string       RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string   RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
+  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                   help for silences
+      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check     skip checking to see if this is the most recent release
 ```
 
 ### osdctl rhobs alerts silences create
@@ -4536,6 +4548,8 @@ osdctl rhobs alerts silences create selector [flags]
 
 ```
       --author string           Name of the person creating the silence (default to the OS user name)
+      --client-id string        RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string    RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
   -C, --cluster-id string       Name or Internal ID of the cluster (defaults to current cluster context)
       --comment string          Some free text giving some context around why the silence is created - you can give JIRA or other references there
       --end-time time           Time at which the silence will expire - Mandatory unless --expire-after is set
@@ -4557,10 +4571,12 @@ osdctl rhobs alerts silences delete [silence-id] [flags]
 #### Flags
 
 ```
-  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
-  -h, --help                  help for delete
-      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -S, --skip-version-check    skip checking to see if this is the most recent release
+      --client-id string       RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string   RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
+  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                   help for delete
+      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check     skip checking to see if this is the most recent release
 ```
 
 ### osdctl rhobs alerts silences get
@@ -4574,10 +4590,12 @@ osdctl rhobs alerts silences get [flags]
 #### Flags
 
 ```
-  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
-  -h, --help                  help for get
-      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -S, --skip-version-check    skip checking to see if this is the most recent release
+      --client-id string       RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string   RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
+  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                   help for get
+      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check     skip checking to see if this is the most recent release
 ```
 
 ### osdctl rhobs cell
@@ -4591,10 +4609,12 @@ osdctl rhobs cell [flags]
 #### Flags
 
 ```
-  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
-  -h, --help                  help for cell
-      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -S, --skip-version-check    skip checking to see if this is the most recent release
+      --client-id string       RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string   RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
+  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                   help for cell
+      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check     skip checking to see if this is the most recent release
 ```
 
 ### osdctl rhobs hcp-dashboard
@@ -4608,12 +4628,14 @@ osdctl rhobs hcp-dashboard [dashboard-name] [flags]
 #### Flags
 
 ```
-  -b, --browser               Open in the URL in the default browser
-  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
-  -h, --help                  help for hcp-dashboard
-      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -c, --rhobs-cell string     RHOBS cell URL - for instance: https://us-east-1-0.rhobs.api.stage.openshift.com - use a comma to separate the RHOBS cell to use for metrics from the logs RHOBS cell if they are different - this option is not working with all dashboards - exclusive with --cluster-id
-  -S, --skip-version-check    skip checking to see if this is the most recent release
+  -b, --browser                Open in the URL in the default browser
+      --client-id string       RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string   RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
+  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                   help for hcp-dashboard
+      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -c, --rhobs-cell string      RHOBS cell URL - for instance: https://us-east-1-0.rhobs.api.stage.openshift.com - use a comma to separate the RHOBS cell to use for metrics from the logs RHOBS cell if they are different - this option is not working with all dashboards - exclusive with --cluster-id
+  -S, --skip-version-check     skip checking to see if this is the most recent release
 ```
 
 ### osdctl rhobs logs
@@ -4628,6 +4650,8 @@ osdctl rhobs logs [pod] [flags]
 
 ```
   -b, --browser                         Open in the default browser the URL computed with the --url option - only applicable if --url is set
+      --client-id string                RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string            RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
   -C, --cluster-id string               Name or Internal ID of the cluster (defaults to current cluster context)
       --contain stringArray             Text the log message must contain - flag can be repeated
       --contain-regex stringArray       Regular expression the log message must contain - flag can be repeated
@@ -4682,10 +4706,12 @@ osdctl rhobs mcp [flags]
 #### Flags
 
 ```
-  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
-  -h, --help                  help for mcp
-      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -S, --skip-version-check    skip checking to see if this is the most recent release
+      --client-id string       RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string   RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
+  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                   help for mcp
+      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check     skip checking to see if this is the most recent release
 ```
 
 ### osdctl rhobs mcp config
@@ -4704,10 +4730,12 @@ osdctl rhobs mcp config [flags]
 #### Flags
 
 ```
-  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
-  -h, --help                  help for config
-      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -S, --skip-version-check    skip checking to see if this is the most recent release
+      --client-id string       RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string   RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
+  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                   help for config
+      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check     skip checking to see if this is the most recent release
 ```
 
 ### osdctl rhobs mcp server
@@ -4721,10 +4749,12 @@ osdctl rhobs mcp server [flags]
 #### Flags
 
 ```
-  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
-  -h, --help                  help for server
-      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -S, --skip-version-check    skip checking to see if this is the most recent release
+      --client-id string       RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string   RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
+  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                   help for server
+      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check     skip checking to see if this is the most recent release
 ```
 
 ### osdctl rhobs metrics
@@ -4738,19 +4768,21 @@ osdctl rhobs metrics [PromQL-expression] [flags]
 #### Flags
 
 ```
-  -b, --browser               Open in the default browser the URL computed with the --url option - only applicable if --url is set
-  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
-      --end-time time         End time at which the PromQL expression must be evaluated - can only be set if --start-time or --url is set (default to now)
-  -f, --filter                Only keep the results matching the given cluster - only effective if some of those results have a _id, _mc_id or mc_name label - exclusive with --url
-  -h, --help                  help for metrics
-      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -o, --output string         Format of the output - allowed values: "table", "csv" or "json" - "json" prints raw API data and as such is forward compatible - exclusive with --url (default "table")
-      --since duration        Only return values newer than a relative duration (e.g. 1h, 30m) - enable time range mode - exclusive with --time, --start-time & --end-time
-  -S, --skip-version-check    skip checking to see if this is the most recent release
-      --start-time time       Start time at which the PromQL expression must be evaluated - enable time range mode - exclusive with --time (default to 30 minutes ago)
-      --step duration         Duration between data points (e.g. 30s, 2m) - can only be set if in time range mode (i.e. --start-time or --since is set)
-      --time time             Time at which the PromQL expression must be evaluated - exclusive with --url (default to now)
-  -u, --url                   Only compute and print the grafana URL
+  -b, --browser                Open in the default browser the URL computed with the --url option - only applicable if --url is set
+      --client-id string       RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string   RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
+  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
+      --end-time time          End time at which the PromQL expression must be evaluated - can only be set if --start-time or --url is set (default to now)
+  -f, --filter                 Only keep the results matching the given cluster - only effective if some of those results have a _id, _mc_id or mc_name label - exclusive with --url
+  -h, --help                   help for metrics
+      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -o, --output string          Format of the output - allowed values: "table", "csv" or "json" - "json" prints raw API data and as such is forward compatible - exclusive with --url (default "table")
+      --since duration         Only return values newer than a relative duration (e.g. 1h, 30m) - enable time range mode - exclusive with --time, --start-time & --end-time
+  -S, --skip-version-check     skip checking to see if this is the most recent release
+      --start-time time        Start time at which the PromQL expression must be evaluated - enable time range mode - exclusive with --time (default to 30 minutes ago)
+      --step duration          Duration between data points (e.g. 30s, 2m) - can only be set if in time range mode (i.e. --start-time or --since is set)
+      --time time              Time at which the PromQL expression must be evaluated - exclusive with --url (default to now)
+  -u, --url                    Only compute and print the grafana URL
 ```
 
 ### osdctl servicelog

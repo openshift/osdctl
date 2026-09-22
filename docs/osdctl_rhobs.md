@@ -5,9 +5,11 @@ RHOBS.next related utilities
 ### Options
 
 ```
-  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
-  -h, --help                  help for rhobs
-      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+      --client-id string       RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.
+      --client-secret string   RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.
+  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                   help for rhobs
+      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
 ```
 
 ### Options inherited from parent commands
