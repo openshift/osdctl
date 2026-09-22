@@ -28,7 +28,7 @@ const (
 	authUrl                   = "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
 	rhobsVaultPathKeyTemplate = "rhobs_%s_vault_path"
 	rhobsClientIDEnvVar       = "RHOBS_CLIENT_ID"
-	rhobsClientSecretEnvVar   = "RHOBS_CLIENT_SECRET"
+	rhobsClientSecretEnvVar   = "RHOBS_CLIENT_SECRET" //nolint:gosec // G101 false positive — env var name, not a credential
 	clusterIdCdLabel          = "api.openshift.com/id"
 	rhobsCellCdLabel          = "ext-hypershift.openshift.io/rhobs-cell"
 	rhobsCellMetricsCmNs      = "openshift-observability-operator"
