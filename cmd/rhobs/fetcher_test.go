@@ -73,12 +73,9 @@ func TestGetTokenProvider_CredentialResolution(t *testing.T) {
 			commonOptions.clientSecret = ""
 
 			// Set up test inputs - t.Setenv automatically restores after subtest
-			if tt.envClientID != "" {
-				t.Setenv(rhobsClientIDEnvVar, tt.envClientID)
-			}
-			if tt.envClientSecret != "" {
-				t.Setenv(rhobsClientSecretEnvVar, tt.envClientSecret)
-			}
+			// Set both unconditionally to override any pre-existing CI environment
+			t.Setenv(rhobsClientIDEnvVar, tt.envClientID)
+			t.Setenv(rhobsClientSecretEnvVar, tt.envClientSecret)
 			commonOptions.clientID = tt.flagClientID
 			commonOptions.clientSecret = tt.flagClientSecret
 
