@@ -1,18 +1,13 @@
 package rhobs
 
 import (
-	"os"
 	"testing"
 )
 
 func TestGetTokenProvider_CredentialResolution(t *testing.T) {
-	// Save original env vars and commonOptions
-	origClientID := os.Getenv(rhobsClientIDEnvVar)
-	origClientSecret := os.Getenv(rhobsClientSecretEnvVar)
+	// Save original commonOptions
 	origCommonOptions := commonOptions
 	defer func() {
-		os.Setenv(rhobsClientIDEnvVar, origClientID)
-		os.Setenv(rhobsClientSecretEnvVar, origClientSecret)
 		commonOptions = origCommonOptions
 	}()
 
@@ -73,21 +68,19 @@ func TestGetTokenProvider_CredentialResolution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Reset state
-			os.Unsetenv(rhobsClientIDEnvVar)
-			os.Unsetenv(rhobsClientSecretEnvVar)
+			// Reset commonOptions
 			commonOptions.clientID = ""
 			commonOptions.clientSecret = ""
 
-			// Set up test inputs
-			commonOptions.clientID = tt.flagClientID
-			commonOptions.clientSecret = tt.flagClientSecret
+			// Set up test inputs - t.Setenv automatically restores after subtest
 			if tt.envClientID != "" {
-				os.Setenv(rhobsClientIDEnvVar, tt.envClientID)
+				t.Setenv(rhobsClientIDEnvVar, tt.envClientID)
 			}
 			if tt.envClientSecret != "" {
-				os.Setenv(rhobsClientSecretEnvVar, tt.envClientSecret)
+				t.Setenv(rhobsClientSecretEnvVar, tt.envClientSecret)
 			}
+			commonOptions.clientID = tt.flagClientID
+			commonOptions.clientSecret = tt.flagClientSecret
 
 			// Create fetcher with minimal required fields
 			fetcher := &RhobsFetcher{
