@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 
@@ -26,6 +27,8 @@ import (
 const (
 	authUrl                   = "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
 	rhobsVaultPathKeyTemplate = "rhobs_%s_vault_path"
+	rhobsClientIDEnvVar       = "RHOBS_CLIENT_ID"
+	rhobsClientSecretEnvVar   = "RHOBS_CLIENT_SECRET"
 	clusterIdCdLabel          = "api.openshift.com/id"
 	rhobsCellCdLabel          = "ext-hypershift.openshift.io/rhobs-cell"
 	rhobsCellMetricsCmNs      = "openshift-observability-operator"
@@ -373,11 +376,30 @@ func (f *RhobsFetcher) getBaseGrafanaDataSource() (string, error) {
 
 func (f *RhobsFetcher) getTokenProvider() (ocmutils.AccessTokenProvider, error) {
 	if f.tokenProvider == nil {
-		tokenProvider, err := ocmutils.GetScopedTokenProvider(authUrl, fmt.Sprintf(rhobsVaultPathKeyTemplate, f.ocmEnvName), "profile")
-		if err != nil {
-			return nil, fmt.Errorf("failed to get access token provider: %v", err)
+		// Resolve client credentials from flags, then env vars
+		clientID := commonOptions.clientID
+		if clientID == "" {
+			clientID = os.Getenv(rhobsClientIDEnvVar)
 		}
-		f.tokenProvider = tokenProvider
+		clientSecret := commonOptions.clientSecret
+		if clientSecret == "" {
+			clientSecret = os.Getenv(rhobsClientSecretEnvVar)
+		}
+
+		// If both are provided, skip Vault and use them directly
+		if clientID != "" && clientSecret != "" {
+			f.tokenProvider = ocmutils.GetScopedTokenProviderWithCreds(authUrl, clientID, clientSecret, "profile")
+		} else if clientID != "" || clientSecret != "" {
+			// If only one is provided, error
+			return nil, fmt.Errorf("both --client-id/--client-secret (or %s/%s env vars) must be provided together", rhobsClientIDEnvVar, rhobsClientSecretEnvVar)
+		} else {
+			// Fall back to Vault
+			tokenProvider, err := ocmutils.GetScopedTokenProvider(authUrl, fmt.Sprintf(rhobsVaultPathKeyTemplate, f.ocmEnvName), "profile")
+			if err != nil {
+				return nil, fmt.Errorf("failed to get access token provider: %v", err)
+			}
+			f.tokenProvider = tokenProvider
+		}
 	}
 	return f.tokenProvider, nil
 }
