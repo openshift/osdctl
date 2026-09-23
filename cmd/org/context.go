@@ -85,7 +85,7 @@ func NewDefaultContextFetcher() *DefaultContextFetcher {
 		GetJiraIssues:       utils.GetJiraIssuesForCluster,
 		NewPDClient: func(baseDomain, clusterID string) (PDClient, error) {
 			return pdProvider.NewClient().
-				WithBaseDomain(baseDomain).
+				WithServiceQuery(baseDomain).
 				WithClusterID(clusterID).
 				WithUserToken(viper.GetString(pdProvider.PagerDutyUserTokenConfigKey)).
 				WithOauthToken(viper.GetString(pdProvider.PagerDutyOauthTokenConfigKey)).

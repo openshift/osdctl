@@ -31,20 +31,23 @@ type pdClientInterface interface {
 }
 
 type client struct {
-	pdclient   pdClientInterface
-	baseDomain string
-	clusterID  string
-	teamIds    []string
-	userToken  string
-	oauthToken string
+	pdclient     pdClientInterface
+	serviceQuery string
+	clusterID    string
+	teamIds      []string
+	userToken    string
+	oauthToken   string
 }
 
 func NewClient() *client {
 	return &client{}
 }
 
-func (c *client) WithBaseDomain(baseDomain string) *client {
-	c.baseDomain = baseDomain
+// WithServiceQuery sets the PagerDuty service lookup query. For classic
+// clusters this is the DNS base domain; for HCP clusters it is the AWS
+// region ID.
+func (c *client) WithServiceQuery(serviceQuery string) *client {
+	c.serviceQuery = serviceQuery
 	return c
 }
 
@@ -92,7 +95,7 @@ func (c *client) buildClient() error {
 
 func (c *client) GetPDServiceIDs() ([]string, error) {
 	// TODO : do we need this to be an exposed function or could we do this when we build the client?
-	lsResponse, err := c.pdclient.ListServicesWithContext(context.TODO(), pd.ListServiceOptions{Query: c.baseDomain, TeamIDs: c.teamIds})
+	lsResponse, err := c.pdclient.ListServicesWithContext(context.TODO(), pd.ListServiceOptions{Query: c.serviceQuery, TeamIDs: c.teamIds})
 	if err != nil {
 		return []string{}, fmt.Errorf("failed to ListServicesWithContext: %w", err)
 	}
@@ -156,6 +159,8 @@ func (c *client) GetFiringAlertsForCluster(pdServiceIDs []string) (map[string][]
 func incidentMatchesCluster(incident pd.Incident, clusterID string) bool {
 	ed := incident.FirstTriggerLogEntry.EventDetails
 	if ed == nil {
+		fmt.Printf("Warning: incident %d (%s) has no EventDetails in FirstTriggerLogEntry, skipping for HCP cluster filtering\n",
+			incident.IncidentNumber, incident.Title)
 		return false
 	}
 	for _, key := range []string{"cluster_id", "clusterID", "cluster-id"} {

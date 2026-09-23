@@ -56,7 +56,7 @@ type contextOptions struct {
 	full              bool
 	clusterID         string
 	externalClusterID string
-	baseDomain        string
+	pdServiceQuery    string
 	organizationID    string
 	days              int
 	pages             int
@@ -194,12 +194,12 @@ func (o *contextOptions) setup() error {
 	o.cluster = clusters[0]
 	o.clusterID = o.cluster.ID()
 	o.externalClusterID = o.cluster.ExternalID()
-	o.baseDomain = o.cluster.DNS().BaseDomain()
+	o.pdServiceQuery = o.cluster.DNS().BaseDomain()
 	// HCP clusters use region-based PD services rather than per-cluster
 	// services keyed by DNS base domain. Use the region ID as the PD
 	// service query for HCP clusters.
 	if regionID := utils.HCPRegionID(o.cluster); regionID != "" {
-		o.baseDomain = regionID
+		o.pdServiceQuery = regionID
 	}
 	o.infraID = o.cluster.InfraID()
 
@@ -383,7 +383,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	pdClientBuilder := pagerduty.NewClient().
 		WithUserToken(o.usertoken).
 		WithOauthToken(o.oauthtoken).
-		WithBaseDomain(o.baseDomain).
+		WithServiceQuery(o.pdServiceQuery).
 		WithTeamIdList(viper.GetStringSlice(pagerduty.PagerDutyTeamIDsKey))
 	// For HCP clusters, set the cluster ID so PD incidents are filtered
 	// to only those belonging to this cluster within the region-based

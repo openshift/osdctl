@@ -146,10 +146,10 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 		pdProvider = NewClient()
 	})
 	Describe("Client Creation", func() {
-		Context("WithBaseDomain", func() {
-			It("Should correctly populate the base domain", func() {
-				pdProvider.WithBaseDomain("foo")
-				Expect(pdProvider.baseDomain).To(Equal("foo"))
+		Context("WithServiceQuery", func() {
+			It("Should correctly populate the service query", func() {
+				pdProvider.WithServiceQuery("foo")
+				Expect(pdProvider.serviceQuery).To(Equal("foo"))
 			})
 			It("Should correctly populate the Team ID list", func() {
 				pdProvider.WithTeamIdList([]string{"foo", "bar"})
@@ -162,6 +162,12 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 			It("Should correctly populate the oauthToken", func() {
 				pdProvider.WithOauthToken("oauth_token")
 				Expect(pdProvider.oauthToken).To(Equal("oauth_token"))
+			})
+		})
+		Context("WithClusterID", func() {
+			It("Should correctly populate the clusterID", func() {
+				pdProvider.WithClusterID("test-cluster-123")
+				Expect(pdProvider.clusterID).To(Equal("test-cluster-123"))
 			})
 		})
 		Context("Building the Client", func() {
@@ -188,13 +194,6 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 
 		AfterEach(func() {
 			ctrl.Finish()
-		})
-
-		Context("WithClusterID", func() {
-			It("Should correctly populate the clusterID", func() {
-				pdProvider.WithClusterID("test-cluster-123")
-				Expect(pdProvider.clusterID).To(Equal("test-cluster-123"))
-			})
 		})
 
 		Context("GetPDServiceIDs", func() {
@@ -471,6 +470,70 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 					Expect(err).To(BeNil())
 					Expect(result["region-svc"]).To(HaveLen(1))
 					Expect(result["region-svc"][0].IncidentName).To(Equal("MatchingAlert"))
+				})
+
+				It("Supports alternate cluster ID key names (clusterID)", func() {
+					incident := pd.Incident{
+						IncidentNumber: 1,
+						Title:          "AltKeyAlert fired",
+						CreatedAt:      "2024-01-01T00:00:00Z",
+						FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+							CommonLogEntryField: pd.CommonLogEntryField{
+								EventDetails: map[string]string{
+									"clusterID": "hcp-cluster-alt",
+								},
+							},
+						},
+					}
+					response := &pd.ListIncidentsResponse{
+						Incidents: []pd.Incident{incident},
+					}
+					emptyResponse := &pd.ListIncidentsResponse{
+						Incidents: []pd.Incident{},
+					}
+
+					m := pdMock.NewMockpdClientInterface(ctrl)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(response, nil)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(emptyResponse, nil)
+					pdProvider.pdclient = m
+					pdProvider.clusterID = "hcp-cluster-alt"
+
+					result, err := pdProvider.GetHistoricalAlertsForCluster([]string{"region-svc"})
+					Expect(err).To(BeNil())
+					Expect(result["region-svc"]).To(HaveLen(1))
+					Expect(result["region-svc"][0].IncidentName).To(Equal("AltKeyAlert"))
+				})
+
+				It("Supports alternate cluster ID key names (cluster-id)", func() {
+					incident := pd.Incident{
+						IncidentNumber: 1,
+						Title:          "DashKeyAlert fired",
+						CreatedAt:      "2024-01-01T00:00:00Z",
+						FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+							CommonLogEntryField: pd.CommonLogEntryField{
+								EventDetails: map[string]string{
+									"cluster-id": "hcp-cluster-dash",
+								},
+							},
+						},
+					}
+					response := &pd.ListIncidentsResponse{
+						Incidents: []pd.Incident{incident},
+					}
+					emptyResponse := &pd.ListIncidentsResponse{
+						Incidents: []pd.Incident{},
+					}
+
+					m := pdMock.NewMockpdClientInterface(ctrl)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(response, nil)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(emptyResponse, nil)
+					pdProvider.pdclient = m
+					pdProvider.clusterID = "hcp-cluster-dash"
+
+					result, err := pdProvider.GetHistoricalAlertsForCluster([]string{"region-svc"})
+					Expect(err).To(BeNil())
+					Expect(result["region-svc"]).To(HaveLen(1))
+					Expect(result["region-svc"][0].IncidentName).To(Equal("DashKeyAlert"))
 				})
 
 				It("Does not filter when clusterID is empty (classic cluster behavior)", func() {
