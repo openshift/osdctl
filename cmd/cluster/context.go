@@ -387,8 +387,9 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		WithTeamIdList(viper.GetStringSlice(pagerduty.PagerDutyTeamIDsKey))
 	// For HCP clusters, set the cluster ID so PD incidents are filtered
 	// to only those belonging to this cluster within the region-based
-	// PD service.
-	if o.cluster.Hypershift().Enabled() {
+	// PD service. Guard must match the region check in setup() to avoid
+	// filtering incidents when baseDomain is still a DNS domain.
+	if o.cluster.Hypershift().Enabled() && o.cluster.Region() != nil && o.cluster.Region().ID() != "" {
 		pdClientBuilder = pdClientBuilder.WithClusterID(o.externalClusterID)
 	}
 	pdProvider, err := pdClientBuilder.Init()
