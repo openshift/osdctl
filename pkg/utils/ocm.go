@@ -674,8 +674,9 @@ func IsManagementCluster(clusterID string) (isMC bool, err error) {
 	return false, nil
 }
 
-// IsServiceCluster checks whether a cluster is a service cluster by querying
-// the OSD Fleet Manager's service clusters endpoint.
+// IsServiceCluster checks whether a cluster is a service cluster by looking
+// for the ext-hypershift.openshift.io/cluster-type label with value
+// "service-cluster" on the cluster's external configuration.
 func IsServiceCluster(clusterID string) (bool, error) {
 	conn, err := CreateConnection()
 	if err != nil {
@@ -683,15 +684,28 @@ func IsServiceCluster(clusterID string) (bool, error) {
 	}
 	defer conn.Close()
 
-	response, err := conn.OSDFleetMgmt().V1().ServiceClusters().
-		List().
-		Parameter("search", fmt.Sprintf("cluster_management_reference.cluster_id='%s'", clusterID)).
-		Send()
+	collection := conn.ClustersMgmt().V1().Clusters()
+	resource := collection.Cluster(clusterID).ExternalConfiguration().Labels()
+	response, err := resource.List().Send()
 	if err != nil {
-		return false, fmt.Errorf("can't check service cluster status: %w", err)
+		return false, fmt.Errorf("can't retrieve cluster labels: %w", err)
 	}
 
-	return response.Items().Len() > 0, nil
+	labels, ok := response.GetItems()
+	if !ok {
+		return false, nil
+	}
+
+	for _, label := range labels.Slice() {
+		if key, ok := label.GetKey(); ok {
+			if key == HypershiftClusterTypeLabel {
+				if value, ok := label.GetValue(); ok {
+					return value == "service-cluster", nil
+				}
+			}
+		}
+	}
+	return false, nil
 }
 
 func IsHostedCluster(clusterID string) (bool, error) {
