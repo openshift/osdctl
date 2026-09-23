@@ -215,7 +215,7 @@ func (f *DefaultContextFetcher) FetchContext(orgID string, output io.Writer) ([]
 				var clusterID string
 				if cluster.Hypershift().Enabled() && cluster.Region() != nil && cluster.Region().ID() != "" {
 					baseDomain = cluster.Region().ID()
-					clusterID = cluster.ID()
+					clusterID = cluster.ExternalID()
 				}
 				pdClient, err := f.NewPDClient(baseDomain, clusterID)
 				if err != nil {

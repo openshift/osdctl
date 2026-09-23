@@ -389,7 +389,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	// to only those belonging to this cluster within the region-based
 	// PD service.
 	if o.cluster.Hypershift().Enabled() {
-		pdClientBuilder = pdClientBuilder.WithClusterID(o.clusterID)
+		pdClientBuilder = pdClientBuilder.WithClusterID(o.externalClusterID)
 	}
 	pdProvider, err := pdClientBuilder.Init()
 	if err != nil {
