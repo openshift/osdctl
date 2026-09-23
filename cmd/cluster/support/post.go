@@ -164,7 +164,12 @@ func (p *Post) Run(clusterID string) error {
 	isMC, mcErr := ctlutil.IsManagementCluster(p.cluster.ID())
 	if mcErr != nil {
 		fmt.Fprintf(os.Stderr, "Warning: could not determine if cluster is a management cluster: %v\n", mcErr)
-	} else if isMC {
+	}
+	isSC, scErr := ctlutil.IsServiceCluster(p.cluster.ID())
+	if scErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not determine if cluster is a service cluster: %v\n", scErr)
+	}
+	if (mcErr == nil && isMC) || (scErr == nil && isSC) {
 		fmt.Println("WARNING: This cluster appears to be a management or service cluster (infrastructure cluster).")
 		fmt.Println("Placing an infrastructure cluster into limited support can affect all hosted clusters on it.")
 		fmt.Println("Please verify you are targeting the correct cluster.")

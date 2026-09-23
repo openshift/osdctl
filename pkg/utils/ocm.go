@@ -674,6 +674,26 @@ func IsManagementCluster(clusterID string) (isMC bool, err error) {
 	return false, nil
 }
 
+// IsServiceCluster checks whether a cluster is a service cluster by querying
+// the OSD Fleet Manager's service clusters endpoint.
+func IsServiceCluster(clusterID string) (bool, error) {
+	conn, err := CreateConnection()
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+
+	response, err := conn.OSDFleetMgmt().V1().ServiceClusters().
+		List().
+		Parameter("search", fmt.Sprintf("cluster_management_reference.cluster_id='%s'", clusterID)).
+		Send()
+	if err != nil {
+		return false, fmt.Errorf("can't check service cluster status: %w", err)
+	}
+
+	return response.Items().Len() > 0, nil
+}
+
 func IsHostedCluster(clusterID string) (bool, error) {
 	conn, err := CreateConnection()
 	if err != nil {
