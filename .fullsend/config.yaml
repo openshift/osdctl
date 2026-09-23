@@ -16,6 +16,8 @@ agents:
       source: harness/triage.yaml
     - name: code
       source: harness/code.yaml
+authorization:
+    - provider: owners_file
 create_issues:
     allow_targets:
         repos:
