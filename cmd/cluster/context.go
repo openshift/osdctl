@@ -198,8 +198,8 @@ func (o *contextOptions) setup() error {
 	// HCP clusters use region-based PD services rather than per-cluster
 	// services keyed by DNS base domain. Use the region ID as the PD
 	// service query for HCP clusters.
-	if o.cluster.Hypershift().Enabled() && o.cluster.Region() != nil && o.cluster.Region().ID() != "" {
-		o.baseDomain = o.cluster.Region().ID()
+	if regionID := utils.HCPRegionID(o.cluster); regionID != "" {
+		o.baseDomain = regionID
 	}
 	o.infraID = o.cluster.InfraID()
 
@@ -387,9 +387,8 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		WithTeamIdList(viper.GetStringSlice(pagerduty.PagerDutyTeamIDsKey))
 	// For HCP clusters, set the cluster ID so PD incidents are filtered
 	// to only those belonging to this cluster within the region-based
-	// PD service. Guard must match the region check in setup() to avoid
-	// filtering incidents when baseDomain is still a DNS domain.
-	if o.cluster.Hypershift().Enabled() && o.cluster.Region() != nil && o.cluster.Region().ID() != "" {
+	// PD service.
+	if utils.HCPRegionID(o.cluster) != "" {
 		pdClientBuilder = pdClientBuilder.WithClusterID(o.externalClusterID)
 	}
 	pdProvider, err := pdClientBuilder.Init()

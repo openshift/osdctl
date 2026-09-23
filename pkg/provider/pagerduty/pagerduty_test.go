@@ -13,6 +13,54 @@ import (
 	pdMock "github.com/openshift/osdctl/pkg/provider/pagerduty/mocks"
 )
 
+// includesMatcher verifies that ListIncidentsOptions.Includes contains the
+// expected entry. This ensures HCP cluster requests ask the PagerDuty API
+// to populate FirstTriggerLogEntry.EventDetails.
+type includesMatcher struct {
+	expected string
+}
+
+func (m *includesMatcher) Matches(x interface{}) bool {
+	opts, ok := x.(pd.ListIncidentsOptions)
+	if !ok {
+		return false
+	}
+	for _, inc := range opts.Includes {
+		if inc == m.expected {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *includesMatcher) String() string {
+	return fmt.Sprintf("has Includes containing %q", m.expected)
+}
+
+func hasIncludes(expected string) gomock.Matcher {
+	return &includesMatcher{expected: expected}
+}
+
+// noIncludesMatcher verifies that ListIncidentsOptions.Includes is empty,
+// confirming classic (non-HCP) clusters do not request log entry expansion.
+type noIncludesMatcher struct{}
+
+func (m *noIncludesMatcher) Matches(x interface{}) bool {
+	opts, ok := x.(pd.ListIncidentsOptions)
+	if !ok {
+		return false
+	}
+	return len(opts.Includes) == 0
+}
+
+func (m *noIncludesMatcher) String() string {
+	return "has empty Includes"
+}
+
+func hasNoIncludes() gomock.Matcher {
+	return &noIncludesMatcher{}
+}
+
 func generateIncident() pd.Incident {
 	return pd.Incident{
 		IncidentNumber: uint(gofakeit.Uint16()),
@@ -238,7 +286,7 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 					}
 
 					m := pdMock.NewMockpdClientInterface(ctrl)
-					m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(mixedResponse, nil)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(mixedResponse, nil)
 					pdProvider.pdclient = m
 					pdProvider.clusterID = "hcp-cluster-123"
 
@@ -266,7 +314,7 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 					}
 
 					m := pdMock.NewMockpdClientInterface(ctrl)
-					m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(nonMatchingResponse, nil)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(nonMatchingResponse, nil)
 					pdProvider.pdclient = m
 					pdProvider.clusterID = "hcp-cluster-123"
 
@@ -292,7 +340,7 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 					}
 
 					m := pdMock.NewMockpdClientInterface(ctrl)
-					m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(response, nil)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(response, nil)
 					pdProvider.pdclient = m
 					pdProvider.clusterID = "hcp-cluster-alt"
 
@@ -303,7 +351,7 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 
 				It("Does not filter when clusterID is empty (classic cluster behavior)", func() {
 					m := pdMock.NewMockpdClientInterface(ctrl)
-					m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(singleIncResponse, nil)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasNoIncludes()).Return(singleIncResponse, nil)
 					pdProvider.pdclient = m
 					pdProvider.clusterID = ""
 
@@ -414,8 +462,8 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 					}
 
 					m := pdMock.NewMockpdClientInterface(ctrl)
-					m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(response, nil)
-					m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(emptyResponse, nil)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(response, nil)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(emptyResponse, nil)
 					pdProvider.pdclient = m
 					pdProvider.clusterID = "hcp-cluster-123"
 
@@ -444,8 +492,8 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 					}
 
 					m := pdMock.NewMockpdClientInterface(ctrl)
-					m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(response, nil)
-					m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(emptyResponse, nil)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasNoIncludes()).Return(response, nil)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasNoIncludes()).Return(emptyResponse, nil)
 					pdProvider.pdclient = m
 					pdProvider.clusterID = ""
 

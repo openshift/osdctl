@@ -213,8 +213,8 @@ func (f *DefaultContextFetcher) FetchContext(orgID string, output io.Writer) ([]
 				// the query and filter incidents by cluster ID.
 				baseDomain := cluster.DNS().BaseDomain()
 				var clusterID string
-				if cluster.Hypershift().Enabled() && cluster.Region() != nil && cluster.Region().ID() != "" {
-					baseDomain = cluster.Region().ID()
+				if regionID := utils.HCPRegionID(cluster); regionID != "" {
+					baseDomain = regionID
 					clusterID = cluster.ExternalID()
 				}
 				pdClient, err := f.NewPDClient(baseDomain, clusterID)
