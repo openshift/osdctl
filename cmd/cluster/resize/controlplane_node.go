@@ -133,27 +133,37 @@ func (o *controlPlane) New() error {
 
 func (o *controlPlane) embiggenMachineType() {}
 
-// extractInstanceClass extracts the instance class from an instance type string.
-// For example: "m5.4xlarge" -> "m5", "m6i.8xlarge" -> "m6i"
-func extractInstanceClass(instanceType string) (string, error) {
-	if strings.Contains(instanceType, ".") {
-		parts := strings.Split(instanceType, ".")
-		if len(parts) >= 2 {
-			return parts[0], nil
-		}
+// validateAWSInstanceTypeChange permits same-family changes and m5-to-m6i changes.
+func validateAWSInstanceTypeChange(currentInstanceType, newInstanceType string) error {
+	currentFamily, currentSize, currentValid := strings.Cut(currentInstanceType, ".")
+	if !currentValid || currentFamily == "" || currentSize == "" {
+		return fmt.Errorf("instance type %s is not a valid instance type", currentInstanceType)
 	}
 
-	return "", fmt.Errorf("instance type %s is not a valid instance type", instanceType)
+	newFamily, newSize, newValid := strings.Cut(newInstanceType, ".")
+	if !newValid || newFamily == "" || newSize == "" {
+		return fmt.Errorf("instance type %s is not a valid instance type", newInstanceType)
+	}
+
+	allowedFamilyChange := currentFamily == newFamily || currentFamily == "m5" && newFamily == "m6i"
+	if !allowedFamilyChange {
+		return fmt.Errorf("cannot change instance family from %s to %s (current: %s, requested: %s)", currentFamily, newFamily, currentInstanceType, newInstanceType)
+	}
+	if err := validateInstanceSize(newInstanceType, "controlplane"); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type optionsDialogResponse int64
 
 const (
-	Undefined optionsDialogResponse = 0
-	Retry                           = 1
-	Skip                            = 2
-	Force                           = 3
-	Cancel                          = 4
+	Undefined optionsDialogResponse = iota
+	Retry
+	Skip
+	Force
+	Cancel
 )
 
 func retrySkipCancelDialog(procedure string) (optionsDialogResponse, error) {
@@ -316,17 +326,8 @@ func (o *controlPlane) run(ctx context.Context) error {
 		}
 		currentInstanceType = awsSpec.InstanceType
 
-		// Validate that instance class is not being changed
-		currentClass, err := extractInstanceClass(currentInstanceType)
-		if err != nil {
-			return fmt.Errorf("error extracting current instance class: %v", err)
-		}
-		newClass, err := extractInstanceClass(o.newMachineType)
-		if err != nil {
-			return fmt.Errorf("error extracting new instance class: %v", err)
-		}
-		if currentClass != newClass {
-			return fmt.Errorf("cannot change instance class from %s to %s (current: %s, requested: %s). You can only resize within the same instance class", currentClass, newClass, currentInstanceType, o.newMachineType)
+		if err := validateAWSInstanceTypeChange(currentInstanceType, o.newMachineType); err != nil {
+			return fmt.Errorf("validating instance type change: %w", err)
 		}
 
 		awsSpec.InstanceType = o.newMachineType
