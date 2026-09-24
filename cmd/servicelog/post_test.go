@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	slv1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"github.com/openshift/osdctl/internal/servicelog"
 	"github.com/stretchr/testify/assert"
 )
@@ -474,7 +475,7 @@ func TestReadTemplate(t *testing.T) {
 				InternalOnly: true,
 			},
 			expectedMsg: servicelog.Message{
-				Severity:     "Low",
+				Severity:     string(slv1.SeverityLow),
 				ServiceName:  "SREManualAction",
 				Summary:      "INTERNAL ONLY, DO NOT SHARE WITH CUSTOMER",
 				Description:  "${MESSAGE}",
@@ -488,7 +489,7 @@ func TestReadTemplate(t *testing.T) {
 				Overrides:    []string{"some_override"},
 			},
 			expectedMsg: servicelog.Message{
-				Severity:     "Low",
+				Severity:     string(slv1.SeverityLow),
 				ServiceName:  "SREManualAction",
 				InternalOnly: true,
 			},
@@ -500,7 +501,7 @@ func TestReadTemplate(t *testing.T) {
 				Template:     "template.json",
 			},
 			expectedMsg: servicelog.Message{
-				Severity:     "Low",
+				Severity:     string(slv1.SeverityLow),
 				ServiceName:  "TestService",
 				Summary:      "Test Summary",
 				Description:  "Test Description",

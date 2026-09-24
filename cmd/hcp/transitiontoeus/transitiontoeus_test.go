@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	slv1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"github.com/openshift/osdctl/internal/servicelog"
 )
 
@@ -326,7 +327,7 @@ func TestValidateServiceLogResponse(t *testing.T) {
 				"description": "Test Description"
 			}`,
 			sentMessage: servicelog.Message{
-				Severity:    "Low",
+				Severity:    string(slv1.SeverityLow),
 				ServiceName: "SREManualAction",
 				ClusterUUID: "test-cluster-uuid",
 				Summary:     "Test Summary",
@@ -344,7 +345,7 @@ func TestValidateServiceLogResponse(t *testing.T) {
 				"description": "Test Description"
 			}`,
 			sentMessage: servicelog.Message{
-				Severity:    "Low",
+				Severity:    string(slv1.SeverityLow),
 				ServiceName: "SREManualAction",
 				ClusterUUID: "test-cluster-uuid",
 				Summary:     "Test Summary",
@@ -363,7 +364,7 @@ func TestValidateServiceLogResponse(t *testing.T) {
 				"description": "Test Description"
 			}`,
 			sentMessage: servicelog.Message{
-				Severity:    "Low",
+				Severity:    string(slv1.SeverityLow),
 				ServiceName: "SREManualAction",
 				ClusterUUID: "test-cluster-uuid",
 				Summary:     "Test Summary",
@@ -382,7 +383,7 @@ func TestValidateServiceLogResponse(t *testing.T) {
 				"description": "Test Description"
 			}`,
 			sentMessage: servicelog.Message{
-				Severity:    "Low",
+				Severity:    string(slv1.SeverityLow),
 				ServiceName: "SREManualAction",
 				ClusterUUID: "test-cluster-uuid",
 				Summary:     "Test Summary",
@@ -395,7 +396,7 @@ func TestValidateServiceLogResponse(t *testing.T) {
 			name:         "invalid - malformed JSON",
 			responseBody: `{invalid json`,
 			sentMessage: servicelog.Message{
-				Severity: "Low",
+				Severity: string(slv1.SeverityLow),
 			},
 			expectError:   true,
 			errorContains: "invalid JSON",

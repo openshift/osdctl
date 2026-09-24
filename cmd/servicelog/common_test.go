@@ -3,6 +3,7 @@ package servicelog
 import (
 	"testing"
 
+	slv1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"github.com/openshift/osdctl/internal/servicelog"
 	"github.com/stretchr/testify/assert"
 )
@@ -17,7 +18,7 @@ func TestValidateGoodResponse(t *testing.T) {
 		{
 			name: "successful_validation",
 			clusterMessage: servicelog.Message{
-				Severity:    "Low",
+				Severity:    string(slv1.SeverityLow),
 				ServiceName: "TestService",
 				ClusterUUID: "test-cluster-uuid",
 				Summary:     "Test Summary",
@@ -43,7 +44,7 @@ func TestValidateGoodResponse(t *testing.T) {
 		{
 			name: "mismatch_severity",
 			clusterMessage: servicelog.Message{
-				Severity: "Low",
+				Severity: string(slv1.SeverityLow),
 			},
 			goodReply: []byte(`{
 				"severity": "Moderate",

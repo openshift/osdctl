@@ -20,6 +20,7 @@ import (
 	"github.com/openshift-online/ocm-cli/pkg/dump"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	slv1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"github.com/openshift/osdctl/internal/io"
 	"github.com/openshift/osdctl/internal/servicelog"
 	"github.com/openshift/osdctl/internal/utils"
@@ -471,7 +472,6 @@ func (o *PostCmdOptions) readTemplate() {
 		// fixed template for internal service logs
 		messageTemplate := []byte(`
 		{
-			"severity": "Low",
 			"service_name": "SREManualAction",
 			"summary": "INTERNAL ONLY, DO NOT SHARE WITH CUSTOMER",
 			"description": "${MESSAGE}",
@@ -481,6 +481,7 @@ func (o *PostCmdOptions) readTemplate() {
 		if err := o.parseTemplate(messageTemplate); err != nil {
 			log.Fatalf("Cannot not parse the JSON internal message template.\nError: %q\n", err)
 		}
+		o.Message.Severity = string(slv1.SeverityLow)
 		return
 	}
 
@@ -488,7 +489,6 @@ func (o *PostCmdOptions) readTemplate() {
 	if !o.InternalOnly && (o.Template == "") && (len(o.Overrides) != 0) {
 		messageTemplate := []byte(`
 		{
-			"severity": "Low",
 			"service_name": "SREManualAction",
 			"internal_only": true
 		}
@@ -496,6 +496,7 @@ func (o *PostCmdOptions) readTemplate() {
 		if err := o.parseTemplate(messageTemplate); err != nil {
 			log.Fatalf("Cannot not parse the default message template.\nError: %q\n", err)
 		}
+		o.Message.Severity = string(slv1.SeverityLow)
 		return
 	}
 
