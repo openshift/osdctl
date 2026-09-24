@@ -4,10 +4,10 @@ Drop emergency access to a cluster
 
 ### Synopsis
 
-Relinquish emergency access from the given cluster. If the cluster is PrivateLink, it deletes
-all jump pods in the cluster's namespace (because of this, you must be logged into the hive shard
-when dropping access for PrivateLink clusters). For non-PrivateLink clusters, the $KUBECONFIG
-environment variable is unset, if applicable.
+Relinquish emergency access from the given cluster. If the cluster is PrivateLink or Private
+Service Connect (PSC), it deletes all jump pods in the cluster's namespace (because of this, you
+must be logged into the hive shard when dropping access for PrivateLink/PSC clusters). For other
+clusters, the $KUBECONFIG environment variable is unset, if applicable.
 
 ```
 osdctl cluster break-glass cleanup --cluster-id <cluster-identifier> [flags]
@@ -23,9 +23,10 @@ osdctl cluster break-glass cleanup --cluster-id <cluster-identifier> [flags]
 ### Options
 
 ```
-  -C, --cluster-id string   [Mandatory] Provide the Internal ID of the cluster
-  -h, --help                help for cleanup
-      --reason string       [Mandatory for PrivateLink clusters] The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)
+  -C, --cluster-id string     [Mandatory] Provide the Internal ID of the cluster
+  -h, --help                  help for cleanup
+      --hive-ocm-url string   (optional) OCM environment URL for Hive operations. Aliases: 'production', 'staging', 'integration'. This only changes how the Hive cluster is resolved; the target cluster still comes from the current/default OCM environment.
+      --reason string         [Mandatory for PrivateLink/PSC clusters] The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)
 ```
 
 ### Options inherited from parent commands

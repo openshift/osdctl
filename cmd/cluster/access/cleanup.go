@@ -7,6 +7,7 @@ import (
 	fpath "path/filepath"
 	"strings"
 
+	sdk "github.com/openshift-online/ocm-sdk-go"
 	clustersmgmtv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/k8s"
 	osdctlutil "github.com/openshift/osdctl/pkg/utils"
@@ -16,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/kubernetes/scheme"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 	kclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -25,7 +27,7 @@ func newCmdCleanup(client *k8s.LazyClient, streams genericclioptions.IOStreams) 
 	cleanupCmd := &cobra.Command{
 		Use:   "cleanup --cluster-id <cluster-identifier>",
 		Short: "Drop emergency access to a cluster",
-		Long:  "Relinquish emergency access from the given cluster. If the cluster is PrivateLink, it deletes\nall jump pods in the cluster's namespace (because of this, you must be logged into the hive shard\nwhen dropping access for PrivateLink clusters). For non-PrivateLink clusters, the $KUBECONFIG\nenvironment variable is unset, if applicable.",
+		Long:  "Relinquish emergency access from the given cluster. If the cluster is PrivateLink or Private\nService Connect (PSC), it deletes all jump pods in the cluster's namespace (because of this, you\nmust be logged into the hive shard when dropping access for PrivateLink/PSC clusters). For other\nclusters, the $KUBECONFIG environment variable is unset, if applicable.",
 		Example: `  # Drop emergency access to a cluster
   osdctl cluster break-glass cleanup --cluster-id ${CLUSTER_ID}`,
 		Args:              cobra.NoArgs,
@@ -36,7 +38,8 @@ func newCmdCleanup(client *k8s.LazyClient, streams genericclioptions.IOStreams) 
 		},
 	}
 	cleanupCmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "[Mandatory] Provide the Internal ID of the cluster")
-	cleanupCmd.Flags().StringVar(&ops.reason, "reason", "", "[Mandatory for PrivateLink clusters] The reason for this command, which requires elevation, to be run (usualy an OHSS or PD ticket)")
+	cleanupCmd.Flags().StringVar(&ops.reason, "reason", "", "[Mandatory for PrivateLink/PSC clusters] The reason for this command, which requires elevation, to be run (usually an OHSS or PD ticket)")
+	cleanupCmd.Flags().StringVar(&ops.hiveOcmUrl, "hive-ocm-url", "", "(optional) OCM environment URL for Hive operations. Aliases: 'production', 'staging', 'integration'. This only changes how the Hive cluster is resolved; the target cluster still comes from the current/default OCM environment.")
 
 	_ = cleanupCmd.MarkFlagRequired("cluster-id")
 
@@ -48,13 +51,25 @@ func cleanupCmdComplete(cmd *cobra.Command) error {
 	if clusterID == "" {
 		return cmdutil.UsageErrorf(cmd, "The cluster-id flag is required")
 	}
-	return osdctlutil.IsValidClusterKey(clusterID)
+	if err := osdctlutil.IsValidClusterKey(clusterID); err != nil {
+		return err
+	}
+
+	hiveOcmUrl, _ := cmd.Flags().GetString("hive-ocm-url")
+	if hiveOcmUrl != "" {
+		if _, err := osdctlutil.ValidateAndResolveOcmUrl(hiveOcmUrl); err != nil {
+			return fmt.Errorf("invalid --hive-ocm-url: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // cleanupAccessOptions contains the objects and information required to drop access to a cluster
 type cleanupAccessOptions struct {
-	reason    string
-	clusterID string
+	reason     string
+	clusterID  string
+	hiveOcmUrl string
 
 	genericclioptions.IOStreams
 	kubeCli *k8s.LazyClient
@@ -106,8 +121,9 @@ func (c *cleanupAccessOptions) Run(cmd *cobra.Command) error {
 		return err
 	}
 	c.Println(fmt.Sprintf("Dropping access to cluster '%s'", cluster.Name()))
-	if cluster.AWS().PrivateLink() {
-		return c.dropPrivateLinkAccess(cluster)
+	isPscCluster := cluster.GCP().PrivateServiceConnect().ServiceAttachmentSubnet() != ""
+	if cluster.AWS().PrivateLink() || isPscCluster {
+		return c.dropPrivateLinkAccess(cluster, conn)
 	} else {
 		return c.dropLocalAccess(cluster)
 	}
@@ -115,17 +131,41 @@ func (c *cleanupAccessOptions) Run(cmd *cobra.Command) error {
 
 // dropPrivateLinkAccess removes access to a PrivateLink cluster.
 // This primarily consists of deleting any jump pods found to be running against the cluster in hive.
-func (c *cleanupAccessOptions) dropPrivateLinkAccess(cluster *clustersmgmtv1.Cluster) error {
+func (c *cleanupAccessOptions) dropPrivateLinkAccess(cluster *clustersmgmtv1.Cluster, conn *sdk.Connection) error {
 	if c.reason == "" {
-		c.Errorln("flag \"reason\" not set and is required when Cluster is PrivateLink")
-		return fmt.Errorf("flag \"reason\" not set and is required when Cluster is PrivateLink")
+		c.Errorln("flag \"reason\" not set and is required when Cluster is PrivateLink or Private Service Connect")
+		return fmt.Errorf("flag \"reason\" not set and is required when Cluster is PrivateLink or Private Service Connect")
 	}
-	c.kubeCli.Impersonate("backplane-cluster-admin", c.reason, fmt.Sprintf("Elevation required to clean break-glass on PrivateLink Clusters"))
 
-	c.Println("Cluster is PrivateLink - removing jump pods in the cluster's namespace.")
-	ns, err := getClusterNamespace(c.kubeCli, cluster.ID())
+	var hiveClient kclient.Client
+	if c.hiveOcmUrl != "" {
+		hiveOCM, err := osdctlutil.CreateConnectionWithUrl(c.hiveOcmUrl)
+		if err != nil {
+			return fmt.Errorf("failed to create hive OCM connection with URL '%s': %w", c.hiveOcmUrl, err)
+		}
+		defer hiveOCM.Close()
+
+		hive, err := osdctlutil.GetHiveClusterWithConn(cluster.ID(), conn, hiveOCM)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve hive shard for %q (OCM URL:'%s'): %w", cluster.ID(), c.hiveOcmUrl, err)
+		}
+
+		hiveClient, err = k8s.NewAsBackplaneClusterAdminWithConn(hive.ID(), kclient.Options{Scheme: scheme.Scheme}, hiveOCM, c.reason, "Elevation required to clean break-glass on PrivateLink/PSC Clusters")
+		if err != nil {
+			return fmt.Errorf("failed to login to hive shard %q (OCM URL:'%s'): %w", hive.Name(), c.hiveOcmUrl, err)
+		}
+	} else {
+		c.kubeCli.Impersonate("backplane-cluster-admin", c.reason, "Elevation required to clean break-glass on PrivateLink/PSC Clusters")
+		hiveClient = c.kubeCli
+	}
+
+	c.Println("Cluster is PrivateLink or Private Service Connect - removing jump pods in the cluster's namespace.")
+	ns, err := getClusterNamespace(hiveClient, cluster.ID())
 	if err != nil {
 		c.Errorln("Failed to retrieve cluster namespace")
+		if c.hiveOcmUrl == "" {
+			c.Errorln("Hint: if the cluster's hive shard is in a different OCM environment, use --hive-ocm-url (e.g. --hive-ocm-url production)")
+		}
 		return err
 	}
 
@@ -139,7 +179,7 @@ func (c *cleanupAccessOptions) dropPrivateLinkAccess(cluster *clustersmgmtv1.Clu
 
 	listOpts := kclient.ListOptions{Namespace: ns.Name, LabelSelector: selector}
 	pods := corev1.PodList{}
-	err = c.kubeCli.List(context.TODO(), &pods, &listOpts)
+	err = hiveClient.List(context.TODO(), &pods, &listOpts)
 	if err != nil {
 		c.Errorln(fmt.Sprintf("Failed to list pods in cluster namespace '%s'", ns.Name))
 		return err
@@ -166,7 +206,7 @@ func (c *cleanupAccessOptions) dropPrivateLinkAccess(cluster *clustersmgmtv1.Clu
 	}
 	if isAffirmative(input) {
 		pod := corev1.Pod{}
-		err = c.kubeCli.DeleteAllOf(context.TODO(), &pod, &kclient.DeleteAllOfOptions{ListOptions: listOpts})
+		err = hiveClient.DeleteAllOf(context.TODO(), &pod, &kclient.DeleteAllOfOptions{ListOptions: listOpts})
 		if err != nil {
 			c.Errorln("Failed to delete pod(s)")
 			return err
@@ -178,7 +218,7 @@ func (c *cleanupAccessOptions) dropPrivateLinkAccess(cluster *clustersmgmtv1.Clu
 			// and we end up waiting for irrelevant pods. I've tried reproducing this bug in other places, but I haven't been able to
 			// figure it out. If someone does, please fix it.
 			pods := corev1.PodList{}
-			err = c.kubeCli.List(context.TODO(), &pods, &listOpts)
+			err = hiveClient.List(context.TODO(), &pods, &listOpts)
 			if err != nil || len(pods.Items) != 0 {
 				return false, err
 			}
