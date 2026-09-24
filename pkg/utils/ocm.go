@@ -777,6 +777,17 @@ func GetDynatraceURLFromLabel(clusterID string) (url string, err error) {
 	return "", fmt.Errorf("DT Tenant Not Found")
 }
 
+// HCPRegionID returns the cloud region ID for HCP (Hosted Control Plane)
+// clusters. Returns the region ID if the cluster is HCP-enabled with a
+// valid region, or an empty string for classic clusters or HCP clusters
+// without a region set.
+func HCPRegionID(cluster *cmv1.Cluster) string {
+	if cluster.Hypershift().Enabled() && cluster.Region() != nil && cluster.Region().ID() != "" {
+		return cluster.Region().ID()
+	}
+	return ""
+}
+
 func SendRequest(request *sdk.Request) (*sdk.Response, error) {
 	response, err := request.Send()
 	if err != nil {
