@@ -17,6 +17,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
 	workv1 "open-cluster-management.io/api/work/v1"
@@ -273,6 +274,56 @@ func rolloutPods(clientset *kubernetes.Clientset, namespace, selector string) er
 	}
 
 	fmt.Printf("Pods in namespace %s with label selector '%s' have been deleted.\n", namespace, selector)
+	return nil
+}
+
+// waitForPodReady polls until at least one pod matching the label selector in
+// the given namespace reaches the Ready condition. This is used to ensure an
+// operator pod has fully restarted before proceeding with dependent rollouts.
+func waitForPodReady(ctx context.Context, clientset kubernetes.Interface, namespace, selector string, timeout time.Duration) error {
+	pollInterval := 5 * time.Second
+
+	// Track the last observed state so the timeout error can report why it failed.
+	var lastTotal, lastTerminating, lastNotReady int
+
+	err := wait.PollUntilContextTimeout(ctx, pollInterval, timeout, true, func(ctx context.Context) (bool, error) {
+		pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: selector,
+		})
+		if err != nil {
+			fmt.Printf("Warning: error listing pods in namespace '%s' with selector '%s' (will retry): %v\n", namespace, selector, err)
+			return false, nil
+		}
+
+		lastTotal = len(pods.Items)
+		lastTerminating = 0
+		lastNotReady = 0
+
+		for _, pod := range pods.Items {
+			// Skip pods that are being terminated — their Ready condition
+			// may still be true during the graceful shutdown window.
+			if pod.DeletionTimestamp != nil {
+				lastTerminating++
+				continue
+			}
+			for _, cond := range pod.Status.Conditions {
+				if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
+					fmt.Printf("Pod %s in namespace %s is Ready.\n", pod.Name, namespace)
+					return true, nil
+				}
+			}
+			lastNotReady++
+		}
+		return false, nil
+	})
+
+	if err != nil {
+		if lastTotal == 0 {
+			return fmt.Errorf("no pods found in namespace '%s' with selector '%s' within %v: %w", namespace, selector, timeout, err)
+		}
+		return fmt.Errorf("found %d pod(s) in namespace '%s' with selector '%s' (%d terminating, %d not ready) but none became Ready within %v: %w",
+			lastTotal, namespace, selector, lastTerminating, lastNotReady, timeout, err)
+	}
 	return nil
 }
 
@@ -818,11 +869,26 @@ func (o *transferOwnerOptions) run() error {
 		fmt.Print("Re-registered cluster\n")
 	}
 
-	// Rollout the ocmAgent pods for non HCP clusters
+	// Rollout the ocm-agent-operator and ocm-agent pods for non HCP clusters.
+	// The operator must be restarted first so it picks up the new pull secret
+	// and reconciles with fresh state; otherwise the recreated agent pods
+	// inherit stale configuration and enter CrashLoopBackOff.
 	if !o.hypershift {
+		err = rolloutPods(targetClientSet, "openshift-ocm-agent-operator", "app=ocm-agent-operator")
+		if err != nil {
+			return fmt.Errorf("failed to roll out OCM Agent Operator pod in namespace 'openshift-ocm-agent-operator' with label selector 'app=ocm-agent-operator': %w", err)
+		}
+
+		// Wait for the operator pod to become Ready before rolling the agent
+		// pods — the operator must reconcile with the new pull secret first.
+		err = waitForPodReady(context.TODO(), targetClientSet, "openshift-ocm-agent-operator", "app=ocm-agent-operator", 2*time.Minute)
+		if err != nil {
+			return fmt.Errorf("timed out waiting for OCM Agent Operator pod to become Ready in namespace 'openshift-ocm-agent-operator': %w", err)
+		}
+
 		err = rolloutPods(targetClientSet, "openshift-ocm-agent-operator", "app=ocm-agent")
 		if err != nil {
-			return fmt.Errorf("failed to roll out OCM Agent pods in namespace 'openshift-ocm-agent-operator' with label selector 'app=ocm-agent': %w", err)
+			return fmt.Errorf("failed to roll out OCM Agent pods in namespace 'openshift-ocm-agent-operator' with label selector 'app=ocm-agent' (note: the ocm-agent-operator was already restarted successfully): %w", err)
 		}
 	}
 
