@@ -158,6 +158,26 @@ func (p *Post) Run(clusterID string) error {
 		return fmt.Errorf("can't retrieve cluster: %w", err)
 	}
 
+	// Warn if the target cluster is a management or service cluster (infrastructure).
+	// Placing infrastructure clusters into limited support can suppress alerting
+	// for all hosted clusters running on them.
+	isMC, mcErr := ctlutil.IsManagementCluster(p.cluster.ID())
+	if mcErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not determine if cluster is a management cluster: %v\n", mcErr)
+	}
+	isSC, scErr := ctlutil.IsServiceCluster(p.cluster.ID())
+	if scErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not determine if cluster is a service cluster: %v\n", scErr)
+	}
+	if (mcErr == nil && isMC) || (scErr == nil && isSC) {
+		fmt.Println("WARNING: This cluster appears to be a management or service cluster (infrastructure cluster).")
+		fmt.Println("Placing an infrastructure cluster into limited support can affect all hosted clusters on it.")
+		fmt.Println("Please verify you are targeting the correct cluster.")
+		if !ctlutil.ConfirmPrompt() {
+			return nil
+		}
+	}
+
 	subscriptionResponse, err := connection.
 		AccountsMgmt().
 		V1().
