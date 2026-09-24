@@ -474,7 +474,7 @@ func TestReadTemplate(t *testing.T) {
 				InternalOnly: true,
 			},
 			expectedMsg: servicelog.Message{
-				Severity:     "Info",
+				Severity:     "Low",
 				ServiceName:  "SREManualAction",
 				Summary:      "INTERNAL ONLY, DO NOT SHARE WITH CUSTOMER",
 				Description:  "${MESSAGE}",
@@ -488,7 +488,7 @@ func TestReadTemplate(t *testing.T) {
 				Overrides:    []string{"some_override"},
 			},
 			expectedMsg: servicelog.Message{
-				Severity:     "Info",
+				Severity:     "Low",
 				ServiceName:  "SREManualAction",
 				InternalOnly: true,
 			},
@@ -500,7 +500,7 @@ func TestReadTemplate(t *testing.T) {
 				Template:     "template.json",
 			},
 			expectedMsg: servicelog.Message{
-				Severity:     "Info",
+				Severity:     "Low",
 				ServiceName:  "TestService",
 				Summary:      "Test Summary",
 				Description:  "Test Description",
@@ -508,7 +508,7 @@ func TestReadTemplate(t *testing.T) {
 			},
 			prepare: func() {
 				fileContent := `{
-					"severity": "Info",
+					"severity": "Low",
 					"service_name": "TestService",
 					"summary": "Test Summary",
 					"description": "Test Description",

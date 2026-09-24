@@ -319,14 +319,14 @@ func TestValidateServiceLogResponse(t *testing.T) {
 				"id": "123",
 				"kind": "ServiceLog",
 				"href": "/api/service_logs/v1/cluster_logs/123",
-				"severity": "Info",
+				"severity": "Low",
 				"service_name": "SREManualAction",
 				"cluster_uuid": "test-cluster-uuid",
 				"summary": "Test Summary",
 				"description": "Test Description"
 			}`,
 			sentMessage: servicelog.Message{
-				Severity:    "Info",
+				Severity:    "Low",
 				ServiceName: "SREManualAction",
 				ClusterUUID: "test-cluster-uuid",
 				Summary:     "Test Summary",
@@ -337,14 +337,14 @@ func TestValidateServiceLogResponse(t *testing.T) {
 		{
 			name: "invalid - severity mismatch",
 			responseBody: `{
-				"severity": "Warning",
+				"severity": "Moderate",
 				"service_name": "SREManualAction",
 				"cluster_uuid": "test-cluster-uuid",
 				"summary": "Test Summary",
 				"description": "Test Description"
 			}`,
 			sentMessage: servicelog.Message{
-				Severity:    "Info",
+				Severity:    "Low",
 				ServiceName: "SREManualAction",
 				ClusterUUID: "test-cluster-uuid",
 				Summary:     "Test Summary",
@@ -356,14 +356,14 @@ func TestValidateServiceLogResponse(t *testing.T) {
 		{
 			name: "invalid - service_name mismatch",
 			responseBody: `{
-				"severity": "Info",
+				"severity": "Low",
 				"service_name": "Different",
 				"cluster_uuid": "test-cluster-uuid",
 				"summary": "Test Summary",
 				"description": "Test Description"
 			}`,
 			sentMessage: servicelog.Message{
-				Severity:    "Info",
+				Severity:    "Low",
 				ServiceName: "SREManualAction",
 				ClusterUUID: "test-cluster-uuid",
 				Summary:     "Test Summary",
@@ -375,14 +375,14 @@ func TestValidateServiceLogResponse(t *testing.T) {
 		{
 			name: "invalid - cluster_uuid mismatch",
 			responseBody: `{
-				"severity": "Info",
+				"severity": "Low",
 				"service_name": "SREManualAction",
 				"cluster_uuid": "different-uuid",
 				"summary": "Test Summary",
 				"description": "Test Description"
 			}`,
 			sentMessage: servicelog.Message{
-				Severity:    "Info",
+				Severity:    "Low",
 				ServiceName: "SREManualAction",
 				ClusterUUID: "test-cluster-uuid",
 				Summary:     "Test Summary",
@@ -395,7 +395,7 @@ func TestValidateServiceLogResponse(t *testing.T) {
 			name:         "invalid - malformed JSON",
 			responseBody: `{invalid json`,
 			sentMessage: servicelog.Message{
-				Severity: "Info",
+				Severity: "Low",
 			},
 			expectError:   true,
 			errorContains: "invalid JSON",
@@ -475,7 +475,7 @@ func TestLoadServiceLogTemplate(t *testing.T) {
 	// Create a temporary file for testing file-based loading
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test-template.json")
-	testTemplate := `{"test": "template", "severity": "Info"}`
+	testTemplate := `{"test": "template", "severity": "Low"}`
 	if err := os.WriteFile(tmpFile, []byte(testTemplate), 0600); err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}

@@ -471,7 +471,7 @@ func (o *PostCmdOptions) readTemplate() {
 		// fixed template for internal service logs
 		messageTemplate := []byte(`
 		{
-			"severity": "Info",
+			"severity": "Low",
 			"service_name": "SREManualAction",
 			"summary": "INTERNAL ONLY, DO NOT SHARE WITH CUSTOMER",
 			"description": "${MESSAGE}",
@@ -488,7 +488,7 @@ func (o *PostCmdOptions) readTemplate() {
 	if !o.InternalOnly && (o.Template == "") && (len(o.Overrides) != 0) {
 		messageTemplate := []byte(`
 		{
-			"severity": "Info",
+			"severity": "Low",
 			"service_name": "SREManualAction",
 			"internal_only": true
 		}

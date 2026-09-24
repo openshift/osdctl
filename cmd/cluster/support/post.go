@@ -31,7 +31,7 @@ const (
 	ProblemFlag                                          = "problem"
 	ResolutionFlag                                       = "resolution"
 	EvidenceFlag                                         = "evidence"
-	InternalServiceLogSeverity                           = "Warning"
+	InternalServiceLogSeverity                           = "Moderate"
 	InternalServiceLogServiceName                        = "SREManualAction"
 	InternalServiceLogSummary                            = "LimitedSupportEvidence"
 	managedCriticalCustomerLabel                         = "capability.organization.managed_critical_customer"
