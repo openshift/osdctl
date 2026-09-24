@@ -3,6 +3,7 @@ package servicelog
 import (
 	"testing"
 
+	slv1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"github.com/openshift/osdctl/internal/servicelog"
 	"github.com/stretchr/testify/assert"
 )
@@ -17,14 +18,14 @@ func TestValidateGoodResponse(t *testing.T) {
 		{
 			name: "successful_validation",
 			clusterMessage: servicelog.Message{
-				Severity:    "Info",
+				Severity:    string(slv1.SeverityLow),
 				ServiceName: "TestService",
 				ClusterUUID: "test-cluster-uuid",
 				Summary:     "Test Summary",
 				Description: "Test Description",
 			},
 			goodReply: []byte(`{
-				"severity": "Info",
+				"severity": "Low",
 				"service_name": "TestService",
 				"cluster_uuid": "test-cluster-uuid",
 				"summary": "Test Summary",
@@ -43,10 +44,10 @@ func TestValidateGoodResponse(t *testing.T) {
 		{
 			name: "mismatch_severity",
 			clusterMessage: servicelog.Message{
-				Severity: "Info",
+				Severity: string(slv1.SeverityLow),
 			},
 			goodReply: []byte(`{
-				"severity": "Warning",
+				"severity": "Moderate",
 				"service_name": "TestService",
 				"cluster_uuid": "test-cluster-uuid",
 				"summary": "Test Summary",
@@ -60,7 +61,7 @@ func TestValidateGoodResponse(t *testing.T) {
 				ServiceName: "TestService",
 			},
 			goodReply: []byte(`{
-				"severity": "Info",
+				"severity": "Low",
 				"service_name": "DifferentService",
 				"cluster_uuid": "test-cluster-uuid",
 				"summary": "Test Summary",
@@ -74,7 +75,7 @@ func TestValidateGoodResponse(t *testing.T) {
 				ClusterUUID: "test-cluster-uuid",
 			},
 			goodReply: []byte(`{
-				"severity": "Info",
+				"severity": "Low",
 				"service_name": "TestService",
 				"cluster_uuid": "different-cluster-uuid",
 				"summary": "Test Summary",
@@ -88,7 +89,7 @@ func TestValidateGoodResponse(t *testing.T) {
 				Summary: "Test Summary",
 			},
 			goodReply: []byte(`{
-				"severity": "Info",
+				"severity": "Low",
 				"service_name": "TestService",
 				"cluster_uuid": "test-cluster-uuid",
 				"summary": "Different Summary",
@@ -102,7 +103,7 @@ func TestValidateGoodResponse(t *testing.T) {
 				Description: "Test Description",
 			},
 			goodReply: []byte(`{
-				"severity": "Info",
+				"severity": "Low",
 				"service_name": "TestService",
 				"cluster_uuid": "test-cluster-uuid",
 				"summary": "Test Summary",
