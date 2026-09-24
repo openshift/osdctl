@@ -1,93 +1,71 @@
 package resize
 
 import (
+	"strings"
 	"testing"
 )
 
-func TestExtractInstanceClass_AWS(t *testing.T) {
+func TestValidateAWSInstanceTypeChange(t *testing.T) {
 	tests := []struct {
-		name         string
-		instanceType string
-		expected     string
+		name                string
+		currentInstanceType string
+		newInstanceType     string
+		errContains         string
 	}{
 		{
-			name:         "AWS m5 instance",
-			instanceType: "m5.4xlarge",
-			expected:     "m5",
+			name:                "same general purpose family",
+			currentInstanceType: "m5.2xlarge",
+			newInstanceType:     "m5.4xlarge",
 		},
 		{
-			name:         "AWS m6i instance",
-			instanceType: "m6i.8xlarge",
-			expected:     "m6i",
+			name:                "m5 to m6i",
+			currentInstanceType: "m5.4xlarge",
+			newInstanceType:     "m6i.4xlarge",
 		},
 		{
-			name:         "AWS m5 small instance",
-			instanceType: "m5.2xlarge",
-			expected:     "m5",
+			name:                "unsupported requested instance type",
+			currentInstanceType: "m5.4xlarge",
+			newInstanceType:     "m6i.not-a-size",
+			errContains:         "instance type m6i.not-a-size not supported for controlplane nodes",
+		},
+		{
+			name:                "m6i to m5 is not allowed",
+			currentInstanceType: "m6i.4xlarge",
+			newInstanceType:     "m5.4xlarge",
+			errContains:         "cannot change instance family from m6i to m5",
+		},
+		{
+			name:                "other family change is not allowed",
+			currentInstanceType: "m5.4xlarge",
+			newInstanceType:     "r5.4xlarge",
+			errContains:         "cannot change instance family from m5 to r5",
+		},
+		{
+			name:                "invalid current instance type",
+			currentInstanceType: "m5",
+			newInstanceType:     "m6i.4xlarge",
+			errContains:         "instance type m5 is not a valid instance type",
+		},
+		{
+			name:                "missing instance size",
+			currentInstanceType: "m5.",
+			newInstanceType:     "m6i.4xlarge",
+			errContains:         "instance type m5. is not a valid instance type",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := extractInstanceClass(tt.instanceType)
-			if err != nil {
-				t.Error(err)
+			err := validateAWSInstanceTypeChange(tt.currentInstanceType, tt.newInstanceType)
+			if tt.errContains == "" {
+				if err != nil {
+					t.Fatalf("validateAWSInstanceTypeChange() error = %v", err)
+				}
+				return
 			}
-			if result != tt.expected {
-				t.Errorf("extractInstanceClass(%s) = %s, expected %s", tt.instanceType, result, tt.expected)
-			}
-		})
-	}
-}
 
-func TestInstanceClassValidation_AWS(t *testing.T) {
-	tests := []struct {
-		name            string
-		currentInstance string
-		newInstance     string
-		shouldFail      bool
-	}{
-		{
-			name:            "Same class AWS m5",
-			currentInstance: "m5.2xlarge",
-			newInstance:     "m5.4xlarge",
-			shouldFail:      false,
-		},
-		{
-			name:            "Different class AWS m5 to m6i",
-			currentInstance: "m5.4xlarge",
-			newInstance:     "m6i.8xlarge",
-			shouldFail:      true,
-		},
-		{
-			name:            "Different class AWS m6i to m5",
-			currentInstance: "m6i.8xlarge",
-			newInstance:     "m5.4xlarge",
-			shouldFail:      true,
-		},
-		{
-			name:            "Same class AWS m6i",
-			currentInstance: "m6i.4xlarge",
-			newInstance:     "m6i.8xlarge",
-			shouldFail:      false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			currentClass, err := extractInstanceClass(tt.currentInstance)
-			if err != nil && !tt.shouldFail {
-				t.Error(err)
-			}
-			newClass, err := extractInstanceClass(tt.newInstance)
-			if err != nil && !tt.shouldFail {
-				t.Error(err)
-			}
-			failed := currentClass != newClass
-
-			if failed != tt.shouldFail {
-				t.Errorf("Instance class validation for %s -> %s: expected shouldFail=%v, got %v (currentClass=%s, newClass=%s)",
-					tt.currentInstance, tt.newInstance, tt.shouldFail, failed, currentClass, newClass)
+			if err == nil || !strings.Contains(err.Error(), tt.errContains) {
+				t.Errorf("validateAWSInstanceTypeChange() error = %v, want error containing %q", err, tt.errContains)
 			}
 		})
 	}
