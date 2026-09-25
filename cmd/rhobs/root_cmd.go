@@ -9,8 +9,10 @@ import (
 )
 
 var commonOptions = struct {
-	clusterId  string
-	hiveOcmUrl string
+	clusterId    string
+	hiveOcmUrl   string
+	clientID     string
+	clientSecret string
 }{}
 
 func NewCmdRhobs() *cobra.Command {
@@ -55,6 +57,8 @@ func NewCmdRhobs() *cobra.Command {
 
 	cmd.PersistentFlags().StringVarP(&commonOptions.clusterId, "cluster-id", "C", "", "Name or Internal ID of the cluster (defaults to current cluster context)")
 	cmd.PersistentFlags().StringVar(&commonOptions.hiveOcmUrl, "hive-ocm-url", "production", `OCM environment URL for hive operations - aliases: "production", "staging", "integration"`)
+	cmd.PersistentFlags().StringVar(&commonOptions.clientID, "client-id", "", "RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.")
+	cmd.PersistentFlags().StringVar(&commonOptions.clientSecret, "client-secret", "", "RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.")
 
 	return cmd
 }
