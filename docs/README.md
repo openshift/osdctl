@@ -2288,6 +2288,9 @@ osdctl cluster resize [flags]
 Resize an OSD/ROSA cluster's control plane nodes
 
   Requires previous login to the api server via "ocm backplane login".
+  The command prints the target cluster identity and requires confirmation before elevation.
+  Hive, Management, and Service clusters get an extra warning because resizing them can
+  affect many customer clusters. This command is not for HCP clusters.
   The user will be prompted to send a service log after initiating the resize. The resize process runs asynchronously,
   and this command exits immediately after sending the service log. Any issues with the resize will be reported via PagerDuty.
 

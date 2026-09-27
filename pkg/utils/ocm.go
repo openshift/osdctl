@@ -708,6 +708,32 @@ func IsServiceCluster(clusterID string) (bool, error) {
 	return false, nil
 }
 
+// hiveShardNameRE matches complete OSD Hive shard names such as hivep01ue1, hives02ue1, hivei01ue1.
+// The trailing $ rejects names that only share the hivepNN prefix (e.g. hivep01-customer).
+var hiveShardNameRE = regexp.MustCompile(`(?i)^hive[psi]\d+[a-z0-9]*$`)
+
+// IsHiveClusterName reports whether name looks like an OSD Hive shard.
+func IsHiveClusterName(name string) bool {
+	return hiveShardNameRE.MatchString(name)
+}
+
+// ClassifyInfrastructureCluster returns "Service", "Management", "Hive", or "" for a customer cluster.
+// Service is checked before management because IsManagementCluster only tests
+// that the hypershift cluster-type label key exists, so it is also true for
+// service clusters.
+func ClassifyInfrastructureCluster(name string, isManagement, isService bool) string {
+	if isService {
+		return "Service"
+	}
+	if isManagement {
+		return "Management"
+	}
+	if IsHiveClusterName(name) {
+		return "Hive"
+	}
+	return ""
+}
+
 func IsHostedCluster(clusterID string) (bool, error) {
 	conn, err := CreateConnection()
 	if err != nil {
