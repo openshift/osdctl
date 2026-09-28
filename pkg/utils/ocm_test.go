@@ -685,6 +685,93 @@ func TestGetHiveBPClientForCluster(t *testing.T) {
 	}
 }
 
+func TestIsHiveClusterName(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "hivep01ue1", want: true},
+		{name: "hives02ue1", want: true},
+		{name: "hivei01ue1", want: true},
+		{name: "HIVEP01UE1", want: true},
+		{name: "hivep01", want: true},
+		{name: "hivep01-customer", want: false},
+		{name: "hivep01ue1-prod", want: false},
+		{name: "hive", want: false},
+		{name: "hivep", want: false},
+		{name: "hivex01ue1", want: false},
+		{name: "hs-mc-773jpgko0", want: false},
+		{name: "prod-customer-01", want: false},
+		{name: "", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsHiveClusterName(tt.name); got != tt.want {
+				t.Errorf("IsHiveClusterName(%q) = %v, want %v", tt.name, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestClassifyInfrastructureCluster(t *testing.T) {
+	tests := []struct {
+		name         string
+		clusterName  string
+		isManagement bool
+		isService    bool
+		want         string
+	}{
+		{
+			name:        "customer cluster",
+			clusterName: "prod-customer-01",
+			want:        "",
+		},
+		{
+			name:         "management cluster",
+			clusterName:  "hs-mc-773jpgko0",
+			isManagement: true,
+			want:         "Management",
+		},
+		{
+			name:        "service cluster",
+			clusterName: "hs-sc-abc",
+			isService:   true,
+			want:        "Service",
+		},
+		{
+			name:         "service cluster also flagged as management",
+			clusterName:  "hs-sc-abc",
+			isManagement: true,
+			isService:    true,
+			want:         "Service",
+		},
+		{
+			name:        "customer name sharing hive prefix",
+			clusterName: "hivep01-customer",
+			want:        "",
+		},
+		{
+			name:        "hive shard by name",
+			clusterName: "hivep01ue1",
+			want:        "Hive",
+		},
+		{
+			name:         "management label wins over hive-like name",
+			clusterName:  "hivep01ue1",
+			isManagement: true,
+			want:         "Management",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ClassifyInfrastructureCluster(tt.clusterName, tt.isManagement, tt.isService)
+			if got != tt.want {
+				t.Errorf("ClassifyInfrastructureCluster() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||

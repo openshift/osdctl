@@ -38,8 +38,11 @@ type controlPlane struct {
 	// client is a K8s client to cluster
 	client client.Client
 
-	// clientAdmin is a K8s client to cluster impersonating backplane-cluster-admin
+	// clientAdmin is a K8s client to cluster impersonating backplane-cluster-admin.
+	// Created only after the operator confirms the target cluster.
 	clientAdmin client.Client
+
+	scheme *runtime.Scheme
 
 	// reason to provide for elevation (eg: OHSS/PG ticket)
 	reason string
@@ -54,6 +57,9 @@ func newCmdResizeControlPlane() *cobra.Command {
 		Long: `Resize an OSD/ROSA cluster's control plane nodes
 
   Requires previous login to the api server via "ocm backplane login".
+  The command prints the target cluster identity and requires confirmation before elevation.
+  Hive, Management, and Service clusters get an extra warning because resizing them can
+  affect many customer clusters. This command is not for HCP clusters.
   The user will be prompted to send a service log after initiating the resize. The resize process runs asynchronously,
   and this command exits immediately after sending the service log. Any issues with the resize will be reported via PagerDuty.`,
 		Example: `  # Resize all control plane instances to m5.4xlarge using control plane machine sets
@@ -82,10 +88,6 @@ func (o *controlPlane) New() error {
 		return err
 	}
 
-	if o.cluster != nil && o.cluster.Hypershift().Enabled() {
-		return errors.New("this command should not be used for HCP clusters")
-	}
-
 	err := utils.IsValidClusterKey(o.clusterID)
 	if err != nil {
 		return err
@@ -107,6 +109,10 @@ func (o *controlPlane) New() error {
 	// Ensure we store the internal OCM cluster id
 	o.clusterID = cluster.ID()
 
+	if err := errIfHostedControlPlane(o.cluster); err != nil {
+		return err
+	}
+
 	scheme := runtime.NewScheme()
 	// Register machinev1 for ControlPlaneMachineSets
 	if err := machinev1.Install(scheme); err != nil {
@@ -118,6 +124,89 @@ func (o *controlPlane) New() error {
 		return err
 	}
 
+	o.scheme = scheme
+	o.client = c
+	return nil
+}
+
+func errIfHostedControlPlane(cluster *cmv1.Cluster) error {
+	if cluster != nil && cluster.Hypershift().Enabled() {
+		return errors.New("this command should not be used for HCP clusters; use \"osdctl cluster resize request-serving-nodes\" for request-serving capacity")
+	}
+	return nil
+}
+
+func (o *controlPlane) lookupInfrastructureKind() (string, error) {
+	isSC, scErr := utils.IsServiceCluster(o.clusterID)
+	if scErr != nil {
+		return "", fmt.Errorf("could not determine if cluster is a service cluster: %w", scErr)
+	}
+	isMC, mcErr := utils.IsManagementCluster(o.clusterID)
+	if mcErr != nil {
+		return "", fmt.Errorf("could not determine if cluster is a management cluster: %w", mcErr)
+	}
+	return utils.ClassifyInfrastructureCluster(o.cluster.Name(), isMC, isSC), nil
+}
+
+func formatControlPlaneResizePrompt(clusterName, clusterID, currentType, targetType, cloud, kind string) string {
+	var b strings.Builder
+	if kind != "" {
+		fmt.Fprintf(&b, "======================================================================\n")
+		fmt.Fprintf(&b, "WARNING: You are about to resize a %s cluster\n", strings.ToUpper(kind))
+		fmt.Fprintf(&b, "======================================================================\n")
+		fmt.Fprintf(&b, "Cluster        : %s (%s)\n", clusterName, clusterID)
+		fmt.Fprintf(&b, "Type           : %s\n", strings.ToUpper(kind))
+		if cloud != "" {
+			fmt.Fprintf(&b, "Cloud          : %s\n", cloud)
+		}
+		fmt.Fprintf(&b, "Current type   : %s\n", currentType)
+		fmt.Fprintf(&b, "Target type    : %s\n", targetType)
+		fmt.Fprintf(&b, "Risk Note: This operation targets an infrastructure cluster that\n")
+		fmt.Fprintf(&b, "underpins hosted control planes. Proceed with caution.\n")
+		fmt.Fprintf(&b, "Have you confirmed this cluster ID/name is the intended target (not a\n")
+		fmt.Fprintf(&b, "customer HCP cluster)?\n")
+		fmt.Fprintf(&b, "This process runs asynchronously.\n")
+		return b.String()
+	}
+
+	fmt.Fprintf(&b, "Cluster        : %s (%s)\n", clusterName, clusterID)
+	fmt.Fprintf(&b, "Type           : classic OSD/ROSA\n")
+	if cloud != "" {
+		fmt.Fprintf(&b, "Cloud          : %s\n", cloud)
+	}
+	fmt.Fprintf(&b, "Current type   : %s\n", currentType)
+	fmt.Fprintf(&b, "Target type    : %s\n", targetType)
+	fmt.Fprintf(&b, "This process runs asynchronously.\n")
+	return b.String()
+}
+
+func (o *controlPlane) confirmResize(currentInstanceType string) error {
+	cloud := ""
+	if o.cluster.CloudProvider() != nil {
+		cloud = o.cluster.CloudProvider().ID()
+	}
+	kind, err := o.lookupInfrastructureKind()
+	if err != nil {
+		return err
+	}
+	fmt.Println(formatControlPlaneResizePrompt(o.cluster.Name(), o.cluster.ID(), currentInstanceType, o.newMachineType, cloud, kind))
+	if !utils.ConfirmPrompt() {
+		return errors.New("aborting control plane resize")
+	}
+	return nil
+}
+
+func (o *controlPlane) elevate() error {
+	if o.clientAdmin != nil {
+		return nil
+	}
+	scheme := o.scheme
+	if scheme == nil {
+		scheme = runtime.NewScheme()
+		if err := machinev1.Install(scheme); err != nil {
+			return err
+		}
+	}
 	cAdmin, err := k8s.NewAsBackplaneClusterAdmin(o.cluster.ID(), client.Options{Scheme: scheme}, []string{
 		o.reason,
 		fmt.Sprintf("Need elevation for %s cluster in order to resize it to instance type %s", o.clusterID, o.newMachineType),
@@ -125,8 +214,6 @@ func (o *controlPlane) New() error {
 	if err != nil {
 		return err
 	}
-
-	o.client = c
 	o.clientAdmin = cAdmin
 	return nil
 }
@@ -341,6 +428,7 @@ func (o *controlPlane) run(ctx context.Context) error {
 		if err := json.Unmarshal(cpms.Spec.Template.OpenShiftMachineV1Beta1Machine.Spec.ProviderSpec.Value.Raw, gcpSpec); err != nil {
 			return fmt.Errorf("error unmarshalling providerSpec: %v", err)
 		}
+		currentInstanceType = gcpSpec.MachineType
 
 		gcpSpec.MachineType = o.newMachineType
 		rawBytes, err = json.Marshal(gcpSpec)
@@ -351,9 +439,12 @@ func (o *controlPlane) run(ctx context.Context) error {
 		return fmt.Errorf("cloud provider not supported: %s, only AWS and GCP are supported", o.cluster.CloudProvider().ID())
 	}
 
-	log.Printf("Initiating control plane node resize for cluster %s/%s to %s using control plane machine sets. This process runs asynchronously.", o.cluster.Name(), o.cluster.ID(), o.newMachineType)
-	if !utils.ConfirmPrompt() {
-		return errors.New("aborting control plane resize")
+	if err := o.confirmResize(currentInstanceType); err != nil {
+		return err
+	}
+
+	if err := o.elevate(); err != nil {
+		return err
 	}
 
 	// Patch the ControlPlaneMachineSet
