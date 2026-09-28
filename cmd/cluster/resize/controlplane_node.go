@@ -453,14 +453,14 @@ func (o *controlPlane) run(ctx context.Context) error {
 		return fmt.Errorf("failed patching control plane machine set: %v", err)
 	}
 
-	log.Println("Control plane machine set patched successfully. The resize is now in progress and will complete asynchronously. This command will exit after sending a service log, and any issues will be reported via PagerDuty.")
+	log.Println("Control plane machine set patched successfully. The resize is now in progress and will complete asynchronously. Any issues will be reported via PagerDuty.")
 
 	return promptGenerateResizeSL(o.clusterID, o.newMachineType)
 }
 
 func promptGenerateResizeSL(clusterID string, newMachineType string) error {
-	fmt.Println("The resize operation is in progress and will complete asynchronously. A service log will now be sent to document this action. Any issues with the resize will be reported via PagerDuty.")
-	fmt.Println("Would you like to proceed with sending the service log?")
+	fmt.Println("The resize operation is in progress and will complete asynchronously. Any issues with the resize will be reported via PagerDuty.")
+	fmt.Println("Would you like to send a service log to document this action?")
 	if !utils.ConfirmPrompt() {
 		fmt.Println("Service log not sent. The resize is still in progress, and this command will now exit. Monitor PagerDuty for any issues.")
 		return nil
