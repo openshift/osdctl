@@ -414,7 +414,7 @@ func TestFormatTextLogLine_DedupeCount(t *testing.T) {
 	}
 
 	got = formatTextLogLine(result, false, fields, 42)
-	if want := "pod-a boom (x42)"; got != want {
+	if want := "pod-a boom\n... repeated 42x ...\n"; got != want {
 		t.Errorf("count=42: got %q, want %q", got, want)
 	}
 }
