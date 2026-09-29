@@ -35,6 +35,7 @@ func checkVaultToken(ctx context.Context) error {
 	return nil
 }
 
+// newCmdMcp builds the MCP command and describes its authentication prerequisites.
 func newCmdMcp() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mcp",
@@ -53,8 +54,8 @@ Quick start:
 
 Prerequisites:
   - OCM login: ocm login --use-auth-code --url <environment>
-  - Vault login: VAULT_ADDR=https://vault.devshift.net vault login -method=oidc
-  - osdctl config: ~/.config/osdctl must have rhobs_<env>_vault_path entries`,
+  - Vault login: VAULT_ADDR=https://vault.devshift.net vault login -method=oidc (required when direct RHOBS client ID and secret credentials are not supplied)
+  - osdctl config: ~/.config/osdctl must have rhobs_<env>_vault_path entries when direct RHOBS credentials are not supplied through --client-id/--client-secret or RHOBS_CLIENT_ID/RHOBS_CLIENT_SECRET`,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			return nil
 		},
@@ -76,6 +77,9 @@ func newCmdMcpServer() *cobra.Command {
 			log.SetOutput(io.Discard)
 
 			go func(ctx context.Context) {
+				if hasProvidedClientCredentials() {
+					return
+				}
 				if err := checkVaultToken(ctx); err != nil {
 					fmt.Fprintln(os.Stderr, "WARNING:", err)
 					fmt.Fprintln(os.Stderr, "MCP server starting anyway. Tool calls will fail until vault is authenticated.")

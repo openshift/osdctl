@@ -4,6 +4,8 @@ import (
 	"testing"
 )
 
+// TestGetTokenProvider_CredentialResolution checks complete and incomplete
+// credential pairs while isolating each subtest from the process environment.
 func TestGetTokenProvider_CredentialResolution(t *testing.T) {
 	// Save original commonOptions
 	origCommonOptions := commonOptions
@@ -108,10 +110,12 @@ func TestGetTokenProvider_CredentialResolution(t *testing.T) {
 	}
 }
 
+// contains reports whether s contains substr, handling exact matches directly.
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && someContains(s, substr))
 }
 
+// someContains scans s for a matching substring.
 func someContains(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {

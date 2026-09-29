@@ -46,8 +46,10 @@ func getCachedFetcher(ctx context.Context, clusterId string, usage RhobsFetchUsa
 		if cached, ok := fetcherCache.Load(key); ok {
 			return cached, nil
 		}
-		if err := quickVaultCheck(); err != nil {
-			return nil, err
+		if !hasProvidedClientCredentials() {
+			if err := quickVaultCheck(); err != nil {
+				return nil, err
+			}
 		}
 		fetcher, err := CreateRhobsFetcher(ctx, clusterId, usage, commonOptions.hiveOcmUrl)
 		if err != nil {
@@ -72,8 +74,10 @@ func getCachedFetcherFromCell(rhobsCell string) (*RhobsFetcher, error) {
 		if cached, ok := fetcherCache.Load(key); ok {
 			return cached, nil
 		}
-		if err := quickVaultCheck(); err != nil {
-			return nil, err
+		if !hasProvidedClientCredentials() {
+			if err := quickVaultCheck(); err != nil {
+				return nil, err
+			}
 		}
 		fetcher, err := CreateRhobsFetcherFromCell(rhobsCell)
 		if err != nil {

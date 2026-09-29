@@ -374,17 +374,11 @@ func (f *RhobsFetcher) getBaseGrafanaDataSource() (string, error) {
 	return "rhobs-" + rhobsCellName + "-" + f.ocmEnvName + "-hcp-", nil
 }
 
+// getTokenProvider caches a provider using credentials from flags, then environment
+// variables. It rejects incomplete pairs and uses Vault only when neither is set.
 func (f *RhobsFetcher) getTokenProvider() (ocmutils.AccessTokenProvider, error) {
 	if f.tokenProvider == nil {
-		// Resolve client credentials from flags, then env vars
-		clientID := commonOptions.clientID
-		if clientID == "" {
-			clientID = os.Getenv(rhobsClientIDEnvVar)
-		}
-		clientSecret := commonOptions.clientSecret
-		if clientSecret == "" {
-			clientSecret = os.Getenv(rhobsClientSecretEnvVar)
-		}
+		clientID, clientSecret := providedClientCredentials()
 
 		// If both are provided, skip Vault and use them directly
 		if clientID != "" && clientSecret != "" {
@@ -402,6 +396,24 @@ func (f *RhobsFetcher) getTokenProvider() (ocmutils.AccessTokenProvider, error) 
 		}
 	}
 	return f.tokenProvider, nil
+}
+
+// providedClientCredentials resolves credentials from flags, then environment variables.
+func providedClientCredentials() (string, string) {
+	clientID := commonOptions.clientID
+	if clientID == "" {
+		clientID = os.Getenv(rhobsClientIDEnvVar)
+	}
+	clientSecret := commonOptions.clientSecret
+	if clientSecret == "" {
+		clientSecret = os.Getenv(rhobsClientSecretEnvVar)
+	}
+	return clientID, clientSecret
+}
+
+func hasProvidedClientCredentials() bool {
+	clientID, clientSecret := providedClientCredentials()
+	return clientID != "" && clientSecret != ""
 }
 
 func (f *RhobsFetcher) getClient() (*rhobsclient.ClientWithResponses, error) {

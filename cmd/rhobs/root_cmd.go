@@ -15,6 +15,7 @@ var commonOptions = struct {
 	clientSecret string
 }{}
 
+// NewCmdRhobs builds the RHOBS command with shared credential flags and subcommands.
 func NewCmdRhobs() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rhobs",
@@ -57,8 +58,8 @@ func NewCmdRhobs() *cobra.Command {
 
 	cmd.PersistentFlags().StringVarP(&commonOptions.clusterId, "cluster-id", "C", "", "Name or Internal ID of the cluster (defaults to current cluster context)")
 	cmd.PersistentFlags().StringVar(&commonOptions.hiveOcmUrl, "hive-ocm-url", "production", `OCM environment URL for hive operations - aliases: "production", "staging", "integration"`)
-	cmd.PersistentFlags().StringVar(&commonOptions.clientID, "client-id", "", "RHOBS SSO client ID - skips Vault lookup. Falls back to the RHOBS_CLIENT_ID env var.")
-	cmd.PersistentFlags().StringVar(&commonOptions.clientSecret, "client-secret", "", "RHOBS SSO client secret - skips Vault lookup. Falls back to the RHOBS_CLIENT_SECRET env var.")
+	cmd.PersistentFlags().StringVar(&commonOptions.clientID, "client-id", "", "RHOBS SSO client ID (falls back to RHOBS_CLIENT_ID when empty). A complete ID/secret pair from flags and/or env vars bypasses Vault credential lookup. If neither is set, Vault is used; an incomplete pair returns an error.")
+	cmd.PersistentFlags().StringVar(&commonOptions.clientSecret, "client-secret", "", "RHOBS SSO client secret (falls back to RHOBS_CLIENT_SECRET when empty). A complete ID/secret pair from flags and/or env vars bypasses Vault credential lookup. If neither is set, Vault is used; an incomplete pair returns an error.")
 
 	return cmd
 }
