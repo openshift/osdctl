@@ -31,19 +31,28 @@ type pdClientInterface interface {
 }
 
 type client struct {
-	pdclient   pdClientInterface
-	baseDomain string
-	teamIds    []string
-	userToken  string
-	oauthToken string
+	pdclient     pdClientInterface
+	serviceQuery string
+	clusterID    string
+	teamIds      []string
+	userToken    string
+	oauthToken   string
 }
 
 func NewClient() *client {
 	return &client{}
 }
 
-func (c *client) WithBaseDomain(baseDomain string) *client {
-	c.baseDomain = baseDomain
+// WithServiceQuery sets the PagerDuty service lookup query. For classic
+// clusters this is the DNS base domain; for HCP clusters it is the AWS
+// region ID.
+func (c *client) WithServiceQuery(serviceQuery string) *client {
+	c.serviceQuery = serviceQuery
+	return c
+}
+
+func (c *client) WithClusterID(clusterID string) *client {
+	c.clusterID = clusterID
 	return c
 }
 
@@ -86,7 +95,7 @@ func (c *client) buildClient() error {
 
 func (c *client) GetPDServiceIDs() ([]string, error) {
 	// TODO : do we need this to be an exposed function or could we do this when we build the client?
-	lsResponse, err := c.pdclient.ListServicesWithContext(context.TODO(), pd.ListServiceOptions{Query: c.baseDomain, TeamIDs: c.teamIds})
+	lsResponse, err := c.pdclient.ListServicesWithContext(context.TODO(), pd.ListServiceOptions{Query: c.serviceQuery, TeamIDs: c.teamIds})
 	if err != nil {
 		return []string{}, fmt.Errorf("failed to ListServicesWithContext: %w", err)
 	}
@@ -106,21 +115,33 @@ func (c *client) GetFiringAlertsForCluster(pdServiceIDs []string) (map[string][]
 	var incidentListOffset uint = 0
 	for _, pdServiceID := range pdServiceIDs {
 		for {
+			opts := pd.ListIncidentsOptions{
+				ServiceIDs: []string{pdServiceID},
+				Statuses:   []string{"triggered", "acknowledged"},
+				SortBy:     "urgency:DESC",
+				Limit:      incidentLimit,
+				Offset:     incidentListOffset,
+			}
+			// For HCP clusters, include first_trigger_log_entries so
+			// we can filter incidents by cluster ID in EventDetails.
+			if c.clusterID != "" {
+				opts.Includes = []string{"first_trigger_log_entries"}
+			}
+
 			listIncidentsResponse, err := c.pdclient.ListIncidentsWithContext(
 				context.TODO(),
-				pd.ListIncidentsOptions{
-					ServiceIDs: []string{pdServiceID},
-					Statuses:   []string{"triggered", "acknowledged"},
-					SortBy:     "urgency:DESC",
-					Limit:      incidentLimit,
-					Offset:     incidentListOffset,
-				},
+				opts,
 			)
 			if err != nil {
 				return nil, err
 			}
 
-			incidents[pdServiceID] = append(incidents[pdServiceID], listIncidentsResponse.Incidents...)
+			for _, incident := range listIncidentsResponse.Incidents {
+				if c.clusterID != "" && !incidentMatchesCluster(incident, c.clusterID) {
+					continue
+				}
+				incidents[pdServiceID] = append(incidents[pdServiceID], incident)
+			}
 
 			if !listIncidentsResponse.More {
 				break
@@ -129,6 +150,25 @@ func (c *client) GetFiringAlertsForCluster(pdServiceIDs []string) (map[string][]
 		}
 	}
 	return incidents, nil
+}
+
+// incidentMatchesCluster checks whether a PagerDuty incident belongs to the
+// given cluster by inspecting the first trigger log entry's EventDetails for
+// a matching cluster_id value. This is used for HCP clusters where PD services
+// are region-based and contain incidents for multiple clusters.
+func incidentMatchesCluster(incident pd.Incident, clusterID string) bool {
+	ed := incident.FirstTriggerLogEntry.EventDetails
+	if ed == nil {
+		fmt.Printf("Warning: incident %d (%s) has no EventDetails in FirstTriggerLogEntry, skipping for HCP cluster filtering\n",
+			incident.IncidentNumber, incident.Title)
+		return false
+	}
+	for _, key := range []string{"cluster_id", "clusterID", "cluster-id"} {
+		if v, ok := ed[key]; ok && v == clusterID {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *client) GetHistoricalAlertsForCluster(pdServiceIDs []string) (map[string][]*IncidentOccurrenceTracker, error) {
@@ -141,15 +181,22 @@ func (c *client) GetHistoricalAlertsForCluster(pdServiceIDs []string) (map[strin
 
 	for _, pdServiceID := range pdServiceIDs {
 		for currentOffset = 0; true; currentOffset += limit {
+			opts := pd.ListIncidentsOptions{
+				ServiceIDs: []string{pdServiceID},
+				Statuses:   []string{"resolved", "triggered", "acknowledged"},
+				Offset:     currentOffset,
+				Limit:      limit,
+				SortBy:     "created_at:desc",
+			}
+			// For HCP clusters, include first_trigger_log_entries so
+			// we can filter incidents by cluster ID in EventDetails.
+			if c.clusterID != "" {
+				opts.Includes = []string{"first_trigger_log_entries"}
+			}
+
 			liResponse, err := c.pdclient.ListIncidentsWithContext(
 				ctx,
-				pd.ListIncidentsOptions{
-					ServiceIDs: []string{pdServiceID},
-					Statuses:   []string{"resolved", "triggered", "acknowledged"},
-					Offset:     currentOffset,
-					Limit:      limit,
-					SortBy:     "created_at:desc",
-				},
+				opts,
 			)
 
 			if err != nil {
@@ -160,7 +207,12 @@ func (c *client) GetHistoricalAlertsForCluster(pdServiceIDs []string) (map[strin
 				break
 			}
 
-			incidents = append(incidents, liResponse.Incidents...)
+			for _, incident := range liResponse.Incidents {
+				if c.clusterID != "" && !incidentMatchesCluster(incident, c.clusterID) {
+					continue
+				}
+				incidents = append(incidents, incident)
+			}
 		}
 
 		incidentCounter := make(map[string]*IncidentOccurrenceTracker)
