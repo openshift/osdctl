@@ -265,12 +265,12 @@ func TestGetGrafanaLogsUrl(t *testing.T) {
 	}{
 		{
 			name:           "HCP corrected query - backward",
-			lokiExpr:       `{k8s_namespace_name="ocm-production-abc123-ns"} | json json_kind="kind" | json_kind != "Event" | openshift_cluster_id = "mc-ext-uuid"`,
+			lokiExpr:       `{k8s_namespace_name="ocm-production-abc123-ns"} | json json_kind="kind" | json_kind != "Event" | openshift_cluster_uid = "mc-ext-uuid"`,
 			isGoingForward: false,
 		},
 		{
 			name:           "MC query - forward",
-			lokiExpr:       `{k8s_namespace_name="default"} | json json_kind="kind" | json_kind != "Event" | openshift_cluster_id = "mc-ext-uuid"`,
+			lokiExpr:       `{k8s_namespace_name="default"} | json json_kind="kind" | json_kind != "Event" | openshift_cluster_uid = "mc-ext-uuid"`,
 			isGoingForward: true,
 		},
 	}
@@ -302,7 +302,7 @@ func TestGetGrafanaLogsUrl_EncodesLokiExpr(t *testing.T) {
 		ocmEnvName: "production",
 	}
 
-	expr := `{k8s_namespace_name="ocm-production-abc123-ns"} | openshift_cluster_id = "mc-uuid"`
+	expr := `{k8s_namespace_name="ocm-production-abc123-ns"} | openshift_cluster_uid = "mc-uuid"`
 	now := time.Now()
 
 	gotURL, err := f.GetGrafanaLogsUrl(expr, now.Add(-5*time.Minute), now, false)
@@ -327,8 +327,8 @@ func TestHcpLogsQueryDiffersFromStandard(t *testing.T) {
 	now := time.Now()
 	start := now.Add(-5 * time.Minute)
 
-	brokenExpr := `{k8s_namespace_name="default"} | json json_kind="kind" | json_kind != "Event" | openshift_cluster_id = "hcp-ext-uuid"`
-	fixedExpr := `{k8s_namespace_name="ocm-production-abc123-ns"} | json json_kind="kind" | json_kind != "Event" | openshift_cluster_id = "mc-ext-uuid"`
+	brokenExpr := `{k8s_namespace_name="default"} | json json_kind="kind" | json_kind != "Event" | openshift_cluster_uid = "hcp-ext-uuid"`
+	fixedExpr := `{k8s_namespace_name="ocm-production-abc123-ns"} | json json_kind="kind" | json_kind != "Event" | openshift_cluster_uid = "mc-ext-uuid"`
 
 	brokenURL, err := f.GetGrafanaLogsUrl(brokenExpr, start, now, false)
 	if err != nil {

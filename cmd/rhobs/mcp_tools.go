@@ -65,7 +65,7 @@ func registerMcpTools(s *mcp.Server) {
 			"type": "object",
 			"properties": {
 				"cluster_id":     {"type": "string", "description": "Cluster ID or name (HCP, MC, or SC). HCP IDs auto-resolve to their parent MC. Exclusive with rhobs_cell."},
-				"rhobs_cell":     {"type": "string", "description": "RHOBS cell URL (e.g., https://us-east-1-0.rhobs.api.stage.openshift.com). Query logs directly without a cluster ID. No openshift_cluster_id filter is applied. Exclusive with cluster_id."},
+				"rhobs_cell":     {"type": "string", "description": "RHOBS cell URL (e.g., https://us-east-1-0.rhobs.api.stage.openshift.com). Query logs directly without a cluster ID. No openshift_cluster_uid filter is applied. Exclusive with cluster_id."},
 				"namespace":      {"type": "string", "description": "Kubernetes namespace. Required unless query is set."},
 				"query":          {"type": "string", "description": "Raw LogQL expression (overrides namespace)"},
 				"contain_regex":  {"type": "string", "description": "Server-side regex filter (e.g., (?i)(error|timeout))"},
@@ -247,7 +247,7 @@ func handleLogs(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolRes
 			lokiExpr += fmt.Sprintf(` |~ "%s"`, containRegex)
 		}
 		if rhobsCell == "" {
-			lokiExpr += fmt.Sprintf(` | openshift_cluster_id = "%s"`, fetcher.logsClusterExtId())
+			lokiExpr += fmt.Sprintf(` | openshift_cluster_uid = "%s"`, fetcher.logsClusterExtId())
 		}
 	}
 

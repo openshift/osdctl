@@ -46,7 +46,7 @@ const (
 type RhobsFetcher struct {
 	clusterId           string
 	clusterExternalId   string
-	mcExternalId        string // MC's external UUID; set for HCP clusters, used for Loki openshift_cluster_id filter
+	mcExternalId        string // MC's external UUID; set for HCP clusters, used for Loki openshift_cluster_uid filter
 	clusterName         string
 	IsHostedCluster     bool
 	isManagementCluster bool
@@ -56,8 +56,8 @@ type RhobsFetcher struct {
 	tokenProvider       ocmutils.AccessTokenProvider
 }
 
-// logsClusterExtId returns the cluster external UUID to use in Loki's openshift_cluster_id filter.
-// HCP control-plane logs are indexed in RHOBS under the MC's openshift_cluster_id, not the HCP
+// logsClusterExtId returns the cluster external UUID to use in Loki's openshift_cluster_uid filter.
+// HCP control-plane logs are indexed in RHOBS under the MC's openshift_cluster_uid, not the HCP
 // cluster's own UUID, so for HCP clusters this returns the MC's external UUID.
 func (f *RhobsFetcher) logsClusterExtId() string {
 	if f.IsHostedCluster && f.mcExternalId != "" {
