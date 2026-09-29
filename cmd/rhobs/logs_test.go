@@ -343,3 +343,90 @@ func TestHcpLogsQueryDiffersFromStandard(t *testing.T) {
 		t.Error("broken and fixed Loki expressions should produce different Grafana URLs")
 	}
 }
+
+// --- --dedupe ---
+
+func newTestLogResult(message string, fields map[string]string) *logResult {
+	stream := fields
+	values := []string{"0", message}
+	return &logResult{
+		Stream: &stream,
+		Values: []*[]string{&values},
+	}
+}
+
+func TestLogDedupeBuffer(t *testing.T) {
+	fields := []string{"k8s_pod_name"}
+	buf := &logDedupeBuffer{fieldNames: fields}
+
+	r1 := newTestLogResult("reconcile failed", map[string]string{"k8s_pod_name": "controller"})
+	r2 := newTestLogResult("reconcile failed", map[string]string{"k8s_pod_name": "controller"})
+	r3 := newTestLogResult("reconcile failed", map[string]string{"k8s_pod_name": "controller"})
+	r4 := newTestLogResult("other error", map[string]string{"k8s_pod_name": "controller"})
+	r5 := newTestLogResult("other error", map[string]string{"k8s_pod_name": "other-pod"})
+
+	if flush, count := buf.push(r1); flush != nil || count != 0 {
+		t.Fatalf("first push should not flush, got flush=%v count=%d", flush != nil, count)
+	}
+	if flush, count := buf.push(r2); flush != nil || count != 0 {
+		t.Fatalf("duplicate push should not flush, got flush=%v count=%d", flush != nil, count)
+	}
+	if flush, count := buf.push(r3); flush != nil || count != 0 {
+		t.Fatalf("duplicate push should not flush, got flush=%v count=%d", flush != nil, count)
+	}
+
+	flush, count := buf.push(r4)
+	if flush == nil || count != 3 {
+		t.Fatalf("message change should flush streak of 3, got flush=%v count=%d", flush != nil, count)
+	}
+	if flush.getMessage() != "reconcile failed" {
+		t.Errorf("flushed message = %q, want reconcile failed", flush.getMessage())
+	}
+
+	flush, count = buf.push(r5)
+	if flush == nil || count != 1 {
+		t.Fatalf("pod change should flush streak of 1, got flush=%v count=%d", flush != nil, count)
+	}
+	if flush.getMessage() != "other error" {
+		t.Errorf("flushed message = %q, want other error", flush.getMessage())
+	}
+
+	flush, count = buf.flush()
+	if flush == nil || count != 1 {
+		t.Fatalf("final flush should return pending, got flush=%v count=%d", flush != nil, count)
+	}
+	if (*flush.Stream)["k8s_pod_name"] != "other-pod" {
+		t.Errorf("final flush pod = %q, want other-pod", (*flush.Stream)["k8s_pod_name"])
+	}
+
+	if flush, count = buf.flush(); flush != nil || count != 0 {
+		t.Fatalf("second flush should be empty, got flush=%v count=%d", flush != nil, count)
+	}
+}
+
+func TestFormatTextLogLine_DedupeCount(t *testing.T) {
+	result := newTestLogResult("boom", map[string]string{"k8s_pod_name": "pod-a"})
+	fields := []string{"k8s_pod_name"}
+
+	got := formatTextLogLine(result, false, fields, 1)
+	if want := "pod-a boom"; got != want {
+		t.Errorf("count=1: got %q, want %q", got, want)
+	}
+
+	got = formatTextLogLine(result, false, fields, 42)
+	if want := "pod-a boom (x42)"; got != want {
+		t.Errorf("count=42: got %q, want %q", got, want)
+	}
+}
+
+func TestLogsCommand_DedupeFlag(t *testing.T) {
+	cmd := newCmdLogs()
+
+	flag := cmd.Flags().Lookup("dedupe")
+	if flag == nil {
+		t.Fatal("--dedupe flag not found on logs command")
+	}
+	if flag.DefValue != "false" {
+		t.Errorf("--dedupe default should be false, got %q", flag.DefValue)
+	}
+}

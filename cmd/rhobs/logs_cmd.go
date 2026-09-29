@@ -55,6 +55,7 @@ func newCmdLogs() *cobra.Command {
 	var outputFormatStr string
 	var isPrintingTimestamp bool
 	var printedFields []string
+	var isDeduping bool
 	var rhobsCell string
 
 	cmd := &cobra.Command{
@@ -238,6 +239,10 @@ func newCmdLogs() *cobra.Command {
 				}
 			}
 
+			if isDeduping && outputFormat != LogsFormatText {
+				return fmt.Errorf("--dedupe can only be used with the text output format")
+			}
+
 			cmd.SilenceUsage = true
 
 			var rhobsFetcher *RhobsFetcher
@@ -281,9 +286,9 @@ func newCmdLogs() *cobra.Command {
 				}
 			} else {
 				if isFollowing {
-					err = rhobsFetcher.StreamLogs(lokiExpr, outputFormat, isPrintingTimestamp, printedFields)
+					err = rhobsFetcher.StreamLogs(lokiExpr, outputFormat, isPrintingTimestamp, printedFields, isDeduping)
 				} else {
-					err = rhobsFetcher.PrintLogs(cmd.Context(), lokiExpr, startTime, endTime, logsCount, isGoingForward, outputFormat, isPrintingTimestamp, printedFields)
+					err = rhobsFetcher.PrintLogs(cmd.Context(), lokiExpr, startTime, endTime, logsCount, isGoingForward, outputFormat, isPrintingTimestamp, printedFields, isDeduping)
 				}
 				if err != nil {
 					return fmt.Errorf("failed to print logs: %v", err)
@@ -349,6 +354,9 @@ func newCmdLogs() *cobra.Command {
 		`flag can be repeated / values can also be aggregated with one flag using the comma as separator - possible values: "k8s_namespace_name", "k8s_pod_name", "k8s_container_name" - `+
 		`use the "json" output format to know about all possible fields - exclusive with --url`)
 	cmd.MarkFlagsMutuallyExclusive("field", "url")
+	cmd.Flags().BoolVar(&isDeduping, "dedupe", false, `Collapse consecutive identical log lines into a single line with a repeat count (e.g. "(x42)") - `+
+		`identity is the message plus --field values (timestamps ignored) - only supported with the text output format - exclusive with --url`)
+	cmd.MarkFlagsMutuallyExclusive("dedupe", "url")
 
 	cmd.Flags().StringVar(&rhobsCell, "rhobs-cell", "", "RHOBS cell URL (e.g., https://us-east-1-0.rhobs.api.stage.openshift.com) - "+
 		"query logs directly without a cluster ID - exclusive with --cluster-id")
@@ -500,31 +508,102 @@ type logsPrinter interface {
 	PrintTrailer()
 }
 
+// logDedupeBuffer collapses consecutive identical log lines. Identity is the
+// message plus the given field values (timestamps are ignored).
+type logDedupeBuffer struct {
+	fieldNames []string
+	pending    *logResult
+	count      int
+}
+
+func dedupeKey(result *logResult, fieldNames []string) string {
+	var b strings.Builder
+	for _, fieldName := range fieldNames {
+		if result.Stream != nil {
+			b.WriteString((*result.Stream)[fieldName])
+		}
+		b.WriteByte(0)
+	}
+	b.WriteString(result.getMessage())
+	return b.String()
+}
+
+// push accepts a log result. If a previous streak ended, it returns that
+// result and its repeat count to print. Otherwise both return values are zero.
+func (d *logDedupeBuffer) push(result *logResult) (flush *logResult, count int) {
+	if d.pending == nil {
+		d.pending = result
+		d.count = 1
+		return nil, 0
+	}
+	if dedupeKey(d.pending, d.fieldNames) == dedupeKey(result, d.fieldNames) {
+		d.count++
+		return nil, 0
+	}
+	flush, count = d.pending, d.count
+	d.pending = result
+	d.count = 1
+	return flush, count
+}
+
+// flush returns the pending streak, if any.
+func (d *logDedupeBuffer) flush() (*logResult, int) {
+	if d.pending == nil {
+		return nil, 0
+	}
+	result, count := d.pending, d.count
+	d.pending = nil
+	d.count = 0
+	return result, count
+}
+
 type textLogsPrinter struct {
 	isPrintingTimeValue bool
 	fieldNames          []string
+	dedupe              *logDedupeBuffer
+}
+
+func formatTextLogLine(result *logResult, isPrintingTimeValue bool, fieldNames []string, repeatCount int) string {
+	var sb strings.Builder
+
+	if isPrintingTimeValue {
+		sb.WriteString(result.getHumanReadableTime())
+		sb.WriteString(" ")
+	}
+	for _, fieldName := range fieldNames {
+		if result.Stream != nil {
+			sb.WriteString((*result.Stream)[fieldName])
+		}
+		sb.WriteString(" ")
+	}
+	sb.WriteString(result.getMessage())
+	if repeatCount > 1 {
+		sb.WriteString(fmt.Sprintf("\n... repeated %dx ...\n", repeatCount))
+	}
+
+	return sb.String()
 }
 
 func (p *textLogsPrinter) PrintHeader() {
 }
 
 func (p *textLogsPrinter) PrintResult(result *logResult) {
-	var sb strings.Builder
-
-	if p.isPrintingTimeValue {
-		sb.WriteString(result.getHumanReadableTime())
-		sb.WriteString(" ")
+	if p.dedupe == nil {
+		fmt.Println(formatTextLogLine(result, p.isPrintingTimeValue, p.fieldNames, 1))
+		return
 	}
-	for _, fieldName := range p.fieldNames {
-		sb.WriteString((*result.Stream)[fieldName])
-		sb.WriteString(" ")
+	if flush, count := p.dedupe.push(result); flush != nil {
+		fmt.Println(formatTextLogLine(flush, p.isPrintingTimeValue, p.fieldNames, count))
 	}
-	sb.WriteString(result.getMessage())
-
-	fmt.Println(sb.String())
 }
 
 func (p *textLogsPrinter) PrintTrailer() {
+	if p.dedupe == nil {
+		return
+	}
+	if flush, count := p.dedupe.flush(); flush != nil {
+		fmt.Println(formatTextLogLine(flush, p.isPrintingTimeValue, p.fieldNames, count))
+	}
 }
 
 type csvLogsPrinter struct {
@@ -598,14 +677,18 @@ func (p *jsonLogsPrinter) PrintTrailer() {
 	fmt.Println("]")
 }
 
-func createLogsPrinter(format LogsFormat, isPrintingTimeValue bool, fieldNames []string) logsPrinter {
+func createLogsPrinter(format LogsFormat, isPrintingTimeValue bool, fieldNames []string, isDeduping bool) logsPrinter {
 	switch format {
 	case LogsFormatCsv:
 		return &csvLogsPrinter{writer: csv.NewWriter(os.Stdout), isPrintingTimeValue: isPrintingTimeValue, fieldNames: fieldNames}
 	case LogsFormatJson:
 		return &jsonLogsPrinter{}
 	default:
-		return &textLogsPrinter{isPrintingTimeValue: isPrintingTimeValue, fieldNames: fieldNames}
+		printer := &textLogsPrinter{isPrintingTimeValue: isPrintingTimeValue, fieldNames: fieldNames}
+		if isDeduping {
+			printer.dedupe = &logDedupeBuffer{fieldNames: fieldNames}
+		}
+		return printer
 	}
 }
 
@@ -734,8 +817,8 @@ func (f *RhobsFetcher) queryLogs(ctx context.Context, lokiExpr string, startTime
 	return nil
 }
 
-func (f *RhobsFetcher) PrintLogs(ctx context.Context, lokiExpr string, startTime, endTime time.Time, logsCount int, isGoingForward bool, format LogsFormat, isPrintingTimeValue bool, fieldNames []string) error {
-	logsPrinter := createLogsPrinter(format, isPrintingTimeValue, fieldNames)
+func (f *RhobsFetcher) PrintLogs(ctx context.Context, lokiExpr string, startTime, endTime time.Time, logsCount int, isGoingForward bool, format LogsFormat, isPrintingTimeValue bool, fieldNames []string, isDeduping bool) error {
+	logsPrinter := createLogsPrinter(format, isPrintingTimeValue, fieldNames, isDeduping)
 	logsPrinter.PrintHeader()
 	defer logsPrinter.PrintTrailer()
 
@@ -754,7 +837,7 @@ type streamLogsContext struct {
 	webSocket *websocket.Conn
 }
 
-func (f *RhobsFetcher) StreamLogs(lokiExpr string, format LogsFormat, isPrintingTimeValue bool, fieldNames []string) error {
+func (f *RhobsFetcher) StreamLogs(lokiExpr string, format LogsFormat, isPrintingTimeValue bool, fieldNames []string, isDeduping bool) error {
 	startTime := time.Now().Add(-5 * time.Minute)
 	tokenProvider, err := f.getTokenProvider()
 	if err != nil {
@@ -764,7 +847,7 @@ func (f *RhobsFetcher) StreamLogs(lokiExpr string, format LogsFormat, isPrinting
 	log.Infoln("RHOBS cell:", f.RhobsCell)
 	log.Infoln("Loki query:", lokiExpr)
 
-	logsPrinter := createLogsPrinter(format, isPrintingTimeValue, fieldNames)
+	logsPrinter := createLogsPrinter(format, isPrintingTimeValue, fieldNames, isDeduping)
 	logsPrinter.PrintHeader()
 	defer logsPrinter.PrintTrailer()
 
