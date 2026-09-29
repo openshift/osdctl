@@ -263,7 +263,7 @@ func newCmdLogs() *cobra.Command {
 						fmt.Sprintf(`{k8s_namespace_name="%s"}`, effectiveNs),
 						1)
 				}
-				lokiExpr += fmt.Sprintf(` | openshift_cluster_id = "%s"`, rhobsFetcher.logsClusterExtId())
+				lokiExpr += fmt.Sprintf(` | openshift_cluster_uid = "%s"`, rhobsFetcher.logsClusterExtId())
 			}
 
 			if isComputingGrafanaUrl {

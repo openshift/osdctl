@@ -600,7 +600,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		// Logs URL
 		// NOTE: 'osdctl rhobs logs -C <hcp-cluster-id> --url' has a bug: it filters by the HCP
 		// cluster's external UUID, but HCP control-plane logs on the MC are labeled with the MC's
-		// openshift_cluster_id. We intentionally work around that bug here (tracked in #932).
+		// openshift_cluster_uid. We intentionally work around that bug here (tracked in #932).
 		if logsFetchErr != nil {
 			mu.Lock()
 			dataErrors = append(dataErrors, fmt.Errorf("failed to get RHOBS logs fetcher: %v", logsFetchErr))
@@ -609,7 +609,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			var lokiNamespace, clusterExtID string
 			if isHCP {
 				// HCP control-plane logs live in the HCP namespace on the MC and are indexed
-				// under the MC's openshift_cluster_id, not the HCP cluster's.
+				// under the MC's openshift_cluster_uid, not the HCP cluster's.
 				mc, mcErr := utils.GetManagementCluster(o.clusterID)
 				if mcErr != nil {
 					mu.Lock()
@@ -635,7 +635,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			}
 
 			if clusterExtID != "" {
-				lokiExpr := fmt.Sprintf(`{k8s_namespace_name="%s"} | json json_kind="kind" | json_kind != "Event" | openshift_cluster_id = "%s"`, lokiNamespace, clusterExtID)
+				lokiExpr := fmt.Sprintf(`{k8s_namespace_name="%s"} | json json_kind="kind" | json_kind != "Event" | openshift_cluster_uid = "%s"`, lokiNamespace, clusterExtID)
 				now := time.Now()
 				logsURL, logsErr := logsFetcher.GetGrafanaLogsUrl(lokiExpr, now.Add(-5*time.Minute), now, false)
 				if logsErr != nil {
