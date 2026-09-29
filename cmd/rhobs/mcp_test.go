@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -710,6 +711,52 @@ func TestHandleLogs_RhobsCellInvalidUrl(t *testing.T) {
 	}
 	if !isToolError(result) {
 		t.Error("expected tool error for invalid cell URL")
+	}
+}
+
+// TestHandleLogs_PartialCredentialsWithoutVault verifies that a missing Vault CLI
+// cannot mask the incomplete-pair error for config or environment variables.
+func TestHandleLogs_PartialCredentialsWithoutVault(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	for _, tt := range []struct {
+		name         string
+		configID     string
+		configSecret string
+		envID        string
+		envSecret    string
+		emptyEnv     string
+		wantError    string
+	}{
+		{name: "config ID", configID: "test-id", wantError: "must be provided together"},
+		{name: "config secret", configSecret: "test-secret", wantError: "must be provided together"},
+		{name: "env ID", envID: "test-id", wantError: "must be provided together"},
+		{name: "env secret", envSecret: "test-secret", wantError: "must be provided together"},
+		{name: "empty env ID overrides config", configID: "config-id", configSecret: "config-secret", emptyEnv: rhobsClientIDEnvVar, wantError: "RHOBS_CLIENT_ID is set but empty"},
+		{name: "empty env secret overrides config", configID: "config-id", configSecret: "config-secret", emptyEnv: rhobsClientSecretEnvVar, wantError: "RHOBS_CLIENT_SECRET is set but empty"},
+		{name: "no credentials still requires Vault", wantError: "vault CLI not found"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			setRhobsTestConfig(t, tt.configID, tt.configSecret)
+			setRhobsTestEnv(t, tt.envID, tt.envSecret)
+			if tt.emptyEnv != "" {
+				t.Setenv(tt.emptyEnv, "")
+			}
+			cell := "https://credential-test.rhobs.api.openshift.com"
+			fetcherCache.Delete("cell:" + cell)
+			t.Cleanup(func() { fetcherCache.Delete("cell:" + cell) })
+
+			result, err := handleLogs(context.Background(), makeRequest("rhobs_logs", map[string]interface{}{
+				"rhobs_cell": cell,
+				"namespace":  "test",
+			}))
+			if err != nil {
+				t.Fatalf("handler returned Go error: %v", err)
+			}
+			if !isToolError(result) || !strings.Contains(getResultText(result), tt.wantError) {
+				t.Fatalf("expected tool error containing %q, got %q", tt.wantError, getResultText(result))
+			}
+		})
 	}
 }
 

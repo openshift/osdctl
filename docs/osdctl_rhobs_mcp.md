@@ -18,8 +18,12 @@ Quick start:
 
 Prerequisites:
   - OCM login: ocm login --use-auth-code --url <environment>
-  - Vault login: VAULT_ADDR=https://vault.devshift.net vault login -method=oidc (required when direct RHOBS client ID and secret credentials are not supplied)
-  - osdctl config: ~/.config/osdctl must have rhobs_<env>_vault_path entries when direct RHOBS credentials are not supplied through --client-id/--client-secret or RHOBS_CLIENT_ID/RHOBS_CLIENT_SECRET
+  - RHOBS credentials: resolve each value from RHOBS_CLIENT_ID/RHOBS_CLIENT_SECRET,
+    then rhobs_client_id/rhobs_client_secret in ~/.config/osdctl.
+    A complete pair bypasses Vault; an incomplete pair or explicitly empty
+    environment variable returns an error.
+  - Vault fallback (when neither credential resolves): configure rhobs_<env>_vault_path
+    in ~/.config/osdctl and log in with VAULT_ADDR=https://vault.devshift.net vault login -method=oidc
 
 ### Options
 
@@ -30,11 +34,9 @@ Prerequisites:
 ### Options inherited from parent commands
 
 ```
-      --client-id string       RHOBS SSO client ID (falls back to RHOBS_CLIENT_ID when empty). A complete ID/secret pair from flags and/or env vars bypasses Vault credential lookup. If neither is set, Vault is used; an incomplete pair returns an error.
-      --client-secret string   RHOBS SSO client secret (falls back to RHOBS_CLIENT_SECRET when empty). A complete ID/secret pair from flags and/or env vars bypasses Vault credential lookup. If neither is set, Vault is used; an incomplete pair returns an error.
-  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
-      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
-  -S, --skip-version-check     skip checking to see if this is the most recent release
+  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
+      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -S, --skip-version-check    skip checking to see if this is the most recent release
 ```
 
 ### SEE ALSO

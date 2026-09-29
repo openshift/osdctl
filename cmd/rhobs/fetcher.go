@@ -25,18 +25,20 @@ import (
 )
 
 const (
-	authUrl                   = "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
-	rhobsVaultPathKeyTemplate = "rhobs_%s_vault_path"
-	rhobsClientIDEnvVar       = "RHOBS_CLIENT_ID"
-	rhobsClientSecretEnvVar   = "RHOBS_CLIENT_SECRET" //nolint:gosec // G101 false positive — env var name, not a credential
-	clusterIdCdLabel          = "api.openshift.com/id"
-	rhobsCellCdLabel          = "ext-hypershift.openshift.io/rhobs-cell"
-	rhobsCellMetricsCmNs      = "openshift-observability-operator"
-	rhobsCellMetricsCmName    = "rhobs-metrics-destination"
-	rhobsCellLogsCmNs         = "openshift-logging"
-	rhobsCellLogsCmName       = "rhobs-logs-destination"
-	rhobsCellCmAnnotation     = "rhobs.openshift.io/forwarding-destination"
-	grafanaBaseUrl            = "https://grafana.app-sre.devshift.net/"
+	authUrl                    = "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
+	rhobsVaultPathKeyTemplate  = "rhobs_%s_vault_path"
+	rhobsClientIDEnvVar        = "RHOBS_CLIENT_ID"
+	rhobsClientSecretEnvVar    = "RHOBS_CLIENT_SECRET" //nolint:gosec // G101 false positive — env var name, not a credential
+	rhobsClientIDConfigKey     = "rhobs_client_id"
+	rhobsClientSecretConfigKey = "rhobs_client_secret" //nolint:gosec // G101 false positive — config key, not a credential
+	clusterIdCdLabel           = "api.openshift.com/id"
+	rhobsCellCdLabel           = "ext-hypershift.openshift.io/rhobs-cell"
+	rhobsCellMetricsCmNs       = "openshift-observability-operator"
+	rhobsCellMetricsCmName     = "rhobs-metrics-destination"
+	rhobsCellLogsCmNs          = "openshift-logging"
+	rhobsCellLogsCmName        = "rhobs-logs-destination"
+	rhobsCellCmAnnotation      = "rhobs.openshift.io/forwarding-destination"
+	grafanaBaseUrl             = "https://grafana.app-sre.devshift.net/"
 )
 
 type RhobsFetchUsage string
@@ -374,18 +376,24 @@ func (f *RhobsFetcher) getBaseGrafanaDataSource() (string, error) {
 	return "rhobs-" + rhobsCellName + "-" + f.ocmEnvName + "-hcp-", nil
 }
 
-// getTokenProvider caches a provider using credentials from flags, then environment
-// variables. It rejects incomplete pairs and uses Vault only when neither is set.
+// readRhobsConfig uses an isolated reader because backplane can replace global Viper state.
+var readRhobsConfig = osdctlConfig.GetConfigValues
+
+// getTokenProvider caches a provider using environment credentials, then config.
+// It rejects incomplete pairs and uses Vault only when neither is set.
 func (f *RhobsFetcher) getTokenProvider() (ocmutils.AccessTokenProvider, error) {
 	if f.tokenProvider == nil {
-		clientID, clientSecret := providedClientCredentials()
+		clientID, clientSecret, err := providedClientCredentials()
+		if err != nil {
+			return nil, err
+		}
 
 		// If both are provided, skip Vault and use them directly
 		if clientID != "" && clientSecret != "" {
 			f.tokenProvider = ocmutils.GetScopedTokenProviderWithCreds(authUrl, clientID, clientSecret, "profile")
 		} else if clientID != "" || clientSecret != "" {
 			// If only one is provided, error
-			return nil, fmt.Errorf("both --client-id/--client-secret (or %s/%s env vars) must be provided together", rhobsClientIDEnvVar, rhobsClientSecretEnvVar)
+			return nil, fmt.Errorf("both RHOBS client ID and secret must be provided together via %s/%s or %s/%s in ~/.config/osdctl", rhobsClientIDEnvVar, rhobsClientSecretEnvVar, rhobsClientIDConfigKey, rhobsClientSecretConfigKey)
 		} else {
 			// Fall back to Vault
 			tokenProvider, err := ocmutils.GetScopedTokenProvider(authUrl, fmt.Sprintf(rhobsVaultPathKeyTemplate, f.ocmEnvName), "profile")
@@ -398,22 +406,39 @@ func (f *RhobsFetcher) getTokenProvider() (ocmutils.AccessTokenProvider, error) 
 	return f.tokenProvider, nil
 }
 
-// providedClientCredentials resolves credentials from flags, then environment variables.
-func providedClientCredentials() (string, string) {
-	clientID := commonOptions.clientID
-	if clientID == "" {
-		clientID = os.Getenv(rhobsClientIDEnvVar)
+// providedClientCredentials resolves each credential from the environment, then config.
+// Explicitly empty environment variables are rejected rather than falling back.
+// A missing config file permits Vault fallback; other config errors are returned.
+func providedClientCredentials() (string, string, error) {
+	clientID, clientIDSet := os.LookupEnv(rhobsClientIDEnvVar)
+	clientSecret, clientSecretSet := os.LookupEnv(rhobsClientSecretEnvVar)
+	if clientIDSet && clientID == "" {
+		return "", "", fmt.Errorf("%s is set but empty", rhobsClientIDEnvVar)
 	}
-	clientSecret := commonOptions.clientSecret
-	if clientSecret == "" {
-		clientSecret = os.Getenv(rhobsClientSecretEnvVar)
+	if clientSecretSet && clientSecret == "" {
+		return "", "", fmt.Errorf("%s is set but empty", rhobsClientSecretEnvVar)
 	}
-	return clientID, clientSecret
+	if clientIDSet && clientSecretSet {
+		return clientID, clientSecret, nil
+	}
+	config, err := readRhobsConfig(rhobsClientIDConfigKey, rhobsClientSecretConfigKey)
+	if err != nil && !os.IsNotExist(err) {
+		return "", "", fmt.Errorf("failed to read RHOBS credentials from ~/.config/osdctl: %w", err)
+	}
+	if !clientIDSet {
+		clientID = config[rhobsClientIDConfigKey]
+	}
+	if !clientSecretSet {
+		clientSecret = config[rhobsClientSecretConfigKey]
+	}
+	return clientID, clientSecret, nil
 }
 
-func hasProvidedClientCredentials() bool {
-	clientID, clientSecret := providedClientCredentials()
-	return clientID != "" && clientSecret != ""
+// hasProvidedClientCredentials reports whether direct authentication was requested.
+// Even an incomplete pair must bypass Vault so getTokenProvider can reject it.
+func hasProvidedClientCredentials() (bool, error) {
+	clientID, clientSecret, err := providedClientCredentials()
+	return clientID != "" || clientSecret != "", err
 }
 
 func (f *RhobsFetcher) getClient() (*rhobsclient.ClientWithResponses, error) {

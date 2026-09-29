@@ -2,14 +2,34 @@
 
 RHOBS.next related utilities
 
+### Synopsis
+
+RHOBS.next related utilities.
+
+For headless automation, have the trusted launcher inject RHOBS_CLIENT_ID and
+RHOBS_CLIENT_SECRET into the osdctl process environment from your secret manager.
+
+Alternatively, set rhobs_client_id and rhobs_client_secret in ~/.config/osdctl:
+  rhobs_client_id: "<client-id>"
+  rhobs_client_secret: "<client-secret>"
+Restrict access to this file (for example, chmod 600 ~/.config/osdctl).
+
+Each environment variable overrides its corresponding config value. An explicitly
+empty environment variable returns an error instead of falling back to config.
+A complete pair bypasses Vault; an incomplete pair returns an error. Vault is
+used only when neither credential is supplied. Direct credentials apply to all
+RHOBS environments queried by the process; supply the pair for your target environment.
+
+Keep secret values out of agent prompts, tool calls, and shell tracing.
+Environment variables remain accessible to the receiving process and may be
+inherited by child processes.
+
 ### Options
 
 ```
-      --client-id string       RHOBS SSO client ID (falls back to RHOBS_CLIENT_ID when empty). A complete ID/secret pair from flags and/or env vars bypasses Vault credential lookup. If neither is set, Vault is used; an incomplete pair returns an error.
-      --client-secret string   RHOBS SSO client secret (falls back to RHOBS_CLIENT_SECRET when empty). A complete ID/secret pair from flags and/or env vars bypasses Vault credential lookup. If neither is set, Vault is used; an incomplete pair returns an error.
-  -C, --cluster-id string      Name or Internal ID of the cluster (defaults to current cluster context)
-  -h, --help                   help for rhobs
-      --hive-ocm-url string    OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
+  -C, --cluster-id string     Name or Internal ID of the cluster (defaults to current cluster context)
+  -h, --help                  help for rhobs
+      --hive-ocm-url string   OCM environment URL for hive operations - aliases: "production", "staging", "integration" (default "production")
 ```
 
 ### Options inherited from parent commands

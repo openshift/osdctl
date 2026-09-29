@@ -54,8 +54,12 @@ Quick start:
 
 Prerequisites:
   - OCM login: ocm login --use-auth-code --url <environment>
-  - Vault login: VAULT_ADDR=https://vault.devshift.net vault login -method=oidc (required when direct RHOBS client ID and secret credentials are not supplied)
-  - osdctl config: ~/.config/osdctl must have rhobs_<env>_vault_path entries when direct RHOBS credentials are not supplied through --client-id/--client-secret or RHOBS_CLIENT_ID/RHOBS_CLIENT_SECRET`,
+  - RHOBS credentials: resolve each value from RHOBS_CLIENT_ID/RHOBS_CLIENT_SECRET,
+    then rhobs_client_id/rhobs_client_secret in ~/.config/osdctl.
+    A complete pair bypasses Vault; an incomplete pair or explicitly empty
+    environment variable returns an error.
+  - Vault fallback (when neither credential resolves): configure rhobs_<env>_vault_path
+    in ~/.config/osdctl and log in with VAULT_ADDR=https://vault.devshift.net vault login -method=oidc`,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			return nil
 		},
@@ -67,6 +71,7 @@ Prerequisites:
 	return cmd
 }
 
+// newCmdMcpServer starts the stdio server and checks Vault only for Vault-backed authentication.
 func newCmdMcpServer() *cobra.Command {
 	return &cobra.Command{
 		Use:          "server",
@@ -77,7 +82,12 @@ func newCmdMcpServer() *cobra.Command {
 			log.SetOutput(io.Discard)
 
 			go func(ctx context.Context) {
-				if hasProvidedClientCredentials() {
+				hasCredentials, err := hasProvidedClientCredentials()
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "WARNING:", err)
+					return
+				}
+				if hasCredentials {
 					return
 				}
 				if err := checkVaultToken(ctx); err != nil {
@@ -98,6 +108,7 @@ func newCmdMcpServer() *cobra.Command {
 	}
 }
 
+// newCmdMcpConfig prints a client configuration without embedding credentials.
 func newCmdMcpConfig() *cobra.Command {
 	return &cobra.Command{
 		Use:   "config",
