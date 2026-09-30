@@ -11,11 +11,12 @@ import (
 
 // ── Cluster resolution ─────────────────────────────────────────────────────
 
-// ClusterInfo holds the canonical OCM internal IDs for the HCP cluster
-// and its management cluster, as resolved by a ClusterResolver.
+// ClusterInfo holds cluster details resolved from OCM by a ClusterResolver.
 type ClusterInfo struct {
-	HCPClusterID  string
-	MgmtClusterID string
+	HCPClusterID     string
+	HCPClusterRegion string
+	MgmtClusterID    string
+	MgmtClusterName  string
 }
 
 // ClusterResolver resolves an HCP cluster identifier to its canonical OCM IDs,
@@ -57,9 +58,16 @@ func (r *ocmClusterResolver) Resolve(ctx context.Context, clusterIdentifier stri
 		return ClusterInfo{}, fmt.Errorf("getting management cluster %s: %w", mgmtClusterName, err)
 	}
 
+	region := ""
+	if hcpCluster.Region() != nil {
+		region = hcpCluster.Region().ID()
+	}
+
 	return ClusterInfo{
-		HCPClusterID:  clusterID,
-		MgmtClusterID: mc.ID(),
+		HCPClusterID:     clusterID,
+		HCPClusterRegion: region,
+		MgmtClusterID:    mc.ID(),
+		MgmtClusterName:  mgmtClusterName,
 	}, nil
 }
 
