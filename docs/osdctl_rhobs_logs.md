@@ -17,6 +17,7 @@ osdctl rhobs logs [pod] [flags]
       --contain stringArray             Text the log message must contain - flag can be repeated
       --contain-regex stringArray       Regular expression the log message must contain - flag can be repeated
   -c, --container string                Name of the container - print all containers logs if not specified
+      --dedupe                          Collapse consecutive identical log lines into a single line followed by a "... repeated Nx ..." marker - identity is the message plus --field values (timestamps ignored) - only supported with the text output format - exclusive with --url
       --direction string                Direction of the logs to return - allowed values: "forward" or "backward" - "backward" returns the most recent & interesting logs first, while "forward" matches the behavior of "kubectl logs" by returning the oldest logs first (default to "backward" unless --follow is set in which case it is forced to "forward")
       --end-time time                   End time for the logs (default to now)
       --field strings                   Fields to print with the log message - not possible with the "json" output format - flag can be repeated / values can also be aggregated with one flag using the comma as separator - possible values: "k8s_namespace_name", "k8s_pod_name", "k8s_container_name" - use the "json" output format to know about all possible fields - exclusive with --url (default [k8s_pod_name])

@@ -354,7 +354,7 @@ func newCmdLogs() *cobra.Command {
 		`flag can be repeated / values can also be aggregated with one flag using the comma as separator - possible values: "k8s_namespace_name", "k8s_pod_name", "k8s_container_name" - `+
 		`use the "json" output format to know about all possible fields - exclusive with --url`)
 	cmd.MarkFlagsMutuallyExclusive("field", "url")
-	cmd.Flags().BoolVar(&isDeduping, "dedupe", false, `Collapse consecutive identical log lines into a single line with a repeat count (e.g. "(x42)") - `+
+	cmd.Flags().BoolVar(&isDeduping, "dedupe", false, `Collapse consecutive identical log lines into a single line followed by a "... repeated Nx ..." marker - `+
 		`identity is the message plus --field values (timestamps ignored) - only supported with the text output format - exclusive with --url`)
 	cmd.MarkFlagsMutuallyExclusive("dedupe", "url")
 
@@ -578,7 +578,7 @@ func formatTextLogLine(result *logResult, isPrintingTimeValue bool, fieldNames [
 	}
 	sb.WriteString(result.getMessage())
 	if repeatCount > 1 {
-		sb.WriteString(fmt.Sprintf("\n... repeated %dx ...\n", repeatCount))
+		fmt.Fprintf(&sb, "\n... repeated %dx ...\n", repeatCount)
 	}
 
 	return sb.String()
