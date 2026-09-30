@@ -365,33 +365,33 @@ func TestLogDedupeBuffer(t *testing.T) {
 	r4 := newTestLogResult("other error", map[string]string{"k8s_pod_name": "controller"})
 	r5 := newTestLogResult("other error", map[string]string{"k8s_pod_name": "other-pod"})
 
-	if flush, count := buf.push(r1); flush != nil || count != 0 {
-		t.Fatalf("first push should not flush, got flush=%v count=%d", flush != nil, count)
+	if isNew, ended, count := buf.push(r1); !isNew || ended != nil || count != 0 {
+		t.Fatalf("first push should be new with nothing ended, got isNew=%v ended=%v count=%d", isNew, ended != nil, count)
 	}
-	if flush, count := buf.push(r2); flush != nil || count != 0 {
-		t.Fatalf("duplicate push should not flush, got flush=%v count=%d", flush != nil, count)
+	if isNew, ended, count := buf.push(r2); isNew || ended != nil || count != 0 {
+		t.Fatalf("duplicate push should not be new, got isNew=%v ended=%v count=%d", isNew, ended != nil, count)
 	}
-	if flush, count := buf.push(r3); flush != nil || count != 0 {
-		t.Fatalf("duplicate push should not flush, got flush=%v count=%d", flush != nil, count)
-	}
-
-	flush, count := buf.push(r4)
-	if flush == nil || count != 3 {
-		t.Fatalf("message change should flush streak of 3, got flush=%v count=%d", flush != nil, count)
-	}
-	if flush.getMessage() != "reconcile failed" {
-		t.Errorf("flushed message = %q, want reconcile failed", flush.getMessage())
+	if isNew, ended, count := buf.push(r3); isNew || ended != nil || count != 0 {
+		t.Fatalf("duplicate push should not be new, got isNew=%v ended=%v count=%d", isNew, ended != nil, count)
 	}
 
-	flush, count = buf.push(r5)
-	if flush == nil || count != 1 {
-		t.Fatalf("pod change should flush streak of 1, got flush=%v count=%d", flush != nil, count)
+	isNew, ended, count := buf.push(r4)
+	if !isNew || ended == nil || count != 3 {
+		t.Fatalf("message change should be new and end streak of 3, got isNew=%v ended=%v count=%d", isNew, ended != nil, count)
 	}
-	if flush.getMessage() != "other error" {
-		t.Errorf("flushed message = %q, want other error", flush.getMessage())
+	if ended.getMessage() != "reconcile failed" {
+		t.Errorf("ended message = %q, want reconcile failed", ended.getMessage())
 	}
 
-	flush, count = buf.flush()
+	isNew, ended, count = buf.push(r5)
+	if !isNew || ended == nil || count != 1 {
+		t.Fatalf("pod change should be new and end streak of 1, got isNew=%v ended=%v count=%d", isNew, ended != nil, count)
+	}
+	if ended.getMessage() != "other error" {
+		t.Errorf("ended message = %q, want other error", ended.getMessage())
+	}
+
+	flush, count := buf.flush()
 	if flush == nil || count != 1 {
 		t.Fatalf("final flush should return pending, got flush=%v count=%d", flush != nil, count)
 	}
@@ -404,18 +404,13 @@ func TestLogDedupeBuffer(t *testing.T) {
 	}
 }
 
-func TestFormatTextLogLine_DedupeCount(t *testing.T) {
+func TestFormatTextLogLine(t *testing.T) {
 	result := newTestLogResult("boom", map[string]string{"k8s_pod_name": "pod-a"})
 	fields := []string{"k8s_pod_name"}
 
-	got := formatTextLogLine(result, false, fields, 1)
+	got := formatTextLogLine(result, false, fields)
 	if want := "pod-a boom"; got != want {
-		t.Errorf("count=1: got %q, want %q", got, want)
-	}
-
-	got = formatTextLogLine(result, false, fields, 42)
-	if want := "pod-a boom\n... repeated 42x ...\n"; got != want {
-		t.Errorf("count=42: got %q, want %q", got, want)
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
 

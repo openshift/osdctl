@@ -528,33 +528,33 @@ func dedupeKey(result *logResult, fieldNames []string) string {
 	return b.String()
 }
 
-// push accepts a log result. If a previous streak ended, it returns that
-// result and its repeat count to print. Otherwise both return values are zero.
-func (d *logDedupeBuffer) push(result *logResult) (flush *logResult, count int) {
-	if d.pending == nil {
-		d.pending = result
-		d.count = 1
-		return nil, 0
-	}
-	if dedupeKey(d.pending, d.fieldNames) == dedupeKey(result, d.fieldNames) {
+// push accepts a log result. isNew reports whether result differs from the
+// currently pending streak (and should be printed right away). When a
+// previous streak just ended, endedResult/endedCount describe it so the
+// caller can print a "repeated Nx" marker if endedCount > 1.
+func (d *logDedupeBuffer) push(result *logResult) (isNew bool, endedResult *logResult, endedCount int) {
+	if d.pending != nil && dedupeKey(d.pending, d.fieldNames) == dedupeKey(result, d.fieldNames) {
 		d.count++
-		return nil, 0
+		return false, nil, 0
 	}
-	flush, count = d.pending, d.count
+	if d.pending != nil {
+		endedResult, endedCount = d.pending, d.count
+	}
 	d.pending = result
 	d.count = 1
-	return flush, count
+	return true, endedResult, endedCount
 }
 
-// flush returns the pending streak, if any.
-func (d *logDedupeBuffer) flush() (*logResult, int) {
+// flush reports the pending streak, if any, so a trailing "repeated Nx"
+// marker can be printed for it.
+func (d *logDedupeBuffer) flush() (endedResult *logResult, endedCount int) {
 	if d.pending == nil {
 		return nil, 0
 	}
-	result, count := d.pending, d.count
+	endedResult, endedCount = d.pending, d.count
 	d.pending = nil
 	d.count = 0
-	return result, count
+	return endedResult, endedCount
 }
 
 type textLogsPrinter struct {
@@ -563,7 +563,7 @@ type textLogsPrinter struct {
 	dedupe              *logDedupeBuffer
 }
 
-func formatTextLogLine(result *logResult, isPrintingTimeValue bool, fieldNames []string, repeatCount int) string {
+func formatTextLogLine(result *logResult, isPrintingTimeValue bool, fieldNames []string) string {
 	var sb strings.Builder
 
 	if isPrintingTimeValue {
@@ -577,9 +577,6 @@ func formatTextLogLine(result *logResult, isPrintingTimeValue bool, fieldNames [
 		sb.WriteString(" ")
 	}
 	sb.WriteString(result.getMessage())
-	if repeatCount > 1 {
-		fmt.Fprintf(&sb, "\n... repeated %dx ...\n", repeatCount)
-	}
 
 	return sb.String()
 }
@@ -589,11 +586,15 @@ func (p *textLogsPrinter) PrintHeader() {
 
 func (p *textLogsPrinter) PrintResult(result *logResult) {
 	if p.dedupe == nil {
-		fmt.Println(formatTextLogLine(result, p.isPrintingTimeValue, p.fieldNames, 1))
+		fmt.Println(formatTextLogLine(result, p.isPrintingTimeValue, p.fieldNames))
 		return
 	}
-	if flush, count := p.dedupe.push(result); flush != nil {
-		fmt.Println(formatTextLogLine(flush, p.isPrintingTimeValue, p.fieldNames, count))
+	isNew, _, endedCount := p.dedupe.push(result)
+	if endedCount > 1 {
+		fmt.Printf("... repeated %dx ...\n", endedCount)
+	}
+	if isNew {
+		fmt.Println(formatTextLogLine(result, p.isPrintingTimeValue, p.fieldNames))
 	}
 }
 
@@ -601,8 +602,8 @@ func (p *textLogsPrinter) PrintTrailer() {
 	if p.dedupe == nil {
 		return
 	}
-	if flush, count := p.dedupe.flush(); flush != nil {
-		fmt.Println(formatTextLogLine(flush, p.isPrintingTimeValue, p.fieldNames, count))
+	if _, endedCount := p.dedupe.flush(); endedCount > 1 {
+		fmt.Printf("... repeated %dx ...\n", endedCount)
 	}
 }
 
