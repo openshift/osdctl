@@ -95,14 +95,9 @@ func GetScopedAccessToken(authUrl, vaultConfigKey string, scopes string) (string
 	return token, nil
 }
 
-// GetScopedTokenProvider returns an AccessTokenProvider that fetches tokens
-// using the vault path in the specified configuration key.
-func GetScopedTokenProvider(authUrl, vaultConfigKey string, scopes string) (AccessTokenProvider, error) {
-	clientId, clientSecret, err := GetCredsFromVault(vaultConfigKey)
-	if err != nil {
-		return nil, err
-	}
-
+// GetScopedTokenProviderWithCreds returns an AccessTokenProvider using the
+// supplied client credentials directly, skipping Vault.
+func GetScopedTokenProviderWithCreds(authUrl, clientId, clientSecret, scopes string) AccessTokenProvider {
 	fetchFunc := func() (string, int, error) {
 		reqData := url.Values{
 			"grant_type":    {"client_credentials"},
@@ -147,5 +142,16 @@ func GetScopedTokenProvider(authUrl, vaultConfigKey string, scopes string) (Acce
 		return token, expiresIn, nil
 	}
 
-	return newCachedTokenProvider(fetchFunc), nil
+	return newCachedTokenProvider(fetchFunc)
+}
+
+// GetScopedTokenProvider returns an AccessTokenProvider that fetches tokens
+// using the vault path in the specified configuration key.
+func GetScopedTokenProvider(authUrl, vaultConfigKey string, scopes string) (AccessTokenProvider, error) {
+	clientId, clientSecret, err := GetCredsFromVault(vaultConfigKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return GetScopedTokenProviderWithCreds(authUrl, clientId, clientSecret, scopes), nil
 }

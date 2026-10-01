@@ -36,6 +36,8 @@ func quickVaultCheck() error {
 	return nil
 }
 
+// getCachedFetcher resolves and caches a cluster fetcher, checking Vault only when
+// no direct credential is supplied.
 func getCachedFetcher(ctx context.Context, clusterId string, usage RhobsFetchUsage) (*RhobsFetcher, error) {
 	key := fmt.Sprintf("%s:%s", clusterId, usage)
 	if cached, ok := fetcherCache.Load(key); ok {
@@ -46,8 +48,14 @@ func getCachedFetcher(ctx context.Context, clusterId string, usage RhobsFetchUsa
 		if cached, ok := fetcherCache.Load(key); ok {
 			return cached, nil
 		}
-		if err := quickVaultCheck(); err != nil {
+		hasCredentials, err := hasProvidedClientCredentials()
+		if err != nil {
 			return nil, err
+		}
+		if !hasCredentials {
+			if err := quickVaultCheck(); err != nil {
+				return nil, err
+			}
 		}
 		fetcher, err := CreateRhobsFetcher(ctx, clusterId, usage, commonOptions.hiveOcmUrl)
 		if err != nil {
@@ -62,6 +70,8 @@ func getCachedFetcher(ctx context.Context, clusterId string, usage RhobsFetchUsa
 	return v.(*RhobsFetcher), nil
 }
 
+// getCachedFetcherFromCell caches a direct-cell fetcher without requiring OCM.
+// Vault is checked only when no direct credential is supplied.
 func getCachedFetcherFromCell(rhobsCell string) (*RhobsFetcher, error) {
 	key := "cell:" + rhobsCell
 	if cached, ok := fetcherCache.Load(key); ok {
@@ -72,8 +82,14 @@ func getCachedFetcherFromCell(rhobsCell string) (*RhobsFetcher, error) {
 		if cached, ok := fetcherCache.Load(key); ok {
 			return cached, nil
 		}
-		if err := quickVaultCheck(); err != nil {
+		hasCredentials, err := hasProvidedClientCredentials()
+		if err != nil {
 			return nil, err
+		}
+		if !hasCredentials {
+			if err := quickVaultCheck(); err != nil {
+				return nil, err
+			}
 		}
 		fetcher, err := CreateRhobsFetcherFromCell(rhobsCell)
 		if err != nil {

@@ -4454,7 +4454,25 @@ osdctl promote saas [flags]
 
 ### osdctl rhobs
 
-RHOBS.next related utilities
+RHOBS.next related utilities.
+
+For headless automation, have the trusted launcher inject RHOBS_CLIENT_ID and
+RHOBS_CLIENT_SECRET into the osdctl process environment from your secret manager.
+
+Alternatively, set rhobs_client_id and rhobs_client_secret in ~/.config/osdctl:
+  rhobs_client_id: "<client-id>"
+  rhobs_client_secret: "<client-secret>"
+Restrict access to this file (for example, chmod 600 ~/.config/osdctl).
+
+Each environment variable overrides its corresponding config value. An explicitly
+empty environment variable returns an error instead of falling back to config.
+A complete pair bypasses Vault; an incomplete pair returns an error. Vault is
+used only when neither credential is supplied. Direct credentials apply to all
+RHOBS environments queried by the process; supply the pair for your target environment.
+
+Keep secret values out of agent prompts, tool calls, and shell tracing.
+Environment variables remain accessible to the receiving process and may be
+inherited by child processes.
 
 ```
 osdctl rhobs [flags]
@@ -4704,8 +4722,12 @@ Quick start:
 
 Prerequisites:
   - OCM login: ocm login --use-auth-code --url <environment>
-  - Vault login: VAULT_ADDR=https://vault.devshift.net vault login -method=oidc
-  - osdctl config: ~/.config/osdctl must have rhobs_<env>_vault_path entries
+  - RHOBS credentials: resolve each value from RHOBS_CLIENT_ID/RHOBS_CLIENT_SECRET,
+    then rhobs_client_id/rhobs_client_secret in ~/.config/osdctl.
+    A complete pair bypasses Vault; an incomplete pair or explicitly empty
+    environment variable returns an error.
+  - Vault fallback (when neither credential resolves): configure rhobs_<env>_vault_path
+    in ~/.config/osdctl and log in with VAULT_ADDR=https://vault.devshift.net vault login -method=oidc
 
 ```
 osdctl rhobs mcp [flags]

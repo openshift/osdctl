@@ -18,8 +18,12 @@ Quick start:
 
 Prerequisites:
   - OCM login: ocm login --use-auth-code --url <environment>
-  - Vault login: VAULT_ADDR=https://vault.devshift.net vault login -method=oidc
-  - osdctl config: ~/.config/osdctl must have rhobs_<env>_vault_path entries
+  - RHOBS credentials: resolve each value from RHOBS_CLIENT_ID/RHOBS_CLIENT_SECRET,
+    then rhobs_client_id/rhobs_client_secret in ~/.config/osdctl.
+    A complete pair bypasses Vault; an incomplete pair or explicitly empty
+    environment variable returns an error.
+  - Vault fallback (when neither credential resolves): configure rhobs_<env>_vault_path
+    in ~/.config/osdctl and log in with VAULT_ADDR=https://vault.devshift.net vault login -method=oidc
 
 ### Options
 
