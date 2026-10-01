@@ -17,9 +17,9 @@ import (
 	accountsv1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/printer"
 	pdProvider "github.com/openshift/osdctl/pkg/provider/pagerduty"
+	"github.com/openshift/osdctl/pkg/servicelog"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -39,7 +39,7 @@ type DefaultContextFetcher struct {
 	SearchSubscriptions func(orgID string, status string, managedOnly bool) ([]*accountsv1.Subscription, error)
 	GetCluster          func(*sdk.Connection, string) (*cmv1.Cluster, error)
 	GetLimitedSupport   func(*sdk.Connection, string) ([]*cmv1.LimitedSupportReason, error)
-	GetServiceLogs      func(string, time.Time, bool, bool) ([]*v1.LogEntry, error)
+	GetServiceLogs      func(*sdk.Connection, string, time.Time, bool, bool) ([]*v1.LogEntry, error)
 	GetJiraIssues       func(clusterID, externalID, filter string) ([]jira.Issue, error)
 	NewPDClient         func(baseDomain string) (PDClient, error)
 }
@@ -191,7 +191,7 @@ func (f *DefaultContextFetcher) FetchContext(orgID string, output io.Writer) ([]
 			})
 			// Service logs
 			dataEg.Go(func() error {
-				ci.ServiceLogs, err = f.GetServiceLogs(ci.ID, time.Now().AddDate(0, 0, -ServiceLogDaysSince), false, false)
+				ci.ServiceLogs, err = f.GetServiceLogs(ocmClient, ci.ID, time.Now().AddDate(0, 0, -ServiceLogDaysSince), false, false)
 				if err != nil {
 					return fmt.Errorf("failed to fetch service logs for cluster %v: %w", ci.ID, err)
 				}

@@ -2,16 +2,19 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
 
 	"github.com/AlecAivazis/survey/v2"
+	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	bputils "github.com/openshift/backplane-cli/pkg/utils"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/backplane"
 	"github.com/openshift/osdctl/pkg/k8s"
+	"github.com/openshift/osdctl/pkg/servicelog"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
@@ -25,6 +28,8 @@ type validatePullSecretOptions struct {
 	clusterID     string
 	managedScript bool
 	reason        string
+	ocm           *sdk.Connection
+	cluster       *cmv1.Cluster
 }
 
 var emailRegex = regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
@@ -71,6 +76,23 @@ func (o *validatePullSecretOptions) run() error {
 		fmt.Printf("Using cluster from current context: %s\n", o.clusterID)
 	}
 
+	ocm, err := utils.CreateConnection()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if ocmCloseErr := ocm.Close(); ocmCloseErr != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "Cannot close the ocm (possible memory leak): %q", ocmCloseErr)
+		}
+	}()
+	o.ocm = ocm
+
+	cluster, err := utils.GetCluster(o.ocm, o.clusterID)
+	if err != nil {
+		return err
+	}
+	o.cluster = cluster
+
 	// get the pull secret in OCM
 	emailOCM, err, done := o.getPullSecretFromOCM()
 	if err != nil {
@@ -100,7 +122,7 @@ func (o *validatePullSecretOptions) run() error {
 				return fmt.Errorf("failed to get reason for elevation: %w", err)
 			}
 		}
-		emailCluster, clusterErr, done = getPullSecretElevated(o.clusterID, o.reason)
+		emailCluster, clusterErr, done = getPullSecretElevated(o.ocm, o.cluster, o.clusterID, o.reason)
 		if clusterErr != nil {
 			return clusterErr
 		}
@@ -111,11 +133,12 @@ func (o *validatePullSecretOptions) run() error {
 
 	if emailOCM != emailCluster {
 		_, _ = fmt.Fprintln(os.Stderr, "Pull secret email doesn't match OCM user email. Sending service log.")
-		postCmd := servicelog.PostCmdOptions{
-			Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_user_mismatch.json",
-			ClusterId: o.clusterID,
+		if err := servicelog.Post(o.ocm, o.cluster, servicelog.PostRequest{
+			Template: "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_user_mismatch.json",
+		}); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
+			return err
 		}
-		return postCmd.Run()
+		return nil
 	}
 
 	fmt.Println("Email addresses match.")
@@ -159,7 +182,7 @@ func (o *validatePullSecretOptions) promptForReason() (string, error) {
 }
 
 // getPullSecretElevated gets the pull-secret in the cluster with backplane elevation.
-func getPullSecretElevated(clusterID string, reason string) (email string, err error, sentSL bool) {
+func getPullSecretElevated(ocmClient *sdk.Connection, cluster *cmv1.Cluster, clusterID string, reason string) (email string, err error, sentSL bool) {
 	kubeClient, err := k8s.NewAsBackplaneClusterAdmin(clusterID, client.Options{}, reason)
 	if err != nil {
 		return "", fmt.Errorf("failed to login to cluster as 'backplane-cluster-admin': %w", err), false
@@ -170,7 +193,7 @@ func getPullSecretElevated(clusterID string, reason string) (email string, err e
 		return "", err, false
 	}
 
-	clusterPullSecretEmail, err, done := getPullSecretEmail(clusterID, secret, true)
+	clusterPullSecretEmail, err, done := getPullSecretEmail(ocmClient, cluster, secret, true)
 	if done {
 		return "", err, true
 	}
@@ -184,39 +207,28 @@ func getPullSecretElevated(clusterID string, reason string) (email string, err e
 // done means a service log has been sent
 func (o *validatePullSecretOptions) getPullSecretFromOCM() (string, error, bool) {
 	fmt.Println("Getting email from OCM")
-	ocm, err := utils.CreateConnection()
-	if err != nil {
-		return "", err, false
-	}
-	defer func() {
-		if ocmCloseErr := ocm.Close(); ocmCloseErr != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "Cannot close the ocm (possible memory leak): %q", ocmCloseErr)
-		}
-	}()
 
-	subscription, err := utils.GetSubscription(ocm, o.clusterID)
+	subscription, err := utils.GetSubscription(o.ocm, o.clusterID)
 	if err != nil {
 		return "", err, false
 	}
 
-	account, err := utils.GetAccount(ocm, subscription.Creator().ID())
+	account, err := utils.GetAccount(o.ocm, subscription.Creator().ID())
 	if err != nil {
 		return "", err, false
 	}
 
 	// validate the registryCredentials before return
-	registryCredentials, err := utils.GetRegistryCredentials(ocm, account.ID())
+	registryCredentials, err := utils.GetRegistryCredentials(o.ocm, account.ID())
 	if err != nil {
 		return "", err, false
 	}
 	if len(registryCredentials) == 0 {
 		_, _ = fmt.Fprintln(os.Stderr, "There is no pull secret in OCM. Sending service log.")
-		postCmd := servicelog.PostCmdOptions{
+		if err := servicelog.Post(o.ocm, o.cluster, servicelog.PostRequest{
 			Template:       "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/update_pull_secret.json",
 			TemplateParams: []string{"REGISTRY=registry.redhat.io"},
-			ClusterId:      o.clusterID,
-		}
-		if err = postCmd.Run(); err != nil {
+		}); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
 			return "", err, false
 		}
 		return "", nil, true
@@ -227,17 +239,15 @@ func (o *validatePullSecretOptions) getPullSecretFromOCM() (string, error, bool)
 }
 
 // getPullSecretEmail extract the email from the pull-secret secret in cluster
-func getPullSecretEmail(clusterID string, secret *corev1.Secret, sendServiceLog bool) (string, error, bool) {
+func getPullSecretEmail(ocmClient *sdk.Connection, cluster *cmv1.Cluster, secret *corev1.Secret, sendServiceLog bool) (string, error, bool) {
 	dockerConfigJsonBytes, found := secret.Data[".dockerconfigjson"]
 	if !found {
 		// Indicates issue w/ pull-secret, so we can stop evaluating and specify a more direct course of action
 		_, _ = fmt.Fprintln(os.Stderr, "Secret does not contain expected key '.dockerconfigjson'. Sending service log.")
 		if sendServiceLog {
-			postCmd := servicelog.PostCmdOptions{
-				Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json",
-				ClusterId: clusterID,
-			}
-			if err := postCmd.Run(); err != nil {
+			if err := servicelog.Post(ocmClient, cluster, servicelog.PostRequest{
+				Template: "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json",
+			}); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
 				return "", err, true
 			}
 		}
@@ -255,11 +265,9 @@ func getPullSecretEmail(clusterID string, secret *corev1.Secret, sendServiceLog 
 		_, _ = fmt.Fprintln(os.Stderr, "Secret does not contain entry for cloud.openshift.com")
 		if sendServiceLog {
 			fmt.Println("Sending service log")
-			postCmd := servicelog.PostCmdOptions{
-				Template:  "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json",
-				ClusterId: clusterID,
-			}
-			if err = postCmd.Run(); err != nil {
+			if err := servicelog.Post(ocmClient, cluster, servicelog.PostRequest{
+				Template: "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/pull_secret_change_breaking_upgradesync.json",
+			}); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
 				return "", err, true
 			}
 		}

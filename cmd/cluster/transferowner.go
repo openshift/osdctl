@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -23,7 +24,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/openshift/osdctl/cmd/common"
-	"github.com/openshift/osdctl/cmd/servicelog"
 
 	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
@@ -33,6 +33,7 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 
 	"github.com/openshift/osdctl/internal/utils/globalflags"
+	"github.com/openshift/osdctl/pkg/servicelog"
 	"github.com/openshift/osdctl/pkg/utils"
 )
 
@@ -105,9 +106,8 @@ type serviceLogParameters struct {
 	IsExternalOrgTransfer bool
 }
 
-func generateInternalServiceLog(params serviceLogParameters) servicelog.PostCmdOptions {
-	return servicelog.PostCmdOptions{
-		ClusterId: params.ClusterID,
+func generateInternalServiceLog(params serviceLogParameters) servicelog.PostRequest {
+	return servicelog.PostRequest{
 		TemplateParams: []string{
 			"MESSAGE=" + fmt.Sprintf("From user '%s' in Red Hat account %s => user '%s' in Red Hat account %s.", params.OldOwnerName, params.OldOwnerID, params.NewOwnerName, params.NewOwnerID),
 		},
@@ -115,10 +115,9 @@ func generateInternalServiceLog(params serviceLogParameters) servicelog.PostCmdO
 	}
 }
 
-func generateServiceLog(params serviceLogParameters, template string) servicelog.PostCmdOptions {
-	return servicelog.PostCmdOptions{
-		Template:  template,
-		ClusterId: params.ClusterID,
+func generateServiceLog(params serviceLogParameters, template string) servicelog.PostRequest {
+	return servicelog.PostRequest{
+		Template: template,
 	}
 }
 
@@ -627,8 +626,8 @@ func (o *transferOwnerOptions) run() error {
 	// Send a SL saying we're about to start
 	fmt.Println("Notify the customer before ownership transfer commences. Sending service log.")
 	postCmd := generateServiceLog(slParams, SL_TRANSFER_INITIATED)
-	if err := postCmd.Run(); err != nil {
-		fmt.Println("Failed to POST customer service log. Please manually send a service log to notify the customer before ownership transfer commences:")
+	if err := servicelog.Post(ocm, o.cluster, postCmd); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
+		fmt.Printf("Failed to send customer service log: %v\n", err)
 		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
 			o.clusterID, SL_TRANSFER_INITIATED, strings.Join(postCmd.TemplateParams, " -p "))
 	}
@@ -637,8 +636,8 @@ func (o *transferOwnerOptions) run() error {
 	// need them later. This prevents leaking PII to customers.
 	postCmd = generateInternalServiceLog(slParams)
 	fmt.Println("Internal SL Being Sent")
-	if err := postCmd.Run(); err != nil {
-		fmt.Println("Failed to POST internal service log. Please manually send a service log to persist details of the customer transfer before proceeding:")
+	if err := servicelog.Post(ocm, o.cluster, postCmd); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
+		fmt.Printf("Failed to send internal service log: %v\n", err)
 		fmt.Println(fmt.Sprintf("osdctl servicelog post -i -p MESSAGE=\"From user '%s' in Red Hat account %s => user '%s' in Red Hat account %s.\" %s", slParams.OldOwnerName, slParams.OldOwnerID, slParams.NewOwnerName, slParams.NewOwnerID, slParams.ClusterID))
 	}
 
@@ -834,8 +833,8 @@ func (o *transferOwnerOptions) run() error {
 
 	fmt.Println("Notify the customer the ownership transfer is completed. Sending service log.")
 	postCmd = generateServiceLog(slParams, SL_TRANSFER_COMPLETE)
-	if err := postCmd.Run(); err != nil {
-		fmt.Println("Failed to POST service log. Please manually send a service log to notify the customer the ownership transfer is completed:")
+	if err := servicelog.Post(ocm, o.cluster, postCmd); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
+		fmt.Printf("Failed to send service log: %v\n", err)
 		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
 			o.clusterID, SL_TRANSFER_COMPLETE, strings.Join(postCmd.TemplateParams, " -p "))
 	}

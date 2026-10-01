@@ -38,7 +38,7 @@ func Test_getPullSecretEmail(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			email, err, done := getPullSecretEmail("abc123", tt.secret, false)
+			email, err, done := getPullSecretEmail(nil, nil, tt.secret, false)
 			if email != tt.expectedEmail {
 				t.Errorf("getPullSecretEmail() email = %v, expectedEmail %v", email, tt.expectedEmail)
 			}

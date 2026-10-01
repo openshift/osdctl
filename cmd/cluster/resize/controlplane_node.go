@@ -14,9 +14,9 @@ import (
 	machinev1 "github.com/openshift/api/machine/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	bpelevate "github.com/openshift/backplane-cli/pkg/elevate"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/printer"
+	"github.com/openshift/osdctl/pkg/servicelog"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -484,21 +484,29 @@ func promptGenerateResizeSL(clusterID string, newMachineType string) error {
 		return errors.New(errText)
 	}
 
-	postCmd := servicelog.PostCmdOptions{
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		return fmt.Errorf("failed to create OCM connection for service log: %v", err)
+	}
+	defer ocmClient.Close()
+
+	cluster, err := utils.GetCluster(ocmClient, clusterID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve cluster for service log: %v", err)
+	}
+
+	if err := servicelog.Post(ocmClient, cluster, servicelog.PostRequest{
 		Template: resizeControlPlaneServiceLogTemplate,
 		TemplateParams: []string{
 			fmt.Sprintf("INSTANCE_TYPE=%s", newMachineType),
 			fmt.Sprintf("JIRA_ID=%s", jiraID),
 			fmt.Sprintf("JUSTIFICATION=%s", justification),
 		},
-		ClusterId: clusterID,
-	}
-
-	if err := postCmd.Run(); err != nil {
+	}); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
 		return fmt.Errorf("failed to send service log: %v", err)
 	}
 
-	fmt.Println("Service log sent successfully. Use the following command to track progress of the resize:")
+	fmt.Println("Use the following command to track progress of the resize:")
 	fmt.Println()
 	fmt.Println(`watch -d 'oc get machines -n openshift-machine-api -l machine.openshift.io/cluster-api-machine-role=master && oc get nodes -l node-role.kubernetes.io/master'`)
 

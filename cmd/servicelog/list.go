@@ -10,6 +10,8 @@ import (
 	slv1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 
 	"github.com/openshift-online/ocm-cli/pkg/dump"
+	sl "github.com/openshift/osdctl/pkg/servicelog"
+	ocmutils "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -48,9 +50,15 @@ func newListCmd() *cobra.Command {
 }
 
 func listServiceLogs(clusterID string, opts *listCmdOptions) error {
-	response, err := FetchServiceLogs(clusterID, opts.allMessages, opts.internal)
+	ocmClient, err := ocmutils.CreateConnection()
 	if err != nil {
-		return fmt.Errorf("failed to fetch service logs: %w", err)
+		return err
+	}
+	defer ocmClient.Close()
+
+	response, err := sl.FetchServiceLogs(ocmClient, clusterID, opts.allMessages, opts.internal)
+	if err != nil {
+		return err
 	}
 
 	if err = printServiceLogResponse(response); err != nil {

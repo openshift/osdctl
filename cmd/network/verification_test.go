@@ -19,7 +19,7 @@ import (
 	"github.com/openshift/osd-network-verifier/pkg/output"
 	"github.com/openshift/osd-network-verifier/pkg/probes/curl"
 	onv "github.com/openshift/osd-network-verifier/pkg/verifier"
-	"github.com/openshift/osdctl/cmd/servicelog"
+	"github.com/openshift/osdctl/pkg/servicelog"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -326,10 +326,9 @@ func TestEgressVerification_DefaultValidateEgressInput(t *testing.T) {
 
 func TestGenerateServiceLog(t *testing.T) {
 	testCases := []struct {
-		name      string
-		output    *output.Output
-		clusterId string
-		want      servicelog.PostCmdOptions
+		name   string
+		output *output.Output
+		want   servicelog.PostRequest
 	}{
 		{
 			name: "with_failures",
@@ -341,26 +340,23 @@ func TestGenerateServiceLog(t *testing.T) {
 				})
 				return o
 			}(),
-			clusterId: "test-cluster",
-			want: servicelog.PostCmdOptions{
+			want: servicelog.PostRequest{
 				Template:       blockedEgressTemplateUrl,
-				ClusterId:      "test-cluster",
 				TemplateParams: []string{"URLS=https://test1.com,https://test2.com"},
+				SkipLinkCheck:  true,
 			},
 		},
 		{
-			name:      "no_failures",
-			output:    &output.Output{}, // Empty output for no failures
-			clusterId: "test-cluster",
-			want:      servicelog.PostCmdOptions{},
+			name:   "no_failures",
+			output: &output.Output{}, // Empty output for no failures
+			want:   servicelog.PostRequest{},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := generateServiceLog(tc.output, tc.clusterId)
+			got := generateServiceLog(tc.output)
 			assert.Equal(t, tc.want.Template, got.Template)
-			assert.Equal(t, tc.want.ClusterId, got.ClusterId)
 			assert.Equal(t, tc.want.TemplateParams, got.TemplateParams)
 		})
 	}
@@ -660,12 +656,10 @@ func Test_egressVerificationGetSubnetIdAllSubnetsFlag(t *testing.T) {
 }
 
 func Test_generateServiceLog(t *testing.T) {
-	testClusterId := "abc123"
-
 	tests := []struct {
 		name       string
 		egressUrls []string
-		want       servicelog.PostCmdOptions
+		want       servicelog.PostRequest
 	}{
 		{
 			name:       "no_egress_failures",
@@ -674,10 +668,9 @@ func Test_generateServiceLog(t *testing.T) {
 		{
 			name:       "one_egress_failure",
 			egressUrls: []string{"storage.googleapis.com:443"},
-			want: servicelog.PostCmdOptions{
+			want: servicelog.PostRequest{
 				Template:       blockedEgressTemplateUrl,
 				TemplateParams: []string{"URLS=storage.googleapis.com:443"},
-				ClusterId:      testClusterId,
 				SkipLinkCheck:  true,
 			},
 		},
@@ -688,10 +681,9 @@ func Test_generateServiceLog(t *testing.T) {
 				"console.redhat.com:443",
 				"s3.amazonaws.com:443",
 			},
-			want: servicelog.PostCmdOptions{
+			want: servicelog.PostRequest{
 				Template:       blockedEgressTemplateUrl,
 				TemplateParams: []string{"URLS=storage.googleapis.com:443,console.redhat.com:443,s3.amazonaws.com:443"},
-				ClusterId:      testClusterId,
 				SkipLinkCheck:  true,
 			},
 		},
@@ -700,7 +692,7 @@ func Test_generateServiceLog(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			out := new(output.Output)
 			out.SetEgressFailures(test.egressUrls)
-			if got := generateServiceLog(out, testClusterId); !reflect.DeepEqual(got, test.want) {
+			if got := generateServiceLog(out); !reflect.DeepEqual(got, test.want) {
 				t.Errorf("generateServiceLog() = %v, want %v", got, test.want)
 			}
 		})

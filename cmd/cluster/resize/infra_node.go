@@ -16,10 +16,10 @@ import (
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	infraPkg "github.com/openshift/osdctl/pkg/infra"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/osdCloud"
+	"github.com/openshift/osdctl/pkg/servicelog"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
@@ -257,11 +257,27 @@ func (r *Infra) RunInfra(ctx context.Context) error {
 		return err
 	}
 
-	postCmd := generateServiceLog(newMp, r.instanceType, r.justification, r.clusterId, r.ohss)
-	if err := postCmd.Run(); err != nil {
-		fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
+	postReq := generateServiceLog(newMp, r.instanceType, r.justification, r.ohss)
+	if postReq.Template == "" {
+		fmt.Println("No service log template available for this platform. Please send one manually if needed.")
+		return nil
+	}
+
+	slConn, err := utils.CreateConnection()
+	if err != nil {
+		fmt.Printf("Failed to create OCM connection for service log: %v\n", err)
+		fmt.Println("Please manually send a service log with:")
 		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
-			r.clusterId, resizedInfraNodeServiceLogTemplate, strings.Join(postCmd.TemplateParams, " -p "))
+			r.clusterId, postReq.Template, strings.Join(postReq.TemplateParams, " -p "))
+		return nil
+	}
+	defer slConn.Close()
+
+	if err := servicelog.Post(slConn, r.cluster, postReq); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
+		fmt.Printf("Failed to send service log: %v\n", err)
+		fmt.Println("Please manually send a service log with:")
+		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n",
+			r.clusterId, postReq.Template, strings.Join(postReq.TemplateParams, " -p "))
 	}
 
 	return nil
@@ -323,21 +339,19 @@ func getInstanceType(mp *hivev1.MachinePool) (string, error) {
 }
 
 // Adding change in serviceLog as per the cloud provider.
-func generateServiceLog(mp *hivev1.MachinePool, instanceType, justification, clusterId, ohss string) servicelog.PostCmdOptions {
+func generateServiceLog(mp *hivev1.MachinePool, instanceType, justification, ohss string) servicelog.PostRequest {
 	if mp.Spec.Platform.AWS != nil {
-		return servicelog.PostCmdOptions{
+		return servicelog.PostRequest{
 			Template:       resizedInfraNodeServiceLogTemplate,
-			ClusterId:      clusterId,
 			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType), fmt.Sprintf("JUSTIFICATION=%s", justification), fmt.Sprintf("JIRA_ID=%s", ohss)},
 		}
 	} else if mp.Spec.Platform.GCP != nil {
-		return servicelog.PostCmdOptions{
+		return servicelog.PostRequest{
 			Template:       resizedInfraNodeServiceLogTemplateGCP,
-			ClusterId:      clusterId,
 			TemplateParams: []string{fmt.Sprintf("INSTANCE_TYPE=%s", instanceType), fmt.Sprintf("JUSTIFICATION=%s", justification)},
 		}
 	}
-	return servicelog.PostCmdOptions{}
+	return servicelog.PostRequest{}
 }
 
 func (r *Infra) terminateCloudInstances(ctx context.Context, nodeList *corev1.NodeList) error {

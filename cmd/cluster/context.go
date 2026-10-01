@@ -23,12 +23,12 @@ import (
 	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	backplaneapi "github.com/openshift/backplane-api/pkg/client"
 	"github.com/openshift/osdctl/cmd/rhobs"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/backplane"
 	"github.com/openshift/osdctl/pkg/osdCloud"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/provider/pagerduty"
+	"github.com/openshift/osdctl/pkg/servicelog"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -460,7 +460,7 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		defer wg.Done()
 		defer utils.StartDelayTracker(o.verbose, "Service Logs").End()
 		timeToCheckSvcLogs := time.Now().AddDate(0, 0, -o.days)
-		svcLogs, svcErr := servicelog.GetServiceLogsSince(o.clusterID, timeToCheckSvcLogs, false, false)
+		svcLogs, svcErr := servicelog.GetServiceLogsSince(ocmClient, o.clusterID, timeToCheckSvcLogs, false, false)
 		if svcErr != nil {
 			mu.Lock()
 			dataErrors = append(dataErrors, fmt.Errorf("error while getting the service logs: %v", svcErr))

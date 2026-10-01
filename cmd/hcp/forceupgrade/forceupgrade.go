@@ -9,12 +9,11 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/internal/io"
-	"github.com/openshift/osdctl/internal/servicelog"
-	"github.com/openshift/osdctl/internal/utils"
+	internalutils "github.com/openshift/osdctl/internal/utils"
+	"github.com/openshift/osdctl/pkg/servicelog"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 )
@@ -372,89 +371,38 @@ func (o *forceUpgradeOptions) determineTargetVersion(availableUpgrades []string)
 	return latest.Original(), nil
 }
 
-// loadServiceLogTemplate loads a service log template from either a predefined template name or file path
-func loadServiceLogTemplate(templateOrFile string) ([]byte, bool, error) {
-	var templateBytes []byte
-	var err error
-	var usingDefaultTemplate bool
-
-	// Check if it's a template name
-	if templateURL, exists := serviceLogTemplates[templateOrFile]; exists {
-		// Use predefined template URL
-		templateBytes, err = utils.CurlThis(templateURL)
-		if err != nil {
-			return nil, false, fmt.Errorf("failed to fetch template from %s: %w", templateURL, err)
-		}
-		usingDefaultTemplate = true
-	} else {
-		// Treat as file path
-		templateBytes, err = os.ReadFile(templateOrFile)
-		if err != nil {
-			return nil, false, fmt.Errorf("failed to read template file %s: %w", templateOrFile, err)
-		}
-		usingDefaultTemplate = false
-	}
-
-	return templateBytes, usingDefaultTemplate, nil
-}
-
 func sendUpgradeServiceLog(ocmClient *sdk.Connection, cluster *v1.Cluster, templateOrFile, targetVersion string) error {
-	templateBytes, usingDefaultTemplate, err := loadServiceLogTemplate(templateOrFile)
-	if err != nil {
-		return err
-	}
+	template := resolveTemplate(templateOrFile)
+	_, isDefault := serviceLogTemplates[templateOrFile]
 
-	if usingDefaultTemplate {
+	if isDefault {
 		fmt.Printf("  📄 Using service log template: %s\n", templateOrFile)
 	} else {
 		fmt.Printf("  📄 Using custom service log template file: %s\n", templateOrFile)
 	}
 
-	var message servicelog.Message
-	if err := json.Unmarshal(templateBytes, &message); err != nil {
-		return fmt.Errorf("failed to parse service log template: %w", err)
+	req := servicelog.PostRequest{
+		Template:      template,
+		SkipLinkCheck: true,
+	}
+	if isDefault {
+		req.TemplateParams = []string{"VERSION=" + targetVersion}
 	}
 
-	// Set cluster-specific fields
-	message.ClusterUUID = cluster.ExternalID()
-	message.ClusterID = cluster.ID()
-
-	// Only replace VERSION parameter if using the default template
-	if usingDefaultTemplate {
-		message.ReplaceWithFlag("${VERSION}", targetVersion)
-	}
-
-	// Validate that all required parameters were replaced
-	if leftoverParams, found := message.FindLeftovers(); found {
-		if usingDefaultTemplate {
-			return fmt.Errorf("default template contains unresolved parameters: %v. This should not happen", leftoverParams)
-		} else {
-			return fmt.Errorf("custom template contains unresolved parameters: %v. Please ensure all parameters are defined in your template", leftoverParams)
-		}
-	}
-
-	request := ocmClient.Post()
-	if err := arguments.ApplyPathArg(request, "/api/service_logs/v1/cluster_logs"); err != nil {
-		return fmt.Errorf("cannot parse API path: %v", err)
-	}
-
-	messageBytes, err := json.Marshal(message)
+	msg, err := servicelog.Prepare(req)
 	if err != nil {
-		return fmt.Errorf("cannot marshal service log message: %v", err)
+		return err
 	}
+	return servicelog.PostMessage(ocmClient, cluster, msg)
+}
 
-	request.Bytes(messageBytes)
-
-	response, err := ocmutils.SendRequest(request)
-	if err != nil {
-		return fmt.Errorf("failed to send service log: %w", err)
+// resolveTemplate maps a template name to its URL, or returns the input
+// as-is if it's a file path.
+func resolveTemplate(templateOrFile string) string {
+	if url, exists := serviceLogTemplates[templateOrFile]; exists {
+		return url
 	}
-
-	if response.Status() != 201 {
-		return fmt.Errorf("service log request failed with status: %d", response.Status())
-	}
-
-	return nil
+	return templateOrFile
 }
 
 func (o *forceUpgradeOptions) printSummary(successful, failed, serviceLogSuccessful, serviceLogFailed []string) {
@@ -512,12 +460,12 @@ func (o *forceUpgradeOptions) printPreProcessingSummary(clusters []*v1.Cluster) 
 	if o.serviceLogTemplate != "" {
 		fmt.Printf("\nService Log to be sent after scheduling upgrades:\n")
 
-		templateBytes, usingDefaultTemplate, err := loadServiceLogTemplate(o.serviceLogTemplate)
+		template := resolveTemplate(o.serviceLogTemplate)
+		templateBytes, err := internalutils.AccessFile(template)
 		if err != nil {
 			return err
 		}
 
-		// Pretty print the JSON template
 		var jsonData any
 		if err := json.Unmarshal(templateBytes, &jsonData); err != nil {
 			return fmt.Errorf("failed to parse template: %w", err)
@@ -529,7 +477,7 @@ func (o *forceUpgradeOptions) printPreProcessingSummary(clusters []*v1.Cluster) 
 		}
 		fmt.Printf("Template:\n%s\n", string(prettyJSON))
 
-		if usingDefaultTemplate {
+		if _, isDefault := serviceLogTemplates[o.serviceLogTemplate]; isDefault {
 			fmt.Printf("\nNote: The ${VERSION} parameter will be replaced with the target upgrade version for each cluster.\n")
 		} else {
 			fmt.Printf("\nNote: Custom template files are used as-is without automatic parameter replacement.\n")

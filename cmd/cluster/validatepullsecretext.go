@@ -15,8 +15,9 @@ import (
 	"github.com/fatih/color"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/accountsmgmt/v1"
-	"github.com/openshift/osdctl/cmd/servicelog"
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/pkg/k8s"
+	"github.com/openshift/osdctl/pkg/servicelog"
 	"github.com/openshift/osdctl/pkg/utils"
 	logrus "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -52,6 +53,7 @@ type validatePullSecretExtOptions struct {
 	clusterID            string              // Target cluster containing pull-secret to be validated against OCM values
 	reason               string              // Reason or justification for accessing sensitive data. (ie jira ticket)
 	ocm                  *sdk.Connection     // openshift api client
+	cluster              *cmv1.Cluster       // Resolved cluster from OCM
 	results              *tabwriter.Writer   // Used for printing tabled results
 	log                  *logrus.Logger      // Simple stderr logger
 	verboseLevel         string              // Logging level
@@ -187,6 +189,7 @@ func (o *validatePullSecretExtOptions) run() error {
 		o.log.Errorf("Failed to fetch cluster:'%s' info from OCM (url:'%s')\n", o.clusterID, o.ocm.URL())
 		return err
 	}
+	o.cluster = clusterInfo
 	// Get the internal cluster ID from OCM for comparing to active/current kubecli connection...
 	clusterID := clusterInfo.ID()
 	// Make sure we're using the internal cluster ID from here on...
@@ -670,41 +673,24 @@ func (o *validatePullSecretExtOptions) getOCMRegistryCredentials(accountID strin
 	if len(registryCredentials) <= 0 {
 		err := fmt.Errorf("registryCredentials not found for Account:'%s' in OCM", accountID)
 		o.log.Errorf("%s\nSee: /api/accounts_mgmt/v1/registry_credentials -p search=\"account_id='%s'\"", err, accountID)
-		postCmd := servicelog.PostCmdOptions{
+		postReq := servicelog.PostRequest{
 			Template:       ServiceLogUpdatePullSecret,
 			TemplateParams: []string{"REGISTRY=registry.redhat.io"},
-			ClusterId:      o.clusterID,
 		}
-		sendServiceLog(postCmd, fmt.Sprintf("%s\n", err))
+		if slErr := sendServiceLog(o.ocm, o.cluster, postReq, fmt.Sprintf("%s\n", err)); slErr != nil && !errors.Is(slErr, servicelog.ErrDeclined) {
+			o.log.Errorf("failed to send service log: %v", slErr)
+		}
 		return nil, err
 	}
 	return registryCredentials, nil
 }
 
 // Provide information, and prompt user to send a service log.
-func sendServiceLog(postCmd servicelog.PostCmdOptions, message string) error {
-	var err error = nil
-	if len(postCmd.ClusterId) <= 0 {
-		fmt.Fprintf(os.Stderr, "Empty clusterID provided to sendServiceLog()\n")
-		return fmt.Errorf("empty clusterID provided to sendServiceLog function")
-	}
-	if len(postCmd.Template) <= 0 {
-		fmt.Fprintf(os.Stderr, "Empty template url provided to sendServiceLog()\n")
-		return fmt.Errorf("empty template URL provided to sendServiceLog function")
-	}
-	// Print provided message then prompt user whether or not to send a service log.
+func sendServiceLog(ocmClient *sdk.Connection, cluster *cmv1.Cluster, postReq servicelog.PostRequest, message string) error {
 	if len(message) > 0 {
 		fmt.Printf("%s\n", message)
 	}
-	fmt.Printf("Would you like to send a service log now using the following options: '%v'?", postCmd)
-	if utils.ConfirmPrompt() {
-		err = postCmd.Run()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error incurred sending service log:'%s'\n", err)
-			return err
-		}
-	}
-	return err
+	return servicelog.Post(ocmClient, cluster, postReq)
 }
 
 // buildTemplateParameters creates the template parameter array for service log
@@ -763,14 +749,13 @@ func (o *validatePullSecretExtOptions) sendAggregatedServiceLogs() error {
 	// Build template parameters
 	templateParams := buildTemplateParameters(allFailures)
 
-	// Use servicelog package's built-in prompting and validation
-	postCmd := servicelog.PostCmdOptions{
+	if err := servicelog.Post(o.ocm, o.cluster, servicelog.PostRequest{
 		Template:       ServiceLogMultipleSyncFailures,
 		TemplateParams: templateParams,
-		ClusterId:      o.clusterID,
-	}
-
-	if err := postCmd.Run(); err != nil {
+	}); err != nil {
+		if errors.Is(err, servicelog.ErrDeclined) {
+			return nil
+		}
 		fmt.Fprintf(os.Stderr, "Error sending service log: %s\n", err)
 		return err
 	}
