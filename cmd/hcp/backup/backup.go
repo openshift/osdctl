@@ -49,6 +49,7 @@ func NewCmdBackup() *cobra.Command {
 	_ = cmd.MarkFlagRequired("cluster-id")
 	_ = cmd.MarkFlagRequired("reason")
 	cmd.AddCommand(newCmdDiscover())
+	cmd.AddCommand(newCmdReleaseDNS())
 
 	return cmd
 }

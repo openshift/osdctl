@@ -131,6 +131,7 @@ type Client interface {
 	// Route53
 	ListHostedZones(input *route53.ListHostedZonesInput) (*route53.ListHostedZonesOutput, error)
 	ListResourceRecordSets(input *route53.ListResourceRecordSetsInput) (*route53.ListResourceRecordSetsOutput, error)
+	ChangeResourceRecordSets(input *route53.ChangeResourceRecordSetsInput) (*route53.ChangeResourceRecordSetsOutput, error)
 
 	// ELB
 	DescribeLoadBalancers(input *elasticloadbalancing.DescribeLoadBalancersInput) (*elasticloadbalancing.DescribeLoadBalancersOutput, error)
@@ -539,6 +540,10 @@ func (c *AwsClient) ListHostedZones(input *route53.ListHostedZonesInput) (*route
 
 func (c *AwsClient) ListResourceRecordSets(input *route53.ListResourceRecordSetsInput) (*route53.ListResourceRecordSetsOutput, error) {
 	return c.route53Client.ListResourceRecordSets(context.TODO(), input)
+}
+
+func (c *AwsClient) ChangeResourceRecordSets(input *route53.ChangeResourceRecordSetsInput) (*route53.ChangeResourceRecordSetsOutput, error) {
+	return c.route53Client.ChangeResourceRecordSets(context.TODO(), input)
 }
 
 func (c *AwsClient) DescribeLoadBalancers(input *elasticloadbalancing.DescribeLoadBalancersInput) (*elasticloadbalancing.DescribeLoadBalancersOutput, error) {

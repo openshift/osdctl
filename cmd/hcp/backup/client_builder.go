@@ -15,6 +15,8 @@ import (
 type ClusterInfo struct {
 	HCPClusterID     string
 	HCPClusterRegion string
+	DomainPrefix     string
+	BaseDomain       string
 	MgmtClusterID    string
 	MgmtClusterName  string
 }
@@ -62,10 +64,16 @@ func (r *ocmClusterResolver) Resolve(ctx context.Context, clusterIdentifier stri
 	if hcpCluster.Region() != nil {
 		region = hcpCluster.Region().ID()
 	}
+	baseDomain := ""
+	if hcpCluster.DNS() != nil {
+		baseDomain = hcpCluster.DNS().BaseDomain()
+	}
 
 	return ClusterInfo{
 		HCPClusterID:     clusterID,
 		HCPClusterRegion: region,
+		DomainPrefix:     hcpCluster.DomainPrefix(),
+		BaseDomain:       baseDomain,
 		MgmtClusterID:    mc.ID(),
 		MgmtClusterName:  mgmtClusterName,
 	}, nil
