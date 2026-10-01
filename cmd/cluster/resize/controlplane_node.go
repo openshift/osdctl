@@ -502,13 +502,8 @@ func promptGenerateResizeSL(clusterID string, newMachineType string) error {
 			fmt.Sprintf("JIRA_ID=%s", jiraID),
 			fmt.Sprintf("JUSTIFICATION=%s", justification),
 		},
-	}); err != nil {
-		if !errors.Is(err, servicelog.ErrDeclined) {
-			return fmt.Errorf("failed to send service log: %v", err)
-		}
-		fmt.Println("Service log not sent.")
-	} else {
-		fmt.Println("Service log sent successfully.")
+	}); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
+		return fmt.Errorf("failed to send service log: %v", err)
 	}
 
 	fmt.Println("Use the following command to track progress of the resize:")

@@ -95,6 +95,23 @@ Releases are fully automated — **do not push version tags or run `goreleaser` 
 2. On merge to `master`, the `release-on-version-bump` workflow tags `vX.Y.Z`, publishes the GitHub release via goreleaser, and fires the Fedora COPR webhook.
 3. Pushing a `v*` tag by hand is still supported as a fallback and triggers the separate `release` and `trigger_copr` workflows.
 
+## Service Logs (`pkg/servicelog`)
+
+Service logs are customer-facing messages sent via the OCM API. They appear in the customer's cluster console and support history — treat them like sending an email to a customer. Getting it wrong (duplicate sends, wrong content, wrong cluster) directly impacts customer experience.
+
+The package exposes two levels of abstraction:
+
+- **`Post()`** — the default. Loads the template, substitutes parameters, validates links, checks for recent duplicates, previews the message, and confirms before sending. Use this unless you have a reason not to.
+- **`Prepare()` + `PostMessage()`** — for commands that need their own confirmation UX (e.g. batch loops that confirm upfront, or commands with a custom preview). The caller is responsible for ensuring the user has a chance to review and confirm before anything is sent.
+
+Rules:
+
+- **Prefer `Post()`.** The duplicate-check and confirm flow exists because SREs have accidentally double-sent or mis-targeted service logs. Don't bypass it for convenience.
+- **Never send without any confirmation in the call chain.** If using `Prepare()` + `PostMessage()`, the command must have its own confirmation step somewhere before `PostMessage()` is called.
+- **`Post()` prints a standard decline message and returns `ErrDeclined` when the user says no.** Callers should use `err != nil && !errors.Is(err, servicelog.ErrDeclined)` to avoid treating a decline as a failure. Do not add per-caller decline messages.
+- **Reuse your existing OCM connection.** Don't create a new connection just to send a service log if you already have one in scope.
+- **Only set `SkipLinkCheck` when the template has already been validated** (e.g. batch sends where the same template is reused across clusters, or templates with URLs that are filled in dynamically).
+
 ## Working Rules
 
 - **Dependabot** opens weekly `gomod` PRs for `osd-network-verifier` and `backplane-cli` only; the `dependabot-auto-merge` workflow auto-merges patch/minor updates. **Do not hand-bump these two dependencies** — let the bot manage them.

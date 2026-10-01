@@ -971,15 +971,13 @@ func (o *replacePullSecretOptions) run(ctx context.Context) error {
 				fmt.Sprintf("MESSAGE=Pull secret replaced for cluster owner '%s'. Reason: %s", ownerUsername, o.reason),
 			},
 			InternalOnly: true,
-		}); err != nil {
-			if errors.Is(err, servicelog.ErrDeclined) {
-				op.OK("internal service log skipped by user")
-			} else {
-				op.Warn("failed to send internal service log: %v", err)
-				fmt.Fprintf(out, "To send manually: osdctl servicelog post -C %s -i -p MESSAGE=\"Pull secret replaced for cluster owner %q. Reason: %s\"\n", o.clusterID, ownerUsername, o.reason)
-			}
-		} else {
+		}); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
+			op.Warn("failed to send internal service log: %v", err)
+			fmt.Fprintf(out, "To send manually: osdctl servicelog post -C %s -i -p MESSAGE=\"Pull secret replaced for cluster owner %q. Reason: %s\"\n", o.clusterID, ownerUsername, o.reason)
+		} else if err == nil {
 			op.OK("internal service log sent")
+		} else {
+			op.OK("internal service log skipped by user")
 		}
 	}
 

@@ -677,7 +677,7 @@ func (o *validatePullSecretExtOptions) getOCMRegistryCredentials(accountID strin
 			Template:       ServiceLogUpdatePullSecret,
 			TemplateParams: []string{"REGISTRY=registry.redhat.io"},
 		}
-		if slErr := sendServiceLog(o.ocm, o.cluster, postReq, fmt.Sprintf("%s\n", err)); slErr != nil {
+		if slErr := sendServiceLog(o.ocm, o.cluster, postReq, fmt.Sprintf("%s\n", err)); slErr != nil && !errors.Is(slErr, servicelog.ErrDeclined) {
 			o.log.Errorf("failed to send service log: %v", slErr)
 		}
 		return nil, err
@@ -754,7 +754,6 @@ func (o *validatePullSecretExtOptions) sendAggregatedServiceLogs() error {
 		TemplateParams: templateParams,
 	}); err != nil {
 		if errors.Is(err, servicelog.ErrDeclined) {
-			o.log.Infof("Service log not sent")
 			return nil
 		}
 		fmt.Fprintf(os.Stderr, "Error sending service log: %s\n", err)

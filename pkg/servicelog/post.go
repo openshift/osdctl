@@ -25,46 +25,35 @@ type PostRequest struct {
 	TemplateParams []string
 	InternalOnly   bool
 	SkipLinkCheck  bool
-	Quiet          bool
-	Confirm        func(Message) bool
 }
 
 // Post sends a service log to a cluster from a template. It handles the
 // full pipeline: template loading, parameter substitution, link validation,
-// user confirmation, and HTTP POST.
-//   - Default: interactive flow (check recent SLs, preview, confirm)
-//   - Quiet: skip all prompts
-//   - Confirm: custom confirmation callback
-//
-// For sending a pre-built Message, use PostMessage instead.
+// user confirmation, and HTTP POST. It always runs an interactive
+// confirmation flow. For non-interactive sends (e.g. batch operations
+// that confirm upfront), use Prepare + PostMessage directly.
 func Post(ocmClient *sdk.Connection, cluster *cmv1.Cluster, req PostRequest) error {
 	msg, err := Prepare(req)
 	if err != nil {
 		return err
 	}
 
-	if !req.Quiet {
-		if req.Confirm != nil {
-			if !req.Confirm(msg) {
-				return ErrDeclined
-			}
-		} else {
-			if CheckServiceLogsLastHour(ocmClient, cluster.ID()) {
-				if !ocmutils.ConfirmPrompt() {
-					return ErrDeclined
-				}
-			}
-			log.Infof("Sending service log to cluster %s (%s)", cluster.Name(), cluster.ID())
-			log.Infoln("The following service log will be sent:")
-			templateBytes, err := json.MarshalIndent(msg, "", "  ")
-			if err != nil {
-				return fmt.Errorf("failed to marshal service log for preview: %w", err)
-			}
-			fmt.Println(string(templateBytes))
-			if !ocmutils.ConfirmPrompt() {
-				return ErrDeclined
-			}
+	if CheckServiceLogsLastHour(ocmClient, cluster.ID()) {
+		if !ocmutils.ConfirmPrompt() {
+			fmt.Println("Service log not sent (user declined).")
+			return ErrDeclined
 		}
+	}
+	log.Infof("Sending service log to cluster %s (%s)", cluster.Name(), cluster.ID())
+	log.Infoln("The following service log will be sent:")
+	templateBytes, err := json.MarshalIndent(msg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal service log for preview: %w", err)
+	}
+	fmt.Println(string(templateBytes))
+	if !ocmutils.ConfirmPrompt() {
+		fmt.Println("Service log not sent (user declined).")
+		return ErrDeclined
 	}
 
 	if err := PostMessage(ocmClient, cluster, msg); err != nil {

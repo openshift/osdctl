@@ -384,12 +384,16 @@ func sendUpgradeServiceLog(ocmClient *sdk.Connection, cluster *v1.Cluster, templ
 	req := servicelog.PostRequest{
 		Template:      template,
 		SkipLinkCheck: true,
-		Quiet:         true,
 	}
 	if isDefault {
 		req.TemplateParams = []string{"VERSION=" + targetVersion}
 	}
-	return servicelog.Post(ocmClient, cluster, req)
+
+	msg, err := servicelog.Prepare(req)
+	if err != nil {
+		return err
+	}
+	return servicelog.PostMessage(ocmClient, cluster, msg)
 }
 
 // resolveTemplate maps a template name to its URL, or returns the input
