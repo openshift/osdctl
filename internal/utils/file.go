@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 
 	osFile "path/filepath"
@@ -34,6 +35,30 @@ func FolderExists(path string) bool {
 // FileExists reports whether the provided file exists.
 func FileExists(path string) bool {
 	return exists(path, false)
+}
+
+// AccessFile returns the contents of a local file or URL.
+func AccessFile(filePath string) ([]byte, error) {
+	if IsValidUrl(filePath) {
+		urlPage, _ := url.Parse(filePath)
+		if err := IsOnline(*urlPage); err != nil {
+			return nil, fmt.Errorf("host %q is not accessible", filePath)
+		}
+		return CurlThis(urlPage.String())
+	}
+
+	filePath = osFile.Clean(filePath)
+	if FileExists(filePath) {
+		file, err := os.ReadFile(filePath) //#nosec G304 -- Potential file inclusion via variable
+		if err != nil {
+			return file, fmt.Errorf("cannot read the file: %w", err)
+		}
+		return file, nil
+	}
+	if FolderExists(filePath) {
+		return nil, fmt.Errorf("the provided path %q is a directory, not a file", filePath)
+	}
+	return nil, fmt.Errorf("cannot read the file %q", filePath)
 }
 
 // CreateFile creates a file on the given filepath

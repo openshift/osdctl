@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"time"
 
+	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	hypershiftv1beta1 "github.com/openshift/hypershift/api/hypershift/v1beta1"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/printer"
+	"github.com/openshift/osdctl/pkg/servicelog"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -255,7 +256,7 @@ func (r *requestServingNodesOpts) run(ctx context.Context) error {
 
 	// Send customer-facing service log
 	printer.PrintlnGreen("\nSending customer service log...")
-	if err := r.sendCustomerServiceLog(); err != nil {
+	if err := r.sendCustomerServiceLog(connection); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
 		fmt.Printf("Warning: failed to send customer service log: %v\n", err)
 		fmt.Println("You can send it manually with:")
 		fmt.Printf("osdctl servicelog post -C %s -t %s -p INSTANCE_TYPE=%s\n", r.clusterID, resizeRequestServingServiceLogTemplate, targetSize)
@@ -405,13 +406,10 @@ func (r *requestServingNodesOpts) applyClusterSizeOverride(ctx context.Context, 
 	return nil
 }
 
-func (r *requestServingNodesOpts) sendCustomerServiceLog() error {
-	postCmd := servicelog.PostCmdOptions{
-		Template:  resizeRequestServingServiceLogTemplate,
-		ClusterId: r.clusterID,
-	}
-
-	return postCmd.Run()
+func (r *requestServingNodesOpts) sendCustomerServiceLog(ocmClient *sdk.Connection) error {
+	return servicelog.Post(ocmClient, r.cluster, servicelog.PostRequest{
+		Template: resizeRequestServingServiceLogTemplate,
+	})
 }
 
 func (r *requestServingNodesOpts) handleRemoveOverride(ctx context.Context, hostedCluster *hypershiftv1beta1.HostedCluster, clusterName, hcNamespace string) error {

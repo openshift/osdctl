@@ -3,6 +3,7 @@ package network
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -35,8 +36,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	lsupport "github.com/openshift/osdctl/cmd/cluster/support"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/pkg/k8s"
+	"github.com/openshift/osdctl/pkg/servicelog"
 	"github.com/openshift/osdctl/pkg/utils"
 )
 
@@ -296,7 +297,7 @@ func (e *EgressVerification) Run(ctx context.Context) {
 
 			// Only send service logs if not disabled by flag
 			if !e.SkipServiceLog {
-				postCmd := generateServiceLog(out, e.ClusterId)
+				postCmd := generateServiceLog(out)
 				blockedUrl := strings.Join(postCmd.TemplateParams, ",")
 				if (strings.Contains(blockedUrl, "deadmanssnitch") || strings.Contains(blockedUrl, "pagerduty")) && e.cluster.State() == "ready" {
 					fmt.Println("PagerDuty and/or DMS outgoing traffic is blocked, resulting in a loss of observability. As a result, Red Hat can no longer guarantee SLAs and the cluster should be put in limited support")
@@ -304,9 +305,8 @@ func (e *EgressVerification) Run(ctx context.Context) {
 					if err := pCmd.Run(e.ClusterId); err != nil {
 						fmt.Printf("failed to post limited support reason: %v", err)
 					}
-				} else if err := postCmd.Run(); err != nil {
-					fmt.Println("Failed to generate service log. Please manually send a service log to the customer for the blocked egresses with:")
-					fmt.Printf("osdctl servicelog post %v -t %v -p %v\n", e.ClusterId, blockedEgressTemplateUrl, strings.Join(postCmd.TemplateParams, " -p "))
+				} else {
+					e.sendEgressServiceLog(postCmd)
 				}
 			} else {
 				fmt.Println("Service log sending disabled by --skip-service-log flag. Network verification failed but no service log will be sent.")
@@ -318,7 +318,27 @@ func (e *EgressVerification) Run(ctx context.Context) {
 	}
 }
 
-func generateServiceLog(out *output.Output, clusterId string) servicelog.PostCmdOptions {
+// sendEgressServiceLog creates a short-lived OCM connection, sends the
+// service log, and closes the connection. A separate method avoids placing
+// a defer inside the for-range loop in Run (defers are scoped to the
+// enclosing function, not the loop iteration).
+func (e *EgressVerification) sendEgressServiceLog(postCmd servicelog.PostRequest) {
+	ocmClient, err := utils.CreateConnection()
+	if err != nil {
+		fmt.Printf("Failed to create OCM connection for service log: %v\n", err)
+		fmt.Println("Please manually send a service log to the customer for the blocked egresses with:")
+		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n", e.ClusterId, blockedEgressTemplateUrl, strings.Join(postCmd.TemplateParams, " -p "))
+		return
+	}
+	defer ocmClient.Close()
+
+	if err := servicelog.Post(ocmClient, e.cluster, postCmd); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
+		fmt.Println("Failed to send service log. Please manually send a service log to the customer for the blocked egresses with:")
+		fmt.Printf("osdctl servicelog post %v -t %v -p %v\n", e.ClusterId, blockedEgressTemplateUrl, strings.Join(postCmd.TemplateParams, " -p "))
+	}
+}
+
+func generateServiceLog(out *output.Output) servicelog.PostRequest {
 	failures := out.GetEgressURLFailures()
 	if len(failures) > 0 {
 		egressUrls := make([]string, len(failures))
@@ -326,14 +346,13 @@ func generateServiceLog(out *output.Output, clusterId string) servicelog.PostCmd
 			egressUrls[i] = failure.EgressURL()
 		}
 
-		return servicelog.PostCmdOptions{
+		return servicelog.PostRequest{
 			Template:       blockedEgressTemplateUrl,
-			ClusterId:      clusterId,
 			TemplateParams: []string{fmt.Sprintf("URLS=%v", strings.Join(egressUrls, ","))},
 			SkipLinkCheck:  true,
 		}
 	}
-	return servicelog.PostCmdOptions{}
+	return servicelog.PostRequest{}
 }
 
 // getPlatform returns a cloud.Platform struct corresponding to the cluster's cloud platform

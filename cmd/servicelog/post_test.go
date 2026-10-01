@@ -11,7 +11,8 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	slv1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
-	"github.com/openshift/osdctl/internal/servicelog"
+	internalutils "github.com/openshift/osdctl/internal/utils"
+	sl "github.com/openshift/osdctl/pkg/servicelog"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,7 +30,7 @@ var _ = Describe("Test posting service logs", func() {
 				"description=new description",
 				"summary=new summary",
 			},
-			Message: servicelog.Message{
+			Message: sl.Message{
 				Summary:      "The original summary",
 				InternalOnly: false,
 			},
@@ -179,7 +180,7 @@ var _ = Describe("Test posting service logs", func() {
 			err = tmpfile.Close()
 			Expect(err).ShouldNot(HaveOccurred())
 
-			fileContent, err := options.accessFile(tmpfile.Name())
+			fileContent, err := internalutils.AccessFile(tmpfile.Name())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(fileContent).To(Equal(content))
 		})
@@ -191,13 +192,13 @@ var _ = Describe("Test posting service logs", func() {
 			}))
 			defer server.Close()
 
-			fileContent, err := options.accessFile(server.URL)
+			fileContent, err := internalutils.AccessFile(server.URL)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(fileContent).To(Equal([]byte("test content")))
 		})
 
 		It("returns an error for a non-existent file", func() {
-			_, err := options.accessFile("non-existent-file")
+			_, err := internalutils.AccessFile("non-existent-file")
 			Expect(err).Should(HaveOccurred())
 		})
 
@@ -207,14 +208,14 @@ var _ = Describe("Test posting service logs", func() {
 
 			defer os.RemoveAll(dir)
 
-			_, err = options.accessFile(dir)
+			_, err = internalutils.AccessFile(dir)
 			Expect(err).Should(HaveOccurred())
 		})
 	})
 
 	Context("parsing template", func() {
 		It("parses a valid JSON template successfully", func() {
-			template := servicelog.Message{
+			template := sl.Message{
 				Summary:      "Test Summary",
 				Description:  "Test Description",
 				InternalOnly: true,
@@ -222,7 +223,7 @@ var _ = Describe("Test posting service logs", func() {
 			jsonData, err := json.Marshal(template)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			err = options.parseTemplate(jsonData)
+			err = json.Unmarshal(jsonData, &options.Message)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(options.Message.Summary).To(Equal(template.Summary))
 			Expect(options.Message.Description).To(Equal(template.Description))
@@ -232,7 +233,7 @@ var _ = Describe("Test posting service logs", func() {
 		It("returns an error for an invalid JSON template", func() {
 			jsonData := []byte(`{"summary": "Test Summary", "description": "Test Description", "internal_only": "this should be bool"}`)
 
-			err := options.parseTemplate(jsonData)
+			err := json.Unmarshal(jsonData, &options.Message)
 			Expect(err).Should(HaveOccurred())
 		})
 	})
@@ -306,7 +307,7 @@ func TestPrintTemplate(t *testing.T) {
 		{
 			name: "valid_input_with_no_errors",
 			input: &PostCmdOptions{
-				Message: servicelog.Message{
+				Message: sl.Message{
 					Severity:      "info",
 					ServiceName:   "TestService",
 					ClusterID:     "cluster-123",
@@ -393,7 +394,7 @@ func TestReplaceFlags(t *testing.T) {
 		{
 			name: "valid_flag_replacement_in_Message",
 			inputOptions: PostCmdOptions{
-				Message: servicelog.Message{Summary: "This is a FILTERREPLACE test"},
+				Message: sl.Message{Summary: "This is a FILTERREPLACE test"},
 			},
 			flagName:    "FILTERREPLACE",
 			flagValue:   "successful",
@@ -428,14 +429,14 @@ func TestCheckLeftovers(t *testing.T) {
 		{
 			name: "no_leftovers",
 			inputOptions: PostCmdOptions{
-				Message: servicelog.Message{Summary: "This is a test"},
+				Message: sl.Message{Summary: "This is a test"},
 			},
 			excludes: []string{},
 		},
 		{
 			name: "leftovers_found_in_message",
 			inputOptions: PostCmdOptions{
-				Message: servicelog.Message{Summary: "This is a ${PLACEHOLDER} test"},
+				Message: sl.Message{Summary: "This is a ${PLACEHOLDER} test"},
 			},
 			excludes: []string{"${PLACEHOLDER}"},
 		},
@@ -449,7 +450,7 @@ func TestCheckLeftovers(t *testing.T) {
 		{
 			name: "excluded_leftovers",
 			inputOptions: PostCmdOptions{
-				Message: servicelog.Message{Summary: "This is a ${PLACEHOLDER} test"},
+				Message: sl.Message{Summary: "This is a ${PLACEHOLDER} test"},
 			},
 			excludes: []string{"${PLACEHOLDER}"},
 		},
@@ -466,7 +467,7 @@ func TestReadTemplate(t *testing.T) {
 	tests := []struct {
 		name        string
 		options     PostCmdOptions
-		expectedMsg servicelog.Message
+		expectedMsg sl.Message
 		prepare     func()
 	}{
 		{
@@ -474,7 +475,7 @@ func TestReadTemplate(t *testing.T) {
 			options: PostCmdOptions{
 				InternalOnly: true,
 			},
-			expectedMsg: servicelog.Message{
+			expectedMsg: sl.Message{
 				Severity:     string(slv1.SeverityLow),
 				ServiceName:  "SREManualAction",
 				Summary:      "INTERNAL ONLY, DO NOT SHARE WITH CUSTOMER",
@@ -488,7 +489,7 @@ func TestReadTemplate(t *testing.T) {
 				InternalOnly: false,
 				Overrides:    []string{"some_override"},
 			},
-			expectedMsg: servicelog.Message{
+			expectedMsg: sl.Message{
 				Severity:     string(slv1.SeverityLow),
 				ServiceName:  "SREManualAction",
 				InternalOnly: true,
@@ -500,7 +501,7 @@ func TestReadTemplate(t *testing.T) {
 				InternalOnly: false,
 				Template:     "template.json",
 			},
-			expectedMsg: servicelog.Message{
+			expectedMsg: sl.Message{
 				Severity:     string(slv1.SeverityLow),
 				ServiceName:  "TestService",
 				Summary:      "Test Summary",
@@ -527,7 +528,7 @@ func TestReadTemplate(t *testing.T) {
 			if tt.prepare != nil {
 				tt.prepare()
 			}
-			tt.options.readTemplate()
+			tt.options.loadMessage()
 			assert.Equal(t, tt.expectedMsg, tt.options.Message)
 			if tt.options.Template == "template.json" {
 				_ = os.Remove(tt.options.Template)

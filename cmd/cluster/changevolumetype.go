@@ -9,14 +9,15 @@ import (
 	"strings"
 	"time"
 
+	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	machinev1 "github.com/openshift/api/machine/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	hivev1 "github.com/openshift/hive/apis/hive/v1"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	infraPkg "github.com/openshift/osdctl/pkg/infra"
 	"github.com/openshift/osdctl/pkg/k8s"
 	"github.com/openshift/osdctl/pkg/printer"
+	"github.com/openshift/osdctl/pkg/servicelog"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
@@ -42,6 +43,7 @@ type changeVolumeTypeOptions struct {
 	targetType string
 	role       string // "control-plane", "infra", or "" (both)
 
+	ocmClient   *sdk.Connection
 	client      client.Client
 	clientAdmin client.Client
 
@@ -117,7 +119,7 @@ func (o *changeVolumeTypeOptions) init() error {
 	if err != nil {
 		return err
 	}
-	defer connection.Close()
+	o.ocmClient = connection
 
 	cluster, err := utils.GetCluster(connection, o.clusterID)
 	if err != nil {
@@ -200,8 +202,12 @@ func (o *changeVolumeTypeOptions) run(ctx context.Context) error {
 	}
 
 	if err := o.init(); err != nil {
+		if o.ocmClient != nil {
+			o.ocmClient.Close()
+		}
 		return err
 	}
+	defer o.ocmClient.Close()
 
 	fmt.Printf("Cluster: %s (%s)\n", o.cluster.Name(), o.clusterID)
 	fmt.Printf("Target volume type: %s\n", o.targetType)
@@ -441,19 +447,19 @@ func (o *changeVolumeTypeOptions) changeInfraVolumeType(ctx context.Context) err
 	}
 
 	// Post service log
-	postCmd := servicelog.PostCmdOptions{
-		Template:  volumeTypeChangedServiceLogTemplate,
-		ClusterId: o.clusterID,
-		TemplateParams: []string{
-			fmt.Sprintf("PREVIOUS_VOLUME_TYPE=%s", previousType),
-			fmt.Sprintf("NEW_VOLUME_TYPE=%s", targetType),
-			fmt.Sprintf("REASON=%s", o.reason),
-		},
+	slParams := []string{
+		fmt.Sprintf("PREVIOUS_VOLUME_TYPE=%s", previousType),
+		fmt.Sprintf("NEW_VOLUME_TYPE=%s", targetType),
+		fmt.Sprintf("REASON=%s", o.reason),
 	}
-	if err := postCmd.Run(); err != nil {
-		fmt.Println("Failed to post service log. Please manually send a service log with:")
+	if err := servicelog.Post(o.ocmClient, o.cluster, servicelog.PostRequest{
+		Template:       volumeTypeChangedServiceLogTemplate,
+		TemplateParams: slParams,
+	}); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
+		fmt.Printf("Failed to send service log: %v\n", err)
+		fmt.Println("Please manually send a service log with:")
 		fmt.Printf("osdctl servicelog post %s -t %s -p %s\n",
-			o.clusterID, volumeTypeChangedServiceLogTemplate, strings.Join(postCmd.TemplateParams, " -p "))
+			o.clusterID, volumeTypeChangedServiceLogTemplate, strings.Join(slParams, " -p "))
 	}
 
 	printer.PrintlnGreen("Infra volume type change complete!")

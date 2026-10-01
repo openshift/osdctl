@@ -4,28 +4,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"k8s.io/utils/strings/slices"
 
-	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	"github.com/openshift-online/ocm-cli/pkg/dump"
-	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	slv1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 	"github.com/openshift/osdctl/internal/io"
-	"github.com/openshift/osdctl/internal/servicelog"
-	"github.com/openshift/osdctl/internal/utils"
+	internalutils "github.com/openshift/osdctl/internal/utils"
 	"github.com/openshift/osdctl/pkg/link_validator"
 	"github.com/openshift/osdctl/pkg/printer"
+	sl "github.com/openshift/osdctl/pkg/servicelog"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
 
 	log "github.com/sirupsen/logrus"
@@ -33,8 +28,12 @@ import (
 	"golang.org/x/term"
 )
 
+var (
+	userParameterNames, userParameterValues []string
+)
+
 type PostCmdOptions struct {
-	Message         servicelog.Message
+	Message         sl.Message
 	Template        string
 	TemplateParams  []string
 	Overrides       []string
@@ -117,23 +116,10 @@ func (o *PostCmdOptions) Validate() error {
 	return nil
 }
 
-// CheckServiceLogsLastHour returns true if there were servicelogs sent in the past hour, otherwise false
-func CheckServiceLogsLastHour(clusterId string) bool {
-	timeStampToCompare := time.Now().Add(-time.Hour)
-	serviceLogs, err := GetServiceLogsSince(clusterId, timeStampToCompare, false, false)
-	if err != nil {
-		log.Warnf("please verify that you are not sending a duplicate service log that has been recently sent - failed to fetch recent service logs: %v", err)
-		return true
-	}
-	if len(serviceLogs) > 0 {
-		for _, svclog := range serviceLogs {
-			log.Warnf("A service log has been submitted in last hour\nDescription: %s", svclog.Description())
-		}
-		return true
-	}
-	return false
-}
-
+// Run has its own parameter substitution pipeline rather than using
+// servicelog.Post because -r overrides must be applied between template
+// loading and leftover checking, and -p params also substitute into OCM
+// filter files (-f), not just the message.
 func (o *PostCmdOptions) Run() error {
 	if err := o.Init(); err != nil {
 		return err
@@ -149,7 +135,7 @@ func (o *PostCmdOptions) Run() error {
 	}
 
 	o.readFilterFile() // parse the ocm filters in file provided via '-f' flag
-	o.readTemplate()   // parse the given JSON template provided via '-t' flag
+	o.loadMessage()    // parse the given JSON template provided via '-t' flag
 
 	// For every '-p' flag, replace its related placeholder in the template & filterFiles
 	for k := range userParameterNames {
@@ -229,7 +215,7 @@ func (o *PostCmdOptions) Run() error {
 	// If sending a service log to one cluster, print recent service logs so that we can verify we aren't sending
 	// duplicate messages in quick succession
 	if len(clusters) == 1 {
-		if term.IsTerminal(int(os.Stdout.Fd())) && CheckServiceLogsLastHour(clusters[0].ID()) {
+		if term.IsTerminal(int(os.Stdout.Fd())) && sl.CheckServiceLogsLastHour(ocmClient, clusters[0].ID()) {
 			if !ocmutils.ConfirmPrompt() {
 				return nil
 			}
@@ -241,7 +227,6 @@ func (o *PostCmdOptions) Run() error {
 		return fmt.Errorf("cannot read generated template: %w", err)
 	}
 
-	// Validate links in service log unless skipped via '--skip-link-check'
 	if !o.SkipLinkCheck {
 		lv := link_validator.NewLinkValidator()
 		messageText := o.Message.Summary + " " + o.Message.Description
@@ -282,12 +267,6 @@ func (o *PostCmdOptions) Run() error {
 	docClusterType := getDocClusterType(o.Message.Description)
 
 	for _, cluster := range clusters {
-		request, err := o.createPostRequest(ocmClient, cluster)
-		if err != nil {
-			o.failedClusters[cluster.ExternalID()] = err.Error()
-			continue
-		}
-
 		// if servicelog description contains a documentation link, verify that
 		// documentation link matches the cluster product (rosa, dedicated)
 		if !o.skipPrompts && docClusterType != "" {
@@ -302,13 +281,11 @@ func (o *PostCmdOptions) Run() error {
 			}
 		}
 
-		response, err := ocmutils.SendRequest(request)
-		if err != nil {
+		if err := sl.PostMessage(ocmClient, cluster, o.Message); err != nil {
 			o.failedClusters[cluster.ExternalID()] = err.Error()
 			continue
 		}
-
-		o.check(response, o.Message)
+		o.successfulClusters[cluster.ExternalID()] = fmt.Sprintf("Message has been successfully sent to %s", cluster.ExternalID())
 	}
 
 	o.printPostOutput()
@@ -335,25 +312,6 @@ func getDocClusterType(message string) string {
 		}
 	}
 	return ""
-}
-
-func (o *PostCmdOptions) check(response *sdk.Response, clusterMessage servicelog.Message) {
-	body := response.Bytes()
-	if response.Status() < 400 {
-		_, err := validateGoodResponse(body, clusterMessage)
-		if err != nil {
-			o.failedClusters[clusterMessage.ClusterUUID] = err.Error()
-		} else {
-			o.successfulClusters[clusterMessage.ClusterUUID] = fmt.Sprintf("Message has been successfully sent to %s", clusterMessage.ClusterUUID)
-		}
-	} else {
-		badReply, err := validateBadResponse(body)
-		if err != nil {
-			o.failedClusters[clusterMessage.ClusterUUID] = err.Error()
-		} else {
-			o.failedClusters[clusterMessage.ClusterUUID] = badReply.Reason
-		}
-	}
 }
 
 // parseUserParameters parse all the '-p FOO=BAR' parameters and checks for syntax errors
@@ -435,66 +393,21 @@ func (o *PostCmdOptions) overrideField(overrideKey string, overrideValue string)
 	return fmt.Errorf("field does not exist")
 }
 
-// accessFile returns the contents of a local file or url, and any errors encountered
-func (o *PostCmdOptions) accessFile(filePath string) ([]byte, error) {
-
-	if utils.IsValidUrl(filePath) {
-		urlPage, _ := url.Parse(filePath)
-		if err := utils.IsOnline(*urlPage); err != nil {
-			return nil, fmt.Errorf("host %q is not accessible", filePath)
-		}
-		return utils.CurlThis(urlPage.String())
-	}
-
-	filePath = filepath.Clean(filePath)
-	if utils.FileExists(filePath) {
-		// template is file on the disk
-		file, err := os.ReadFile(filePath) //#nosec G304 -- Potential file inclusion via variable
-		if err != nil {
-			return file, fmt.Errorf("cannot read the file.\nError: %q", err)
-		}
-		return file, nil
-	}
-	if utils.FolderExists(filePath) {
-		return nil, fmt.Errorf("the provided path %q is a directory, not a file", filePath)
-	}
-	return nil, fmt.Errorf("cannot read the file %q", filePath)
-}
-
-// parseTemplate reads the template file into a JSON struct
-func (o *PostCmdOptions) parseTemplate(jsonFile []byte) error {
-	return json.Unmarshal(jsonFile, &o.Message)
-}
-
-// readTemplate loads the template into the Message variable
-func (o *PostCmdOptions) readTemplate() {
+// loadMessage loads the template into the Message variable.
+func (o *PostCmdOptions) loadMessage() {
 	if o.InternalOnly {
-		// fixed template for internal service logs
-		messageTemplate := []byte(`
-		{
-			"service_name": "SREManualAction",
-			"summary": "INTERNAL ONLY, DO NOT SHARE WITH CUSTOMER",
-			"description": "${MESSAGE}",
-			"internal_only": true
-		}
-		`)
-		if err := o.parseTemplate(messageTemplate); err != nil {
-			log.Fatalf("Cannot not parse the JSON internal message template.\nError: %q\n", err)
+		if err := json.Unmarshal([]byte(sl.InternalOnlyTemplate), &o.Message); err != nil {
+			log.Fatalf("Cannot parse the JSON internal message template: %v", err)
 		}
 		o.Message.Severity = string(slv1.SeverityLow)
 		return
 	}
 
 	// If neither `-i` or `-t` is specified, but `-r` is specified at least once then use a pre-canned template
-	if !o.InternalOnly && (o.Template == "") && (len(o.Overrides) != 0) {
-		messageTemplate := []byte(`
-		{
-			"service_name": "SREManualAction",
-			"internal_only": true
-		}
-		`)
-		if err := o.parseTemplate(messageTemplate); err != nil {
-			log.Fatalf("Cannot not parse the default message template.\nError: %q\n", err)
+	if o.Template == "" && len(o.Overrides) != 0 {
+		messageTemplate := []byte(`{"service_name":"SREManualAction","internal_only":true}`)
+		if err := json.Unmarshal(messageTemplate, &o.Message); err != nil {
+			log.Fatalf("Cannot parse the default message template: %v", err)
 		}
 		o.Message.Severity = string(slv1.SeverityLow)
 		return
@@ -504,13 +417,12 @@ func (o *PostCmdOptions) readTemplate() {
 		log.Fatalf("Template file is not provided. Use '-t' to fix this.")
 	}
 
-	file, err := o.accessFile(o.Template)
-	if err != nil { // check if this URL or file and if we can access it
+	data, err := internalutils.AccessFile(o.Template)
+	if err != nil {
 		log.Fatal(err)
 	}
-
-	if err = o.parseTemplate(file); err != nil {
-		log.Fatalf("Cannot not parse the JSON template.\nError: %q\n", err)
+	if err := json.Unmarshal(data, &o.Message); err != nil {
+		log.Fatalf("Cannot parse JSON template from %q: %v", o.Template, err)
 	}
 }
 
@@ -521,7 +433,7 @@ func (o *PostCmdOptions) readFilterFile() {
 	}
 
 	for _, filterFile := range o.filterFiles {
-		fileContents, err := o.accessFile(filterFile)
+		fileContents, err := internalutils.AccessFile(filterFile)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -541,7 +453,7 @@ func (o *PostCmdOptions) FindLeftovers(s string) (matches []string) {
 }
 
 func (o *PostCmdOptions) checkLeftovers(excludes []string) {
-	unusedParameters, _ := o.Message.FindLeftovers()
+	unusedParameters := o.Message.FindLeftovers()
 	unusedParameters = append(unusedParameters, o.FindLeftovers(o.filtersFromFile)...)
 
 	var numberOfMissingParameters int
@@ -600,30 +512,6 @@ func (o *PostCmdOptions) printTemplate() (err error) {
 		return err
 	}
 	return dump.Pretty(os.Stdout, exampleMessage)
-}
-
-func (o *PostCmdOptions) createPostRequest(ocmClient *sdk.Connection, cluster *v1.Cluster) (request *sdk.Request, err error) {
-	// Create and populate the request:
-	request = ocmClient.Post()
-	err = arguments.ApplyPathArg(request, targetAPIPath)
-	if err != nil {
-		return nil, fmt.Errorf("cannot parse API path '%s': %v", targetAPIPath, err)
-	}
-
-	o.Message.ClusterUUID = cluster.ExternalID()
-	o.Message.ClusterID = cluster.ID()
-	o.Message.InternalOnly = o.InternalOnly
-	if subscription := cluster.Subscription(); subscription != nil {
-		o.Message.SubscriptionID = cluster.Subscription().ID()
-	}
-
-	messageBytes, err := json.Marshal(o.Message)
-	if err != nil {
-		return nil, fmt.Errorf("cannot marshal template to json: %v", err)
-	}
-
-	request.Bytes(messageBytes)
-	return request, nil
 }
 
 // listMessagedClusters prints all the clusters a service log was tried to be posted.

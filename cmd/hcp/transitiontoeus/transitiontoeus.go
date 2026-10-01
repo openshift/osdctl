@@ -1,7 +1,6 @@
 package transitiontoeus
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -9,12 +8,10 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/openshift-online/ocm-cli/pkg/arguments"
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	v1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/internal/io"
-	"github.com/openshift/osdctl/internal/servicelog"
-	"github.com/openshift/osdctl/internal/utils"
+	"github.com/openshift/osdctl/pkg/servicelog"
 	ocmutils "github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 )
@@ -34,9 +31,6 @@ var serviceLogTemplates = map[string]string{
 	"success":   "https://raw.githubusercontent.com/openshift/managed-notifications/master/hcp/eus_transition_success.json",
 	"attempted": "https://raw.githubusercontent.com/openshift/managed-notifications/master/hcp/eus_transition_attempted.json",
 }
-
-// Template cache to avoid re-fetching the same templates in batch mode
-var templateCache = make(map[string][]byte)
 
 // Regular expression for valid cluster IDs - alphanumeric characters and hyphens only
 var validClusterIDRegex = regexp.MustCompile(`^[a-zA-Z0-9-]+$`)
@@ -194,6 +188,21 @@ func (o *transitionOptions) Run() error {
 	// Process only eligible clusters
 	clusters = eligibleClusters
 
+	successMsg, err := servicelog.Prepare(servicelog.PostRequest{
+		Template:      resolveTemplate("success"),
+		SkipLinkCheck: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to prepare 'success' service log template: %w", err)
+	}
+	attemptedMsg, err := servicelog.Prepare(servicelog.PostRequest{
+		Template:      resolveTemplate("attempted"),
+		SkipLinkCheck: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to prepare 'attempted' service log template: %w", err)
+	}
+
 	var successful, failed []string
 
 	for i, cluster := range clusters {
@@ -214,7 +223,7 @@ func (o *transitionOptions) Run() error {
 						fmt.Printf("  ℹ️  Note: The recurring upgrade policy was modified during this attempt but has been restored.\n")
 
 						// Show service log preview and prompt
-						if err := promptAndSendServiceLog(ocmClient, cluster, "attempted"); err != nil {
+						if err := promptAndSendServiceLog(ocmClient, cluster, attemptedMsg, "attempted"); err != nil {
 							fmt.Printf("  ⚠️  Failed to send service log: %v\n", err)
 						}
 					} else {
@@ -228,7 +237,7 @@ func (o *transitionOptions) Run() error {
 						fmt.Printf("  ⚠️  Action required: Use the policy details printed above to manually restore.\n")
 
 						// Show service log preview and prompt for critical failure
-						if err := promptAndSendServiceLog(ocmClient, cluster, "attempted"); err != nil {
+						if err := promptAndSendServiceLog(ocmClient, cluster, attemptedMsg, "attempted"); err != nil {
 							fmt.Printf("  ⚠️  Failed to send service log: %v\n", err)
 						}
 					} else {
@@ -245,7 +254,7 @@ func (o *transitionOptions) Run() error {
 				fmt.Printf("  ✅ Transition completed successfully!\n")
 
 				// Show service log preview and prompt
-				if err := promptAndSendServiceLog(ocmClient, cluster, "success"); err != nil {
+				if err := promptAndSendServiceLog(ocmClient, cluster, successMsg, "success"); err != nil {
 					fmt.Printf("  ⚠️  Failed to send service log: %v\n", err)
 				}
 			} else {
@@ -714,182 +723,37 @@ func (o *transitionOptions) pollChannelChange(ocmClient *sdk.Connection, cluster
 	return "", fmt.Errorf("unexpected error in polling loop")
 }
 
-// loadServiceLogTemplate loads a service log template from either a predefined template name or file path
-// Templates are cached to avoid re-fetching in batch mode
-func loadServiceLogTemplate(templateOrFile string) ([]byte, bool, error) {
-	var templateBytes []byte
-	var err error
-	var usingDefaultTemplate bool
-
-	// Check if it's a template name
-	if templateURL, exists := serviceLogTemplates[templateOrFile]; exists {
-		// Check cache first
-		if cached, found := templateCache[templateOrFile]; found {
-			return cached, true, nil
-		}
-
-		// Fetch and cache the template
-		templateBytes, err = utils.CurlThis(templateURL)
-		if err != nil {
-			return nil, false, fmt.Errorf("failed to fetch template from %s: %w", templateURL, err)
-		}
-		templateCache[templateOrFile] = templateBytes
-		usingDefaultTemplate = true
-	} else {
-		// Treat as file path - don't cache file-based templates as they may be edited between runs
-		templateBytes, err = os.ReadFile(templateOrFile)
-		if err != nil {
-			return nil, false, fmt.Errorf("failed to read template file %s: %w", templateOrFile, err)
-		}
-		usingDefaultTemplate = false
+func resolveTemplate(name string) string {
+	if url, exists := serviceLogTemplates[name]; exists {
+		return url
 	}
-
-	return templateBytes, usingDefaultTemplate, nil
+	return name
 }
 
-// promptAndSendServiceLog shows the service log preview and prompts user to send it
-func promptAndSendServiceLog(ocmClient *sdk.Connection, cluster *v1.Cluster, templateName string) error {
-	// Load and prepare the message
-	templateBytes, usingDefaultTemplate, err := loadServiceLogTemplate(templateName)
-	if err != nil {
-		return err
-	}
-
-	var message servicelog.Message
-	if err := json.Unmarshal(templateBytes, &message); err != nil {
-		return fmt.Errorf("failed to parse service log template: %w", err)
-	}
-
-	// Set cluster-specific fields (matching cmd/servicelog/post.go:612-617)
-	message.ClusterUUID = cluster.ExternalID()
-	message.ClusterID = cluster.ID()
-	if subscription := cluster.Subscription(); subscription != nil {
-		message.SubscriptionID = subscription.ID()
-	}
-
-	// Validate that all required parameters were replaced
-	if leftoverParams, found := message.FindLeftovers(); found {
-		if usingDefaultTemplate {
-			return fmt.Errorf("default template contains unresolved parameters: %v. This should not happen", leftoverParams)
-		} else {
-			return fmt.Errorf("custom template contains unresolved parameters: %v. Please ensure all parameters are defined in your template", leftoverParams)
-		}
-	}
-
-	// Display service log preview
+func promptAndSendServiceLog(ocmClient *sdk.Connection, cluster *v1.Cluster, msg servicelog.Message, templateName string) error {
 	fmt.Println()
 	fmt.Printf("  📧 SERVICE LOG PREVIEW:\n")
-	fmt.Printf("  Summary:  %s\n", message.Summary)
-	fmt.Printf("  Severity: %s\n", message.Severity)
+	fmt.Printf("  Summary:  %s\n", msg.Summary)
+	fmt.Printf("  Severity: %s\n", msg.Severity)
 	fmt.Println()
 	fmt.Printf("  Message to Customer:\n")
-	fmt.Printf("  %s\n", message.Description)
+	fmt.Printf("  %s\n", msg.Description)
 	fmt.Println()
-
-	// Prompt user
 	if templateName == "success" {
 		fmt.Printf("  📧 Do you want to send this service log notification to the customer? (yes/no): ")
 	} else {
 		fmt.Printf("  📧 Do you want to send this 'attempted' service log to notify the customer? (yes/no): ")
 	}
-
-	if ocmutils.ConfirmPrompt() {
-		fmt.Printf("  📄 Sending '%s' service log template\n", templateName)
-		if err := sendServiceLog(ocmClient, &message); err != nil {
-			return err
-		}
-		fmt.Printf("  📧 Service log notification sent successfully\n")
-	} else {
+	if !ocmutils.ConfirmPrompt() {
 		fmt.Printf("  ℹ️  Skipping service log notification\n")
-	}
-
-	return nil
-}
-
-// sendServiceLog sends the prepared service log message
-// Implementation aligned with cmd/servicelog/post.go:304-310 and common.go:24-56
-func sendServiceLog(ocmClient *sdk.Connection, message *servicelog.Message) error {
-	request := ocmClient.Post()
-	if err := arguments.ApplyPathArg(request, "/api/service_logs/v1/cluster_logs"); err != nil {
-		return fmt.Errorf("cannot parse API path: %v", err)
-	}
-
-	messageBytes, err := json.Marshal(message)
-	if err != nil {
-		return fmt.Errorf("cannot marshal service log message: %v", err)
-	}
-
-	request.Bytes(messageBytes)
-
-	response, err := ocmutils.SendRequest(request)
-	if err != nil {
-		return fmt.Errorf("failed to send service log: %w", err)
-	}
-
-	body := response.Bytes()
-
-	// Validate response body - match cmd/servicelog/post.go:339-356
-	if response.Status() < 400 {
-		// Success response - validate that API echoed back expected fields
-		if err := validateServiceLogResponse(body, *message); err != nil {
-			return fmt.Errorf("service log sent but response validation failed: %w", err)
-		}
 		return nil
 	}
 
-	// Error response - parse and return the error reason
-	badReply, err := validateBadServiceLogResponse(body)
-	if err != nil {
-		return fmt.Errorf("service log request failed with status %d: %w", response.Status(), err)
+	if err := servicelog.PostMessage(ocmClient, cluster, msg); err != nil {
+		return err
 	}
-	return fmt.Errorf("service log request failed: %s (status: %d)", badReply.Reason, response.Status())
-}
-
-// validateServiceLogResponse validates that the API response echoes back the expected message fields
-// Implementation from cmd/servicelog/common.go:24-50
-func validateServiceLogResponse(body []byte, clusterMessage servicelog.Message) error {
-	if !json.Valid(body) {
-		return fmt.Errorf("server returned invalid JSON")
-	}
-
-	var goodReply servicelog.GoodReply
-	if err := json.Unmarshal(body, &goodReply); err != nil {
-		return fmt.Errorf("cannot parse the JSON response: %w", err)
-	}
-
-	// Validate that critical fields match what we sent
-	if goodReply.Severity != clusterMessage.Severity {
-		return fmt.Errorf("wrong severity echoed (sent %q, got %q)", clusterMessage.Severity, goodReply.Severity)
-	}
-	if goodReply.ServiceName != clusterMessage.ServiceName {
-		return fmt.Errorf("wrong service_name echoed (sent %q, got %q)", clusterMessage.ServiceName, goodReply.ServiceName)
-	}
-	if goodReply.ClusterUUID != clusterMessage.ClusterUUID {
-		return fmt.Errorf("wrong cluster_uuid echoed (sent %q, got %q)", clusterMessage.ClusterUUID, goodReply.ClusterUUID)
-	}
-	if goodReply.Summary != clusterMessage.Summary {
-		return fmt.Errorf("wrong summary echoed (sent %q, got %q)", clusterMessage.Summary, goodReply.Summary)
-	}
-	if goodReply.Description != clusterMessage.Description {
-		return fmt.Errorf("wrong description echoed (sent %q, got %q)", clusterMessage.Description, goodReply.Description)
-	}
-
+	fmt.Printf("  📧 Service log notification sent successfully\n")
 	return nil
-}
-
-// validateBadServiceLogResponse parses error response body
-// Implementation from cmd/servicelog/common.go:52-59
-func validateBadServiceLogResponse(body []byte) (*servicelog.BadReply, error) {
-	if !json.Valid(body) {
-		return nil, fmt.Errorf("server returned invalid JSON")
-	}
-
-	var badReply servicelog.BadReply
-	if err := json.Unmarshal(body, &badReply); err != nil {
-		return nil, fmt.Errorf("cannot parse error JSON response: %w", err)
-	}
-
-	return &badReply, nil
 }
 
 func (o *transitionOptions) printSummary(successful, failed []string) {

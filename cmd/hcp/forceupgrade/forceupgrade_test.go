@@ -3,7 +3,6 @@ package forceupgrade
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -167,66 +166,42 @@ func TestForceUpgradeOptionsValidation(t *testing.T) {
 	}
 }
 
-func TestLoadServiceLogTemplate(t *testing.T) {
-	// Create a temporary template file
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test-template.json")
-	testContent := `{"test": "template content"}`
-	err := os.WriteFile(tmpFile, []byte(testContent), 0600)
-	if err != nil {
-		t.Fatalf("Failed to create temp template file: %v", err)
-	}
-
+func TestResolveTemplate(t *testing.T) {
 	tests := []struct {
-		name                    string
-		templateOrFile          string
-		expectError             bool
-		expectedUsingDefault    bool
-		expectedContentContains string
+		name    string
+		input   string
+		wantURL bool
 	}{
 		{
-			name:                 "valid template name",
-			templateOrFile:       "end-of-support",
-			expectError:          false,
-			expectedUsingDefault: true,
+			name:    "known template name resolves to URL",
+			input:   "end-of-support",
+			wantURL: true,
 		},
 		{
-			name:                    "valid file path",
-			templateOrFile:          tmpFile,
-			expectError:             false,
-			expectedUsingDefault:    false,
-			expectedContentContains: "template content",
+			name:    "file path is returned as-is",
+			input:   "/path/to/template.json",
+			wantURL: false,
 		},
 		{
-			name:           "invalid template name (treated as file path)",
-			templateOrFile: "non-existent-template",
-			expectError:    true,
-		},
-		{
-			name:           "non-existent file path",
-			templateOrFile: "/path/that/does/not/exist.json",
-			expectError:    true,
+			name:    "unknown name is returned as-is",
+			input:   "unknown-template",
+			wantURL: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			templateBytes, usingDefaultTemplate, err := loadServiceLogTemplate(tt.templateOrFile)
-
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected error but got none")
+			result := resolveTemplate(tt.input)
+			if tt.wantURL {
+				if _, exists := serviceLogTemplates[tt.input]; !exists {
+					t.Fatalf("test setup error: %q should be in serviceLogTemplates", tt.input)
+				}
+				if result != serviceLogTemplates[tt.input] {
+					t.Errorf("resolveTemplate(%q) = %q, want %q", tt.input, result, serviceLogTemplates[tt.input])
 				}
 			} else {
-				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
-				} else {
-					if usingDefaultTemplate != tt.expectedUsingDefault {
-						t.Errorf("Expected usingDefaultTemplate=%v, got %v", tt.expectedUsingDefault, usingDefaultTemplate)
-					}
-					if tt.expectedContentContains != "" && !strings.Contains(string(templateBytes), tt.expectedContentContains) {
-						t.Errorf("Expected template content to contain '%s', got: %s", tt.expectedContentContains, string(templateBytes))
-					}
+				if result != tt.input {
+					t.Errorf("resolveTemplate(%q) = %q, want %q (returned as-is)", tt.input, result, tt.input)
 				}
 			}
 		})

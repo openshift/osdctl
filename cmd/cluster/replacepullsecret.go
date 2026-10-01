@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	b64 "encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -24,9 +25,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/openshift/osdctl/cmd/common"
-	"github.com/openshift/osdctl/cmd/servicelog"
 	"github.com/openshift/osdctl/internal/utils/globalflags"
 	"github.com/openshift/osdctl/pkg/controller"
+	"github.com/openshift/osdctl/pkg/servicelog"
 	"github.com/openshift/osdctl/pkg/utils"
 )
 
@@ -965,18 +966,20 @@ func (o *replacePullSecretOptions) run(ctx context.Context) error {
 	op.Would("send internal service log for %s", cluster.Name())
 
 	if !o.dryrun && op.AllOK {
-		postCmd := servicelog.PostCmdOptions{
-			ClusterId: o.clusterID,
+		if err := servicelog.Post(ocm, cluster, servicelog.PostRequest{
 			TemplateParams: []string{
 				fmt.Sprintf("MESSAGE=Pull secret replaced for cluster owner '%s'. Reason: %s", ownerUsername, o.reason),
 			},
 			InternalOnly: true,
-		}
-		if err := postCmd.Run(); err != nil {
-			op.Warn("failed to send internal service log: %v", err)
-			fmt.Fprintf(out, "To send manually: osdctl servicelog post -C %s -i -p MESSAGE=\"Pull secret replaced for cluster owner %q. Reason: %s\"\n", o.clusterID, ownerUsername, o.reason)
+		}); err != nil {
+			if errors.Is(err, servicelog.ErrDeclined) {
+				op.OK("internal service log skipped by user")
+			} else {
+				op.Warn("failed to send internal service log: %v", err)
+				fmt.Fprintf(out, "To send manually: osdctl servicelog post -C %s -i -p MESSAGE=\"Pull secret replaced for cluster owner %q. Reason: %s\"\n", o.clusterID, ownerUsername, o.reason)
+			}
 		} else {
-			op.OK("internal service log step completed")
+			op.OK("internal service log sent")
 		}
 	}
 
