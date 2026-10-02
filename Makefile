@@ -18,9 +18,9 @@ help:
 	@echo "Targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 
-all: format mod build test lint verify-docs
+all: format mod ci-build test lint verify-docs
 
-format: vet mod fmt mockgen ci-build ## Runs vet, mod, fmt, mockgen & ci-build targets
+format: vet mod fmt mockgen ## Runs vet, mod, fmt & mockgen targets
 
 fmt: ## format go code
 	@echo "gofmt"
