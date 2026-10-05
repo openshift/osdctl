@@ -347,10 +347,9 @@ func TestHcpLogsQueryDiffersFromStandard(t *testing.T) {
 // --- --dedupe ---
 
 func newTestLogResult(message string, fields map[string]string) *logResult {
-	stream := fields
 	values := []string{"0", message}
 	return &logResult{
-		Stream: &stream,
+		Stream: fields,
 		Values: []*[]string{&values},
 	}
 }
@@ -395,8 +394,8 @@ func TestLogDedupeBuffer(t *testing.T) {
 	if flush == nil || count != 1 {
 		t.Fatalf("final flush should return pending, got flush=%v count=%d", flush != nil, count)
 	}
-	if (*flush.Stream)["k8s_pod_name"] != "other-pod" {
-		t.Errorf("final flush pod = %q, want other-pod", (*flush.Stream)["k8s_pod_name"])
+	if flush.Stream["k8s_pod_name"] != "other-pod" {
+		t.Errorf("final flush pod = %q, want other-pod", flush.Stream["k8s_pod_name"])
 	}
 
 	if flush, count = buf.flush(); flush != nil || count != 0 {
@@ -407,8 +406,9 @@ func TestLogDedupeBuffer(t *testing.T) {
 func TestFormatTextLogLine(t *testing.T) {
 	result := newTestLogResult("boom", map[string]string{"k8s_pod_name": "pod-a"})
 	fields := []string{"k8s_pod_name"}
+	printer := &textLogsPrinter{isPrintingTimeValue: false, fieldNames: fields}
 
-	got := formatTextLogLine(result, false, fields)
+	got := printer.formatLine(result)
 	if want := "pod-a boom"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

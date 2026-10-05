@@ -462,9 +462,9 @@ type streamLogsResponse struct {
 }
 
 type logResult struct {
-	Stream    *map[string]string `json:"stream"`
-	Values    []*[]string        `json:"values"`
-	timeStamp int64              `json:"-"`
+	Stream    map[string]string `json:"stream"`
+	Values    []*[]string       `json:"values"`
+	timeStamp int64             `json:"-"`
 }
 
 func (l *logResult) getTimeStamp() int64 {
@@ -516,16 +516,17 @@ type logDedupeBuffer struct {
 	count      int
 }
 
-func dedupeKey(result *logResult, fieldNames []string) string {
-	var b strings.Builder
-	for _, fieldName := range fieldNames {
-		if result.Stream != nil {
-			b.WriteString((*result.Stream)[fieldName])
-		}
-		b.WriteByte(0)
+// equals compares two log results by message and field values.
+func (d *logDedupeBuffer) equals(r1, r2 *logResult) bool {
+	if r1.getMessage() != r2.getMessage() {
+		return false
 	}
-	b.WriteString(result.getMessage())
-	return b.String()
+	for _, fieldName := range d.fieldNames {
+		if r1.Stream[fieldName] != r2.Stream[fieldName] {
+			return false
+		}
+	}
+	return true
 }
 
 // push accepts a log result. isNew reports whether result differs from the
@@ -533,7 +534,7 @@ func dedupeKey(result *logResult, fieldNames []string) string {
 // previous streak just ended, endedResult/endedCount describe it so the
 // caller can print a "repeated Nx" marker if endedCount > 1.
 func (d *logDedupeBuffer) push(result *logResult) (isNew bool, endedResult *logResult, endedCount int) {
-	if d.pending != nil && dedupeKey(d.pending, d.fieldNames) == dedupeKey(result, d.fieldNames) {
+	if d.pending != nil && d.equals(d.pending, result) {
 		d.count++
 		return false, nil, 0
 	}
@@ -563,17 +564,15 @@ type textLogsPrinter struct {
 	dedupe              *logDedupeBuffer
 }
 
-func formatTextLogLine(result *logResult, isPrintingTimeValue bool, fieldNames []string) string {
+func (p *textLogsPrinter) formatLine(result *logResult) string {
 	var sb strings.Builder
 
-	if isPrintingTimeValue {
+	if p.isPrintingTimeValue {
 		sb.WriteString(result.getHumanReadableTime())
 		sb.WriteString(" ")
 	}
-	for _, fieldName := range fieldNames {
-		if result.Stream != nil {
-			sb.WriteString((*result.Stream)[fieldName])
-		}
+	for _, fieldName := range p.fieldNames {
+		sb.WriteString(result.Stream[fieldName])
 		sb.WriteString(" ")
 	}
 	sb.WriteString(result.getMessage())
@@ -581,20 +580,29 @@ func formatTextLogLine(result *logResult, isPrintingTimeValue bool, fieldNames [
 	return sb.String()
 }
 
+func (p *textLogsPrinter) printRepeatedCount(endedResult *logResult, endedCount int) {
+	if endedCount <= 1 {
+		return
+	}
+	if p.isPrintingTimeValue && endedResult != nil {
+		fmt.Printf("... repeated %dx (last: %s) ...\n", endedCount, endedResult.getHumanReadableTime())
+	} else {
+		fmt.Printf("... repeated %dx ...\n", endedCount)
+	}
+}
+
 func (p *textLogsPrinter) PrintHeader() {
 }
 
 func (p *textLogsPrinter) PrintResult(result *logResult) {
 	if p.dedupe == nil {
-		fmt.Println(formatTextLogLine(result, p.isPrintingTimeValue, p.fieldNames))
+		fmt.Println(p.formatLine(result))
 		return
 	}
-	isNew, _, endedCount := p.dedupe.push(result)
-	if endedCount > 1 {
-		fmt.Printf("... repeated %dx ...\n", endedCount)
-	}
+	isNew, endedResult, endedCount := p.dedupe.push(result)
+	p.printRepeatedCount(endedResult, endedCount)
 	if isNew {
-		fmt.Println(formatTextLogLine(result, p.isPrintingTimeValue, p.fieldNames))
+		fmt.Println(p.formatLine(result))
 	}
 }
 
@@ -602,9 +610,8 @@ func (p *textLogsPrinter) PrintTrailer() {
 	if p.dedupe == nil {
 		return
 	}
-	if _, endedCount := p.dedupe.flush(); endedCount > 1 {
-		fmt.Printf("... repeated %dx ...\n", endedCount)
-	}
+	endedResult, endedCount := p.dedupe.flush()
+	p.printRepeatedCount(endedResult, endedCount)
 }
 
 type csvLogsPrinter struct {
@@ -634,7 +641,7 @@ func (p *csvLogsPrinter) PrintResult(result *logResult) {
 		row = append(row, result.getHumanReadableTime())
 	}
 	for _, fieldName := range p.fieldNames {
-		row = append(row, (*result.Stream)[fieldName])
+		row = append(row, result.Stream[fieldName])
 	}
 	row = append(row, result.getMessage())
 

@@ -260,9 +260,7 @@ func handleLogs(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolRes
 			Timestamp: result.getTime(),
 			Message:   result.getMessage(),
 		}
-		if result.Stream != nil {
-			entry.Stream = *result.Stream
-		}
+		entry.Stream = result.Stream
 		entries = append(entries, entry)
 	})
 	if err != nil {
