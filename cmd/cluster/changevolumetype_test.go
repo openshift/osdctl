@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -165,34 +164,6 @@ func TestNewVolumeTypeChangedServiceLogRequest(t *testing.T) {
 	}
 }
 
-func TestMonitorControlPlaneRolloutAndNotify(t *testing.T) {
-	t.Run("notifies after successful rollout", func(t *testing.T) {
-		events := []string{}
-		err := monitorControlPlaneRolloutAndNotify(context.Background(), func(context.Context) error {
-			events = append(events, "rollout")
-			return nil
-		}, func() {
-			events = append(events, "notification")
-		})
-
-		assert.NoError(t, err)
-		assert.Equal(t, []string{"rollout", "notification"}, events)
-	})
-
-	t.Run("does not notify after failed rollout", func(t *testing.T) {
-		rolloutErr := errors.New("rollout failed")
-		notified := false
-		err := monitorControlPlaneRolloutAndNotify(context.Background(), func(context.Context) error {
-			return rolloutErr
-		}, func() {
-			notified = true
-		})
-
-		assert.ErrorIs(t, err, rolloutErr)
-		assert.False(t, notified)
-	})
-}
-
 func TestChangeControlPlaneVolumeTypeAlreadyTargetTypeSkipsNotification(t *testing.T) {
 	volumeType := "gp3"
 	providerSpec, err := json.Marshal(machinev1beta1.AWSMachineProviderConfig{
@@ -225,29 +196,11 @@ func TestChangeControlPlaneVolumeTypeAlreadyTargetTypeSkipsNotification(t *testi
 		targetType: "gp3",
 		client:     fake.NewClientBuilder().WithScheme(scheme).WithObjects(cpms).Build(),
 	}
-	notified := false
 
-	err = ops.changeControlPlaneVolumeType(context.Background(), func(string, string, string) {
-		notified = true
-	})
+	previousType, err := ops.changeControlPlaneVolumeType(context.Background())
 
 	assert.NoError(t, err)
-	assert.False(t, notified)
-}
-
-func TestChangeRequestedVolumeTypesCombinedNotificationOrdering(t *testing.T) {
-	events := []string{}
-
-	err := changeRequestedVolumeTypes(context.Background(), "", func(context.Context) error {
-		events = append(events, "control-plane notification")
-		return nil
-	}, func(context.Context) error {
-		events = append(events, "infra notification")
-		return nil
-	})
-
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"control-plane notification", "infra notification"}, events)
+	assert.Empty(t, previousType, "previousType must be empty when already at target type")
 }
 
 // newTestCPMS builds a ControlPlaneMachineSet for monitorCPMSRollout tests.
@@ -386,8 +339,10 @@ func TestManualServiceLogGuidance_RedactsClusterID(t *testing.T) {
 			req := newVolumeTypeChangedServiceLogRequest(tt.template, "gp2", "gp3", "OHSS-123")
 			guidance := manualServiceLogGuidance(req)
 
-			assert.Contains(t, guidance, "$CLUSTER_ID",
-				"guidance must use $CLUSTER_ID placeholder")
+			// $CLUSTER_ID must be double-quoted so the variable expands
+			// safely without word splitting.
+			assert.Contains(t, guidance, `"$CLUSTER_ID"`,
+				"guidance must use double-quoted $CLUSTER_ID placeholder")
 			assert.Contains(t, guidance, "osdctl servicelog post",
 				"guidance must include the osdctl command")
 			assert.Contains(t, guidance, tt.template,
@@ -453,8 +408,8 @@ func TestOutboundServiceLogMessage_CarriesClusterFields(t *testing.T) {
 }
 
 func TestManualServiceLogGuidance_IncludesTemplateParams(t *testing.T) {
-	// Verify all template parameters appear in the guidance so the SRE
-	// can run the manual command without reconstructing them.
+	// Verify all template parameters appear in the guidance (inside
+	// single-quoted shells) so the SRE can run the command as-is.
 	req := newVolumeTypeChangedServiceLogRequest(
 		controlPlaneVolumeTypeChangedServiceLogTemplate,
 		"gp2", "gp3", "OHSS-456",
@@ -462,7 +417,84 @@ func TestManualServiceLogGuidance_IncludesTemplateParams(t *testing.T) {
 
 	guidance := manualServiceLogGuidance(req)
 	for _, param := range req.TemplateParams {
+		// The parameter value is single-quoted in the output, so the
+		// raw KEY=VALUE text still appears inside the quotes.
 		assert.True(t, strings.Contains(guidance, param),
 			"guidance must include template parameter %q", param)
+	}
+}
+
+func TestManualServiceLogGuidance_ShellQuotesMaliciousReason(t *testing.T) {
+	// A malicious or complex reason must be safely quoted so that
+	// copying the printed command never executes injected content.
+	maliciousReasons := []struct {
+		name   string
+		reason string
+	}{
+		{"spaces", "some reason with spaces"},
+		{"double quotes", `reason "with" quotes`},
+		{"single quotes", "reason 'with' quotes"},
+		{"command substitution", "$(rm -rf /)"},
+		{"backticks", "`whoami`"},
+		{"semicolons", "reason; rm -rf /"},
+		{"redirect", "reason > /etc/passwd"},
+		{"pipe", "reason | cat /etc/shadow"},
+		{"newlines", "reason\nwhoami"},
+		{"combined", `OHSS-$(whoami); rm -rf / > /dev/null & echo 'pwned'` + "\n`id`"},
+	}
+
+	for _, tt := range maliciousReasons {
+		t.Run(tt.name, func(t *testing.T) {
+			req := newVolumeTypeChangedServiceLogRequest(
+				controlPlaneVolumeTypeChangedServiceLogTemplate,
+				"gp2", "gp3", tt.reason,
+			)
+			guidance := manualServiceLogGuidance(req)
+
+			// All dynamic values must be single-quoted. Verify the
+			// shell-quoted form of every parameter appears exactly.
+			assert.Contains(t, guidance, shellQuote(req.Template),
+				"template URL must be single-quoted")
+			for _, param := range req.TemplateParams {
+				assert.Contains(t, guidance, shellQuote(param),
+					"template parameter %q must be single-quoted", param)
+			}
+
+			// The REASON parameter (including the shell-quoted reason)
+			// must be present so the SRE can verify what will be sent.
+			// For reasons with single quotes, the escaped form '\'' is
+			// correct and preserves the value when evaluated by a shell.
+			assert.Contains(t, guidance, shellQuote("REASON="+tt.reason),
+				"guidance must include the shell-quoted reason parameter")
+
+			// $CLUSTER_ID must be double-quoted for safe expansion.
+			assert.Contains(t, guidance, `"$CLUSTER_ID"`,
+				"$CLUSTER_ID must be double-quoted")
+		})
+	}
+}
+
+func TestShellQuote(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"simple", "hello", "'hello'"},
+		{"spaces", "hello world", "'hello world'"},
+		{"single quote", "it's", `'it'\''s'`},
+		{"double quote", `say "hi"`, `'say "hi"'`},
+		{"dollar sign", "$(cmd)", "'$(cmd)'"},
+		{"backtick", "`cmd`", "'`cmd`'"},
+		{"semicolon", "a; b", "'a; b'"},
+		{"redirect", "a > b", "'a > b'"},
+		{"newline", "a\nb", "'a\nb'"},
+		{"empty", "", "''"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, shellQuote(tt.input))
+		})
 	}
 }
