@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	machinev1 "github.com/openshift/api/machine/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
@@ -12,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -244,4 +246,119 @@ func TestChangeRequestedVolumeTypesCombinedNotificationOrdering(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"control-plane notification", "infra notification"}, events)
+}
+
+// newTestCPMS builds a ControlPlaneMachineSet for monitorCPMSRollout tests.
+// generation sets metadata.Generation, observedGeneration sets
+// Status.ObservedGeneration, and updated/ready populate the replica counts.
+func newTestCPMS(generation, observedGeneration int64, updated, ready int32) *machinev1.ControlPlaneMachineSet {
+	return &machinev1.ControlPlaneMachineSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  changeVolumeTypeCPMSNamespace,
+			Name:       changeVolumeTypeCPMSName,
+			Generation: generation,
+		},
+		Status: machinev1.ControlPlaneMachineSetStatus{
+			ObservedGeneration: observedGeneration,
+			UpdatedReplicas:    updated,
+			ReadyReplicas:      ready,
+		},
+	}
+}
+
+func newTestScheme(t *testing.T) *runtime.Scheme {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	assert.NoError(t, machinev1.Install(scheme))
+	return scheme
+}
+
+// withFastPoll temporarily shortens pollInterval and rolloutPollTimeout so
+// that monitorCPMSRollout tests run in milliseconds, not minutes.
+func withFastPoll(t *testing.T) {
+	t.Helper()
+	origInterval, origTimeout := pollInterval, rolloutPollTimeout
+	pollInterval = 50 * time.Millisecond
+	rolloutPollTimeout = 2 * time.Second
+	t.Cleanup(func() {
+		pollInterval = origInterval
+		rolloutPollTimeout = origTimeout
+	})
+}
+
+func TestMonitorCPMSRollout_StaleGeneration(t *testing.T) {
+	withFastPoll(t)
+
+	// Simulate the race CodeRabbit identified: immediately after the patch,
+	// the CPMS controller has not yet observed the new generation, so the
+	// status still shows the pre-patch 3/3 counts. The monitor must wait
+	// until ObservedGeneration catches up before trusting replica counts.
+	scheme := newTestScheme(t)
+	cpms := newTestCPMS(2, 1, 3, 3) // gen 2 patched, controller still on gen 1
+
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cpms).
+		WithStatusSubresource(cpms).
+		Build()
+	ops := &changeVolumeTypeOptions{client: fakeClient}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Run monitor in a goroutine — it should NOT complete immediately.
+	done := make(chan error, 1)
+	go func() { done <- ops.monitorCPMSRollout(ctx) }()
+
+	// Give the first poll iteration time to run, then verify it has not
+	// returned (the stale generation must block completion).
+	time.Sleep(150 * time.Millisecond)
+	select {
+	case <-done:
+		t.Fatal("monitorCPMSRollout returned immediately on stale ObservedGeneration; should have waited")
+	default:
+	}
+
+	// Simulate controller catching up: bump ObservedGeneration to match.
+	latest := &machinev1.ControlPlaneMachineSet{}
+	assert.NoError(t, fakeClient.Get(ctx, client.ObjectKey{Namespace: changeVolumeTypeCPMSNamespace, Name: changeVolumeTypeCPMSName}, latest))
+	latest.Status.ObservedGeneration = 2
+	assert.NoError(t, fakeClient.Status().Update(ctx, latest))
+
+	// Now the monitor should complete successfully.
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("monitorCPMSRollout did not complete after ObservedGeneration caught up")
+	}
+}
+
+func TestMonitorCPMSRollout_SuccessfulRollout(t *testing.T) {
+	withFastPoll(t)
+
+	// When ObservedGeneration already matches and replicas are 3/3,
+	// the monitor should return success on the first poll.
+	scheme := newTestScheme(t)
+	cpms := newTestCPMS(2, 2, 3, 3)
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cpms).Build()
+	ops := &changeVolumeTypeOptions{client: fakeClient}
+
+	err := ops.monitorCPMSRollout(context.Background())
+	assert.NoError(t, err)
+}
+
+func TestMonitorCPMSRollout_Timeout(t *testing.T) {
+	withFastPoll(t)
+
+	// When replicas never reach 3/3, the monitor should time out.
+	scheme := newTestScheme(t)
+	cpms := newTestCPMS(2, 2, 1, 1) // stuck at 1/3
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cpms).Build()
+	ops := &changeVolumeTypeOptions{client: fakeClient}
+
+	err := ops.monitorCPMSRollout(context.Background())
+	assert.Error(t, err, "monitor should return an error on timeout")
 }

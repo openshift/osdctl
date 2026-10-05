@@ -29,7 +29,11 @@ import (
 const (
 	changeVolumeTypeCPMSNamespace = "openshift-machine-api"
 	changeVolumeTypeCPMSName      = "cluster"
+)
 
+// pollInterval and rolloutPollTimeout are package-level vars so that tests
+// can use shorter durations without waiting 30 s between poll ticks.
+var (
 	pollInterval       = 30 * time.Second
 	rolloutPollTimeout = 45 * time.Minute
 )
@@ -400,6 +404,15 @@ func (o *changeVolumeTypeOptions) monitorCPMSRollout(ctx context.Context) error 
 		cpms := &machinev1.ControlPlaneMachineSet{}
 		if err := o.client.Get(ctx, client.ObjectKey{Namespace: changeVolumeTypeCPMSNamespace, Name: changeVolumeTypeCPMSName}, cpms); err != nil {
 			log.Printf("Error checking CPMS status: %v", err)
+			return false, nil
+		}
+
+		// Wait until the controller has observed the patched generation before
+		// trusting replica counts. Without this, a stale pre-patch status of
+		// 3/3 would immediately satisfy the completion check.
+		if cpms.Status.ObservedGeneration < cpms.Generation {
+			log.Printf("[%s] CPMS: waiting for controller to observe generation %d (observed: %d)",
+				time.Now().Format("15:04:05"), cpms.Generation, cpms.Status.ObservedGeneration)
 			return false, nil
 		}
 
