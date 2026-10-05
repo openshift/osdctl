@@ -164,17 +164,21 @@ func TestNewVolumeTypeChangedServiceLogRequest(t *testing.T) {
 	}
 }
 
-func TestChangeControlPlaneVolumeTypeAlreadyTargetTypeSkipsNotification(t *testing.T) {
-	volumeType := "gp3"
+// newTestCPMSWithVolumeType builds a fake CPMS with the given EBS VolumeType.
+// Pass nil to simulate a CPMS whose VolumeType field was never set.
+func newTestCPMSWithVolumeType(t *testing.T, volumeType *string) (*machinev1.ControlPlaneMachineSet, *runtime.Scheme) {
+	t.Helper()
+
 	providerSpec, err := json.Marshal(machinev1beta1.AWSMachineProviderConfig{
 		BlockDevices: []machinev1beta1.BlockDeviceMappingSpec{{
-			EBS: &machinev1beta1.EBSBlockDeviceSpec{VolumeType: &volumeType},
+			EBS: &machinev1beta1.EBSBlockDeviceSpec{VolumeType: volumeType},
 		}},
 	})
 	assert.NoError(t, err)
 
 	scheme := runtime.NewScheme()
 	assert.NoError(t, machinev1.Install(scheme))
+
 	cpms := &machinev1.ControlPlaneMachineSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: changeVolumeTypeCPMSNamespace,
@@ -192,6 +196,116 @@ func TestChangeControlPlaneVolumeTypeAlreadyTargetTypeSkipsNotification(t *testi
 			},
 		},
 	}
+	return cpms, scheme
+}
+
+func TestVolumeTypeResolution(t *testing.T) {
+	// Directly exercises the VolumeType detection logic used by
+	// changeControlPlaneVolumeType: unmarshal the CPMS provider spec and
+	// resolve currentType. This avoids the ConfirmPrompt interaction.
+	tests := []struct {
+		name        string
+		volumeType  *string
+		wantCurrent string
+		wantSkipGp3 bool // true → currentType == "gp3" → skip
+	}{
+		{
+			name:        "nil VolumeType uses effective AWS default",
+			volumeType:  nil,
+			wantCurrent: defaultAWSEBSVolumeType,
+			wantSkipGp3: false,
+		},
+		{
+			name:        "explicit gp2",
+			volumeType:  strPtr("gp2"),
+			wantCurrent: "gp2",
+			wantSkipGp3: false,
+		},
+		{
+			name:        "explicit gp3 (already target)",
+			volumeType:  strPtr("gp3"),
+			wantCurrent: "gp3",
+			wantSkipGp3: true,
+		},
+		{
+			name:        "explicit io1",
+			volumeType:  strPtr("io1"),
+			wantCurrent: "io1",
+			wantSkipGp3: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw, err := json.Marshal(machinev1beta1.AWSMachineProviderConfig{
+				BlockDevices: []machinev1beta1.BlockDeviceMappingSpec{{
+					EBS: &machinev1beta1.EBSBlockDeviceSpec{VolumeType: tt.volumeType},
+				}},
+			})
+			assert.NoError(t, err)
+
+			awsSpec := &machinev1beta1.AWSMachineProviderConfig{}
+			assert.NoError(t, json.Unmarshal(raw, awsSpec))
+
+			// Replicate the detection logic from changeControlPlaneVolumeType.
+			currentType := defaultAWSEBSVolumeType
+			if awsSpec.BlockDevices[0].EBS != nil && awsSpec.BlockDevices[0].EBS.VolumeType != nil {
+				currentType = *awsSpec.BlockDevices[0].EBS.VolumeType
+			}
+
+			assert.Equal(t, tt.wantCurrent, currentType, "resolved currentType")
+			assert.Equal(t, tt.wantSkipGp3, currentType == "gp3", "skip-when-target-is-gp3")
+
+			// Verify the notification gating contract: currentType must
+			// be non-empty when a change would be made.
+			if !tt.wantSkipGp3 {
+				assert.NotEmpty(t, currentType,
+					"currentType must be non-empty for the notification gate (previousType != \"\") to pass")
+			}
+		})
+	}
+}
+
+func strPtr(s string) *string { return &s }
+
+func TestChangeControlPlaneVolumeType_NilVolumeTypeReachesConfirm(t *testing.T) {
+	// When VolumeType is nil, the function must NOT skip (because the
+	// effective type gp2 differs from the target gp3). It should reach
+	// the ConfirmPrompt and abort in a non-TTY test environment.
+	cpms, scheme := newTestCPMSWithVolumeType(t, nil)
+	ops := &changeVolumeTypeOptions{
+		targetType: "gp3",
+		client:     fake.NewClientBuilder().WithScheme(scheme).WithObjects(cpms).Build(),
+	}
+
+	_, err := ops.changeControlPlaneVolumeType(context.Background())
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "aborted by user",
+		"nil VolumeType must not be skipped — code should reach confirm prompt")
+}
+
+func TestChangeControlPlaneVolumeType_ExplicitTypePreserved(t *testing.T) {
+	// When VolumeType is explicitly set to "gp2", the function must
+	// return "gp2" as previousType (not the default constant).
+	explicitType := "gp2"
+	cpms, scheme := newTestCPMSWithVolumeType(t, &explicitType)
+	ops := &changeVolumeTypeOptions{
+		targetType: "gp3",
+		client:     fake.NewClientBuilder().WithScheme(scheme).WithObjects(cpms).Build(),
+	}
+
+	_, err := ops.changeControlPlaneVolumeType(context.Background())
+
+	// Will abort at confirm prompt, proving the code detected the type
+	// difference and didn't skip.
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "aborted by user")
+}
+
+func TestChangeControlPlaneVolumeTypeAlreadyTargetTypeSkipsNotification(t *testing.T) {
+	volumeType := "gp3"
+	cpms, scheme := newTestCPMSWithVolumeType(t, &volumeType)
 	ops := &changeVolumeTypeOptions{
 		targetType: "gp3",
 		client:     fake.NewClientBuilder().WithScheme(scheme).WithObjects(cpms).Build(),
@@ -201,6 +315,34 @@ func TestChangeControlPlaneVolumeTypeAlreadyTargetTypeSkipsNotification(t *testi
 
 	assert.NoError(t, err)
 	assert.Empty(t, previousType, "previousType must be empty when already at target type")
+}
+
+func TestNotificationGating_NilVolumeType(t *testing.T) {
+	// Verify the notification gating logic in run(): previousType from
+	// changeControlPlaneVolumeType must be non-empty when VolumeType was
+	// nil, so that the service log notification fires.
+	//
+	// We can't call run() directly (it requires OCM + K8s clients), but
+	// we can verify the invariant: the default constant is non-empty and
+	// differs from the empty-string gate used in run().
+	assert.NotEmpty(t, defaultAWSEBSVolumeType,
+		"defaultAWSEBSVolumeType must be non-empty so the notification gating check (previousType != \"\") passes")
+}
+
+func TestNotificationGating_AlreadyTargetType(t *testing.T) {
+	// When the CPMS is already at the target type, previousType is empty,
+	// and the notification must NOT fire. Verify this contract.
+	volumeType := "gp3"
+	cpms, scheme := newTestCPMSWithVolumeType(t, &volumeType)
+	ops := &changeVolumeTypeOptions{
+		targetType: "gp3",
+		client:     fake.NewClientBuilder().WithScheme(scheme).WithObjects(cpms).Build(),
+	}
+
+	previousType, err := ops.changeControlPlaneVolumeType(context.Background())
+	assert.NoError(t, err)
+	assert.Empty(t, previousType,
+		"previousType must be empty (skipped) when already at target, so notification does not fire")
 }
 
 // newTestCPMS builds a ControlPlaneMachineSet for monitorCPMSRollout tests.

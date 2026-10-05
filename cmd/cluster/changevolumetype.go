@@ -38,6 +38,14 @@ var (
 	rolloutPollTimeout = 45 * time.Minute
 )
 
+// defaultAWSEBSVolumeType is the effective AWS default when the CPMS
+// EBS VolumeType field is nil. The machine-api-provider-aws passes a
+// nil VolumeType through to the AWS SDK, which omits it from the
+// RunInstances call; AWS then defaults to "gp2". (The OpenShift
+// Machine API type doc says "Default: standard", but that reflects the
+// legacy AWS default for magnetic volumes — modern AWS defaults to gp2.)
+const defaultAWSEBSVolumeType = "gp2"
+
 var validVolumeTypes = []string{"gp3"}
 
 type changeVolumeTypeOptions struct {
@@ -339,7 +347,7 @@ func (o *changeVolumeTypeOptions) changeControlPlaneVolumeType(ctx context.Conte
 		return "", fmt.Errorf("CPMS has no blockDevices configured")
 	}
 
-	currentType := ""
+	currentType := defaultAWSEBSVolumeType
 	if awsSpec.BlockDevices[0].EBS != nil && awsSpec.BlockDevices[0].EBS.VolumeType != nil {
 		currentType = *awsSpec.BlockDevices[0].EBS.VolumeType
 	}
