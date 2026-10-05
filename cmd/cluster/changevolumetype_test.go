@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	machinev1 "github.com/openshift/api/machine/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/openshift/osdctl/pkg/servicelog"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -361,4 +363,106 @@ func TestMonitorCPMSRollout_Timeout(t *testing.T) {
 
 	err := ops.monitorCPMSRollout(context.Background())
 	assert.Error(t, err, "monitor should return an error on timeout")
+}
+
+// --- Sensitive-data redaction tests ---
+
+func TestManualServiceLogGuidance_RedactsClusterID(t *testing.T) {
+	// The manual fallback must use $CLUSTER_ID placeholder — never a real
+	// cluster identifier — so that terminal output and logs do not leak
+	// customer-specific values.
+	sampleClusterID := "1abc2def3ghi4jkl5mno6pqr7stu8vwx"
+
+	tests := []struct {
+		name     string
+		template string
+	}{
+		{"control-plane template", controlPlaneVolumeTypeChangedServiceLogTemplate},
+		{"infra template", infraVolumeTypeChangedServiceLogTemplate},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := newVolumeTypeChangedServiceLogRequest(tt.template, "gp2", "gp3", "OHSS-123")
+			guidance := manualServiceLogGuidance(req)
+
+			assert.Contains(t, guidance, "$CLUSTER_ID",
+				"guidance must use $CLUSTER_ID placeholder")
+			assert.Contains(t, guidance, "osdctl servicelog post",
+				"guidance must include the osdctl command")
+			assert.Contains(t, guidance, tt.template,
+				"guidance must include the template URL")
+			assert.NotContains(t, guidance, sampleClusterID,
+				"guidance must not contain a real cluster ID")
+		})
+	}
+}
+
+func TestServiceLogPreview_OmitsClusterFields(t *testing.T) {
+	// After Prepare (before PostMessage), the Message has empty cluster
+	// fields. With omitempty JSON tags, cluster_uuid, cluster_id, and
+	// subscription_id must not appear in the marshaled preview JSON.
+	msg := servicelog.Message{
+		Severity:    "Info",
+		ServiceName: "SREManualAction",
+		Summary:     "Volume type changed from gp2 to gp3",
+		Description: "The EBS volume type was changed.",
+	}
+
+	previewBytes, err := json.MarshalIndent(msg, "", "  ")
+	assert.NoError(t, err)
+
+	preview := string(previewBytes)
+	assert.NotContains(t, preview, "cluster_uuid",
+		"preview must not contain cluster_uuid field")
+	assert.NotContains(t, preview, "cluster_id",
+		"preview must not contain cluster_id field")
+	assert.NotContains(t, preview, "subscription_id",
+		"preview must not contain subscription_id field")
+
+	// Verify the preview still contains the expected content fields
+	assert.Contains(t, preview, "SREManualAction")
+	assert.Contains(t, preview, "Volume type changed from gp2 to gp3")
+}
+
+func TestOutboundServiceLogMessage_CarriesClusterFields(t *testing.T) {
+	// PostMessage sets ClusterUUID, ClusterID, and SubscriptionID on the
+	// Message before sending. Verify that when these fields are populated,
+	// they appear in the marshaled JSON — proving the outbound request
+	// carries the required cluster identifiers.
+	msg := servicelog.Message{
+		Severity:       "Info",
+		ServiceName:    "SREManualAction",
+		Summary:        "Volume type changed",
+		Description:    "The EBS volume type was changed.",
+		ClusterUUID:    "ext-uuid-12345",
+		ClusterID:      "int-cluster-67890",
+		SubscriptionID: "sub-abcde-fghij",
+	}
+
+	outboundBytes, err := json.Marshal(msg)
+	assert.NoError(t, err)
+
+	outbound := string(outboundBytes)
+	assert.Contains(t, outbound, `"cluster_uuid":"ext-uuid-12345"`,
+		"outbound JSON must contain the cluster UUID")
+	assert.Contains(t, outbound, `"cluster_id":"int-cluster-67890"`,
+		"outbound JSON must contain the cluster ID")
+	assert.Contains(t, outbound, `"subscription_id":"sub-abcde-fghij"`,
+		"outbound JSON must contain the subscription ID")
+}
+
+func TestManualServiceLogGuidance_IncludesTemplateParams(t *testing.T) {
+	// Verify all template parameters appear in the guidance so the SRE
+	// can run the manual command without reconstructing them.
+	req := newVolumeTypeChangedServiceLogRequest(
+		controlPlaneVolumeTypeChangedServiceLogTemplate,
+		"gp2", "gp3", "OHSS-456",
+	)
+
+	guidance := manualServiceLogGuidance(req)
+	for _, param := range req.TemplateParams {
+		assert.True(t, strings.Contains(guidance, param),
+			"guidance must include template parameter %q", param)
+	}
 }

@@ -233,6 +233,9 @@ func (o *changeVolumeTypeOptions) run(ctx context.Context) error {
 	return nil
 }
 
+// changeRequestedVolumeTypes runs the control-plane and/or infra volume
+// type change operations based on the requested role. When role is empty,
+// both operations run in sequence (control-plane first, then infra).
 func changeRequestedVolumeTypes(ctx context.Context, role string, changeControlPlane, changeInfra func(context.Context) error) error {
 	if role == "" || role == "control-plane" {
 		if err := changeControlPlane(ctx); err != nil {
@@ -388,6 +391,9 @@ func (o *changeVolumeTypeOptions) changeControlPlaneVolumeType(ctx context.Conte
 	return nil
 }
 
+// monitorControlPlaneRolloutAndNotify runs the CPMS rollout monitor and,
+// only on success, fires the notification callback. This ensures the
+// service log is sent only after a fully successful rollout.
 func monitorControlPlaneRolloutAndNotify(ctx context.Context, monitor func(context.Context) error, notify func()) error {
 	if err := monitor(ctx); err != nil {
 		return err
@@ -480,6 +486,9 @@ func (o *changeVolumeTypeOptions) changeInfraVolumeType(ctx context.Context) err
 	return nil
 }
 
+// newVolumeTypeChangedServiceLogRequest builds a PostRequest for a
+// volume-type-changed service log with the given template URL and the
+// previous/new volume type and reason substituted as template parameters.
 func newVolumeTypeChangedServiceLogRequest(template, previousType, newType, reason string) servicelog.PostRequest {
 	return servicelog.PostRequest{
 		Template: template,
@@ -491,16 +500,63 @@ func newVolumeTypeChangedServiceLogRequest(template, previousType, newType, reas
 	}
 }
 
+// postVolumeTypeChangedServiceLog sends a volume-type-changed service log
+// using Prepare + PostMessage (instead of Post) so that cluster-specific
+// identifiers (ClusterUUID, ClusterID, SubscriptionID) never appear in
+// previews, terminal output, or log messages. PostMessage sets those
+// fields at send time. Errors are non-fatal: on failure the function
+// prints manual remediation guidance with redacted identifiers.
 func (o *changeVolumeTypeOptions) postVolumeTypeChangedServiceLog(template, previousType, newType string) {
 	postRequest := newVolumeTypeChangedServiceLogRequest(template, previousType, newType, o.reason)
-	if err := servicelog.Post(o.ocmClient, o.cluster, postRequest); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
-		fmt.Printf("Failed to send service log: %v\n", err)
-		fmt.Println("Please manually send a service log with:")
-		fmt.Printf("osdctl servicelog post %s -t %s -p %s\n",
-			o.clusterID, postRequest.Template, strings.Join(postRequest.TemplateParams, " -p "))
+
+	msg, err := servicelog.Prepare(postRequest)
+	if err != nil {
+		fmt.Printf("Failed to prepare service log: %v\n", err)
+		fmt.Print(manualServiceLogGuidance(postRequest))
+		return
 	}
+
+	if servicelog.CheckServiceLogsLastHour(o.ocmClient, o.cluster.ID()) {
+		if !utils.ConfirmPrompt() {
+			fmt.Println("Service log not sent (user declined).")
+			return
+		}
+	}
+
+	// Preview the message with cluster-specific fields intentionally
+	// omitted — PostMessage sets ClusterUUID, ClusterID, and
+	// SubscriptionID at send time; excluding them from the preview
+	// avoids leaking customer identifiers into terminal or log output.
+	fmt.Println("The following service log will be sent:")
+	if previewBytes, err := json.MarshalIndent(msg, "", "  "); err == nil {
+		fmt.Println(string(previewBytes))
+	}
+
+	if !utils.ConfirmPrompt() {
+		fmt.Println("Service log not sent (user declined).")
+		return
+	}
+
+	if err := servicelog.PostMessage(o.ocmClient, o.cluster, msg); err != nil {
+		fmt.Printf("Failed to send service log: %v\n", err)
+		fmt.Print(manualServiceLogGuidance(postRequest))
+		return
+	}
+
+	fmt.Println("Service log sent successfully.")
 }
 
+// manualServiceLogGuidance returns the manual remediation instructions for
+// a failed service-log post. The cluster identifier is represented as a
+// shell-style $CLUSTER_ID placeholder to prevent customer-specific values
+// from appearing in logs or shared terminal output.
+func manualServiceLogGuidance(req servicelog.PostRequest) string {
+	return fmt.Sprintf("Please manually send a service log with:\nosdctl servicelog post $CLUSTER_ID -t %s -p %s\n",
+		req.Template, strings.Join(req.TemplateParams, " -p "))
+}
+
+// countReadyNodes returns the number of nodes in the list whose Ready
+// condition is True.
 func countReadyNodes(nodes *corev1.NodeList) int {
 	ready := 0
 	for _, node := range nodes.Items {
@@ -513,6 +569,8 @@ func countReadyNodes(nodes *corev1.NodeList) int {
 	return ready
 }
 
+// roleDisplay returns a human-readable label for the role filter,
+// defaulting to "control-plane + infra" when no role is specified.
 func roleDisplay(role string) string {
 	if role == "" {
 		return "control-plane + infra"
