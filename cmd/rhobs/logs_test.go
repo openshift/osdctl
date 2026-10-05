@@ -403,7 +403,7 @@ func TestLogDedupeBuffer(t *testing.T) {
 	}
 }
 
-func TestFormatTextLogLine(t *testing.T) {
+func TestFormatLine(t *testing.T) {
 	result := newTestLogResult("boom", map[string]string{"k8s_pod_name": "pod-a"})
 	fields := []string{"k8s_pod_name"}
 	printer := &textLogsPrinter{isPrintingTimeValue: false, fieldNames: fields}
