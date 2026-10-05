@@ -1,10 +1,18 @@
 package cluster
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"testing"
 
+	machinev1 "github.com/openshift/api/machine/v1"
+	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestChangeVolumeType_ValidateTargetType(t *testing.T) {
@@ -117,4 +125,123 @@ func TestChangeVolumeType_CountReadyNodes(t *testing.T) {
 	// Empty list
 	nodes := &corev1.NodeList{}
 	assert.Equal(t, 0, countReadyNodes(nodes))
+}
+
+func TestNewVolumeTypeChangedServiceLogRequest(t *testing.T) {
+	tests := []struct {
+		name             string
+		template         string
+		expectedTemplate string
+	}{
+		{
+			name:             "control plane",
+			template:         controlPlaneVolumeTypeChangedServiceLogTemplate,
+			expectedTemplate: "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/controlplane_volume_type_changed.json",
+		},
+		{
+			name:             "infra",
+			template:         infraVolumeTypeChangedServiceLogTemplate,
+			expectedTemplate: "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_volume_type_changed.json",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := newVolumeTypeChangedServiceLogRequest(tt.template, "gp2", "gp3", "OHSS-123")
+
+			assert.Equal(t, tt.expectedTemplate, request.Template)
+			assert.Equal(t, []string{
+				"PREVIOUS_VOLUME_TYPE=gp2",
+				"NEW_VOLUME_TYPE=gp3",
+				"REASON=OHSS-123",
+			}, request.TemplateParams)
+			assert.False(t, request.InternalOnly)
+			assert.False(t, request.SkipLinkCheck)
+		})
+	}
+}
+
+func TestMonitorControlPlaneRolloutAndNotify(t *testing.T) {
+	t.Run("notifies after successful rollout", func(t *testing.T) {
+		events := []string{}
+		err := monitorControlPlaneRolloutAndNotify(context.Background(), func(context.Context) error {
+			events = append(events, "rollout")
+			return nil
+		}, func() {
+			events = append(events, "notification")
+		})
+
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"rollout", "notification"}, events)
+	})
+
+	t.Run("does not notify after failed rollout", func(t *testing.T) {
+		rolloutErr := errors.New("rollout failed")
+		notified := false
+		err := monitorControlPlaneRolloutAndNotify(context.Background(), func(context.Context) error {
+			return rolloutErr
+		}, func() {
+			notified = true
+		})
+
+		assert.ErrorIs(t, err, rolloutErr)
+		assert.False(t, notified)
+	})
+}
+
+func TestChangeControlPlaneVolumeTypeAlreadyTargetTypeSkipsNotification(t *testing.T) {
+	volumeType := "gp3"
+	providerSpec, err := json.Marshal(machinev1beta1.AWSMachineProviderConfig{
+		BlockDevices: []machinev1beta1.BlockDeviceMappingSpec{{
+			EBS: &machinev1beta1.EBSBlockDeviceSpec{VolumeType: &volumeType},
+		}},
+	})
+	assert.NoError(t, err)
+
+	scheme := runtime.NewScheme()
+	assert.NoError(t, machinev1.Install(scheme))
+	cpms := &machinev1.ControlPlaneMachineSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: changeVolumeTypeCPMSNamespace,
+			Name:      changeVolumeTypeCPMSName,
+		},
+		Spec: machinev1.ControlPlaneMachineSetSpec{
+			Template: machinev1.ControlPlaneMachineSetTemplate{
+				OpenShiftMachineV1Beta1Machine: &machinev1.OpenShiftMachineV1Beta1MachineTemplate{
+					Spec: machinev1beta1.MachineSpec{
+						ProviderSpec: machinev1beta1.ProviderSpec{
+							Value: &runtime.RawExtension{Raw: providerSpec},
+						},
+					},
+				},
+			},
+		},
+	}
+	ops := &changeVolumeTypeOptions{
+		targetType: "gp3",
+		client:     fake.NewClientBuilder().WithScheme(scheme).WithObjects(cpms).Build(),
+	}
+	notified := false
+
+	err = ops.changeControlPlaneVolumeType(context.Background(), func(string, string, string) {
+		notified = true
+	})
+
+	assert.NoError(t, err)
+	assert.False(t, notified)
+}
+
+func TestChangeRequestedVolumeTypesCombinedNotificationOrdering(t *testing.T) {
+	events := []string{}
+
+	err := changeRequestedVolumeTypes(context.Background(), "", func(context.Context) error {
+		events = append(events, "control-plane notification")
+		return nil
+	}, func(context.Context) error {
+		events = append(events, "infra notification")
+		return nil
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"control-plane notification", "infra notification"}, events)
 }

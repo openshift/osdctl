@@ -219,24 +219,29 @@ func (o *changeVolumeTypeOptions) run(ctx context.Context) error {
 		return fmt.Errorf("pre-flight checks failed: %v", err)
 	}
 
-	doControlPlane := o.role == "" || o.role == "control-plane"
-	doInfra := o.role == "" || o.role == "infra"
+	if err := changeRequestedVolumeTypes(ctx, o.role, func(ctx context.Context) error {
+		return o.changeControlPlaneVolumeType(ctx, o.postVolumeTypeChangedServiceLog)
+	}, o.changeInfraVolumeType); err != nil {
+		return err
+	}
 
-	// Control plane
-	if doControlPlane {
-		if err := o.changeControlPlaneVolumeType(ctx); err != nil {
+	printer.PrintlnGreen("\nVolume type change completed successfully!")
+	return nil
+}
+
+func changeRequestedVolumeTypes(ctx context.Context, role string, changeControlPlane, changeInfra func(context.Context) error) error {
+	if role == "" || role == "control-plane" {
+		if err := changeControlPlane(ctx); err != nil {
 			return fmt.Errorf("control plane volume type change failed: %v", err)
 		}
 	}
 
-	// Infra
-	if doInfra {
-		if err := o.changeInfraVolumeType(ctx); err != nil {
+	if role == "" || role == "infra" {
+		if err := changeInfra(ctx); err != nil {
 			return fmt.Errorf("infra volume type change failed: %v", err)
 		}
 	}
 
-	printer.PrintlnGreen("\nVolume type change completed successfully!")
 	return nil
 }
 
@@ -311,7 +316,7 @@ func (o *changeVolumeTypeOptions) preFlightChecks(ctx context.Context) error {
 }
 
 // changeControlPlaneVolumeType patches the CPMS to trigger a rolling replacement.
-func (o *changeVolumeTypeOptions) changeControlPlaneVolumeType(ctx context.Context) error {
+func (o *changeVolumeTypeOptions) changeControlPlaneVolumeType(ctx context.Context, postServiceLog func(template, previousType, newType string)) error {
 	printer.PrintlnGreen("=== Changing control plane volume type ===")
 
 	cpms := &machinev1.ControlPlaneMachineSet{}
@@ -369,12 +374,21 @@ func (o *changeVolumeTypeOptions) changeControlPlaneVolumeType(ctx context.Conte
 	printer.PrintlnGreen("CPMS patched successfully. Rolling replacement in progress...")
 	fmt.Println("Monitoring rollout (this will take ~35-45 minutes)...")
 
-	// Monitor the rollout
-	if err := o.monitorCPMSRollout(ctx); err != nil {
+	if err := monitorControlPlaneRolloutAndNotify(ctx, o.monitorCPMSRollout, func() {
+		postServiceLog(controlPlaneVolumeTypeChangedServiceLogTemplate, currentType, targetType)
+	}); err != nil {
 		return err
 	}
 
 	printer.PrintlnGreen("Control plane volume type change complete!")
+	return nil
+}
+
+func monitorControlPlaneRolloutAndNotify(ctx context.Context, monitor func(context.Context) error, notify func()) error {
+	if err := monitor(ctx); err != nil {
+		return err
+	}
+	notify()
 	return nil
 }
 
@@ -402,7 +416,8 @@ func (o *changeVolumeTypeOptions) monitorCPMSRollout(ctx context.Context) error 
 }
 
 const (
-	volumeTypeChangedServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_volume_type_changed.json"
+	controlPlaneVolumeTypeChangedServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/controlplane_volume_type_changed.json"
+	infraVolumeTypeChangedServiceLogTemplate        = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_volume_type_changed.json"
 )
 
 // changeInfraVolumeType uses the Hive MachinePool dance from pkg/infra
@@ -446,24 +461,31 @@ func (o *changeVolumeTypeOptions) changeInfraVolumeType(ctx context.Context) err
 		return err
 	}
 
-	// Post service log
-	slParams := []string{
-		fmt.Sprintf("PREVIOUS_VOLUME_TYPE=%s", previousType),
-		fmt.Sprintf("NEW_VOLUME_TYPE=%s", targetType),
-		fmt.Sprintf("REASON=%s", o.reason),
-	}
-	if err := servicelog.Post(o.ocmClient, o.cluster, servicelog.PostRequest{
-		Template:       volumeTypeChangedServiceLogTemplate,
-		TemplateParams: slParams,
-	}); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
-		fmt.Printf("Failed to send service log: %v\n", err)
-		fmt.Println("Please manually send a service log with:")
-		fmt.Printf("osdctl servicelog post %s -t %s -p %s\n",
-			o.clusterID, volumeTypeChangedServiceLogTemplate, strings.Join(slParams, " -p "))
-	}
+	o.postVolumeTypeChangedServiceLog(infraVolumeTypeChangedServiceLogTemplate, previousType, targetType)
 
 	printer.PrintlnGreen("Infra volume type change complete!")
 	return nil
+}
+
+func newVolumeTypeChangedServiceLogRequest(template, previousType, newType, reason string) servicelog.PostRequest {
+	return servicelog.PostRequest{
+		Template: template,
+		TemplateParams: []string{
+			fmt.Sprintf("PREVIOUS_VOLUME_TYPE=%s", previousType),
+			fmt.Sprintf("NEW_VOLUME_TYPE=%s", newType),
+			fmt.Sprintf("REASON=%s", reason),
+		},
+	}
+}
+
+func (o *changeVolumeTypeOptions) postVolumeTypeChangedServiceLog(template, previousType, newType string) {
+	postRequest := newVolumeTypeChangedServiceLogRequest(template, previousType, newType, o.reason)
+	if err := servicelog.Post(o.ocmClient, o.cluster, postRequest); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
+		fmt.Printf("Failed to send service log: %v\n", err)
+		fmt.Println("Please manually send a service log with:")
+		fmt.Printf("osdctl servicelog post %s -t %s -p %s\n",
+			o.clusterID, postRequest.Template, strings.Join(postRequest.TemplateParams, " -p "))
+	}
 }
 
 func countReadyNodes(nodes *corev1.NodeList) int {
