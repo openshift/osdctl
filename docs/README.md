@@ -104,6 +104,7 @@
   - `backup --cluster-id <cluster-id> --reason <reason>` - Trigger a Velero backup for an HCP cluster
     - `discover --cluster-id <cluster-id>` - Discover HCP backups from the disaster recovery S3 bucket
     - `release-dns --cluster-id <cluster-id>` - Release central DNS records for an HCP cluster
+    - `update-trust-policy --cluster-id <cluster-id> --replacement-mc <management-cluster>` - Allow a replacement management cluster to access HCP backups
   - `force-upgrade` - Schedule forced control plane upgrade for HCP clusters (Requires ForceUpgrader permissions)
   - `get-cp-autoscaling-status` - Get control plane autoscaling status for hosted clusters on a management cluster
   - `must-gather --cluster-id <cluster-identifier>` - Create a must-gather for HCP cluster
@@ -3251,6 +3252,34 @@ osdctl hcp backup release-dns --cluster-id <cluster-id> [flags]
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
   -S, --skip-version-check               skip checking to see if this is the most recent release
+```
+
+### osdctl hcp backup update-trust-policy
+
+Allow a replacement management cluster to access HCP backups
+
+```
+osdctl hcp backup update-trust-policy --cluster-id <cluster-id> --replacement-mc <management-cluster> [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+  -C, --cluster-id string                Internal ID, name, or external ID of the HCP cluster
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for update-trust-policy
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+  -p, --profile string                   AWS profile used to assume the DR account role
+      --replacement-mc string            Internal ID, name, or external ID of the replacement management cluster
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+      --source-mc string                 Internal ID, name, or external ID of the management cluster currently trusted by the backup role
 ```
 
 ### osdctl hcp force-upgrade

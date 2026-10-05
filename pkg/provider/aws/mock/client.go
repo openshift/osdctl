@@ -652,6 +652,21 @@ func (mr *MockClientMockRecorder) GetResources(input any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetResources", reflect.TypeOf((*MockClient)(nil).GetResources), input)
 }
 
+// GetRole mocks base method.
+func (m *MockClient) GetRole(arg0 *iam.GetRoleInput) (*iam.GetRoleOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRole", arg0)
+	ret0, _ := ret[0].(*iam.GetRoleOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRole indicates an expected call of GetRole.
+func (mr *MockClientMockRecorder) GetRole(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRole", reflect.TypeOf((*MockClient)(nil).GetRole), arg0)
+}
+
 // GetUser mocks base method.
 func (m *MockClient) GetUser(arg0 *iam.GetUserInput) (*iam.GetUserOutput, error) {
 	m.ctrl.T.Helper()
@@ -1115,4 +1130,19 @@ func (m *MockClient) UntagResource(input *organizations.UntagResourceInput) (*or
 func (mr *MockClientMockRecorder) UntagResource(input any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UntagResource", reflect.TypeOf((*MockClient)(nil).UntagResource), input)
+}
+
+// UpdateAssumeRolePolicy mocks base method.
+func (m *MockClient) UpdateAssumeRolePolicy(arg0 *iam.UpdateAssumeRolePolicyInput) (*iam.UpdateAssumeRolePolicyOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateAssumeRolePolicy", arg0)
+	ret0, _ := ret[0].(*iam.UpdateAssumeRolePolicyOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateAssumeRolePolicy indicates an expected call of UpdateAssumeRolePolicy.
+func (mr *MockClientMockRecorder) UpdateAssumeRolePolicy(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateAssumeRolePolicy", reflect.TypeOf((*MockClient)(nil).UpdateAssumeRolePolicy), arg0)
 }
