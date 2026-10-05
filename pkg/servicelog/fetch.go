@@ -11,8 +11,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// checkServiceLogsLastHour returns true if there were service logs sent
-// in the past hour, printing warnings for each one found.
+// CheckServiceLogsLastHour returns true if there were service logs sent
+// in the past hour, logging a generic duplicate warning with the count.
 func CheckServiceLogsLastHour(ocmClient *sdk.Connection, clusterID string) bool {
 	timeStampToCompare := time.Now().Add(-time.Hour)
 	serviceLogs, err := GetServiceLogsSince(ocmClient, clusterID, timeStampToCompare, false, false)
@@ -21,9 +21,7 @@ func CheckServiceLogsLastHour(ocmClient *sdk.Connection, clusterID string) bool 
 		return true
 	}
 	if len(serviceLogs) > 0 {
-		for _, svclog := range serviceLogs {
-			log.Warnf("A service log has been submitted in last hour\nDescription: %s", svclog.Description())
-		}
+		log.Warn(duplicateWarning(len(serviceLogs)))
 		return true
 	}
 	return false
@@ -80,4 +78,13 @@ func sendClusterLogsListRequest(ocmClient *sdk.Connection, cluster *cmv1.Cluster
 		return nil, fmt.Errorf("failed to fetch service logs: %w", err)
 	}
 	return response, nil
+}
+
+// duplicateWarning returns a generic warning string for recent service logs
+// without including any service-log content that might contain customer data.
+func duplicateWarning(count int) string {
+	if count == 1 {
+		return "1 service log has been sent to this cluster in the last hour; please verify you are not sending a duplicate"
+	}
+	return fmt.Sprintf("%d service logs have been sent to this cluster in the last hour; please verify you are not sending a duplicate", count)
 }
