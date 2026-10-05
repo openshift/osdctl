@@ -227,7 +227,7 @@ func (o *awsCredsOptions) validatePDIncidents(rc *resolvedCluster, incidents []s
 		return false
 	}
 
-	pdClient := pagerduty.NewClient().WithBaseDomain(baseDomain)
+	pdClient := pagerduty.NewClient().WithServiceQuery(baseDomain)
 	if _, err := pdClient.Init(); err != nil {
 		o.log.WithError(err).Debug("Could not initialize PagerDuty client (token may not be configured)")
 		return false
