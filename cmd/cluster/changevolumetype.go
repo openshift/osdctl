@@ -29,10 +29,20 @@ import (
 const (
 	changeVolumeTypeCPMSNamespace = "openshift-machine-api"
 	changeVolumeTypeCPMSName      = "cluster"
+)
 
+// pollInterval and rolloutPollTimeout are package-level vars so that tests
+// can use shorter durations without waiting 30 s between poll ticks.
+var (
 	pollInterval       = 30 * time.Second
 	rolloutPollTimeout = 45 * time.Minute
 )
+
+// defaultAWSEBSVolumeType is the effective AWS default when the CPMS
+// EBS VolumeType field is nil. The machine-api-provider-aws passes a
+// nil VolumeType through to the AWS SDK, which omits it from the
+// RunInstances call; AWS then defaults to "gp2".
+const defaultAWSEBSVolumeType = "gp2"
 
 var validVolumeTypes = []string{"gp3"}
 
@@ -329,7 +339,7 @@ func (o *changeVolumeTypeOptions) changeControlPlaneVolumeType(ctx context.Conte
 		return fmt.Errorf("CPMS has no blockDevices configured")
 	}
 
-	currentType := ""
+	currentType := defaultAWSEBSVolumeType
 	if awsSpec.BlockDevices[0].EBS != nil && awsSpec.BlockDevices[0].EBS.VolumeType != nil {
 		currentType = *awsSpec.BlockDevices[0].EBS.VolumeType
 	}
@@ -367,9 +377,26 @@ func (o *changeVolumeTypeOptions) changeControlPlaneVolumeType(ctx context.Conte
 	}
 
 	printer.PrintlnGreen("CPMS patched successfully. Rolling replacement in progress...")
+
+	// Send the service log immediately after the patch succeeds so the
+	// customer is notified before the lengthy rollout monitoring begins.
+	// Errors are non-fatal: the volume change is already in progress.
+	if err := servicelog.Post(o.ocmClient, o.cluster, servicelog.PostRequest{
+		Template: controlPlaneVolumeTypeChangedServiceLogTemplate,
+		TemplateParams: []string{
+			fmt.Sprintf("PREVIOUS_VOLUME_TYPE=%s", currentType),
+			fmt.Sprintf("NEW_VOLUME_TYPE=%s", o.targetType),
+			fmt.Sprintf("REASON=%s", o.reason),
+		},
+	}); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
+		fmt.Printf("Failed to send service log: %v\n", err)
+		fmt.Println("Please manually send a service log with:")
+		fmt.Printf("osdctl servicelog post \"$CLUSTER_ID\" -t %s -p PREVIOUS_VOLUME_TYPE=%s -p NEW_VOLUME_TYPE=%s -p REASON=%s\n",
+			controlPlaneVolumeTypeChangedServiceLogTemplate, currentType, o.targetType, o.reason)
+	}
+
 	fmt.Println("Monitoring rollout (this will take ~35-45 minutes)...")
 
-	// Monitor the rollout
 	if err := o.monitorCPMSRollout(ctx); err != nil {
 		return err
 	}
@@ -389,6 +416,15 @@ func (o *changeVolumeTypeOptions) monitorCPMSRollout(ctx context.Context) error 
 			return false, nil
 		}
 
+		// Wait until the controller has observed the patched generation before
+		// trusting replica counts. Without this, a stale pre-patch status of
+		// 3/3 would immediately satisfy the completion check.
+		if cpms.Status.ObservedGeneration < cpms.Generation {
+			log.Printf("[%s] CPMS: waiting for controller to observe generation %d (observed: %d)",
+				time.Now().Format("15:04:05"), cpms.Generation, cpms.Status.ObservedGeneration)
+			return false, nil
+		}
+
 		updated := cpms.Status.UpdatedReplicas
 		ready := cpms.Status.ReadyReplicas
 
@@ -402,7 +438,8 @@ func (o *changeVolumeTypeOptions) monitorCPMSRollout(ctx context.Context) error 
 }
 
 const (
-	volumeTypeChangedServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_volume_type_changed.json"
+	controlPlaneVolumeTypeChangedServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/controlplane_volume_type_changed.json"
+	infraVolumeTypeChangedServiceLogTemplate        = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_volume_type_changed.json"
 )
 
 // changeInfraVolumeType uses the Hive MachinePool dance from pkg/infra
@@ -453,13 +490,13 @@ func (o *changeVolumeTypeOptions) changeInfraVolumeType(ctx context.Context) err
 		fmt.Sprintf("REASON=%s", o.reason),
 	}
 	if err := servicelog.Post(o.ocmClient, o.cluster, servicelog.PostRequest{
-		Template:       volumeTypeChangedServiceLogTemplate,
+		Template:       infraVolumeTypeChangedServiceLogTemplate,
 		TemplateParams: slParams,
 	}); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
 		fmt.Printf("Failed to send service log: %v\n", err)
 		fmt.Println("Please manually send a service log with:")
 		fmt.Printf("osdctl servicelog post %s -t %s -p %s\n",
-			o.clusterID, volumeTypeChangedServiceLogTemplate, strings.Join(slParams, " -p "))
+			o.clusterID, infraVolumeTypeChangedServiceLogTemplate, strings.Join(slParams, " -p "))
 	}
 
 	printer.PrintlnGreen("Infra volume type change complete!")
