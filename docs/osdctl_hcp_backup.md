@@ -66,4 +66,5 @@ osdctl hcp backup --cluster-id <cluster-id> --reason <reason> [flags]
 * [osdctl hcp](osdctl_hcp.md)	 - 
 * [osdctl hcp backup discover](osdctl_hcp_backup_discover.md)	 - Discover HCP backups from the disaster recovery S3 bucket
 * [osdctl hcp backup release-dns](osdctl_hcp_backup_release-dns.md)	 - Release central DNS records for an HCP cluster
+* [osdctl hcp backup update-trust-policy](osdctl_hcp_backup_update-trust-policy.md)	 - Allow a replacement management cluster to access HCP backups
 

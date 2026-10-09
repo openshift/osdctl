@@ -50,6 +50,7 @@ func NewCmdBackup() *cobra.Command {
 	_ = cmd.MarkFlagRequired("reason")
 	cmd.AddCommand(newCmdDiscover())
 	cmd.AddCommand(newCmdReleaseDNS())
+	cmd.AddCommand(newCmdUpdateTrustPolicy())
 
 	return cmd
 }

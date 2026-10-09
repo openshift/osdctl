@@ -89,7 +89,9 @@ func newBackupDiscoveryRunner(ocmConn *ocmsdk.Connection, logger *logrus.Logger,
 		generateCredentials: osdCloud.GenerateOrganizationAccountAccessCredentials,
 		printer:             printer,
 	}
-	runner.getBackupConfig = runner.backupConfig
+	runner.getBackupConfig = func(ctx context.Context, clusterID, managementCluster string) (*cmv1.AWSBackupConfig, error) {
+		return getBackupConfig(ctx, ocmConn, clusterID, managementCluster)
+	}
 	return runner
 }
 
@@ -159,12 +161,12 @@ func (r *backupDiscoveryRunner) run(ctx context.Context, flags discoveryFlags) e
 	return nil
 }
 
-func (r *backupDiscoveryRunner) backupConfig(ctx context.Context, clusterID, managementCluster string) (*cmv1.AWSBackupConfig, error) {
+func getBackupConfig(ctx context.Context, ocmConn *ocmsdk.Connection, clusterID, managementCluster string) (*cmv1.AWSBackupConfig, error) {
 	if managementCluster == "" {
 		return nil, fmt.Errorf("no management cluster found for %s", clusterID)
 	}
 
-	response, err := r.ocmConn.ClustersMgmt().V1().Clusters().Cluster(clusterID).ProvisionShard().Get().SendContext(ctx)
+	response, err := ocmConn.ClustersMgmt().V1().Clusters().Cluster(clusterID).ProvisionShard().Get().SendContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("getting provision shard for cluster %s: %w", clusterID, err)
 	}

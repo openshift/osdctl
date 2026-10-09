@@ -65,6 +65,7 @@ type Client interface {
 	ListAccessKeys(*iam.ListAccessKeysInput) (*iam.ListAccessKeysOutput, error)
 	GetAccessKeyLastUsed(ctx context.Context, input *iam.GetAccessKeyLastUsedInput) (*iam.GetAccessKeyLastUsedOutput, error)
 	GetUser(*iam.GetUserInput) (*iam.GetUserOutput, error)
+	GetRole(*iam.GetRoleInput) (*iam.GetRoleOutput, error)
 	CreateUser(*iam.CreateUserInput) (*iam.CreateUserOutput, error)
 	ListUsers(*iam.ListUsersInput) (*iam.ListUsersOutput, error)
 	AttachUserPolicy(*iam.AttachUserPolicyInput) (*iam.AttachUserPolicyOutput, error)
@@ -85,6 +86,7 @@ type Client interface {
 	RemoveUserFromGroup(*iam.RemoveUserFromGroupInput) (*iam.RemoveUserFromGroupOutput, error)
 	ListRoles(*iam.ListRolesInput) (*iam.ListRolesOutput, error)
 	DeleteRole(*iam.DeleteRoleInput) (*iam.DeleteRoleOutput, error)
+	UpdateAssumeRolePolicy(*iam.UpdateAssumeRolePolicyInput) (*iam.UpdateAssumeRolePolicyOutput, error)
 	DeleteUser(*iam.DeleteUserInput) (*iam.DeleteUserOutput, error)
 	SimulatePrincipalPolicy(*iam.SimulatePrincipalPolicyInput) (*iam.SimulatePrincipalPolicyOutput, error)
 
@@ -324,6 +326,10 @@ func (c *AwsClient) GetUser(input *iam.GetUserInput) (*iam.GetUserOutput, error)
 	return c.iamClient.GetUser(context.TODO(), input)
 }
 
+func (c *AwsClient) GetRole(input *iam.GetRoleInput) (*iam.GetRoleOutput, error) {
+	return c.iamClient.GetRole(context.TODO(), input)
+}
+
 func (c *AwsClient) CreateUser(input *iam.CreateUserInput) (*iam.CreateUserOutput, error) {
 	return c.iamClient.CreateUser(context.TODO(), input)
 }
@@ -402,6 +408,10 @@ func (c *AwsClient) ListRoles(input *iam.ListRolesInput) (*iam.ListRolesOutput, 
 
 func (c *AwsClient) DeleteRole(input *iam.DeleteRoleInput) (*iam.DeleteRoleOutput, error) {
 	return c.iamClient.DeleteRole(context.TODO(), input)
+}
+
+func (c *AwsClient) UpdateAssumeRolePolicy(input *iam.UpdateAssumeRolePolicyInput) (*iam.UpdateAssumeRolePolicyOutput, error) {
+	return c.iamClient.UpdateAssumeRolePolicy(context.TODO(), input)
 }
 
 func (c *AwsClient) DeleteUser(input *iam.DeleteUserInput) (*iam.DeleteUserOutput, error) {

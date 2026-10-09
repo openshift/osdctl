@@ -44,8 +44,6 @@ func (r *ocmClusterResolver) Resolve(ctx context.Context, clusterIdentifier stri
 	}
 	clusterID := hcpCluster.ID()
 
-	r.logger.Infof("Resolving management cluster for HCP cluster %s...", clusterID)
-
 	hypershiftResp, err := r.ocmConn.ClustersMgmt().V1().Clusters().
 		Cluster(clusterID).Hypershift().Get().SendContext(ctx)
 	if err != nil {
