@@ -29,10 +29,22 @@ import (
 const (
 	changeVolumeTypeCPMSNamespace = "openshift-machine-api"
 	changeVolumeTypeCPMSName      = "cluster"
+)
 
+// pollInterval and rolloutPollTimeout are package-level vars so that tests
+// can use shorter durations without waiting 30 s between poll ticks.
+var (
 	pollInterval       = 30 * time.Second
 	rolloutPollTimeout = 45 * time.Minute
 )
+
+// defaultAWSEBSVolumeType is the effective AWS default when the CPMS
+// EBS VolumeType field is nil. The machine-api-provider-aws passes a
+// nil VolumeType through to the AWS SDK, which omits it from the
+// RunInstances call; AWS then defaults to "gp2". (The OpenShift
+// Machine API type doc says "Default: standard", but that reflects the
+// legacy AWS default for magnetic volumes — modern AWS defaults to gp2.)
+const defaultAWSEBSVolumeType = "gp2"
 
 var validVolumeTypes = []string{"gp3"}
 
@@ -219,18 +231,21 @@ func (o *changeVolumeTypeOptions) run(ctx context.Context) error {
 		return fmt.Errorf("pre-flight checks failed: %v", err)
 	}
 
-	doControlPlane := o.role == "" || o.role == "control-plane"
-	doInfra := o.role == "" || o.role == "infra"
-
-	// Control plane
-	if doControlPlane {
-		if err := o.changeControlPlaneVolumeType(ctx); err != nil {
+	// Run control-plane and/or infra changes based on the requested role.
+	// When role is empty both run in sequence (control-plane first).
+	if o.role == "" || o.role == "control-plane" {
+		previousType, err := o.changeControlPlaneVolumeType(ctx)
+		if err != nil {
 			return fmt.Errorf("control plane volume type change failed: %v", err)
+		}
+		// Send a service log only when the volume type was actually changed
+		// (previousType is empty when the CPMS was already at the target type).
+		if previousType != "" {
+			o.postVolumeTypeChangedServiceLog(controlPlaneVolumeTypeChangedServiceLogTemplate, previousType, o.targetType)
 		}
 	}
 
-	// Infra
-	if doInfra {
+	if o.role == "" || o.role == "infra" {
 		if err := o.changeInfraVolumeType(ctx); err != nil {
 			return fmt.Errorf("infra volume type change failed: %v", err)
 		}
@@ -310,33 +325,36 @@ func (o *changeVolumeTypeOptions) preFlightChecks(ctx context.Context) error {
 	return nil
 }
 
-// changeControlPlaneVolumeType patches the CPMS to trigger a rolling replacement.
-func (o *changeVolumeTypeOptions) changeControlPlaneVolumeType(ctx context.Context) error {
+// changeControlPlaneVolumeType patches the CPMS to trigger a rolling
+// replacement. It returns the previous volume type so the caller can
+// send a service log after success. An empty previousType means the
+// CPMS was already at the target type and no change was made.
+func (o *changeVolumeTypeOptions) changeControlPlaneVolumeType(ctx context.Context) (previousType string, err error) {
 	printer.PrintlnGreen("=== Changing control plane volume type ===")
 
 	cpms := &machinev1.ControlPlaneMachineSet{}
 	if err := o.client.Get(ctx, client.ObjectKey{Namespace: changeVolumeTypeCPMSNamespace, Name: changeVolumeTypeCPMSName}, cpms); err != nil {
-		return fmt.Errorf("failed to get CPMS: %v", err)
+		return "", fmt.Errorf("failed to get CPMS: %v", err)
 	}
 
 	// Unmarshal the provider spec to read current blockDevices
 	awsSpec := &machinev1beta1.AWSMachineProviderConfig{}
 	if err := json.Unmarshal(cpms.Spec.Template.OpenShiftMachineV1Beta1Machine.Spec.ProviderSpec.Value.Raw, awsSpec); err != nil {
-		return fmt.Errorf("failed to unmarshal CPMS provider spec: %v", err)
+		return "", fmt.Errorf("failed to unmarshal CPMS provider spec: %v", err)
 	}
 
 	if len(awsSpec.BlockDevices) == 0 {
-		return fmt.Errorf("CPMS has no blockDevices configured")
+		return "", fmt.Errorf("CPMS has no blockDevices configured")
 	}
 
-	currentType := ""
+	currentType := defaultAWSEBSVolumeType
 	if awsSpec.BlockDevices[0].EBS != nil && awsSpec.BlockDevices[0].EBS.VolumeType != nil {
 		currentType = *awsSpec.BlockDevices[0].EBS.VolumeType
 	}
 
 	if currentType == o.targetType {
 		fmt.Printf("Control plane volumes are already %s - skipping\n", o.targetType)
-		return nil
+		return "", nil
 	}
 
 	fmt.Printf("Current control plane volume type: %s\n", currentType)
@@ -350,32 +368,31 @@ func (o *changeVolumeTypeOptions) changeControlPlaneVolumeType(ctx context.Conte
 	// Confirm
 	fmt.Printf("\nThis will replace all 3 control plane nodes one at a time (~35-45 min).\n")
 	if !utils.ConfirmPrompt() {
-		return errors.New("aborted by user")
+		return "", errors.New("aborted by user")
 	}
 
 	// Marshal and patch
 	rawBytes, err := json.Marshal(awsSpec)
 	if err != nil {
-		return fmt.Errorf("failed to marshal updated provider spec: %v", err)
+		return "", fmt.Errorf("failed to marshal updated provider spec: %v", err)
 	}
 
 	patch := client.MergeFrom(cpms.DeepCopy())
 	cpms.Spec.Template.OpenShiftMachineV1Beta1Machine.Spec.ProviderSpec.Value = &runtime.RawExtension{Raw: rawBytes}
 
 	if err := o.clientAdmin.Patch(ctx, cpms, patch); err != nil {
-		return fmt.Errorf("failed to patch CPMS: %v", err)
+		return "", fmt.Errorf("failed to patch CPMS: %v", err)
 	}
 
 	printer.PrintlnGreen("CPMS patched successfully. Rolling replacement in progress...")
 	fmt.Println("Monitoring rollout (this will take ~35-45 minutes)...")
 
-	// Monitor the rollout
 	if err := o.monitorCPMSRollout(ctx); err != nil {
-		return err
+		return "", err
 	}
 
 	printer.PrintlnGreen("Control plane volume type change complete!")
-	return nil
+	return currentType, nil
 }
 
 // monitorCPMSRollout polls the CPMS until all replicas are updated.
@@ -386,6 +403,15 @@ func (o *changeVolumeTypeOptions) monitorCPMSRollout(ctx context.Context) error 
 		cpms := &machinev1.ControlPlaneMachineSet{}
 		if err := o.client.Get(ctx, client.ObjectKey{Namespace: changeVolumeTypeCPMSNamespace, Name: changeVolumeTypeCPMSName}, cpms); err != nil {
 			log.Printf("Error checking CPMS status: %v", err)
+			return false, nil
+		}
+
+		// Wait until the controller has observed the patched generation before
+		// trusting replica counts. Without this, a stale pre-patch status of
+		// 3/3 would immediately satisfy the completion check.
+		if cpms.Status.ObservedGeneration < cpms.Generation {
+			log.Printf("[%s] CPMS: waiting for controller to observe generation %d (observed: %d)",
+				time.Now().Format("15:04:05"), cpms.Generation, cpms.Status.ObservedGeneration)
 			return false, nil
 		}
 
@@ -402,7 +428,8 @@ func (o *changeVolumeTypeOptions) monitorCPMSRollout(ctx context.Context) error 
 }
 
 const (
-	volumeTypeChangedServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_volume_type_changed.json"
+	controlPlaneVolumeTypeChangedServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/controlplane_volume_type_changed.json"
+	infraVolumeTypeChangedServiceLogTemplate        = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_volume_type_changed.json"
 )
 
 // changeInfraVolumeType uses the Hive MachinePool dance from pkg/infra
@@ -446,26 +473,103 @@ func (o *changeVolumeTypeOptions) changeInfraVolumeType(ctx context.Context) err
 		return err
 	}
 
-	// Post service log
-	slParams := []string{
-		fmt.Sprintf("PREVIOUS_VOLUME_TYPE=%s", previousType),
-		fmt.Sprintf("NEW_VOLUME_TYPE=%s", targetType),
-		fmt.Sprintf("REASON=%s", o.reason),
-	}
-	if err := servicelog.Post(o.ocmClient, o.cluster, servicelog.PostRequest{
-		Template:       volumeTypeChangedServiceLogTemplate,
-		TemplateParams: slParams,
-	}); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
-		fmt.Printf("Failed to send service log: %v\n", err)
-		fmt.Println("Please manually send a service log with:")
-		fmt.Printf("osdctl servicelog post %s -t %s -p %s\n",
-			o.clusterID, volumeTypeChangedServiceLogTemplate, strings.Join(slParams, " -p "))
-	}
+	o.postVolumeTypeChangedServiceLog(infraVolumeTypeChangedServiceLogTemplate, previousType, targetType)
 
 	printer.PrintlnGreen("Infra volume type change complete!")
 	return nil
 }
 
+// newVolumeTypeChangedServiceLogRequest builds a PostRequest for a
+// volume-type-changed service log with the given template URL and the
+// previous/new volume type and reason substituted as template parameters.
+func newVolumeTypeChangedServiceLogRequest(template, previousType, newType, reason string) servicelog.PostRequest {
+	return servicelog.PostRequest{
+		Template: template,
+		TemplateParams: []string{
+			fmt.Sprintf("PREVIOUS_VOLUME_TYPE=%s", previousType),
+			fmt.Sprintf("NEW_VOLUME_TYPE=%s", newType),
+			fmt.Sprintf("REASON=%s", reason),
+		},
+	}
+}
+
+// postVolumeTypeChangedServiceLog sends a volume-type-changed service log
+// using Prepare + PostMessage (instead of Post) so that cluster-specific
+// identifiers (ClusterUUID, ClusterID, SubscriptionID) never appear in
+// previews, terminal output, or log messages. PostMessage sets those
+// fields at send time. Errors are non-fatal: on failure the function
+// prints manual remediation guidance with redacted identifiers.
+func (o *changeVolumeTypeOptions) postVolumeTypeChangedServiceLog(template, previousType, newType string) {
+	postRequest := newVolumeTypeChangedServiceLogRequest(template, previousType, newType, o.reason)
+
+	msg, err := servicelog.Prepare(postRequest)
+	if err != nil {
+		fmt.Printf("Failed to prepare service log: %v\n", err)
+		fmt.Print(manualServiceLogGuidance(postRequest))
+		return
+	}
+
+	if servicelog.CheckServiceLogsLastHour(o.ocmClient, o.cluster.ID()) {
+		if !utils.ConfirmPrompt() {
+			fmt.Println("Service log not sent (user declined).")
+			return
+		}
+	}
+
+	// Preview the message with cluster-specific fields intentionally
+	// omitted — PostMessage sets ClusterUUID, ClusterID, and
+	// SubscriptionID at send time; excluding them from the preview
+	// avoids leaking customer identifiers into terminal or log output.
+	fmt.Println("The following service log will be sent:")
+	if previewBytes, err := json.MarshalIndent(msg, "", "  "); err == nil {
+		fmt.Println(string(previewBytes))
+	}
+
+	if !utils.ConfirmPrompt() {
+		fmt.Println("Service log not sent (user declined).")
+		return
+	}
+
+	if err := servicelog.PostMessage(o.ocmClient, o.cluster, msg); err != nil {
+		fmt.Printf("Failed to send service log: %v\n", err)
+		fmt.Print(manualServiceLogGuidance(postRequest))
+		return
+	}
+
+	fmt.Println("Service log sent successfully.")
+}
+
+// manualServiceLogGuidance returns the manual remediation instructions for
+// a failed service-log post. The cluster identifier is represented as a
+// shell-style $CLUSTER_ID placeholder to prevent customer-specific values
+// from appearing in logs or shared terminal output.
+//
+// Every dynamic value is single-quoted to prevent shell injection when an
+// operator copies the printed command. $CLUSTER_ID uses double quotes so
+// the variable expands safely.
+func manualServiceLogGuidance(req servicelog.PostRequest) string {
+	var params strings.Builder
+	for i, p := range req.TemplateParams {
+		if i > 0 {
+			params.WriteString(" ")
+		}
+		params.WriteString("-p ")
+		params.WriteString(shellQuote(p))
+	}
+	return fmt.Sprintf("Please manually send a service log with:\nosdctl servicelog post \"$CLUSTER_ID\" -t %s %s\n",
+		shellQuote(req.Template), params.String())
+}
+
+// shellQuote wraps s in single quotes, escaping any embedded single quotes
+// using the standard sh idiom '\” (end-quote, escaped-quote, re-open-quote).
+// This prevents shell interpretation of spaces, semicolons, backticks,
+// $(), redirects, newlines, and all other special characters.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
+// countReadyNodes returns the number of nodes in the list whose Ready
+// condition is True.
 func countReadyNodes(nodes *corev1.NodeList) int {
 	ready := 0
 	for _, node := range nodes.Items {
@@ -478,6 +582,8 @@ func countReadyNodes(nodes *corev1.NodeList) int {
 	return ready
 }
 
+// roleDisplay returns a human-readable label for the role filter,
+// defaulting to "control-plane + infra" when no role is specified.
 func roleDisplay(role string) string {
 	if role == "" {
 		return "control-plane + infra"
