@@ -58,6 +58,12 @@ type KubeClient interface {
 	// Namespace and label filters are passed as ListOptions (e.g. client.InNamespace, client.MatchingLabels).
 	List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error
 
+	// Create stores obj on the cluster.
+	Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error
+
+	// Update persists changes to obj on the cluster.
+	Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error
+
 	// Exec runs cmd inside the named container of the given pod and returns its stdout.
 	// It is only supported by clients constructed with a REST config and Clientset.
 	Exec(ctx context.Context, namespace, pod, container string, cmd []string) (string, error)
@@ -88,6 +94,14 @@ func (k *kubeClient) Get(ctx context.Context, key client.ObjectKey, obj client.O
 
 func (k *kubeClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
 	return k.runtimeCli.List(ctx, list, opts...)
+}
+
+func (k *kubeClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	return k.runtimeCli.Create(ctx, obj, opts...)
+}
+
+func (k *kubeClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	return k.runtimeCli.Update(ctx, obj, opts...)
 }
 
 // Exec runs cmd inside the named container of the given pod using a SPDY executor.

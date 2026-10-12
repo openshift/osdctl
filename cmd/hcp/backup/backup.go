@@ -9,6 +9,7 @@ import (
 	"github.com/openshift/osdctl/pkg/utils"
 	logrus "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	workv1 "open-cluster-management.io/api/work/v1"
 )
 
 //go:embed description.txt
@@ -49,6 +50,7 @@ func NewCmdBackup() *cobra.Command {
 	_ = cmd.MarkFlagRequired("cluster-id")
 	_ = cmd.MarkFlagRequired("reason")
 	cmd.AddCommand(newCmdDiscover())
+	cmd.AddCommand(newCmdManifestWork())
 	cmd.AddCommand(newCmdReleaseDNS())
 	cmd.AddCommand(newCmdUpdateTrustPolicy())
 
@@ -63,6 +65,9 @@ func newKubeClientForCluster(ocmConn *ocmsdk.Connection, clusterID string, eleva
 	kubeCli, restCfg, clientset, err := common.GetKubeConfigAndClientWithConn(clusterID, ocmConn, elevationReasons...)
 	if err != nil {
 		return nil, err
+	}
+	if err := workv1.AddToScheme(kubeCli.Scheme()); err != nil {
+		return nil, fmt.Errorf("adding ManifestWork scheme: %w", err)
 	}
 	return newKubeClient(kubeCli, restCfg, clientset), nil
 }
