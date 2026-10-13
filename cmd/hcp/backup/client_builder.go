@@ -3,6 +3,8 @@ package backup
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strings"
 
 	ocmsdk "github.com/openshift-online/ocm-sdk-go"
 	"github.com/openshift/osdctl/pkg/utils"
@@ -19,6 +21,13 @@ type ClusterInfo struct {
 	BaseDomain       string
 	MgmtClusterID    string
 	MgmtClusterName  string
+}
+
+// ServiceClusterInfo identifies the Service Cluster that hosts an HCP's
+// ManifestWorks.
+type ServiceClusterInfo struct {
+	ID   string
+	Name string
 }
 
 // ClusterResolver resolves an HCP cluster identifier to its canonical OCM IDs,
@@ -57,7 +66,6 @@ func (r *ocmClusterResolver) Resolve(ctx context.Context, clusterIdentifier stri
 	if err != nil {
 		return ClusterInfo{}, fmt.Errorf("getting management cluster %s: %w", mgmtClusterName, err)
 	}
-
 	region := ""
 	if hcpCluster.Region() != nil {
 		region = hcpCluster.Region().ID()
@@ -75,6 +83,45 @@ func (r *ocmClusterResolver) Resolve(ctx context.Context, clusterIdentifier stri
 		MgmtClusterID:    mc.ID(),
 		MgmtClusterName:  mgmtClusterName,
 	}, nil
+}
+
+func resolveServiceCluster(ctx context.Context, ocmConn *ocmsdk.Connection, clusterID string) (ServiceClusterInfo, error) {
+	response, err := ocmConn.ClustersMgmt().V1().Clusters().Cluster(clusterID).ProvisionShard().Get().SendContext(ctx)
+	if err != nil {
+		return ServiceClusterInfo{}, fmt.Errorf("getting provision shard for cluster %s: %w", clusterID, err)
+	}
+	if response == nil || response.Body() == nil || response.Body().ID() == "" {
+		return ServiceClusterInfo{}, fmt.Errorf("no provision shard found for cluster %s", clusterID)
+	}
+	shardID := response.Body().ID()
+	shardResponse, err := ocmConn.ClustersMgmt().V1().ProvisionShards().ProvisionShard(shardID).Get().SendContext(ctx)
+	if err != nil {
+		return ServiceClusterInfo{}, fmt.Errorf("getting provision shard %s: %w", shardID, err)
+	}
+	if shardResponse == nil || shardResponse.Body() == nil || shardResponse.Body().HypershiftConfig() == nil {
+		return ServiceClusterInfo{}, fmt.Errorf("provision shard %s has no HyperShift configuration", shardID)
+	}
+	serviceClusterName, err := serviceClusterNameFromServer(shardResponse.Body().HypershiftConfig().Server())
+	if err != nil {
+		return ServiceClusterInfo{}, fmt.Errorf("getting service cluster for provision shard %s: %w", shardID, err)
+	}
+	serviceCluster, err := utils.GetClusterAnyStatus(ocmConn, serviceClusterName)
+	if err != nil {
+		return ServiceClusterInfo{}, fmt.Errorf("getting service cluster %s: %w", serviceClusterName, err)
+	}
+	return ServiceClusterInfo{ID: serviceCluster.ID(), Name: serviceCluster.Name()}, nil
+}
+
+func serviceClusterNameFromServer(server string) (string, error) {
+	parsed, err := url.Parse(server)
+	if err != nil || parsed.Hostname() == "" {
+		return "", fmt.Errorf("invalid HyperShift server URL")
+	}
+	labels := strings.Split(parsed.Hostname(), ".")
+	if len(labels) < 2 || labels[0] != "api" || labels[1] == "" {
+		return "", fmt.Errorf("invalid HyperShift server URL")
+	}
+	return labels[1], nil
 }
 
 // ── KubeClient building ────────────────────────────────────────────────────

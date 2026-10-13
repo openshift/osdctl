@@ -103,6 +103,11 @@
 - `hcp` - 
   - `backup --cluster-id <cluster-id> --reason <reason>` - Trigger a Velero backup for an HCP cluster
     - `discover --cluster-id <cluster-id>` - Discover HCP backups from the disaster recovery S3 bucket
+    - `manifestwork` - Compare and relocate HCP ManifestWorks
+      - `compare --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>]` - Compare HCP ManifestWorks between management clusters
+      - `move` - Move HCP Velero and cluster resources in phases
+        - `cluster-resources --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>]` - Move the namespace, HostedCluster, and NodePool ManifestWorks
+        - `velero-resources --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>]` - Move the Velero resource ManifestWorks
     - `release-dns --cluster-id <cluster-id>` - Release central DNS records for an HCP cluster
     - `update-trust-policy --cluster-id <cluster-id> --replacement-mc <management-cluster>` - Allow a replacement management cluster to access HCP backups
   - `force-upgrade` - Schedule forced control plane upgrade for HCP clusters (Requires ForceUpgrader permissions)
@@ -3226,6 +3231,138 @@ osdctl hcp backup discover --cluster-id <cluster-id> [flags]
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
   -S, --skip-version-check               skip checking to see if this is the most recent release
+```
+
+### osdctl hcp backup manifestwork
+
+Compare and relocate HCP ManifestWorks
+
+```
+osdctl hcp backup manifestwork [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for manifestwork
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+```
+
+### osdctl hcp backup manifestwork compare
+
+Compare HCP ManifestWorks between management clusters
+
+```
+osdctl hcp backup manifestwork compare --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>] [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+  -C, --cluster-id string                Internal ID, name, or external ID of the HCP cluster
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for compare
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --reason string                    Reason for elevated access
+      --replacement-mc string            Management cluster whose namespace contains the replacement ManifestWorks
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+      --source-mc string                 Management cluster whose namespace contains the ManifestWorks (defaults to the HCP management cluster)
+```
+
+### osdctl hcp backup manifestwork move
+
+Move HCP Velero and cluster resources in phases
+
+```
+osdctl hcp backup manifestwork move [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for move
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+```
+
+### osdctl hcp backup manifestwork move cluster-resources
+
+After the Velero resource ManifestWorks are present in the replacement management cluster, pause the source HostedCluster and NodePool payloads and copy the namespace, HostedCluster, and NodePool ManifestWorks. Source ManifestWorks are retained and both source and destination payloads remain paused.
+
+```
+osdctl hcp backup manifestwork move cluster-resources --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>] [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+  -C, --cluster-id string                Internal ID, name, or external ID of the HCP cluster
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for cluster-resources
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --reason string                    Reason for elevated access
+      --replacement-mc string            Management cluster whose namespace will contain the replacement ManifestWorks
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+      --source-mc string                 Management cluster whose namespace contains the source ManifestWorks (defaults to the HCP management cluster)
+```
+
+### osdctl hcp backup manifestwork move velero-resources
+
+Copy the exact Velero credential secret and schedule ManifestWorks to the replacement management cluster. Source ManifestWorks are retained.
+
+```
+osdctl hcp backup manifestwork move velero-resources --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>] [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+  -C, --cluster-id string                Internal ID, name, or external ID of the HCP cluster
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for velero-resources
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --reason string                    Reason for elevated access
+      --replacement-mc string            Management cluster whose namespace will contain the replacement ManifestWorks
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+      --source-mc string                 Management cluster whose namespace contains the source ManifestWorks (defaults to the HCP management cluster)
 ```
 
 ### osdctl hcp backup release-dns
