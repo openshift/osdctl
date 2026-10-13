@@ -1,10 +1,17 @@
 package cluster
 
 import (
+	"context"
+	"encoding/json"
 	"testing"
 
+	machinev1 "github.com/openshift/api/machine/v1"
+	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestChangeVolumeType_ValidateTargetType(t *testing.T) {
@@ -55,9 +62,9 @@ func TestChangeVolumeType_ValidateRole(t *testing.T) {
 		role    string
 		wantErr bool
 	}{
-		{"empty role (both)", "", false},
 		{"control-plane", "control-plane", false},
 		{"infra", "infra", false},
+		{"empty role", "", true},
 		{"invalid worker", "worker", true},
 		{"invalid master", "master", true},
 		{"invalid random", "random", true},
@@ -76,10 +83,8 @@ func TestChangeVolumeType_ValidateRole(t *testing.T) {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), "invalid role")
 			}
-			// For valid roles, validate would still fail on clusterID check,
-			// but the role validation should pass
 			if !tt.wantErr {
-				validRole := tt.role == "" || tt.role == "control-plane" || tt.role == "infra"
+				validRole := tt.role == "control-plane" || tt.role == "infra"
 				assert.True(t, validRole)
 			}
 		})
@@ -95,26 +100,114 @@ func TestChangeVolumeType_CommandCreation(t *testing.T) {
 	assert.NotEmpty(t, cmd.Long)
 	assert.NotEmpty(t, cmd.Example)
 
-	// Required flags
-	requiredFlags := []string{"cluster-id", "type", "reason"}
+	requiredFlags := []string{"cluster-id", "type", "role", "reason"}
 	for _, flagName := range requiredFlags {
 		flag := cmd.Flag(flagName)
 		assert.NotNilf(t, flag, "required flag %q should exist", flagName)
 	}
-
-	// Optional flags
-	flag := cmd.Flag("role")
-	assert.NotNil(t, flag, "optional flag 'role' should exist")
-}
-
-func TestChangeVolumeType_RoleDisplay(t *testing.T) {
-	assert.Equal(t, "control-plane + infra", roleDisplay(""))
-	assert.Equal(t, "control-plane", roleDisplay("control-plane"))
-	assert.Equal(t, "infra", roleDisplay("infra"))
 }
 
 func TestChangeVolumeType_CountReadyNodes(t *testing.T) {
 	// Empty list
 	nodes := &corev1.NodeList{}
 	assert.Equal(t, 0, countReadyNodes(nodes))
+}
+
+func strPtr(s string) *string { return &s }
+
+func newTestCPMSWithVolumeType(t *testing.T, volumeType *string) (*machinev1.ControlPlaneMachineSet, *runtime.Scheme) {
+	t.Helper()
+
+	providerSpec, err := json.Marshal(machinev1beta1.AWSMachineProviderConfig{
+		BlockDevices: []machinev1beta1.BlockDeviceMappingSpec{{
+			EBS: &machinev1beta1.EBSBlockDeviceSpec{VolumeType: volumeType},
+		}},
+	})
+	assert.NoError(t, err)
+
+	scheme := runtime.NewScheme()
+	assert.NoError(t, machinev1.Install(scheme))
+
+	cpms := &machinev1.ControlPlaneMachineSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: changeVolumeTypeCPMSNamespace,
+			Name:      changeVolumeTypeCPMSName,
+		},
+		Spec: machinev1.ControlPlaneMachineSetSpec{
+			Template: machinev1.ControlPlaneMachineSetTemplate{
+				OpenShiftMachineV1Beta1Machine: &machinev1.OpenShiftMachineV1Beta1MachineTemplate{
+					Spec: machinev1beta1.MachineSpec{
+						ProviderSpec: machinev1beta1.ProviderSpec{
+							Value: &runtime.RawExtension{Raw: providerSpec},
+						},
+					},
+				},
+			},
+		},
+	}
+	return cpms, scheme
+}
+
+func TestChangeControlPlaneVolumeType_AlreadyTargetSkips(t *testing.T) {
+	cpms, scheme := newTestCPMSWithVolumeType(t, strPtr("gp3"))
+	ops := &changeVolumeTypeOptions{
+		targetType: "gp3",
+		client:     fake.NewClientBuilder().WithScheme(scheme).WithObjects(cpms).Build(),
+	}
+
+	err := ops.changeControlPlaneVolumeType(context.Background())
+	assert.NoError(t, err)
+}
+
+func TestChangeControlPlaneVolumeType_NilVolumeTypeReachesConfirm(t *testing.T) {
+	cpms, scheme := newTestCPMSWithVolumeType(t, nil)
+	ops := &changeVolumeTypeOptions{
+		targetType: "gp3",
+		client:     fake.NewClientBuilder().WithScheme(scheme).WithObjects(cpms).Build(),
+	}
+
+	// In a non-TTY environment ConfirmPrompt returns false, so the function
+	// aborts with "aborted by user", proving it did not skip.
+	err := ops.changeControlPlaneVolumeType(context.Background())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "aborted by user")
+}
+
+func TestChangeControlPlaneVolumeType_NilEBSErrors(t *testing.T) {
+	providerSpec, err := json.Marshal(machinev1beta1.AWSMachineProviderConfig{
+		BlockDevices: []machinev1beta1.BlockDeviceMappingSpec{{
+			EBS: nil,
+		}},
+	})
+	assert.NoError(t, err)
+
+	scheme := runtime.NewScheme()
+	assert.NoError(t, machinev1.Install(scheme))
+
+	cpms := &machinev1.ControlPlaneMachineSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: changeVolumeTypeCPMSNamespace,
+			Name:      changeVolumeTypeCPMSName,
+		},
+		Spec: machinev1.ControlPlaneMachineSetSpec{
+			Template: machinev1.ControlPlaneMachineSetTemplate{
+				OpenShiftMachineV1Beta1Machine: &machinev1.OpenShiftMachineV1Beta1MachineTemplate{
+					Spec: machinev1beta1.MachineSpec{
+						ProviderSpec: machinev1beta1.ProviderSpec{
+							Value: &runtime.RawExtension{Raw: providerSpec},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	ops := &changeVolumeTypeOptions{
+		targetType: "gp3",
+		client:     fake.NewClientBuilder().WithScheme(scheme).WithObjects(cpms).Build(),
+	}
+
+	err = ops.changeControlPlaneVolumeType(context.Background())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "CPMS blockDevice has no EBS configuration")
 }
