@@ -48,7 +48,7 @@ require (
 	github.com/openshift/aws-account-operator/api v0.0.0-20250205151445-6455c35fc4ae
 	github.com/openshift/backplane-api v0.0.0-20260205054653-459856398d59
 	github.com/openshift/backplane-cli v1.0.0
-	github.com/openshift/cloud-credential-operator v0.0.0-20250120201329-db5f2531a5b4
+	github.com/openshift/cloud-credential-operator v0.0.0-20260923223624-82a5b4459331
 	github.com/openshift/gcp-project-operator v0.0.0-20241024143818-ec4eabd35aba
 	github.com/openshift/hive/apis v0.0.0-20250206153200-5a34ea42e678
 	github.com/openshift/hypershift/api v0.0.0-20250208145556-2753dcc8cfb7
