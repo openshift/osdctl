@@ -49,7 +49,7 @@ require (
 	github.com/openshift/backplane-api v0.0.0-20260205054653-459856398d59
 	github.com/openshift/backplane-cli v1.0.0
 	github.com/openshift/cloud-credential-operator v0.0.0-20250120201329-db5f2531a5b4
-	github.com/openshift/gcp-project-operator v0.0.0-20241024143818-ec4eabd35aba
+	github.com/openshift/gcp-project-operator v0.0.0-20260928143853-098cb5a33aca
 	github.com/openshift/hive/apis v0.0.0-20250206153200-5a34ea42e678
 	github.com/openshift/hypershift/api v0.0.0-20250208145556-2753dcc8cfb7
 	github.com/openshift/ocm-container v1.0.1-0.20260310005051-28d4fda21872
