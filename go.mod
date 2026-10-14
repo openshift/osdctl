@@ -37,7 +37,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/manifoldco/promptui v0.9.0
 	github.com/modelcontextprotocol/go-sdk v1.6.0
-	github.com/observatorium/api v0.1.3-0.20260127104902-9709b1e9e333
+	github.com/observatorium/api d17ce8724dc0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.43.1
