@@ -14,8 +14,10 @@ import (
 	"github.com/openshift/osdctl/cmd/cluster"
 	logrus "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
@@ -50,6 +52,12 @@ func joinSortedMap(m map[string]string) string {
 // in-pod command execution. Both privileged and unprivileged clients satisfy
 // this interface, making them interchangeable in the runner and in tests.
 type KubeClient interface {
+	// ServerGroups returns the API groups served by the cluster.
+	ServerGroups() (*metav1.APIGroupList, error)
+
+	// ServerResourcesForGroupVersion returns the resources served for groupVersion.
+	ServerResourcesForGroupVersion(groupVersion string) (*metav1.APIResourceList, error)
+
 	// Get retrieves the resource identified by key and populates obj with the result.
 	// obj must be a pointer to an initialized struct (e.g. &corev1.Pod{}).
 	Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error
@@ -76,16 +84,40 @@ type kubeClient struct {
 	runtimeCli client.Client
 	restCfg    *rest.Config
 	clientset  kubernetes.Interface
+	discovery  discovery.DiscoveryInterface
 }
 
 // newKubeClient constructs a kubeClient. restCfg and clientset may be nil for
 // read-only clients that will never call Exec.
-func newKubeClient(runtimeCli client.Client, restCfg *rest.Config, clientset kubernetes.Interface) *kubeClient {
+func newKubeClient(runtimeCli client.Client, restCfg *rest.Config, clientset kubernetes.Interface) (*kubeClient, error) {
+	var discoveryClient discovery.DiscoveryInterface
+	if restCfg != nil {
+		var err error
+		discoveryClient, err = discovery.NewDiscoveryClientForConfig(restCfg)
+		if err != nil {
+			return nil, fmt.Errorf("creating discovery client: %w", err)
+		}
+	}
 	return &kubeClient{
 		runtimeCli: runtimeCli,
 		restCfg:    restCfg,
 		clientset:  clientset,
+		discovery:  discoveryClient,
+	}, nil
+}
+
+func (k *kubeClient) ServerGroups() (*metav1.APIGroupList, error) {
+	if k.discovery == nil {
+		return nil, errors.New("discovery is not supported on this client: no REST config provided")
 	}
+	return k.discovery.ServerGroups()
+}
+
+func (k *kubeClient) ServerResourcesForGroupVersion(groupVersion string) (*metav1.APIResourceList, error) {
+	if k.discovery == nil {
+		return nil, errors.New("discovery is not supported on this client: no REST config provided")
+	}
+	return k.discovery.ServerResourcesForGroupVersion(groupVersion)
 }
 
 func (k *kubeClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {

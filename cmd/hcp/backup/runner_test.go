@@ -22,7 +22,23 @@ import (
 // Exec so individual tests can control its behaviour.
 type testKubeClient struct {
 	client.Client
-	execFn func(ctx context.Context, namespace, pod, container string, cmd []string) (string, error)
+	execFn                           func(ctx context.Context, namespace, pod, container string, cmd []string) (string, error)
+	serverGroupsFn                   func() (*metav1.APIGroupList, error)
+	serverResourcesForGroupVersionFn func(string) (*metav1.APIResourceList, error)
+}
+
+func (t *testKubeClient) ServerGroups() (*metav1.APIGroupList, error) {
+	if t.serverGroupsFn == nil {
+		return nil, errors.New("ServerGroups not configured in this test")
+	}
+	return t.serverGroupsFn()
+}
+
+func (t *testKubeClient) ServerResourcesForGroupVersion(groupVersion string) (*metav1.APIResourceList, error) {
+	if t.serverResourcesForGroupVersionFn == nil {
+		return nil, errors.New("ServerResourcesForGroupVersion not configured in this test")
+	}
+	return t.serverResourcesForGroupVersionFn(groupVersion)
 }
 
 func (t *testKubeClient) Exec(ctx context.Context, namespace, pod, container string, cmd []string) (string, error) {
@@ -34,7 +50,22 @@ func (t *testKubeClient) Exec(ctx context.Context, namespace, pod, container str
 
 // newTestClient wraps a controller-runtime fake client in a testKubeClient.
 func newTestClient(c client.Client) *testKubeClient {
-	return &testKubeClient{Client: c}
+	return &testKubeClient{
+		Client: c,
+		serverGroupsFn: func() (*metav1.APIGroupList, error) {
+			return &metav1.APIGroupList{Groups: []metav1.APIGroup{{
+				Name:             veleroAPIGroup,
+				PreferredVersion: metav1.GroupVersionForDiscovery{GroupVersion: "velero.io/v1", Version: "v1"},
+			}}}, nil
+		},
+		serverResourcesForGroupVersionFn: func(string) (*metav1.APIResourceList, error) {
+			return &metav1.APIResourceList{GroupVersion: "velero.io/v1", APIResources: []metav1.APIResource{
+				{Name: "backups", Kind: "Backup", Namespaced: true},
+				{Name: "restores", Kind: "Restore", Namespaced: true},
+				{Name: "backupstoragelocations", Kind: "BackupStorageLocation", Namespaced: true},
+			}}, nil
+		},
+	}
 }
 
 // staticKubeClientBuilder is a test double for KubeClientBuilder. It returns
@@ -210,11 +241,14 @@ func TestKubeClientExec_NilGuard(t *testing.T) {
 	t.Parallel()
 
 	// Client constructed without restCfg or clientset (read-only).
-	k := newKubeClient(fake.NewClientBuilder().Build(), nil, nil)
-	_, err := k.Exec(context.TODO(), "ns", "pod", "container", []string{"./velero", "backup", "get"})
+	k, err := newKubeClient(fake.NewClientBuilder().Build(), nil, nil)
+	assert.NoError(t, err)
+	_, err = k.Exec(context.TODO(), "ns", "pod", "container", []string{"./velero", "backup", "get"})
 
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "no REST config or Clientset provided")
+	_, err = k.ServerGroups()
+	assert.ErrorContains(t, err, "no REST config provided")
 }
 
 // ── buildConfig / BuildOption ──────────────────────────────────────────────

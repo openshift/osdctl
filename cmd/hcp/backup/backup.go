@@ -52,6 +52,7 @@ func NewCmdBackup() *cobra.Command {
 	cmd.AddCommand(newCmdDiscover())
 	cmd.AddCommand(newCmdManifestWork())
 	cmd.AddCommand(newCmdReleaseDNS())
+	cmd.AddCommand(newCmdRestore())
 	cmd.AddCommand(newCmdUpdateTrustPolicy())
 
 	return cmd
@@ -69,5 +70,9 @@ func newKubeClientForCluster(ocmConn *ocmsdk.Connection, clusterID string, eleva
 	if err := workv1.AddToScheme(kubeCli.Scheme()); err != nil {
 		return nil, fmt.Errorf("adding ManifestWork scheme: %w", err)
 	}
-	return newKubeClient(kubeCli, restCfg, clientset), nil
+	client, err := newKubeClient(kubeCli, restCfg, clientset)
+	if err != nil {
+		return nil, fmt.Errorf("creating Kubernetes client: %w", err)
+	}
+	return client, nil
 }
