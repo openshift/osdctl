@@ -1,4 +1,5 @@
 reviewers:
+- rosa-trust-engineering-access-tooling
 - clcollins
 - dustman9000
 - sam-nguyen7
@@ -16,6 +17,7 @@ reviewers:
 - gvnnn
 - geowa4
 approvers:
+- rosa-trust-engineering-access-tooling
 - clcollins
 - dustman9000
 - sam-nguyen7
