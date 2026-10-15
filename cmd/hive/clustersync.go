@@ -16,7 +16,7 @@ import (
 	hiveapiv1alpha1 "github.com/openshift/hive/apis/hiveinternal/v1alpha1"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
