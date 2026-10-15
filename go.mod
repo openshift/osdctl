@@ -43,7 +43,7 @@ require (
 	github.com/onsi/gomega v1.43.1
 	github.com/openshift-online/ocm-cli v1.0.11
 	github.com/openshift-online/ocm-common v0.0.37
-	github.com/openshift-online/ocm-sdk-go v0.1.513
+	github.com/openshift-online/ocm-sdk-go v0.1.517
 	github.com/openshift/api v0.0.0-20250207102212-9e59a77ed2e0
 	github.com/openshift/aws-account-operator/api v0.0.0-20250205151445-6455c35fc4ae
 	github.com/openshift/backplane-api v0.0.0-20260205054653-459856398d59
@@ -203,8 +203,8 @@ require (
 	github.com/oapi-codegen/runtime v1.1.2 // indirect
 	github.com/oasdiff/yaml v0.0.0-20250309154309-f31be36b4037 // indirect
 	github.com/oasdiff/yaml3 v0.0.0-20250309153720-d2182401db90 // indirect
-	github.com/openshift-online/ocm-api-model/clientapi v0.0.468 // indirect
-	github.com/openshift-online/ocm-api-model/model v0.0.468 // indirect
+	github.com/openshift-online/ocm-api-model/clientapi v0.0.470 // indirect
+	github.com/openshift-online/ocm-api-model/model v0.0.470 // indirect
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
