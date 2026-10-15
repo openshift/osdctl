@@ -24,7 +24,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/servicequotas v1.34.1
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.0
 	github.com/aws/smithy-go v1.28.1
-	github.com/brianvoe/gofakeit/v6 v6.24.0
+	github.com/brianvoe/gofakeit/v7 v7.18.0
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/coreos/go-semver v0.3.1
 	github.com/deckarep/golang-set v1.8.0
