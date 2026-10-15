@@ -40,7 +40,7 @@ require (
 	github.com/observatorium/api v0.1.3-0.20260127104902-9709b1e9e333
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.43.1
+	github.com/onsi/gomega v1.44.0
 	github.com/openshift-online/ocm-cli v1.0.11
 	github.com/openshift-online/ocm-common v0.0.37
 	github.com/openshift-online/ocm-sdk-go v0.1.513
