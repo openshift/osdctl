@@ -55,7 +55,7 @@ require (
 	github.com/openshift/ocm-container v1.0.1-0.20260310005051-28d4fda21872
 	github.com/openshift/osd-network-verifier v1.8.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
-	github.com/shopspring/decimal v1.4.0
+	github.com/shopspring/decimal v1.5.0
 	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/afero v1.15.0
 	github.com/spf13/cobra v1.10.2
