@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cenkalti/backoff/v4"
+	"github.com/cenkalti/backoff/v7"
 	"github.com/gorilla/websocket"
 	rhobsclient "github.com/observatorium/api/client"
 	rhobsparameters "github.com/observatorium/api/client/parameters"

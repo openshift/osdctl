@@ -25,7 +25,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.0
 	github.com/aws/smithy-go v1.28.1
 	github.com/brianvoe/gofakeit/v6 v6.24.0
-	github.com/cenkalti/backoff/v4 v4.3.0
+	github.com/cenkalti/backoff/v7 v7.0.1
 	github.com/coreos/go-semver v0.3.1
 	github.com/deckarep/golang-set v1.8.0
 	github.com/fatih/color v1.18.0
@@ -118,6 +118,7 @@ require (
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
+	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chai2010/gettext-go v1.0.3 // indirect
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e // indirect
