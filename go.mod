@@ -1,6 +1,6 @@
 module github.com/openshift/osdctl
 
-go 1.25.7
+go 1.26.0
 
 require (
 	cloud.google.com/go/compute v1.49.1
@@ -66,7 +66,7 @@ require (
 	gitlab.com/gitlab-org/api/client-go v0.128.0
 	go.uber.org/mock v0.6.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/oauth2 v0.35.0
+	golang.org/x/oauth2 v0.37.0
 	golang.org/x/sync v0.21.0
 	golang.org/x/term v0.45.0
 	google.golang.org/api v0.257.0
