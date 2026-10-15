@@ -6,7 +6,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/costexplorer"
 	organizationTypes "github.com/aws/aws-sdk-go-v2/service/organizations/types"
-	"github.com/deckarep/golang-set"
+	"github.com/deckarep/golang-set/v3"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/spf13/cobra"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
