@@ -204,7 +204,7 @@ require (
 	github.com/oasdiff/yaml v0.0.0-20250309154309-f31be36b4037 // indirect
 	github.com/oasdiff/yaml3 v0.0.0-20250309153720-d2182401db90 // indirect
 	github.com/openshift-online/ocm-api-model/clientapi v0.0.468 // indirect
-	github.com/openshift-online/ocm-api-model/model v0.0.468 // indirect
+	github.com/openshift-online/ocm-api-model/model v0.0.470 // indirect
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect
