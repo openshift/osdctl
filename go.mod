@@ -65,7 +65,7 @@ require (
 	github.com/zclconf/go-cty v1.13.0
 	gitlab.com/gitlab-org/api/client-go v0.128.0
 	go.uber.org/mock v0.6.0
-	go.uber.org/zap v1.27.0
+	go.uber.org/zap v1.28.0
 	golang.org/x/oauth2 v0.35.0
 	golang.org/x/sync v0.21.0
 	golang.org/x/term v0.45.0
