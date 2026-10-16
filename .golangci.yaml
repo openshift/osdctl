@@ -1,6 +1,4 @@
 version: "2"
-run:
-  concurrency: 10
 linters:
   default: none
   enable:
