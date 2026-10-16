@@ -1571,7 +1571,7 @@ osdctl cluster change-ebs-volume-type [flags]
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
       --reason string                    Reason for elevation (OHSS/PD/JIRA ticket)
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
-      --role string                      Node role to change: control-plane, infra (default: both)
+      --role string                      Node role to change: control-plane or infra
   -s, --server string                    The address and port of the Kubernetes API server
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
   -S, --skip-version-check               skip checking to see if this is the most recent release

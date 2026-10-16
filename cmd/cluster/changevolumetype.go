@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
-	"time"
 
 	sdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
@@ -22,16 +20,12 @@ import (
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
 	changeVolumeTypeCPMSNamespace = "openshift-machine-api"
 	changeVolumeTypeCPMSName      = "cluster"
-
-	pollInterval       = 30 * time.Second
-	rolloutPollTimeout = 45 * time.Minute
 )
 
 var validVolumeTypes = []string{"gp3"}
@@ -41,7 +35,7 @@ type changeVolumeTypeOptions struct {
 	cluster    *cmv1.Cluster
 	reason     string
 	targetType string
-	role       string // "control-plane", "infra", or "" (both)
+	role       string // "control-plane" or "infra"
 
 	ocmClient   *sdk.Connection
 	client      client.Client
@@ -64,13 +58,10 @@ rolls nodes one at a time. For infra nodes, it uses the Hive MachinePool dance t
 replace all infra nodes with new ones using the target volume type.
 
 Pre-flight checks are performed automatically before making changes.`,
-		Example: `  # Change both control plane and infra volumes to gp3
-  osdctl cluster change-ebs-volume-type -C ${CLUSTER_ID} --type gp3 --reason "${REASON}"
-
-  # Change only control plane volumes to gp3
+		Example: `  # Change control plane volumes to gp3
   osdctl cluster change-ebs-volume-type -C ${CLUSTER_ID} --type gp3 --role control-plane --reason "${REASON}"
 
-  # Change only infra volumes to gp3
+  # Change infra volumes to gp3
   osdctl cluster change-ebs-volume-type -C ${CLUSTER_ID} --type gp3 --role infra --reason "${REASON}"`,
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
@@ -81,11 +72,12 @@ Pre-flight checks are performed automatically before making changes.`,
 
 	cmd.Flags().StringVarP(&ops.clusterID, "cluster-id", "C", "", "The internal/external ID of the cluster")
 	cmd.Flags().StringVar(&ops.targetType, "type", "", "Target EBS volume type (gp3)")
-	cmd.Flags().StringVar(&ops.role, "role", "", "Node role to change: control-plane, infra (default: both)")
+	cmd.Flags().StringVar(&ops.role, "role", "", "Node role to change: control-plane or infra")
 	cmd.Flags().StringVar(&ops.reason, "reason", "", "Reason for elevation (OHSS/PD/JIRA ticket)")
 
 	_ = cmd.MarkFlagRequired("cluster-id")
 	_ = cmd.MarkFlagRequired("type")
+	_ = cmd.MarkFlagRequired("role")
 	_ = cmd.MarkFlagRequired("reason")
 
 	return cmd
@@ -107,7 +99,7 @@ func (o *changeVolumeTypeOptions) validate() error {
 		return fmt.Errorf("invalid volume type: %s (must be one of: %s)", o.targetType, strings.Join(validVolumeTypes, ", "))
 	}
 
-	if o.role != "" && o.role != "control-plane" && o.role != "infra" {
+	if o.role != "control-plane" && o.role != "infra" {
 		return fmt.Errorf("invalid role: %s (must be 'control-plane' or 'infra')", o.role)
 	}
 
@@ -163,7 +155,7 @@ func (o *changeVolumeTypeOptions) init() error {
 	o.clientAdmin = cAdmin
 
 	// Set up Hive clients for infra node replacement via machinepool dance
-	if o.role == "" || o.role == "infra" {
+	if o.role == "infra" {
 		hiveScheme := runtime.NewScheme()
 		if err := hivev1.AddToScheme(hiveScheme); err != nil {
 			return err
@@ -211,26 +203,18 @@ func (o *changeVolumeTypeOptions) run(ctx context.Context) error {
 
 	fmt.Printf("Cluster: %s (%s)\n", o.cluster.Name(), o.clusterID)
 	fmt.Printf("Target volume type: %s\n", o.targetType)
-	fmt.Printf("Role: %s\n", roleDisplay(o.role))
+	fmt.Printf("Role: %s\n", o.role)
 	fmt.Printf("Reason: %s\n\n", o.reason)
 
-	// Pre-flight checks
 	if err := o.preFlightChecks(ctx); err != nil {
 		return fmt.Errorf("pre-flight checks failed: %v", err)
 	}
 
-	doControlPlane := o.role == "" || o.role == "control-plane"
-	doInfra := o.role == "" || o.role == "infra"
-
-	// Control plane
-	if doControlPlane {
+	if o.role == "control-plane" {
 		if err := o.changeControlPlaneVolumeType(ctx); err != nil {
 			return fmt.Errorf("control plane volume type change failed: %v", err)
 		}
-	}
-
-	// Infra
-	if doInfra {
+	} else {
 		if err := o.changeInfraVolumeType(ctx); err != nil {
 			return fmt.Errorf("infra volume type change failed: %v", err)
 		}
@@ -245,7 +229,7 @@ func (o *changeVolumeTypeOptions) preFlightChecks(ctx context.Context) error {
 	fmt.Println("Running pre-flight checks...")
 
 	// Check 1: CPMS state (if changing control plane)
-	if o.role == "" || o.role == "control-plane" {
+	if o.role == "control-plane" {
 		cpms := &machinev1.ControlPlaneMachineSet{}
 		if err := o.client.Get(ctx, client.ObjectKey{Namespace: changeVolumeTypeCPMSNamespace, Name: changeVolumeTypeCPMSName}, cpms); err != nil {
 			return fmt.Errorf("failed to get CPMS: %v", err)
@@ -273,7 +257,7 @@ func (o *changeVolumeTypeOptions) preFlightChecks(ctx context.Context) error {
 	fmt.Printf("  Master nodes: %d/3 Ready\n", readyMasters)
 
 	// Check 3: Infra nodes ready (if changing infra)
-	if o.role == "" || o.role == "infra" {
+	if o.role == "infra" {
 		infraNodes := &corev1.NodeList{}
 		if err := o.client.List(ctx, infraNodes, client.MatchingLabels{"node-role.kubernetes.io/infra": ""}); err != nil {
 			return fmt.Errorf("failed to list infra nodes: %v", err)
@@ -329,8 +313,12 @@ func (o *changeVolumeTypeOptions) changeControlPlaneVolumeType(ctx context.Conte
 		return fmt.Errorf("CPMS has no blockDevices configured")
 	}
 
+	if awsSpec.BlockDevices[0].EBS == nil {
+		return fmt.Errorf("CPMS blockDevice has no EBS configuration")
+	}
+
 	currentType := ""
-	if awsSpec.BlockDevices[0].EBS != nil && awsSpec.BlockDevices[0].EBS.VolumeType != nil {
+	if awsSpec.BlockDevices[0].EBS.VolumeType != nil {
 		currentType = *awsSpec.BlockDevices[0].EBS.VolumeType
 	}
 
@@ -339,10 +327,13 @@ func (o *changeVolumeTypeOptions) changeControlPlaneVolumeType(ctx context.Conte
 		return nil
 	}
 
-	fmt.Printf("Current control plane volume type: %s\n", currentType)
+	if currentType != "" {
+		fmt.Printf("Current control plane volume type: %s\n", currentType)
+	} else {
+		fmt.Println("Current control plane volume type: not set in CPMS (field is nil)")
+	}
 	fmt.Printf("Target volume type: %s\n", o.targetType)
 
-	// Update volume type, preserving all other EBS settings (volumeSize, encrypted, kmsKey)
 	targetType := o.targetType
 	awsSpec.BlockDevices[0].EBS.VolumeType = &targetType
 	awsSpec.BlockDevices[0].EBS.Iops = nil
@@ -367,42 +358,39 @@ func (o *changeVolumeTypeOptions) changeControlPlaneVolumeType(ctx context.Conte
 	}
 
 	printer.PrintlnGreen("CPMS patched successfully. Rolling replacement in progress...")
-	fmt.Println("Monitoring rollout (this will take ~35-45 minutes)...")
 
-	// Monitor the rollout
-	if err := o.monitorCPMSRollout(ctx); err != nil {
-		return err
+	if currentType == "" {
+		fmt.Println("CPMS VolumeType was nil — cannot determine previous volume type automatically.")
+		fmt.Println("Please verify the actual previous volume type and send the service log manually:")
+		fmt.Printf("  osdctl servicelog post %s -t %s -p 'PREVIOUS_VOLUME_TYPE=<actual-type>' -p 'NEW_VOLUME_TYPE=%s' -p 'REASON=%s'\n",
+			o.clusterID, controlPlaneVolumeTypeChangedServiceLogTemplate, o.targetType, o.reason)
+	} else {
+		slParams := []string{
+			fmt.Sprintf("PREVIOUS_VOLUME_TYPE=%s", currentType),
+			fmt.Sprintf("NEW_VOLUME_TYPE=%s", o.targetType),
+			fmt.Sprintf("REASON=%s", o.reason),
+		}
+		if err := servicelog.Post(o.ocmClient, o.cluster, servicelog.PostRequest{
+			Template:       controlPlaneVolumeTypeChangedServiceLogTemplate,
+			TemplateParams: slParams,
+		}); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
+			fmt.Printf("Failed to send service log: %v\n", err)
+			fmt.Println("Please manually send a service log with:")
+			fmt.Printf("  osdctl servicelog post %s -t %s -p '%s'\n",
+				o.clusterID, controlPlaneVolumeTypeChangedServiceLogTemplate, strings.Join(slParams, "' -p '"))
+		}
 	}
+
+	fmt.Println("Rolling replacement is in progress (~35-45 minutes). Monitor with:")
+	fmt.Println("  oc get controlplanemachineset/cluster -n openshift-machine-api -w")
 
 	printer.PrintlnGreen("Control plane volume type change complete!")
 	return nil
 }
 
-// monitorCPMSRollout polls the CPMS until all replicas are updated.
-func (o *changeVolumeTypeOptions) monitorCPMSRollout(ctx context.Context) error {
-	pollCtx, cancel := context.WithTimeout(ctx, rolloutPollTimeout)
-	defer cancel()
-	return wait.PollUntilContextTimeout(pollCtx, pollInterval, rolloutPollTimeout, true, func(ctx context.Context) (bool, error) {
-		cpms := &machinev1.ControlPlaneMachineSet{}
-		if err := o.client.Get(ctx, client.ObjectKey{Namespace: changeVolumeTypeCPMSNamespace, Name: changeVolumeTypeCPMSName}, cpms); err != nil {
-			log.Printf("Error checking CPMS status: %v", err)
-			return false, nil
-		}
-
-		updated := cpms.Status.UpdatedReplicas
-		ready := cpms.Status.ReadyReplicas
-
-		log.Printf("[%s] CPMS: %d/3 updated, %d ready", time.Now().Format("15:04:05"), updated, ready)
-
-		if updated == 3 && ready >= 3 {
-			return true, nil
-		}
-		return false, nil
-	})
-}
-
 const (
-	volumeTypeChangedServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_volume_type_changed.json"
+	controlPlaneVolumeTypeChangedServiceLogTemplate = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/controlplane_volume_type_changed.json"
+	infraVolumeTypeChangedServiceLogTemplate        = "https://raw.githubusercontent.com/openshift/managed-notifications/master/osd/infranode_volume_type_changed.json"
 )
 
 // changeInfraVolumeType uses the Hive MachinePool dance from pkg/infra
@@ -453,13 +441,13 @@ func (o *changeVolumeTypeOptions) changeInfraVolumeType(ctx context.Context) err
 		fmt.Sprintf("REASON=%s", o.reason),
 	}
 	if err := servicelog.Post(o.ocmClient, o.cluster, servicelog.PostRequest{
-		Template:       volumeTypeChangedServiceLogTemplate,
+		Template:       infraVolumeTypeChangedServiceLogTemplate,
 		TemplateParams: slParams,
 	}); err != nil && !errors.Is(err, servicelog.ErrDeclined) {
 		fmt.Printf("Failed to send service log: %v\n", err)
 		fmt.Println("Please manually send a service log with:")
-		fmt.Printf("osdctl servicelog post %s -t %s -p %s\n",
-			o.clusterID, volumeTypeChangedServiceLogTemplate, strings.Join(slParams, " -p "))
+		fmt.Printf("  osdctl servicelog post %s -t %s -p '%s'\n",
+			o.clusterID, infraVolumeTypeChangedServiceLogTemplate, strings.Join(slParams, "' -p '"))
 	}
 
 	printer.PrintlnGreen("Infra volume type change complete!")
@@ -476,11 +464,4 @@ func countReadyNodes(nodes *corev1.NodeList) int {
 		}
 	}
 	return ready
-}
-
-func roleDisplay(role string) string {
-	if role == "" {
-		return "control-plane + infra"
-	}
-	return role
 }

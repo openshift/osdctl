@@ -20,13 +20,10 @@ osdctl cluster change-ebs-volume-type [flags]
 ### Examples
 
 ```
-  # Change both control plane and infra volumes to gp3
-  osdctl cluster change-ebs-volume-type -C ${CLUSTER_ID} --type gp3 --reason "${REASON}"
-
-  # Change only control plane volumes to gp3
+  # Change control plane volumes to gp3
   osdctl cluster change-ebs-volume-type -C ${CLUSTER_ID} --type gp3 --role control-plane --reason "${REASON}"
 
-  # Change only infra volumes to gp3
+  # Change infra volumes to gp3
   osdctl cluster change-ebs-volume-type -C ${CLUSTER_ID} --type gp3 --role infra --reason "${REASON}"
 ```
 
@@ -36,7 +33,7 @@ osdctl cluster change-ebs-volume-type [flags]
   -C, --cluster-id string   The internal/external ID of the cluster
   -h, --help                help for change-ebs-volume-type
       --reason string       Reason for elevation (OHSS/PD/JIRA ticket)
-      --role string         Node role to change: control-plane, infra (default: both)
+      --role string         Node role to change: control-plane or infra
       --type string         Target EBS volume type (gp3)
 ```
 
