@@ -44,7 +44,7 @@ require (
 	github.com/openshift-online/ocm-cli v1.0.11
 	github.com/openshift-online/ocm-common v0.0.37
 	github.com/openshift-online/ocm-sdk-go v0.1.513
-	github.com/openshift/api v0.0.0-20250207102212-9e59a77ed2e0
+	github.com/openshift/api 24b2699a9b32
 	github.com/openshift/aws-account-operator/api v0.0.0-20250205151445-6455c35fc4ae
 	github.com/openshift/backplane-api v0.0.0-20260205054653-459856398d59
 	github.com/openshift/backplane-cli v1.0.0
