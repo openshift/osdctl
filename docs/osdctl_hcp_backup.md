@@ -67,5 +67,6 @@ osdctl hcp backup --cluster-id <cluster-id> --reason <reason> [flags]
 * [osdctl hcp backup discover](osdctl_hcp_backup_discover.md)	 - Discover HCP backups from the disaster recovery S3 bucket
 * [osdctl hcp backup manifestwork](osdctl_hcp_backup_manifestwork.md)	 - Compare and relocate HCP ManifestWorks
 * [osdctl hcp backup release-dns](osdctl_hcp_backup_release-dns.md)	 - Release central DNS records for an HCP cluster
+* [osdctl hcp backup restore](osdctl_hcp_backup_restore.md)	 - Create and monitor a Velero restore for an HCP backup
 * [osdctl hcp backup update-trust-policy](osdctl_hcp_backup_update-trust-policy.md)	 - Allow a replacement management cluster to access HCP backups
 
