@@ -156,7 +156,7 @@ func TestValidateInstanceSize(t *testing.T) {
 		{
 			instanceSize: "m6i.4xlarge",
 			nodeType:     "infra",
-			expectErr:    true,
+			expectErr:    false,
 		},
 		{
 			instanceSize: "r6i.4xlarge",
@@ -200,6 +200,72 @@ func TestValidateInstanceSize(t *testing.T) {
 			} else {
 				if test.expectErr {
 					t.Error("expected err, got nil")
+				}
+			}
+		})
+	}
+}
+
+func TestInfraResizeM6iOverride(testContext *testing.T) {
+	testContext.Parallel()
+
+	for _, instanceType := range []string{
+		"m6i.2xlarge",
+		"m6i.4xlarge",
+		"m6i.8xlarge",
+		"m6i.12xlarge",
+		"m6i.16xlarge",
+		"m6i.24xlarge",
+		"m6i.32xlarge",
+	} {
+		testContext.Run(instanceType, func(testContext *testing.T) {
+			testContext.Parallel()
+
+			for _, nodeType := range []string{"infra", "controlplane"} {
+				if err := validateInstanceSize(instanceType, nodeType); err != nil {
+					testContext.Fatalf("expected %s to be supported for %s: %v", instanceType, nodeType, err)
+				}
+			}
+
+			original := &hivev1.MachinePool{
+				Spec: hivev1.MachinePoolSpec{
+					Platform: hivev1.MachinePoolPlatform{
+						AWS: &hivev1aws.MachinePoolPlatform{InstanceType: "r5.2xlarge"},
+					},
+				},
+			}
+			resize := &Infra{
+				cluster:      newTestCluster(testContext, cmv1.NewCluster().CloudProvider(cmv1.NewCloudProvider().ID("aws"))),
+				instanceType: instanceType,
+			}
+			resized, err := resize.embiggenMachinePool(original)
+			if err != nil {
+				testContext.Fatalf("failed to resize machinepool: %v", err)
+			}
+			if actual := resized.Spec.Platform.AWS.InstanceType; actual != instanceType {
+				testContext.Errorf("expected instance type %s, got %s", instanceType, actual)
+			}
+			if actual := original.Spec.Platform.AWS.InstanceType; actual != "r5.2xlarge" {
+				testContext.Errorf("original machinepool changed to %s", actual)
+			}
+		})
+	}
+}
+
+func TestInfraResizeRejectsUnsupportedInstanceTypes(testContext *testing.T) {
+	testContext.Parallel()
+
+	for _, instanceType := range []string{"", "m6i.large", "m6i.xlarge", "m6i.48xlarge", "m6i.not-a-size", "m7i.2xlarge", "m5.4xlarge"} {
+		testContext.Run(instanceType, func(testContext *testing.T) {
+			testContext.Parallel()
+
+			if err := validateInstanceSize(instanceType, "infra"); err == nil {
+				testContext.Fatalf("expected unsupported instance type %q to be rejected", instanceType)
+			}
+			if instanceType != "" {
+				resize := &Infra{instanceType: instanceType}
+				if err := resize.New(); err == nil || !strings.Contains(err.Error(), "not supported for infra nodes") {
+					testContext.Errorf("expected initialization to reject instance type %q, got %v", instanceType, err)
 				}
 			}
 		})
