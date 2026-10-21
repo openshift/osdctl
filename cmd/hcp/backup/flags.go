@@ -1,6 +1,9 @@
 package backup
 
-import "github.com/spf13/pflag"
+import (
+	internalcmd "github.com/openshift/osdctl/cmd/hcp/internal/cmd"
+	"github.com/spf13/pflag"
+)
 
 // backupFlags holds the parsed command-line flag values for the backup command.
 type backupFlags struct {
@@ -20,4 +23,13 @@ func (f *backupFlags) AddFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&f.reason, "reason", "", "Reason for privilege elevation (e.g., OHSS-1234 or PD incident ID)")
 	flags.StringToStringVar(&f.labels, "label", nil, "Label to add to the Velero Backup CR (key=value); may be repeated")
 	flags.StringToStringVar(&f.annotations, "annotation", nil, "Annotation to add to the Velero Backup CR (key=value); may be repeated")
+}
+
+func (f *backupFlags) request() internalcmd.BackupRequest {
+	return internalcmd.BackupRequest{
+		ClusterID:   f.clusterID,
+		Reason:      f.reason,
+		Labels:      f.labels,
+		Annotations: f.annotations,
+	}
 }

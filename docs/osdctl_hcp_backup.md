@@ -1,49 +1,11 @@
 ## osdctl hcp backup
 
-Trigger a Velero backup for an HCP cluster
-
-### Synopsis
-
-Trigger a Velero backup for an HCP cluster using the cluster's existing daily schedule.
-
-This command:
-  1. Logs into the Management Cluster for the given HCP cluster (unprivileged)
-  2. Validates the Velero schedule exists in the openshift-adp namespace
-  3. Logs into the Management Cluster again with elevated permissions (backplane-cluster-admin)
-  4. Triggers an immediate backup from the schedule via velero backup create --from-schedule
-
-Optional metadata can be attached to the Velero Backup CR:
-
-  --label key=value       Add a label to the Backup CR (may be repeated)
-  --annotation key=value  Add an annotation to the Backup CR (may be repeated)
-
-This command only triggers the backup. It does not wait for completion.
-To monitor the backup status after triggering, log into the management cluster
-and review the Backup CR:
-  ocm backplane login --manager <CLUSTER_ID>
-  oc get backup <backup-id> -n openshift-adp
-
-
-```
-osdctl hcp backup --cluster-id <cluster-id> --reason <reason> [flags]
-```
-
-### Examples
-
-```
-  osdctl hcp backup --cluster-id ${CLUSTER_ID} --reason ${REASON}
-  osdctl hcp backup --cluster-id ${CLUSTER_ID} --reason ${REASON} --label env=prod --label incident=${REASON}
-  osdctl hcp backup --cluster-id ${CLUSTER_ID} --reason ${REASON} --annotation owner=sre-team
-```
+Manage Velero backups for HCP clusters
 
 ### Options
 
 ```
-      --annotation stringToString   Annotation to add to the Velero Backup CR (key=value); may be repeated (default [])
-  -C, --cluster-id string           Internal ID, name, or external ID of the HCP cluster
-  -h, --help                        help for backup
-      --label stringToString        Label to add to the Velero Backup CR (key=value); may be repeated (default [])
-      --reason string               Reason for privilege elevation (e.g., OHSS-1234 or PD incident ID)
+  -h, --help   help for backup
 ```
 
 ### Options inherited from parent commands
@@ -64,9 +26,6 @@ osdctl hcp backup --cluster-id <cluster-id> --reason <reason> [flags]
 ### SEE ALSO
 
 * [osdctl hcp](osdctl_hcp.md)	 - 
+* [osdctl hcp backup create](osdctl_hcp_backup_create.md)	 - Trigger a Velero backup for an HCP cluster
 * [osdctl hcp backup discover](osdctl_hcp_backup_discover.md)	 - Discover HCP backups from the disaster recovery S3 bucket
-* [osdctl hcp backup manifestwork](osdctl_hcp_backup_manifestwork.md)	 - Compare and relocate HCP ManifestWorks
-* [osdctl hcp backup release-dns](osdctl_hcp_backup_release-dns.md)	 - Release central DNS records for an HCP cluster
-* [osdctl hcp backup restore](osdctl_hcp_backup_restore.md)	 - Create and monitor a Velero restore for an HCP backup
-* [osdctl hcp backup update-trust-policy](osdctl_hcp_backup_update-trust-policy.md)	 - Allow a replacement management cluster to access HCP backups
 

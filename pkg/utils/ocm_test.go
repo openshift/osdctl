@@ -1,7 +1,10 @@
 package utils
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -419,6 +422,78 @@ func TestGetHiveClusterWithConn(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestGetManagementClusterWithConn(t *testing.T) {
+	for _, tt := range []struct {
+		name           string
+		hypershiftBody string
+		wantErr        string
+	}{
+		{
+			name:           "resolves management cluster",
+			hypershiftBody: `{"management_cluster":"management-cluster"}`,
+		},
+		{
+			name:           "management cluster missing",
+			hypershiftBody: `{}`,
+			wantErr:        "no management cluster found for hcp-cluster",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/token":
+					if _, err := w.Write([]byte(`{"access_token":"eyJhbGciOiJub25lIn0.eyJleHAiOjQxMDAwMDAwMDB9.signature","expires_in":3600}`)); err != nil { // notsecret
+						t.Errorf("writing token response: %v", err)
+					}
+				case "/api/clusters_mgmt/v1/clusters/hcp-cluster/hypershift":
+					if _, err := w.Write([]byte(tt.hypershiftBody)); err != nil {
+						t.Errorf("writing hypershift response: %v", err)
+					}
+				case "/api/clusters_mgmt/v1/clusters":
+					if _, err := w.Write([]byte(`{"total":1,"items":[{"id":"management-cluster-id","name":"management-cluster"}]}`)); err != nil {
+						t.Errorf("writing cluster response: %v", err)
+					}
+				default:
+					t.Errorf("unexpected request path %s", r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			defer server.Close()
+
+			conn, err := sdk.NewConnectionBuilder().
+				URL(server.URL).
+				TokenURL(server.URL+"/token").
+				Insecure(true).
+				Client("client", "secret").
+				Build()
+			if err != nil {
+				t.Fatalf("building OCM connection: %v", err)
+			}
+			defer conn.Close()
+
+			cluster, err := GetManagementClusterWithConn(context.Background(), "hcp-cluster", conn)
+			if tt.wantErr != "" {
+				if err == nil || !contains(err.Error(), tt.wantErr) {
+					t.Fatalf("GetManagementClusterWithConn() error = %v, want error containing %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("GetManagementClusterWithConn() error = %v", err)
+			}
+			if cluster.ID() != "management-cluster-id" || cluster.Name() != "management-cluster" {
+				t.Fatalf("GetManagementClusterWithConn() = (%s, %s), want (management-cluster-id, management-cluster)", cluster.ID(), cluster.Name())
+			}
+		})
+	}
+
+	_, err := GetManagementClusterWithConn(context.Background(), "hcp-cluster", nil)
+	if err == nil || !contains(err.Error(), "ocm connection is required") {
+		t.Fatalf("GetManagementClusterWithConn() error = %v, want missing connection error", err)
 	}
 }
 
