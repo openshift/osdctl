@@ -19,7 +19,7 @@ osdctl hcp must-gather --cluster-id <cluster-identifier> [flags]
 ### Options
 
 ```
-      --acm_image string    Overrides the acm must-gather image being used for acm mc, sc as well as hcp must-gathers. (default "registry.redhat.io/multicluster-engine/must-gather-rhel9:v2.9.4-1")
+      --acm_image string    Overrides the acm must-gather image being used for acm mc, sc as well as hcp must-gathers. (default "quay.io/redhat-user-workloads/crt-redhat-acm-tenant/must-gather-acm-51:203e21767f29c24069a92565638befed9fc7cc41")
   -C, --cluster-id string   Internal ID of the cluster to gather data from
       --gather string       Comma-separated list of gather targets (available: sc, sc_acm, mc, hcp). (default "hcp")
   -h, --help                help for must-gather
