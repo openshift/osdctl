@@ -52,6 +52,99 @@ type promoteCallbacks struct {
 	component    *promote.CodeComponent // not supposed to change on subsequent calls to ComputeCommitMessage
 }
 
+// filterPubSubCanaryTargets identifies the manual-promotion entry points in a
+// publish/subscribe staged-rollout topology. A target qualifies as a canary if:
+//  1. It has a non-empty promotion.publish list (it drives a channel).
+//  2. It does NOT have promotion.auto: true (it is promoted manually, not by the pipeline).
+//  3. It does NOT have a promotion.soakDays field (no soak period on the entry point).
+//  4. At least one of the channels it publishes is subscribed to by another target in
+//     the same file (confirming it is a genuine gate in the topology, not an orphan).
+//
+// Conditions 2 and 3 together rule out auto-promoted stage / phase hives that also
+// happen to publish. Condition 4 rules out a leaf publisher that nothing subscribes to.
+func filterPubSubCanaryTargets(targetNodes []*kyaml.RNode) ([]*kyaml.RNode, error) {
+	// Pass A: build the global set of every channel that any target subscribes to.
+	allSubscribedChannels := make(map[string]struct{})
+	for _, targetNode := range targetNodes {
+		subscribeNode, err := kyaml.Lookup("promotion", "subscribe").Filter(targetNode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to look up promotion.subscribe: %w", err)
+		}
+		if subscribeNode == nil {
+			continue
+		}
+		elements, err := subscribeNode.Elements()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read promotion.subscribe elements: %w", err)
+		}
+		for _, elem := range elements {
+			channel, err := elem.String()
+			if err != nil {
+				return nil, fmt.Errorf("failed to read promotion.subscribe channel value: %w", err)
+			}
+			channel = strings.TrimSpace(channel)
+			if channel != "" {
+				allSubscribedChannels[channel] = struct{}{}
+			}
+		}
+	}
+
+	// Pass B: collect targets that are manual pub/sub canaries.
+	var canaryTargets []*kyaml.RNode
+	for _, targetNode := range targetNodes {
+		// Condition 2: skip targets with promotion.auto: true.
+		autoVal, _ := targetNode.GetString("promotion.auto")
+		if autoVal == "true" {
+			continue
+		}
+
+		// Condition 3: skip targets that carry a soakDays field.
+		soakNode, err := kyaml.Lookup("promotion", "soakDays").Filter(targetNode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to look up promotion.soakDays: %w", err)
+		}
+		if soakNode != nil {
+			continue
+		}
+
+		// Condition 1: must have a non-empty promotion.publish list.
+		publishNode, err := kyaml.Lookup("promotion", "publish").Filter(targetNode)
+		if err != nil {
+			return nil, fmt.Errorf("failed to look up promotion.publish: %w", err)
+		}
+		if publishNode == nil {
+			continue
+		}
+		publishedChannels, err := publishNode.Elements()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read promotion.publish elements: %w", err)
+		}
+		if len(publishedChannels) == 0 {
+			continue
+		}
+
+		// Condition 4: at least one published channel must be subscribed to by another target.
+		hasSubscriber := false
+		for _, elem := range publishedChannels {
+			channel, err := elem.String()
+			if err != nil {
+				return nil, fmt.Errorf("failed to read promotion.publish channel value: %w", err)
+			}
+			if _, ok := allSubscribedChannels[strings.TrimSpace(channel)]; ok {
+				hasSubscriber = true
+				break
+			}
+		}
+		if !hasSubscriber {
+			continue
+		}
+
+		canaryTargets = append(canaryTargets, targetNode)
+	}
+
+	return canaryTargets, nil
+}
+
 func (c *promoteCallbacks) FilterTargets(targetNodes []*kyaml.RNode) ([]*kyaml.RNode, error) {
 	namespaceRef := c.namespaceRef
 
@@ -69,7 +162,7 @@ func (c *promoteCallbacks) FilterTargets(targetNodes []*kyaml.RNode) ([]*kyaml.R
 			if !c.isHotfix {
 				var filteredTargetNodes []*kyaml.RNode
 
-				// look for canary targets
+				// First: look for explicitly named canary targets (legacy naming convention).
 				for _, targetNode := range targetNodes {
 					targetName, err := targetNode.GetString("name")
 					if err != nil {
@@ -83,8 +176,17 @@ func (c *promoteCallbacks) FilterTargets(targetNodes []*kyaml.RNode) ([]*kyaml.R
 
 				if len(filteredTargetNodes) > 0 {
 					fmt.Println("Canary targets detected!")
-
 					return filteredTargetNodes, nil
+				}
+
+				// Second: look for pub/sub canary targets (topology-aware detection).
+				pubSubCanaries, err := filterPubSubCanaryTargets(targetNodes)
+				if err != nil {
+					return nil, err
+				}
+				if len(pubSubCanaries) > 0 {
+					fmt.Println("Pub/sub canary targets detected!")
+					return pubSubCanaries, nil
 				}
 			}
 
