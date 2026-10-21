@@ -75,8 +75,8 @@ Entry point: `cmd/cmd.go` registers all sub-commands onto the cobra root.
 | Dependency                                      | Purpose                                                                                                            |
 |-------------------------------------------------|--------------------------------------------------------------------------------------------------------------------|
 | `github.com/aws/aws-sdk-go-v2` (+ sub-modules)  | AWS API calls: config, credentials, CloudTrail, CostExplorer, EC2, ELB, IAM, Orgs, Route53, S3, ServiceQuotas, STS |
-| `github.com/openshift/backplane-cli`            | Backplane cluster access; managed by Dependabot                                                                    |
-| `github.com/openshift/osd-network-verifier`     | Egress network verification; managed by Dependabot                                                                 |
+| `github.com/openshift/backplane-cli`            | Backplane cluster access; managed by Renovate/MintMaker                                                            |
+| `github.com/openshift/osd-network-verifier`     | Egress network verification; managed by Renovate/MintMaker                                                        |
 | `github.com/openshift-online/ocm-sdk-go`        | OCM API (clusters, service logs, organisations)                                                                    |
 | `github.com/openshift/aws-account-operator/api` | Account / AccountClaim CRD types                                                                                   |
 | `github.com/openshift/hive/apis`                | Hive CRD types                                                                                                     |
@@ -114,8 +114,8 @@ Rules:
 
 ## Working Rules
 
-- **Dependabot** opens weekly `gomod` PRs for `osd-network-verifier` and `backplane-cli` only; the `dependabot-auto-merge` workflow auto-merges patch/minor updates. **Do not hand-bump these two dependencies** — let the bot manage them.
-- All other dependencies are managed via MintMaker / manual PRs; do not bump them without a concrete reason.
+- **Dependency updates are managed by Renovate/MintMaker** via `.github/renovate.json`, which extends `openshift/boilerplate`. `gomod` minor/patch/digest bumps are **grouped into a single scheduled PR** (pre-labelled `lgtm`/`approved`, merged by Tide after CI); majors open a separate manual-review PR. A 3-day `minimumReleaseAge` cooldown applies. **Do not hand-bump dependencies** — let the bot manage them — unless you have a concrete reason.
+- `osd-network-verifier` and `backplane-cli` (previously on a dedicated Dependabot flow) now ride the same grouped PR as everything else. The trade-off is lost isolation: a bump of either can be delayed when an unrelated dep in the batch breaks CI. **To reintroduce isolation** (e.g. if that blocking becomes a problem), add a `packageRules` entry in `.github/renovate.json` that un-groups those two (own `groupName`/branch, optionally a tighter schedule) — do **not** reintroduce Dependabot.
 - Keep changes **minimal and focused**; avoid unrelated refactors in the same PR.
 - **Add unit tests** alongside every new function; existing test files (`*_test.go`) in the same package are the right place.
 - Comments should explain **why**, not what — the code itself shows what.
