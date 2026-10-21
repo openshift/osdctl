@@ -51,8 +51,9 @@ func NewCmdMustGather() *cobra.Command {
 		},
 	}
 
+	// To be changed to registry.redhat.io/multicluster-engine/must-gather-rhel9:v5.1 when it exists
 	// The registry.redhat.io image requires authentication - see https://access.redhat.com/articles/RegistryAuthentication
-	defaultAcmImage := "registry.redhat.io/multicluster-engine/must-gather-rhel9:v2.9.4-1"
+	defaultAcmImage := "quay.io/redhat-user-workloads/crt-redhat-acm-tenant/must-gather-acm-51:203e21767f29c24069a92565638befed9fc7cc41"
 	mustGatherCommand.Flags().StringVarP(&mg.clusterId, "cluster-id", "C", "", "Internal ID of the cluster to gather data from")
 	mustGatherCommand.Flags().StringVar(&mg.reason, "reason", "", "The reason for this command, which requires elevation (e.g., OHSS ticket or PD incident).")
 	mustGatherCommand.Flags().StringVar(&mg.gatherTargets, "gather", "hcp", "Comma-separated list of gather targets (available: sc, sc_acm, mc, hcp).")
