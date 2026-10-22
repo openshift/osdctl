@@ -1,10 +1,29 @@
 ## osdctl hcp must-gather
 
-Create a must-gather for HCP cluster
+Create a must-gather for an HCP cluster (and optionally its management/service clusters)
 
 ### Synopsis
 
-Create a must-gather for an HCP cluster with optional gather targets
+Create a must-gather for a HyperShift / ROSA HCP cluster.
+
+--cluster-id is the cluster you want data about; --gather selects which cluster(s) are
+actually collected from. The supplied ID and the gather targets are distinct: the default
+target 'hcp' requires an HCP cluster ID, while 'mc'/'sc'/'sc_acm' can also be run directly
+against a management- or service-cluster ID.
+
+Gather targets:
+  hcp     HCP control-plane logs & events from RHOBS, plus an ACM hypershift dump (requires an HCP ID)
+  mc      management-cluster infrastructure must-gather
+  sc      service-cluster infrastructure must-gather
+  sc_acm  service-cluster ACM must-gather
+
+Supported workflows:
+  HCP cluster ID:         --gather hcp (default) | --gather mc | --gather sc,sc_acm | any combination
+  Management cluster ID:  --gather mc
+  Service cluster ID:     --gather sc,sc_acm
+
+The 'hcp' target reads control-plane logs from RHOBS and therefore requires RHOBS client
+credentials (RHOBS_CLIENT_ID / RHOBS_CLIENT_SECRET as env vars, in ~/.config/osdctl, or via Vault).
 
 ```
 osdctl hcp must-gather --cluster-id <cluster-identifier> [flags]
@@ -13,17 +32,27 @@ osdctl hcp must-gather --cluster-id <cluster-identifier> [flags]
 ### Examples
 
 ```
-  osdctl hcp must-gather --cluster-id ${CLUSTER_ID} --gather sc,mc,sc_acm --reason ${REASON}
+  # HCP control-plane logs/events + hypershift dump (default)
+  osdctl hcp must-gather --cluster-id ${HCP_CLUSTER_ID} --reason ${REASON}
+
+  # HCP cluster plus its management and service clusters
+  osdctl hcp must-gather --cluster-id ${HCP_CLUSTER_ID} --gather hcp,mc,sc,sc_acm --reason ${REASON}
+
+  # Directly against a management-cluster ID
+  osdctl hcp must-gather --cluster-id ${MC_CLUSTER_ID} --gather mc --reason ${REASON}
 ```
 
 ### Options
 
 ```
-      --acm_image string    Overrides the acm must-gather image being used for acm mc, sc as well as hcp must-gathers. (default "quay.io/redhat-user-workloads/crt-redhat-acm-tenant/must-gather-acm-51:203e21767f29c24069a92565638befed9fc7cc41")
-  -C, --cluster-id string   Internal ID of the cluster to gather data from
-      --gather string       Comma-separated list of gather targets (available: sc, sc_acm, mc, hcp). (default "hcp")
-  -h, --help                help for must-gather
-      --reason string       The reason for this command, which requires elevation (e.g., OHSS ticket or PD incident).
+      --acm_image string      Overrides the acm must-gather image being used for acm mc, sc as well as hcp must-gathers. (default "quay.io/redhat-user-workloads/crt-redhat-acm-tenant/must-gather-acm-51:203e21767f29c24069a92565638befed9fc7cc41")
+  -C, --cluster-id string     Internal ID of the cluster to gather data from
+      --gather string         Comma-separated list of gather targets (available: hcp, mc, sc, sc_acm). (default "hcp")
+  -h, --help                  help for must-gather
+      --hive-ocm-url string   OCM environment for the RHOBS/hive lookups used by the hcp target - aliases: "production", "staging", "integration". (default "production")
+      --max-log-lines int     Maximum number of most-recent log lines to collect per namespace from RHOBS for the hcp target; a positive cap is written newest-first (0 = unlimited, oldest-first). (default 100000)
+      --output-dir string     Directory to write the must-gather into (defaults to the current working directory). Avoid RAM-backed paths like /tmp (tmpfs) for large gathers.
+      --reason string         The reason for this command, which requires elevation (e.g., OHSS ticket or PD incident).
 ```
 
 ### Options inherited from parent commands

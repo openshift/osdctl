@@ -21,7 +21,7 @@ import (
 	ocmsdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift/osdctl/cmd/common"
-	"github.com/openshift/osdctl/cmd/dynatrace"
+	"github.com/openshift/osdctl/cmd/rhobs"
 	"github.com/openshift/osdctl/pkg/osdctlConfig"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
@@ -36,16 +36,54 @@ type mustGather struct {
 	reason             string
 	gatherTargets      string
 	acmMustGatherImage string
+	hiveOcmUrl         string
+	maxLogLines        int
+	outputDir          string
+
+	// Seams defaulted to the real implementations in NewCmdMustGather and overridden in tests,
+	// so the orchestration (per-target outcomes, summary, exit policy) is exercisable without a
+	// live cluster, backplane elevation, an `oc` binary, or RHOBS access.
+	runMustGather func(*rest.Config, *kubernetes.Clientset, []string) error
+	gatherHCPLogs func(context.Context, string, string, string, []string, time.Duration, int) (int, error)
 }
 
 func NewCmdMustGather() *cobra.Command {
-	mg := &mustGather{}
+	mg := &mustGather{
+		runMustGather: createMustGather,
+		gatherHCPLogs: rhobs.GatherHCPLogs,
+	}
 
 	mustGatherCommand := &cobra.Command{
-		Use:     "must-gather --cluster-id <cluster-identifier>",
-		Short:   "Create a must-gather for HCP cluster",
-		Long:    "Create a must-gather for an HCP cluster with optional gather targets",
-		Example: "  osdctl hcp must-gather --cluster-id ${CLUSTER_ID} --gather sc,mc,sc_acm --reason ${REASON}",
+		Use:   "must-gather --cluster-id <cluster-identifier>",
+		Short: "Create a must-gather for an HCP cluster (and optionally its management/service clusters)",
+		Long: `Create a must-gather for a HyperShift / ROSA HCP cluster.
+
+--cluster-id is the cluster you want data about; --gather selects which cluster(s) are
+actually collected from. The supplied ID and the gather targets are distinct: the default
+target 'hcp' requires an HCP cluster ID, while 'mc'/'sc'/'sc_acm' can also be run directly
+against a management- or service-cluster ID.
+
+Gather targets:
+  hcp     HCP control-plane logs & events from RHOBS, plus an ACM hypershift dump (requires an HCP ID)
+  mc      management-cluster infrastructure must-gather
+  sc      service-cluster infrastructure must-gather
+  sc_acm  service-cluster ACM must-gather
+
+Supported workflows:
+  HCP cluster ID:         --gather hcp (default) | --gather mc | --gather sc,sc_acm | any combination
+  Management cluster ID:  --gather mc
+  Service cluster ID:     --gather sc,sc_acm
+
+The 'hcp' target reads control-plane logs from RHOBS and therefore requires RHOBS client
+credentials (RHOBS_CLIENT_ID / RHOBS_CLIENT_SECRET as env vars, in ~/.config/osdctl, or via Vault).`,
+		Example: `  # HCP control-plane logs/events + hypershift dump (default)
+  osdctl hcp must-gather --cluster-id ${HCP_CLUSTER_ID} --reason ${REASON}
+
+  # HCP cluster plus its management and service clusters
+  osdctl hcp must-gather --cluster-id ${HCP_CLUSTER_ID} --gather hcp,mc,sc,sc_acm --reason ${REASON}
+
+  # Directly against a management-cluster ID
+  osdctl hcp must-gather --cluster-id ${MC_CLUSTER_ID} --gather mc --reason ${REASON}`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return mg.Run()
 		},
@@ -56,13 +94,54 @@ func NewCmdMustGather() *cobra.Command {
 	defaultAcmImage := "quay.io/redhat-user-workloads/crt-redhat-acm-tenant/must-gather-acm-51:203e21767f29c24069a92565638befed9fc7cc41"
 	mustGatherCommand.Flags().StringVarP(&mg.clusterId, "cluster-id", "C", "", "Internal ID of the cluster to gather data from")
 	mustGatherCommand.Flags().StringVar(&mg.reason, "reason", "", "The reason for this command, which requires elevation (e.g., OHSS ticket or PD incident).")
-	mustGatherCommand.Flags().StringVar(&mg.gatherTargets, "gather", "hcp", "Comma-separated list of gather targets (available: sc, sc_acm, mc, hcp).")
+	mustGatherCommand.Flags().StringVar(&mg.gatherTargets, "gather", "hcp", "Comma-separated list of gather targets (available: hcp, mc, sc, sc_acm).")
 	mustGatherCommand.Flags().StringVar(&mg.acmMustGatherImage, "acm_image", defaultAcmImage, "Overrides the acm must-gather image being used for acm mc, sc as well as hcp must-gathers.")
+	mustGatherCommand.Flags().StringVar(&mg.hiveOcmUrl, "hive-ocm-url", "production", `OCM environment for the RHOBS/hive lookups used by the hcp target - aliases: "production", "staging", "integration".`)
+	mustGatherCommand.Flags().IntVar(&mg.maxLogLines, "max-log-lines", 100000, "Maximum number of most-recent log lines to collect per namespace from RHOBS for the hcp target; a positive cap is written newest-first (0 = unlimited, oldest-first).")
+	mustGatherCommand.Flags().StringVar(&mg.outputDir, "output-dir", "", "Directory to write the must-gather into (defaults to the current working directory). Avoid RAM-backed paths like /tmp (tmpfs) for large gathers.")
 
 	mustGatherCommand.MarkFlagRequired("cluster-id")
 	mustGatherCommand.MarkFlagRequired("reason")
 
 	return mustGatherCommand
+}
+
+// validGatherTargets is the set of accepted --gather values.
+var validGatherTargets = map[string]bool{"hcp": true, "mc": true, "sc": true, "sc_acm": true}
+
+// parseAndValidateTargets splits the --gather value and rejects unknown targets or combinations
+// incompatible with the supplied cluster ID, so the command fails with an actionable error before
+// creating output or elevating into any cluster.
+func parseAndValidateTargets(raw string, cluster *cmv1.Cluster) ([]string, error) {
+	var targets []string
+	seen := map[string]bool{}
+	for _, target := range strings.Split(raw, ",") {
+		target = strings.TrimSpace(target)
+		if target == "" {
+			continue
+		}
+		if !validGatherTargets[target] {
+			return nil, fmt.Errorf("unknown gather target %q; valid targets are: hcp, mc, sc, sc_acm", target)
+		}
+		// De-duplicate so a repeated target (e.g. --gather hcp,hcp) does not run twice
+		// concurrently into the same output directory.
+		if seen[target] {
+			continue
+		}
+		seen[target] = true
+		targets = append(targets, target)
+	}
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("no gather targets specified; valid targets are: hcp, mc, sc, sc_acm")
+	}
+
+	for _, target := range targets {
+		if target == "hcp" && !cluster.Hypershift().Enabled() {
+			return nil, fmt.Errorf("--gather hcp requires an HCP cluster ID, but %s is not an HCP cluster; use --gather mc or --gather sc,sc_acm for a management/service-cluster ID", cluster.ID())
+		}
+	}
+
+	return targets, nil
 }
 
 func (mg *mustGather) Run() error {
@@ -77,15 +156,30 @@ func (mg *mustGather) Run() error {
 		return fmt.Errorf("failed to get OCM cluster info for %s: %s", mg.clusterId, err)
 	}
 
+	// Validate targets up front so an unknown target or an incompatible ID/target combination
+	// fails before we create output directories or elevate into any cluster.
+	gatherTargets, err := parseAndValidateTargets(mg.gatherTargets, cluster)
+	if err != nil {
+		return err
+	}
+
 	// hack(typeid): work around backplane overwriting our config
 	err = osdctlConfig.EnsureConfigFile()
 	if err != nil {
 		return err
 	}
 
-	// Prepare for gathering data
+	// Prepare for gathering data. Default to the current working directory rather than /tmp, which
+	// is RAM-backed (tmpfs) on many systems and would OOM the host for large gathers.
+	baseDir := mg.outputDir
+	if baseDir == "" {
+		baseDir, err = os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to determine working directory for output: %w", err)
+		}
+	}
+
 	timestamp := time.Now().Format("20060102150405")
-	baseDir := "/tmp"
 	outputDir := fmt.Sprintf("%s/cluster_dump_%s_%s", baseDir, mg.clusterId, timestamp)
 	tarballName := fmt.Sprintf("cluster_dump_%s_%s.tar.gz", mg.clusterId, timestamp)
 	outputTarballTmp := fmt.Sprintf("%s/%s", baseDir, tarballName)
@@ -96,213 +190,327 @@ func (mg *mustGather) Run() error {
 	}
 
 	// Prints with color :)
-	fmt.Printf("\033[1;34mCreating must-gather with targets '%s'. Output directory: '%s'\033[0m\n", mg.gatherTargets, outputDir)
-	gatherTargets := strings.Split(mg.gatherTargets, ",")
+	fmt.Printf("\033[1;34mCreating must-gather with targets '%s'. Output directory: '%s'\033[0m\n", strings.Join(gatherTargets, ","), outputDir)
 
-	// Progress tracking
+	// Progress tracking; the ticker is stopped deterministically via progressDone once all
+	// targets finish, so it never reports after the final summary.
 	var completed sync.Map
 	totalGatherTargets := len(gatherTargets)
+	progressDone := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 
-		for range ticker.C {
-			var completedCount int
-			var remaining []string
+		start := time.Now()
+		lastCompleted := -1
 
-			for _, gatherType := range gatherTargets {
-				if _, ok := completed.Load(gatherType); ok {
-					completedCount++
-				} else {
-					remaining = append(remaining, gatherType)
-				}
-			}
-
-			// Prints with color :)
-			fmt.Printf("\033[1;34mProgress: %d/%d completed. Remaining: %v\033[0m\n", completedCount, totalGatherTargets, remaining)
-
-			if completedCount == totalGatherTargets {
+		for {
+			select {
+			case <-progressDone:
 				return
+			case <-ticker.C:
+				var completedCount int
+				var remaining []string
+
+				for _, gatherType := range gatherTargets {
+					if _, ok := completed.Load(gatherType); ok {
+						completedCount++
+					} else {
+						remaining = append(remaining, gatherType)
+					}
+				}
+
+				// Only reprint when something actually changed, so a single long-running target
+				// (e.g. a large HCP log export) does not spam an identical line every tick.
+				if completedCount == lastCompleted {
+					continue
+				}
+				lastCompleted = completedCount
+
+				// Prints with color :)
+				fmt.Printf("\033[1;34mProgress: %d/%d completed after %s. Remaining: %v\033[0m\n", completedCount, totalGatherTargets, time.Since(start).Round(time.Second), remaining)
 			}
 		}
 	}()
 
-	// Start must-gathers in parallel
+	// Resolve (and elevate into) each infrastructure cluster at most once per invocation.
+	// sync.Once makes concurrent targets share a single setup and its error: mc/hcp share the
+	// MC, sc/sc_acm share the SC, so we never run the backplane login/elevation twice.
+	var (
+		mcOnce sync.Once
+		mcCfg  *rest.Config
+		mcCli  *kubernetes.Clientset
+		mcErr  error
+	)
+	getMC := func() (*rest.Config, *kubernetes.Clientset, error) {
+		mcOnce.Do(func() { mcCfg, mcCli, mcErr = resolveMCRestConfig(ocmClient, cluster, mg.reason) })
+		return mcCfg, mcCli, mcErr
+	}
+
+	var (
+		scOnce sync.Once
+		scCfg  *rest.Config
+		scCli  *kubernetes.Clientset
+		scErr  error
+	)
+	getSC := func() (*rest.Config, *kubernetes.Clientset, error) {
+		scOnce.Do(func() { scCfg, scCli, scErr = resolveSCRestConfig(ocmClient, cluster, mg.reason) })
+		return scCfg, scCli, scErr
+	}
+
+	// Start must-gathers in parallel; each goroutine owns its own result slot (no shared writes).
+	results := make([]targetResult, len(gatherTargets))
 	var wg sync.WaitGroup
-	for _, gatherTarget := range gatherTargets {
+	for i, gatherTarget := range gatherTargets {
 		wg.Add(1)
-		go func(gatherTarget string) {
+		go func(i int, gatherTarget string) {
 			defer wg.Done()
 			// Mark this gatherTarget as completed for progress tracking
 			defer completed.Store(gatherTarget, true)
 
-			switch gatherTarget {
-			case "sc":
-				destDir := outputDir + "/sc_infra"
-				scRestCfg, scK8sCli, err := resolveSCRestConfig(ocmClient, cluster, mg.reason)
-				if err != nil {
-					fmt.Printf("failed to resolve service cluster for %s: %v\n", gatherTarget, err)
-					return
-				}
-				if err := createMustGather(scRestCfg, scK8sCli, []string{"--dest-dir=" + destDir}); err != nil {
-					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
-				}
-			case "sc_acm":
-				destDir := outputDir + "/sc_acm"
-				scRestCfg, scK8sCli, err := resolveSCRestConfig(ocmClient, cluster, mg.reason)
-				if err != nil {
-					fmt.Printf("failed to resolve service cluster for %s: %v\n", gatherTarget, err)
-					return
-				}
-				if err := createMustGather(scRestCfg, scK8sCli, []string{"--dest-dir=" + destDir, "--image=" + mg.acmMustGatherImage}); err != nil {
-					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
-				}
-			case "mc":
-				destDir := outputDir + "/mc_infra"
-				mcRestCfg, mcK8sCli, err := resolveMCRestConfig(ocmClient, cluster, mg.reason)
-				if err != nil {
-					fmt.Printf("failed to resolve management cluster for %s: %v\n", gatherTarget, err)
-					return
-				}
-				if err := createMustGather(mcRestCfg, mcK8sCli, []string{"--dest-dir=" + destDir}); err != nil {
-					fmt.Printf("failed to gather %s: %v\n", gatherTarget, err)
-				}
-			case "hcp":
-				if !cluster.Hypershift().Enabled() {
-					fmt.Printf("--gather hcp requires an HCP cluster ID; %s is not an HCP cluster\n", mg.clusterId)
-					return
-				}
-
-				destDir := outputDir + "/hcp"
-
-				// 1. Gather logs from DT
-				gatherOptions := &dynatrace.GatherLogsOpts{Since: 72, SortOrder: "asc", DestDir: destDir}
-				if err := gatherOptions.GatherLogs(mg.clusterId); err != nil {
-					fmt.Printf("failed to gather HCP dynatrace logs: %v\n", err)
-				}
-
-				// 2. ACM must-gather which includes running the hypershift binary for a dump
-				clusterHyperShift, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(mg.clusterId).Hypershift().Get().Send()
-				if err != nil {
-					fmt.Printf("collected HCP dynatrace logs but failed to get OCM cluster hypershift info for %s: %v\n", mg.clusterId, err)
-					return
-				}
-
-				hcpNamespace, ok := clusterHyperShift.Body().GetHCPNamespace()
-				if !ok {
-					fmt.Println("collected HCP dynatrace logs but failed to get HCP namespace")
-					return
-				}
-
-				hcName := cluster.DomainPrefix()
-				hcNamespace := strings.TrimSuffix(hcpNamespace, "-"+hcName)
-
-				mcRestCfg, mcK8sCli, err := resolveMCRestConfig(ocmClient, cluster, mg.reason)
-				if err != nil {
-					fmt.Printf("gathered DT logs but failed to resolve MC for ACM must-gather: %v\n", err)
-					return
-				}
-
-				gatherScript := fmt.Sprintf("/usr/bin/gather hosted-cluster-namespace=%s hosted-cluster-name=%s", hcNamespace, hcName)
-				if err := createMustGather(mcRestCfg, mcK8sCli, []string{"--dest-dir=" + destDir, "--image=" + mg.acmMustGatherImage, gatherScript}); err != nil {
-					fmt.Printf("collected HCP dynatrace logs but failed to gather %s: %v\n", gatherTarget, err.Error())
-				}
-
-			default:
-				fmt.Printf("unknown gather type: %s\n", gatherTarget)
-			}
-		}(gatherTarget)
+			results[i] = mg.runTarget(gatherTarget, outputDir, cluster, ocmClient, getMC, getSC)
+		}(i, gatherTarget)
 	}
 
 	wg.Wait()
-	fmt.Println()
-	fmt.Println("All must-gather tasks completed. Creating tarball.")
+	close(progressDone)
 
-	// Create a tarball with all collected data
+	printGatherSummary(results)
+
+	producedOutput, allSucceeded := summarizeResults(results)
+
+	// Total collection failure: every requested target failed. Do not create an empty archive
+	// or print a success message, and exit nonzero.
+	if !producedOutput {
+		return fmt.Errorf("must-gather failed: all %d requested target(s) failed; no archive created", len(results))
+	}
+
+	// We have useful output, so build the archive even when collection was only partial.
+	// Prints with color :)
+	fmt.Printf("\033[1;34mCompressing collected data into an archive (this can take a while for large gathers)...\033[0m\n")
 	if err := createTarball(outputDir, outputTarballTmp); err != nil {
 		return fmt.Errorf("failed to create tarball: %w", err)
 	}
-
-	// Move the tarball we create from collected data back in the output directory
-	err = os.Rename(outputTarballTmp, outputTarballPath)
-	if err != nil {
+	if err := os.Rename(outputTarballTmp, outputTarballPath); err != nil {
 		return fmt.Errorf("failed to move tarball to output directory: %w", err)
 	}
 
-	fmt.Println("Data collection completed successfully in:", outputDir)
+	if allSucceeded {
+		fmt.Println("Data collection completed successfully in:", outputDir)
+	} else {
+		// Prints with color :)
+		fmt.Printf("\033[1;33mWARNING: must-gather completed with PARTIAL results - some targets or substeps failed (see summary above). Collected output has been retained.\033[0m\n")
+	}
 	fmt.Println("Compressed archive has been created at:", outputTarballPath)
 
 	return nil
 }
 
-// resolveMCRestConfig returns the REST config and k8s client for the management cluster.
-func resolveMCRestConfig(ocmClient *ocmsdk.Connection, cluster *cmv1.Cluster, reason string) (*rest.Config, *kubernetes.Clientset, error) {
-	mcID := cluster.ID()
+type gatherStatus string
 
-	if cluster.Hypershift().Enabled() {
-		mc, err := utils.GetManagementClusterWithConn(context.Background(), cluster.ID(), ocmClient)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get management cluster for %s: %w", cluster.ID(), err)
-		}
-		mcID = mc.ID()
+const (
+	statusSucceeded gatherStatus = "SUCCEEDED"
+	statusPartial   gatherStatus = "PARTIAL"
+	statusFailed    gatherStatus = "FAILED"
+)
+
+// targetResult records the outcome of a single gather target for the final summary and the
+// archive/exit decision.
+type targetResult struct {
+	target   string
+	role     string
+	artifact string
+	status   gatherStatus
+	failures []string
+	note     string // optional extra info for the summary (e.g. RHOBS record counts)
+}
+
+func (r targetResult) fail(reason string) targetResult {
+	r.status = statusFailed
+	r.failures = append(r.failures, reason)
+	return r
+}
+
+func (r targetResult) succeed() targetResult {
+	r.status = statusSucceeded
+	return r
+}
+
+// runTarget executes a single gather target and reports its outcome, artifact location and any
+// substep failures. The hcp target tracks the RHOBS log export and the ACM dump as independent
+// substeps (see runHCPTarget).
+func (mg *mustGather) runTarget(target, outputDir string, cluster *cmv1.Cluster, ocmClient *ocmsdk.Connection, getMC, getSC func() (*rest.Config, *kubernetes.Clientset, error)) targetResult {
+	switch target {
+	case "sc":
+		return mg.runInfraTarget(target, "service cluster infrastructure", outputDir+"/sc_infra", getSC)
+	case "sc_acm":
+		return mg.runInfraTarget(target, "service cluster ACM", outputDir+"/sc_acm", getSC, "--image="+mg.acmMustGatherImage)
+	case "mc":
+		return mg.runInfraTarget(target, "management cluster infrastructure", outputDir+"/mc_infra", getMC)
+	case "hcp":
+		return mg.runHCPTarget(outputDir, cluster, ocmClient, getMC)
+	default:
+		return targetResult{target: target}.fail(fmt.Sprintf("unknown gather target %q", target))
 	}
+}
 
-	_, restCfg, k8sCli, err := common.GetKubeConfigAndClientWithConn(mcID, ocmClient, reason)
+// runInfraTarget resolves a cluster via getConfig and runs a plain `oc adm must-gather` into
+// artifact (with any extra flags, e.g. a custom --image). It backs the sc/sc_acm/mc targets, which
+// differ only in cluster, artifact dir and flags.
+func (mg *mustGather) runInfraTarget(target, role, artifact string, getConfig func() (*rest.Config, *kubernetes.Clientset, error), extraArgs ...string) targetResult {
+	res := targetResult{target: target, role: role, artifact: artifact}
+	cfg, cli, err := getConfig()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get kubeconfig for management cluster %s: %w", mcID, err)
+		return res.fail(fmt.Sprintf("resolve cluster: %v", err))
+	}
+	if err := mg.runMustGather(cfg, cli, append([]string{"--dest-dir=" + artifact}, extraArgs...)); err != nil {
+		return res.fail(fmt.Sprintf("must-gather: %v", err))
+	}
+	return res.succeed()
+}
+
+// runHCPTarget collects the HCP control-plane: RHOBS logs/events and the ACM hypershift dump are
+// independent substeps, so one failing while the other succeeds yields a PARTIAL result.
+func (mg *mustGather) runHCPTarget(outputDir string, cluster *cmv1.Cluster, ocmClient *ocmsdk.Connection, getMC func() (*rest.Config, *kubernetes.Clientset, error)) targetResult {
+	res := targetResult{target: "hcp", role: "HCP control-plane (RHOBS logs + ACM hypershift dump)", artifact: outputDir + "/hcp"}
+	destDir := res.artifact
+
+	// Resolve the HCP namespaces once; both substeps depend on them, so a failure here fails both.
+	clusterHyperShift, err := ocmClient.ClustersMgmt().V1().Clusters().Cluster(mg.clusterId).Hypershift().Get().Send()
+	if err != nil {
+		return res.fail(fmt.Sprintf("get hypershift info for %s: %v", mg.clusterId, err))
+	}
+	hcpNamespace, ok := clusterHyperShift.Body().GetHCPNamespace()
+	if !ok {
+		return res.fail("get HCP namespace")
+	}
+	hcName := cluster.DomainPrefix()
+	hcNamespace := strings.TrimSuffix(hcpNamespace, "-"+hcName)
+
+	// Substep 1: gather logs and events from RHOBS (replaces the former Dynatrace collection).
+	logsOK := true
+	rhobsNamespaces := []string{
+		hcpNamespace,
+		"klusterlet-" + cluster.ID(),
+		hcNamespace,
+		"hypershift",
+		"cert-manager",
+		"redhat-cert-manager-operator",
+		"open-cluster-management-agent",
+		"open-cluster-management-agent-addon",
+	}
+	logCount, err := mg.gatherHCPLogs(context.Background(), mg.clusterId, mg.hiveOcmUrl, destDir, rhobsNamespaces, 72*time.Hour, mg.maxLogLines)
+	if err != nil {
+		logsOK = false
+		res.failures = append(res.failures, fmt.Sprintf("RHOBS log export: %v", err))
+	}
+	res.note = fmt.Sprintf("RHOBS: %d log lines across %d namespaces", logCount, len(rhobsNamespaces))
+
+	// Substep 2: ACM must-gather which includes running the hypershift binary for a dump.
+	dumpOK := true
+	mcCfg, mcCli, err := getMC()
+	if err != nil {
+		dumpOK = false
+		res.failures = append(res.failures, fmt.Sprintf("resolve MC for ACM dump: %v", err))
+	} else {
+		// The gather command and its args must follow a "--" separator and be passed as separate
+		// argv elements; otherwise `oc adm must-gather` ignores them and runs the image's default
+		// entrypoint (which does not perform the hosted-cluster hypershift dump).
+		gatherArgs := []string{
+			"--dest-dir=" + destDir,
+			"--image=" + mg.acmMustGatherImage,
+			"--",
+			"/usr/bin/gather",
+			"hosted-cluster-namespace=" + hcNamespace,
+			"hosted-cluster-name=" + hcName,
+		}
+		if err := mg.runMustGather(mcCfg, mcCli, gatherArgs); err != nil {
+			dumpOK = false
+			res.failures = append(res.failures, fmt.Sprintf("ACM hypershift dump: %v", err))
+		}
 	}
 
+	res.status = combineSubsteps(logsOK, dumpOK)
+	return res
+}
+
+// combineSubsteps reduces substep outcomes into a target status: all ok is SUCCEEDED, none ok is
+// FAILED, and a mix is PARTIAL.
+func combineSubsteps(oks ...bool) gatherStatus {
+	all, any := true, false
+	for _, ok := range oks {
+		all = all && ok
+		any = any || ok
+	}
+	switch {
+	case all:
+		return statusSucceeded
+	case any:
+		return statusPartial
+	default:
+		return statusFailed
+	}
+}
+
+// summarizeResults reports whether any target produced useful output (succeeded or partial) and
+// whether every target fully succeeded, driving the archive and exit decisions.
+func summarizeResults(results []targetResult) (producedOutput, allSucceeded bool) {
+	allSucceeded = true
+	for _, result := range results {
+		switch result.status {
+		case statusSucceeded:
+			producedOutput = true
+		case statusPartial:
+			producedOutput = true
+			allSucceeded = false
+		default:
+			allSucceeded = false
+		}
+	}
+	return producedOutput, allSucceeded
+}
+
+func printGatherSummary(results []targetResult) {
+	fmt.Println()
+	fmt.Println("Must-gather summary:")
+	for _, result := range results {
+		fmt.Printf("  [%s] %s - %s (artifacts: %s)\n", result.status, result.target, result.role, result.artifact)
+		if result.note != "" {
+			fmt.Printf("      %s\n", result.note)
+		}
+		for _, failure := range result.failures {
+			fmt.Printf("      ! %s\n", failure)
+		}
+	}
+}
+
+// resolveClusterRestConfig returns the REST config and k8s client for an infrastructure cluster.
+// For an HCP cluster ID it resolves the parent MC/SC via resolve; for a direct MC/SC ID it uses the
+// cluster as-is. role ("management"/"service") only labels the error messages.
+func resolveClusterRestConfig(ocmClient *ocmsdk.Connection, cluster *cmv1.Cluster, reason, role string,
+	resolve func(context.Context, string, *ocmsdk.Connection) (*cmv1.Cluster, error)) (*rest.Config, *kubernetes.Clientset, error) {
+	id := cluster.ID()
+	if cluster.Hypershift().Enabled() {
+		infra, err := resolve(context.Background(), cluster.ID(), ocmClient)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to resolve %s cluster for %s: %w", role, cluster.ID(), err)
+		}
+		id = infra.ID()
+	}
+
+	_, restCfg, k8sCli, err := common.GetKubeConfigAndClientWithConn(id, ocmClient, reason)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get kubeconfig for %s cluster %s: %w", role, id, err)
+	}
 	return restCfg, k8sCli, nil
 }
 
-// resolveSCRestConfig returns the REST config and k8s client for the service cluster.
+func resolveMCRestConfig(ocmClient *ocmsdk.Connection, cluster *cmv1.Cluster, reason string) (*rest.Config, *kubernetes.Clientset, error) {
+	return resolveClusterRestConfig(ocmClient, cluster, reason, "management", utils.GetManagementClusterWithConn)
+}
+
 func resolveSCRestConfig(ocmClient *ocmsdk.Connection, cluster *cmv1.Cluster, reason string) (*rest.Config, *kubernetes.Clientset, error) {
-	scID := cluster.ID()
-
-	if cluster.Hypershift().Enabled() {
-		hypershiftResp, err := ocmClient.ClustersMgmt().V1().Clusters().
-			Cluster(cluster.ID()).
-			Hypershift().
-			Get().
-			Send()
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get hypershift info for %s: %w", cluster.ID(), err)
-		}
-
-		mgmtClusterName := hypershiftResp.Body().ManagementCluster()
-		if mgmtClusterName == "" {
-			return nil, nil, fmt.Errorf("failed to lookup management cluster for cluster %s", cluster.ID())
-		}
-
-		ofmResp, err := ocmClient.OSDFleetMgmt().V1().ManagementClusters().
-			List().
-			Parameter("search", fmt.Sprintf("name='%s'", mgmtClusterName)).
-			Send()
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get fleet manager info for management cluster %s: %w", mgmtClusterName, err)
-		}
-
-		var svcClusterName string
-		if kind := ofmResp.Items().Get(0).Parent().Kind(); kind == "ServiceCluster" {
-			svcClusterName = ofmResp.Items().Get(0).Parent().Name()
-		}
-		if svcClusterName == "" {
-			return nil, nil, fmt.Errorf("no service cluster found for management cluster %s", mgmtClusterName)
-		}
-
-		sc, err := utils.GetClusterAnyStatus(ocmClient, svcClusterName)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get service cluster %s: %w", svcClusterName, err)
-		}
-		scID = sc.ID()
-	}
-
-	_, restCfg, k8sCli, err := common.GetKubeConfigAndClientWithConn(scID, ocmClient, reason)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get kubeconfig for service cluster %s: %w", scID, err)
-	}
-
-	return restCfg, k8sCli, nil
+	return resolveClusterRestConfig(ocmClient, cluster, reason, "service", utils.GetServiceClusterWithConn)
 }
 
 func createMustGather(restCfg *rest.Config, k8sCli *kubernetes.Clientset, additionalFlags []string) error {

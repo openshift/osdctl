@@ -106,7 +106,7 @@
     - `discover --cluster-id <cluster-id>` - Discover HCP backups from the disaster recovery S3 bucket
   - `force-upgrade` - Schedule forced control plane upgrade for HCP clusters (Requires ForceUpgrader permissions)
   - `get-cp-autoscaling-status` - Get control plane autoscaling status for hosted clusters on a management cluster
-  - `must-gather --cluster-id <cluster-identifier>` - Create a must-gather for HCP cluster
+  - `must-gather --cluster-id <cluster-identifier>` - Create a must-gather for an HCP cluster (and optionally its management/service clusters)
   - `restore` - Prepare and restore HCP clusters during disaster recovery
     - `create --cluster-id <cluster-id> --backup-name <backup-name> --reason <reason> [--target-mc <management-cluster>] [--timeout <duration>]` - Create and monitor a Velero restore for an HCP backup
     - `manifestwork` - Compare and relocate HCP ManifestWorks
@@ -3337,7 +3337,26 @@ osdctl hcp get-cp-autoscaling-status [flags]
 
 ### osdctl hcp must-gather
 
-Create a must-gather for an HCP cluster with optional gather targets
+Create a must-gather for a HyperShift / ROSA HCP cluster.
+
+--cluster-id is the cluster you want data about; --gather selects which cluster(s) are
+actually collected from. The supplied ID and the gather targets are distinct: the default
+target 'hcp' requires an HCP cluster ID, while 'mc'/'sc'/'sc_acm' can also be run directly
+against a management- or service-cluster ID.
+
+Gather targets:
+  hcp     HCP control-plane logs & events from RHOBS, plus an ACM hypershift dump (requires an HCP ID)
+  mc      management-cluster infrastructure must-gather
+  sc      service-cluster infrastructure must-gather
+  sc_acm  service-cluster ACM must-gather
+
+Supported workflows:
+  HCP cluster ID:         --gather hcp (default) | --gather mc | --gather sc,sc_acm | any combination
+  Management cluster ID:  --gather mc
+  Service cluster ID:     --gather sc,sc_acm
+
+The 'hcp' target reads control-plane logs from RHOBS and therefore requires RHOBS client
+credentials (RHOBS_CLIENT_ID / RHOBS_CLIENT_SECRET as env vars, in ~/.config/osdctl, or via Vault).
 
 ```
 osdctl hcp must-gather --cluster-id <cluster-identifier> [flags]
@@ -3351,11 +3370,14 @@ osdctl hcp must-gather --cluster-id <cluster-identifier> [flags]
       --cluster string                   The name of the kubeconfig cluster to use
   -C, --cluster-id string                Internal ID of the cluster to gather data from
       --context string                   The name of the kubeconfig context to use
-      --gather string                    Comma-separated list of gather targets (available: sc, sc_acm, mc, hcp). (default "hcp")
+      --gather string                    Comma-separated list of gather targets (available: hcp, mc, sc, sc_acm). (default "hcp")
   -h, --help                             help for must-gather
+      --hive-ocm-url string              OCM environment for the RHOBS/hive lookups used by the hcp target - aliases: "production", "staging", "integration". (default "production")
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+      --max-log-lines int                Maximum number of most-recent log lines to collect per namespace from RHOBS for the hcp target; a positive cap is written newest-first (0 = unlimited, oldest-first). (default 100000)
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --output-dir string                Directory to write the must-gather into (defaults to the current working directory). Avoid RAM-backed paths like /tmp (tmpfs) for large gathers.
       --reason string                    The reason for this command, which requires elevation (e.g., OHSS ticket or PD incident).
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server

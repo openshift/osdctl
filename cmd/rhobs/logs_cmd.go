@@ -708,10 +708,10 @@ func (f *RhobsFetcher) queryLogs(ctx context.Context, lokiExpr string, startTime
 		return err
 	}
 
-	log.Infoln("RHOBS cell:", f.RhobsCell)
-	log.Infoln("Loki query:", lokiExpr)
-	log.Infoln("Start time:", startTime.Round(0))
-	log.Infoln("End time  :", endTime.Round(0))
+	log.Debugln("RHOBS cell:", f.RhobsCell)
+	log.Debugln("Loki query:", lokiExpr)
+	log.Debugln("Start time:", startTime.Round(0))
+	log.Debugln("End time  :", endTime.Round(0))
 
 	startTimeStamp := startTime.UnixNano()
 	endTimeStamp := endTime.UnixNano()
@@ -737,8 +737,12 @@ func (f *RhobsFetcher) queryLogs(ctx context.Context, lokiExpr string, startTime
 		startTimeStr := strconv.FormatInt(startTimeStamp, 10)
 		endTimeStr := strconv.FormatInt(endTimeStamp, 10)
 
-		limit := float32(500)
-		if 0 < logsCount && logsCount < 500 {
+		pageSize := f.pageSize
+		if pageSize <= 0 {
+			pageSize = 500
+		}
+		limit := float32(pageSize)
+		if 0 < logsCount && logsCount < pageSize {
 			limit = float32(logsCount)
 		}
 
