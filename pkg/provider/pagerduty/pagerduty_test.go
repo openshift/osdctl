@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	pd "github.com/PagerDuty/go-pagerduty"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/brianvoe/gofakeit/v6"
