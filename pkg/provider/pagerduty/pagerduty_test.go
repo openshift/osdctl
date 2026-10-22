@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/brianvoe/gofakeit/v6"
+	"github.com/brianvoe/gofakeit/v7"
 	"go.uber.org/mock/gomock"
 
 	pdMock "github.com/openshift/osdctl/pkg/provider/pagerduty/mocks"
