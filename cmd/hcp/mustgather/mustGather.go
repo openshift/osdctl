@@ -240,23 +240,9 @@ func resolveMCRestConfig(ocmClient *ocmsdk.Connection, cluster *cmv1.Cluster, re
 	mcID := cluster.ID()
 
 	if cluster.Hypershift().Enabled() {
-		hypershiftResp, err := ocmClient.ClustersMgmt().V1().Clusters().
-			Cluster(cluster.ID()).
-			Hypershift().
-			Get().
-			Send()
+		mc, err := utils.GetManagementClusterWithConn(context.Background(), cluster.ID(), ocmClient)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get hypershift info for %s: %w", cluster.ID(), err)
-		}
-
-		mgmtClusterName, ok := hypershiftResp.Body().GetManagementCluster()
-		if !ok || mgmtClusterName == "" {
-			return nil, nil, fmt.Errorf("no management cluster found for %s", cluster.ID())
-		}
-
-		mc, err := utils.GetClusterAnyStatus(ocmClient, mgmtClusterName)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get management cluster %s: %w", mgmtClusterName, err)
+			return nil, nil, fmt.Errorf("failed to get management cluster for %s: %w", cluster.ID(), err)
 		}
 		mcID = mc.ID()
 	}

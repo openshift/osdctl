@@ -41,5 +41,5 @@ osdctl hcp backup discover --cluster-id <cluster-id> [flags]
 
 ### SEE ALSO
 
-* [osdctl hcp backup](osdctl_hcp_backup.md)	 - Trigger a Velero backup for an HCP cluster
+* [osdctl hcp backup](osdctl_hcp_backup.md)	 - Manage Velero backups for HCP clusters
 

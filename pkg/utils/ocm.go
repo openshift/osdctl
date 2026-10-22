@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -62,10 +63,15 @@ var urlAliases = map[string]string{
 // GetClusterAnyStatus returns an OCM cluster object given an OCM connection and cluster id
 // (internal id, external id, and name all supported).
 func GetClusterAnyStatus(conn *sdk.Connection, clusterId string) (*cmv1.Cluster, error) {
+	return GetClusterAnyStatusWithContext(context.Background(), conn, clusterId)
+}
+
+// GetClusterAnyStatusWithContext returns an OCM cluster object using ctx for the request.
+func GetClusterAnyStatusWithContext(ctx context.Context, conn *sdk.Connection, clusterId string) (*cmv1.Cluster, error) {
 	// identifier in the accounts management service. To find those clusters we need to check
 	// directly in the clusters management service.
 	clustersSearch := fmt.Sprintf(ClusterServiceClusterSearch, clusterId, clusterId, clusterId)
-	clustersListResponse, err := conn.ClustersMgmt().V1().Clusters().List().Search(clustersSearch).Size(1).Send()
+	clustersListResponse, err := conn.ClustersMgmt().V1().Clusters().List().Search(clustersSearch).Size(1).SendContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("can't retrieve clusters for clusterId '%s': %w", clusterId, err)
 	}
@@ -578,17 +584,30 @@ func GetManagementCluster(clusterId string) (*cmv1.Cluster, error) {
 	}
 	defer conn.Close()
 
+	return GetManagementClusterWithConn(context.Background(), clusterId, conn)
+}
+
+// GetManagementClusterWithConn returns the management cluster for an HCP cluster using conn.
+func GetManagementClusterWithConn(ctx context.Context, clusterId string, conn *sdk.Connection) (*cmv1.Cluster, error) {
+	if conn == nil {
+		return nil, fmt.Errorf("ocm connection is required")
+	}
+
 	hypershiftResp, err := conn.ClustersMgmt().V1().Clusters().
 		Cluster(clusterId).
 		Hypershift().
 		Get().
-		Send()
+		SendContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if mgmtClusterName, ok := hypershiftResp.Body().GetManagementCluster(); ok {
-		return GetClusterAnyStatus(conn, mgmtClusterName)
+	if hypershiftResp != nil && hypershiftResp.Body() != nil {
+		mgmtClusterName, ok := hypershiftResp.Body().GetManagementCluster()
+		if !ok || mgmtClusterName == "" {
+			return nil, fmt.Errorf("no management cluster found for %s", clusterId)
+		}
+		return GetClusterAnyStatusWithContext(ctx, conn, mgmtClusterName)
 	}
 
 	return nil, fmt.Errorf("no management cluster found for %s", clusterId)
