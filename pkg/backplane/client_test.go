@@ -27,6 +27,7 @@ type mockBackplaneClient struct {
 	getReportError       error
 	listReportsResponse  *http.Response
 	listReportsError     error
+	listReportsOrder     string
 }
 
 func (m *mockBackplaneClient) CreateJob(
@@ -81,6 +82,16 @@ func (m *mockBackplaneClient) GetReportsByCluster(
 	params *backplaneapi.GetReportsByClusterParams,
 	reqEditors ...backplaneapi.RequestEditorFn,
 ) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://example.com", nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, editor := range reqEditors {
+		if err := editor(ctx, req); err != nil {
+			return nil, err
+		}
+	}
+	m.listReportsOrder = req.URL.Query().Get("order")
 	return m.listReportsResponse, m.listReportsError
 }
 
@@ -407,6 +418,9 @@ func TestListReports(t *testing.T) {
 				}
 				if reports == nil {
 					t.Errorf("ListReports() reports is nil")
+				}
+				if mockClient.listReportsOrder != "desc" {
+					t.Errorf("ListReports() order = %q, want desc", mockClient.listReportsOrder)
 				}
 			}
 		})

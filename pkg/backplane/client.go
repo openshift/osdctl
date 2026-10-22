@@ -104,7 +104,12 @@ func (c *Client) ListReports(ctx context.Context, last int) (*backplaneapi.ListR
 	if last > 0 {
 		params.Last = &last
 	}
-	reports, err := c.backplaneClient.GetReportsByCluster(ctx, c.clusterID, params)
+	reports, err := c.backplaneClient.GetReportsByCluster(ctx, c.clusterID, params, func(_ context.Context, req *http.Request) error {
+		query := req.URL.Query()
+		query.Set("order", "desc")
+		req.URL.RawQuery = query.Encode()
+		return nil
+	})
 	if err != nil {
 		return list, fmt.Errorf("failed to list reports: %w", err)
 	}
