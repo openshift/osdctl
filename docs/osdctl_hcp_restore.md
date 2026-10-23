@@ -28,6 +28,7 @@ Prepare and restore HCP clusters during disaster recovery
 * [osdctl hcp](osdctl_hcp.md)	 - 
 * [osdctl hcp restore create](osdctl_hcp_restore_create.md)	 - Create and monitor a Velero restore for an HCP backup
 * [osdctl hcp restore manifestwork](osdctl_hcp_restore_manifestwork.md)	 - Compare and relocate HCP ManifestWorks
+* [osdctl hcp restore reassign](osdctl_hcp_restore_reassign.md)	 - Reassign an HCP to a replacement management cluster in OCM
 * [osdctl hcp restore release-dns](osdctl_hcp_restore_release-dns.md)	 - Release central DNS records for an HCP cluster
 * [osdctl hcp restore update-trust-policy](osdctl_hcp_restore_update-trust-policy.md)	 - Allow a replacement management cluster to access HCP backups
 

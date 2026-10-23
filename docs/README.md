@@ -114,6 +114,7 @@
       - `move` - Move HCP Velero and cluster resources in phases
         - `cluster-resources --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>]` - Move the namespace, HostedCluster, and NodePool ManifestWorks
         - `velero-resources --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>]` - Move the Velero resource ManifestWorks
+    - `reassign --cluster-id <cluster-id> --replacement-mc <management-cluster>` - Reassign an HCP to a replacement management cluster in OCM
     - `release-dns --cluster-id <cluster-id>` - Release central DNS records for an HCP cluster
     - `update-trust-policy --cluster-id <cluster-id> --replacement-mc <management-cluster>` - Allow a replacement management cluster to access HCP backups
   - `status` - Show HCP cluster health status from OCM live resources
@@ -3546,6 +3547,32 @@ osdctl hcp restore manifestwork move velero-resources --cluster-id <cluster-id> 
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
   -S, --skip-version-check               skip checking to see if this is the most recent release
       --source-mc string                 Management cluster whose namespace contains the ManifestWorks (defaults to the HCP management cluster)
+```
+
+### osdctl hcp restore reassign
+
+Reassign an HCP to a replacement management cluster in OCM
+
+```
+osdctl hcp restore reassign --cluster-id <cluster-id> --replacement-mc <management-cluster> [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+  -C, --cluster-id string                Internal ID, name, or external ID of the HCP cluster
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for reassign
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --replacement-mc string            Internal ID, name, or external ID of the replacement management cluster
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
 ```
 
 ### osdctl hcp restore release-dns
