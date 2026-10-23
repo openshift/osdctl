@@ -576,7 +576,8 @@ func GetHiveClusterWithConn(clusterId string, clusterOCM *sdk.Connection, hiveOC
 
 }
 
-// GetManagementCluster returns the OCM Cluster object for a provided clusterId
+// GetManagementCluster returns the hypershift Management Cluster object for a provided HCP clusterId.
+// It is a convenience wrapper that owns its connection; use GetManagementClusterWithConn to reuse one.
 func GetManagementCluster(clusterId string) (*cmv1.Cluster, error) {
 	conn, err := CreateConnection()
 	if err != nil {
@@ -613,7 +614,8 @@ func GetManagementClusterWithConn(ctx context.Context, clusterId string, conn *s
 	return nil, fmt.Errorf("no management cluster found for %s", clusterId)
 }
 
-// GetServiceCluster returns the hypershift Service Cluster object for a provided HCP clusterId
+// GetServiceCluster returns the hypershift Service Cluster object for a provided HCP clusterId.
+// It is a convenience wrapper that owns its connection; use GetServiceClusterWithConn to reuse one.
 func GetServiceCluster(clusterId string) (*cmv1.Cluster, error) {
 	conn, err := CreateConnection()
 	if err != nil {
@@ -621,44 +623,54 @@ func GetServiceCluster(clusterId string) (*cmv1.Cluster, error) {
 	}
 	defer conn.Close()
 
-	var svcClusterName, mgmtClusterName string
+	return GetServiceClusterWithConn(context.Background(), clusterId, conn)
+}
+
+// GetServiceClusterWithConn returns the hypershift Service Cluster object for a provided HCP
+// clusterId using the caller-provided connection. The connection is borrowed and never closed here.
+func GetServiceClusterWithConn(ctx context.Context, clusterId string, conn *sdk.Connection) (*cmv1.Cluster, error) {
+	if conn == nil {
+		return nil, fmt.Errorf("ocm connection is required")
+	}
 
 	hypershiftResp, err := conn.ClustersMgmt().V1().Clusters().
 		Cluster(clusterId).
 		Hypershift().
 		Get().
-		Send()
+		SendContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if err == nil && hypershiftResp != nil {
-		mgmtClusterName = hypershiftResp.Body().ManagementCluster()
-	}
-
-	if mgmtClusterName == "" {
-		return nil, fmt.Errorf("failed to lookup management cluster for cluster %s", clusterId)
+	// Use the checked getter so a missing parent surfaces a consistent error, matching
+	// GetManagementClusterWithConn rather than silently proceeding with an empty name.
+	mgmtClusterName, ok := hypershiftResp.Body().GetManagementCluster()
+	if !ok || mgmtClusterName == "" {
+		return nil, fmt.Errorf("no management cluster found for %s", clusterId)
 	}
 
 	// Get the osd_fleet_mgmt reference for the given mgmt_cluster
 	ofmResp, err := conn.OSDFleetMgmt().V1().ManagementClusters().
 		List().
 		Parameter("search", fmt.Sprintf("name='%s'", mgmtClusterName)).
-		Send()
+		SendContext(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get the fleet manager information for management cluster %s", mgmtClusterName)
 	}
 
+	if ofmResp.Items().Empty() {
+		return nil, fmt.Errorf("no fleet management record found for management cluster %s", mgmtClusterName)
+	}
+
+	var svcClusterName string
 	if kind := ofmResp.Items().Get(0).Parent().Kind(); kind == "ServiceCluster" {
 		svcClusterName = ofmResp.Items().Get(0).Parent().Name()
 	}
-
-	svcCluster, err := GetClusterAnyStatus(conn, svcClusterName)
-	if err != nil {
-		return nil, err
+	if svcClusterName == "" {
+		return nil, fmt.Errorf("no service cluster found for management cluster %s", mgmtClusterName)
 	}
 
-	return svcCluster, nil
+	return GetClusterAnyStatusWithContext(ctx, conn, svcClusterName)
 }
 
 // Sanity Check for MC Cluster

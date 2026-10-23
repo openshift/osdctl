@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 
 	ocmsdk "github.com/openshift-online/ocm-sdk-go"
 	bplogin "github.com/openshift/backplane-cli/cmd/ocm-backplane/login"
@@ -62,10 +63,7 @@ func GetKubeConfigAndClient(clusterID string, elevationReasons ...string) (clien
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	// To avoid warnings/backtrace, if k8s controller-runtime logger is not yet set, do it now...
-	if !log.Log.Enabled() {
-		log.SetLogger(zap.New(zap.WriteTo(io.Discard)))
-	}
+	ensureControllerRuntimeLogger()
 	// create the clientset
 	clientset, err := kubernetes.NewForConfig(kubeconfig)
 	if err != nil {
@@ -94,6 +92,7 @@ func GetKubeConfigAndClientWithConn(clusterID string, ocm *ocmsdk.Connection, el
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	ensureControllerRuntimeLogger()
 	// create the clientset
 	clientset, err := kubernetes.NewForConfig(kubeconfig)
 	if err != nil {
@@ -104,4 +103,17 @@ func GetKubeConfigAndClientWithConn(clusterID string, ocm *ocmsdk.Connection, el
 		return nil, nil, nil, err
 	}
 	return kubeCli, kubeconfig, clientset, nil
+}
+
+var ctrlLogOnce sync.Once
+
+// ensureControllerRuntimeLogger installs a no-op controller-runtime logger exactly once. Creating a
+// controller-runtime client before a logger is set emits a "log.SetLogger(...) was never called"
+// warning with a goroutine stack trace; this suppresses it. Output is discarded, matching the
+// pre-existing behavior of GetKubeConfigAndClient so other commands are unaffected. Guarded by
+// sync.Once so concurrent callers (e.g. parallel must-gather targets) don't race on the global logger.
+func ensureControllerRuntimeLogger() {
+	ctrlLogOnce.Do(func() {
+		log.SetLogger(zap.New(zap.WriteTo(io.Discard)))
+	})
 }

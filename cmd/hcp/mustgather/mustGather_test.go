@@ -7,6 +7,7 @@ import (
 	"os"
 	"testing"
 
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/rest"
@@ -93,4 +94,73 @@ func TestCreateTarball_Success(t *testing.T) {
 func TestCreateTarball_FileError(t *testing.T) {
 	err := createTarball("/nonexistent/path", "/tmp/testdata.tar.gz")
 	assert.Error(t, err)
+}
+
+func mustCluster(t *testing.T, id string, hypershift bool) *cmv1.Cluster {
+	t.Helper()
+	cluster, err := cmv1.NewCluster().
+		ID(id).
+		Hypershift(cmv1.NewHypershift().Enabled(hypershift)).
+		Build()
+	require.NoError(t, err)
+	return cluster
+}
+
+func TestParseAndValidateTargets(t *testing.T) {
+	hcp := mustCluster(t, "hcp-id", true)
+	nonHcp := mustCluster(t, "mc-id", false)
+
+	tests := []struct {
+		name     string
+		raw      string
+		cluster  *cmv1.Cluster
+		want     []string
+		errMatch string
+	}{
+		{name: "default hcp on HCP cluster", raw: "hcp", cluster: hcp, want: []string{"hcp"}},
+		{name: "all targets on HCP cluster", raw: "hcp,mc,sc,sc_acm", cluster: hcp, want: []string{"hcp", "mc", "sc", "sc_acm"}},
+		{name: "trims whitespace", raw: " mc , hcp ", cluster: hcp, want: []string{"mc", "hcp"}},
+		{name: "de-duplicates repeats", raw: "hcp,hcp,mc", cluster: hcp, want: []string{"hcp", "mc"}},
+		{name: "mc directly against non-HCP cluster", raw: "mc", cluster: nonHcp, want: []string{"mc"}},
+		{name: "sc_acm against non-HCP cluster", raw: "sc,sc_acm", cluster: nonHcp, want: []string{"sc", "sc_acm"}},
+		{name: "unknown target", raw: "mc,foo", cluster: hcp, errMatch: "unknown gather target"},
+		{name: "empty", raw: " , ", cluster: hcp, errMatch: "no gather targets specified"},
+		{name: "hcp against non-HCP cluster", raw: "hcp", cluster: nonHcp, errMatch: "requires an HCP cluster ID"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseAndValidateTargets(tt.raw, tt.cluster)
+			if tt.errMatch != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMatch)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestSummarizeResults(t *testing.T) {
+	res := func(s gatherStatus) targetResult { return targetResult{status: s} }
+
+	tests := []struct {
+		name         string
+		results      []targetResult
+		wantProduced bool
+		wantAllOK    bool
+	}{
+		{name: "all succeeded", results: []targetResult{res(statusSucceeded), res(statusSucceeded)}, wantProduced: true, wantAllOK: true},
+		{name: "succeeded and failed", results: []targetResult{res(statusSucceeded), res(statusFailed)}, wantProduced: true, wantAllOK: false},
+		{name: "single partial", results: []targetResult{res(statusPartial)}, wantProduced: true, wantAllOK: false},
+		{name: "all failed", results: []targetResult{res(statusFailed), res(statusFailed)}, wantProduced: false, wantAllOK: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			produced, allOK := summarizeResults(tt.results)
+			assert.Equal(t, tt.wantProduced, produced)
+			assert.Equal(t, tt.wantAllOK, allOK)
+		})
+	}
 }

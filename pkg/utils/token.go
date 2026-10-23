@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -18,6 +19,7 @@ type AccessTokenProvider interface {
 // cachedTokenProvider caches an OAuth access token and transparently refreshes
 // it when it is close to expiring.
 type cachedTokenProvider struct {
+	mu        sync.Mutex
 	token     string
 	expiresAt time.Time
 	fetchFunc func() (string, int, error)
@@ -33,8 +35,12 @@ func newCachedTokenProvider(fetchFunc func() (string, int, error)) *cachedTokenP
 	}
 }
 
-// Token returns a valid access token, refreshing it if necessary.
+// Token returns a valid access token, refreshing it if necessary. It is safe for concurrent use:
+// callers (e.g. parallel must-gather namespace workers) may share one provider.
 func (p *cachedTokenProvider) Token() (string, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if p.token != "" && time.Now().Before(p.expiresAt.Add(-p.margin)) {
 		return p.token, nil
 	}
@@ -90,7 +96,7 @@ func GetScopedAccessToken(authUrl, vaultConfigKey string, scopes string) (string
 		return "", fmt.Errorf("access token not present in response")
 	}
 
-	log.Infoln("Successfully authenticated")
+	log.Debugln("Successfully authenticated")
 
 	return token, nil
 }
@@ -137,7 +143,7 @@ func GetScopedTokenProviderWithCreds(authUrl, clientId, clientSecret, scopes str
 			expiresIn = int(v)
 		}
 
-		log.Infoln("Successfully authenticated")
+		log.Debugln("Successfully authenticated")
 
 		return token, expiresIn, nil
 	}

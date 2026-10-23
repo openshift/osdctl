@@ -59,6 +59,7 @@ type RhobsFetcher struct {
 	RhobsCell           string
 	HcpNamespace        string // HCP control-plane namespace on the MC; set for HCP clusters
 	tokenProvider       ocmutils.AccessTokenProvider
+	pageSize            int // Loki rows fetched per request; 0 means the default (500)
 }
 
 // logsClusterExtId returns the cluster external UUID to use in Loki's openshift_cluster_uid filter.
