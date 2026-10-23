@@ -34,6 +34,13 @@ var supportedInstanceTypes = map[string][]string{
 		"n2-standard-32",
 	},
 	"infra": {
+		"m6i.2xlarge",
+		"m6i.4xlarge",
+		"m6i.8xlarge",
+		"m6i.12xlarge",
+		"m6i.16xlarge",
+		"m6i.24xlarge",
+		"m6i.32xlarge",
 		"r5.xlarge",
 		"r5.2xlarge",
 		"r5.4xlarge",
