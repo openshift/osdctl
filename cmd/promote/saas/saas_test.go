@@ -16,6 +16,66 @@ var serviceFileContentCanaryTemplate = strings.Replace(promote.ServiceFileConten
 	"name: hivep01"+defaultProdTargetNameSuffix,
 	1)
 
+// serviceFileContentPubSubTemplate mirrors the publish/subscribe staged-rollout
+// topology found in real saas files (e.g. saas-splunk-forwarder-operator-pko).
+// Layout:
+//   - hivecanary1 / hivecanary2 : manual canary gates  (publish, no auto, no soakDays)
+//   - hivephase2                 : auto, soakDays, subscribes to both canary channels
+//   - hiveleaf                   : publishes but NOBODY subscribes to it (orphan publisher)
+//
+// The @gitHash*@ placeholders follow the same naming scheme as ServiceFileContentTemplate
+// so InitProperties and CheckAppInterfaceService1Content can be reused directly.
+var serviceFileContentPubSubTemplate = `name: @name@
+app:
+  $ref: /services/gen-app/app.yml
+resourceTemplates:
+- name: prod1
+  url: @prod1repoUrl@
+  path: /templates/prod1.yaml
+  targets:
+  - name: hivecanary1
+    namespace:
+      $ref: /services/gen-app/namespaces/hivep01/cluster-scope.yml
+    ref: @gitHashProd1Target1@
+    promotion:
+      publish:
+      - canary-success-channel-1
+      subscribe:
+      - upstream-stage-channel
+  - name: hivecanary2
+    namespace:
+      $ref: /services/gen-app/namespaces/hivep02/cluster-scope.yml
+    ref: @gitHashProd1Target2@
+    promotion:
+      publish:
+      - canary-success-channel-2
+      subscribe:
+      - upstream-stage-channel
+- name: prod2
+  url: @prod2repoUrl@
+  path: /templates/prod2.yaml
+  targets:
+  - name: hivephase2
+    namespace:
+      $ref: /services/gen-app/namespaces/hivep01/cluster-scope.yml
+    ref: @gitHashProd2Target1@
+    promotion:
+      auto: true
+      soakDays: 1
+      publish:
+      - phase2-success-channel
+      subscribe:
+      - canary-success-channel-1
+      - canary-success-channel-2
+  - name: hiveleaf
+    namespace:
+      $ref: /services/gen-app/namespaces/hivep02/cluster-scope.yml
+    ref: @gitHashProd2Target2@
+    promotion:
+      publish:
+      - leaf-orphan-channel
+`
+
 func TestSetup(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Setup Suite")
@@ -219,6 +279,74 @@ var _ = Describe("Service struct", func() {
 				data.CheckAppInterfaceCommitStats(1, 2, "data/services/gen-app/cicd/saas/service-1.yaml", 2, 2)
 				data.CheckAppInterfaceCommitStats(1, 2, "data/services/gen-app/app.yml", 2, 0)
 			})
+		})
+	})
+})
+
+var _ = Describe("filterPubSubCanaryTargets", func() {
+	var data *promote.TestData
+	var service *promote.Service
+
+	BeforeEach(func() {
+		data = promote.CreateTestData(func(data *promote.TestData) map[string]string {
+			properties := promote.InitProperties(data.TestRepoPath, data.TestRepoHashes[0])
+			properties["stageRepoUrl"] = data.TestRepoPath // unused resource template; keep consistent
+			return map[string]string{
+				"data/services/gen-app/cicd/saas/service-1.yaml": promote.GetFileContent(serviceFileContentPubSubTemplate, "service-1", properties),
+				"data/services/gen-app/app.yml":                  promote.GetFileContent(promote.AppFileContentTemplate, "gen-app", properties),
+			}
+		})
+	})
+
+	JustBeforeEach(func() {
+		var err error
+		servicesRegistry := promote.CreateDefaultServiceRegistry(data)
+		service, err = servicesRegistry.GetService("service-1")
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(service).ToNot(BeNil())
+	})
+
+	AfterEach(func() {
+		promote.CleanupAllTestDataResources()
+	})
+
+	Context("when namespaceRef is empty and the service uses pub/sub promotion", func() {
+		It("promotes only the two canary targets, not the auto/soakDays phase-2 target or the orphan leaf publisher", func() {
+			err := service.Promote(&promoteCallbacks{
+				DefaultPromoteCallbacks: promote.DefaultPromoteCallbacks{Service: service},
+				namespaceRef:            "",
+				isHotfix:                false,
+			}, data.TestRepoHashes[5])
+			Expect(err).ShouldNot(HaveOccurred())
+
+			// Only hivecanary1 and hivecanary2 should move to the new hash.
+			// hivephase2 and hiveleaf must remain at the original hash.
+			expectedProperties := promote.InitProperties(data.TestRepoPath, data.TestRepoHashes[0])
+			expectedProperties["gitHashProd1Target1"] = data.TestRepoHashes[5]
+			expectedProperties["gitHashProd1Target2"] = data.TestRepoHashes[5]
+			data.CheckAppInterfaceService1Content(serviceFileContentPubSubTemplate, expectedProperties)
+
+			data.CheckAppInterfaceIsClean()
+			data.CheckAppInterfaceBranchName(fmt.Sprintf("promote-service-1-%s", data.TestRepoHashes[5]))
+
+			// Both canaries share the same old hash → one commit for prod1 resource template.
+			Expect(data.GetAppInterfaceCommitsCount()).To(Equal(2))
+			data.CheckAppInterfaceCommitStats(0, 1, "data/services/gen-app/cicd/saas/service-1.yaml", 2, 2)
+		})
+	})
+
+	Context("when namespaceRef is empty and --hotfix is set", func() {
+		It("falls through to the hivep namespace-ref fallback and promotes all prod targets", func() {
+			err := service.Promote(&promoteCallbacks{
+				DefaultPromoteCallbacks: promote.DefaultPromoteCallbacks{Service: service},
+				namespaceRef:            "",
+				isHotfix:                true,
+			}, data.TestRepoHashes[5])
+			Expect(err).ShouldNot(HaveOccurred())
+
+			// All four targets (hivecanary1, hivecanary2, hivephase2, hiveleaf) must be updated.
+			expectedProperties := promote.InitProperties(data.TestRepoPath, data.TestRepoHashes[5])
+			data.CheckAppInterfaceService1Content(serviceFileContentPubSubTemplate, expectedProperties)
 		})
 	})
 })
