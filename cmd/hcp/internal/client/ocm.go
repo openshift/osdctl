@@ -119,6 +119,36 @@ func (c *OCMClient) Cluster(identifier string) (*cmv1.Cluster, error) {
 	return utils.GetClusterAnyStatus(c.conn, identifier)
 }
 
+// ManagementClusterAssignment returns the management cluster currently assigned
+// to the HCP in OCM.
+func (c *OCMClient) ManagementClusterAssignment(ctx context.Context, clusterID string) (string, error) {
+	response, err := c.conn.ClustersMgmt().V1().Clusters().Cluster(clusterID).Hypershift().Get().SendContext(ctx)
+	if err != nil {
+		return "", fmt.Errorf("getting hypershift info for cluster %s: %w", clusterID, err)
+	}
+	if response == nil || response.Body() == nil {
+		return "", fmt.Errorf("no hypershift info found for %s", clusterID)
+	}
+	managementCluster, ok := response.Body().GetManagementCluster()
+	if !ok || managementCluster == "" {
+		return "", fmt.Errorf("no management cluster found for %s", clusterID)
+	}
+	return managementCluster, nil
+}
+
+// UpdateManagementClusterAssignment patches only the HCP management cluster.
+func (c *OCMClient) UpdateManagementClusterAssignment(ctx context.Context, clusterID, managementCluster string) error {
+	config, err := cmv1.NewHypershiftConfig().ManagementCluster(managementCluster).Build()
+	if err != nil {
+		return fmt.Errorf("building hypershift update for cluster %s: %w", clusterID, err)
+	}
+	_, err = c.conn.ClustersMgmt().V1().Clusters().Cluster(clusterID).Hypershift().Update().Body(config).SendContext(ctx)
+	if err != nil {
+		return fmt.Errorf("updating management cluster for %s: %w", clusterID, err)
+	}
+	return nil
+}
+
 func (c *OCMClient) BackupConfig(ctx context.Context, clusterID, managementCluster string) (*cmv1.AWSBackupConfig, error) {
 	if managementCluster == "" {
 		return nil, fmt.Errorf("no management cluster found for %s", clusterID)
