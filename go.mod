@@ -1,6 +1,6 @@
 module github.com/openshift/osdctl
 
-go 1.26.0
+go 1.27
 
 require (
 	cloud.google.com/go/compute v1.62.0
@@ -283,7 +283,7 @@ require (
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kustomize/api v0.21.1 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v6 v6.3.2-0.20260122202528-d9cc6641c482 // indirect
+	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
 )
 
 replace github.com/observatorium/api v0.1.2 => github.com/observatorium/api v0.1.3-0.20260326145919-3032029d0fde
