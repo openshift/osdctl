@@ -60,6 +60,26 @@ func (c *managementClusterClient) GetVeleroSchedule(ctx context.Context, namespa
 	return schedule, nil
 }
 
+// ListVolumeSnapshotContents returns all CSI snapshot contents visible to the
+// management cluster. The caller is responsible for selecting its HCP's items.
+func (c *managementClusterClient) ListVolumeSnapshotContents(ctx context.Context) (*unstructured.UnstructuredList, error) {
+	all := &unstructured.UnstructuredList{}
+	all.SetGroupVersionKind(schema.GroupVersionKind{Group: "snapshot.storage.k8s.io", Version: "v1", Kind: "VolumeSnapshotContentList"})
+	var continuation string
+	for {
+		contents := &unstructured.UnstructuredList{}
+		contents.SetGroupVersionKind(all.GroupVersionKind())
+		if err := c.client.List(ctx, contents, client.Limit(500), client.Continue(continuation)); err != nil {
+			return nil, fmt.Errorf("listing VolumeSnapshotContents: %w", err)
+		}
+		all.Items = append(all.Items, contents.Items...)
+		continuation = contents.GetContinue()
+		if continuation == "" {
+			return all, nil
+		}
+	}
+}
+
 func (c *managementClusterClient) CreateVeleroBackup(ctx context.Context, request VeleroBackupRequest) (string, error) {
 	pods := &corev1.PodList{}
 	if err := c.client.List(ctx, pods, client.InNamespace(request.Namespace), client.MatchingLabels{request.LabelKey: request.LabelValue}); err != nil {

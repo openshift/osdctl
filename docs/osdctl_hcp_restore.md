@@ -26,6 +26,7 @@ Prepare and restore HCP clusters during disaster recovery
 ### SEE ALSO
 
 * [osdctl hcp](osdctl_hcp.md)	 - 
+* [osdctl hcp restore copy-snapshots](osdctl_hcp_restore_copy-snapshots.md)	 - Copy HCP EBS snapshots to a replacement management-cluster account
 * [osdctl hcp restore create](osdctl_hcp_restore_create.md)	 - Create and monitor a Velero restore for an HCP backup
 * [osdctl hcp restore manifestwork](osdctl_hcp_restore_manifestwork.md)	 - Compare and relocate HCP ManifestWorks
 * [osdctl hcp restore reassign](osdctl_hcp_restore_reassign.md)	 - Reassign an HCP to a replacement management cluster in OCM

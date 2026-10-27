@@ -86,6 +86,19 @@ func (c *OCMClient) Resolve(ctx context.Context, clusterIdentifier string) (Clus
 	return c.ResolveCluster(ctx, clusterIdentifier)
 }
 
+// HCPNamespace returns the namespace where the HCP control plane is hosted.
+func (c *OCMClient) HCPNamespace(ctx context.Context, clusterID string) (string, error) {
+	response, err := c.conn.ClustersMgmt().V1().Clusters().Cluster(clusterID).Hypershift().Get().SendContext(ctx)
+	if err != nil {
+		return "", fmt.Errorf("getting hypershift info for cluster %s: %w", clusterID, err)
+	}
+	namespace, ok := response.Body().GetHCPNamespace()
+	if !ok || namespace == "" {
+		return "", fmt.Errorf("no HCP namespace found for cluster %s", clusterID)
+	}
+	return namespace, nil
+}
+
 func (c *OCMClient) ResolveServiceCluster(ctx context.Context, clusterID string) (ServiceClusterInfo, error) {
 	hypershiftResp, err := c.conn.ClustersMgmt().V1().Clusters().Cluster(clusterID).Hypershift().Get().SendContext(ctx)
 	if err != nil {
@@ -195,6 +208,7 @@ type ManagementClusterClient interface {
 	GetVeleroSchedule(ctx context.Context, namespace, name string) (*unstructured.Unstructured, error)
 	CreateVeleroBackup(ctx context.Context, request VeleroBackupRequest) (string, error)
 	RestoreVeleroBackup(ctx context.Context, request VeleroRestoreRequest) (VeleroRestoreResult, error)
+	ListVolumeSnapshotContents(ctx context.Context) (*unstructured.UnstructuredList, error)
 }
 
 // ServiceClusterClient manages ManifestWorks for one service cluster.

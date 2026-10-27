@@ -1,9 +1,12 @@
 package restore
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRestoreLeafFlags(t *testing.T) {
@@ -16,6 +19,7 @@ func TestRestoreLeafFlags(t *testing.T) {
 		{name: "release DNS", cmd: "release-dns", flags: []string{"cluster-id", "profile"}},
 		{name: "reassign", cmd: "reassign", flags: []string{"cluster-id", "replacement-mc"}},
 		{name: "trust policy", cmd: "update-trust-policy", flags: []string{"cluster-id", "source-mc", "replacement-mc", "profile"}},
+		{name: "copy snapshots", cmd: "copy-snapshots", flags: []string{"cluster-id", "source-mc", "replacement-mc", "snapshot-journal", "reason", "profile", "timeout", "concurrency"}},
 	}
 
 	restore := NewCmdRestore()
@@ -28,6 +32,27 @@ func TestRestoreLeafFlags(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNextSnapshotJournalPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "snapshot-copy-journal-hcp.json")
+	require.NoError(t, os.WriteFile(path, nil, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(filepath.Dir(path), "snapshot-copy-journal-hcp-1.json"), nil, 0600))
+
+	next, err := nextSnapshotJournalPath(path)
+
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(filepath.Dir(path), "snapshot-copy-journal-hcp-2.json"), next)
+}
+
+func TestCopySnapshotsSnapshotJournalUsesDynamicDefault(t *testing.T) {
+	cmd := NewCmdCopySnapshots()
+
+	flag := cmd.Flags().Lookup("snapshot-journal")
+	assert.NotNil(t, flag)
+	assert.Empty(t, flag.DefValue)
+	assert.Nil(t, cmd.Flags().Lookup("source-account-id"))
+	assert.Nil(t, cmd.Flags().Lookup("replacement-account-id"))
 }
 
 func TestManifestWorkLeavesRequireOperationFlags(t *testing.T) {
