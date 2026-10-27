@@ -14,6 +14,7 @@ func TestRestoreLeafFlags(t *testing.T) {
 	}{
 		{name: "create", cmd: "create", flags: []string{"cluster-id", "target-mc", "backup-name", "reason", "timeout"}},
 		{name: "release DNS", cmd: "release-dns", flags: []string{"cluster-id", "profile"}},
+		{name: "reassign", cmd: "reassign", flags: []string{"cluster-id", "replacement-mc"}},
 		{name: "trust policy", cmd: "update-trust-policy", flags: []string{"cluster-id", "source-mc", "replacement-mc", "profile"}},
 	}
 
