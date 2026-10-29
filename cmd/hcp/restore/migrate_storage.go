@@ -27,13 +27,13 @@ type copySnapshotsFlags struct {
 	concurrency     int
 }
 
-func NewCmdCopySnapshots() *cobra.Command {
+func NewCmdMigrateStorage() *cobra.Command {
 	flags := &copySnapshotsFlags{}
 	cmd := &cobra.Command{
-		Use:     "copy-snapshots --cluster-id <cluster-id> --source-mc <management-cluster> --replacement-mc <management-cluster> --reason <reason>",
-		Short:   "Copy HCP EBS snapshots to a replacement management-cluster account",
-		Long:    "Discovers EBS VolumeSnapshotContents for the HCP on the replacement management cluster, stores the relevant inventory and snapshot mappings in a restartable journal, copies snapshots through a temporary source-account KMS key, then deletes intermediary snapshots and schedules deletion of the temporary key.",
-		Example: "  osdctl hcp restore copy-snapshots --cluster-id ${CLUSTER_ID} --source-mc ${SOURCE_MC} --replacement-mc ${REPLACEMENT_MC} --reason ${REASON}",
+		Use:     "migrate-storage --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason>",
+		Short:   "Migrate HCP snapshot storage to a replacement management cluster",
+		Long:    "Discovers EBS VolumeSnapshotContents for the HCP on the replacement management cluster, stores the relevant inventory and snapshot mappings in a restartable journal, copies snapshots through a temporary source-account KMS key, replaces the target VSCs with the copied snapshot IDs, and resumes the control plane only after all replacement VSCs are ready to use.",
+		Example: "  osdctl hcp restore migrate-storage --cluster-id ${CLUSTER_ID} --replacement-mc ${REPLACEMENT_MC} --reason ${REASON}",
 		Args:    cobra.NoArgs, DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := logrus.New()
@@ -44,7 +44,7 @@ func NewCmdCopySnapshots() *cobra.Command {
 			}
 			defer ocmConn.Close()
 			request := internalcmd.CopySnapshotsRequest{ClusterID: flags.clusterID, SourceMC: flags.sourceMC, ReplacementMC: flags.replacementMC, AWSProfile: flags.awsProfile, SnapshotJournalPath: flags.snapshotJournal, Reason: flags.reason, Timeout: flags.timeout, Concurrency: flags.concurrency}
-			copier := internalcmd.NewDefaultSnapshotCopierWithLogger(internalclient.NewOCMClient(ocmConn, logger), logger)
+			copier := internalcmd.NewDefaultSnapshotCopier(internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: logger}), internalclient.NewAWSAccountClientProvider(), internalcmd.WithLogger{Logger: logger})
 			plan, err := copier.PrepareSnapshotCopy(cmd.Context(), request)
 			if err != nil {
 				return err
@@ -60,7 +60,7 @@ func NewCmdCopySnapshots() *cobra.Command {
 			} else if !errors.Is(err, os.ErrNotExist) {
 				return fmt.Errorf("checking snapshot journal %s: %w", plan.SnapshotJournalPath, err)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Discovered %d EBS VolumeSnapshotContents.\n  Region: %s\n  Concurrency: %d\n", len(plan.Entries), plan.Region, plan.Concurrency)
+			fmt.Fprintf(cmd.OutOrStdout(), "Discovered %d EBS VolumeSnapshotContents.\n  Source management cluster: %s\n  Replacement management cluster: %s\n  Region: %s\n  Concurrency: %d\n", len(plan.Entries), plan.SourceManagementCluster, plan.ReplacementManagementCluster, plan.Region, plan.Concurrency)
 			if !confirm(cmd.InOrStdin(), cmd.ErrOrStderr(), "Create a temporary source KMS key and copy these snapshots? [y/N] ") {
 				_, err := fmt.Fprintln(cmd.OutOrStdout(), "Snapshot copy cancelled.")
 				return err
@@ -75,14 +75,14 @@ func NewCmdCopySnapshots() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&flags.clusterID, "cluster-id", "C", "", "Internal ID, name, or external ID of the HCP cluster")
-	cmd.Flags().StringVar(&flags.sourceMC, "source-mc", "", "Internal ID, name, or external ID of the source management cluster")
+	cmd.Flags().StringVar(&flags.sourceMC, "source-mc", "", "Internal ID, name, or external ID of the source management cluster (defaults to the HCP's current management cluster)")
 	cmd.Flags().StringVar(&flags.replacementMC, "replacement-mc", "", "Internal ID, name, or external ID of the replacement management cluster")
 	cmd.Flags().StringVarP(&flags.awsProfile, "profile", "p", "", "AWS profile used to assume management-cluster account roles")
 	cmd.Flags().StringVar(&flags.snapshotJournal, "snapshot-journal", "", "Path for the restartable snapshot journal (defaults to a cluster-specific file; existing journals prompt to resume or create a numbered file)")
 	cmd.Flags().StringVar(&flags.reason, "reason", "", "Reason for elevated access to the replacement management cluster")
 	cmd.Flags().DurationVar(&flags.timeout, "timeout", 2*time.Hour, "Maximum time to wait for all snapshot copies")
 	cmd.Flags().IntVar(&flags.concurrency, "concurrency", 4, "Maximum number of snapshot copy chains to run concurrently")
-	for _, flag := range []string{"cluster-id", "source-mc", "replacement-mc", "reason"} {
+	for _, flag := range []string{"cluster-id", "replacement-mc", "reason"} {
 		_ = cmd.MarkFlagRequired(flag)
 	}
 	return cmd
