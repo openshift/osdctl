@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/google/go-github/v63/github"
+	"github.com/google/go-github/v93/github"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
