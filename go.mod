@@ -17,6 +17,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancing v1.41.4
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.63.4
 	github.com/aws/aws-sdk-go-v2/service/iam v1.64.4
+	github.com/aws/aws-sdk-go-v2/service/kms v1.48.0
 	github.com/aws/aws-sdk-go-v2/service/organizations v1.62.1
 	github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.41.5
 	github.com/aws/aws-sdk-go-v2/service/route53 v1.70.4

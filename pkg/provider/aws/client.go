@@ -21,6 +21,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancing"
 	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/organizations"
 	"github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	"github.com/aws/aws-sdk-go-v2/service/route53"
@@ -98,6 +99,19 @@ type Client interface {
 	DescribeVpcEndpoints(*ec2.DescribeVpcEndpointsInput) (*ec2.DescribeVpcEndpointsOutput, error)
 	DescribeVpcEndpointConnections(*ec2.DescribeVpcEndpointConnectionsInput) (*ec2.DescribeVpcEndpointConnectionsOutput, error)
 	DescribeVpcEndpointServices(*ec2.DescribeVpcEndpointServicesInput) (*ec2.DescribeVpcEndpointServicesOutput, error)
+	DescribeSnapshots(context.Context, *ec2.DescribeSnapshotsInput) (*ec2.DescribeSnapshotsOutput, error)
+	CopySnapshot(context.Context, *ec2.CopySnapshotInput) (*ec2.CopySnapshotOutput, error)
+	ModifySnapshotAttribute(context.Context, *ec2.ModifySnapshotAttributeInput) (*ec2.ModifySnapshotAttributeOutput, error)
+	DeleteSnapshot(context.Context, *ec2.DeleteSnapshotInput) (*ec2.DeleteSnapshotOutput, error)
+
+	// KMS
+	CreateKey(context.Context, *kms.CreateKeyInput) (*kms.CreateKeyOutput, error)
+	CreateAlias(context.Context, *kms.CreateAliasInput) (*kms.CreateAliasOutput, error)
+	CreateGrant(context.Context, *kms.CreateGrantInput) (*kms.CreateGrantOutput, error)
+	RevokeGrant(context.Context, *kms.RevokeGrantInput) (*kms.RevokeGrantOutput, error)
+	DeleteAlias(context.Context, *kms.DeleteAliasInput) (*kms.DeleteAliasOutput, error)
+	ScheduleKeyDeletion(context.Context, *kms.ScheduleKeyDeletionInput) (*kms.ScheduleKeyDeletionOutput, error)
+	DescribeKey(context.Context, *kms.DescribeKeyInput) (*kms.DescribeKeyOutput, error)
 
 	// Service Quotas
 	ListServiceQuotas(*servicequotas.ListServiceQuotasInput) (*servicequotas.ListServiceQuotasOutput, error)
@@ -155,6 +169,7 @@ type AwsClient struct {
 	route53Client       route53.Client
 	elbClient           elasticloadbalancing.Client
 	elbv2Client         elasticloadbalancingv2.Client
+	kmsClient           kms.Client
 }
 
 func addProxyConfigToSessionOptConfig(config *aws.Config) {
@@ -232,6 +247,7 @@ func NewAwsClient(profile, region, configFile string) (Client, error) {
 		route53Client:       *route53.NewFromConfig(*cfg),
 		elbClient:           *elasticloadbalancing.NewFromConfig(*cfg),
 		elbv2Client:         *elasticloadbalancingv2.NewFromConfig(*cfg),
+		kmsClient:           *kms.NewFromConfig(*cfg),
 	}
 
 	// Validate the creds
@@ -267,6 +283,7 @@ func NewAwsClientWithInput(input *ClientInput) (Client, error) {
 		route53Client:       *route53.NewFromConfig(cfg),
 		elbClient:           *elasticloadbalancing.NewFromConfig(cfg),
 		elbv2Client:         *elasticloadbalancingv2.NewFromConfig(cfg),
+		kmsClient:           *kms.NewFromConfig(cfg),
 	}, nil
 }
 
@@ -522,6 +539,50 @@ func (c *AwsClient) DescribeVpcEndpoints(input *ec2.DescribeVpcEndpointsInput) (
 
 func (c *AwsClient) DescribeVpcEndpointServices(input *ec2.DescribeVpcEndpointServicesInput) (*ec2.DescribeVpcEndpointServicesOutput, error) {
 	return c.ec2Client.DescribeVpcEndpointServices(context.TODO(), input)
+}
+
+func (c *AwsClient) DescribeSnapshots(ctx context.Context, input *ec2.DescribeSnapshotsInput) (*ec2.DescribeSnapshotsOutput, error) {
+	return c.ec2Client.DescribeSnapshots(ctx, input)
+}
+
+func (c *AwsClient) CopySnapshot(ctx context.Context, input *ec2.CopySnapshotInput) (*ec2.CopySnapshotOutput, error) {
+	return c.ec2Client.CopySnapshot(ctx, input)
+}
+
+func (c *AwsClient) ModifySnapshotAttribute(ctx context.Context, input *ec2.ModifySnapshotAttributeInput) (*ec2.ModifySnapshotAttributeOutput, error) {
+	return c.ec2Client.ModifySnapshotAttribute(ctx, input)
+}
+
+func (c *AwsClient) DeleteSnapshot(ctx context.Context, input *ec2.DeleteSnapshotInput) (*ec2.DeleteSnapshotOutput, error) {
+	return c.ec2Client.DeleteSnapshot(ctx, input)
+}
+
+func (c *AwsClient) CreateKey(ctx context.Context, input *kms.CreateKeyInput) (*kms.CreateKeyOutput, error) {
+	return c.kmsClient.CreateKey(ctx, input)
+}
+
+func (c *AwsClient) CreateAlias(ctx context.Context, input *kms.CreateAliasInput) (*kms.CreateAliasOutput, error) {
+	return c.kmsClient.CreateAlias(ctx, input)
+}
+
+func (c *AwsClient) CreateGrant(ctx context.Context, input *kms.CreateGrantInput) (*kms.CreateGrantOutput, error) {
+	return c.kmsClient.CreateGrant(ctx, input)
+}
+
+func (c *AwsClient) RevokeGrant(ctx context.Context, input *kms.RevokeGrantInput) (*kms.RevokeGrantOutput, error) {
+	return c.kmsClient.RevokeGrant(ctx, input)
+}
+
+func (c *AwsClient) DeleteAlias(ctx context.Context, input *kms.DeleteAliasInput) (*kms.DeleteAliasOutput, error) {
+	return c.kmsClient.DeleteAlias(ctx, input)
+}
+
+func (c *AwsClient) ScheduleKeyDeletion(ctx context.Context, input *kms.ScheduleKeyDeletionInput) (*kms.ScheduleKeyDeletionOutput, error) {
+	return c.kmsClient.ScheduleKeyDeletion(ctx, input)
+}
+
+func (c *AwsClient) DescribeKey(ctx context.Context, input *kms.DescribeKeyInput) (*kms.DescribeKeyOutput, error) {
+	return c.kmsClient.DescribeKey(ctx, input)
 }
 
 func (c *AwsClient) DescribeVpcEndpointConnections(input *ec2.DescribeVpcEndpointConnectionsInput) (*ec2.DescribeVpcEndpointConnectionsOutput, error) {

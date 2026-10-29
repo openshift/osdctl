@@ -64,6 +64,10 @@ func (c *testManagementClusterClient) RestoreVeleroBackup(context.Context, Veler
 	return VeleroRestoreResult{}, errors.New("restore not configured in this test")
 }
 
+func (c *testManagementClusterClient) ListVolumeSnapshotContents(context.Context) (*unstructured.UnstructuredList, error) {
+	return nil, errors.New("snapshot inventory not configured in this test")
+}
+
 type testBackupOCMClient struct {
 	clusterInfo ClusterInfo
 	resolverErr error

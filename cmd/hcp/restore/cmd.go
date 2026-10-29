@@ -15,6 +15,7 @@ func NewCmdRestore() *cobra.Command {
 	cmd.AddCommand(NewCmdReassign())
 	cmd.AddCommand(NewCmdReleaseDNS())
 	cmd.AddCommand(NewCmdUpdateTrustPolicy())
+	cmd.AddCommand(NewCmdCopySnapshots())
 
 	return cmd
 }

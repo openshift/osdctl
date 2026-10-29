@@ -19,6 +19,7 @@ import (
 	elasticloadbalancing "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancing"
 	elasticloadbalancingv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	iam "github.com/aws/aws-sdk-go-v2/service/iam"
+	kms "github.com/aws/aws-sdk-go-v2/service/kms"
 	organizations "github.com/aws/aws-sdk-go-v2/service/organizations"
 	resourcegroupstaggingapi "github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi"
 	route53 "github.com/aws/aws-sdk-go-v2/service/route53"
@@ -112,6 +113,21 @@ func (mr *MockClientMockRecorder) ChangeResourceRecordSets(input any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChangeResourceRecordSets", reflect.TypeOf((*MockClient)(nil).ChangeResourceRecordSets), input)
 }
 
+// CopySnapshot mocks base method.
+func (m *MockClient) CopySnapshot(arg0 context.Context, arg1 *ec2.CopySnapshotInput) (*ec2.CopySnapshotOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CopySnapshot", arg0, arg1)
+	ret0, _ := ret[0].(*ec2.CopySnapshotOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CopySnapshot indicates an expected call of CopySnapshot.
+func (mr *MockClientMockRecorder) CopySnapshot(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopySnapshot", reflect.TypeOf((*MockClient)(nil).CopySnapshot), arg0, arg1)
+}
+
 // CreateAccessKey mocks base method.
 func (m *MockClient) CreateAccessKey(arg0 *iam.CreateAccessKeyInput) (*iam.CreateAccessKeyOutput, error) {
 	m.ctrl.T.Helper()
@@ -142,6 +158,21 @@ func (mr *MockClientMockRecorder) CreateAccount(input any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccount", reflect.TypeOf((*MockClient)(nil).CreateAccount), input)
 }
 
+// CreateAlias mocks base method.
+func (m *MockClient) CreateAlias(arg0 context.Context, arg1 *kms.CreateAliasInput) (*kms.CreateAliasOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateAlias", arg0, arg1)
+	ret0, _ := ret[0].(*kms.CreateAliasOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateAlias indicates an expected call of CreateAlias.
+func (mr *MockClientMockRecorder) CreateAlias(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAlias", reflect.TypeOf((*MockClient)(nil).CreateAlias), arg0, arg1)
+}
+
 // CreateCostCategoryDefinition mocks base method.
 func (m *MockClient) CreateCostCategoryDefinition(input *costexplorer.CreateCostCategoryDefinitionInput) (*costexplorer.CreateCostCategoryDefinitionOutput, error) {
 	m.ctrl.T.Helper()
@@ -155,6 +186,36 @@ func (m *MockClient) CreateCostCategoryDefinition(input *costexplorer.CreateCost
 func (mr *MockClientMockRecorder) CreateCostCategoryDefinition(input any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCostCategoryDefinition", reflect.TypeOf((*MockClient)(nil).CreateCostCategoryDefinition), input)
+}
+
+// CreateGrant mocks base method.
+func (m *MockClient) CreateGrant(arg0 context.Context, arg1 *kms.CreateGrantInput) (*kms.CreateGrantOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateGrant", arg0, arg1)
+	ret0, _ := ret[0].(*kms.CreateGrantOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateGrant indicates an expected call of CreateGrant.
+func (mr *MockClientMockRecorder) CreateGrant(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGrant", reflect.TypeOf((*MockClient)(nil).CreateGrant), arg0, arg1)
+}
+
+// CreateKey mocks base method.
+func (m *MockClient) CreateKey(arg0 context.Context, arg1 *kms.CreateKeyInput) (*kms.CreateKeyOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateKey", arg0, arg1)
+	ret0, _ := ret[0].(*kms.CreateKeyOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateKey indicates an expected call of CreateKey.
+func (mr *MockClientMockRecorder) CreateKey(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateKey", reflect.TypeOf((*MockClient)(nil).CreateKey), arg0, arg1)
 }
 
 // CreatePolicy mocks base method.
@@ -200,6 +261,21 @@ func (m *MockClient) DeleteAccessKey(arg0 *iam.DeleteAccessKeyInput) (*iam.Delet
 func (mr *MockClientMockRecorder) DeleteAccessKey(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAccessKey", reflect.TypeOf((*MockClient)(nil).DeleteAccessKey), arg0)
+}
+
+// DeleteAlias mocks base method.
+func (m *MockClient) DeleteAlias(arg0 context.Context, arg1 *kms.DeleteAliasInput) (*kms.DeleteAliasOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteAlias", arg0, arg1)
+	ret0, _ := ret[0].(*kms.DeleteAliasOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteAlias indicates an expected call of DeleteAlias.
+func (mr *MockClientMockRecorder) DeleteAlias(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAlias", reflect.TypeOf((*MockClient)(nil).DeleteAlias), arg0, arg1)
 }
 
 // DeleteBucket mocks base method.
@@ -292,6 +368,21 @@ func (mr *MockClientMockRecorder) DeleteSigningCertificate(arg0 any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSigningCertificate", reflect.TypeOf((*MockClient)(nil).DeleteSigningCertificate), arg0)
 }
 
+// DeleteSnapshot mocks base method.
+func (m *MockClient) DeleteSnapshot(arg0 context.Context, arg1 *ec2.DeleteSnapshotInput) (*ec2.DeleteSnapshotOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteSnapshot", arg0, arg1)
+	ret0, _ := ret[0].(*ec2.DeleteSnapshotOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteSnapshot indicates an expected call of DeleteSnapshot.
+func (mr *MockClientMockRecorder) DeleteSnapshot(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSnapshot", reflect.TypeOf((*MockClient)(nil).DeleteSnapshot), arg0, arg1)
+}
+
 // DeleteUser mocks base method.
 func (m *MockClient) DeleteUser(arg0 *iam.DeleteUserInput) (*iam.DeleteUserOutput, error) {
 	m.ctrl.T.Helper()
@@ -367,6 +458,21 @@ func (mr *MockClientMockRecorder) DescribeInstances(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeInstances", reflect.TypeOf((*MockClient)(nil).DescribeInstances), arg0)
 }
 
+// DescribeKey mocks base method.
+func (m *MockClient) DescribeKey(arg0 context.Context, arg1 *kms.DescribeKeyInput) (*kms.DescribeKeyOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescribeKey", arg0, arg1)
+	ret0, _ := ret[0].(*kms.DescribeKeyOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeKey indicates an expected call of DescribeKey.
+func (mr *MockClientMockRecorder) DescribeKey(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeKey", reflect.TypeOf((*MockClient)(nil).DescribeKey), arg0, arg1)
+}
+
 // DescribeLoadBalancers mocks base method.
 func (m *MockClient) DescribeLoadBalancers(input *elasticloadbalancing.DescribeLoadBalancersInput) (*elasticloadbalancing.DescribeLoadBalancersOutput, error) {
 	m.ctrl.T.Helper()
@@ -410,6 +516,21 @@ func (m *MockClient) DescribeRouteTables(arg0 *ec2.DescribeRouteTablesInput) (*e
 func (mr *MockClientMockRecorder) DescribeRouteTables(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeRouteTables", reflect.TypeOf((*MockClient)(nil).DescribeRouteTables), arg0)
+}
+
+// DescribeSnapshots mocks base method.
+func (m *MockClient) DescribeSnapshots(arg0 context.Context, arg1 *ec2.DescribeSnapshotsInput) (*ec2.DescribeSnapshotsOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DescribeSnapshots", arg0, arg1)
+	ret0, _ := ret[0].(*ec2.DescribeSnapshotsOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DescribeSnapshots indicates an expected call of DescribeSnapshots.
+func (mr *MockClientMockRecorder) DescribeSnapshots(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DescribeSnapshots", reflect.TypeOf((*MockClient)(nil).DescribeSnapshots), arg0, arg1)
 }
 
 // DescribeSubnets mocks base method.
@@ -1042,6 +1163,21 @@ func (mr *MockClientMockRecorder) LookupEvents(input any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupEvents", reflect.TypeOf((*MockClient)(nil).LookupEvents), input)
 }
 
+// ModifySnapshotAttribute mocks base method.
+func (m *MockClient) ModifySnapshotAttribute(arg0 context.Context, arg1 *ec2.ModifySnapshotAttributeInput) (*ec2.ModifySnapshotAttributeOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ModifySnapshotAttribute", arg0, arg1)
+	ret0, _ := ret[0].(*ec2.ModifySnapshotAttributeOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ModifySnapshotAttribute indicates an expected call of ModifySnapshotAttribute.
+func (mr *MockClientMockRecorder) ModifySnapshotAttribute(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModifySnapshotAttribute", reflect.TypeOf((*MockClient)(nil).ModifySnapshotAttribute), arg0, arg1)
+}
+
 // MoveAccount mocks base method.
 func (m *MockClient) MoveAccount(input *organizations.MoveAccountInput) (*organizations.MoveAccountOutput, error) {
 	m.ctrl.T.Helper()
@@ -1085,6 +1221,36 @@ func (m *MockClient) RequestServiceQuotaIncrease(arg0 *servicequotas.RequestServ
 func (mr *MockClientMockRecorder) RequestServiceQuotaIncrease(arg0 any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequestServiceQuotaIncrease", reflect.TypeOf((*MockClient)(nil).RequestServiceQuotaIncrease), arg0)
+}
+
+// RevokeGrant mocks base method.
+func (m *MockClient) RevokeGrant(arg0 context.Context, arg1 *kms.RevokeGrantInput) (*kms.RevokeGrantOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RevokeGrant", arg0, arg1)
+	ret0, _ := ret[0].(*kms.RevokeGrantOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RevokeGrant indicates an expected call of RevokeGrant.
+func (mr *MockClientMockRecorder) RevokeGrant(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeGrant", reflect.TypeOf((*MockClient)(nil).RevokeGrant), arg0, arg1)
+}
+
+// ScheduleKeyDeletion mocks base method.
+func (m *MockClient) ScheduleKeyDeletion(arg0 context.Context, arg1 *kms.ScheduleKeyDeletionInput) (*kms.ScheduleKeyDeletionOutput, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ScheduleKeyDeletion", arg0, arg1)
+	ret0, _ := ret[0].(*kms.ScheduleKeyDeletionOutput)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ScheduleKeyDeletion indicates an expected call of ScheduleKeyDeletion.
+func (mr *MockClientMockRecorder) ScheduleKeyDeletion(arg0, arg1 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScheduleKeyDeletion", reflect.TypeOf((*MockClient)(nil).ScheduleKeyDeletion), arg0, arg1)
 }
 
 // SimulatePrincipalPolicy mocks base method.
