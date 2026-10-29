@@ -16,7 +16,7 @@ import (
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
