@@ -334,11 +334,6 @@ func TestAccountAssignCompleteAccountName(t *testing.T) {
 			accountName: "custom-account-name",
 		},
 		{
-			name:          "rejects an invalid LDAP username",
-			username:      "test.user",
-			expectedError: "LDAP username must contain only letters and numbers",
-		},
-		{
 			name:          "rejects an account name with an existing account ID",
 			username:      "testuser",
 			accountName:   "rosa-dev-testuser",

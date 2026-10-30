@@ -3,7 +3,6 @@ package mgmt
 import (
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/organizations"
@@ -22,8 +21,6 @@ import (
 var (
 	OSDStaging1RootID     = "r-0wd6"
 	OSDStaging1AssignOuID = "ou-0wd6-x0ri0jpn"
-
-	ldapUsernamePattern = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
 )
 
 type accountAssignOptions struct {
@@ -82,10 +79,6 @@ func newCmdAccountAssign(streams genericclioptions.IOStreams, globalOpts *global
 func (o *accountAssignOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.username == "" {
 		return cmdutil.UsageErrorf(cmd, "LDAP username was not provided")
-	}
-
-	if !ldapUsernamePattern.MatchString(o.username) {
-		return cmdutil.UsageErrorf(cmd, "LDAP username must contain only letters and numbers")
 	}
 
 	if o.accountName != "" && o.accountID != "" {
