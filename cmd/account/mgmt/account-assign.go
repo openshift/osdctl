@@ -2,9 +2,9 @@ package mgmt
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
-	"time"
+	"regexp"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/organizations"
 	organizationTypes "github.com/aws/aws-sdk-go-v2/service/organizations/types"
@@ -20,10 +20,10 @@ import (
 
 // Global variables
 var (
-	OSDStaging2RootID = "r-rs3h"
-	OSDStaging2OuID   = "ou-rs3h-ry0hn2l9"
-	OSDStaging1RootID = "r-0wd6"
-	OSDStaging1OuID   = "ou-0wd6-z6tzkjek"
+	OSDStaging1RootID     = "r-0wd6"
+	OSDStaging1AssignOuID = "ou-0wd6-x0ri0jpn"
+
+	ldapUsernamePattern = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
 )
 
 type accountAssignOptions struct {
@@ -31,6 +31,7 @@ type accountAssignOptions struct {
 	username     string
 	payerAccount string
 	accountID    string
+	accountName  string
 	output       string
 	iamUser      bool
 
@@ -56,7 +57,7 @@ func newAccountAssignOptions(streams genericclioptions.IOStreams, globalOpts *gl
 	}
 }
 
-// assignCmd assigns an aws account to user under osd-staging-2 by default unless osd-staging-1 is specified
+// assignCmd assigns an aws account to user under osd-staging-1
 func newCmdAccountAssign(streams genericclioptions.IOStreams, globalOpts *globalflags.GlobalOptions) *cobra.Command {
 	ops := newAccountAssignOptions(streams, globalOpts)
 	accountAssignCmd := &cobra.Command{
@@ -69,9 +70,10 @@ func newCmdAccountAssign(streams genericclioptions.IOStreams, globalOpts *global
 		},
 	}
 	ops.printFlags.AddFlags(accountAssignCmd)
-	accountAssignCmd.Flags().StringVarP(&ops.payerAccount, "payer-account", "p", "", "Payer account type")
+	accountAssignCmd.Flags().StringVarP(&ops.payerAccount, "payer-account", "p", osdStaging1, "Payer account type")
 	accountAssignCmd.Flags().StringVarP(&ops.username, "username", "u", "", "LDAP username")
 	accountAssignCmd.Flags().StringVarP(&ops.accountID, "account-id", "i", "", "(optional) Specific AWS account ID to assign")
+	accountAssignCmd.Flags().StringVar(&ops.accountName, "account-name", "", "(optional) Name for a newly created account; recommended pattern: <scope>-<environment>-<purpose>[-<region>][-<sequence>]")
 	accountAssignCmd.Flags().BoolVarP(&ops.iamUser, "iam-user", "I", false, "(optional) Create an AWS IAM user and Access Key")
 
 	return accountAssignCmd
@@ -80,6 +82,22 @@ func newCmdAccountAssign(streams genericclioptions.IOStreams, globalOpts *global
 func (o *accountAssignOptions) complete(cmd *cobra.Command, _ []string) error {
 	if o.username == "" {
 		return cmdutil.UsageErrorf(cmd, "LDAP username was not provided")
+	}
+
+	if !ldapUsernamePattern.MatchString(o.username) {
+		return cmdutil.UsageErrorf(cmd, "LDAP username must contain only letters and numbers")
+	}
+
+	if o.accountName != "" && o.accountID != "" {
+		return cmdutil.UsageErrorf(cmd, "account name cannot be used when assigning an existing account ID")
+	}
+
+	if o.payerAccount != osdStaging1 {
+		return cmdutil.UsageErrorf(cmd, "payer account must be %s; %s is deprecated", osdStaging1, osdStaging2)
+	}
+
+	if os.Getenv(envKeyAWSAccountName) == osdStaging2 {
+		return cmdutil.UsageErrorf(cmd, "%s is set to %s, which is deprecated; use %s", envKeyAWSAccountName, osdStaging2, osdStaging1)
 	}
 
 	o.output = o.GlobalOptions.Output
@@ -95,15 +113,8 @@ func (o *accountAssignOptions) run() error {
 		rootID          string
 	)
 
-	if o.payerAccount == osdStaging1 || os.Getenv(envKeyAWSAccountName) == osdStaging1 {
-		rootID = OSDStaging1RootID
-		destinationOU = OSDStaging1OuID
-	} else if o.payerAccount == osdStaging2 || os.Getenv(envKeyAWSAccountName) == osdStaging2 {
-		rootID = OSDStaging2RootID
-		destinationOU = OSDStaging2OuID
-	} else {
-		return fmt.Errorf("invalid payer account provided")
-	}
+	rootID = OSDStaging1RootID
+	destinationOU = OSDStaging1AssignOuID
 
 	//Instantiate aws client
 	awsClient, err := awsprovider.NewAwsClient(o.payerAccount, "us-east-1", "")
@@ -142,8 +153,12 @@ func (o *accountAssignOptions) run() error {
 			return err
 		}
 		// otherwise, create a new account
-		seed := time.Now().UnixNano()
-		accountAssignID, err = o.buildAccount(seed)
+		accountName := o.accountName
+		if accountName == "" {
+			accountName = "rosa-dev-" + strings.ToLower(o.username)
+		}
+
+		accountAssignID, err = o.buildAccount(accountName)
 
 		if err != nil {
 			return err
@@ -304,24 +319,14 @@ func (o *accountAssignOptions) tagAccount(accountId string) error {
 	return nil
 }
 
-func (o *accountAssignOptions) buildAccount(seedVal int64) (string, error) {
+func (o *accountAssignOptions) buildAccount(accountName string) (string, error) {
 
 	fmt.Println("Creating account")
 	var newAccountId string
 
-	orgOutput, orgErr := o.createAccount(seedVal)
-	if orgErr != nil {
-
-		// If email already exists retry until a new email is generated
-		for orgErr == ErrEmailAlreadyExist {
-			seedVal = time.Now().UnixNano()
-			orgOutput, orgErr = o.createAccount(seedVal)
-			if orgErr == nil {
-				newAccountId = *orgOutput.CreateAccountStatus.AccountId
-				return newAccountId, nil
-			}
-		}
-		return "", orgErr
+	orgOutput, err := o.createAccount(accountName)
+	if err != nil {
+		return "", err
 	}
 
 	newAccountId = *orgOutput.CreateAccountStatus.AccountId
@@ -335,9 +340,7 @@ var (
 	ErrAwsFailedCreateAccount  = fmt.Errorf("ErrAwsFailedCreateAccount")
 )
 
-func (o *accountAssignOptions) createAccount(seedVal int64) (*organizations.DescribeCreateAccountStatusOutput, error) {
-	randStr := RandomString(rand.New(rand.NewSource(seedVal)), 6)
-	accountName := "osd-creds-mgmt+" + randStr
+func (o *accountAssignOptions) createAccount(accountName string) (*organizations.DescribeCreateAccountStatusOutput, error) {
 	email := accountName + "@redhat.com"
 
 	createInput := &organizations.CreateAccountInput{
@@ -386,16 +389,6 @@ func (o *accountAssignOptions) createAccount(seedVal int64) (*organizations.Desc
 	}
 
 	return accountStatus, nil
-}
-
-func RandomString(r *rand.Rand, length int) string {
-	var letters = []byte("abcdefghijklmnopqrstuvwxyz0123456789")
-
-	s := make([]byte, length)
-	for i := range s {
-		s[i] = letters[r.Intn(len(letters))] //#nosec G404 -- math/rand is not used for a secret here, hence it's okay
-	}
-	return string(s)
 }
 
 func (o *accountAssignOptions) moveAccount(accountIdInput string, destOuInput string, rootIdInput string) error {
