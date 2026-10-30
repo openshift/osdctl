@@ -19,6 +19,12 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
+var (
+	OSDStaging2RootID       = "r-rs3h"
+	OSDStaging2OuID         = "ou-rs3h-ry0hn2l9"
+	OSDStaging1UnassignOuID = "ou-0wd6-z6tzkjek"
+)
+
 func newCmdAccountUnassign(streams genericclioptions.IOStreams) *cobra.Command {
 	ops := newAccountUnassignOptions(streams)
 	accountUnassignCmd := &cobra.Command{
@@ -78,7 +84,7 @@ func (o *accountUnassignOptions) run() error {
 	}
 	if o.payerAccount == osdStaging1 || os.Getenv(envKeyAWSAccountName) == osdStaging1 {
 		rootID = OSDStaging1RootID
-		destinationOU = OSDStaging1OuID
+		destinationOU = OSDStaging1UnassignOuID
 	} else if o.payerAccount == osdStaging2 || os.Getenv(envKeyAWSAccountName) == osdStaging2 {
 		rootID = OSDStaging2RootID
 		destinationOU = OSDStaging2OuID

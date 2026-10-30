@@ -2,16 +2,18 @@ package mgmt
 
 import (
 	"fmt"
-	"math/rand"
+	"strings"
 	"testing"
 
 	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/organizations"
 	organizationTypes "github.com/aws/aws-sdk-go-v2/service/organizations/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/openshift/osdctl/internal/utils/globalflags"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
 	"github.com/openshift/osdctl/pkg/provider/aws/mock"
 	"go.uber.org/mock/gomock"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 )
 
 func TestIsOwned(t *testing.T) {
@@ -242,14 +244,135 @@ func TestFindUntaggedAccount(t *testing.T) {
 	}
 }
 
+func TestAccountAssignPayerAccount(t *testing.T) {
+	tests := []struct {
+		name          string
+		payerAccount  string
+		envAccount    string
+		expectedError string
+	}{
+		{
+			name:         "accepts osd-staging-1",
+			payerAccount: osdStaging1,
+		},
+		{
+			name:         "rejects osd-staging-2",
+			payerAccount: osdStaging2,
+			expectedError: "payer account must be osd-staging-1; " +
+				"osd-staging-2 is deprecated",
+		},
+		{
+			name:         "rejects an unknown payer account",
+			payerAccount: "osd-production-1",
+			expectedError: "payer account must be osd-staging-1; " +
+				"osd-staging-2 is deprecated",
+		},
+		{
+			name:         "rejects osd-staging-2 credentials",
+			payerAccount: osdStaging1,
+			envAccount:   osdStaging2,
+			expectedError: "AWS_ACCOUNT_NAME is set to osd-staging-2, " +
+				"which is deprecated; use osd-staging-1",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.envAccount != "" {
+				t.Setenv(envKeyAWSAccountName, test.envAccount)
+			}
+
+			cmd := newCmdAccountAssign(genericclioptions.IOStreams{}, &globalflags.GlobalOptions{})
+			options := &accountAssignOptions{
+				username:      "testuser",
+				payerAccount:  test.payerAccount,
+				GlobalOptions: &globalflags.GlobalOptions{},
+			}
+
+			err := options.complete(cmd, nil)
+			if test.expectedError == "" {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.expectedError) {
+				t.Fatalf("expected error %q, got %v", test.expectedError, err)
+			}
+		})
+	}
+}
+
+func TestAccountAssignPayerAccountDefault(t *testing.T) {
+	cmd := newCmdAccountAssign(genericclioptions.IOStreams{}, &globalflags.GlobalOptions{})
+
+	defaultValue := cmd.Flags().Lookup("payer-account").DefValue
+	if defaultValue != osdStaging1 {
+		t.Fatalf("expected payer-account default %q, got %q", osdStaging1, defaultValue)
+	}
+	if OSDStaging1RootID != "r-0wd6" || OSDStaging1AssignOuID != "ou-0wd6-x0ri0jpn" {
+		t.Fatalf("unexpected staging-1 assignment target: root %s, OU %s", OSDStaging1RootID, OSDStaging1AssignOuID)
+	}
+}
+
+func TestAccountAssignCompleteAccountName(t *testing.T) {
+	tests := []struct {
+		name          string
+		username      string
+		accountName   string
+		accountID     string
+		expectedError string
+	}{
+		{
+			name:        "accepts a conventional account name",
+			username:    "testuser",
+			accountName: "rosa-dev-testuser-use1-001",
+		},
+		{
+			name:        "accepts a non-conventional account name",
+			username:    "testuser",
+			accountName: "custom-account-name",
+		},
+		{
+			name:          "rejects an account name with an existing account ID",
+			username:      "testuser",
+			accountName:   "rosa-dev-testuser",
+			accountID:     "111111111111",
+			expectedError: "account name cannot be used when assigning an existing account ID",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cmd := newCmdAccountAssign(genericclioptions.IOStreams{}, &globalflags.GlobalOptions{})
+			options := &accountAssignOptions{
+				username:      test.username,
+				payerAccount:  osdStaging1,
+				accountName:   test.accountName,
+				accountID:     test.accountID,
+				GlobalOptions: &globalflags.GlobalOptions{},
+			}
+
+			err := options.complete(cmd, nil)
+			if test.expectedError == "" {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.expectedError) {
+				t.Fatalf("expected error %q, got %v", test.expectedError, err)
+			}
+		})
+	}
+}
+
 func TestCreateAccount(t *testing.T) {
 	mocks := setupDefaultMocks(t)
 
 	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
 
-	seed := int64(1)
-	randStr := RandomString(rand.New(rand.NewSource(seed)), 6)
-	accountName := "osd-creds-mgmt+" + randStr
+	accountName := "rosa-dev-testuser"
 	email := accountName + "@redhat.com"
 
 	createId := "car-random1234"
@@ -274,7 +397,7 @@ func TestCreateAccount(t *testing.T) {
 
 	o := &accountAssignOptions{}
 	o.awsClient = mockAWSClient
-	returnVal, err := o.createAccount(seed)
+	returnVal, err := o.createAccount(accountName)
 	if err != nil {
 		t.Error("failed to create account")
 	}
@@ -292,12 +415,24 @@ func TestTagAccount(t *testing.T) {
 
 	awsOutputTag := &organizations.TagResourceOutput{}
 
-	mockAWSClient.EXPECT().TagResource(gomock.Any()).Return(
+	expectedInput := &organizations.TagResourceInput{
+		ResourceId: awsSdk.String(accountID),
+		Tags: []organizationTypes.Tag{
+			{Key: awsSdk.String("owner"), Value: awsSdk.String("test-user")},
+			{Key: awsSdk.String("claimed"), Value: awsSdk.String("true")},
+			{Key: awsSdk.String("service-name"), Value: awsSdk.String("rosa-internal")},
+			{Key: awsSdk.String("cost-center"), Value: awsSdk.String("732")},
+			{Key: awsSdk.String("service-phase"), Value: awsSdk.String("dev")},
+			{Key: awsSdk.String("app-code"), Value: awsSdk.String("OSD-002")},
+		},
+	}
+
+	mockAWSClient.EXPECT().TagResource(expectedInput).Return(
 		awsOutputTag,
 		nil,
 	)
 
-	o := &accountAssignOptions{}
+	o := &accountAssignOptions{username: "test-user"}
 	o.awsClient = mockAWSClient
 	err := o.tagAccount(accountID)
 	if err != nil {
