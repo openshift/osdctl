@@ -35,7 +35,7 @@ func NewCmdDiscover() *cobra.Command {
 				return fmt.Errorf("creating OCM connection: %w", err)
 			}
 			defer ocmConn.Close()
-			var discoverer internalcmd.BackupDiscoverer = internalcmd.NewDefaultBackupDiscoverer(internalclient.NewOCMClient(ocmConn, logger))
+			var discoverer internalcmd.BackupDiscoverer = internalcmd.NewDefaultBackupDiscoverer(internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: logger}))
 			backups, err := discoverer.DiscoverBackups(cmd.Context(), internalcmd.DiscoveryRequest{
 				ClusterID: flags.clusterID, Limit: flags.limit, AWSProfile: flags.awsProfile,
 			})

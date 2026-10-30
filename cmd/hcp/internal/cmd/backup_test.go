@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	internalclient "github.com/openshift/osdctl/cmd/hcp/internal/client"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -68,6 +69,10 @@ func (c *testManagementClusterClient) ListVolumeSnapshotContents(context.Context
 	return nil, errors.New("snapshot inventory not configured in this test")
 }
 
+func (c *testManagementClusterClient) RemapVolumeSnapshotContents(context.Context, VolumeSnapshotRemapRequest) error {
+	return errors.New("VSC remapping not configured in this test")
+}
+
 type testBackupOCMClient struct {
 	clusterInfo ClusterInfo
 	resolverErr error
@@ -82,7 +87,7 @@ func (c *testBackupOCMClient) Resolve(_ context.Context, _ string) (ClusterInfo,
 	return c.clusterInfo, c.resolverErr
 }
 
-func (c *testBackupOCMClient) ManagementCluster(clusterID string) (ManagementClusterClient, error) {
+func (c *testBackupOCMClient) ManagementCluster(clusterID string, _ ...internalclient.ManagementClusterClientOption) (ManagementClusterClient, error) {
 	c.calls = append(c.calls, managementCall{clusterID: clusterID})
 	if c.clientErr != nil {
 		return nil, c.clientErr
@@ -90,7 +95,7 @@ func (c *testBackupOCMClient) ManagementCluster(clusterID string) (ManagementClu
 	return c.client, nil
 }
 
-func (c *testBackupOCMClient) ElevatedManagementCluster(clusterID, reason string) (ManagementClusterClient, error) {
+func (c *testBackupOCMClient) ElevatedManagementCluster(clusterID, reason string, _ ...internalclient.ManagementClusterClientOption) (ManagementClusterClient, error) {
 	c.calls = append(c.calls, managementCall{clusterID: clusterID, reason: reason, elevated: true})
 	if c.elevatedErr != nil {
 		return nil, c.elevatedErr
@@ -153,7 +158,8 @@ func TestBackupRequestValidate(t *testing.T) {
 func TestDefaultBackupCreatorConfig_Default(t *testing.T) {
 	t.Parallel()
 
-	cfg := newDefaultBackupCreatorConfig()
+	var cfg DefaultBackupCreatorConfig
+	cfg.Defaults()
 
 	assert.Equal(t, "openshift-adp", cfg.ADPNamespace)
 	assert.Equal(t, "velero", cfg.VeleroContainer)
@@ -168,12 +174,12 @@ func TestDefaultBackupCreatorConfig_Options(t *testing.T) {
 	tests := []struct {
 		name     string
 		opts     []DefaultBackupCreatorOption
-		assertFn func(t *testing.T, cfg defaultBackupCreatorConfig)
+		assertFn func(t *testing.T, cfg DefaultBackupCreatorConfig)
 	}{
 		{
 			name: "WithADPNamespace overrides ADPNamespace",
 			opts: []DefaultBackupCreatorOption{WithADPNamespace("custom-ns")},
-			assertFn: func(t *testing.T, cfg defaultBackupCreatorConfig) {
+			assertFn: func(t *testing.T, cfg DefaultBackupCreatorConfig) {
 				assert.Equal(t, "custom-ns", cfg.ADPNamespace)
 				// other fields stay at defaults
 				assert.Equal(t, "velero", cfg.VeleroContainer)
@@ -182,7 +188,7 @@ func TestDefaultBackupCreatorConfig_Options(t *testing.T) {
 		{
 			name: "WithVeleroContainer overrides VeleroContainer",
 			opts: []DefaultBackupCreatorOption{WithVeleroContainer("sidecar")},
-			assertFn: func(t *testing.T, cfg defaultBackupCreatorConfig) {
+			assertFn: func(t *testing.T, cfg DefaultBackupCreatorConfig) {
 				assert.Equal(t, "sidecar", cfg.VeleroContainer)
 				assert.Equal(t, "openshift-adp", cfg.ADPNamespace)
 			},
@@ -190,7 +196,7 @@ func TestDefaultBackupCreatorConfig_Options(t *testing.T) {
 		{
 			name: "WithVeleroLabelKey overrides VeleroLabelKey",
 			opts: []DefaultBackupCreatorOption{WithVeleroLabelKey("app")},
-			assertFn: func(t *testing.T, cfg defaultBackupCreatorConfig) {
+			assertFn: func(t *testing.T, cfg DefaultBackupCreatorConfig) {
 				assert.Equal(t, "app", cfg.VeleroLabelKey)
 				assert.Equal(t, "openshift-adp", cfg.ADPNamespace)
 			},
@@ -198,7 +204,7 @@ func TestDefaultBackupCreatorConfig_Options(t *testing.T) {
 		{
 			name: "WithVeleroLabelValue overrides VeleroLabelValue",
 			opts: []DefaultBackupCreatorOption{WithVeleroLabelValue("backup-agent")},
-			assertFn: func(t *testing.T, cfg defaultBackupCreatorConfig) {
+			assertFn: func(t *testing.T, cfg DefaultBackupCreatorConfig) {
 				assert.Equal(t, "backup-agent", cfg.VeleroLabelValue)
 				assert.Equal(t, "openshift-adp", cfg.ADPNamespace)
 			},
@@ -206,7 +212,7 @@ func TestDefaultBackupCreatorConfig_Options(t *testing.T) {
 		{
 			name: "WithScheduleNameSuffix overrides ScheduleNameSuffix",
 			opts: []DefaultBackupCreatorOption{WithScheduleNameSuffix("-weekly")},
-			assertFn: func(t *testing.T, cfg defaultBackupCreatorConfig) {
+			assertFn: func(t *testing.T, cfg DefaultBackupCreatorConfig) {
 				assert.Equal(t, "-weekly", cfg.ScheduleNameSuffix)
 				assert.Equal(t, "openshift-adp", cfg.ADPNamespace)
 			},
@@ -217,7 +223,7 @@ func TestDefaultBackupCreatorConfig_Options(t *testing.T) {
 				WithADPNamespace("first"),
 				WithADPNamespace("second"),
 			},
-			assertFn: func(t *testing.T, cfg defaultBackupCreatorConfig) {
+			assertFn: func(t *testing.T, cfg DefaultBackupCreatorConfig) {
 				assert.Equal(t, "second", cfg.ADPNamespace)
 			},
 		},
@@ -227,7 +233,9 @@ func TestDefaultBackupCreatorConfig_Options(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg := newDefaultBackupCreatorConfig(tt.opts...)
+			var cfg DefaultBackupCreatorConfig
+			cfg.Options(tt.opts...)
+			cfg.Defaults()
 			tt.assertFn(t, cfg)
 		})
 	}

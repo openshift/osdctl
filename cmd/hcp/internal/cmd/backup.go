@@ -46,10 +46,9 @@ type BackupResult struct {
 	RawOutput string
 }
 
-// defaultBackupCreatorConfig holds all configurable parameters for the backup creator,
-// including operational settings and the cluster resolver. Use newDefaultBackupCreatorConfig to obtain an
-// instance with defaults applied.
-type defaultBackupCreatorConfig struct {
+// DefaultBackupCreatorConfig holds all configurable parameters for the backup creator,
+// including operational settings and the cluster resolver.
+type DefaultBackupCreatorConfig struct {
 	ADPNamespace       string
 	VeleroContainer    string
 	VeleroLabelKey     string
@@ -61,27 +60,34 @@ type defaultBackupCreatorConfig struct {
 	Resolver internalclient.ClusterResolver
 }
 
-// newDefaultBackupCreatorConfig returns a defaultBackupCreatorConfig populated with
-// standard defaults. Call it once, then pass any overrides via DefaultBackupCreatorOption.
-// Resolver is left nil here and configured by NewDefaultBackupCreator.
-func newDefaultBackupCreatorConfig(opts ...DefaultBackupCreatorOption) defaultBackupCreatorConfig {
-	cfg := defaultBackupCreatorConfig{
-		ADPNamespace:       "openshift-adp",
-		VeleroContainer:    "velero",
-		VeleroLabelKey:     "app.kubernetes.io/name",
-		VeleroLabelValue:   "velero",
-		ScheduleNameSuffix: "-daily",
+func (c *DefaultBackupCreatorConfig) Options(opts ...DefaultBackupCreatorOption) {
+	for _, opt := range opts {
+		opt.ConfigureDefaultBackupCreator(c)
 	}
-	for _, o := range opts {
-		o.ConfigureDefaultBackupCreator(&cfg)
+}
+
+func (c *DefaultBackupCreatorConfig) Defaults() {
+	if c.ADPNamespace == "" {
+		c.ADPNamespace = "openshift-adp"
 	}
-	return cfg
+	if c.VeleroContainer == "" {
+		c.VeleroContainer = "velero"
+	}
+	if c.VeleroLabelKey == "" {
+		c.VeleroLabelKey = "app.kubernetes.io/name"
+	}
+	if c.VeleroLabelValue == "" {
+		c.VeleroLabelValue = "velero"
+	}
+	if c.ScheduleNameSuffix == "" {
+		c.ScheduleNameSuffix = "-daily"
+	}
 }
 
 // DefaultBackupCreatorOption is implemented by any type that can configure a defaultBackupCreatorConfig.
 // Concrete implementations live in options.go.
 type DefaultBackupCreatorOption interface {
-	ConfigureDefaultBackupCreator(*defaultBackupCreatorConfig)
+	ConfigureDefaultBackupCreator(*DefaultBackupCreatorConfig)
 }
 
 // DefaultBackupCreator executes the backup workflow for an HCP cluster.
@@ -89,7 +95,7 @@ type DefaultBackupCreatorOption interface {
 // operations — is deferred to Run so that construction is always cheap and
 // side-effect free.
 type DefaultBackupCreator struct {
-	cfg       defaultBackupCreatorConfig
+	cfg       DefaultBackupCreatorConfig
 	ocmClient backupOCMClient
 	resolver  internalclient.ClusterResolver
 }
@@ -102,7 +108,9 @@ func NewDefaultBackupCreator(
 	ocmClient backupOCMClient,
 	opts ...DefaultBackupCreatorOption,
 ) *DefaultBackupCreator {
-	cfg := newDefaultBackupCreatorConfig(opts...)
+	var cfg DefaultBackupCreatorConfig
+	cfg.Options(opts...)
+	cfg.Defaults()
 
 	resolver := cfg.Resolver
 	if resolver == nil {
@@ -133,7 +141,7 @@ func (r *DefaultBackupCreator) CreateBackup(ctx context.Context, request BackupR
 
 	scheduleName := clusterInfo.HCPClusterID + r.cfg.ScheduleNameSuffix
 
-	managementClient, err := r.ocmClient.ManagementCluster(clusterInfo.MgmtClusterID)
+	managementClient, err := r.ocmClient.ManagementCluster(clusterInfo.MgmtClusterID, internalclient.WithVeleroNamespace(r.cfg.ADPNamespace))
 	if err != nil {
 		return BackupResult{}, fmt.Errorf("connecting to management cluster %s: %w", clusterInfo.MgmtClusterID, err)
 	}
@@ -148,7 +156,7 @@ func (r *DefaultBackupCreator) CreateBackup(ctx context.Context, request BackupR
 		return BackupResult{}, err
 	}
 
-	managementClient, err = r.ocmClient.ElevatedManagementCluster(clusterInfo.MgmtClusterID, request.Reason)
+	managementClient, err = r.ocmClient.ElevatedManagementCluster(clusterInfo.MgmtClusterID, request.Reason, internalclient.WithVeleroNamespace(r.cfg.ADPNamespace))
 	if err != nil {
 		return BackupResult{}, fmt.Errorf("connecting to management cluster %s with elevation: %w", clusterInfo.MgmtClusterID, err)
 	}
@@ -178,6 +186,6 @@ func (r *DefaultBackupCreator) CreateBackup(ctx context.Context, request BackupR
 
 type backupOCMClient interface {
 	internalclient.ClusterResolver
-	ManagementCluster(clusterID string) (internalclient.ManagementClusterClient, error)
-	ElevatedManagementCluster(clusterID, reason string) (internalclient.ManagementClusterClient, error)
+	ManagementCluster(clusterID string, options ...internalclient.ManagementClusterClientOption) (internalclient.ManagementClusterClient, error)
+	ElevatedManagementCluster(clusterID, reason string, options ...internalclient.ManagementClusterClientOption) (internalclient.ManagementClusterClient, error)
 }

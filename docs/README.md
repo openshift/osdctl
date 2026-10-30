@@ -108,13 +108,13 @@
   - `get-cp-autoscaling-status` - Get control plane autoscaling status for hosted clusters on a management cluster
   - `must-gather --cluster-id <cluster-identifier>` - Create a must-gather for an HCP cluster (and optionally its management/service clusters)
   - `restore` - Prepare and restore HCP clusters during disaster recovery
-    - `copy-snapshots --cluster-id <cluster-id> --source-mc <management-cluster> --replacement-mc <management-cluster> --reason <reason>` - Copy HCP EBS snapshots to a replacement management-cluster account
     - `create --cluster-id <cluster-id> --backup-name <backup-name> --reason <reason> [--target-mc <management-cluster>] [--timeout <duration>]` - Create and monitor a Velero restore for an HCP backup
     - `manifestwork` - Compare and relocate HCP ManifestWorks
       - `compare --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>]` - Compare HCP ManifestWorks between management clusters
       - `move` - Move HCP Velero and cluster resources in phases
         - `cluster-resources --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>]` - Move the namespace, HostedCluster, and NodePool ManifestWorks
         - `velero-resources --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>]` - Move the Velero resource ManifestWorks
+    - `migrate-storage --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason>` - Migrate HCP snapshot storage to a replacement management cluster
     - `reassign --cluster-id <cluster-id> --replacement-mc <management-cluster>` - Reassign an HCP to a replacement management cluster in OCM
     - `release-dns --cluster-id <cluster-id>` - Release central DNS records for an HCP cluster
     - `update-trust-policy --cluster-id <cluster-id> --replacement-mc <management-cluster>` - Allow a replacement management cluster to access HCP backups
@@ -3411,38 +3411,6 @@ osdctl hcp restore [flags]
   -S, --skip-version-check               skip checking to see if this is the most recent release
 ```
 
-### osdctl hcp restore copy-snapshots
-
-Discovers EBS VolumeSnapshotContents for the HCP on the replacement management cluster, stores the relevant inventory and snapshot mappings in a restartable journal, copies snapshots through a temporary source-account KMS key, then deletes intermediary snapshots and schedules deletion of the temporary key.
-
-```
-osdctl hcp restore copy-snapshots --cluster-id <cluster-id> --source-mc <management-cluster> --replacement-mc <management-cluster> --reason <reason> [flags]
-```
-
-#### Flags
-
-```
-      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
-      --cluster string                   The name of the kubeconfig cluster to use
-  -C, --cluster-id string                Internal ID, name, or external ID of the HCP cluster
-      --concurrency int                  Maximum number of snapshot copy chains to run concurrently (default 4)
-      --context string                   The name of the kubeconfig context to use
-  -h, --help                             help for copy-snapshots
-      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
-      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
-  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
-  -p, --profile string                   AWS profile used to assume management-cluster account roles
-      --reason string                    Reason for elevated access to the replacement management cluster
-      --replacement-mc string            Internal ID, name, or external ID of the replacement management cluster
-      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
-  -s, --server string                    The address and port of the Kubernetes API server
-      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
-  -S, --skip-version-check               skip checking to see if this is the most recent release
-      --snapshot-journal string          Path for the restartable snapshot journal (defaults to a cluster-specific file; existing journals prompt to resume or create a numbered file)
-      --source-mc string                 Internal ID, name, or external ID of the source management cluster
-      --timeout duration                 Maximum time to wait for all snapshot copies (default 2h0m0s)
-```
-
 ### osdctl hcp restore create
 
 Create and monitor a Velero Restore in the target management cluster. The target defaults to the management cluster currently bound to the HCP; an explicit target must be in the HCP's region. Repeated invocations safely resume an active restore or report an already completed restore; failed attempts receive a new retry Restore.
@@ -3602,6 +3570,38 @@ osdctl hcp restore manifestwork move velero-resources --cluster-id <cluster-id> 
       --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
   -S, --skip-version-check               skip checking to see if this is the most recent release
       --source-mc string                 Management cluster whose namespace contains the ManifestWorks (defaults to the HCP management cluster)
+```
+
+### osdctl hcp restore migrate-storage
+
+Discovers EBS VolumeSnapshotContents for the HCP on the replacement management cluster, stores the relevant inventory and snapshot mappings in a restartable journal, copies snapshots through a temporary source-account KMS key, replaces the target VSCs with the copied snapshot IDs, and resumes the control plane only after all replacement VSCs are ready to use.
+
+```
+osdctl hcp restore migrate-storage --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [flags]
+```
+
+#### Flags
+
+```
+      --as string                        Username to impersonate for the operation. User could be a regular user or a service account in a namespace.
+      --cluster string                   The name of the kubeconfig cluster to use
+  -C, --cluster-id string                Internal ID, name, or external ID of the HCP cluster
+      --concurrency int                  Maximum number of snapshot copy chains to run concurrently (default 4)
+      --context string                   The name of the kubeconfig context to use
+  -h, --help                             help for migrate-storage
+      --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
+      --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
+  -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+  -p, --profile string                   AWS profile used to assume management-cluster account roles
+      --reason string                    Reason for elevated access to the replacement management cluster
+      --replacement-mc string            Internal ID, name, or external ID of the replacement management cluster
+      --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
+  -s, --server string                    The address and port of the Kubernetes API server
+      --skip-aws-proxy-check aws_proxy   Don't use the configured aws_proxy value
+  -S, --skip-version-check               skip checking to see if this is the most recent release
+      --snapshot-journal string          Path for the restartable snapshot journal (defaults to a cluster-specific file; existing journals prompt to resume or create a numbered file)
+      --source-mc string                 Internal ID, name, or external ID of the source management cluster (defaults to the HCP's current management cluster)
+      --timeout duration                 Maximum time to wait for all snapshot copies (default 2h0m0s)
 ```
 
 ### osdctl hcp restore reassign

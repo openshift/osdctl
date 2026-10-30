@@ -36,7 +36,7 @@ func NewCmdCreate() *cobra.Command {
 			}
 			defer ocmConn.Close()
 
-			var creator internalcmd.BackupCreator = internalcmd.NewDefaultBackupCreator(internalclient.NewOCMClient(ocmConn, logger))
+			var creator internalcmd.BackupCreator = internalcmd.NewDefaultBackupCreator(internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: logger}))
 			result, err := creator.CreateBackup(cmd.Context(), flags.request())
 			if err != nil {
 				return err

@@ -14,13 +14,19 @@ import (
 // initialized service-cluster connection.
 type serviceClusterClient struct{ client client.Client }
 
-type manifestWorkListConfig struct {
+type ManifestWorkListConfig struct {
 	labels map[string]string
+}
+
+func (c *ManifestWorkListConfig) Options(opts ...ManifestWorkListOption) {
+	for _, opt := range opts {
+		opt.ConfigureManifestWorkList(c)
+	}
 }
 
 // ManifestWorkListOption configures a ManifestWork list operation.
 type ManifestWorkListOption interface {
-	configureManifestWorkList(*manifestWorkListConfig)
+	ConfigureManifestWorkList(*ManifestWorkListConfig)
 }
 
 type manifestWorkLabel struct {
@@ -33,7 +39,7 @@ func WithManifestWorkLabel(key, value string) ManifestWorkListOption {
 	return manifestWorkLabel{key: key, value: value}
 }
 
-func (l manifestWorkLabel) configureManifestWorkList(config *manifestWorkListConfig) {
+func (l manifestWorkLabel) ConfigureManifestWorkList(config *ManifestWorkListConfig) {
 	if config.labels == nil {
 		config.labels = make(map[string]string)
 	}
@@ -42,10 +48,8 @@ func (l manifestWorkLabel) configureManifestWorkList(config *manifestWorkListCon
 
 // ManifestWorkLabels returns the label filters configured by options.
 func ManifestWorkLabels(options ...ManifestWorkListOption) map[string]string {
-	config := manifestWorkListConfig{}
-	for _, option := range options {
-		option.configureManifestWorkList(&config)
-	}
+	config := ManifestWorkListConfig{}
+	config.Options(options...)
 	return config.labels
 }
 

@@ -23,6 +23,7 @@ import (
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	internalclient "github.com/openshift/osdctl/cmd/hcp/internal/client"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/openshift/osdctl/pkg/utils"
 	logrus "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -56,16 +57,20 @@ type SnapshotCopier interface {
 
 // SnapshotCopyPlan contains the validated inputs and clients for a copy operation.
 type SnapshotCopyPlan struct {
-	ClusterID                    string
-	Region                       string
-	SnapshotJournalPath          string
-	SourceAccountID              string
-	ReplacementAccountID         string
-	SourceManagementCluster      string
-	ReplacementManagementCluster string
-	Entries                      []SnapshotCopyEntry
-	VSCInventory                 []map[string]any
-	Concurrency                  int
+	ClusterID                      string
+	Region                         string
+	SnapshotJournalPath            string
+	SourceAccountID                string
+	ReplacementAccountID           string
+	SourceManagementCluster        string
+	ReplacementManagementCluster   string
+	ReplacementManagementClusterID string
+	HCPNamespace                   string
+	DomainPrefix                   string
+	Reason                         string
+	Entries                        []SnapshotCopyEntry
+	VSCInventory                   []map[string]any
+	Concurrency                    int
 
 	source      awsprovider.Client
 	destination awsprovider.Client
@@ -98,32 +103,65 @@ type snapshotCopyJournal struct {
 	VSCInventory               []map[string]any    `json:"vscInventory"`
 }
 
+type DefaultSnapshotCopierConfig struct {
+	Clock  Clock
+	Logger *logrus.Logger
+}
+
+func (c *DefaultSnapshotCopierConfig) Defaults() {
+	if c.Clock == nil {
+		c.Clock = &defaultClock{}
+	}
+	if c.Logger == nil {
+		c.Logger = utils.NewDiscardLogger()
+	}
+}
+
+func (c *DefaultSnapshotCopierConfig) Options(opts ...DefaultSnapshotCopierOption) {
+	for _, opt := range opts {
+		opt.ConfigureDefaultSnapshotCopier(c)
+	}
+}
+
+type DefaultSnapshotCopierOption interface {
+	ConfigureDefaultSnapshotCopier(*DefaultSnapshotCopierConfig)
+}
+
+type Clock interface {
+	Now() time.Time
+}
+
+type defaultClock struct{}
+
+func (d *defaultClock) Now() time.Time {
+	return time.Now()
+}
+
 // DefaultSnapshotCopier performs cross-account EBS snapshot copies.
 type DefaultSnapshotCopier struct {
 	ocmClient snapshotCopyOCMClient
 	awsClient internalclient.AWSAccountClientProvider
-	now       func() time.Time
-	logger    *logrus.Logger
+	cfg       DefaultSnapshotCopierConfig
 }
 
 type snapshotCopyOCMClient interface {
 	internalclient.ClusterResolver
 	Cluster(string) (*cmv1.Cluster, error)
 	HCPNamespace(context.Context, string) (string, error)
-	ElevatedManagementCluster(string, string) (internalclient.ManagementClusterClient, error)
+	ElevatedManagementCluster(string, string, ...internalclient.ManagementClusterClientOption) (internalclient.ManagementClusterClient, error)
 }
 
 // NewDefaultSnapshotCopier creates a snapshot copier with a default logger.
-func NewDefaultSnapshotCopier(ocmClient snapshotCopyOCMClient) *DefaultSnapshotCopier {
-	return NewDefaultSnapshotCopierWithLogger(ocmClient, logrus.New())
-}
+func NewDefaultSnapshotCopier(ocmClient snapshotCopyOCMClient, awsClient internalclient.AWSAccountClientProvider, opts ...DefaultSnapshotCopierOption) *DefaultSnapshotCopier {
+	var cfg DefaultSnapshotCopierConfig
+	cfg.Options(opts...)
+	cfg.Defaults()
 
-// NewDefaultSnapshotCopierWithLogger creates a snapshot copier that reports progress through logger.
-func NewDefaultSnapshotCopierWithLogger(ocmClient snapshotCopyOCMClient, logger *logrus.Logger) *DefaultSnapshotCopier {
-	if logger == nil {
-		logger = logrus.New()
+	return &DefaultSnapshotCopier{
+		ocmClient: ocmClient,
+		awsClient: awsClient,
+		cfg:       cfg,
 	}
-	return &DefaultSnapshotCopier{ocmClient: ocmClient, awsClient: internalclient.NewAWSAccountClientProvider(), now: time.Now, logger: logger}
 }
 
 func (c *DefaultSnapshotCopier) PrepareSnapshotCopy(ctx context.Context, request CopySnapshotsRequest) (SnapshotCopyPlan, error) {
@@ -141,7 +179,14 @@ func (c *DefaultSnapshotCopier) PrepareSnapshotCopy(ctx context.Context, request
 	if err != nil {
 		return SnapshotCopyPlan{}, err
 	}
-	source, err := c.ocmClient.Cluster(request.SourceMC)
+	sourceIdentifier, err := sourceManagementClusterIdentifier(request, cluster)
+	if err != nil {
+		return SnapshotCopyPlan{}, err
+	}
+	if request.SourceMC == "" {
+		c.cfg.Logger.WithField("source_management_cluster", sourceIdentifier).Info("Using the HCP's current management cluster as the source")
+	}
+	source, err := c.ocmClient.Cluster(sourceIdentifier)
 	if err != nil {
 		return SnapshotCopyPlan{}, fmt.Errorf("resolving source management cluster: %w", err)
 	}
@@ -168,6 +213,9 @@ func (c *DefaultSnapshotCopier) PrepareSnapshotCopy(ctx context.Context, request
 	if err != nil {
 		return SnapshotCopyPlan{}, fmt.Errorf("getting replacement management cluster account: %w", err)
 	}
+	if sourceAccountID == replacementAccountID {
+		return SnapshotCopyPlan{}, fmt.Errorf("source and replacement management clusters must use different AWS accounts")
+	}
 
 	managementClient, err := c.ocmClient.ElevatedManagementCluster(replacement.ID(), request.Reason)
 	if err != nil {
@@ -182,6 +230,10 @@ func (c *DefaultSnapshotCopier) PrepareSnapshotCopy(ctx context.Context, request
 		return SnapshotCopyPlan{}, err
 	}
 	entries, err := snapshotEntries(contents, hcpNamespace)
+	if err != nil {
+		return SnapshotCopyPlan{}, err
+	}
+	entries, err = reconcileJournaledSnapshotEntries(journalPath, entries)
 	if err != nil {
 		return SnapshotCopyPlan{}, err
 	}
@@ -207,7 +259,7 @@ func (c *DefaultSnapshotCopier) PrepareSnapshotCopy(ctx context.Context, request
 	}
 
 	inventory := selectedVSCInventory(contents, entries)
-	return SnapshotCopyPlan{ClusterID: cluster.HCPClusterID, Region: cluster.HCPClusterRegion, SnapshotJournalPath: journalPath, SourceAccountID: sourceAccountID, ReplacementAccountID: replacementAccountID, SourceManagementCluster: source.Name(), ReplacementManagementCluster: replacement.Name(), Entries: entries, VSCInventory: inventory, Concurrency: request.Concurrency, source: sourceClient, destination: destinationClient}, nil
+	return SnapshotCopyPlan{ClusterID: cluster.HCPClusterID, Region: cluster.HCPClusterRegion, SnapshotJournalPath: journalPath, SourceAccountID: sourceAccountID, ReplacementAccountID: replacementAccountID, SourceManagementCluster: source.Name(), ReplacementManagementCluster: replacement.Name(), ReplacementManagementClusterID: replacement.ID(), HCPNamespace: hcpNamespace, DomainPrefix: cluster.DomainPrefix, Reason: request.Reason, Entries: entries, VSCInventory: inventory, Concurrency: request.Concurrency, source: sourceClient, destination: destinationClient}, nil
 }
 
 func (c *DefaultSnapshotCopier) CopySnapshots(ctx context.Context, plan SnapshotCopyPlan) error {
@@ -219,8 +271,8 @@ func (c *DefaultSnapshotCopier) CopySnapshots(ctx context.Context, plan Snapshot
 		return err
 	}
 	if journal.SourceCMKID == "" {
-		alias := fmt.Sprintf("alias/hcp-migration-%s-%s", plan.ClusterID, c.now().UTC().Format("20060102150405"))
-		c.logger.Info("Creating temporary source KMS key for snapshot copies")
+		alias := fmt.Sprintf("alias/hcp-migration-%s-%s", plan.ClusterID, c.cfg.Clock.Now().UTC().Format("20060102150405"))
+		c.cfg.Logger.Info("Creating temporary source KMS key for snapshot copies")
 		key, err := plan.source.CreateKey(ctx, &kms.CreateKeyInput{Description: awssdk.String("Temporary HCP recovery snapshot migration key")})
 		if err != nil {
 			return fmt.Errorf("creating source KMS key: %w", err)
@@ -232,12 +284,12 @@ func (c *DefaultSnapshotCopier) CopySnapshots(ctx context.Context, plan Snapshot
 		if err := saveSnapshotJournal(plan.SnapshotJournalPath, journal); err != nil {
 			return err
 		}
-		c.logger.Info("Created temporary source KMS key")
+		c.cfg.Logger.Info("Created temporary source KMS key")
 	} else {
-		c.logger.Info("Reusing temporary source KMS key from snapshot journal")
+		c.cfg.Logger.Info("Reusing temporary source KMS key from snapshot journal")
 	}
 	if journal.SourceCMKAlias != "" && !journal.SourceCMKAliasCreated {
-		c.logger.Info("Creating source KMS key alias")
+		c.cfg.Logger.Info("Creating source KMS key alias")
 		if _, err := plan.source.CreateAlias(ctx, &kms.CreateAliasInput{AliasName: awssdk.String(journal.SourceCMKAlias), TargetKeyId: awssdk.String(journal.SourceCMKID)}); err != nil {
 			if !isAlreadyExists(err) {
 				return fmt.Errorf("creating source KMS key alias: %w", err)
@@ -247,10 +299,10 @@ func (c *DefaultSnapshotCopier) CopySnapshots(ctx context.Context, plan Snapshot
 		if err := saveSnapshotJournal(plan.SnapshotJournalPath, journal); err != nil {
 			return err
 		}
-		c.logger.Info("Source KMS key alias is ready")
+		c.cfg.Logger.Info("Source KMS key alias is ready")
 	}
 	if journal.SourceCMKGrantID == "" {
-		c.logger.Info("Granting replacement account access to source KMS key")
+		c.cfg.Logger.Info("Granting replacement account access to source KMS key")
 		identity, err := plan.destination.GetCallerIdentity(nil)
 		if err != nil {
 			return fmt.Errorf("getting replacement caller identity: %w", err)
@@ -270,17 +322,35 @@ func (c *DefaultSnapshotCopier) CopySnapshots(ctx context.Context, plan Snapshot
 		if err := saveSnapshotJournal(plan.SnapshotJournalPath, journal); err != nil {
 			return err
 		}
-		c.logger.Info("Replacement account KMS grant is ready")
+		c.cfg.Logger.Info("Replacement account KMS grant is ready")
 	}
 	writer := snapshotJournalWriter{path: plan.SnapshotJournalPath, journal: &journal}
-	c.logger.WithField("snapshot_count", len(journal.Entries)).Info("Starting snapshot copy chains")
+	c.cfg.Logger.WithField("snapshot_count", len(journal.Entries)).Info("Starting snapshot copy chains")
 	if err := runBounded(ctx, len(journal.Entries), plan.Concurrency, func(ctx context.Context, index int) error {
-		return copySnapshotEntry(ctx, plan, &writer, c.logger, index)
+		return copySnapshotEntry(ctx, plan, &writer, c.cfg.Logger, index)
 	}); err != nil {
 		return err
 	}
-	c.logger.WithField("snapshot_count", len(journal.Entries)).Info("Snapshot copy chains completed")
-	return cleanupSnapshotCopies(ctx, plan.source, &writer, c.logger)
+	c.cfg.Logger.WithField("snapshot_count", len(journal.Entries)).Info("Snapshot copy chains completed")
+	if err := cleanupSnapshotCopies(ctx, plan.source, &writer, c.cfg.Logger); err != nil {
+		return err
+	}
+	c.cfg.Logger.WithField("snapshot_count", len(journal.Entries)).Info("Remapping VolumeSnapshotContents on replacement management cluster")
+	managementClient, err := c.ocmClient.ElevatedManagementCluster(plan.ReplacementManagementClusterID, plan.Reason, internalclient.WithLogger{Logger: c.cfg.Logger})
+	if err != nil {
+		return fmt.Errorf("connecting to replacement management cluster for VSC remapping: %w", err)
+	}
+	mappings := make(map[string]string, len(journal.Entries))
+	for _, entry := range journal.Entries {
+		if entry.DestinationSnapshotID == "" {
+			return fmt.Errorf("destination snapshot for VSC %s is missing", entry.VSCName)
+		}
+		mappings[entry.VSCName] = entry.DestinationSnapshotID
+	}
+	if err := managementClient.RemapVolumeSnapshotContents(ctx, internalclient.VolumeSnapshotRemapRequest{HCPNamespace: plan.HCPNamespace, DomainPrefix: plan.DomainPrefix, Mappings: mappings}); err != nil {
+		return fmt.Errorf("remapping VolumeSnapshotContents: %w", err)
+	}
+	return nil
 }
 
 type snapshotJournalWriter struct {
@@ -521,7 +591,7 @@ func findOperationSnapshot(ctx context.Context, client awsprovider.Client, opera
 }
 
 func validateCopySnapshotsRequest(r CopySnapshotsRequest) error {
-	for name, value := range map[string]string{"cluster ID": r.ClusterID, "source management cluster": r.SourceMC, "replacement management cluster": r.ReplacementMC, "reason": r.Reason} {
+	for name, value := range map[string]string{"cluster ID": r.ClusterID, "replacement management cluster": r.ReplacementMC, "reason": r.Reason} {
 		if strings.TrimSpace(value) == "" {
 			return fmt.Errorf("%s is required", name)
 		}
@@ -533,6 +603,16 @@ func validateCopySnapshotsRequest(r CopySnapshotsRequest) error {
 		return fmt.Errorf("concurrency must be greater than zero")
 	}
 	return nil
+}
+
+func sourceManagementClusterIdentifier(request CopySnapshotsRequest, cluster internalclient.ClusterInfo) (string, error) {
+	if source := strings.TrimSpace(request.SourceMC); source != "" {
+		return source, nil
+	}
+	if cluster.MgmtClusterID == "" {
+		return "", fmt.Errorf("HCP cluster %s has no associated source management cluster; specify --source-mc", cluster.HCPClusterID)
+	}
+	return cluster.MgmtClusterID, nil
 }
 
 func managementClusterAccountID(cluster *cmv1.Cluster) (string, error) {
@@ -569,6 +649,7 @@ func defaultSnapshotJournalPath(xdgDataHome, home, clusterID string) (string, er
 		candidates = append(candidates, filepath.Join(home, ".local", "share", "osdctl", journalName))
 	}
 	for _, candidate := range candidates {
+		// #nosec G703 -- paths are intentionally selected from the invoking user's XDG or home directory.
 		if err := os.MkdirAll(filepath.Dir(candidate), 0700); err == nil {
 			return candidate, nil
 		}
@@ -716,6 +797,38 @@ func sameSnapshotSources(journaled, discovered []SnapshotCopyEntry) bool {
 		}
 	}
 	return true
+}
+
+// reconcileJournaledSnapshotEntries permits a completed VSC replacement to be
+// resumed: live VSCs then reference destination IDs, while the journal retains
+// the source IDs that identify the copy operation.
+func reconcileJournaledSnapshotEntries(path string, discovered []SnapshotCopyEntry) ([]SnapshotCopyEntry, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return discovered, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("reading snapshot journal: %w", err)
+	}
+	var journal snapshotCopyJournal
+	if err := json.Unmarshal(data, &journal); err != nil {
+		return nil, fmt.Errorf("parsing snapshot journal: %w", err)
+	}
+	byName := make(map[string]SnapshotCopyEntry, len(journal.Entries))
+	for _, entry := range journal.Entries {
+		byName[entry.VSCName] = entry
+	}
+	for index := range discovered {
+		journaled, ok := byName[discovered[index].VSCName]
+		if !ok || discovered[index].OriginalSnapshotID == journaled.OriginalSnapshotID {
+			continue
+		}
+		if journaled.DestinationSnapshotID == "" || discovered[index].OriginalSnapshotID != journaled.DestinationSnapshotID {
+			return nil, fmt.Errorf("VolumeSnapshotContent %s no longer references the journaled source or destination snapshot", discovered[index].VSCName)
+		}
+		discovered[index].OriginalSnapshotID = journaled.OriginalSnapshotID
+	}
+	return discovered, nil
 }
 func saveSnapshotJournal(path string, journal snapshotCopyJournal) error {
 	return writeJSON(path, journal)

@@ -38,6 +38,17 @@ func TestSnapshotCopyTagsIncludeMeaningfulName(t *testing.T) {
 	assert.Equal(t, "destination", values["osdctl.openshift.io/stage"])
 }
 
+func TestDefaultSnapshotCopierConfig(t *testing.T) {
+	logger := logrus.New()
+	clock := &defaultClock{}
+	var config DefaultSnapshotCopierConfig
+	config.Options(WithLogger{Logger: logger}, WithClock{Clock: clock})
+	config.Defaults()
+
+	assert.Same(t, logger, config.Logger)
+	assert.Same(t, clock, config.Clock)
+}
+
 func TestSnapshotCopyNamePreservesStageWithinTagLimit(t *testing.T) {
 	name := snapshotCopyName("cluster", strings.Repeat("v", 300), "intermediary")
 
@@ -45,12 +56,28 @@ func TestSnapshotCopyNamePreservesStageWithinTagLimit(t *testing.T) {
 	assert.True(t, strings.HasSuffix(name, "-intermediary"))
 }
 
-func TestNewDefaultSnapshotCopierWithLogger(t *testing.T) {
-	logger := logrus.New()
-
-	copier := NewDefaultSnapshotCopierWithLogger(nil, logger)
-
-	assert.Same(t, logger, copier.logger)
+func TestSourceManagementClusterIdentifier(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		request CopySnapshotsRequest
+		cluster ClusterInfo
+		want    string
+		err     string
+	}{
+		{name: "uses current management cluster", cluster: ClusterInfo{HCPClusterID: "hcp", MgmtClusterID: "source"}, want: "source"},
+		{name: "explicit source overrides current management cluster", request: CopySnapshotsRequest{SourceMC: "explicit-source"}, cluster: ClusterInfo{HCPClusterID: "hcp", MgmtClusterID: "source"}, want: "explicit-source"},
+		{name: "requires explicit source when HCP has no assignment", cluster: ClusterInfo{HCPClusterID: "hcp"}, err: "specify --source-mc"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := sourceManagementClusterIdentifier(tt.request, tt.cluster)
+			if tt.err != "" {
+				assert.ErrorContains(t, err, tt.err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
 
 func TestCleanupSnapshotCopies(t *testing.T) {
@@ -152,6 +179,27 @@ func TestSnapshotJournalRejectsChangedSnapshotSources(t *testing.T) {
 	_, err = loadOrCreateSnapshotJournal(path, plan)
 
 	assert.ErrorContains(t, err, "does not match")
+}
+
+func TestReconcileJournaledSnapshotEntriesAcceptsRemappedVSC(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "journal.json")
+	journal := snapshotCopyJournal{Entries: []SnapshotCopyEntry{{VSCName: "etcd", OriginalSnapshotID: "snap-source", DestinationSnapshotID: "snap-destination"}}}
+	require.NoError(t, saveSnapshotJournal(path, journal))
+
+	entries, err := reconcileJournaledSnapshotEntries(path, []SnapshotCopyEntry{{VSCName: "etcd", OriginalSnapshotID: "snap-destination"}})
+
+	require.NoError(t, err)
+	assert.Equal(t, "snap-source", entries[0].OriginalSnapshotID)
+}
+
+func TestReconcileJournaledSnapshotEntriesRejectsUnexpectedVSCHandle(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "journal.json")
+	journal := snapshotCopyJournal{Entries: []SnapshotCopyEntry{{VSCName: "etcd", OriginalSnapshotID: "snap-source", DestinationSnapshotID: "snap-destination"}}}
+	require.NoError(t, saveSnapshotJournal(path, journal))
+
+	_, err := reconcileJournaledSnapshotEntries(path, []SnapshotCopyEntry{{VSCName: "etcd", OriginalSnapshotID: "snap-unexpected"}})
+
+	assert.ErrorContains(t, err, "no longer references")
 }
 
 func TestSameSnapshotSources(t *testing.T) {
