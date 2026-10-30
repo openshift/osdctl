@@ -299,6 +299,14 @@ func (o *accountAssignOptions) tagAccount(accountId string) error {
 	ownerKey := "owner"
 	claimedKey := "claimed"
 	claimedValue := "true"
+	serviceNameKey := "service-name"
+	serviceNameValue := "rosa-internal"
+	costCenterKey := "cost-center"
+	costCenterValue := "732"
+	servicePhaseKey := "service-phase"
+	servicePhaseValue := "dev"
+	appCodeKey := "app-code"
+	appCodeValue := "OSD-002"
 	inputTag := &organizations.TagResourceInput{
 		ResourceId: &accountId,
 		Tags: []organizationTypes.Tag{
@@ -309,6 +317,22 @@ func (o *accountAssignOptions) tagAccount(accountId string) error {
 			{
 				Key:   &claimedKey,
 				Value: &claimedValue,
+			},
+			{
+				Key:   &serviceNameKey,
+				Value: &serviceNameValue,
+			},
+			{
+				Key:   &costCenterKey,
+				Value: &costCenterValue,
+			},
+			{
+				Key:   &servicePhaseKey,
+				Value: &servicePhaseValue,
+			},
+			{
+				Key:   &appCodeKey,
+				Value: &appCodeValue,
 			},
 		},
 	}

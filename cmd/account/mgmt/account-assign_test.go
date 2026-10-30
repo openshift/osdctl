@@ -420,12 +420,24 @@ func TestTagAccount(t *testing.T) {
 
 	awsOutputTag := &organizations.TagResourceOutput{}
 
-	mockAWSClient.EXPECT().TagResource(gomock.Any()).Return(
+	expectedInput := &organizations.TagResourceInput{
+		ResourceId: awsSdk.String(accountID),
+		Tags: []organizationTypes.Tag{
+			{Key: awsSdk.String("owner"), Value: awsSdk.String("test-user")},
+			{Key: awsSdk.String("claimed"), Value: awsSdk.String("true")},
+			{Key: awsSdk.String("service-name"), Value: awsSdk.String("rosa-internal")},
+			{Key: awsSdk.String("cost-center"), Value: awsSdk.String("732")},
+			{Key: awsSdk.String("service-phase"), Value: awsSdk.String("dev")},
+			{Key: awsSdk.String("app-code"), Value: awsSdk.String("OSD-002")},
+		},
+	}
+
+	mockAWSClient.EXPECT().TagResource(expectedInput).Return(
 		awsOutputTag,
 		nil,
 	)
 
-	o := &accountAssignOptions{}
+	o := &accountAssignOptions{username: "test-user"}
 	o.awsClient = mockAWSClient
 	err := o.tagAccount(accountID)
 	if err != nil {
