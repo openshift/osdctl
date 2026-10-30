@@ -9,7 +9,7 @@ import (
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	gitlab "gitlab.com/gitlab-org/api/client-go"
+	gitlab "gitlab.com/gitlab-org/api/client-go/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"

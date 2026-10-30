@@ -64,7 +64,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.12.1
 	github.com/zclconf/go-cty v1.19.0
-	gitlab.com/gitlab-org/api/client-go v1.46.0
+	gitlab.com/gitlab-org/api/client-go/v3 v3.39.1
 	go.uber.org/mock v0.6.0
 	go.uber.org/zap v1.28.0
 	golang.org/x/oauth2 v0.37.0
