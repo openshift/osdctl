@@ -13,6 +13,54 @@ import (
 	pdMock "github.com/openshift/osdctl/pkg/provider/pagerduty/mocks"
 )
 
+// includesMatcher verifies that ListIncidentsOptions.Includes contains the
+// expected entry. This ensures HCP cluster requests ask the PagerDuty API
+// to populate FirstTriggerLogEntry.EventDetails.
+type includesMatcher struct {
+	expected string
+}
+
+func (m *includesMatcher) Matches(x interface{}) bool {
+	opts, ok := x.(pd.ListIncidentsOptions)
+	if !ok {
+		return false
+	}
+	for _, inc := range opts.Includes {
+		if inc == m.expected {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *includesMatcher) String() string {
+	return fmt.Sprintf("has Includes containing %q", m.expected)
+}
+
+func hasIncludes(expected string) gomock.Matcher {
+	return &includesMatcher{expected: expected}
+}
+
+// noIncludesMatcher verifies that ListIncidentsOptions.Includes is empty,
+// confirming classic (non-HCP) clusters do not request log entry expansion.
+type noIncludesMatcher struct{}
+
+func (m *noIncludesMatcher) Matches(x interface{}) bool {
+	opts, ok := x.(pd.ListIncidentsOptions)
+	if !ok {
+		return false
+	}
+	return len(opts.Includes) == 0
+}
+
+func (m *noIncludesMatcher) String() string {
+	return "has empty Includes"
+}
+
+func hasNoIncludes() gomock.Matcher {
+	return &noIncludesMatcher{}
+}
+
 func generateIncident() pd.Incident {
 	return pd.Incident{
 		IncidentNumber: uint(gofakeit.Uint16()),
@@ -20,16 +68,88 @@ func generateIncident() pd.Incident {
 	}
 }
 
+var _ = Describe("incidentMatchesCluster", func() {
+	It("Returns true when cluster_id matches", func() {
+		incident := pd.Incident{
+			FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+				CommonLogEntryField: pd.CommonLogEntryField{
+					EventDetails: map[string]string{
+						"cluster_id": "abc-123",
+					},
+				},
+			},
+		}
+		Expect(incidentMatchesCluster(incident, "abc-123")).To(BeTrue())
+	})
+
+	It("Returns true when clusterID key matches", func() {
+		incident := pd.Incident{
+			FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+				CommonLogEntryField: pd.CommonLogEntryField{
+					EventDetails: map[string]string{
+						"clusterID": "abc-123",
+					},
+				},
+			},
+		}
+		Expect(incidentMatchesCluster(incident, "abc-123")).To(BeTrue())
+	})
+
+	It("Returns true when cluster-id key matches", func() {
+		incident := pd.Incident{
+			FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+				CommonLogEntryField: pd.CommonLogEntryField{
+					EventDetails: map[string]string{
+						"cluster-id": "abc-123",
+					},
+				},
+			},
+		}
+		Expect(incidentMatchesCluster(incident, "abc-123")).To(BeTrue())
+	})
+
+	It("Returns false when cluster ID does not match", func() {
+		incident := pd.Incident{
+			FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+				CommonLogEntryField: pd.CommonLogEntryField{
+					EventDetails: map[string]string{
+						"cluster_id": "different-cluster",
+					},
+				},
+			},
+		}
+		Expect(incidentMatchesCluster(incident, "abc-123")).To(BeFalse())
+	})
+
+	It("Returns false when EventDetails is nil", func() {
+		incident := pd.Incident{}
+		Expect(incidentMatchesCluster(incident, "abc-123")).To(BeFalse())
+	})
+
+	It("Returns false when no cluster ID key is present", func() {
+		incident := pd.Incident{
+			FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+				CommonLogEntryField: pd.CommonLogEntryField{
+					EventDetails: map[string]string{
+						"some_other_key": "abc-123",
+					},
+				},
+			},
+		}
+		Expect(incidentMatchesCluster(incident, "abc-123")).To(BeFalse())
+	})
+})
+
 var _ = Describe("Tests the Pagerduty Provider", func() {
 	var pdProvider *client
 	BeforeEach(func() {
 		pdProvider = NewClient()
 	})
 	Describe("Client Creation", func() {
-		Context("WithBaseDomain", func() {
-			It("Should correctly populate the base domain", func() {
-				pdProvider.WithBaseDomain("foo")
-				Expect(pdProvider.baseDomain).To(Equal("foo"))
+		Context("WithServiceQuery", func() {
+			It("Should correctly populate the service query", func() {
+				pdProvider.WithServiceQuery("foo")
+				Expect(pdProvider.serviceQuery).To(Equal("foo"))
 			})
 			It("Should correctly populate the Team ID list", func() {
 				pdProvider.WithTeamIdList([]string{"foo", "bar"})
@@ -42,6 +162,12 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 			It("Should correctly populate the oauthToken", func() {
 				pdProvider.WithOauthToken("oauth_token")
 				Expect(pdProvider.oauthToken).To(Equal("oauth_token"))
+			})
+		})
+		Context("WithClusterID", func() {
+			It("Should correctly populate the clusterID", func() {
+				pdProvider.WithClusterID("test-cluster-123")
+				Expect(pdProvider.clusterID).To(Equal("test-cluster-123"))
 			})
 		})
 		Context("Building the Client", func() {
@@ -126,6 +252,114 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 				}
 			})
 
+			Context("HCP cluster ID filtering", func() {
+				It("Returns only incidents matching the cluster ID in EventDetails", func() {
+					matchingIncident := pd.Incident{
+						IncidentNumber: 1,
+						Title:          "MatchingAlert",
+						FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+							CommonLogEntryField: pd.CommonLogEntryField{
+								EventDetails: map[string]string{
+									"cluster_id": "hcp-cluster-123",
+								},
+							},
+						},
+					}
+					nonMatchingIncident := pd.Incident{
+						IncidentNumber: 2,
+						Title:          "OtherClusterAlert",
+						FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+							CommonLogEntryField: pd.CommonLogEntryField{
+								EventDetails: map[string]string{
+									"cluster_id": "hcp-cluster-999",
+								},
+							},
+						},
+					}
+					noDetailsIncident := pd.Incident{
+						IncidentNumber: 3,
+						Title:          "NoDetailsAlert",
+					}
+					mixedResponse := &pd.ListIncidentsResponse{
+						Incidents: []pd.Incident{matchingIncident, nonMatchingIncident, noDetailsIncident},
+					}
+
+					m := pdMock.NewMockpdClientInterface(ctrl)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(mixedResponse, nil)
+					pdProvider.pdclient = m
+					pdProvider.clusterID = "hcp-cluster-123"
+
+					incs, err := pdProvider.GetFiringAlertsForCluster([]string{"region-svc"})
+					Expect(err).To(BeNil())
+					Expect(incs["region-svc"]).To(HaveLen(1))
+					Expect(incs["region-svc"][0].Title).To(Equal("MatchingAlert"))
+				})
+
+				It("Returns empty when no incidents match the cluster ID", func() {
+					nonMatchingResponse := &pd.ListIncidentsResponse{
+						Incidents: []pd.Incident{
+							{
+								IncidentNumber: 1,
+								Title:          "OtherAlert",
+								FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+									CommonLogEntryField: pd.CommonLogEntryField{
+										EventDetails: map[string]string{
+											"cluster_id": "different-cluster",
+										},
+									},
+								},
+							},
+						},
+					}
+
+					m := pdMock.NewMockpdClientInterface(ctrl)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(nonMatchingResponse, nil)
+					pdProvider.pdclient = m
+					pdProvider.clusterID = "hcp-cluster-123"
+
+					incs, err := pdProvider.GetFiringAlertsForCluster([]string{"region-svc"})
+					Expect(err).To(BeNil())
+					Expect(incs["region-svc"]).To(BeEmpty())
+				})
+
+				It("Supports alternate cluster ID key names", func() {
+					incident := pd.Incident{
+						IncidentNumber: 1,
+						Title:          "AlternateKeyAlert",
+						FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+							CommonLogEntryField: pd.CommonLogEntryField{
+								EventDetails: map[string]string{
+									"clusterID": "hcp-cluster-alt",
+								},
+							},
+						},
+					}
+					response := &pd.ListIncidentsResponse{
+						Incidents: []pd.Incident{incident},
+					}
+
+					m := pdMock.NewMockpdClientInterface(ctrl)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(response, nil)
+					pdProvider.pdclient = m
+					pdProvider.clusterID = "hcp-cluster-alt"
+
+					incs, err := pdProvider.GetFiringAlertsForCluster([]string{"region-svc"})
+					Expect(err).To(BeNil())
+					Expect(incs["region-svc"]).To(HaveLen(1))
+				})
+
+				It("Does not filter when clusterID is empty (classic cluster behavior)", func() {
+					m := pdMock.NewMockpdClientInterface(ctrl)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasNoIncludes()).Return(singleIncResponse, nil)
+					pdProvider.pdclient = m
+					pdProvider.clusterID = ""
+
+					incs, err := pdProvider.GetFiringAlertsForCluster([]string{"classic-svc"})
+					Expect(err).To(BeNil())
+					Expect(incs["classic-svc"]).To(HaveLen(1))
+				})
+			})
+
 			It("Returns an error from the pd client if there's an error with the request", func() {
 				m := pdMock.NewMockpdClientInterface(ctrl)
 				m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(&pd.ListIncidentsResponse{}, fmt.Errorf("An error"))
@@ -188,6 +422,147 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 					Expect(incs["foo"]).To(HaveLen(1))
 					Expect(incs["bar"]).To(HaveLen(8))
 					Expect(incs["baz"]).To(BeEmpty())
+				})
+			})
+		})
+
+		Context("GetHistoricalAlertsForCluster", func() {
+			Context("HCP cluster ID filtering", func() {
+				It("Returns only incidents matching the cluster ID", func() {
+					matchingIncident := pd.Incident{
+						IncidentNumber: 1,
+						Title:          "MatchingAlert fired",
+						CreatedAt:      "2024-01-01T00:00:00Z",
+						FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+							CommonLogEntryField: pd.CommonLogEntryField{
+								EventDetails: map[string]string{
+									"cluster_id": "hcp-cluster-123",
+								},
+							},
+						},
+					}
+					nonMatchingIncident := pd.Incident{
+						IncidentNumber: 2,
+						Title:          "OtherAlert fired",
+						CreatedAt:      "2024-01-02T00:00:00Z",
+						FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+							CommonLogEntryField: pd.CommonLogEntryField{
+								EventDetails: map[string]string{
+									"cluster_id": "hcp-cluster-999",
+								},
+							},
+						},
+					}
+					response := &pd.ListIncidentsResponse{
+						Incidents: []pd.Incident{matchingIncident, nonMatchingIncident},
+					}
+					emptyResponse := &pd.ListIncidentsResponse{
+						Incidents: []pd.Incident{},
+					}
+
+					m := pdMock.NewMockpdClientInterface(ctrl)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(response, nil)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(emptyResponse, nil)
+					pdProvider.pdclient = m
+					pdProvider.clusterID = "hcp-cluster-123"
+
+					result, err := pdProvider.GetHistoricalAlertsForCluster([]string{"region-svc"})
+					Expect(err).To(BeNil())
+					Expect(result["region-svc"]).To(HaveLen(1))
+					Expect(result["region-svc"][0].IncidentName).To(Equal("MatchingAlert"))
+				})
+
+				It("Supports alternate cluster ID key names (clusterID)", func() {
+					incident := pd.Incident{
+						IncidentNumber: 1,
+						Title:          "AltKeyAlert fired",
+						CreatedAt:      "2024-01-01T00:00:00Z",
+						FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+							CommonLogEntryField: pd.CommonLogEntryField{
+								EventDetails: map[string]string{
+									"clusterID": "hcp-cluster-alt",
+								},
+							},
+						},
+					}
+					response := &pd.ListIncidentsResponse{
+						Incidents: []pd.Incident{incident},
+					}
+					emptyResponse := &pd.ListIncidentsResponse{
+						Incidents: []pd.Incident{},
+					}
+
+					m := pdMock.NewMockpdClientInterface(ctrl)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(response, nil)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(emptyResponse, nil)
+					pdProvider.pdclient = m
+					pdProvider.clusterID = "hcp-cluster-alt"
+
+					result, err := pdProvider.GetHistoricalAlertsForCluster([]string{"region-svc"})
+					Expect(err).To(BeNil())
+					Expect(result["region-svc"]).To(HaveLen(1))
+					Expect(result["region-svc"][0].IncidentName).To(Equal("AltKeyAlert"))
+				})
+
+				It("Supports alternate cluster ID key names (cluster-id)", func() {
+					incident := pd.Incident{
+						IncidentNumber: 1,
+						Title:          "DashKeyAlert fired",
+						CreatedAt:      "2024-01-01T00:00:00Z",
+						FirstTriggerLogEntry: pd.FirstTriggerLogEntry{
+							CommonLogEntryField: pd.CommonLogEntryField{
+								EventDetails: map[string]string{
+									"cluster-id": "hcp-cluster-dash",
+								},
+							},
+						},
+					}
+					response := &pd.ListIncidentsResponse{
+						Incidents: []pd.Incident{incident},
+					}
+					emptyResponse := &pd.ListIncidentsResponse{
+						Incidents: []pd.Incident{},
+					}
+
+					m := pdMock.NewMockpdClientInterface(ctrl)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(response, nil)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasIncludes("first_trigger_log_entries")).Return(emptyResponse, nil)
+					pdProvider.pdclient = m
+					pdProvider.clusterID = "hcp-cluster-dash"
+
+					result, err := pdProvider.GetHistoricalAlertsForCluster([]string{"region-svc"})
+					Expect(err).To(BeNil())
+					Expect(result["region-svc"]).To(HaveLen(1))
+					Expect(result["region-svc"][0].IncidentName).To(Equal("DashKeyAlert"))
+				})
+
+				It("Does not filter when clusterID is empty (classic cluster behavior)", func() {
+					incident1 := pd.Incident{
+						IncidentNumber: 1,
+						Title:          "Alert1 fired",
+						CreatedAt:      "2024-01-01T00:00:00Z",
+					}
+					incident2 := pd.Incident{
+						IncidentNumber: 2,
+						Title:          "Alert2 fired",
+						CreatedAt:      "2024-01-02T00:00:00Z",
+					}
+					response := &pd.ListIncidentsResponse{
+						Incidents: []pd.Incident{incident1, incident2},
+					}
+					emptyResponse := &pd.ListIncidentsResponse{
+						Incidents: []pd.Incident{},
+					}
+
+					m := pdMock.NewMockpdClientInterface(ctrl)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasNoIncludes()).Return(response, nil)
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), hasNoIncludes()).Return(emptyResponse, nil)
+					pdProvider.pdclient = m
+					pdProvider.clusterID = ""
+
+					result, err := pdProvider.GetHistoricalAlertsForCluster([]string{"classic-svc"})
+					Expect(err).To(BeNil())
+					Expect(result["classic-svc"]).To(HaveLen(2))
 				})
 			})
 		})

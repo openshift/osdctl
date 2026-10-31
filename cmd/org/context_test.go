@@ -125,3 +125,26 @@ func TestFetchContext_ErrorCreateOCMClient(t *testing.T) {
 		t.Errorf("expected error creating OCM client, got %v", err)
 	}
 }
+
+func TestNewPDClient_PassesClusterID(t *testing.T) {
+	// Verify that the NewPDClient function signature accepts both
+	// baseDomain and clusterID parameters.
+	var calledBaseDomain, calledClusterID string
+	fetcher := &DefaultContextFetcher{
+		NewPDClient: func(baseDomain, clusterID string) (PDClient, error) {
+			calledBaseDomain = baseDomain
+			calledClusterID = clusterID
+			return &fakePDClient{
+				serviceIDs: []string{"svc-1"},
+				incidents:  map[string][]pd.Incident{},
+			}, nil
+		},
+	}
+	_, _ = fetcher.NewPDClient("us-east-1", "hcp-cluster-123")
+	if calledBaseDomain != "us-east-1" {
+		t.Errorf("expected baseDomain 'us-east-1', got %q", calledBaseDomain)
+	}
+	if calledClusterID != "hcp-cluster-123" {
+		t.Errorf("expected clusterID 'hcp-cluster-123', got %q", calledClusterID)
+	}
+}
