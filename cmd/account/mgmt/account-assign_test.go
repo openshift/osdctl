@@ -108,9 +108,11 @@ func TestFindUntaggedAccount(t *testing.T) {
 			name:              "test for untagged account present",
 			accountsList:      []string{"111111111111"},
 			expectedAccountId: "111111111111",
-			tags:              map[string]string{},
-			suspendCheck:      true,
-			accountStatus:     "ACTIVE",
+			tags: map[string]string{
+				"service-phase": "dev",
+			},
+			suspendCheck:  true,
+			accountStatus: "ACTIVE",
 		},
 		{
 			name:                  "test for only payer account present",
@@ -130,6 +132,14 @@ func TestFindUntaggedAccount(t *testing.T) {
 			name:         "test for no untagged accounts present",
 			accountsList: []string{},
 			expectErr:    ErrNoUntaggedAccounts,
+		},
+		{
+			name:         "test for non-dev service phase",
+			accountsList: []string{"111111111111"},
+			tags: map[string]string{
+				"service-phase": "stage",
+			},
+			expectErr: ErrNoUntaggedAccounts,
 		},
 		{
 			name:         "test for only tagged accounts present",
@@ -153,12 +163,20 @@ func TestFindUntaggedAccount(t *testing.T) {
 			expectedGetCallerIdentityErr: genericAWSError,
 		},
 		{
-			name:          "test for suspended account error",
-			accountsList:  []string{"111111111111"},
-			tags:          map[string]string{},
+			name:         "test for suspended account error",
+			accountsList: []string{"111111111111"},
+			tags: map[string]string{
+				"service-phase": "dev",
+			},
 			suspendCheck:  true,
 			accountStatus: "SUSPENDED",
 			expectErr:     ErrNoUntaggedAccounts,
+		},
+		{
+			name:         "test for missing service phase",
+			accountsList: []string{"111111111111"},
+			tags:         map[string]string{},
+			expectErr:    ErrNoUntaggedAccounts,
 		},
 	}
 
@@ -239,6 +257,70 @@ func TestFindUntaggedAccount(t *testing.T) {
 			}
 			if returnValue != test.expectedAccountId {
 				t.Errorf("expected %s is %s", test.expectedAccountId, returnValue)
+			}
+		})
+	}
+}
+
+func TestIsUnassignedDevAccount(t *testing.T) {
+	testData := []struct {
+		name               string
+		tags               map[string]string
+		expectedAssignable bool
+	}{
+		{
+			name: "accepts an unowned dev account",
+			tags: map[string]string{
+				"service-phase": "dev",
+			},
+			expectedAssignable: true,
+		},
+		{
+			name: "rejects an account missing service phase",
+			tags: map[string]string{},
+		},
+		{
+			name: "rejects a non-dev account",
+			tags: map[string]string{
+				"service-phase": "stage",
+			},
+		},
+		{
+			name: "rejects a claimed dev account",
+			tags: map[string]string{
+				"claimed":       "true",
+				"service-phase": "dev",
+			},
+		},
+	}
+
+	for _, test := range testData {
+		t.Run(test.name, func(t *testing.T) {
+			mocks := setupDefaultMocks(t)
+			mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
+			accountID := "111111111111"
+
+			tags := make([]organizationTypes.Tag, 0, len(test.tags))
+			for key, value := range test.tags {
+				tags = append(tags, organizationTypes.Tag{
+					Key:   awsSdk.String(key),
+					Value: awsSdk.String(value),
+				})
+			}
+
+			mockAWSClient.EXPECT().ListTagsForResource(
+				&organizations.ListTagsForResourceInput{
+					ResourceId: &accountID,
+				},
+			).Return(&organizations.ListTagsForResourceOutput{Tags: tags}, nil)
+
+			var awsClient awsprovider.Client = mockAWSClient
+			assignable, err := isUnassignedDevAccount(accountID, &awsClient)
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if assignable != test.expectedAssignable {
+				t.Fatalf("expected assignable to be %v, got %v", test.expectedAssignable, assignable)
 			}
 		})
 	}

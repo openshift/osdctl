@@ -113,7 +113,12 @@ func (o *accountAssignOptions) run() error {
 	destinationOU = OSDStaging1AssignOuID
 
 	//Instantiate aws client
-	awsClient, err := awsprovider.NewAwsClient(o.payerAccount, "us-east-1", "")
+	awsProfile := o.payerAccount
+	if os.Getenv("AWS_ACCESS_KEY_ID") != "" && os.Getenv("AWS_SECRET_ACCESS_KEY") != "" {
+		awsProfile = ""
+	}
+
+	awsClient, err := awsprovider.NewAwsClient(awsProfile, "us-east-1", "")
 	if err != nil {
 		return err
 	}
@@ -186,7 +191,7 @@ func (o *accountAssignOptions) run() error {
 		fmt.Printf("Creating AWS IAM user for account %s...\n\n", accountAssignID)
 		iamOptions := iamOptions{
 			awsAccountID: accountAssignID,
-			awsProfile:   o.payerAccount,
+			awsProfile:   awsProfile,
 			awsRegion:    "us-east-1",
 			kerberosUser: o.username,
 			rotate:       false,
@@ -225,19 +230,19 @@ func (o *accountAssignOptions) findUntaggedAccount(rootOu string) (string, error
 		return "", err
 	}
 
-	// Loop through accounts and check that it's untagged and assign ID to user
+	// Loop through accounts and check that it's an unowned dev account
 	for _, a := range accounts.Accounts {
 		if *a.Id == *identity.Account {
 			// Don't allow the payer account to be assigned to an individual user
 			continue
 		}
 
-		isOwned, err := isOwned(*a.Id, &o.awsClient)
+		isAssignable, err := isUnassignedDevAccount(*a.Id, &o.awsClient)
 		if err != nil {
 			return "", err
 		}
 
-		if !isOwned {
+		if isAssignable {
 			isSuspended, err := isSuspended(*a.Id, o.awsClient)
 			if err != nil {
 				return "", err
@@ -271,6 +276,30 @@ func isOwned(accountID string, awsClient *awsprovider.Client) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func isUnassignedDevAccount(accountID string, awsClient *awsprovider.Client) (bool, error) {
+	inputListTags := &organizations.ListTagsForResourceInput{
+		ResourceId: &accountID,
+	}
+	tags, err := (*awsClient).ListTagsForResource(inputListTags)
+	if err != nil {
+		return false, err
+	}
+
+	hasOwnershipTag := false
+	hasDevServicePhase := false
+
+	for _, tag := range tags.Tags {
+		if *tag.Key == "owner" || *tag.Key == "claimed" {
+			hasOwnershipTag = true
+		}
+		if *tag.Key == "service-phase" && *tag.Value == "dev" {
+			hasDevServicePhase = true
+		}
+	}
+
+	return hasDevServicePhase && !hasOwnershipTag, nil
 }
 
 func isSuspended(accountIdInput string, awsClient awsprovider.Client) (bool, error) {
