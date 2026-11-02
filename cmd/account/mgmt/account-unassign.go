@@ -20,9 +20,7 @@ import (
 )
 
 const (
-	OSDStaging2RootID       = "r-rs3h"
-	OSDStaging2OuID         = "ou-rs3h-ry0hn2l9"
-	OSDStaging1UnassignOuID = "ou-0wd6-z6tzkjek"
+	OSDStaging2RootID = "r-rs3h"
 )
 
 func newCmdAccountUnassign(streams genericclioptions.IOStreams) *cobra.Command {
@@ -71,7 +69,6 @@ func (o *accountUnassignOptions) run() error {
 	var (
 		accountUsername      string
 		accountIdList        []string
-		destinationOU        string
 		rootID               string
 		assumedRoleAwsClient awsprovider.Client
 		allUsers             []string
@@ -84,10 +81,8 @@ func (o *accountUnassignOptions) run() error {
 	}
 	if o.payerAccount == osdStaging1 || os.Getenv(envKeyAWSAccountName) == osdStaging1 {
 		rootID = OSDStaging1RootID
-		destinationOU = OSDStaging1UnassignOuID
 	} else if o.payerAccount == osdStaging2 || os.Getenv(envKeyAWSAccountName) == osdStaging2 {
 		rootID = OSDStaging2RootID
-		destinationOU = OSDStaging2OuID
 	} else {
 		return fmt.Errorf("invalid payer account provided")
 	}
@@ -139,7 +134,7 @@ func (o *accountUnassignOptions) run() error {
 		}
 
 		// move account
-		err = o.moveAccount(id, rootID, destinationOU)
+		err = o.moveAccount(id, rootID)
 		if err != nil {
 			return err
 		}
@@ -301,14 +296,28 @@ func (o *accountUnassignOptions) untagAccount(id string) error {
 	return nil
 }
 
-func (o *accountUnassignOptions) moveAccount(id string, rootID string, destinationOU string) error {
+func (o *accountUnassignOptions) moveAccount(id string, rootID string) error {
+	parents, err := o.awsClient.ListParents(&organizations.ListParentsInput{
+		ChildId: &id,
+	})
+	if err != nil {
+		return err
+	}
+	if len(parents.Parents) == 0 || parents.Parents[0].Id == nil {
+		return fmt.Errorf("no parent found for account %s", id)
+	}
+
+	sourceOU := *parents.Parents[0].Id
+	if sourceOU == rootID {
+		return nil
+	}
 
 	inputMove := &organizations.MoveAccountInput{
 		AccountId:           &id,
 		DestinationParentId: &rootID,
-		SourceParentId:      &destinationOU,
+		SourceParentId:      &sourceOU,
 	}
-	_, err := o.awsClient.MoveAccount(inputMove)
+	_, err = o.awsClient.MoveAccount(inputMove)
 	if err != nil {
 		return err
 	}
