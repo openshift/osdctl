@@ -12,6 +12,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	addonv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	workv1 "open-cluster-management.io/api/work/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -245,6 +247,18 @@ type ServiceClusterClient interface {
 	UpdateManifestWork(ctx context.Context, work *workv1.ManifestWork) error
 }
 
+// ManagedClusterClient manages ManagedCluster resources on a service cluster.
+type ManagedClusterClient interface {
+	GetManagedCluster(ctx context.Context, name string) (*clusterv1.ManagedCluster, error)
+	UpdateManagedClusterHosting(ctx context.Context, name, uid, resourceVersion, replacementMC string, updateAddonHosting bool) error
+}
+
+// ManagedClusterAddonClient manages ManagedClusterAddon resources on a service cluster.
+type ManagedClusterAddonClient interface {
+	ListManagedClusterAddons(ctx context.Context, namespace string) ([]addonv1alpha1.ManagedClusterAddOn, error)
+	UpdateManagedClusterAddonHosting(ctx context.Context, namespace, name, uid, currentHostingMC, replacementMC string) error
+}
+
 type clusterConnection struct {
 	client    client.Client
 	restCfg   *rest.Config
@@ -258,6 +272,12 @@ func (c *OCMClient) newClusterConnection(clusterID string, elevationReasons ...s
 	}
 	if err := workv1.AddToScheme(kubeCli.Scheme()); err != nil {
 		return nil, fmt.Errorf("adding ManifestWork scheme: %w", err)
+	}
+	if err := clusterv1.AddToScheme(kubeCli.Scheme()); err != nil {
+		return nil, fmt.Errorf("adding ManagedCluster scheme: %w", err)
+	}
+	if err := addonv1alpha1.AddToScheme(kubeCli.Scheme()); err != nil {
+		return nil, fmt.Errorf("adding ManagedClusterAddon scheme: %w", err)
 	}
 	return &clusterConnection{client: kubeCli, restCfg: restCfg, clientset: clientset}, nil
 }

@@ -20,6 +20,7 @@ func TestRestoreLeafFlags(t *testing.T) {
 		{name: "reassign", cmd: "reassign", flags: []string{"cluster-id", "replacement-mc"}},
 		{name: "trust policy", cmd: "update-trust-policy", flags: []string{"cluster-id", "source-mc", "replacement-mc", "profile"}},
 		{name: "migrate storage", cmd: "migrate-storage", flags: []string{"cluster-id", "source-mc", "replacement-mc", "snapshot-journal", "reason", "profile", "timeout", "concurrency"}},
+		{name: "reimport", cmd: "reimport", flags: []string{"cluster-id", "replacement-mc", "reason", "timeout"}},
 	}
 
 	restore := NewCmdRestore()
