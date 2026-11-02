@@ -2,6 +2,7 @@ package mgmt
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	awsSdk "github.com/aws/aws-sdk-go-v2/aws"
@@ -177,27 +178,99 @@ func TestCheckForHiveNameTags(t *testing.T) {
 }
 
 func TestUnassignMoveAccount(t *testing.T) {
+	tests := []struct {
+		name     string
+		parentID string
+	}{
+		{
+			name:     "moves an account from the legacy staging-1 OU",
+			parentID: "ou-0wd6-z6tzkjek",
+		},
+		{
+			name:     "moves an account from the current staging-1 OU",
+			parentID: "ou-0wd6-x0ri0jpn",
+		},
+	}
 
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mocks := setupDefaultMocks(t)
+			mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
+
+			accountID := "111111111111"
+			rootID := OSDStaging1RootID
+			parentID := test.parentID
+
+			mockAWSClient.EXPECT().ListParents(&organizations.ListParentsInput{
+				ChildId: &accountID,
+			}).Return(&organizations.ListParentsOutput{
+				Parents: []organizationTypes.Parent{{Id: &parentID}},
+			}, nil)
+			mockAWSClient.EXPECT().MoveAccount(&organizations.MoveAccountInput{
+				AccountId:           &accountID,
+				DestinationParentId: &rootID,
+				SourceParentId:      &parentID,
+			}).Return(&organizations.MoveAccountOutput{}, nil)
+
+			o := &accountUnassignOptions{awsClient: mockAWSClient}
+			if err := o.moveAccount(accountID, rootID); err != nil {
+				t.Fatalf("failed to move account: %v", err)
+			}
+		})
+	}
+}
+
+func TestUnassignMoveAccountAlreadyAtRoot(t *testing.T) {
 	mocks := setupDefaultMocks(t)
-
 	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
 
-	accountId := "111111111111"
-	destOu := "abc-vnjfdshs"
-	rootOu := "abc"
+	accountID := "111111111111"
+	rootID := OSDStaging1RootID
 
-	awsOutputMove := &organizations.MoveAccountOutput{}
+	mockAWSClient.EXPECT().ListParents(&organizations.ListParentsInput{
+		ChildId: &accountID,
+	}).Return(&organizations.ListParentsOutput{
+		Parents: []organizationTypes.Parent{{Id: &rootID}},
+	}, nil)
 
-	mockAWSClient.EXPECT().MoveAccount(gomock.Any()).Return(
-		awsOutputMove,
-		nil,
-	)
+	o := &accountUnassignOptions{awsClient: mockAWSClient}
+	if err := o.moveAccount(accountID, rootID); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
 
-	o := &accountUnassignOptions{}
-	o.awsClient = mockAWSClient
-	err := o.moveAccount(accountId, rootOu, destOu)
-	if err != nil {
-		t.Errorf("failed to move account")
+func TestUnassignMoveAccountParentLookupError(t *testing.T) {
+	mocks := setupDefaultMocks(t)
+	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
+
+	accountID := "111111111111"
+	expectedErr := fmt.Errorf("list parents failed")
+
+	mockAWSClient.EXPECT().ListParents(&organizations.ListParentsInput{
+		ChildId: &accountID,
+	}).Return(nil, expectedErr)
+
+	o := &accountUnassignOptions{awsClient: mockAWSClient}
+	err := o.moveAccount(accountID, OSDStaging1RootID)
+	if err != expectedErr {
+		t.Fatalf("expected error %v, got %v", expectedErr, err)
+	}
+}
+
+func TestUnassignMoveAccountMissingParent(t *testing.T) {
+	mocks := setupDefaultMocks(t)
+	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
+
+	accountID := "111111111111"
+
+	mockAWSClient.EXPECT().ListParents(&organizations.ListParentsInput{
+		ChildId: &accountID,
+	}).Return(&organizations.ListParentsOutput{}, nil)
+
+	o := &accountUnassignOptions{awsClient: mockAWSClient}
+	err := o.moveAccount(accountID, OSDStaging1RootID)
+	if err == nil || !strings.Contains(err.Error(), "no parent found for account") {
+		t.Fatalf("expected missing parent error, got %v", err)
 	}
 }
 

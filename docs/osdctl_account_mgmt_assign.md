@@ -10,9 +10,10 @@ osdctl account mgmt assign [flags]
 
 ```
   -i, --account-id string      (optional) Specific AWS account ID to assign
+      --account-name string    (optional) Name for a newly created account; recommended pattern: <scope>-<environment>-<purpose>[-<region>][-<sequence>]
   -h, --help                   help for assign
   -I, --iam-user               (optional) Create an AWS IAM user and Access Key
-  -p, --payer-account string   Payer account type
+  -p, --payer-account string   Payer account type (default "osd-staging-1")
       --show-managed-fields    If true, keep the managedFields when printing objects in JSON or YAML format.
       --template string        Template string or path to template file to use when --output=jsonpath, --output=jsonpath-file.
   -u, --username string        LDAP username
