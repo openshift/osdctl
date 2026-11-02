@@ -278,9 +278,7 @@ func TestAccountAssignPayerAccount(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if test.envAccount != "" {
-				t.Setenv(envKeyAWSAccountName, test.envAccount)
-			}
+			t.Setenv(envKeyAWSAccountName, test.envAccount)
 
 			cmd := newCmdAccountAssign(genericclioptions.IOStreams{}, &globalflags.GlobalOptions{})
 			options := &accountAssignOptions{
@@ -344,6 +342,8 @@ func TestAccountAssignCompleteAccountName(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Setenv(envKeyAWSAccountName, "")
+
 			cmd := newCmdAccountAssign(genericclioptions.IOStreams{}, &globalflags.GlobalOptions{})
 			options := &accountAssignOptions{
 				username:      test.username,
@@ -373,7 +373,7 @@ func TestCreateAccount(t *testing.T) {
 	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
 
 	accountName := "rosa-dev-testuser"
-	email := accountName + "@redhat.com"
+	email := "rosa-dev-testuser-0123456789abcdef@redhat.com"
 
 	createId := "car-random1234"
 
@@ -397,12 +397,66 @@ func TestCreateAccount(t *testing.T) {
 
 	o := &accountAssignOptions{}
 	o.awsClient = mockAWSClient
-	returnVal, err := o.createAccount(accountName)
+	returnVal, err := o.createAccount(accountName, email)
 	if err != nil {
 		t.Error("failed to create account")
 	}
 	if returnVal.CreateAccountStatus.State != organizationTypes.CreateAccountState(expectedOutput) {
 		t.Error("failed to create account")
+	}
+}
+
+func TestGenerateAccountEmail(t *testing.T) {
+	email, err := generateAccountEmail()
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if !strings.HasPrefix(email, "osd-creds-mgmt+") || !strings.HasSuffix(email, "@redhat.com") {
+		t.Fatalf("expected a random Red Hat account email, got %q", email)
+	}
+}
+
+func TestBuildAccountRetriesEmailCollision(t *testing.T) {
+	mocks := setupDefaultMocks(t)
+	mockAWSClient := mock.NewMockClient(mocks.mockCtrl)
+
+	failedRequestID := "failed-request"
+	successfulRequestID := "successful-request"
+	accountID := "111111111111"
+
+	gomock.InOrder(
+		mockAWSClient.EXPECT().CreateAccount(gomock.Any()).Return(&organizations.CreateAccountOutput{
+			CreateAccountStatus: &organizationTypes.CreateAccountStatus{Id: &failedRequestID},
+		}, nil),
+		mockAWSClient.EXPECT().DescribeCreateAccountStatus(&organizations.DescribeCreateAccountStatusInput{
+			CreateAccountRequestId: &failedRequestID,
+		}).Return(&organizations.DescribeCreateAccountStatusOutput{
+			CreateAccountStatus: &organizationTypes.CreateAccountStatus{
+				State:         organizationTypes.CreateAccountStateFailed,
+				FailureReason: organizationTypes.CreateAccountFailureReasonEmailAlreadyExists,
+			},
+		}, nil),
+		mockAWSClient.EXPECT().CreateAccount(gomock.Any()).Return(&organizations.CreateAccountOutput{
+			CreateAccountStatus: &organizationTypes.CreateAccountStatus{Id: &successfulRequestID},
+		}, nil),
+		mockAWSClient.EXPECT().DescribeCreateAccountStatus(&organizations.DescribeCreateAccountStatusInput{
+			CreateAccountRequestId: &successfulRequestID,
+		}).Return(&organizations.DescribeCreateAccountStatusOutput{
+			CreateAccountStatus: &organizationTypes.CreateAccountStatus{
+				State:     organizationTypes.CreateAccountStateSucceeded,
+				AccountId: &accountID,
+			},
+		}, nil),
+	)
+
+	options := &accountAssignOptions{awsClient: mockAWSClient}
+	returnedAccountID, err := options.buildAccount("rosa-dev-testuser")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if returnedAccountID != accountID {
+		t.Fatalf("expected account ID %q, got %q", accountID, returnedAccountID)
 	}
 }
 

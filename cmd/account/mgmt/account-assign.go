@@ -1,6 +1,9 @@
 package mgmt
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -17,10 +20,10 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-// Global variables
-var (
-	OSDStaging1RootID     = "r-0wd6"
-	OSDStaging1AssignOuID = "ou-0wd6-x0ri0jpn"
+const (
+	OSDStaging1RootID              = "r-0wd6"
+	OSDStaging1AssignOuID          = "ou-0wd6-x0ri0jpn"
+	accountEmailGenerationAttempts = 5
 )
 
 type accountAssignOptions struct {
@@ -339,15 +342,25 @@ func (o *accountAssignOptions) tagAccount(accountId string) error {
 func (o *accountAssignOptions) buildAccount(accountName string) (string, error) {
 
 	fmt.Println("Creating account")
-	var newAccountId string
 
-	orgOutput, err := o.createAccount(accountName)
-	if err != nil {
-		return "", err
+	for range accountEmailGenerationAttempts {
+		email, err := generateAccountEmail()
+		if err != nil {
+			return "", err
+		}
+
+		orgOutput, err := o.createAccount(accountName, email)
+		if errors.Is(err, ErrEmailAlreadyExist) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+
+		return *orgOutput.CreateAccountStatus.AccountId, nil
 	}
 
-	newAccountId = *orgOutput.CreateAccountStatus.AccountId
-	return newAccountId, nil
+	return "", fmt.Errorf("unable to generate a unique account email after %d attempts: %w", accountEmailGenerationAttempts, ErrEmailAlreadyExist)
 }
 
 var (
@@ -357,9 +370,16 @@ var (
 	ErrAwsFailedCreateAccount  = fmt.Errorf("ErrAwsFailedCreateAccount")
 )
 
-func (o *accountAssignOptions) createAccount(accountName string) (*organizations.DescribeCreateAccountStatusOutput, error) {
-	email := accountName + "@redhat.com"
+func generateAccountEmail() (string, error) {
+	randomBytes := make([]byte, 8)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return "", fmt.Errorf("failed to generate account email suffix: %w", err)
+	}
 
+	return fmt.Sprintf("osd-creds-mgmt+%s@redhat.com", hex.EncodeToString(randomBytes)), nil
+}
+
+func (o *accountAssignOptions) createAccount(accountName string, email string) (*organizations.DescribeCreateAccountStatusOutput, error) {
 	createInput := &organizations.CreateAccountInput{
 		AccountName: &accountName,
 		Email:       &email,

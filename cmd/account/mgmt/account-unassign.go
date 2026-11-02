@@ -19,7 +19,7 @@ import (
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
 )
 
-var (
+const (
 	OSDStaging2RootID       = "r-rs3h"
 	OSDStaging2OuID         = "ou-rs3h-ry0hn2l9"
 	OSDStaging1UnassignOuID = "ou-0wd6-z6tzkjek"
