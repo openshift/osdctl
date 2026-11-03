@@ -56,7 +56,7 @@ type contextOptions struct {
 	full              bool
 	clusterID         string
 	externalClusterID string
-	baseDomain        string
+	pdServiceQuery    string
 	organizationID    string
 	days              int
 	pages             int
@@ -194,7 +194,13 @@ func (o *contextOptions) setup() error {
 	o.cluster = clusters[0]
 	o.clusterID = o.cluster.ID()
 	o.externalClusterID = o.cluster.ExternalID()
-	o.baseDomain = o.cluster.DNS().BaseDomain()
+	o.pdServiceQuery = o.cluster.DNS().BaseDomain()
+	// HCP clusters use region-based PD services rather than per-cluster
+	// services keyed by DNS base domain. Use the region ID as the PD
+	// service query for HCP clusters.
+	if regionID := utils.HCPRegionID(o.cluster); regionID != "" {
+		o.pdServiceQuery = regionID
+	}
 	o.infraID = o.cluster.InfraID()
 
 	if o.usertoken == "" {
@@ -374,12 +380,18 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	// For PD query dependencies
 	pdwg := sync.WaitGroup{}
 	var skipPagerDutyCollection bool
-	pdProvider, err := pagerduty.NewClient().
+	pdClientBuilder := pagerduty.NewClient().
 		WithUserToken(o.usertoken).
 		WithOauthToken(o.oauthtoken).
-		WithBaseDomain(o.baseDomain).
-		WithTeamIdList(viper.GetStringSlice(pagerduty.PagerDutyTeamIDsKey)).
-		Init()
+		WithServiceQuery(o.pdServiceQuery).
+		WithTeamIdList(viper.GetStringSlice(pagerduty.PagerDutyTeamIDsKey))
+	// For HCP clusters, set the cluster ID so PD incidents are filtered
+	// to only those belonging to this cluster within the region-based
+	// PD service.
+	if utils.HCPRegionID(o.cluster) != "" {
+		pdClientBuilder = pdClientBuilder.WithClusterID(o.externalClusterID)
+	}
+	pdProvider, err := pdClientBuilder.Init()
 	if err != nil {
 		skipPagerDutyCollection = true
 		dataErrors = append(dataErrors, fmt.Errorf("skipping PagerDuty context collection: %v", err))
