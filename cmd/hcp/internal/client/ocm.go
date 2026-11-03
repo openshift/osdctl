@@ -35,15 +35,40 @@ type ServiceClusterInfo struct {
 	Name string
 }
 
+type OCMClientConfig struct {
+	// Logger is the logger to use for OCM operations.
+	Logger *logrus.Logger
+}
+
+func (c *OCMClientConfig) Options(opts ...OCMClientOption) {
+	for _, opt := range opts {
+		opt.ConfigureOCMClient(c)
+	}
+}
+
+func (c *OCMClientConfig) Defaults() {
+	if c.Logger == nil {
+		c.Logger = utils.NewDiscardLogger()
+	}
+}
+
+type OCMClientOption interface {
+	ConfigureOCMClient(*OCMClientConfig)
+}
+
 // OCMClient provides HCP operations backed by a shared OCM connection.
 // The caller owns the connection lifecycle.
 type OCMClient struct {
-	conn   *ocmsdk.Connection
-	logger *logrus.Logger
+	conn *ocmsdk.Connection
+	cfg  OCMClientConfig
 }
 
-func NewOCMClient(conn *ocmsdk.Connection, logger *logrus.Logger) *OCMClient {
-	return &OCMClient{conn: conn, logger: logger}
+func NewOCMClient(conn *ocmsdk.Connection, opts ...OCMClientOption) *OCMClient {
+	var config OCMClientConfig
+	config.Options(opts...)
+	config.Defaults()
+
+	return &OCMClient{conn: conn, cfg: config}
 }
 
 // ClusterResolver resolves an HCP cluster identifier to its canonical OCM IDs,
@@ -209,6 +234,7 @@ type ManagementClusterClient interface {
 	CreateVeleroBackup(ctx context.Context, request VeleroBackupRequest) (string, error)
 	RestoreVeleroBackup(ctx context.Context, request VeleroRestoreRequest) (VeleroRestoreResult, error)
 	ListVolumeSnapshotContents(ctx context.Context) (*unstructured.UnstructuredList, error)
+	RemapVolumeSnapshotContents(ctx context.Context, request VolumeSnapshotRemapRequest) error
 }
 
 // ServiceClusterClient manages ManifestWorks for one service cluster.
@@ -236,18 +262,18 @@ func (c *OCMClient) newClusterConnection(clusterID string, elevationReasons ...s
 	return &clusterConnection{client: kubeCli, restCfg: restCfg, clientset: clientset}, nil
 }
 
-func (c *OCMClient) ManagementCluster(clusterID string) (ManagementClusterClient, error) {
-	c.logger.Infof("Logging into cluster %s...", clusterID)
-	return c.newManagementClusterClient(clusterID)
+func (c *OCMClient) ManagementCluster(clusterID string, options ...ManagementClusterClientOption) (ManagementClusterClient, error) {
+	c.cfg.Logger.Infof("Logging into cluster %s...", clusterID)
+	return c.newManagementClusterClient(clusterID, nil, options...)
 }
 
-func (c *OCMClient) ElevatedManagementCluster(clusterID, reason string) (ManagementClusterClient, error) {
-	c.logger.Infof("Logging into cluster %s (elevated)...", clusterID)
-	return c.newManagementClusterClient(clusterID, reason)
+func (c *OCMClient) ElevatedManagementCluster(clusterID, reason string, opts ...ManagementClusterClientOption) (ManagementClusterClient, error) {
+	c.cfg.Logger.Infof("Logging into cluster %s (elevated)...", clusterID)
+	return c.newManagementClusterClient(clusterID, []string{reason}, opts...)
 }
 
 func (c *OCMClient) ServiceCluster(clusterID, reason string) (ServiceClusterClient, error) {
-	c.logger.Infof("Logging into cluster %s (elevated)...", clusterID)
+	c.cfg.Logger.Infof("Logging into cluster %s (elevated)...", clusterID)
 	connection, err := c.newClusterConnection(clusterID, reason)
 	if err != nil {
 		return nil, err
@@ -255,10 +281,10 @@ func (c *OCMClient) ServiceCluster(clusterID, reason string) (ServiceClusterClie
 	return &serviceClusterClient{client: connection.client}, nil
 }
 
-func (c *OCMClient) newManagementClusterClient(clusterID string, elevationReasons ...string) (*managementClusterClient, error) {
+func (c *OCMClient) newManagementClusterClient(clusterID string, elevationReasons []string, opts ...ManagementClusterClientOption) (*managementClusterClient, error) {
 	connection, err := c.newClusterConnection(clusterID, elevationReasons...)
 	if err != nil {
 		return nil, err
 	}
-	return &managementClusterClient{client: connection.client, restCfg: connection.restCfg, clientset: connection.clientset}, nil
+	return NewManagementClusterClient(connection.client, connection.restCfg, connection.clientset, opts...), nil
 }

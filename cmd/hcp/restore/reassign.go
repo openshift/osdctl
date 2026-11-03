@@ -29,7 +29,7 @@ func NewCmdReassign() *cobra.Command {
 			}
 			defer ocmConn.Close()
 
-			manager := internalcmd.NewDefaultReassignmentManager(internalclient.NewOCMClient(ocmConn, logger))
+			manager := internalcmd.NewDefaultReassignmentManager(internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: logger}))
 			plan, err := manager.PrepareReassignment(cmd.Context(), internalcmd.ReassignmentRequest{ClusterID: flags.clusterID, ReplacementMC: flags.replacementMC})
 			if err != nil {
 				return err

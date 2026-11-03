@@ -100,5 +100,5 @@ func (c *DefaultRestoreCreator) CreateRestore(ctx context.Context, request Resto
 type restoreOCMClient interface {
 	internalclient.ClusterResolver
 	Cluster(identifier string) (*cmv1.Cluster, error)
-	ElevatedManagementCluster(clusterID, reason string) (internalclient.ManagementClusterClient, error)
+	ElevatedManagementCluster(clusterID, reason string, options ...internalclient.ManagementClusterClientOption) (internalclient.ManagementClusterClient, error)
 }

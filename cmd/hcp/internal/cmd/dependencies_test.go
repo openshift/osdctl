@@ -3,15 +3,60 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"testing"
 
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
+	internalclient "github.com/openshift/osdctl/cmd/hcp/internal/client"
 	awsprovider "github.com/openshift/osdctl/pkg/provider/aws"
+	"github.com/stretchr/testify/assert"
 )
 
 type awsAccountClientCall struct {
 	profile   string
 	region    string
 	accountID string
+}
+
+func TestAWSClientProviderOptions(t *testing.T) {
+	provider := &testAWSAccountClientProvider{}
+	option := WithAWSAccountClientProvider{AWSClient: provider}
+
+	for _, test := range []struct {
+		name      string
+		configure func() internalclient.AWSAccountClientProvider
+	}{
+		{
+			name: "backup discoverer",
+			configure: func() internalclient.AWSAccountClientProvider {
+				var config DefaultBackupDiscovererConfig
+				config.Options(option)
+				config.Defaults()
+				return config.AWSClient
+			},
+		},
+		{
+			name: "DNS releaser",
+			configure: func() internalclient.AWSAccountClientProvider {
+				var config DefaultDNSReleaserConfig
+				config.Options(option)
+				config.Defaults()
+				return config.AWSClient
+			},
+		},
+		{
+			name: "trust policy updater",
+			configure: func() internalclient.AWSAccountClientProvider {
+				var config DefaultTrustPolicyUpdaterConfig
+				config.Options(option)
+				config.Defaults()
+				return config.AWSClient
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Same(t, provider, test.configure())
+		})
+	}
 }
 
 type testAWSAccountClientProvider struct {

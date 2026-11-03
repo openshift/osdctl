@@ -38,7 +38,7 @@ func NewCmdCreate() *cobra.Command {
 			}
 			defer ocmConn.Close()
 
-			creator := internalcmd.NewDefaultRestoreCreator(internalclient.NewOCMClient(ocmConn, logger))
+			creator := internalcmd.NewDefaultRestoreCreator(internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: logger}))
 			result, err := creator.CreateRestore(cmd.Context(), internalcmd.RestoreRequest{ClusterID: flags.clusterID, TargetMC: flags.targetMC, BackupName: flags.backupName, Reason: flags.reason, Timeout: flags.timeout})
 			if err != nil {
 				return err

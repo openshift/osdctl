@@ -44,6 +44,14 @@ func TestSelectBackupConfig(t *testing.T) {
 	}
 }
 
+func TestOCMClientConfig(t *testing.T) {
+	var config OCMClientConfig
+	config.Options()
+	config.Defaults()
+
+	assert.NotNil(t, config.Logger)
+}
+
 func TestManagementClusterAssignment(t *testing.T) {
 	assignment := "source-mc"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +92,7 @@ func TestManagementClusterAssignment(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	client := NewOCMClient(conn, nil)
+	client := NewOCMClient(conn)
 	current, err := client.ManagementClusterAssignment(context.Background(), "hcp-id")
 	require.NoError(t, err)
 	assert.Equal(t, "source-mc", current)

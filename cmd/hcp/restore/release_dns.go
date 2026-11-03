@@ -29,7 +29,7 @@ func NewCmdReleaseDNS() *cobra.Command {
 				return fmt.Errorf("creating OCM connection: %w", err)
 			}
 			defer ocmConn.Close()
-			var releaser internalcmd.DNSReleaser = internalcmd.NewDefaultDNSReleaser(internalclient.NewOCMClient(ocmConn, logger))
+			var releaser internalcmd.DNSReleaser = internalcmd.NewDefaultDNSReleaser(internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: logger}))
 			plan, err := releaser.PrepareDNSRelease(cmd.Context(), internalcmd.ReleaseDNSRequest{ClusterID: flags.clusterID, AWSProfile: flags.awsProfile})
 			if err != nil {
 				return err

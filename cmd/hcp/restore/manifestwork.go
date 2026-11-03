@@ -36,7 +36,7 @@ func newCmdManifestWorkCompare() *cobra.Command {
 			defer ocmConn.Close()
 			logger := logrus.New()
 			logger.SetOutput(cmd.ErrOrStderr())
-			manager := internalcmd.NewDefaultManifestWorkManager(internalclient.NewOCMClient(ocmConn, logger))
+			manager := internalcmd.NewDefaultManifestWorkManager(internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: logger}))
 			comparisons, err := manager.CompareManifestWorks(cmd.Context(), manifestWorkRequest(flags))
 			if err != nil {
 				return err
@@ -70,7 +70,7 @@ func newCmdManifestWorkMoveVeleroResources() *cobra.Command {
 			defer ocmConn.Close()
 			logger := logrus.New()
 			logger.SetOutput(cmd.ErrOrStderr())
-			manager := internalcmd.NewDefaultManifestWorkManager(internalclient.NewOCMClient(ocmConn, logger))
+			manager := internalcmd.NewDefaultManifestWorkManager(internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: logger}))
 			plan, err := manager.PrepareVeleroManifestWorkMove(cmd.Context(), manifestWorkRequest(flags))
 			if err != nil {
 				return err
@@ -116,7 +116,7 @@ func newCmdManifestWorkMoveClusterResources() *cobra.Command {
 			defer ocmConn.Close()
 			logger := logrus.New()
 			logger.SetOutput(cmd.ErrOrStderr())
-			manager := internalcmd.NewDefaultManifestWorkManager(internalclient.NewOCMClient(ocmConn, logger))
+			manager := internalcmd.NewDefaultManifestWorkManager(internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: logger}))
 			plan, err := manager.PrepareClusterManifestWorkMove(cmd.Context(), manifestWorkRequest(flags))
 			if err != nil {
 				return err

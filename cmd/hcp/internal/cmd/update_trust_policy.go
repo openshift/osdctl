@@ -45,14 +45,38 @@ type DefaultTrustPolicyUpdater struct {
 	awsClient internalclient.AWSAccountClientProvider
 }
 
+type DefaultTrustPolicyUpdaterConfig struct {
+	AWSClient internalclient.AWSAccountClientProvider
+}
+
+func (c *DefaultTrustPolicyUpdaterConfig) Options(opts ...DefaultTrustPolicyUpdaterOption) {
+	for _, opt := range opts {
+		opt.ConfigureDefaultTrustPolicyUpdater(c)
+	}
+}
+
+func (c *DefaultTrustPolicyUpdaterConfig) Defaults() {
+	if c.AWSClient == nil {
+		c.AWSClient = internalclient.NewAWSAccountClientProvider()
+	}
+}
+
+type DefaultTrustPolicyUpdaterOption interface {
+	ConfigureDefaultTrustPolicyUpdater(*DefaultTrustPolicyUpdaterConfig)
+}
+
 type trustPolicyOCMClient interface {
 	internalclient.ClusterResolver
 	Cluster(identifier string) (*cmv1.Cluster, error)
 	BackupConfig(ctx context.Context, clusterID, managementCluster string) (*cmv1.AWSBackupConfig, error)
 }
 
-func NewDefaultTrustPolicyUpdater(ocmClient trustPolicyOCMClient) *DefaultTrustPolicyUpdater {
-	return &DefaultTrustPolicyUpdater{ocmClient: ocmClient, awsClient: internalclient.NewAWSAccountClientProvider()}
+func NewDefaultTrustPolicyUpdater(ocmClient trustPolicyOCMClient, opts ...DefaultTrustPolicyUpdaterOption) *DefaultTrustPolicyUpdater {
+	var cfg DefaultTrustPolicyUpdaterConfig
+	cfg.Options(opts...)
+	cfg.Defaults()
+
+	return &DefaultTrustPolicyUpdater{ocmClient: ocmClient, awsClient: cfg.AWSClient}
 }
 
 func (r *DefaultTrustPolicyUpdater) PrepareTrustPolicyUpdate(ctx context.Context, request UpdateTrustPolicyRequest) (TrustPolicyUpdatePlan, error) {

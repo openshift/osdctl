@@ -26,7 +26,7 @@ func NewCmdUpdateTrustPolicy() *cobra.Command {
 				return fmt.Errorf("creating OCM connection: %w", err)
 			}
 			defer ocmConn.Close()
-			var updater internalcmd.TrustPolicyUpdater = internalcmd.NewDefaultTrustPolicyUpdater(internalclient.NewOCMClient(ocmConn, logger))
+			var updater internalcmd.TrustPolicyUpdater = internalcmd.NewDefaultTrustPolicyUpdater(internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: logger}))
 			plan, err := updater.PrepareTrustPolicyUpdate(cmd.Context(), internalcmd.UpdateTrustPolicyRequest{ClusterID: flags.clusterID, SourceMC: flags.sourceMC, ReplacementMC: flags.replacementMC, AWSProfile: flags.awsProfile})
 			if err != nil {
 				return err

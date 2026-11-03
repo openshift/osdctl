@@ -1,19 +1,19 @@
-## osdctl hcp restore copy-snapshots
+## osdctl hcp restore migrate-storage
 
-Copy HCP EBS snapshots to a replacement management-cluster account
+Migrate HCP snapshot storage to a replacement management cluster
 
 ### Synopsis
 
-Discovers EBS VolumeSnapshotContents for the HCP on the replacement management cluster, stores the relevant inventory and snapshot mappings in a restartable journal, copies snapshots through a temporary source-account KMS key, then deletes intermediary snapshots and schedules deletion of the temporary key.
+Discovers EBS VolumeSnapshotContents for the HCP on the replacement management cluster, stores the relevant inventory and snapshot mappings in a restartable journal, copies snapshots through a temporary source-account KMS key, replaces the target VSCs with the copied snapshot IDs, and resumes the control plane only after all replacement VSCs are ready to use.
 
 ```
-osdctl hcp restore copy-snapshots --cluster-id <cluster-id> --source-mc <management-cluster> --replacement-mc <management-cluster> --reason <reason> [flags]
+osdctl hcp restore migrate-storage --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [flags]
 ```
 
 ### Examples
 
 ```
-  osdctl hcp restore copy-snapshots --cluster-id ${CLUSTER_ID} --source-mc ${SOURCE_MC} --replacement-mc ${REPLACEMENT_MC} --reason ${REASON}
+  osdctl hcp restore migrate-storage --cluster-id ${CLUSTER_ID} --replacement-mc ${REPLACEMENT_MC} --reason ${REASON}
 ```
 
 ### Options
@@ -21,12 +21,12 @@ osdctl hcp restore copy-snapshots --cluster-id <cluster-id> --source-mc <managem
 ```
   -C, --cluster-id string         Internal ID, name, or external ID of the HCP cluster
       --concurrency int           Maximum number of snapshot copy chains to run concurrently (default 4)
-  -h, --help                      help for copy-snapshots
+  -h, --help                      help for migrate-storage
   -p, --profile string            AWS profile used to assume management-cluster account roles
       --reason string             Reason for elevated access to the replacement management cluster
       --replacement-mc string     Internal ID, name, or external ID of the replacement management cluster
       --snapshot-journal string   Path for the restartable snapshot journal (defaults to a cluster-specific file; existing journals prompt to resume or create a numbered file)
-      --source-mc string          Internal ID, name, or external ID of the source management cluster
+      --source-mc string          Internal ID, name, or external ID of the source management cluster (defaults to the HCP's current management cluster)
       --timeout duration          Maximum time to wait for all snapshot copies (default 2h0m0s)
 ```
 

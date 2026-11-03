@@ -19,7 +19,7 @@ func TestRestoreLeafFlags(t *testing.T) {
 		{name: "release DNS", cmd: "release-dns", flags: []string{"cluster-id", "profile"}},
 		{name: "reassign", cmd: "reassign", flags: []string{"cluster-id", "replacement-mc"}},
 		{name: "trust policy", cmd: "update-trust-policy", flags: []string{"cluster-id", "source-mc", "replacement-mc", "profile"}},
-		{name: "copy snapshots", cmd: "copy-snapshots", flags: []string{"cluster-id", "source-mc", "replacement-mc", "snapshot-journal", "reason", "profile", "timeout", "concurrency"}},
+		{name: "migrate storage", cmd: "migrate-storage", flags: []string{"cluster-id", "source-mc", "replacement-mc", "snapshot-journal", "reason", "profile", "timeout", "concurrency"}},
 	}
 
 	restore := NewCmdRestore()
@@ -45,8 +45,8 @@ func TestNextSnapshotJournalPath(t *testing.T) {
 	assert.Equal(t, filepath.Join(filepath.Dir(path), "snapshot-copy-journal-hcp-2.json"), next)
 }
 
-func TestCopySnapshotsSnapshotJournalUsesDynamicDefault(t *testing.T) {
-	cmd := NewCmdCopySnapshots()
+func TestMigrateStorageSnapshotJournalUsesDynamicDefault(t *testing.T) {
+	cmd := NewCmdMigrateStorage()
 
 	flag := cmd.Flags().Lookup("snapshot-journal")
 	assert.NotNil(t, flag)

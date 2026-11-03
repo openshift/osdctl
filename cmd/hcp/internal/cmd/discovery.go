@@ -44,13 +44,37 @@ type DefaultBackupDiscoverer struct {
 	awsClient internalclient.AWSAccountClientProvider
 }
 
+type DefaultBackupDiscovererConfig struct {
+	AWSClient internalclient.AWSAccountClientProvider
+}
+
+func (c *DefaultBackupDiscovererConfig) Options(opts ...DefaultBackupDiscovererOption) {
+	for _, opt := range opts {
+		opt.ConfigureDefaultBackupDiscoverer(c)
+	}
+}
+
+func (c *DefaultBackupDiscovererConfig) Defaults() {
+	if c.AWSClient == nil {
+		c.AWSClient = internalclient.NewAWSAccountClientProvider()
+	}
+}
+
+type DefaultBackupDiscovererOption interface {
+	ConfigureDefaultBackupDiscoverer(*DefaultBackupDiscovererConfig)
+}
+
 type discoveryOCMClient interface {
 	internalclient.ClusterResolver
 	BackupConfig(ctx context.Context, clusterID, managementCluster string) (*cmv1.AWSBackupConfig, error)
 }
 
-func NewDefaultBackupDiscoverer(ocmClient discoveryOCMClient) *DefaultBackupDiscoverer {
-	return &DefaultBackupDiscoverer{ocmClient: ocmClient, awsClient: internalclient.NewAWSAccountClientProvider()}
+func NewDefaultBackupDiscoverer(ocmClient discoveryOCMClient, opts ...DefaultBackupDiscovererOption) *DefaultBackupDiscoverer {
+	var cfg DefaultBackupDiscovererConfig
+	cfg.Options(opts...)
+	cfg.Defaults()
+
+	return &DefaultBackupDiscoverer{ocmClient: ocmClient, awsClient: cfg.AWSClient}
 }
 
 func (r *DefaultBackupDiscoverer) DiscoverBackups(ctx context.Context, request DiscoveryRequest) ([]DiscoveredBackup, error) {

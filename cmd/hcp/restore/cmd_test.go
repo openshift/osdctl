@@ -17,5 +17,5 @@ func TestNewCmdRestore(t *testing.T) {
 	for _, subcommand := range cmd.Commands() {
 		actual = append(actual, subcommand.Name())
 	}
-	assert.ElementsMatch(t, []string{"copy-snapshots", "create", "manifestwork", "reassign", "release-dns", "update-trust-policy"}, actual)
+	assert.ElementsMatch(t, []string{"migrate-storage", "create", "manifestwork", "reassign", "release-dns", "update-trust-policy"}, actual)
 }
