@@ -1,16 +1,10 @@
 # .fullsend/harness/triage.yaml
 #
 # Composes the upstream fullsend triage harness (pinned to agents v0.38.0) and
-# adds the local dispatch trigger, the Jira credentials the Jira-poll dispatch
-# path needs, and a local sandbox policy. v0.38.0 fetches the work item
-# host-side (pre-triage-jira.sh) and sets ISSUE_URL / FULLSEND_TRACKER, but
-# runner env vars don't flow into the OpenShell sandbox automatically, so the
-# Jira credentials are passed through explicitly here. The base sandbox policy
-# does not permit egress to Jira Cloud, so policies/triage.yaml is required to
-# let the sandbox reach redhat.atlassian.net (read-only) for issue fetching.
+# adds the local dispatch trigger. The upstream base handles forge-specific
+# credentials and network access via provider-backed overlays (ADR 0065),
+# selecting GitHub or Jira config based on event.source.system.
 base: https://raw.githubusercontent.com/fullsend-ai/agents/7ab05564b3c9c0ab20197e0c8572b5905ffd75ca/harness/triage.yaml#sha256=3aa32e9f66ad6a9b60a75f50d3adc6ae39ebfb425c3928381e019436498bf2aa
-
-policy: policies/triage.yaml
 
 trigger: >
   event.entity.kind == "work_item"
@@ -19,15 +13,3 @@ trigger: >
     && event.transition.comment.command == "/fs-triage"
 
 allowed_remote_resources: [https://raw.githubusercontent.com/fullsend-ai/agents/]
-
-env:
-  runner:
-    FULLSEND_TRACKER: jira
-    JIRA_USER_EMAIL: "${JIRA_USER_EMAIL}"
-    JIRA_TOKEN: "${JIRA_TOKEN}"
-  # Runner env vars don't flow into the OpenShell sandbox automatically; pass
-  # the Jira credentials through explicitly so the agent can reach Jira Cloud.
-  sandbox:
-    JIRA_TOKEN: "${JIRA_TOKEN}"
-    JIRA_USER_EMAIL: "${JIRA_USER_EMAIL}"
-    JIRA_BASE_URL: "${JIRA_BASE_URL}"
