@@ -227,13 +227,14 @@ func (o *awsCredsOptions) validatePDIncidents(rc *resolvedCluster, incidents []s
 		return false
 	}
 
-	pdClient := pagerduty.NewClient().WithBaseDomain(baseDomain)
+	pdClient := pagerduty.NewClient()
 	if _, err := pdClient.Init(); err != nil {
 		o.log.WithError(err).Debug("Could not initialize PagerDuty client (token may not be configured)")
 		return false
 	}
 
-	serviceIDs, err := pdClient.GetPDServiceIDs()
+	// Classic PagerDuty service names are inferred from the cluster DNS base domain.
+	serviceIDs, err := pdClient.GetServiceIDs(baseDomain)
 	if err != nil {
 		o.log.WithError(err).Debug("Could not query PagerDuty services for cluster")
 		return false
@@ -244,7 +245,7 @@ func (o *awsCredsOptions) validatePDIncidents(rc *resolvedCluster, incidents []s
 		return false
 	}
 
-	clusterAlerts, err := pdClient.GetFiringAlertsForCluster(serviceIDs)
+	clusterAlerts, err := pdClient.GetFiringAlertsForServices(serviceIDs)
 	if err != nil {
 		o.log.WithError(err).Debug("Could not query PagerDuty alerts for cluster")
 		return false

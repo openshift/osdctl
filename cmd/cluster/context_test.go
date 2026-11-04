@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -575,7 +576,7 @@ func TestRun_UnknownOutput(t *testing.T) {
 		output: "invalidOutputFormat",
 	}
 
-	err := contextOptions.run()
+	err := contextOptions.run(context.Background())
 
 	if err == nil || err.Error() != "unknown Output Format: invalidOutputFormat" {
 		t.Errorf("Expected unknown output format error, got: %v", err)

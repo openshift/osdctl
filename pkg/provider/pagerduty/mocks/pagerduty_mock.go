@@ -56,6 +56,21 @@ func (mr *MockpdClientInterfaceMockRecorder) ListIncidentsWithContext(arg0, arg1
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListIncidentsWithContext", reflect.TypeOf((*MockpdClientInterface)(nil).ListIncidentsWithContext), arg0, arg1)
 }
 
+// ListIncidentAlertsWithContext mocks base method.
+func (m *MockpdClientInterface) ListIncidentAlertsWithContext(arg0 context.Context, arg1 string, arg2 pagerduty.ListIncidentAlertsOptions) (*pagerduty.ListAlertsResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListIncidentAlertsWithContext", arg0, arg1, arg2)
+	ret0, _ := ret[0].(*pagerduty.ListAlertsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListIncidentAlertsWithContext indicates an expected call of ListIncidentAlertsWithContext.
+func (mr *MockpdClientInterfaceMockRecorder) ListIncidentAlertsWithContext(arg0, arg1, arg2 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListIncidentAlertsWithContext", reflect.TypeOf((*MockpdClientInterface)(nil).ListIncidentAlertsWithContext), arg0, arg1, arg2)
+}
+
 // ListServicesWithContext mocks base method.
 func (m *MockpdClientInterface) ListServicesWithContext(arg0 context.Context, arg1 pagerduty.ListServiceOptions) (*pagerduty.ListServiceResponse, error) {
 	m.ctrl.T.Helper()

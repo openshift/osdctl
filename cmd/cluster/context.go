@@ -147,7 +147,7 @@ func newCmdContext() *cobra.Command {
 				return err
 			}
 
-			return options.run()
+			return options.run(cmd.Context())
 		},
 	}
 
@@ -216,7 +216,7 @@ func (o *contextOptions) setup() error {
 	return nil
 }
 
-func (o *contextOptions) run() error {
+func (o *contextOptions) run(ctx context.Context) error {
 	var printFunc func(*contextData, io.Writer)
 	switch o.output {
 	case shortOutputConfigValue:
@@ -229,7 +229,7 @@ func (o *contextOptions) run() error {
 		return fmt.Errorf("unknown Output Format: %s", o.output)
 	}
 
-	currentData, dataErrors := o.generateContextData()
+	currentData, dataErrors := o.generateContextData(ctx)
 	if currentData == nil {
 		fmt.Fprintf(os.Stderr, "Failed to query cluster info: %+v", dataErrors)
 		os.Exit(1)
@@ -364,7 +364,9 @@ func (o *contextOptions) printJsonOutput(data *contextData, w io.Writer) {
 // value will only be nil, if this function fails to get basic cluster
 // information. The second return value will *never* be nil, but instead have a
 // length of 0 if no errors occurred
-func (o *contextOptions) generateContextData() (*contextData, []error) {
+func (o *contextOptions) generateContextData(ctx context.Context) (*contextData, []error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	data := &contextData{}
 	var dataErrors []error
 	var mu sync.Mutex
@@ -377,7 +379,6 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 	pdProvider, err := pagerduty.NewClient().
 		WithUserToken(o.usertoken).
 		WithOauthToken(o.oauthtoken).
-		WithBaseDomain(o.baseDomain).
 		WithTeamIdList(viper.GetStringSlice(pagerduty.PagerDutyTeamIDsKey)).
 		Init()
 	if err != nil {
@@ -658,7 +659,17 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		}
 
 		delayTracker := utils.StartDelayTracker(o.verbose, "PagerDuty Service")
-		pdServiceID, pdErr := pdProvider.GetPDServiceIDs()
+		var pdServiceID []string
+		var pdErr error
+		if o.cluster.Hypershift().Enabled() {
+			var rhobsFetcher *rhobs.RhobsFetcher
+			rhobsFetcher, pdErr = rhobs.CreateRhobsFetcher(ctx, o.clusterID, rhobs.RhobsFetchForMetrics, data.OCMEnv)
+			if pdErr == nil {
+				pdServiceID, pdErr = pdProvider.GetHCPServiceIDs(ctx, rhobsFetcher.RhobsCell, rhobsFetcher.OCMEnvironment())
+			}
+		} else {
+			pdServiceID, pdErr = pdProvider.GetServiceIDs(o.baseDomain)
+		}
 		if pdErr != nil {
 			mu.Lock()
 			dataErrors = append(dataErrors, fmt.Errorf("error getting PD Service ID: %v", pdErr))
@@ -668,7 +679,13 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 		delayTracker.End()
 
 		defer utils.StartDelayTracker(o.verbose, "current PagerDuty Alerts").End()
-		pdAlerts, paErr := pdProvider.GetFiringAlertsForCluster(data.pdServiceID)
+		var pdAlerts map[string][]pd.Incident
+		var paErr error
+		if o.cluster.Hypershift().Enabled() {
+			pdAlerts, paErr = pdProvider.GetFiringAlertsForHCPCluster(ctx, data.pdServiceID, o.externalClusterID)
+		} else {
+			pdAlerts, paErr = pdProvider.GetFiringAlertsForServicesWithContext(ctx, data.pdServiceID)
+		}
 		if paErr != nil {
 			mu.Lock()
 			dataErrors = append(dataErrors, fmt.Errorf("error while getting current PD Alerts: %v", paErr))
@@ -764,7 +781,13 @@ func (o *contextOptions) generateContextData() (*contextData, []error) {
 			pdwg.Wait()
 			defer wg.Done()
 			defer utils.StartDelayTracker(o.verbose, "historical PagerDuty Alerts").End()
-			histAlerts, haErr := pdProvider.GetHistoricalAlertsForCluster(data.pdServiceID)
+			if o.cluster.Hypershift().Enabled() {
+				mu.Lock()
+				dataErrors = append(dataErrors, fmt.Errorf("skipping historical PD Alert Data for HCP cluster: lookup is not cluster-scoped"))
+				mu.Unlock()
+				return
+			}
+			histAlerts, haErr := pdProvider.GetHistoricalAlertsForServicesWithContext(ctx, data.pdServiceID)
 			if haErr != nil {
 				mu.Lock()
 				dataErrors = append(dataErrors, fmt.Errorf("error while getting historical PD Alert Data: %v", haErr))

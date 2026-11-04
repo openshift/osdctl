@@ -1,6 +1,7 @@
 package rhobs
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -168,8 +169,12 @@ func TestCreateRhobsFetcherFromCell(t *testing.T) {
 			wantError: true,
 		},
 		{
-			name:      "URL with userinfo",
-			cellUrl:   "https://user:pass@us-east-1-0.rhobs.api.stage.openshift.com",
+			name: "URL with userinfo",
+			cellUrl: (&url.URL{
+				Scheme: "https",
+				Host:   "us-east-1-0.rhobs.api.stage.openshift.com",
+				User:   url.UserPassword("user", "pass"),
+			}).String(),
 			wantError: true,
 		},
 		{
