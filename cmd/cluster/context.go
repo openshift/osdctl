@@ -781,6 +781,12 @@ func (o *contextOptions) generateContextData(ctx context.Context) (*contextData,
 			pdwg.Wait()
 			defer wg.Done()
 			defer utils.StartDelayTracker(o.verbose, "historical PagerDuty Alerts").End()
+			if o.cluster.Hypershift().Enabled() {
+				mu.Lock()
+				dataErrors = append(dataErrors, fmt.Errorf("skipping historical PD Alert Data for HCP cluster: lookup is not cluster-scoped"))
+				mu.Unlock()
+				return
+			}
 			histAlerts, haErr := pdProvider.GetHistoricalAlertsForServicesWithContext(ctx, data.pdServiceID)
 			if haErr != nil {
 				mu.Lock()
