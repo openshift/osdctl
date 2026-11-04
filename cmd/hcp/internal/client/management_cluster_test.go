@@ -444,6 +444,16 @@ func TestManagementClusterClientConfig(t *testing.T) {
 	assert.Same(t, logger, config.Logger)
 }
 
+func TestVerifyBackupReportsMissingBackupAndNamespace(t *testing.T) {
+	managementClient := NewManagementClusterClient(fake.NewClientBuilder().Build(), nil, nil, WithVeleroNamespace("custom-adp"))
+
+	err := managementClient.verifyBackup(context.Background(), veleroResources(), "missing-backup")
+
+	assert.ErrorContains(t, err, "missing-backup")
+	assert.ErrorContains(t, err, "custom-adp")
+	assert.ErrorContains(t, err, "verify that the backup is available")
+}
+
 func TestLogWorkloadReplicas(t *testing.T) {
 	var output bytes.Buffer
 	logger := logrus.New()

@@ -6,6 +6,7 @@ import (
 
 	internalclient "github.com/openshift/osdctl/cmd/hcp/internal/client"
 	internalcmd "github.com/openshift/osdctl/cmd/hcp/internal/cmd"
+	hcpflags "github.com/openshift/osdctl/cmd/hcp/internal/flags"
 	"github.com/openshift/osdctl/pkg/utils"
 	logrus "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -55,9 +56,37 @@ func NewCmdCreate() *cobra.Command {
 		},
 	}
 
-	flags.AddFlags(cmd.Flags())
-	_ = cmd.MarkFlagRequired("cluster-id")
-	_ = cmd.MarkFlagRequired("reason")
+	flags.RegisterFlags(cmd)
 
 	return cmd
+}
+
+// backupFlags holds the parsed command-line flag values for the backup command.
+type backupFlags struct {
+	hcpflags.Cluster
+	hcpflags.Reason
+	// labels holds optional key=value pairs that are forwarded to the Velero
+	// backup CR via --labels. Populated by repeated --label flags.
+	labels map[string]string
+	// annotations holds optional key=value pairs that are forwarded to the
+	// Velero backup CR via --annotations. Populated by repeated --annotation flags.
+	annotations map[string]string
+}
+
+// RegisterFlags binds the command-line flags for the backup command.
+func (f *backupFlags) RegisterFlags(cmd *cobra.Command) {
+	f.Cluster.AddRequired(cmd)
+	f.Reason.AddRequired(cmd, "Reason for privilege elevation (e.g., OHSS-1234 or PD incident ID)")
+	flags := cmd.Flags()
+	flags.StringToStringVar(&f.labels, "label", nil, "Label to add to the Velero Backup CR (key=value); may be repeated")
+	flags.StringToStringVar(&f.annotations, "annotation", nil, "Annotation to add to the Velero Backup CR (key=value); may be repeated")
+}
+
+func (f *backupFlags) request() internalcmd.BackupRequest {
+	return internalcmd.BackupRequest{
+		ClusterID:   string(f.Cluster),
+		Reason:      string(f.Reason),
+		Labels:      f.labels,
+		Annotations: f.annotations,
+	}
 }

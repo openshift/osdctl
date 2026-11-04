@@ -62,7 +62,6 @@ func (c *DefaultRestoreCreator) CreateRestore(ctx context.Context, request Resto
 		return RestoreResult{}, fmt.Errorf("resolving cluster: %w", err)
 	}
 	targetMCID := cluster.MgmtClusterID
-	verifyBackup := true
 	if request.TargetMC != "" {
 		target, err := c.ocmClient.Cluster(request.TargetMC)
 		if err != nil {
@@ -78,7 +77,6 @@ func (c *DefaultRestoreCreator) CreateRestore(ctx context.Context, request Resto
 			return RestoreResult{}, fmt.Errorf("target management cluster %s is in region %s, expected HCP region %s", request.TargetMC, target.Region().ID(), cluster.HCPClusterRegion)
 		}
 		targetMCID = target.ID()
-		verifyBackup = false
 	}
 	if targetMCID == "" {
 		return RestoreResult{}, fmt.Errorf("target management cluster has no ID")
@@ -90,7 +88,7 @@ func (c *DefaultRestoreCreator) CreateRestore(ctx context.Context, request Resto
 	}
 	waitCtx, cancel := context.WithTimeout(ctx, request.Timeout)
 	defer cancel()
-	result, err := managementClient.RestoreVeleroBackup(waitCtx, internalclient.VeleroRestoreRequest{ClusterID: cluster.HCPClusterID, BackupName: request.BackupName, VerifyBackup: verifyBackup})
+	result, err := managementClient.RestoreVeleroBackup(waitCtx, internalclient.VeleroRestoreRequest{ClusterID: cluster.HCPClusterID, BackupName: request.BackupName, VerifyBackup: true})
 	if err != nil {
 		return RestoreResult{}, err
 	}

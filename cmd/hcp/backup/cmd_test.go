@@ -17,6 +17,14 @@ func TestNewCmdBackup(t *testing.T) {
 	assertCommandNames(t, cmd, "create", "discover")
 }
 
+func TestDiscoverFlagDefault(t *testing.T) {
+	cmd := NewCmdDiscover()
+
+	flag := cmd.Flags().Lookup("limit")
+	assert.NotNil(t, flag)
+	assert.Equal(t, "1", flag.DefValue)
+}
+
 func assertCommandNames(t *testing.T, cmd interface{ Commands() []*cobra.Command }, names ...string) {
 	t.Helper()
 	actual := make([]string, 0, len(cmd.Commands()))

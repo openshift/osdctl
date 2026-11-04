@@ -7,13 +7,13 @@ Migrate HCP snapshot storage to a replacement management cluster
 Discovers EBS VolumeSnapshotContents for the HCP on the replacement management cluster, stores the relevant inventory and snapshot mappings in a restartable journal, copies snapshots through a temporary source-account KMS key, replaces the target VSCs with the copied snapshot IDs, and resumes the control plane only after all replacement VSCs are ready to use.
 
 ```
-osdctl hcp restore migrate-storage --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [flags]
+osdctl hcp restore migrate-storage --cluster-id <cluster-id> --target-mc <management-cluster> --reason <reason> [flags]
 ```
 
 ### Examples
 
 ```
-  osdctl hcp restore migrate-storage --cluster-id ${CLUSTER_ID} --replacement-mc ${REPLACEMENT_MC} --reason ${REASON}
+  osdctl hcp restore migrate-storage --cluster-id ${CLUSTER_ID} --target-mc ${TARGET_MC} --reason ${REASON}
 ```
 
 ### Options
@@ -24,9 +24,9 @@ osdctl hcp restore migrate-storage --cluster-id <cluster-id> --replacement-mc <m
   -h, --help                      help for migrate-storage
   -p, --profile string            AWS profile used to assume management-cluster account roles
       --reason string             Reason for elevated access to the replacement management cluster
-      --replacement-mc string     Internal ID, name, or external ID of the replacement management cluster
       --snapshot-journal string   Path for the restartable snapshot journal (defaults to a cluster-specific file; existing journals prompt to resume or create a numbered file)
       --source-mc string          Internal ID, name, or external ID of the source management cluster (defaults to the HCP's current management cluster)
+      --target-mc string          Internal ID, name, or external ID of the target management cluster
       --timeout duration          Maximum time to wait for all snapshot copies (default 2h0m0s)
 ```
 

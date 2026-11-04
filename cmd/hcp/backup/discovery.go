@@ -5,19 +5,16 @@ import (
 
 	internalclient "github.com/openshift/osdctl/cmd/hcp/internal/client"
 	internalcmd "github.com/openshift/osdctl/cmd/hcp/internal/cmd"
+	hcpflags "github.com/openshift/osdctl/cmd/hcp/internal/flags"
 	"github.com/openshift/osdctl/pkg/utils"
 	logrus "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-type discoveryFlags struct {
-	clusterID  string
-	limit      int
-	awsProfile string
-}
-
 func NewCmdDiscover() *cobra.Command {
-	flags := &discoveryFlags{}
+	flags := &discoveryFlags{
+		Limit: 1,
+	}
 	cmd := &cobra.Command{
 		Use:   "discover --cluster-id <cluster-id>",
 		Short: "Discover HCP backups from the disaster recovery S3 bucket",
@@ -37,7 +34,7 @@ func NewCmdDiscover() *cobra.Command {
 			defer ocmConn.Close()
 			var discoverer internalcmd.BackupDiscoverer = internalcmd.NewDefaultBackupDiscoverer(internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: logger}))
 			backups, err := discoverer.DiscoverBackups(cmd.Context(), internalcmd.DiscoveryRequest{
-				ClusterID: flags.clusterID, Limit: flags.limit, AWSProfile: flags.awsProfile,
+				ClusterID: string(flags.Cluster), Limit: flags.Limit, AWSProfile: string(flags.AWSProfile),
 			})
 			if err != nil {
 				return err
@@ -50,9 +47,18 @@ func NewCmdDiscover() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&flags.clusterID, "cluster-id", "C", "", "Internal ID, name, or external ID of the HCP cluster")
-	cmd.Flags().IntVarP(&flags.limit, "limit", "l", 1, "Number of most recent backups to display (-1 displays all)")
-	cmd.Flags().StringVarP(&flags.awsProfile, "profile", "p", "", "AWS profile used to assume the DR account role")
-	_ = cmd.MarkFlagRequired("cluster-id")
+	flags.RegisterFlags(cmd)
 	return cmd
+}
+
+type discoveryFlags struct {
+	hcpflags.Cluster
+	hcpflags.AWSProfile
+	Limit int
+}
+
+func (f *discoveryFlags) RegisterFlags(cmd *cobra.Command) {
+	f.AddRequired(cmd)
+	f.AWSProfile.Add(cmd, "AWS profile used to assume the DR account role")
+	cmd.Flags().IntVarP(&f.Limit, "limit", "l", f.Limit, "Number of most recent backups to display (-1 displays all)")
 }

@@ -7,23 +7,23 @@ Move recovered HCP add-on work to a replacement management cluster
 Updates the recovered HCP ManagedCluster and add-on hosting annotations, then deletes old-host add-on ManifestWorks with the Orphan policy. ManagedClusterAddOns are retained.
 
 ```
-osdctl hcp restore reimport --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--timeout <duration>] [flags]
+osdctl hcp restore reimport --cluster-id <cluster-id> --target-mc <management-cluster> --reason <reason> [--timeout <duration>] [flags]
 ```
 
 ### Examples
 
 ```
-  osdctl hcp restore reimport --cluster-id ${CLUSTER_ID} --replacement-mc ${REPLACEMENT_MC} --reason ${REASON}
+  osdctl hcp restore reimport --cluster-id ${CLUSTER_ID} --target-mc ${TARGET_MC} --reason ${REASON}
 ```
 
 ### Options
 
 ```
-  -C, --cluster-id string       Internal ID, name, or external ID of the HCP cluster
-  -h, --help                    help for reimport
-      --reason string           Reason for elevated access
-      --replacement-mc string   Replacement management cluster
-      --timeout duration        Maximum time to wait for deletion (default 5m0s)
+  -C, --cluster-id string   Internal ID, name, or external ID of the HCP cluster
+  -h, --help                help for reimport
+      --reason string       Reason for elevated access
+      --target-mc string    Internal ID, name, or external ID of the target management cluster
+      --timeout duration    Maximum time to wait for deletion (default 5m0s)
 ```
 
 ### Options inherited from parent commands

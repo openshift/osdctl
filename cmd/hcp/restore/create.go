@@ -6,21 +6,16 @@ import (
 
 	internalclient "github.com/openshift/osdctl/cmd/hcp/internal/client"
 	internalcmd "github.com/openshift/osdctl/cmd/hcp/internal/cmd"
+	hcpflags "github.com/openshift/osdctl/cmd/hcp/internal/flags"
 	"github.com/openshift/osdctl/pkg/utils"
 	logrus "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-type createFlags struct {
-	clusterID  string
-	targetMC   string
-	backupName string
-	reason     string
-	timeout    time.Duration
-}
-
 func NewCmdCreate() *cobra.Command {
-	flags := &createFlags{}
+	flags := &createFlags{
+		Timeout: 30 * time.Minute,
+	}
 	cmd := &cobra.Command{
 		Use:   "create --cluster-id <cluster-id> --backup-name <backup-name> --reason <reason> [--target-mc <management-cluster>] [--timeout <duration>]",
 		Short: "Create and monitor a Velero restore for an HCP backup",
@@ -39,14 +34,14 @@ func NewCmdCreate() *cobra.Command {
 			defer ocmConn.Close()
 
 			creator := internalcmd.NewDefaultRestoreCreator(internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: logger}))
-			result, err := creator.CreateRestore(cmd.Context(), internalcmd.RestoreRequest{ClusterID: flags.clusterID, TargetMC: flags.targetMC, BackupName: flags.backupName, Reason: flags.reason, Timeout: flags.timeout})
+			result, err := creator.CreateRestore(cmd.Context(), internalcmd.RestoreRequest{ClusterID: string(flags.Cluster), TargetMC: string(flags.Destination), BackupName: flags.BackupName, Reason: string(flags.Reason), Timeout: flags.Timeout})
 			if err != nil {
 				return err
 			}
 			if result.Created {
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Created Velero Restore %s for backup %s.\n", result.Name, flags.backupName)
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Created Velero Restore %s for backup %s.\n", result.Name, flags.BackupName)
 			} else {
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Monitoring existing Velero Restore %s for backup %s.\n", result.Name, flags.backupName)
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Monitoring existing Velero Restore %s for backup %s.\n", result.Name, flags.BackupName)
 			}
 			if err != nil {
 				return err
@@ -55,13 +50,26 @@ func NewCmdCreate() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVarP(&flags.clusterID, "cluster-id", "C", "", "Internal ID, name, or external ID of the HCP cluster")
-	cmd.Flags().StringVar(&flags.targetMC, "target-mc", "", "Internal ID, name, or external ID of the management cluster that will run the restore")
-	cmd.Flags().StringVar(&flags.backupName, "backup-name", "", "Name of the completed Velero backup to restore")
-	cmd.Flags().StringVar(&flags.reason, "reason", "", "Reason for elevated access")
-	cmd.Flags().DurationVar(&flags.timeout, "timeout", 30*time.Minute, "Maximum time to wait for the restore to complete")
-	for _, flag := range []string{"cluster-id", "backup-name", "reason"} {
-		_ = cmd.MarkFlagRequired(flag)
-	}
+	flags.RegisterFlags(cmd)
 	return cmd
+}
+
+type createFlags struct {
+	hcpflags.Cluster
+	hcpflags.Reason
+	hcpflags.Destination
+	BackupName string
+	Timeout    time.Duration
+}
+
+func (f *createFlags) RegisterFlags(cmd *cobra.Command) {
+	f.Cluster.AddRequired(cmd)
+	f.Reason.AddRequired(cmd, "Reason for elevated access")
+	flags := cmd.Flags()
+	f.Destination.Add(cmd, "Internal ID, name, or external ID of the management cluster that will run the restore")
+	flags.StringVar(&f.BackupName, "backup-name", f.BackupName, "Name of the completed Velero backup to restore")
+	flags.DurationVar(&f.Timeout, "timeout", f.Timeout, "Maximum time to wait for the restore to complete")
+	if err := cmd.MarkFlagRequired("backup-name"); err != nil {
+		panic(fmt.Sprintf("marking flag %q required: %v", "backup-name", err))
+	}
 }
