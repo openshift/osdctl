@@ -10,6 +10,15 @@ func TestRhobsCellName(t *testing.T) {
 	if name != "us-east-1-0" {
 		t.Fatalf("rhobsCellName() = %q, want %q", name, "us-east-1-0")
 	}
+
+	invalidURL := "https://user:secret@[invalid-host"
+	_, err = rhobsCellName(invalidURL)
+	if err == nil {
+		t.Fatal("rhobsCellName() returned nil error for invalid URL")
+	}
+	if got, want := err.Error(), "invalid RHOBS cell URL"; got != want {
+		t.Fatalf("rhobsCellName() error = %q, want %q", got, want)
+	}
 }
 
 func TestAlertDetailsContainClusterID(t *testing.T) {

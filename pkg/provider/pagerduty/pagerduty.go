@@ -5,6 +5,7 @@ package pagerduty
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -179,7 +180,7 @@ func containsServiceToken(name, token string) bool {
 func rhobsCellName(rhobsCell string) (string, error) {
 	parsed, err := url.Parse(rhobsCell)
 	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" {
-		return "", fmt.Errorf("invalid RHOBS cell URL %q", rhobsCell)
+		return "", errors.New("invalid RHOBS cell URL")
 	}
 	return strings.Split(parsed.Hostname(), ".")[0], nil
 }
