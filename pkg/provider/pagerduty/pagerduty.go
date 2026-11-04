@@ -148,6 +148,9 @@ func hcpServiceNameMatches(name, region, environment, severity string) bool {
 		return false
 	}
 	if severity == "" {
+		if environment == "production" {
+			return false
+		}
 		return !containsServiceToken(name, "critical") && !containsServiceToken(name, "warning")
 	}
 	if environment != "production" {

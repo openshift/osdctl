@@ -57,6 +57,7 @@ func TestHCPServiceNameMatches(t *testing.T) {
 		{"[HCP] [RHOBS] Production Critical us-east-1", "us-east-1", "production", "critical", true},
 		{"rhobs-hcp-stage-useast1", "us-east-1", "stage", "", true},
 		{"rhobs-hcp-stage-critical-us-east-1", "us-east-1", "stage", "critical", false},
+		{"rhobs-hcp-prod-useast1", "us-east-1", "production", "", false},
 		{"platform-infrastructure-critical-us-east-1", "us-east-1", "production", "critical", false},
 		{"rhobs-hcp-production-critical-us-west-2", "us-east-1", "production", "critical", false},
 	}
