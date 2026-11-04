@@ -227,14 +227,18 @@ func selectBackupConfig(configs []*cmv1.AWSBackupConfig, managementCluster strin
 	return matched, nil
 }
 
-// ManagementClusterClient manages Velero resources for one management cluster.
-// Schedule checks remain unprivileged; creating a backup requires elevation.
+// ManagementClusterClient manages Velero resources and cluster resources for one management cluster.
 type ManagementClusterClient interface {
 	GetVeleroSchedule(ctx context.Context, namespace, name string) (*unstructured.Unstructured, error)
 	CreateVeleroBackup(ctx context.Context, request VeleroBackupRequest) (string, error)
 	RestoreVeleroBackup(ctx context.Context, request VeleroRestoreRequest) (VeleroRestoreResult, error)
 	ListVolumeSnapshotContents(ctx context.Context) (*unstructured.UnstructuredList, error)
 	RemapVolumeSnapshotContents(ctx context.Context, request VolumeSnapshotRemapRequest) error
+	GetRuntimeClient() client.Client
+	GetAWSEndpointService(ctx context.Context, namespace, name string) (*unstructured.Unstructured, error)
+	DeleteAWSEndpointService(ctx context.Context, namespace, name string) error
+	GetService(ctx context.Context, namespace, name string) (*unstructured.Unstructured, error)
+	DeleteService(ctx context.Context, namespace, name string) error
 }
 
 // ServiceClusterClient manages ManifestWorks for one service cluster.
