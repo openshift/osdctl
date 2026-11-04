@@ -197,8 +197,8 @@ func (c *client) GetFiringAlertsForServicesWithContext(ctx context.Context, pdSe
 	incidents := map[string][]pd.Incident{}
 
 	var incidentLimit uint = 25
-	var incidentListOffset uint = 0
 	for _, pdServiceID := range pdServiceIDs {
+		var incidentListOffset uint = 0
 		for {
 			listIncidentsResponse, err := c.pdclient.ListIncidentsWithContext(
 				ctx,
