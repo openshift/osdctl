@@ -1,4 +1,4 @@
-package dnsrecover
+package recover
 
 import (
 	"bufio"
@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type dnsRecoverOptions struct {
+type recoverOptions struct {
 	clusterID                string
 	managementCluster        string
 	dryRun                   bool
@@ -29,11 +29,12 @@ type dnsRecoverOptions struct {
 	logger    *logrus.Logger
 }
 
-func newCmdDNSRecover() *cobra.Command {
-	opts := &dnsRecoverOptions{}
+// NewCmdRecover creates and returns the recover command with validation as a subcommand
+func NewCmdRecover() *cobra.Command {
+	opts := &recoverOptions{}
 	cmd := &cobra.Command{
 		Use:   "recover --cluster-id <hcp-id> --management-cluster <mc-name> --reason <reason>",
-		Short: "Recover ExternalDNS and AWSEndpointService reconciliation for a restored HCP cluster",
+		Short: "Recover ExternalDNS and AWSEndpointService reconciliation after disaster recovery",
 		Long: `Recover ExternalDNS and AWSEndpointService reconciliation after HCP management cluster disaster recovery.
 
 When a hosted cluster is restored on a replacement management cluster, the AWSEndpointService
@@ -83,10 +84,13 @@ The command supports --dry-run to preview changes without making modifications, 
 	_ = cmd.MarkFlagRequired("management-cluster")
 	_ = cmd.MarkFlagRequired("reason")
 
+	// Add validate subcommand
+	cmd.AddCommand(newCmdValidate())
+
 	return cmd
 }
 
-func (o *dnsRecoverOptions) validate(ctx context.Context, ocmConn *ocmsdk.Connection) error {
+func (o *recoverOptions) validate(ctx context.Context, ocmConn *ocmsdk.Connection) error {
 	if o.clusterID == "" || o.managementCluster == "" || o.reason == "" {
 		return fmt.Errorf("--cluster-id, --management-cluster, and --reason are required")
 	}
@@ -98,7 +102,7 @@ func (o *dnsRecoverOptions) validate(ctx context.Context, ocmConn *ocmsdk.Connec
 	return nil
 }
 
-func (o *dnsRecoverOptions) Run(ctx context.Context) error {
+func (o *recoverOptions) Run(ctx context.Context) error {
 	// Create single OCM connection for entire operation
 	ocmConn, err := utils.CreateConnection()
 	if err != nil {

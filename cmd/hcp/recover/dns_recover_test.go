@@ -1,4 +1,4 @@
-package dnsrecover
+package recover
 
 import (
 	"context"
@@ -9,14 +9,14 @@ import (
 )
 
 func TestNewCmdDNSRecover(t *testing.T) {
-	cmd := newCmdDNSRecover()
+	cmd := NewCmdRecover()
 
 	assert.Equal(t, "recover", cmd.Name())
 	assert.Contains(t, cmd.Short, "Recover ExternalDNS")
 }
 
 func TestNewCmdDNSRecover_RequiredFlags(t *testing.T) {
-	cmd := newCmdDNSRecover()
+	cmd := NewCmdRecover()
 
 	requiredFlags := []string{"cluster-id", "management-cluster", "reason"}
 	for _, flag := range requiredFlags {
@@ -28,7 +28,7 @@ func TestNewCmdDNSRecover_RequiredFlags(t *testing.T) {
 }
 
 func TestNewCmdDNSRecover_OptionalFlags(t *testing.T) {
-	cmd := newCmdDNSRecover()
+	cmd := NewCmdRecover()
 
 	optionalFlags := []struct {
 		name         string
@@ -50,7 +50,7 @@ func TestNewCmdDNSRecover_OptionalFlags(t *testing.T) {
 }
 
 func TestNewCmdDNSRecover_ShorthandFlags(t *testing.T) {
-	cmd := newCmdDNSRecover()
+	cmd := NewCmdRecover()
 
 	shorthands := map[string]string{
 		"cluster-id":         "C",
@@ -65,24 +65,24 @@ func TestNewCmdDNSRecover_ShorthandFlags(t *testing.T) {
 }
 
 func TestNewCmdDNSRecover_AcceptsNoArgs(t *testing.T) {
-	cmd := newCmdDNSRecover()
+	cmd := NewCmdRecover()
 	assert.NotNil(t, cmd.Args)
 }
 
 func TestValidate_MissingRequiredFields(t *testing.T) {
 	tests := []struct {
 		name    string
-		opts    dnsRecoverOptions
+		opts    recoverOptions
 		wantErr bool
 	}{
 		{
 			name:    "all empty",
-			opts:    dnsRecoverOptions{},
+			opts:    recoverOptions{},
 			wantErr: true,
 		},
 		{
 			name: "missing management-cluster",
-			opts: dnsRecoverOptions{
+			opts: recoverOptions{
 				clusterID: "test-cluster",
 				reason:    "reason",
 			},
@@ -90,7 +90,7 @@ func TestValidate_MissingRequiredFields(t *testing.T) {
 		},
 		{
 			name: "missing reason",
-			opts: dnsRecoverOptions{
+			opts: recoverOptions{
 				clusterID:         "test-cluster",
 				managementCluster: "dest-mc",
 			},
@@ -98,7 +98,7 @@ func TestValidate_MissingRequiredFields(t *testing.T) {
 		},
 		{
 			name: "missing cluster-id",
-			opts: dnsRecoverOptions{
+			opts: recoverOptions{
 				managementCluster: "dest-mc",
 				reason:            "reason",
 			},
@@ -106,7 +106,7 @@ func TestValidate_MissingRequiredFields(t *testing.T) {
 		},
 		{
 			name: "all provided",
-			opts: dnsRecoverOptions{
+			opts: recoverOptions{
 				clusterID:         "test-cluster",
 				managementCluster: "dest-mc",
 				reason:            "reason",
