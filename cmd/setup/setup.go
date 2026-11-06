@@ -1,13 +1,12 @@
 package setup
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 
+	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -60,7 +59,7 @@ func NewCmdSetup() *cobra.Command {
 			}
 
 			values := make(map[string]string)
-			reader := bufio.NewReader(os.Stdin)
+			prompter := utils.NewDefaultPrompter()
 
 			defaults := make(map[string]string)
 			for _, key := range keys {
@@ -75,9 +74,11 @@ func NewCmdSetup() *cobra.Command {
 
 			for _, key := range keys {
 				defaultValue := defaults[key]
-				fmt.Printf("\033[91mEnter %s \033[0m [\033[94mdefault %s\033[0m]:", key, defaultValue)
-				value, _ := reader.ReadString('\n')
-				value = strings.TrimSpace(value)
+				message := fmt.Sprintf("\033[91mEnter %s \033[0m [\033[94mdefault %s\033[0m]:", key, defaultValue)
+				value, promptErr := prompter.Prompt(cmd.Context(), message)
+				if promptErr != nil {
+					return promptErr
+				}
 
 				if value == "" {
 					value = defaultValue
@@ -128,9 +129,11 @@ func NewCmdSetup() *cobra.Command {
 
 			for _, key := range optionalKeys {
 				defaultValue := defaults[key]
-				fmt.Printf("\033[91mEnter %s (optional)\033[0m [\033[94mdefault %s\033[0m]:", key, defaultValue)
-				value, _ := reader.ReadString('\n')
-				value = strings.TrimSpace(value)
+				message := fmt.Sprintf("\033[91mEnter %s (optional)\033[0m [\033[94mdefault %s\033[0m]:", key, defaultValue)
+				value, promptErr := prompter.Prompt(cmd.Context(), message)
+				if promptErr != nil {
+					return promptErr
+				}
 
 				if value == "" {
 					value = defaultValue
