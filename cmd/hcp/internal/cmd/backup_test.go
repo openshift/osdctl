@@ -71,6 +71,27 @@ func (c *testManagementClusterClient) ListVolumeSnapshotContents(context.Context
 
 func (c *testManagementClusterClient) RemapVolumeSnapshotContents(context.Context, VolumeSnapshotRemapRequest) error {
 	return errors.New("VSC remapping not configured in this test")
+
+}
+
+func (c *testManagementClusterClient) GetRuntimeClient() client.Client {
+	return nil
+}
+
+func (c *testManagementClusterClient) GetAWSEndpointService(_ context.Context, _, _ string) (*unstructured.Unstructured, error) {
+	return nil, errors.New("not configured in this test")
+}
+
+func (c *testManagementClusterClient) DeleteAWSEndpointService(_ context.Context, _, _ string) error {
+	return errors.New("not configured in this test")
+}
+
+func (c *testManagementClusterClient) GetService(_ context.Context, _, _ string) (*unstructured.Unstructured, error) {
+	return nil, errors.New("not configured in this test")
+}
+
+func (c *testManagementClusterClient) DeleteService(_ context.Context, _, _ string) error {
+	return errors.New("not configured in this test")
 }
 
 type testBackupOCMClient struct {
