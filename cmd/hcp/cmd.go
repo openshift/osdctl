@@ -2,6 +2,7 @@ package hcp
 
 import (
 	"github.com/openshift/osdctl/cmd/hcp/backup"
+	dnsrecover "github.com/openshift/osdctl/cmd/hcp/dns-recover"
 	"github.com/openshift/osdctl/cmd/hcp/forceupgrade"
 	getcpautoscalingstatus "github.com/openshift/osdctl/cmd/hcp/get-cp-autoscaling-status"
 	"github.com/openshift/osdctl/cmd/hcp/mustgather"
@@ -19,6 +20,7 @@ func NewCmdHCP() *cobra.Command {
 
 	hcp.AddCommand(backup.NewCmdBackup())
 	hcp.AddCommand(restore.NewCmdRestore())
+	hcp.AddCommand(dnsrecover.NewCmdDNSRecover())
 	hcp.AddCommand(getcpautoscalingstatus.NewCmdGetCPAutoscalingStatus())
 	hcp.AddCommand(mustgather.NewCmdMustGather())
 	hcp.AddCommand(forceupgrade.NewCmdForceUpgrade())
