@@ -3,16 +3,17 @@ package backup
 import (
 	"testing"
 
-	"github.com/spf13/pflag"
+	hcpflags "github.com/openshift/osdctl/cmd/hcp/internal/flags"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBackupFlagsAddFlags(t *testing.T) {
+func TestBackupFlagsRegisterFlags(t *testing.T) {
 	flags := &backupFlags{}
-	set := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	flags.AddFlags(set)
+	cmd := &cobra.Command{}
+	flags.RegisterFlags(cmd)
 
-	err := set.Parse([]string{
+	err := cmd.Flags().Parse([]string{
 		"--cluster-id", "abc123",
 		"--reason", "OHSS-1234",
 		"--label", "env=prod",
@@ -20,8 +21,8 @@ func TestBackupFlagsAddFlags(t *testing.T) {
 	})
 
 	assert.NoError(t, err)
-	assert.Equal(t, "abc123", flags.clusterID)
-	assert.Equal(t, "OHSS-1234", flags.reason)
+	assert.Equal(t, hcpflags.Cluster("abc123"), flags.Cluster)
+	assert.Equal(t, hcpflags.Reason("OHSS-1234"), flags.Reason)
 	assert.Equal(t, map[string]string{"env": "prod"}, flags.labels)
 	assert.Equal(t, map[string]string{"owner": "sre-team"}, flags.annotations)
 }

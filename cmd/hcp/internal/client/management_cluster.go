@@ -905,7 +905,10 @@ func (c *managementClusterClient) verifyBackup(ctx context.Context, resources sc
 	namespace := c.cfg.VeleroNamespace
 	backup := veleroObject(resources, namespace, "Backup", backupName)
 	if err := c.client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: backupName}, backup); err != nil {
-		return fmt.Errorf("getting Velero Backup %s: %w", backupName, err)
+		if apierrors.IsNotFound(err) {
+			return fmt.Errorf("velero Backup %s was not found in namespace %s; verify that the backup is available on this management cluster", backupName, namespace)
+		}
+		return fmt.Errorf("getting Velero Backup %s in namespace %s: %w", backupName, namespace, err)
 	}
 	phase, _, _ := unstructured.NestedString(backup.Object, "status", "phase")
 	if phase != "Completed" {

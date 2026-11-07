@@ -5,15 +5,11 @@ import (
 
 	internalclient "github.com/openshift/osdctl/cmd/hcp/internal/client"
 	internalcmd "github.com/openshift/osdctl/cmd/hcp/internal/cmd"
+	hcpflags "github.com/openshift/osdctl/cmd/hcp/internal/flags"
 	"github.com/openshift/osdctl/pkg/utils"
 	logrus "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
-
-type releaseDNSFlags struct {
-	clusterID  string
-	awsProfile string
-}
 
 func NewCmdReleaseDNS() *cobra.Command {
 	flags := &releaseDNSFlags{}
@@ -30,7 +26,7 @@ func NewCmdReleaseDNS() *cobra.Command {
 			}
 			defer ocmConn.Close()
 			var releaser internalcmd.DNSReleaser = internalcmd.NewDefaultDNSReleaser(internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: logger}))
-			plan, err := releaser.PrepareDNSRelease(cmd.Context(), internalcmd.ReleaseDNSRequest{ClusterID: flags.clusterID, AWSProfile: flags.awsProfile})
+			plan, err := releaser.PrepareDNSRelease(cmd.Context(), internalcmd.ReleaseDNSRequest{ClusterID: string(flags.Cluster), AWSProfile: string(flags.AWSProfile)})
 			if err != nil {
 				return err
 			}
@@ -50,8 +46,16 @@ func NewCmdReleaseDNS() *cobra.Command {
 			return releaser.ReleaseDNS(cmd.Context(), plan)
 		},
 	}
-	cmd.Flags().StringVarP(&flags.clusterID, "cluster-id", "C", "", "Internal ID, name, or external ID of the HCP cluster")
-	cmd.Flags().StringVarP(&flags.awsProfile, "profile", "p", "", "AWS profile used to assume the central DNS account role")
-	_ = cmd.MarkFlagRequired("cluster-id")
+	flags.RegisterFlags(cmd)
 	return cmd
+}
+
+type releaseDNSFlags struct {
+	hcpflags.Cluster
+	hcpflags.AWSProfile
+}
+
+func (f *releaseDNSFlags) RegisterFlags(cmd *cobra.Command) {
+	f.AddRequired(cmd)
+	f.AWSProfile.Add(cmd, "AWS profile used to assume the central DNS account role")
 }
