@@ -1,6 +1,6 @@
 ## osdctl hcp recover
 
-Recover ExternalDNS and AWSEndpointService reconciliation for a restored HCP cluster
+Recover ExternalDNS and AWSEndpointService reconciliation after disaster recovery
 
 ### Synopsis
 
@@ -67,4 +67,5 @@ osdctl hcp recover --cluster-id <hcp-id> --management-cluster <mc-name> --reason
 ### SEE ALSO
 
 * [osdctl hcp](osdctl_hcp.md)	 - 
+* [osdctl hcp recover validate](osdctl_hcp_recover_validate.md)	 - Validate DNS and networking health after HCP disaster recovery
 

@@ -78,6 +78,7 @@ is fully accessible.`,
 	return cmd
 }
 
+// validate checks that all required flags are set and initializes the OCM client.
 func (o *dnsValidateOptions) validate(ctx context.Context, ocmConn *ocmsdk.Connection) error {
 	if o.clusterID == "" || o.managementCluster == "" || o.reason == "" {
 		return fmt.Errorf("--cluster-id, --management-cluster, and --reason are required")
@@ -90,6 +91,7 @@ func (o *dnsValidateOptions) validate(ctx context.Context, ocmConn *ocmsdk.Conne
 	return nil
 }
 
+// Run executes the DNS recovery validation workflow across four phases: DNS records, networking resources, control plane components, and cluster reachability.
 func (o *dnsValidateOptions) Run(ctx context.Context) error {
 	// Create single OCM connection for entire operation
 	ocmConn, err := utils.CreateConnection()
@@ -172,6 +174,7 @@ type validationResult struct {
 	phases []phaseResult
 }
 
+// validateDNSRecords queries Route 53 for cluster DNS records and verifies that API and OAuth endpoints are present.
 func (o *dnsValidateOptions) validateDNSRecords(ctx context.Context, ocmConn *ocmsdk.Connection) phaseResult {
 	result := phaseResult{
 		name:    "Route53 DNS Records",
@@ -233,6 +236,7 @@ func (o *dnsValidateOptions) validateDNSRecords(ctx context.Context, ocmConn *oc
 	return result
 }
 
+// validateNetworkingResources checks that the private-router AWSEndpointService and LoadBalancer Service exist and are ready.
 func (o *dnsValidateOptions) validateNetworkingResources(ctx context.Context, ocmConn *ocmsdk.Connection) phaseResult {
 	result := phaseResult{
 		name:    "Networking Resources",
@@ -307,6 +311,7 @@ func (o *dnsValidateOptions) validateNetworkingResources(ctx context.Context, oc
 	return result
 }
 
+// validateControlPlaneComponents verifies that key control plane pods (etcd, kube-apiserver, konnectivity, ExternalDNS, OVN) are ready.
 func (o *dnsValidateOptions) validateControlPlaneComponents(ctx context.Context, ocmConn *ocmsdk.Connection) phaseResult {
 	result := phaseResult{
 		name:    "Control Plane Components",
@@ -421,6 +426,7 @@ func (o *dnsValidateOptions) validateControlPlaneComponents(ctx context.Context,
 	return result
 }
 
+// validateClusterReachability confirms that the HCP cluster is accessible via OCM and provides next steps for manual verification.
 func (o *dnsValidateOptions) validateClusterReachability(ctx context.Context, ocmConn *ocmsdk.Connection) phaseResult {
 	result := phaseResult{
 		name:    "HCP Cluster Reachability",
@@ -451,6 +457,7 @@ func (o *dnsValidateOptions) validateClusterReachability(ctx context.Context, oc
 	return result
 }
 
+// printPhaseResult displays the result of a validation phase including status, details, and errors.
 func printPhaseResult(phase phaseResult) {
 	statusSymbol := "✅"
 	statusText := "PASSED"
@@ -476,6 +483,7 @@ func printPhaseResult(phase phaseResult) {
 	}
 }
 
+// printValidationSummary displays the overall validation results including pass/warning/fail counts and recommendations.
 func printValidationSummary(results validationResult, clusterID, managementCluster string) {
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "╔════════════════════════════════════════════════════════════╗\n")

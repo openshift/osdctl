@@ -90,6 +90,7 @@ The command supports --dry-run to preview changes without making modifications, 
 	return cmd
 }
 
+// validate checks that all required flags are set and initializes the OCM client.
 func (o *recoverOptions) validate(ctx context.Context, ocmConn *ocmsdk.Connection) error {
 	if o.clusterID == "" || o.managementCluster == "" || o.reason == "" {
 		return fmt.Errorf("--cluster-id, --management-cluster, and --reason are required")
@@ -102,6 +103,7 @@ func (o *recoverOptions) validate(ctx context.Context, ocmConn *ocmsdk.Connectio
 	return nil
 }
 
+// Run executes the DNS recovery workflow in three phases: planning, verification, and execution.
 func (o *recoverOptions) Run(ctx context.Context) error {
 	// Create single OCM connection for entire operation
 	ocmConn, err := utils.CreateConnection()
@@ -161,6 +163,7 @@ func (o *recoverOptions) Run(ctx context.Context) error {
 	return nil
 }
 
+// printRecoveryPlan displays the recovery plan including current state and actions to be taken.
 func printRecoveryPlan(plan internalcmd.DNSRecoveryPlan, clusterID, managementCluster string) {
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "╔════════════════════════════════════════════════════════════╗\n")
@@ -199,6 +202,7 @@ func printRecoveryPlan(plan internalcmd.DNSRecoveryPlan, clusterID, managementCl
 	fmt.Fprintf(os.Stderr, "\n")
 }
 
+// askConfirmation prompts the user to confirm the destructive recovery action.
 func askConfirmation(logger *logrus.Logger) bool {
 	// Write to stderr so stdout can be piped/redirected for other uses
 	fmt.Fprintf(os.Stderr, "\n⚠️  DESTRUCTIVE ACTION: This will delete the following resource:\n")
