@@ -29,9 +29,12 @@ fmt: ## format go code
 
 OS := $(shell go env GOOS | sed 's/[a-z]/\U&/')
 ARCH := $(shell go env GOARCH)
+GORELEASER_VERSION_FILE := .goreleaser-version
+GORELEASER_VERSION := $(shell test -f ${GORELEASER_VERSION_FILE} && cat ${GORELEASER_VERSION_FILE})
+
 .PHONY: download-goreleaser
-download-goreleaser: ## Download goreleaser binary
-	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser/v2@v2.11.2
+download-goreleaser: check-goreleaser-version-file ## Download goreleaser binary
+	GOBIN=${BASE_DIR}/bin/ go install github.com/goreleaser/goreleaser/v2@${GORELEASER_VERSION}
 
 # Update documentation as a part of every release
 .PHONY: generate-docs
@@ -43,10 +46,32 @@ generate-docs: ## Generate docs
 verify-docs:
 	./scripts/verify-docs.sh
 
-# CI build containers don't include goreleaser by default,
-# so they need to get it first, and then run the build
 .PHONY: ci-build
-ci-build: download-goreleaser build ## Build for CI environment
+ci-build: check-goreleaser ## Build for CI environment
+	$(MAKE) build
+
+.PHONY: check-goreleaser
+check-goreleaser: check-goreleaser-version-file ## Verify the goreleaser version
+	@if ! command -v goreleaser >/dev/null; then \
+		echo "goreleaser is not installed; run 'make download-goreleaser'." >&2; \
+		exit 1; \
+	fi
+	@actual_version="$$(goreleaser --version | awk '/^GitVersion:/ { print $$2; exit }')"; \
+	if [ "v$${actual_version#v}" != "${GORELEASER_VERSION}" ]; then \
+		echo "goreleaser version $$actual_version does not match required ${GORELEASER_VERSION}; run 'make download-goreleaser'." >&2; \
+		exit 1; \
+	fi
+
+.PHONY: check-goreleaser-version-file
+check-goreleaser-version-file: ## Verify the configured goreleaser version
+	@if [ ! -f "${GORELEASER_VERSION_FILE}" ]; then \
+		echo "${GORELEASER_VERSION_FILE} is missing; restore it with the required goreleaser version." >&2; \
+		exit 1; \
+	fi
+	@if ! echo "${GORELEASER_VERSION}" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		echo "${GORELEASER_VERSION_FILE} must contain a vMAJOR.MINOR.PATCH version, got '${GORELEASER_VERSION}'." >&2; \
+		exit 1; \
+	fi
 
 SINGLE_TARGET ?= false
 
