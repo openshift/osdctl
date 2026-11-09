@@ -3,21 +3,21 @@
 Reassign an HCP to a replacement management cluster in OCM
 
 ```
-osdctl hcp restore reassign --cluster-id <cluster-id> --replacement-mc <management-cluster> [flags]
+osdctl hcp restore reassign --cluster-id <cluster-id> --target-mc <management-cluster> [flags]
 ```
 
 ### Examples
 
 ```
-  osdctl hcp restore reassign --cluster-id ${CLUSTER_ID} --replacement-mc ${REPLACEMENT_MC}
+  osdctl hcp restore reassign --cluster-id ${CLUSTER_ID} --target-mc ${TARGET_MC}
 ```
 
 ### Options
 
 ```
-  -C, --cluster-id string       Internal ID, name, or external ID of the HCP cluster
-  -h, --help                    help for reassign
-      --replacement-mc string   Internal ID, name, or external ID of the replacement management cluster
+  -C, --cluster-id string   Internal ID, name, or external ID of the HCP cluster
+  -h, --help                help for reassign
+      --target-mc string    Internal ID, name, or external ID of the target management cluster
 ```
 
 ### Options inherited from parent commands

@@ -7,27 +7,26 @@ import (
 
 	internalclient "github.com/openshift/osdctl/cmd/hcp/internal/client"
 	internalcmd "github.com/openshift/osdctl/cmd/hcp/internal/cmd"
+	hcpflags "github.com/openshift/osdctl/cmd/hcp/internal/flags"
 	"github.com/openshift/osdctl/pkg/utils"
 	logrus "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-type reimportFlags struct {
-	clusterID     string
-	replacementMC string
-	reason        string
-	timeout       time.Duration
-}
-
 func NewCmdReimport() *cobra.Command {
-	flags := &reimportFlags{}
+	flags := &reimportFlags{
+		Timeout: 5 * time.Minute,
+	}
 	cmd := &cobra.Command{
-		Use:     "reimport --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--timeout <duration>]",
+		Use:     "reimport --cluster-id <cluster-id> --target-mc <management-cluster> --reason <reason> [--timeout <duration>]",
 		Short:   "Move recovered HCP add-on work to a replacement management cluster",
 		Long:    "Updates the recovered HCP ManagedCluster and add-on hosting annotations, then deletes old-host add-on ManifestWorks with the Orphan policy. ManagedClusterAddOns are retained.",
-		Example: "  osdctl hcp restore reimport --cluster-id ${CLUSTER_ID} --replacement-mc ${REPLACEMENT_MC} --reason ${REASON}",
+		Example: "  osdctl hcp restore reimport --cluster-id ${CLUSTER_ID} --target-mc ${TARGET_MC} --reason ${REASON}",
 		Args:    cobra.NoArgs, DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) (returnErr error) {
+			if err := flags.Validate(); err != nil {
+				return err
+			}
 			logger := logrus.New()
 			logger.SetOutput(cmd.ErrOrStderr())
 			conn, err := utils.CreateConnection()
@@ -40,7 +39,7 @@ func NewCmdReimport() *cobra.Command {
 				}
 			}()
 			manager := internalcmd.NewDefaultReimportManager(internalclient.NewOCMClient(conn, internalclient.WithLogger{Logger: logger}))
-			plan, err := manager.PrepareReimport(cmd.Context(), internalcmd.ReimportRequest{ClusterID: flags.clusterID, ReplacementMC: flags.replacementMC, Reason: flags.reason, Timeout: flags.timeout})
+			plan, err := manager.PrepareReimport(cmd.Context(), internalcmd.ReimportRequest{ClusterID: string(flags.Cluster), ReplacementMC: string(flags.Destination), Reason: string(flags.Reason), Timeout: flags.Timeout})
 			if err != nil {
 				return err
 			}
@@ -57,21 +56,27 @@ func NewCmdReimport() *cobra.Command {
 				_, err := fmt.Fprintln(cmd.OutOrStdout(), "Reimport cancelled.")
 				return err
 			}
-			if err := manager.Reimport(cmd.Context(), plan, flags.timeout); err != nil {
+			if err := manager.Reimport(cmd.Context(), plan, flags.Timeout); err != nil {
 				return err
 			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Updated ManagedCluster %s and add-on hosting annotations for management cluster %s; orphaned old-host add-on ManifestWorks.\n", plan.ManagedClusterName, plan.ReplacementManagementCluster)
 			return err
 		},
 	}
-	cmd.Flags().StringVarP(&flags.clusterID, "cluster-id", "C", "", "Internal ID, name, or external ID of the HCP cluster")
-	cmd.Flags().StringVar(&flags.replacementMC, "replacement-mc", "", "Replacement management cluster")
-	cmd.Flags().StringVar(&flags.reason, "reason", "", "Reason for elevated access")
-	cmd.Flags().DurationVar(&flags.timeout, "timeout", 5*time.Minute, "Maximum time to wait for deletion")
-	for _, flag := range []string{"cluster-id", "replacement-mc", "reason"} {
-		if err := cmd.MarkFlagRequired(flag); err != nil {
-			panic(fmt.Sprintf("marking flag %q required: %v", flag, err))
-		}
-	}
+	flags.RegisterFlags(cmd)
 	return cmd
+}
+
+type reimportFlags struct {
+	hcpflags.Cluster
+	hcpflags.Reason
+	hcpflags.Destination
+	Timeout time.Duration
+}
+
+func (f *reimportFlags) RegisterFlags(cmd *cobra.Command) {
+	f.Cluster.AddRequired(cmd)
+	f.Destination.Add(cmd, "Internal ID, name, or external ID of the target management cluster")
+	f.Reason.AddRequired(cmd, "Reason for elevated access")
+	cmd.Flags().DurationVar(&f.Timeout, "timeout", f.Timeout, "Maximum time to wait for deletion")
 }

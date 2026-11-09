@@ -5,20 +5,22 @@ import (
 
 	internalclient "github.com/openshift/osdctl/cmd/hcp/internal/client"
 	internalcmd "github.com/openshift/osdctl/cmd/hcp/internal/cmd"
+	hcpflags "github.com/openshift/osdctl/cmd/hcp/internal/flags"
 	"github.com/openshift/osdctl/pkg/utils"
 	logrus "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-type updateTrustPolicyFlags struct{ clusterID, sourceMC, replacementMC, awsProfile string }
-
 func NewCmdUpdateTrustPolicy() *cobra.Command {
 	flags := &updateTrustPolicyFlags{}
 	cmd := &cobra.Command{
-		Use: "update-trust-policy --cluster-id <cluster-id> --replacement-mc <management-cluster>", Short: "Allow a replacement management cluster to access HCP backups",
-		Example: "  osdctl hcp restore update-trust-policy --cluster-id ${CLUSTER_ID} --replacement-mc ${REPLACEMENT_MC}\n  osdctl hcp restore update-trust-policy --cluster-id ${CLUSTER_ID} --source-mc ${SOURCE_MC} --replacement-mc ${REPLACEMENT_MC} --profile ${AWS_PROFILE}",
+		Use: "update-trust-policy --cluster-id <cluster-id> --target-mc <management-cluster>", Short: "Allow a target management cluster to access HCP backups",
+		Example: "  osdctl hcp restore update-trust-policy --cluster-id ${CLUSTER_ID} --target-mc ${TARGET_MC}\n  osdctl hcp restore update-trust-policy --cluster-id ${CLUSTER_ID} --source-mc ${SOURCE_MC} --target-mc ${TARGET_MC} --profile ${AWS_PROFILE}",
 		Args:    cobra.NoArgs, DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := flags.Validate(); err != nil {
+				return err
+			}
 			logger := logrus.New()
 			logger.SetOutput(cmd.ErrOrStderr())
 			ocmConn, err := utils.CreateConnection()
@@ -27,7 +29,7 @@ func NewCmdUpdateTrustPolicy() *cobra.Command {
 			}
 			defer ocmConn.Close()
 			var updater internalcmd.TrustPolicyUpdater = internalcmd.NewDefaultTrustPolicyUpdater(internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: logger}))
-			plan, err := updater.PrepareTrustPolicyUpdate(cmd.Context(), internalcmd.UpdateTrustPolicyRequest{ClusterID: flags.clusterID, SourceMC: flags.sourceMC, ReplacementMC: flags.replacementMC, AWSProfile: flags.awsProfile})
+			plan, err := updater.PrepareTrustPolicyUpdate(cmd.Context(), internalcmd.UpdateTrustPolicyRequest{ClusterID: string(flags.Cluster), SourceMC: string(flags.Source), ReplacementMC: string(flags.Destination), AWSProfile: string(flags.AWSProfile)})
 			if err != nil {
 				return err
 			}
@@ -42,11 +44,20 @@ func NewCmdUpdateTrustPolicy() *cobra.Command {
 			return updater.UpdateTrustPolicy(cmd.Context(), plan)
 		},
 	}
-	cmd.Flags().StringVarP(&flags.clusterID, "cluster-id", "C", "", "Internal ID, name, or external ID of the HCP cluster")
-	cmd.Flags().StringVar(&flags.sourceMC, "source-mc", "", "Internal ID, name, or external ID of the management cluster currently trusted by the backup role")
-	cmd.Flags().StringVar(&flags.replacementMC, "replacement-mc", "", "Internal ID, name, or external ID of the replacement management cluster")
-	cmd.Flags().StringVarP(&flags.awsProfile, "profile", "p", "", "AWS profile used to assume the DR account role")
-	_ = cmd.MarkFlagRequired("cluster-id")
-	_ = cmd.MarkFlagRequired("replacement-mc")
+	flags.RegisterFlags(cmd)
 	return cmd
+}
+
+type updateTrustPolicyFlags struct {
+	hcpflags.Cluster
+	hcpflags.Destination
+	hcpflags.Source
+	hcpflags.AWSProfile
+}
+
+func (f *updateTrustPolicyFlags) RegisterFlags(cmd *cobra.Command) {
+	f.AddRequired(cmd)
+	f.Source.Add(cmd, "Internal ID, name, or external ID of the management cluster currently trusted by the backup role")
+	f.Destination.Add(cmd, "Internal ID, name, or external ID of the target management cluster")
+	f.AWSProfile.Add(cmd, "AWS profile used to assume the DR account role")
 }

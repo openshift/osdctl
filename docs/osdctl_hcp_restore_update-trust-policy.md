@@ -1,26 +1,26 @@
 ## osdctl hcp restore update-trust-policy
 
-Allow a replacement management cluster to access HCP backups
+Allow a target management cluster to access HCP backups
 
 ```
-osdctl hcp restore update-trust-policy --cluster-id <cluster-id> --replacement-mc <management-cluster> [flags]
+osdctl hcp restore update-trust-policy --cluster-id <cluster-id> --target-mc <management-cluster> [flags]
 ```
 
 ### Examples
 
 ```
-  osdctl hcp restore update-trust-policy --cluster-id ${CLUSTER_ID} --replacement-mc ${REPLACEMENT_MC}
-  osdctl hcp restore update-trust-policy --cluster-id ${CLUSTER_ID} --source-mc ${SOURCE_MC} --replacement-mc ${REPLACEMENT_MC} --profile ${AWS_PROFILE}
+  osdctl hcp restore update-trust-policy --cluster-id ${CLUSTER_ID} --target-mc ${TARGET_MC}
+  osdctl hcp restore update-trust-policy --cluster-id ${CLUSTER_ID} --source-mc ${SOURCE_MC} --target-mc ${TARGET_MC} --profile ${AWS_PROFILE}
 ```
 
 ### Options
 
 ```
-  -C, --cluster-id string       Internal ID, name, or external ID of the HCP cluster
-  -h, --help                    help for update-trust-policy
-  -p, --profile string          AWS profile used to assume the DR account role
-      --replacement-mc string   Internal ID, name, or external ID of the replacement management cluster
-      --source-mc string        Internal ID, name, or external ID of the management cluster currently trusted by the backup role
+  -C, --cluster-id string   Internal ID, name, or external ID of the HCP cluster
+  -h, --help                help for update-trust-policy
+  -p, --profile string      AWS profile used to assume the DR account role
+      --source-mc string    Internal ID, name, or external ID of the management cluster currently trusted by the backup role
+      --target-mc string    Internal ID, name, or external ID of the target management cluster
 ```
 
 ### Options inherited from parent commands

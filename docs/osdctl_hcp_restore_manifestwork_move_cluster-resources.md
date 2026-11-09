@@ -3,24 +3,24 @@
 Move the namespace, HostedCluster, and NodePool ManifestWorks
 
 ```
-osdctl hcp restore manifestwork move cluster-resources --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>] [flags]
+osdctl hcp restore manifestwork move cluster-resources --cluster-id <cluster-id> --target-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>] [flags]
 ```
 
 ### Examples
 
 ```
-  osdctl hcp restore manifestwork move cluster-resources --cluster-id ${CLUSTER_ID} --replacement-mc ${REPLACEMENT_MC} --reason ${REASON}
-  osdctl hcp restore manifestwork move cluster-resources --cluster-id ${CLUSTER_ID} --source-mc ${SOURCE_MC} --replacement-mc ${REPLACEMENT_MC} --reason ${REASON}
+  osdctl hcp restore manifestwork move cluster-resources --cluster-id ${CLUSTER_ID} --target-mc ${TARGET_MC} --reason ${REASON}
+  osdctl hcp restore manifestwork move cluster-resources --cluster-id ${CLUSTER_ID} --source-mc ${SOURCE_MC} --target-mc ${TARGET_MC} --reason ${REASON}
 ```
 
 ### Options
 
 ```
-  -C, --cluster-id string       Internal ID, name, or external ID of the HCP cluster
-  -h, --help                    help for cluster-resources
-      --reason string           Reason for elevated access
-      --replacement-mc string   Management cluster whose namespace contains the replacement ManifestWorks
-      --source-mc string        Management cluster whose namespace contains the ManifestWorks (defaults to the HCP management cluster)
+  -C, --cluster-id string   Internal ID, name, or external ID of the HCP cluster
+  -h, --help                help for cluster-resources
+      --reason string       Reason for elevated access
+      --source-mc string    Management cluster whose namespace contains the ManifestWorks (defaults to the HCP management cluster)
+      --target-mc string    Internal ID, name, or external ID of the target management cluster
 ```
 
 ### Options inherited from parent commands

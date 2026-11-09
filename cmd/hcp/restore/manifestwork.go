@@ -6,6 +6,7 @@ import (
 
 	internalclient "github.com/openshift/osdctl/cmd/hcp/internal/client"
 	internalcmd "github.com/openshift/osdctl/cmd/hcp/internal/cmd"
+	hcpflags "github.com/openshift/osdctl/cmd/hcp/internal/flags"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/openshift/osdctl/pkg/utils"
 	logrus "github.com/sirupsen/logrus"
@@ -23,12 +24,15 @@ func NewCmdManifestWork() *cobra.Command {
 func newCmdManifestWorkCompare() *cobra.Command {
 	flags := &manifestWorkFlags{}
 	cmd := &cobra.Command{
-		Use:               "compare --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>]",
+		Use:               "compare --cluster-id <cluster-id> --target-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>]",
 		Short:             "Compare HCP ManifestWorks between management clusters",
-		Example:           "  osdctl hcp restore manifestwork compare --cluster-id ${CLUSTER_ID} --replacement-mc ${REPLACEMENT_MC} --reason ${REASON}\n  osdctl hcp restore manifestwork compare --cluster-id ${CLUSTER_ID} --source-mc ${SOURCE_MC} --replacement-mc ${REPLACEMENT_MC} --reason ${REASON}",
+		Example:           "  osdctl hcp restore manifestwork compare --cluster-id ${CLUSTER_ID} --target-mc ${TARGET_MC} --reason ${REASON}\n  osdctl hcp restore manifestwork compare --cluster-id ${CLUSTER_ID} --source-mc ${SOURCE_MC} --target-mc ${TARGET_MC} --reason ${REASON}",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := flags.Validate(); err != nil {
+				return err
+			}
 			ocmConn, err := utils.CreateConnection()
 			if err != nil {
 				return fmt.Errorf("creating OCM connection: %w", err)
@@ -44,7 +48,7 @@ func newCmdManifestWorkCompare() *cobra.Command {
 			return printManifestWorkComparison(cmd.OutOrStdout(), comparisons)
 		},
 	}
-	flags.AddFlags(cmd)
+	flags.RegisterFlags(cmd)
 	return cmd
 }
 
@@ -57,12 +61,15 @@ func newCmdManifestWorkMove() *cobra.Command {
 func newCmdManifestWorkMoveVeleroResources() *cobra.Command {
 	flags := &manifestWorkFlags{}
 	cmd := &cobra.Command{
-		Use:               "velero-resources --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>]",
+		Use:               "velero-resources --cluster-id <cluster-id> --target-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>]",
 		Short:             "Move the Velero resource ManifestWorks",
-		Example:           "  osdctl hcp restore manifestwork move velero-resources --cluster-id ${CLUSTER_ID} --replacement-mc ${REPLACEMENT_MC} --reason ${REASON}\n  osdctl hcp restore manifestwork move velero-resources --cluster-id ${CLUSTER_ID} --source-mc ${SOURCE_MC} --replacement-mc ${REPLACEMENT_MC} --reason ${REASON}",
+		Example:           "  osdctl hcp restore manifestwork move velero-resources --cluster-id ${CLUSTER_ID} --target-mc ${TARGET_MC} --reason ${REASON}\n  osdctl hcp restore manifestwork move velero-resources --cluster-id ${CLUSTER_ID} --source-mc ${SOURCE_MC} --target-mc ${TARGET_MC} --reason ${REASON}",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := flags.Validate(); err != nil {
+				return err
+			}
 			ocmConn, err := utils.CreateConnection()
 			if err != nil {
 				return fmt.Errorf("creating OCM connection: %w", err)
@@ -96,19 +103,22 @@ func newCmdManifestWorkMoveVeleroResources() *cobra.Command {
 			return err
 		},
 	}
-	flags.AddFlags(cmd)
+	flags.RegisterFlags(cmd)
 	return cmd
 }
 
 func newCmdManifestWorkMoveClusterResources() *cobra.Command {
 	flags := &manifestWorkFlags{}
 	cmd := &cobra.Command{
-		Use:               "cluster-resources --cluster-id <cluster-id> --replacement-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>]",
+		Use:               "cluster-resources --cluster-id <cluster-id> --target-mc <management-cluster> --reason <reason> [--source-mc <management-cluster>]",
 		Short:             "Move the namespace, HostedCluster, and NodePool ManifestWorks",
-		Example:           "  osdctl hcp restore manifestwork move cluster-resources --cluster-id ${CLUSTER_ID} --replacement-mc ${REPLACEMENT_MC} --reason ${REASON}\n  osdctl hcp restore manifestwork move cluster-resources --cluster-id ${CLUSTER_ID} --source-mc ${SOURCE_MC} --replacement-mc ${REPLACEMENT_MC} --reason ${REASON}",
+		Example:           "  osdctl hcp restore manifestwork move cluster-resources --cluster-id ${CLUSTER_ID} --target-mc ${TARGET_MC} --reason ${REASON}\n  osdctl hcp restore manifestwork move cluster-resources --cluster-id ${CLUSTER_ID} --source-mc ${SOURCE_MC} --target-mc ${TARGET_MC} --reason ${REASON}",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := flags.Validate(); err != nil {
+				return err
+			}
 			ocmConn, err := utils.CreateConnection()
 			if err != nil {
 				return fmt.Errorf("creating OCM connection: %w", err)
@@ -138,24 +148,26 @@ func newCmdManifestWorkMoveClusterResources() *cobra.Command {
 			return err
 		},
 	}
-	flags.AddFlags(cmd)
+	flags.RegisterFlags(cmd)
 	return cmd
 }
 
-type manifestWorkFlags struct{ clusterID, sourceMC, replacementMC, reason string }
+type manifestWorkFlags struct {
+	hcpflags.Cluster
+	hcpflags.Reason
+	hcpflags.Destination
+	hcpflags.Source
+}
 
-func (flags *manifestWorkFlags) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVarP(&flags.clusterID, "cluster-id", "C", "", "Internal ID, name, or external ID of the HCP cluster")
-	cmd.Flags().StringVar(&flags.sourceMC, "source-mc", "", "Management cluster whose namespace contains the ManifestWorks (defaults to the HCP management cluster)")
-	cmd.Flags().StringVar(&flags.replacementMC, "replacement-mc", "", "Management cluster whose namespace contains the replacement ManifestWorks")
-	cmd.Flags().StringVar(&flags.reason, "reason", "", "Reason for elevated access")
-	for _, flag := range []string{"cluster-id", "replacement-mc", "reason"} {
-		_ = cmd.MarkFlagRequired(flag)
-	}
+func (f *manifestWorkFlags) RegisterFlags(cmd *cobra.Command) {
+	f.Cluster.AddRequired(cmd)
+	f.Source.Add(cmd, "Management cluster whose namespace contains the ManifestWorks (defaults to the HCP management cluster)")
+	f.Destination.Add(cmd, "Internal ID, name, or external ID of the target management cluster")
+	f.Reason.AddRequired(cmd, "Reason for elevated access")
 }
 
 func manifestWorkRequest(flags *manifestWorkFlags) internalcmd.ManifestWorkRequest {
-	return internalcmd.ManifestWorkRequest{ClusterID: flags.clusterID, SourceMC: flags.sourceMC, ReplacementMC: flags.replacementMC, Reason: flags.reason}
+	return internalcmd.ManifestWorkRequest{ClusterID: string(flags.Cluster), SourceMC: string(flags.Source), ReplacementMC: string(flags.Destination), Reason: string(flags.Reason)}
 }
 
 func printManifestWorkComparison(out io.Writer, comparisons []internalcmd.ManifestWorkComparison) error {

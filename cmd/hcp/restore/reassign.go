@@ -5,22 +5,24 @@ import (
 
 	internalclient "github.com/openshift/osdctl/cmd/hcp/internal/client"
 	internalcmd "github.com/openshift/osdctl/cmd/hcp/internal/cmd"
+	hcpflags "github.com/openshift/osdctl/cmd/hcp/internal/flags"
 	"github.com/openshift/osdctl/pkg/utils"
 	logrus "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-type reassignFlags struct{ clusterID, replacementMC string }
-
 func NewCmdReassign() *cobra.Command {
 	flags := &reassignFlags{}
 	cmd := &cobra.Command{
-		Use:               "reassign --cluster-id <cluster-id> --replacement-mc <management-cluster>",
+		Use:               "reassign --cluster-id <cluster-id> --target-mc <management-cluster>",
 		Short:             "Reassign an HCP to a replacement management cluster in OCM",
-		Example:           "  osdctl hcp restore reassign --cluster-id ${CLUSTER_ID} --replacement-mc ${REPLACEMENT_MC}",
+		Example:           "  osdctl hcp restore reassign --cluster-id ${CLUSTER_ID} --target-mc ${TARGET_MC}",
 		Args:              cobra.NoArgs,
 		DisableAutoGenTag: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := flags.Validate(); err != nil {
+				return err
+			}
 			logger := logrus.New()
 			logger.SetOutput(cmd.ErrOrStderr())
 			ocmConn, err := utils.CreateConnection()
@@ -30,7 +32,7 @@ func NewCmdReassign() *cobra.Command {
 			defer ocmConn.Close()
 
 			manager := internalcmd.NewDefaultReassignmentManager(internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: logger}))
-			plan, err := manager.PrepareReassignment(cmd.Context(), internalcmd.ReassignmentRequest{ClusterID: flags.clusterID, ReplacementMC: flags.replacementMC})
+			plan, err := manager.PrepareReassignment(cmd.Context(), internalcmd.ReassignmentRequest{ClusterID: string(flags.Cluster), ReplacementMC: string(flags.Destination)})
 			if err != nil {
 				return err
 			}
@@ -55,10 +57,16 @@ func NewCmdReassign() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().StringVarP(&flags.clusterID, "cluster-id", "C", "", "Internal ID, name, or external ID of the HCP cluster")
-	cmd.Flags().StringVar(&flags.replacementMC, "replacement-mc", "", "Internal ID, name, or external ID of the replacement management cluster")
-	for _, flag := range []string{"cluster-id", "replacement-mc"} {
-		_ = cmd.MarkFlagRequired(flag)
-	}
+	flags.RegisterFlags(cmd)
 	return cmd
+}
+
+type reassignFlags struct {
+	hcpflags.Cluster
+	hcpflags.Destination
+}
+
+func (f *reassignFlags) RegisterFlags(cmd *cobra.Command) {
+	f.AddRequired(cmd)
+	f.Destination.Add(cmd, "Internal ID, name, or external ID of the target management cluster")
 }

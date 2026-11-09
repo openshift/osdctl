@@ -233,10 +233,6 @@ func (c *DefaultSnapshotCopier) PrepareSnapshotCopy(ctx context.Context, request
 	if err != nil {
 		return SnapshotCopyPlan{}, err
 	}
-	entries, err = reconcileJournaledSnapshotEntries(journalPath, entries)
-	if err != nil {
-		return SnapshotCopyPlan{}, err
-	}
 
 	sourceClient, err := c.awsClient.AccountClient(request.AWSProfile, cluster.HCPClusterRegion, sourceAccountID)
 	if err != nil {
@@ -252,14 +248,24 @@ func (c *DefaultSnapshotCopier) PrepareSnapshotCopy(ctx context.Context, request
 	if err := validateAccount(destinationClient, replacementAccountID); err != nil {
 		return SnapshotCopyPlan{}, fmt.Errorf("validating replacement account: %w", err)
 	}
-	for _, entry := range entries {
-		if err := validateSourceSnapshot(ctx, sourceClient, entry.OriginalSnapshotID); err != nil {
-			return SnapshotCopyPlan{}, err
-		}
-	}
-
 	inventory := selectedVSCInventory(contents, entries)
 	return SnapshotCopyPlan{ClusterID: cluster.HCPClusterID, Region: cluster.HCPClusterRegion, SnapshotJournalPath: journalPath, SourceAccountID: sourceAccountID, ReplacementAccountID: replacementAccountID, SourceManagementCluster: source.Name(), ReplacementManagementCluster: replacement.Name(), ReplacementManagementClusterID: replacement.ID(), HCPNamespace: hcpNamespace, DomainPrefix: cluster.DomainPrefix, Reason: request.Reason, Entries: entries, VSCInventory: inventory, Concurrency: request.Concurrency, source: sourceClient, destination: destinationClient}, nil
+}
+
+// ReconcileSnapshotCopyPlan applies the selected journal to the discovered
+// snapshots and confirms that every source snapshot can be copied.
+func ReconcileSnapshotCopyPlan(ctx context.Context, plan *SnapshotCopyPlan) error {
+	entries, err := reconcileJournaledSnapshotEntries(plan.SnapshotJournalPath, plan.Entries)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if err := validateSourceSnapshot(ctx, plan.source, entry.OriginalSnapshotID); err != nil {
+			return err
+		}
+	}
+	plan.Entries = entries
+	return nil
 }
 
 func (c *DefaultSnapshotCopier) CopySnapshots(ctx context.Context, plan SnapshotCopyPlan) error {
