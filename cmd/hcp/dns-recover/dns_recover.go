@@ -3,6 +3,7 @@ package dnsrecover
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -125,7 +126,27 @@ func (o *dnsRecoverOptions) Run(ctx context.Context) error {
 	o.logger.Infof("Phase 1/3: Building recovery plan...")
 	plan, err := recoverymanager.PrepareRecovery(ctx, req)
 	if err != nil {
-		return fmt.Errorf("unable to complete planned recovery for hcp cluster %s to mgmt cluster %s : %w", o.clusterID, o.managementCluster, err)
+		// Check if error is due to existing DNS records
+		var dnsErr *internalcmd.DNSRecordsExistError
+		if errors.As(err, &dnsErr) {
+			// Prompt user to continue despite DNS records
+			fmt.Fprintf(os.Stderr, "\n")
+			if !askDNSConfirmation() {
+				fmt.Fprintf(os.Stderr, "\nRecovery cancelled. To clean up DNS records first, run:\n")
+				fmt.Fprintf(os.Stderr, "  osdctl hcp restore release-dns --cluster-id %s\n", o.clusterID)
+				return nil
+			}
+			// User confirmed - recreate client and retry with DNS verification skipped
+			o.ocmClient = internalclient.NewOCMClient(ocmConn, internalclient.WithLogger{Logger: o.logger})
+			recoverymanager = internalcmd.NewDefaultDNSRecoveryManager(*o.ocmClient, o.logger)
+			req.SkipDNSVerification = true
+			plan, err = recoverymanager.PrepareRecovery(ctx, req)
+			if err != nil {
+				return fmt.Errorf("unable to complete planned recovery for hcp cluster %s to mgmt cluster %s : %w", o.clusterID, o.managementCluster, err)
+			}
+		} else {
+			return fmt.Errorf("unable to complete planned recovery for hcp cluster %s to mgmt cluster %s : %w", o.clusterID, o.managementCluster, err)
+		}
 	}
 
 	// Phase 2: Verify - show plan and get user confirmation
@@ -193,6 +214,24 @@ func printRecoveryPlan(plan internalcmd.DNSRecoveryPlan, clusterID, managementCl
 	}
 	fmt.Fprintf(os.Stderr, "    5. Capture new resource state\n")
 	fmt.Fprintf(os.Stderr, "\n")
+}
+
+func askDNSConfirmation() bool {
+	fmt.Fprintf(os.Stderr, "DNS records were found for this cluster. These could be:\n")
+	fmt.Fprintf(os.Stderr, "  1. NEW records (already reconciled by ExternalDNS) - SAFE to proceed\n")
+	fmt.Fprintf(os.Stderr, "  2. OLD records (stale, not cleaned up) - should run 'release-dns' first\n")
+	fmt.Fprintf(os.Stderr, "\nIf you already ran 'release-dns' and records were recreated, it's safe to proceed.\n")
+	fmt.Fprintf(os.Stderr, "\nProceed with recovery despite DNS records? (y/N): ")
+
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "\nRecovery cancelled (error reading response)\n")
+		return false
+	}
+
+	response = strings.TrimSpace(strings.ToLower(response))
+	return response == "y" || response == "yes"
 }
 
 func askConfirmation(logger *logrus.Logger) bool {

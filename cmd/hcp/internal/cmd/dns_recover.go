@@ -47,6 +47,19 @@ type DNSRecoveryResult struct {
 	ComponentRestartErrors      []string
 }
 
+// DNSRecordsExistError is returned when DNS records exist during verification
+// The caller can prompt the user to continue or abort
+type DNSRecordsExistError struct {
+	ClusterID         string
+	ManagementCluster string
+	RecordCount       int
+}
+
+func (e *DNSRecordsExistError) Error() string {
+	return fmt.Sprintf("found %d DNS record(s) for cluster %s - they may be new (safe to proceed) or stale (need cleanup)",
+		e.RecordCount, e.ClusterID)
+}
+
 type clusterInfo struct {
 	ClusterID         string
 	HCPNamespace      string
@@ -166,7 +179,7 @@ func (m *DefaultDNSRecoveryManager) RecoverDNS(ctx context.Context, plan DNSReco
 		result.AWSEndpointServiceRecreated = true
 	}
 
-	// Poll for resource recreation
+	// Poll for resource recreation (10 retries × 30s = up to 5 minutes)
 	m.logger.Infof("Waiting for resources to be recreated...")
 	if err := m.pollResourceRecreation(ctx, &plan, 30*time.Second); err != nil {
 		return result, fmt.Errorf("polling for resource recreation: %w", err)
@@ -228,12 +241,12 @@ func (m *DefaultDNSRecoveryManager) verifyDNSCleanup(ctx context.Context, ocmCon
 	m.logger.Warnf("  2. ExternalDNS has already reconciled the new records (safe to proceed)")
 	m.logger.Warnf("")
 
-	return fmt.Errorf("DNS records exist - review above and either:\n\n"+
-		"Option 1: Clean up stale records first:\n"+
-		"  osdctl hcp restore release-dns --cluster-id %s\n\n"+
-		"Option 2: Skip DNS verification if records are already reconciled:\n"+
-		"  osdctl hcp recover --cluster-id %s --management-cluster %s --elevate-reason \"<reason>\" --skip-dns-verification",
-		plan.ClusterID, plan.ClusterID, plan.clusterInfo.ManagementCluster)
+	// Return a specific error that the caller can handle with a prompt
+	return &DNSRecordsExistError{
+		ClusterID:         plan.ClusterID,
+		ManagementCluster: plan.clusterInfo.ManagementCluster,
+		RecordCount:       len(releaserPlan.Records),
+	}
 }
 
 func (m *DefaultDNSRecoveryManager) checkEtcdHealth(ctx context.Context, plan *DNSRecoveryPlan) error {
@@ -351,10 +364,12 @@ func (m *DefaultDNSRecoveryManager) checkResourceState(ctx context.Context, plan
 }
 
 func (m *DefaultDNSRecoveryManager) pollResourceRecreation(ctx context.Context, plan *DNSRecoveryPlan, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	m.logger.Infof("Polling for resource recreation with %d second timeout", int(timeout.Seconds()))
+	const maxRetries = 10
+	const retryInterval = 30 * time.Second
 
-	for time.Now().Before(deadline) {
+	m.logger.Infof("Polling for resource recreation (max %d retries with %ds interval)", maxRetries, int(retryInterval.Seconds()))
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -363,15 +378,17 @@ func (m *DefaultDNSRecoveryManager) pollResourceRecreation(ctx context.Context, 
 
 		obj, err := plan.k8sClient.GetAWSEndpointService(ctx, plan.clusterInfo.HCPNamespace, "private-router")
 		if err == nil && obj.GetDeletionTimestamp() == nil && obj.GetUID() != types.UID(plan.oldPrivateRouterUID) {
-			m.logger.Infof("Resource private-router recreated successfully")
+			m.logger.Infof("✓ Resource private-router recreated successfully (attempt %d/%d)", attempt, maxRetries)
 			return nil
 		}
 
-		m.logger.Debugf("Waiting for private-router recreation...")
-		time.Sleep(5 * time.Second)
+		if attempt < maxRetries {
+			m.logger.Infof("Attempt %d/%d: private-router not ready yet, waiting %ds...", attempt, maxRetries, int(retryInterval.Seconds()))
+			time.Sleep(retryInterval)
+		}
 	}
 
-	return fmt.Errorf("timed out after %d seconds waiting for private-router AWSEndpointService recreation", int(timeout.Seconds()))
+	return fmt.Errorf("timed out after %d attempts (%d seconds total) waiting for private-router AWSEndpointService recreation", maxRetries, int(retryInterval.Seconds())*maxRetries)
 }
 
 func (m *DefaultDNSRecoveryManager) captureNewResources(ctx context.Context, plan *DNSRecoveryPlan, result *DNSRecoveryResult) error {
