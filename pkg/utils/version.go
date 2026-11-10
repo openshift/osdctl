@@ -3,8 +3,8 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -52,40 +52,74 @@ func UpgradeInstruction() (string, error) {
 	}
 }
 
-// githubResponse is a necessary struct for the JSON unmarshalling that is happening
-// in the getLatestVersion().
 type gitHubResponse struct {
-	TagName string `json:"tag_name"`
+	TagName     string    `json:"tag_name"`
+	PublishedAt time.Time `json:"published_at"`
+	Draft       bool      `json:"draft"`
+	Prerelease  bool      `json:"prerelease"`
 }
 
 // getLatestVersion connects to the GitHub API and returns the latest osdctl tag name
 // Interesting Note: GitHub only shows the latest "stable" tag. This means, that
 // tags with a suffix like *-rc.1 are not returned. We will always show the latest stable on master branch.
 func GetLatestVersion() (latest string, err error) {
-	client := http.Client{
-		Timeout: time.Second * 10,
+	var release gitHubResponse
+	err = getReleaseJSON(&http.Client{Timeout: 10 * time.Second}, VersionAPIEndpoint, &release)
+	return release.TagName, err
+}
+
+// CheckVersion also reports whether the current release qualifies for the
+// one-week grace period following publication of its immediate successor.
+func CheckVersion(current string) (latest string, gracePeriod bool, err error) {
+	return checkVersion(&http.Client{Timeout: 10 * time.Second}, VersionAPIEndpoint, current, time.Now())
+}
+
+// checkVersion uses publication times to identify the previous stable release.
+// Unverifiable eligibility never grants grace; the client and clock are supplied
+// so boundary cases can be tested without contacting GitHub.
+func checkVersion(client *http.Client, endpoint, current string, now time.Time) (string, bool, error) {
+	var latest gitHubResponse
+	if err := getReleaseJSON(client, endpoint, &latest); err != nil {
+		return "", false, err
+	}
+	age := now.Sub(latest.PublishedAt)
+	if strings.TrimPrefix(current, "v") == strings.TrimPrefix(latest.TagName, "v") ||
+		latest.PublishedAt.IsZero() || age < 0 || age >= 7*24*time.Hour {
+		return latest.TagName, false, nil
 	}
 
-	req, err := http.NewRequest(http.MethodGet, VersionAPIEndpoint, nil)
+	var releases []gitHubResponse
+	if err := getReleaseJSON(client, strings.TrimSuffix(endpoint, "/latest")+"?per_page=100", &releases); err != nil {
+		return latest.TagName, false, err
+	}
+	var previous gitHubResponse
+	for _, release := range releases {
+		if release.Draft || release.Prerelease || release.TagName == latest.TagName ||
+			release.PublishedAt.IsZero() || !release.PublishedAt.Before(latest.PublishedAt) {
+			continue
+		}
+		if release.PublishedAt.After(previous.PublishedAt) {
+			previous = release
+		}
+	}
+	return latest.TagName, previous.TagName != "" &&
+		strings.TrimPrefix(current, "v") == strings.TrimPrefix(previous.TagName, "v"), nil
+}
+
+// getReleaseJSON rejects non-success responses before decoding so GitHub API
+// errors cannot be mistaken for valid release metadata.
+func getReleaseJSON(client *http.Client, endpoint string, result any) error {
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
-		return latest, err
+		return err
 	}
-
 	res, err := client.Do(req)
 	if err != nil {
-		return latest, err
+		return err
 	}
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		return latest, err
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("GitHub releases API returned %s", res.Status)
 	}
-
-	githubResp := gitHubResponse{}
-	err = json.Unmarshal(body, &githubResp)
-	if err != nil {
-		return latest, err
-	}
-
-	return githubResp.TagName, nil
+	return json.NewDecoder(res.Body).Decode(result)
 }

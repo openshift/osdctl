@@ -26,11 +26,7 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 		pdProvider = NewClient()
 	})
 	Describe("Client Creation", func() {
-		Context("WithBaseDomain", func() {
-			It("Should correctly populate the base domain", func() {
-				pdProvider.WithBaseDomain("foo")
-				Expect(pdProvider.baseDomain).To(Equal("foo"))
-			})
+		Context("Client configuration", func() {
 			It("Should correctly populate the Team ID list", func() {
 				pdProvider.WithTeamIdList([]string{"foo", "bar"})
 				Expect(pdProvider.teamIds).To(ContainElements("bar", "foo"))
@@ -70,12 +66,44 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 			ctrl.Finish()
 		})
 
-		Context("GetPDServiceIDs", func() {
+		Context("GetServiceIDs", func() {
+			It("Uses each explicit query independently of client configuration", func() {
+				m := pdMock.NewMockpdClientInterface(ctrl)
+				pdProvider.pdclient = m
+				pdProvider.WithTeamIdList([]string{"team-1"})
+
+				gomock.InOrder(
+					m.EXPECT().ListServicesWithContext(gomock.Any(), pd.ListServiceOptions{
+						Query: "cluster.example.com", TeamIDs: []string{"team-1"},
+					}).Return(&pd.ListServiceResponse{Services: []pd.Service{{APIObject: pd.APIObject{ID: "classic-service"}}}}, nil),
+					m.EXPECT().ListServicesWithContext(gomock.Any(), pd.ListServiceOptions{
+						Query: "another-service", TeamIDs: []string{"team-1"},
+					}).Return(&pd.ListServiceResponse{Services: []pd.Service{{APIObject: pd.APIObject{ID: "other-service"}}}}, nil),
+				)
+
+				ids, err := pdProvider.GetServiceIDs("cluster.example.com")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ids).To(Equal([]string{"classic-service"}))
+				ids, err = pdProvider.GetServiceIDs("another-service")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ids).To(Equal([]string{"other-service"}))
+			})
+
+			It("Returns no IDs when no services match", func() {
+				m := pdMock.NewMockpdClientInterface(ctrl)
+				m.EXPECT().ListServicesWithContext(gomock.Any(), pd.ListServiceOptions{Query: "missing"}).Return(&pd.ListServiceResponse{}, nil)
+				pdProvider.pdclient = m
+
+				ids, err := pdProvider.GetServiceIDs("missing")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ids).To(BeEmpty())
+			})
+
 			It("Returns an error from the pd client if there's an error with the request", func() {
 				m := pdMock.NewMockpdClientInterface(ctrl)
 				m.EXPECT().ListServicesWithContext(gomock.Any(), gomock.Any()).Return(&pd.ListServiceResponse{}, fmt.Errorf("Some Error"))
 				pdProvider.pdclient = m
-				ids, err := pdProvider.GetPDServiceIDs()
+				ids, err := pdProvider.GetServiceIDs("example.com")
 				Expect(ids).To(BeEmpty())
 				Expect(err).To(Not(BeNil()))
 				Expect(err.Error()).To(ContainSubstring("failed to ListServices"))
@@ -84,13 +112,13 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 				m := pdMock.NewMockpdClientInterface(ctrl)
 				m.EXPECT().ListServicesWithContext(gomock.Any(), gomock.Any()).Return(&pd.ListServiceResponse{Services: []pd.Service{{APIObject: pd.APIObject{ID: "abcd"}}, {APIObject: pd.APIObject{ID: "1234"}}}}, nil)
 				pdProvider.pdclient = m
-				ids, err := pdProvider.GetPDServiceIDs()
+				ids, err := pdProvider.GetServiceIDs("example.com")
 				Expect(err).To(BeNil())
 				Expect(ids).To(ContainElements("1234", "abcd"))
 			})
 		})
 
-		Context("GetFiringAlertsForCluster", func() {
+		Context("GetFiringAlertsForServices", func() {
 			var emptyIncResponse, singleIncResponse, multipleIncResponse, multiplePageIncResponse *pd.ListIncidentsResponse
 
 			BeforeEach(func() {
@@ -126,11 +154,29 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 				}
 			})
 
+			It("Queries supplied services without performing service discovery", func() {
+				m := pdMock.NewMockpdClientInterface(ctrl)
+				pdProvider.pdclient = m
+				for _, serviceID := range []string{"service-1", "service-2"} {
+					m.EXPECT().ListIncidentsWithContext(gomock.Any(), pd.ListIncidentsOptions{
+						ServiceIDs: []string{serviceID},
+						Statuses:   []string{"triggered", "acknowledged"},
+						SortBy:     "urgency:DESC",
+						Limit:      25,
+					}).Return(singleIncResponse, nil)
+				}
+
+				incs, err := pdProvider.GetFiringAlertsForServices([]string{"service-1", "service-2"})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(incs["service-1"]).To(Equal(singleIncResponse.Incidents))
+				Expect(incs["service-2"]).To(Equal(singleIncResponse.Incidents))
+			})
+
 			It("Returns an error from the pd client if there's an error with the request", func() {
 				m := pdMock.NewMockpdClientInterface(ctrl)
 				m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(&pd.ListIncidentsResponse{}, fmt.Errorf("An error"))
 				pdProvider.pdclient = m
-				incs, err := pdProvider.GetFiringAlertsForCluster([]string{"foo"})
+				incs, err := pdProvider.GetFiringAlertsForServices([]string{"foo"})
 				Expect(incs).To(BeEmpty())
 				Expect(err).To(Not(BeNil()))
 				Expect(err.Error()).To(ContainSubstring("An error"))
@@ -142,7 +188,7 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 					m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(emptyIncResponse, nil)
 					pdProvider.pdclient = m
 
-					incs, err := pdProvider.GetFiringAlertsForCluster([]string{"foo"})
+					incs, err := pdProvider.GetFiringAlertsForServices([]string{"foo"})
 					Expect(incs["foo"]).To(BeEmpty())
 					Expect(err).To(BeNil())
 				})
@@ -153,7 +199,7 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 					m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(emptyIncResponse, nil)
 					pdProvider.pdclient = m
 
-					incs, err := pdProvider.GetFiringAlertsForCluster([]string{"foo", "bar"})
+					incs, err := pdProvider.GetFiringAlertsForServices([]string{"foo", "bar"})
 					Expect(incs["foo"]).To(BeEmpty())
 					Expect(incs["bar"]).To(BeEmpty())
 					Expect(err).To(BeNil())
@@ -168,7 +214,7 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 					m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(emptyIncResponse, nil)
 					pdProvider.pdclient = m
 
-					incs, err := pdProvider.GetFiringAlertsForCluster([]string{"foo", "bar", "baz"})
+					incs, err := pdProvider.GetFiringAlertsForServices([]string{"foo", "bar", "baz"})
 					Expect(err).To(BeNil())
 					Expect(incs["foo"]).To(HaveLen(1))
 					Expect(incs["bar"]).To(HaveLen(3))
@@ -183,7 +229,7 @@ var _ = Describe("Tests the Pagerduty Provider", func() {
 					m.EXPECT().ListIncidentsWithContext(gomock.Any(), gomock.Any()).Return(emptyIncResponse, nil)
 					pdProvider.pdclient = m
 
-					incs, err := pdProvider.GetFiringAlertsForCluster([]string{"foo", "bar", "baz"})
+					incs, err := pdProvider.GetFiringAlertsForServices([]string{"foo", "bar", "baz"})
 					Expect(err).To(BeNil())
 					Expect(incs["foo"]).To(HaveLen(1))
 					Expect(incs["bar"]).To(HaveLen(8))

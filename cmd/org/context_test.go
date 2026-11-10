@@ -14,19 +14,6 @@ import (
 	v1 "github.com/openshift-online/ocm-sdk-go/servicelogs/v1"
 )
 
-type fakePDClient struct {
-	serviceIDs []string
-	incidents  map[string][]pd.Incident
-}
-
-func (f *fakePDClient) GetPDServiceIDs() ([]string, error) {
-	return f.serviceIDs, nil
-}
-
-func (f *fakePDClient) GetFiringAlertsForCluster(ids []string) (map[string][]pd.Incident, error) {
-	return f.incidents, nil
-}
-
 func TestGetPlanDisplayText(t *testing.T) {
 	tests := []struct {
 		plan     string

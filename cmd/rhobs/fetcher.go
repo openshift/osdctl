@@ -62,6 +62,11 @@ type RhobsFetcher struct {
 	pageSize            int // Loki rows fetched per request; 0 means the default (500)
 }
 
+// OCMEnvironment returns the environment associated with the resolved RHOBS cell.
+func (f *RhobsFetcher) OCMEnvironment() string {
+	return f.ocmEnvName
+}
+
 // logsClusterExtId returns the cluster external UUID to use in Loki's openshift_cluster_uid filter.
 // HCP control-plane logs are indexed in RHOBS under the MC's openshift_cluster_uid, not the HCP
 // cluster's own UUID, so for HCP clusters this returns the MC's external UUID.

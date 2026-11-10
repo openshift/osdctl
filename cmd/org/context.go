@@ -41,12 +41,12 @@ type DefaultContextFetcher struct {
 	GetLimitedSupport   func(*sdk.Connection, string) ([]*cmv1.LimitedSupportReason, error)
 	GetServiceLogs      func(*sdk.Connection, string, time.Time, bool, bool) ([]*v1.LogEntry, error)
 	GetJiraIssues       func(clusterID, externalID, filter string) ([]jira.Issue, error)
-	NewPDClient         func(baseDomain string) (PDClient, error)
+	NewPDClient         func() (PDClient, error)
 }
 
 type PDClient interface {
-	GetPDServiceIDs() ([]string, error)
-	GetFiringAlertsForCluster([]string) (map[string][]pd.Incident, error)
+	GetServiceIDs(query string) ([]string, error)
+	GetFiringAlertsForServices([]string) (map[string][]pd.Incident, error)
 }
 
 type ClusterInfo struct {
@@ -83,9 +83,8 @@ func NewDefaultContextFetcher() *DefaultContextFetcher {
 		GetLimitedSupport:   utils.GetClusterLimitedSupportReasons,
 		GetServiceLogs:      servicelog.GetServiceLogsSince,
 		GetJiraIssues:       utils.GetJiraIssuesForCluster,
-		NewPDClient: func(baseDomain string) (PDClient, error) {
+		NewPDClient: func() (PDClient, error) {
 			return pdProvider.NewClient().
-				WithBaseDomain(baseDomain).
 				WithUserToken(viper.GetString(pdProvider.PagerDutyUserTokenConfigKey)).
 				WithOauthToken(viper.GetString(pdProvider.PagerDutyOauthTokenConfigKey)).
 				Init()
@@ -207,15 +206,16 @@ func (f *DefaultContextFetcher) FetchContext(orgID string, output io.Writer) ([]
 			})
 			// PagerDuty alerts
 			dataEg.Go(func() error {
-				pdClient, err := f.NewPDClient(cluster.DNS().BaseDomain())
+				pdClient, err := f.NewPDClient()
 				if err != nil {
 					return fmt.Errorf("failed to build PD client")
 				}
-				serviceIDs, err := pdClient.GetPDServiceIDs()
+				// Classic PagerDuty service names are inferred from the cluster DNS base domain.
+				serviceIDs, err := pdClient.GetServiceIDs(cluster.DNS().BaseDomain())
 				if err != nil {
 					return fmt.Errorf("failed to get PD ServiceID for cluster %v: %v", ci.ID, err)
 				}
-				ci.PdAlerts, err = pdClient.GetFiringAlertsForCluster(serviceIDs)
+				ci.PdAlerts, err = pdClient.GetFiringAlertsForServices(serviceIDs)
 				if err != nil {
 					return fmt.Errorf("failed to get PD Alerts for cluster %v: %v", ci.ID, err)
 				}

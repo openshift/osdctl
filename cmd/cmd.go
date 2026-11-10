@@ -160,8 +160,10 @@ func getSkipVersionCommands() []string {
 	return []string{"upgrade", "version", "mcp"}
 }
 
+// versionCheck warns on version mismatches and requires approval unless the
+// previous stable release is still within its one-week grace period.
 func versionCheck() {
-	latestVersion, err := utils.GetLatestVersion()
+	latestVersion, gracePeriod, err := utils.CheckVersion(utils.Version)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "WARN: Unable to verify that osdctl is running under the latest released version. Error trying to reach GitHub:")
 		_, _ = fmt.Fprintln(os.Stderr, err)
@@ -171,7 +173,7 @@ func versionCheck() {
 	if utils.Version != strings.TrimPrefix(latestVersion, "v") {
 		_, _ = fmt.Fprintf(os.Stderr, "WARN: The current version (%s) is different than the latest released version (%s). It is recommended that you update to the latest released version to ensure that no known bugs or issues are hit.\n", utils.Version, latestVersion)
 
-		if !utils.ConfirmPrompt() {
+		if !gracePeriod && !utils.ConfirmPrompt() {
 			os.Exit(0)
 		}
 	}

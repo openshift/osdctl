@@ -30,6 +30,7 @@ Prepare and restore HCP clusters during disaster recovery
 * [osdctl hcp restore manifestwork](osdctl_hcp_restore_manifestwork.md)	 - Compare and relocate HCP ManifestWorks
 * [osdctl hcp restore migrate-storage](osdctl_hcp_restore_migrate-storage.md)	 - Migrate HCP snapshot storage to a replacement management cluster
 * [osdctl hcp restore reassign](osdctl_hcp_restore_reassign.md)	 - Reassign an HCP to a replacement management cluster in OCM
+* [osdctl hcp restore reimport](osdctl_hcp_restore_reimport.md)	 - Move recovered HCP add-on work to a replacement management cluster
 * [osdctl hcp restore release-dns](osdctl_hcp_restore_release-dns.md)	 - Release central DNS records for an HCP cluster
-* [osdctl hcp restore update-trust-policy](osdctl_hcp_restore_update-trust-policy.md)	 - Allow a replacement management cluster to access HCP backups
+* [osdctl hcp restore update-trust-policy](osdctl_hcp_restore_update-trust-policy.md)	 - Allow a target management cluster to access HCP backups
 
