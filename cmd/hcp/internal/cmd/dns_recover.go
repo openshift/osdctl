@@ -156,7 +156,7 @@ func (m *DefaultDNSRecoveryManager) RecoverDNS(ctx context.Context, plan DNSReco
 
 		// Delete the LoadBalancer Service
 		if err := plan.k8sClient.DeleteService(ctx, plan.clusterInfo.HCPNamespace, "private-router"); err != nil {
-			m.logger.Warnf("Failed to delete Service: %v", err)
+			return result, fmt.Errorf("deleting Service private-router: %w", err)
 		}
 
 		// Delete the AWSEndpointService
