@@ -181,7 +181,8 @@ func TestPrintPhaseResult_Passed(t *testing.T) {
 	os.Stderr = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err := buf.ReadFrom(r)
+	require.NoError(t, err)
 	output := buf.String()
 
 	assert.Contains(t, output, "✅")
@@ -210,7 +211,8 @@ func TestPrintPhaseResult_Warning(t *testing.T) {
 	os.Stderr = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err := buf.ReadFrom(r)
+	require.NoError(t, err)
 	output := buf.String()
 
 	assert.Contains(t, output, "⚠️")
@@ -238,7 +240,8 @@ func TestPrintPhaseResult_Failed(t *testing.T) {
 	os.Stderr = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err := buf.ReadFrom(r)
+	require.NoError(t, err)
 	output := buf.String()
 
 	assert.Contains(t, output, "❌")
@@ -267,7 +270,8 @@ func TestPrintPhaseResult_EmptyLines(t *testing.T) {
 	os.Stderr = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err := buf.ReadFrom(r)
+	require.NoError(t, err)
 	output := buf.String()
 
 	// Empty lines should be rendered as blank lines
@@ -296,7 +300,8 @@ func TestPrintValidationSummary_AllPassed(t *testing.T) {
 	os.Stderr = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err := buf.ReadFrom(r)
+	require.NoError(t, err)
 	output := buf.String()
 
 	assert.Contains(t, output, "✅ ALL CHECKS PASSED")
@@ -327,7 +332,8 @@ func TestPrintValidationSummary_WithWarnings(t *testing.T) {
 	os.Stderr = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err := buf.ReadFrom(r)
+	require.NoError(t, err)
 	output := buf.String()
 
 	assert.Contains(t, output, "⚠️  PASSED WITH WARNINGS")
@@ -356,7 +362,8 @@ func TestPrintValidationSummary_WithFailures(t *testing.T) {
 	os.Stderr = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err := buf.ReadFrom(r)
+	require.NoError(t, err)
 	output := buf.String()
 
 	assert.Contains(t, output, "❌ VALIDATION FAILED")
@@ -438,7 +445,8 @@ func TestPrintValidationSummary_CountingLogic(t *testing.T) {
 			os.Stderr = old
 
 			var buf bytes.Buffer
-			buf.ReadFrom(r)
+			_, err := buf.ReadFrom(r)
+			require.NoError(t, err)
 			output := buf.String()
 
 			assert.Contains(t, output, tt.wantStatus)
@@ -469,7 +477,8 @@ func TestPrintValidationSummary_FormattingAndBoxes(t *testing.T) {
 	os.Stderr = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err := buf.ReadFrom(r)
+	require.NoError(t, err)
 	output := buf.String()
 
 	// Check for box drawing characters
@@ -498,7 +507,8 @@ func TestValidationResult_EmptyPhases(t *testing.T) {
 	os.Stderr = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, err := buf.ReadFrom(r)
+	require.NoError(t, err)
 	output := buf.String()
 
 	assert.Contains(t, output, "0 passed, 0 warnings, 0 failed")

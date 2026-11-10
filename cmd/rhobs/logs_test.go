@@ -169,7 +169,7 @@ func TestCreateRhobsFetcherFromCell(t *testing.T) {
 		},
 		{
 			name:      "URL with userinfo",
-			cellUrl:   "https://user:pass@us-east-1-0.rhobs.api.stage.openshift.com",
+			cellUrl:   "https://user:pass@us-east-1-0.rhobs.api.stage.openshift.com", // #nosec G101 -- test data, not real credentials
 			wantError: true,
 		},
 		{
