@@ -979,6 +979,65 @@ func newVeleroRestore(resources schema.GroupVersionKind, namespace, clusterID, b
 	}}
 }
 
+func (c *managementClusterClient) GetRuntimeClient() client.Client {
+	return c.client
+}
+
+func (c *managementClusterClient) GetAWSEndpointService(ctx context.Context, namespace, name string) (*unstructured.Unstructured, error) {
+	// Register hypershift scheme if not already registered
+	// if err := hypershiftapiv1beta1.AddToScheme(c.client.Scheme()); err != nil {
+	// 	// Continue anyway - the client may still work with unstructured objects
+	// }
+
+	aes := &unstructured.Unstructured{}
+	aes.SetGroupVersionKind(schema.GroupVersionKind{Group: "hypershift.openshift.io", Version: "v1beta1", Kind: "AWSEndpointService"})
+
+	if err := c.client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, aes); err != nil {
+		return nil, fmt.Errorf("getting AWSEndpointService %q in namespace %q: %w", name, namespace, err)
+	}
+	return aes, nil
+}
+
+func (c *managementClusterClient) GetService(ctx context.Context, namespace, name string) (*unstructured.Unstructured, error) {
+	svc := &unstructured.Unstructured{}
+	svc.SetGroupVersionKind(schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Service"})
+
+	if err := c.client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, svc); err != nil {
+		return nil, fmt.Errorf("getting Service %q in namespace %q: %w", name, namespace, err)
+	}
+	return svc, nil
+}
+
+func (c *managementClusterClient) DeleteAWSEndpointService(ctx context.Context, namespace, name string) error {
+	aes := &unstructured.Unstructured{}
+	aes.SetGroupVersionKind(schema.GroupVersionKind{Group: "hypershift.openshift.io", Version: "v1beta1", Kind: "AWSEndpointService"})
+	aes.SetNamespace(namespace)
+	aes.SetName(name)
+
+	if err := c.client.Delete(ctx, aes, client.PropagationPolicy("Foreground")); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("deleting AWSEndpointService %q in namespace %q: %w", name, namespace, err)
+	}
+	return nil
+}
+
+func (c *managementClusterClient) DeleteService(ctx context.Context, namespace, name string) error {
+	svc := &unstructured.Unstructured{}
+	svc.SetGroupVersionKind(schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Service"})
+	svc.SetNamespace(namespace)
+	svc.SetName(name)
+
+	if err := c.client.Delete(ctx, svc, client.PropagationPolicy("Foreground")); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("deleting Service %q in namespace %q: %w", name, namespace, err)
+	}
+	return nil
+}
+
 func terminalRestorePhase(phase string) bool {
 	switch phase {
 	case "Failed", "FailedValidation", "PartiallyFailed":
