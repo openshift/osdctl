@@ -364,12 +364,12 @@ func (m *DefaultDNSRecoveryManager) checkResourceState(ctx context.Context, plan
 }
 
 func (m *DefaultDNSRecoveryManager) pollResourceRecreation(ctx context.Context, plan *DNSRecoveryPlan) error {
+	const maxRetries = 20
 	const retryInterval = 30 * time.Second
 
-	m.logger.Infof("Polling for resource recreation (30s interval, cancel via context)")
+	m.logger.Infof("Polling for resource recreation (max %d retries, %ds interval)", maxRetries, int(retryInterval.Seconds()))
 
-	attempt := 1
-	for {
+	for attempt := 1; attempt <= maxRetries; attempt++ {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -378,19 +378,21 @@ func (m *DefaultDNSRecoveryManager) pollResourceRecreation(ctx context.Context, 
 
 		obj, err := plan.k8sClient.GetAWSEndpointService(ctx, plan.clusterInfo.HCPNamespace, "private-router")
 		if err == nil && obj.GetDeletionTimestamp() == nil && obj.GetUID() != types.UID(plan.oldPrivateRouterUID) {
-			m.logger.Infof("✓ Resource private-router recreated successfully (attempt %d)", attempt)
+			m.logger.Infof("✓ Resource private-router recreated successfully (attempt %d/%d)", attempt, maxRetries)
 			return nil
 		}
 
-		m.logger.Infof("Attempt %d: private-router not ready yet, waiting %ds...", attempt, int(retryInterval.Seconds()))
-
-		select {
-		case <-time.After(retryInterval):
-			attempt++
-		case <-ctx.Done():
-			return ctx.Err()
+		if attempt < maxRetries {
+			m.logger.Infof("Attempt %d/%d: private-router not ready yet, waiting %ds...", attempt, maxRetries, int(retryInterval.Seconds()))
+			select {
+			case <-time.After(retryInterval):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 	}
+
+	return fmt.Errorf("exceeded max retries (%d attempts over %d min) waiting for private-router AWSEndpointService recreation", maxRetries, int(retryInterval.Seconds()*maxRetries/60))
 }
 
 func (m *DefaultDNSRecoveryManager) captureNewResources(ctx context.Context, plan *DNSRecoveryPlan, result *DNSRecoveryResult) error {
@@ -420,10 +422,10 @@ func FormatRecoveryResults(result DNSRecoveryResult, plan DNSRecoveryPlan, clust
 
 		if plan.AWSEndpointServiceStatus == "exists" {
 			output += "  ✓ Delete private-router Service and AWSEndpointService\n"
-			output += "  ✓ Poll for resource recreation (30s interval)\n"
+			output += "  ✓ Poll for resource recreation (max 20 retries, 30s interval)\n"
 		} else {
 			output += "  ⊘ private-router not found - skip deletion\n"
-			output += "  ✓ Poll for resource creation (30s interval)\n"
+			output += "  ✓ Poll for resource creation (max 20 retries, 30s interval)\n"
 		}
 
 		if plan.RestartNetworkComponents {
@@ -477,10 +479,10 @@ func FormatRecoveryResults(result DNSRecoveryResult, plan DNSRecoveryPlan, clust
 
 	if result.AWSEndpointServiceRecreated {
 		output += "  3. ✓ Deleted private-router Service and AWSEndpointService\n"
-		output += "  4. ✓ Polled for resource recreation (30s interval)\n"
+		output += "  4. ✓ Polled for resource recreation (max 20 retries, 30s interval)\n"
 	} else {
 		output += "  3. ⊘ Skipped deletion (resource not found)\n"
-		output += "  4. ✓ Polled for resource creation (30s interval)\n"
+		output += "  4. ✓ Polled for resource creation (max 20 retries, 30s interval)\n"
 	}
 
 	if plan.RestartNetworkComponents {
