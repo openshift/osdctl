@@ -195,10 +195,10 @@ func printRecoveryPlan(plan internalcmd.DNSRecoveryPlan, clusterID, managementCl
 	if plan.AWSEndpointServiceStatus == "exists" {
 		fmt.Fprintf(os.Stderr, "    1. Delete private-router Service (LoadBalancer)\n")
 		fmt.Fprintf(os.Stderr, "    2. Delete private-router AWSEndpointService\n")
-		fmt.Fprintf(os.Stderr, "    3. Wait for controller to recreate resources (30s timeout)\n")
+		fmt.Fprintf(os.Stderr, "    3. Wait for controller to recreate resources (30s interval, Ctrl+C to cancel)\n")
 	} else {
 		fmt.Fprintf(os.Stderr, "    [private-router not found - no deletion needed]\n")
-		fmt.Fprintf(os.Stderr, "    1. Wait for controller to create resources (30s timeout)\n")
+		fmt.Fprintf(os.Stderr, "    1. Wait for controller to create resources (30s interval, Ctrl+C to cancel)\n")
 	}
 
 	if plan.RestartNetworkComponents {
