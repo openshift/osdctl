@@ -40,6 +40,11 @@ jobs:
         with:
           fetch-depth: 0 # goreleaser needs full history + tags for the changelog
 
+      # The repository's .goreleaser-version file is shared with local Make targets.
+      - name: Read goreleaser version
+        id: goreleaser-version
+        run: echo "version=$(<.goreleaser-version)" >> "$GITHUB_OUTPUT"
+
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
@@ -48,7 +53,7 @@ jobs:
       - name: Run goreleaser
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
         with:
-          version: "v2.11.2" # keep in sync with the Makefile download-goreleaser target
+          version: ${{ steps.goreleaser-version.outputs.version }}
           args: release --clean --parallelism 2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

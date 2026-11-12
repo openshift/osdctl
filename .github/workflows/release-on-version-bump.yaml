@@ -40,6 +40,11 @@ jobs:
           fetch-depth: 0 # goreleaser needs full history + tags for the changelog
           persist-credentials: false # the tag-push step below authenticates explicitly instead
 
+      # The repository's .goreleaser-version file is shared with local Make targets.
+      - name: Read goreleaser version
+        id: goreleaser-version
+        run: echo "version=$(<.goreleaser-version)" >> "$GITHUB_OUTPUT"
+
       - name: Resolve version
         id: version
         run: |
@@ -148,7 +153,7 @@ jobs:
         if: steps.release.outputs.exists == 'false'
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
         with:
-          version: "v2.11.2" # keep in sync with the Makefile download-goreleaser target
+          version: ${{ steps.goreleaser-version.outputs.version }}
           args: release --clean --parallelism 2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
