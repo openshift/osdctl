@@ -43,6 +43,7 @@ type DNSReleasePlan struct {
 	ZoneName  string
 	ZoneID    string
 	Records   []route53types.ResourceRecordSet
+	DnsConfig dnsConfig
 
 	client awsprovider.Client
 }
@@ -117,7 +118,7 @@ func (r *DefaultDNSReleaser) PrepareDNSRelease(ctx context.Context, request Rele
 	if err != nil {
 		return DNSReleasePlan{}, err
 	}
-	return DNSReleasePlan{ClusterID: cluster.HCPClusterID, AccountID: config.accountID, ZoneName: config.zoneName, ZoneID: awssdk.ToString(zone.Id), Records: records, client: dnsClient}, nil
+	return DNSReleasePlan{ClusterID: cluster.HCPClusterID, AccountID: config.accountID, ZoneName: config.zoneName, ZoneID: awssdk.ToString(zone.Id), Records: records, DnsConfig: config, client: dnsClient}, nil
 }
 
 func (r *DefaultDNSReleaser) ReleaseDNS(ctx context.Context, plan DNSReleasePlan) error {
