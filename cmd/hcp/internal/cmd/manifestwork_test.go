@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	internalclient "github.com/openshift/osdctl/cmd/hcp/internal/client"
 	"github.com/openshift/osdctl/pkg/printer"
 	"github.com/stretchr/testify/assert"
@@ -195,8 +196,44 @@ func TestManifestWorkMoveUsesHCPProvisionShardServiceCluster(t *testing.T) {
 
 	err := runner.moveVeleroResources(context.Background(), ManifestWorkRequest{ClusterID: clusterID, ReplacementMC: "dne", Reason: "OHSS-1234"})
 
-	require.NoError(t, err, "expected Velero resources to move to a non-fleet namespace")
+	require.NoError(t, err, "expected Velero resources to move to the resolved namespace")
 	assert.Equal(t, []string{clusterID}, ocmClient.resolved, "expected canonical HCP ID for provision-shard resolution")
+}
+
+func TestManifestWorkMoveResolvesTargetManagementClusterID(t *testing.T) {
+	clusterID := "cluster"
+	secretName, schedulesName := disasterRecoveryManifestWorkNames(clusterID)
+	serviceClient := newManifestWorkTestClient(t, drSecretWork("source-mc", secretName, clusterID), drSchedulesWork("source-mc", schedulesName, clusterID))
+	target, err := cmv1.NewCluster().ID("target-id").Name("target-mc").Build()
+	require.NoError(t, err, "expected target management cluster")
+	ocmClient := &testManifestWorkOCMClient{
+		cluster:            ClusterInfo{HCPClusterID: clusterID, MgmtClusterName: "source-mc"},
+		serviceCluster:     ServiceClusterInfo{ID: "service-cluster", Name: "service"},
+		client:             serviceClient,
+		managementClusters: map[string]*cmv1.Cluster{"target-id": target},
+	}
+	runner := testManifestWorkRunner(ocmClient, &strings.Builder{}, true)
+
+	err = runner.moveVeleroResources(context.Background(), ManifestWorkRequest{ClusterID: clusterID, ReplacementMC: "target-id", Reason: "OHSS-1234"})
+
+	require.NoError(t, err, "expected target MC ID to resolve")
+	destination := &workv1.ManifestWork{}
+	require.NoError(t, serviceClient.Get(context.Background(), types.NamespacedName{Namespace: "target-mc", Name: secretName}, destination), "expected destination in resolved target namespace")
+	assert.Equal(t, "target-mc", destination.Labels[managementClusterLabel], "expected canonical target management-cluster label")
+}
+
+func TestManifestWorkMoveRejectsTargetResolvingToSource(t *testing.T) {
+	target, err := cmv1.NewCluster().ID("source-id").Name("source-mc").Build()
+	require.NoError(t, err, "expected source management cluster")
+	ocmClient := &testManifestWorkOCMClient{
+		cluster:            ClusterInfo{HCPClusterID: "cluster", MgmtClusterName: "source-mc"},
+		managementClusters: map[string]*cmv1.Cluster{"source-id": target},
+	}
+	runner := testManifestWorkRunner(ocmClient, &strings.Builder{}, true)
+
+	err = runner.moveVeleroResources(context.Background(), ManifestWorkRequest{ClusterID: "cluster", ReplacementMC: "source-id", Reason: "OHSS-1234"})
+
+	require.ErrorContains(t, err, "source and replacement management clusters must differ")
 }
 
 func TestSanitizeManifestWorkRemovesControllerMetadata(t *testing.T) {

@@ -124,15 +124,23 @@ func (c *testTrustPolicyOCMClient) BackupConfig(_ context.Context, _ string, man
 }
 
 type testManifestWorkOCMClient struct {
-	cluster        ClusterInfo
-	serviceCluster ServiceClusterInfo
-	client         ServiceClusterClient
-	resolved       []string
-	calls          []serviceClusterCall
+	cluster            ClusterInfo
+	serviceCluster     ServiceClusterInfo
+	client             ServiceClusterClient
+	managementClusters map[string]*cmv1.Cluster
+	resolved           []string
+	calls              []serviceClusterCall
 }
 
 func (c *testManifestWorkOCMClient) Resolve(_ context.Context, _ string) (ClusterInfo, error) {
 	return c.cluster, nil
+}
+
+func (c *testManifestWorkOCMClient) Cluster(identifier string) (*cmv1.Cluster, error) {
+	if cluster, ok := c.managementClusters[identifier]; ok {
+		return cluster, nil
+	}
+	return cmv1.NewCluster().ID(identifier).Name(identifier).Build()
 }
 
 func (c *testManifestWorkOCMClient) ResolveServiceCluster(_ context.Context, clusterID string) (ServiceClusterInfo, error) {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	internalclient "github.com/openshift/osdctl/cmd/hcp/internal/client"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -83,6 +84,7 @@ type DefaultManifestWorkManager struct {
 
 type manifestWorkOCMClient interface {
 	internalclient.ClusterResolver
+	Cluster(identifier string) (*cmv1.Cluster, error)
 	ResolveServiceCluster(ctx context.Context, clusterID string) (internalclient.ServiceClusterInfo, error)
 	ServiceCluster(clusterID, reason string) (internalclient.ServiceClusterClient, error)
 }
@@ -96,11 +98,15 @@ func (r *DefaultManifestWorkManager) CompareManifestWorks(ctx context.Context, f
 	if err != nil {
 		return nil, fmt.Errorf("resolving cluster: %w", err)
 	}
+	replacementMC, err := r.resolveReplacementMC(flags.ReplacementMC)
+	if err != nil {
+		return nil, err
+	}
 	sourceMC := sourceManifestWorkNamespace(flags.SourceMC, cluster)
 	if sourceMC == "" {
 		return nil, fmt.Errorf("source management cluster is empty")
 	}
-	if sourceMC == flags.ReplacementMC {
+	if sourceMC == replacementMC {
 		return nil, fmt.Errorf("source and replacement management clusters must differ")
 	}
 	serviceCluster, err := r.ocmClient.ResolveServiceCluster(ctx, cluster.HCPClusterID)
@@ -115,7 +121,7 @@ func (r *DefaultManifestWorkManager) CompareManifestWorks(ctx context.Context, f
 	if err != nil {
 		return nil, err
 	}
-	replacementWorks, err := listHCPManifestWorks(ctx, serviceClient, flags.ReplacementMC, cluster.HCPClusterID)
+	replacementWorks, err := listHCPManifestWorks(ctx, serviceClient, replacementMC, cluster.HCPClusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -186,11 +192,15 @@ func (r *DefaultManifestWorkManager) prepareMove(ctx context.Context, flags Mani
 	if err != nil {
 		return preparedManifestWorkMove{}, fmt.Errorf("resolving cluster: %w", err)
 	}
+	replacementMC, err := r.resolveReplacementMC(flags.ReplacementMC)
+	if err != nil {
+		return preparedManifestWorkMove{}, err
+	}
 	sourceMC := sourceManifestWorkNamespace(flags.SourceMC, cluster)
 	if sourceMC == "" {
 		return preparedManifestWorkMove{}, fmt.Errorf("source management cluster is empty")
 	}
-	if sourceMC == flags.ReplacementMC {
+	if sourceMC == replacementMC {
 		return preparedManifestWorkMove{}, fmt.Errorf("source and replacement management clusters must differ")
 	}
 	serviceCluster, err := r.ocmClient.ResolveServiceCluster(ctx, cluster.HCPClusterID)
@@ -201,7 +211,18 @@ func (r *DefaultManifestWorkManager) prepareMove(ctx context.Context, flags Mani
 	if err != nil {
 		return preparedManifestWorkMove{}, fmt.Errorf("connecting to service cluster %s with elevation: %w", serviceCluster.ID, err)
 	}
-	return preparedManifestWorkMove{cluster: cluster, sourceMC: sourceMC, replacementMC: flags.ReplacementMC, serviceCluster: serviceCluster, client: serviceClient}, nil
+	return preparedManifestWorkMove{cluster: cluster, sourceMC: sourceMC, replacementMC: replacementMC, serviceCluster: serviceCluster, client: serviceClient}, nil
+}
+
+func (r *DefaultManifestWorkManager) resolveReplacementMC(identifier string) (string, error) {
+	replacement, err := r.ocmClient.Cluster(identifier)
+	if err != nil {
+		return "", fmt.Errorf("resolving replacement management cluster %s: %w", identifier, err)
+	}
+	if replacement.Name() == "" {
+		return "", fmt.Errorf("replacement management cluster %s has no name", identifier)
+	}
+	return replacement.Name(), nil
 }
 
 func (r *DefaultManifestWorkManager) MoveManifestWorks(ctx context.Context, plan ManifestWorkMovePlan) (ManifestWorkMoveResult, error) {
