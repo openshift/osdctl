@@ -28,7 +28,7 @@ func (c *testReassignmentOCMClient) Resolve(_ context.Context, _ string) (Cluste
 	return c.cluster, nil
 }
 
-func (c *testReassignmentOCMClient) Cluster(identifier string) (*cmv1.Cluster, error) {
+func (c *testReassignmentOCMClient) Cluster(_ context.Context, identifier string) (*cmv1.Cluster, error) {
 	cluster, ok := c.clusters[identifier]
 	if !ok {
 		return nil, fmt.Errorf("unexpected cluster %s", identifier)

@@ -82,14 +82,16 @@ func TestManifestWorkMoveClusterResourcesRequiresVeleroPhase(t *testing.T) {
 	require.ErrorContains(t, err, "Velero resource ManifestWork", "expected missing Velero prerequisite to stop the cluster move")
 }
 
-func TestManifestWorkMoveClusterResourcesPausesAndCopiesTargetWorks(t *testing.T) {
+func TestManifestWorkMoveClusterResourcesLeavesDestinationHostedClusterUnpaused(t *testing.T) {
 	clusterID := "cluster"
 	secretName, schedulesName := disasterRecoveryManifestWorkNames(clusterID)
+	sourceHostedCluster := hostedClusterWork("source-mc", clusterID)
+	require.NoError(t, pauseManifestWorkPayload(sourceHostedCluster), "failed to prepare paused source HostedCluster work")
 	works := []*workv1.ManifestWork{
 		drSecretWork("replacement-mc", secretName, clusterID),
 		drSchedulesWork("replacement-mc", schedulesName, clusterID),
 		namespaceWork("source-mc", clusterID),
-		hostedClusterWork("source-mc", clusterID),
+		sourceHostedCluster,
 		nodePoolWork("source-mc", clusterID+"-np-a", clusterID, nodePoolOCMLabel),
 		nodePoolWork("source-mc", clusterID+"-np-b", clusterID, nodePoolLabel),
 		nodePoolWork("source-mc", "other-np", "other", nodePoolOCMLabel),
@@ -107,9 +109,118 @@ func TestManifestWorkMoveClusterResourcesPausesAndCopiesTargetWorks(t *testing.T
 	}
 	assertPaused(t, serviceClient, "source-mc", clusterID, hostedClusterKind)
 	assertPaused(t, serviceClient, "source-mc", clusterID+"-np-a", nodePoolKind)
-	assertPaused(t, serviceClient, "replacement-mc", clusterID, hostedClusterKind)
+	assertNotPaused(t, serviceClient, "replacement-mc", clusterID, hostedClusterKind)
 	assertPaused(t, serviceClient, "replacement-mc", clusterID+"-np-b", nodePoolKind)
 	assertManifestWorkNotFound(t, serviceClient, "replacement-mc", "other-np")
+}
+
+func TestManifestWorkMoveClusterResourcesPausesDestinationHostedClusterWhenRequested(t *testing.T) {
+	clusterID := "cluster"
+	secretName, schedulesName := disasterRecoveryManifestWorkNames(clusterID)
+	serviceClient := newManifestWorkTestClient(t,
+		drSecretWork("replacement-mc", secretName, clusterID),
+		drSchedulesWork("replacement-mc", schedulesName, clusterID),
+		namespaceWork("source-mc", clusterID),
+		hostedClusterWork("source-mc", clusterID),
+	)
+	runner := testManifestWorkRunnerForClient(serviceClient, &strings.Builder{}, true)
+
+	err := runner.moveClusterResources(context.Background(), ManifestWorkRequest{ClusterID: clusterID, ReplacementMC: "replacement-mc", Reason: "OHSS-1234", Paused: true})
+
+	require.NoError(t, err, "expected cluster resources to move")
+	assertPaused(t, serviceClient, "replacement-mc", clusterID, hostedClusterKind)
+}
+
+func TestManifestWorkMoveClusterResourcesRejectsSourceChangedAfterPlanning(t *testing.T) {
+	clusterID := "cluster"
+	secretName, schedulesName := disasterRecoveryManifestWorkNames(clusterID)
+	serviceClient := newManifestWorkTestClient(t,
+		drSecretWork("replacement-mc", secretName, clusterID),
+		drSchedulesWork("replacement-mc", schedulesName, clusterID),
+		namespaceWork("source-mc", clusterID),
+		hostedClusterWork("source-mc", clusterID),
+	)
+	runner := testManifestWorkRunnerForClient(serviceClient, &strings.Builder{}, true)
+	plan, err := runner.manager.PrepareClusterManifestWorkMove(context.Background(), ManifestWorkRequest{ClusterID: clusterID, ReplacementMC: "replacement-mc", Reason: "OHSS-1234"})
+	require.NoError(t, err, "expected cluster move plan")
+
+	source, err := serviceClient.GetManifestWork(context.Background(), "source-mc", clusterID)
+	require.NoError(t, err, "expected source HostedCluster work")
+	source.Annotations = map[string]string{"changed": "after-planning"}
+	require.NoError(t, serviceClient.Update(context.Background(), source), "expected source change")
+
+	_, err = runner.manager.MoveManifestWorks(context.Background(), plan)
+
+	require.ErrorContains(t, err, "changed since planning")
+	assertNotPaused(t, serviceClient, "source-mc", clusterID, hostedClusterKind)
+	assertManifestWorkNotFound(t, serviceClient, "replacement-mc", clusterID)
+}
+
+func TestManifestWorkMoveClusterResourcesWaitsForSourcePause(t *testing.T) {
+	clusterID := "cluster"
+	secretName, schedulesName := disasterRecoveryManifestWorkNames(clusterID)
+	serviceClient := newManifestWorkTestClient(t,
+		drSecretWork("replacement-mc", secretName, clusterID),
+		drSchedulesWork("replacement-mc", schedulesName, clusterID),
+		namespaceWork("source-mc", clusterID),
+		hostedClusterWork("source-mc", clusterID),
+	)
+	serviceClient.acknowledgePause = false
+	runner := testManifestWorkRunnerForClient(serviceClient, &strings.Builder{}, true)
+	runner.manager = NewDefaultManifestWorkManager(runner.manager.ocmClient,
+		WithManifestWorkPauseTimeout(20*time.Millisecond),
+		WithManifestWorkPauseAcknowledgmentPeriod(time.Millisecond),
+	)
+	plan, err := runner.manager.PrepareClusterManifestWorkMove(context.Background(), ManifestWorkRequest{ClusterID: clusterID, ReplacementMC: "replacement-mc", Reason: "OHSS-1234"})
+	require.NoError(t, err, "expected cluster move plan")
+
+	_, err = runner.manager.MoveManifestWorks(context.Background(), plan)
+
+	require.ErrorContains(t, err, "waiting for source HostedCluster ManifestWork")
+	assertManifestWorkNotFound(t, serviceClient, "replacement-mc", clusterID)
+}
+
+func TestValidateManifestWorkPauseAcknowledgmentRejectsNewGeneration(t *testing.T) {
+	work := hostedClusterWork("source-mc", "cluster")
+	work.Generation = 2
+	work.Status.Conditions = []metav1.Condition{{Type: workv1.WorkApplied, Status: metav1.ConditionTrue, ObservedGeneration: 2}}
+	serviceClient := newManifestWorkTestClient(t, work)
+
+	require.NoError(t, validateManifestWorkPauseAcknowledgment(context.Background(), serviceClient, "source-mc", "cluster", 2))
+
+	current, err := serviceClient.GetManifestWork(context.Background(), "source-mc", "cluster")
+	require.NoError(t, err)
+	current.Generation = 3
+	require.NoError(t, serviceClient.Update(context.Background(), current))
+
+	err = validateManifestWorkPauseAcknowledgment(context.Background(), serviceClient, "source-mc", "cluster", 2)
+	require.ErrorContains(t, err, "changed after pause acknowledgement")
+}
+
+func TestManifestWorkMoveHonorsCanceledTargetLookup(t *testing.T) {
+	ocmClient := &testManifestWorkOCMClient{cluster: ClusterInfo{HCPClusterID: "cluster", MgmtClusterName: "source-mc"}}
+	manager := NewDefaultManifestWorkManager(ocmClient)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := manager.PrepareVeleroManifestWorkMove(ctx, ManifestWorkRequest{ClusterID: "cluster", ReplacementMC: "replacement-mc", Reason: "OHSS-1234"})
+
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Same(t, ctx, ocmClient.clusterContext, "expected target lookup to receive the caller context")
+}
+
+func TestDefaultManifestWorkManagerOptions(t *testing.T) {
+	ocmClient := &testManifestWorkOCMClient{}
+	manager := NewDefaultManifestWorkManager(ocmClient)
+	assert.Equal(t, 5*time.Minute, manager.cfg.PauseTimeout)
+	assert.Equal(t, time.Second, manager.cfg.PauseAcknowledgmentPeriod)
+
+	manager = NewDefaultManifestWorkManager(ocmClient,
+		WithManifestWorkPauseTimeout(time.Minute),
+		WithManifestWorkPauseAcknowledgmentPeriod(5*time.Second),
+	)
+	assert.Equal(t, time.Minute, manager.cfg.PauseTimeout)
+	assert.Equal(t, 5*time.Second, manager.cfg.PauseAcknowledgmentPeriod)
 }
 
 func TestManifestWorkMoveClusterResourcesDeclineDoesNotPauseSource(t *testing.T) {
@@ -134,6 +245,7 @@ func TestManifestWorkMoveClusterResourcesRejectsConflictBeforePausingSource(t *t
 	clusterID := "cluster"
 	secretName, schedulesName := disasterRecoveryManifestWorkNames(clusterID)
 	conflictingHostedCluster := hostedClusterWork("replacement-mc", clusterID)
+	require.NoError(t, pauseManifestWorkPayload(conflictingHostedCluster), "failed to prepare conflicting destination HostedCluster work")
 	serviceClient := newManifestWorkTestClient(t,
 		drSecretWork("replacement-mc", secretName, clusterID),
 		drSchedulesWork("replacement-mc", schedulesName, clusterID),
@@ -149,7 +261,7 @@ func TestManifestWorkMoveClusterResourcesRejectsConflictBeforePausingSource(t *t
 	assertNotPaused(t, serviceClient, "source-mc", clusterID, hostedClusterKind)
 }
 
-func TestManifestWorkMoveClusterResourcesAcceptsPausedDestination(t *testing.T) {
+func TestManifestWorkMoveClusterResourcesAcceptsPausedDestinationWhenRequested(t *testing.T) {
 	clusterID := "cluster"
 	secretName, schedulesName := disasterRecoveryManifestWorkNames(clusterID)
 	sourceHostedCluster := hostedClusterWork("source-mc", clusterID)
@@ -164,7 +276,7 @@ func TestManifestWorkMoveClusterResourcesAcceptsPausedDestination(t *testing.T) 
 	)
 	runner := testManifestWorkRunnerForClient(serviceClient, &strings.Builder{}, true)
 
-	err := runner.moveClusterResources(context.Background(), ManifestWorkRequest{ClusterID: clusterID, ReplacementMC: "replacement-mc", Reason: "OHSS-1234"})
+	err := runner.moveClusterResources(context.Background(), ManifestWorkRequest{ClusterID: clusterID, ReplacementMC: "replacement-mc", Reason: "OHSS-1234", Paused: true})
 
 	require.NoError(t, err, "expected existing paused destination to be accepted")
 	assertPaused(t, serviceClient, "source-mc", clusterID, hostedClusterKind)
@@ -416,6 +528,7 @@ func assertManifestWorkNotFound(t *testing.T, serviceClient *manifestWorkTestCli
 
 type manifestWorkTestClient struct {
 	client.Client
+	acknowledgePause bool
 }
 
 func newManifestWorkTestClient(t *testing.T, objects ...*workv1.ManifestWork) *manifestWorkTestClient {
@@ -427,7 +540,7 @@ func newManifestWorkTestClient(t *testing.T, objects ...*workv1.ManifestWork) *m
 		items = append(items, object)
 	}
 	runtimeClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(items...).Build()
-	return &manifestWorkTestClient{Client: runtimeClient}
+	return &manifestWorkTestClient{Client: runtimeClient, acknowledgePause: true}
 }
 
 func (c *manifestWorkTestClient) GetManifestWork(ctx context.Context, namespace, name string) (*workv1.ManifestWork, error) {
@@ -455,5 +568,13 @@ func (c *manifestWorkTestClient) CreateManifestWork(ctx context.Context, work *w
 }
 
 func (c *manifestWorkTestClient) UpdateManifestWork(ctx context.Context, work *workv1.ManifestWork) error {
-	return c.Update(ctx, work)
+	if err := c.Update(ctx, work); err != nil || !c.acknowledgePause {
+		return err
+	}
+	updated, err := c.GetManifestWork(ctx, work.Namespace, work.Name)
+	if err != nil {
+		return err
+	}
+	updated.Status.Conditions = []metav1.Condition{{Type: workv1.WorkApplied, Status: metav1.ConditionTrue, ObservedGeneration: updated.Generation}}
+	return c.Update(ctx, updated)
 }
