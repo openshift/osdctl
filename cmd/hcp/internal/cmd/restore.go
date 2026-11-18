@@ -23,9 +23,6 @@ func (r RestoreRequest) Validate() error {
 	if strings.TrimSpace(r.ClusterID) == "" {
 		return fmt.Errorf("cluster ID is required")
 	}
-	if strings.TrimSpace(r.BackupName) == "" {
-		return fmt.Errorf("backup name is required")
-	}
 	if strings.TrimSpace(r.Reason) == "" {
 		return fmt.Errorf("reason is required")
 	}
@@ -81,7 +78,6 @@ func (c *DefaultRestoreCreator) CreateRestore(ctx context.Context, request Resto
 	if targetMCID == "" {
 		return RestoreResult{}, fmt.Errorf("target management cluster has no ID")
 	}
-
 	managementClient, err := c.ocmClient.ElevatedManagementCluster(targetMCID, request.Reason)
 	if err != nil {
 		return RestoreResult{}, fmt.Errorf("connecting to target management cluster: %w", err)
