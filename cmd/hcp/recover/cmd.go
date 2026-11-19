@@ -1,4 +1,4 @@
-package dnsrecover
+package recover
 
 import (
 	"bufio"
@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type dnsRecoverOptions struct {
+type recoverOptions struct {
 	clusterID                string
 	managementCluster        string
 	dryRun                   bool
@@ -30,11 +30,12 @@ type dnsRecoverOptions struct {
 	logger    *logrus.Logger
 }
 
-func newCmdDNSRecover() *cobra.Command {
-	opts := &dnsRecoverOptions{}
+// NewCmdRecover creates and returns the recover command with validation as a subcommand
+func NewCmdRecover() *cobra.Command {
+	opts := &recoverOptions{}
 	cmd := &cobra.Command{
 		Use:   "recover --cluster-id <hcp-id> --management-cluster <mc-name> --reason <reason>",
-		Short: "Recover ExternalDNS and AWSEndpointService reconciliation for a restored HCP cluster",
+		Short: "Recover ExternalDNS and AWSEndpointService reconciliation after disaster recovery",
 		Long: `Recover ExternalDNS and AWSEndpointService reconciliation after HCP management cluster disaster recovery.
 
 When a hosted cluster is restored on a replacement management cluster, the AWSEndpointService
@@ -84,10 +85,14 @@ The command supports --dry-run to preview changes without making modifications, 
 	_ = cmd.MarkFlagRequired("management-cluster")
 	_ = cmd.MarkFlagRequired("reason")
 
+	// Add validate subcommand
+	cmd.AddCommand(newCmdValidate())
+
 	return cmd
 }
 
-func (o *dnsRecoverOptions) validate(ctx context.Context, ocmConn *ocmsdk.Connection) error {
+// validate checks that all required flags are set and initializes the OCM client.
+func (o *recoverOptions) validate(ctx context.Context, ocmConn *ocmsdk.Connection) error {
 	if o.clusterID == "" || o.managementCluster == "" || o.reason == "" {
 		return fmt.Errorf("--cluster-id, --management-cluster, and --reason are required")
 	}
@@ -99,7 +104,8 @@ func (o *dnsRecoverOptions) validate(ctx context.Context, ocmConn *ocmsdk.Connec
 	return nil
 }
 
-func (o *dnsRecoverOptions) Run(ctx context.Context) error {
+// Run executes the DNS recovery workflow in three phases: planning, verification, and execution.
+func (o *recoverOptions) Run(ctx context.Context) error {
 	// Create single OCM connection for entire operation
 	ocmConn, err := utils.CreateConnection()
 	if err != nil {
@@ -178,6 +184,7 @@ func (o *dnsRecoverOptions) Run(ctx context.Context) error {
 	return nil
 }
 
+// printRecoveryPlan displays the recovery plan including current state and actions to be taken.
 func printRecoveryPlan(plan internalcmd.DNSRecoveryPlan, clusterID, managementCluster string) {
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "╔════════════════════════════════════════════════════════════╗\n")
@@ -195,10 +202,10 @@ func printRecoveryPlan(plan internalcmd.DNSRecoveryPlan, clusterID, managementCl
 	if plan.AWSEndpointServiceStatus == "exists" {
 		fmt.Fprintf(os.Stderr, "    1. Delete private-router Service (LoadBalancer)\n")
 		fmt.Fprintf(os.Stderr, "    2. Delete private-router AWSEndpointService\n")
-		fmt.Fprintf(os.Stderr, "    3. Wait for controller to recreate resources (max 20 retries, 30s interval)\n")
+		fmt.Fprintf(os.Stderr, "    3. Wait for controller to recreate resources (10m timeout, 30s poll interval)\n")
 	} else {
 		fmt.Fprintf(os.Stderr, "    [private-router not found - no deletion needed]\n")
-		fmt.Fprintf(os.Stderr, "    1. Wait for controller to create resources (max 20 retries, 30s interval)\n")
+		fmt.Fprintf(os.Stderr, "    1. Wait for controller to create resources (10m timeout, 30s poll interval)\n")
 	}
 
 	if plan.RestartNetworkComponents {

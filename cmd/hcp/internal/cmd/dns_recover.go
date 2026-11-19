@@ -142,6 +142,11 @@ func (m *DefaultDNSRecoveryManager) PrepareRecovery(ctx context.Context, req DNS
 		}
 	}
 
+	// Check if HostedCluster is paused
+	if err := m.checkHostedClusterPaused(ctx, &plan); err != nil {
+		return plan, err
+	}
+
 	// Check etcd health before proceeding
 	if err := m.checkEtcdHealth(ctx, &plan); err != nil {
 		m.logger.Warnf("etcd health check: %v", err)
@@ -169,7 +174,7 @@ func (m *DefaultDNSRecoveryManager) RecoverDNS(ctx context.Context, plan DNSReco
 
 		// Delete the LoadBalancer Service
 		if err := plan.k8sClient.DeleteService(ctx, plan.clusterInfo.HCPNamespace, "private-router"); err != nil {
-			m.logger.Warnf("Failed to delete Service: %v", err)
+			return result, fmt.Errorf("deleting Service private-router: %w", err)
 		}
 
 		// Delete the AWSEndpointService
@@ -241,12 +246,58 @@ func (m *DefaultDNSRecoveryManager) verifyDNSCleanup(ctx context.Context, ocmCon
 	m.logger.Warnf("  2. ExternalDNS has already reconciled the new records (safe to proceed)")
 	m.logger.Warnf("")
 
-	// Return a specific error that the caller can handle with a prompt
-	return &DNSRecordsExistError{
-		ClusterID:         plan.ClusterID,
-		ManagementCluster: plan.clusterInfo.ManagementCluster,
-		RecordCount:       len(releaserPlan.Records),
+	return fmt.Errorf("DNS records exist - review above and either:\n\n"+
+		"Option 1: Clean up stale records first:\n"+
+		"  osdctl hcp restore release-dns --cluster-id %s\n\n"+
+		"Option 2: Skip DNS verification if records are already reconciled:\n"+
+		"  osdctl hcp recover --cluster-id %s --management-cluster %s --elevate-reason \"<reason>\" --skip-dns-verification",
+		plan.ClusterID, plan.ClusterID, plan.clusterInfo.ManagementCluster)
+}
+
+func (m *DefaultDNSRecoveryManager) checkHostedClusterPaused(ctx context.Context, plan *DNSRecoveryPlan) error {
+	m.logger.Infof("Checking if HostedCluster is paused (cluster ID: %s)", plan.clusterInfo.ClusterID)
+
+	kubeClient := plan.k8sClient.GetRuntimeClient()
+
+	// List HostedClusters using label selector for more robust discovery
+	hcList := &unstructured.UnstructuredList{}
+	hcList.SetGroupVersionKind(schema.GroupVersionKind{Group: "hypershift.openshift.io", Version: "v1beta1", Kind: "HostedClusterList"})
+
+	labelSelector := client.MatchingLabels{"api.openshift.com/id": plan.clusterInfo.ClusterID}
+	if err := kubeClient.List(ctx, hcList, labelSelector, client.InNamespace(plan.clusterInfo.HostedClusterNS)); err != nil {
+		return fmt.Errorf("listing HostedClusters with label api.openshift.com/id=%s: %w", plan.clusterInfo.ClusterID, err)
 	}
+
+	if len(hcList.Items) == 0 {
+		return fmt.Errorf("no HostedCluster found with label api.openshift.com/id=%s in namespace %s",
+			plan.clusterInfo.ClusterID, plan.clusterInfo.HostedClusterNS)
+	}
+
+	if len(hcList.Items) > 1 {
+		return fmt.Errorf("found %d HostedClusters with label api.openshift.com/id=%s, expected 1",
+			len(hcList.Items), plan.clusterInfo.ClusterID)
+	}
+
+	hc := &hcList.Items[0]
+	hcName := hc.GetName()
+	hcNamespace := hc.GetNamespace()
+
+	// Check for pausedUntil field
+	pausedUntil, found, err := unstructured.NestedString(hc.Object, "spec", "pausedUntil")
+	if err != nil {
+		return fmt.Errorf("checking pausedUntil field: %w", err)
+	}
+
+	if found && pausedUntil != "" {
+		return fmt.Errorf("HostedCluster %s/%s is PAUSED until %s. "+
+			"Reconciliation is blocked. Unpause with: "+
+			"oc patch hostedcluster -n %s %s --type=json -p='[{\"op\": \"remove\", \"path\": \"/spec/pausedUntil\"}]'",
+			hcNamespace, hcName, pausedUntil,
+			hcNamespace, hcName)
+	}
+
+	m.logger.Infof("HostedCluster %s/%s is not paused", hcNamespace, hcName)
+	return nil
 }
 
 func (m *DefaultDNSRecoveryManager) checkEtcdHealth(ctx context.Context, plan *DNSRecoveryPlan) error {
@@ -300,8 +351,7 @@ func (m *DefaultDNSRecoveryManager) restartControlPlaneComponents(ctx context.Co
 		podList := &unstructured.UnstructuredList{}
 		podList.SetGroupVersionKind(schema.GroupVersionKind{Group: "", Version: "v1", Kind: "PodList"})
 
-		labelKey := strings.SplitN(comp.label, "=", 2)[0]
-		labelVal := strings.SplitN(comp.label, "=", 2)[1]
+		labelKey, labelVal, _ := strings.Cut(comp.label, "=")
 
 		if err := kubeClient.List(ctx, podList, client.InNamespace(ns), client.MatchingLabels{labelKey: labelVal}); err != nil {
 			errMsg := fmt.Sprintf("Failed to list pods with label %s: %v", comp.label, err)
@@ -382,14 +432,8 @@ func (m *DefaultDNSRecoveryManager) pollResourceRecreation(ctx context.Context, 
 			return nil
 		}
 
-		if attempt < maxRetries {
-			m.logger.Infof("Attempt %d/%d: private-router not ready yet, waiting %ds...", attempt, maxRetries, int(retryInterval.Seconds()))
-			select {
-			case <-time.After(retryInterval):
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
+		m.logger.Debugf("Waiting for private-router recreation...")
+		time.Sleep(30 * time.Second)
 	}
 
 	return fmt.Errorf("exceeded max retries (%d attempts over %d min) waiting for private-router AWSEndpointService recreation", maxRetries, int(retryInterval.Seconds()*maxRetries/60))

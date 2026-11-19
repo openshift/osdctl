@@ -4,15 +4,16 @@ Create and monitor a Velero restore for an HCP backup
 
 ### Synopsis
 
-Create and monitor a Velero Restore in the target management cluster. The target defaults to the management cluster currently bound to the HCP; an explicit target must be in the HCP's region. Repeated invocations safely resume an active restore or report an already completed restore; failed attempts receive a new retry Restore.
+Create and monitor a Velero Restore in the target management cluster. The target defaults to the management cluster currently bound to the HCP; an explicit target must be in the HCP's region. Repeated invocations safely resume an active restore or report an already completed restore; failed attempts receive a new retry Restore. If backup-name is not provided, an interactive prompt will display available backups.
 
 ```
-osdctl hcp restore create --cluster-id <cluster-id> --backup-name <backup-name> --reason <reason> [--target-mc <management-cluster>] [--timeout <duration>] [flags]
+osdctl hcp restore create --cluster-id <cluster-id> --reason <reason> [--backup-name <backup-name>] [--target-mc <management-cluster>] [--timeout <duration>] [flags]
 ```
 
 ### Examples
 
 ```
+  osdctl hcp restore create --cluster-id ${CLUSTER_ID} --reason ${REASON}
   osdctl hcp restore create --cluster-id ${CLUSTER_ID} --backup-name ${BACKUP_NAME} --reason ${REASON}
   osdctl hcp restore create --cluster-id ${CLUSTER_ID} --target-mc ${TARGET_MC} --backup-name ${BACKUP_NAME} --reason ${REASON} --timeout 30m
 ```
@@ -20,7 +21,7 @@ osdctl hcp restore create --cluster-id <cluster-id> --backup-name <backup-name> 
 ### Options
 
 ```
-      --backup-name string   Name of the completed Velero backup to restore
+      --backup-name string   Name of the completed Velero backup to restore (optional - will prompt if not provided)
   -C, --cluster-id string    Internal ID, name, or external ID of the HCP cluster
   -h, --help                 help for create
       --reason string        Reason for elevated access

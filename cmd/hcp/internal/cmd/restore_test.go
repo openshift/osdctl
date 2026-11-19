@@ -16,7 +16,6 @@ func TestRestoreRequestValidate(t *testing.T) {
 	}{
 		{name: "valid", request: valid},
 		{name: "missing cluster ID", request: RestoreRequest{BackupName: valid.BackupName, Reason: valid.Reason, Timeout: valid.Timeout}, wantErr: "cluster ID is required"},
-		{name: "missing backup name", request: RestoreRequest{ClusterID: valid.ClusterID, Reason: valid.Reason, Timeout: valid.Timeout}, wantErr: "backup name is required"},
 		{name: "missing reason", request: RestoreRequest{ClusterID: valid.ClusterID, BackupName: valid.BackupName, Timeout: valid.Timeout}, wantErr: "reason is required"},
 		{name: "invalid timeout", request: RestoreRequest{ClusterID: valid.ClusterID, BackupName: valid.BackupName, Reason: valid.Reason}, wantErr: "timeout must be greater than zero"},
 	} {

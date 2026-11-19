@@ -110,7 +110,7 @@ func (c *serviceClusterClient) OrphanDeleteManifestWork(ctx context.Context, nam
 		}
 		return nil
 	}
-	patch, err := json.Marshal([]map[string]interface{}{
+	patch, err := json.Marshal([]map[string]any{
 		{"op": "test", "path": "/metadata/uid", "value": uid},
 		{"op": "test", "path": "/metadata/resourceVersion", "value": work.ResourceVersion},
 		{"op": "add", "path": "/spec/deleteOption", "value": workv1.DeleteOption{PropagationPolicy: workv1.DeletePropagationPolicyTypeOrphan}},
@@ -153,6 +153,9 @@ func (c *serviceClusterClient) UpdateManagedClusterHosting(ctx context.Context, 
 	managedCluster := &clusterv1.ManagedCluster{}
 	managedCluster.Name = name
 	if err := c.client.Patch(ctx, managedCluster, client.RawPatch(types.JSONPatchType, patch)); err != nil {
+		if apierrors.IsInvalid(err) || apierrors.IsConflict(err) {
+			return fmt.Errorf("patching ManagedCluster %s hosting annotations (patch=%s): %w", name, string(patch), err)
+		}
 		return fmt.Errorf("patching ManagedCluster %s hosting annotations: %w", name, err)
 	}
 	return nil
