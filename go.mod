@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	charm.land/huh/v2 v2.0.3
-	cloud.google.com/go/compute v1.62.0
+	cloud.google.com/go/compute v1.75.0
 	github.com/AlecAivazis/survey/v2 v2.3.7
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/PagerDuty/go-pagerduty v1.8.0
@@ -39,22 +39,22 @@ require (
 	github.com/hashicorp/hcl/v2 v2.25.0
 	github.com/manifoldco/promptui v0.9.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	github.com/observatorium/api v0.1.3-0.20260127104902-9709b1e9e333
+	github.com/observatorium/api 5d961d61941f
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.44.0
 	github.com/openshift-online/ocm-cli v1.0.17
 	github.com/openshift-online/ocm-common v0.0.46
 	github.com/openshift-online/ocm-sdk-go v0.1.513
-	github.com/openshift/api v0.0.0-20250207102212-9e59a77ed2e0
-	github.com/openshift/aws-account-operator/api v0.0.0-20250205151445-6455c35fc4ae
-	github.com/openshift/backplane-api v0.0.0-20260205054653-459856398d59
-	github.com/openshift/backplane-cli v1.0.0
+	github.com/openshift/api 0e5fe796a10f
+	github.com/openshift/aws-account-operator/api v0.0.0-20261109195649-799e25ce7d93
+	github.com/openshift/backplane-api v0.0.0-20261019192131-62bd35e29175
+	github.com/openshift/backplane-cli v1.1.0
 	github.com/openshift/cloud-credential-operator v0.0.0-20250120201329-db5f2531a5b4
 	github.com/openshift/gcp-project-operator v0.0.0-20241024143818-ec4eabd35aba
 	github.com/openshift/hive/apis v0.0.0-20250206153200-5a34ea42e678
 	github.com/openshift/hypershift/api v0.0.0-20250208145556-2753dcc8cfb7
-	github.com/openshift/ocm-container v1.0.1-0.20260310005051-28d4fda21872
+	github.com/openshift/ocm-container f364eeee15b1
 	github.com/openshift/osd-network-verifier v1.8.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/shopspring/decimal v1.6.0
@@ -68,22 +68,22 @@ require (
 	gitlab.com/gitlab-org/api/client-go v1.46.0
 	go.uber.org/mock v0.6.0
 	go.uber.org/zap v1.28.0
-	golang.org/x/oauth2 v0.37.0
+	golang.org/x/oauth2 v0.38.0
 	golang.org/x/sync v0.25.0
 	golang.org/x/term v0.48.0
-	google.golang.org/api v0.294.0
+	google.golang.org/api v0.315.0
 	google.golang.org/genproto v0.0.0-20260715232425-e75dac1f907d
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.34.3
-	k8s.io/apimachinery v0.34.3
-	k8s.io/cli-runtime v0.32.1
-	k8s.io/client-go v0.34.3
-	k8s.io/kubectl v0.32.1
-	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
+	k8s.io/api v0.37.2
+	k8s.io/apimachinery v0.37.2
+	k8s.io/cli-runtime v0.37.2
+	k8s.io/client-go v0.37.2
+	k8s.io/kubectl v0.37.2
+	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
 	open-cluster-management.io/api v0.15.0
-	sigs.k8s.io/controller-runtime v0.20.1
-	sigs.k8s.io/kustomize/kyaml v0.21.1
+	sigs.k8s.io/controller-runtime v0.25.3
+	sigs.k8s.io/kustomize/kyaml v0.21.2
 	sigs.k8s.io/yaml v1.6.0
 )
 
