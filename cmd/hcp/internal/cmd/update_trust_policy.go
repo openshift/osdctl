@@ -67,7 +67,7 @@ type DefaultTrustPolicyUpdaterOption interface {
 
 type trustPolicyOCMClient interface {
 	internalclient.ClusterResolver
-	Cluster(identifier string) (*cmv1.Cluster, error)
+	Cluster(ctx context.Context, identifier string) (*cmv1.Cluster, error)
 	BackupConfig(ctx context.Context, clusterID, managementCluster string) (*cmv1.AWSBackupConfig, error)
 }
 
@@ -91,7 +91,7 @@ func (r *DefaultTrustPolicyUpdater) PrepareTrustPolicyUpdate(ctx context.Context
 	sourceMCName := cluster.MgmtClusterName
 	sourceMCID := cluster.MgmtClusterID
 	if request.SourceMC != "" {
-		source, err := r.ocmClient.Cluster(request.SourceMC)
+		source, err := r.ocmClient.Cluster(ctx, request.SourceMC)
 		if err != nil {
 			return TrustPolicyUpdatePlan{}, fmt.Errorf("resolving source management cluster %s: %w", request.SourceMC, err)
 		}
@@ -102,7 +102,7 @@ func (r *DefaultTrustPolicyUpdater) PrepareTrustPolicyUpdate(ctx context.Context
 		return TrustPolicyUpdatePlan{}, fmt.Errorf("source management cluster is incomplete")
 	}
 
-	replacement, err := r.ocmClient.Cluster(request.ReplacementMC)
+	replacement, err := r.ocmClient.Cluster(ctx, request.ReplacementMC)
 	if err != nil {
 		return TrustPolicyUpdatePlan{}, fmt.Errorf("resolving replacement management cluster %s: %w", request.ReplacementMC, err)
 	}

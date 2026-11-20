@@ -182,5 +182,10 @@ func TestManifestWorkLeavesRequireOperationFlags(t *testing.T) {
 		for _, flag := range []string{"cluster-id", "target-mc", "reason"} {
 			assert.Contains(t, cmd.Example, "--"+flag)
 		}
+		if path[len(path)-1] == "cluster-resources" {
+			assert.NotNil(t, cmd.Flags().Lookup("paused"))
+		} else {
+			assert.Nil(t, cmd.Flags().Lookup("paused"))
+		}
 	}
 }

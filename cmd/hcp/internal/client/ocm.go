@@ -155,8 +155,8 @@ func (c *OCMClient) ResolveServiceCluster(ctx context.Context, clusterID string)
 	return ServiceClusterInfo{ID: serviceCluster.ID(), Name: serviceCluster.Name()}, nil
 }
 
-func (c *OCMClient) Cluster(identifier string) (*cmv1.Cluster, error) {
-	return utils.GetClusterAnyStatus(c.conn, identifier)
+func (c *OCMClient) Cluster(ctx context.Context, identifier string) (*cmv1.Cluster, error) {
+	return utils.GetClusterAnyStatusWithContext(ctx, c.conn, identifier)
 }
 
 // ManagementClusterAssignment returns the management cluster currently assigned

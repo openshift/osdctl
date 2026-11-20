@@ -117,7 +117,9 @@ func (*reimportTestOCMClient) Resolve(context.Context, string) (internalclient.C
 func (*reimportTestOCMClient) ResolveServiceCluster(context.Context, string) (internalclient.ServiceClusterInfo, error) {
 	return internalclient.ServiceClusterInfo{ID: "service-id", Name: "service-name"}, nil
 }
-func (c *reimportTestOCMClient) Cluster(string) (*cmv1.Cluster, error) { return c.replacement, nil }
+func (c *reimportTestOCMClient) Cluster(context.Context, string) (*cmv1.Cluster, error) {
+	return c.replacement, nil
+}
 func (c *reimportTestOCMClient) ServiceCluster(string, string) (internalclient.ServiceClusterClient, error) {
 	return c.client, nil
 }

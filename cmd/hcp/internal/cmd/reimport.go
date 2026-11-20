@@ -63,7 +63,7 @@ type reimportClient interface {
 
 type reimportOCMClient interface {
 	internalclient.ClusterResolver
-	Cluster(identifier string) (*cmv1.Cluster, error)
+	Cluster(ctx context.Context, identifier string) (*cmv1.Cluster, error)
 	ResolveServiceCluster(ctx context.Context, clusterID string) (internalclient.ServiceClusterInfo, error)
 	ServiceCluster(clusterID, reason string) (internalclient.ServiceClusterClient, error)
 }
@@ -92,7 +92,7 @@ func (m *DefaultReimportManager) PrepareReimport(ctx context.Context, request Re
 	if err != nil {
 		return ReimportPlan{}, fmt.Errorf("resolving service cluster: %w", err)
 	}
-	replacement, err := m.ocmClient.Cluster(request.ReplacementMC)
+	replacement, err := m.ocmClient.Cluster(ctx, request.ReplacementMC)
 	if err != nil {
 		return ReimportPlan{}, fmt.Errorf("resolving replacement management cluster %s: %w", request.ReplacementMC, err)
 	}

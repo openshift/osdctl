@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"time"
+
 	internalclient "github.com/openshift/osdctl/cmd/hcp/internal/client"
 	"github.com/sirupsen/logrus"
 )
@@ -68,6 +70,20 @@ type WithClock struct {
 
 func (w WithClock) ConfigureDefaultSnapshotCopier(c *DefaultSnapshotCopierConfig) {
 	c.Clock = w.Clock
+}
+
+// WithManifestWorkPauseTimeout overrides the time to wait for a source HostedCluster pause to apply.
+type WithManifestWorkPauseTimeout time.Duration
+
+func (w WithManifestWorkPauseTimeout) ConfigureDefaultManifestWorkManager(c *DefaultManifestWorkManagerConfig) {
+	c.PauseTimeout = time.Duration(w)
+}
+
+// WithManifestWorkPauseAcknowledgmentPeriod overrides how often source pause acknowledgement is checked.
+type WithManifestWorkPauseAcknowledgmentPeriod time.Duration
+
+func (w WithManifestWorkPauseAcknowledgmentPeriod) ConfigureDefaultManifestWorkManager(c *DefaultManifestWorkManagerConfig) {
+	c.PauseAcknowledgmentPeriod = time.Duration(w)
 }
 
 type WithAWSAccountClientProvider struct {

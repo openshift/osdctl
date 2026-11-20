@@ -60,7 +60,7 @@ func (c *DefaultRestoreCreator) CreateRestore(ctx context.Context, request Resto
 	}
 	targetMCID := cluster.MgmtClusterID
 	if request.TargetMC != "" {
-		target, err := c.ocmClient.Cluster(request.TargetMC)
+		target, err := c.ocmClient.Cluster(ctx, request.TargetMC)
 		if err != nil {
 			return RestoreResult{}, fmt.Errorf("resolving target management cluster %s: %w", request.TargetMC, err)
 		}
@@ -93,6 +93,6 @@ func (c *DefaultRestoreCreator) CreateRestore(ctx context.Context, request Resto
 
 type restoreOCMClient interface {
 	internalclient.ClusterResolver
-	Cluster(identifier string) (*cmv1.Cluster, error)
+	Cluster(ctx context.Context, identifier string) (*cmv1.Cluster, error)
 	ElevatedManagementCluster(clusterID, reason string, options ...internalclient.ManagementClusterClientOption) (internalclient.ManagementClusterClient, error)
 }

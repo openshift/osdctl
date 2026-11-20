@@ -41,7 +41,7 @@ type DefaultReassignmentManager struct{ ocmClient reassignmentOCMClient }
 
 type reassignmentOCMClient interface {
 	internalclient.ClusterResolver
-	Cluster(identifier string) (*cmv1.Cluster, error)
+	Cluster(ctx context.Context, identifier string) (*cmv1.Cluster, error)
 	ManagementClusterAssignment(ctx context.Context, clusterID string) (string, error)
 	UpdateManagementClusterAssignment(ctx context.Context, clusterID, managementCluster string) error
 }
@@ -59,7 +59,7 @@ func (r *DefaultReassignmentManager) PrepareReassignment(ctx context.Context, re
 	if cluster.MgmtClusterName == "" || cluster.MgmtClusterID == "" {
 		return ReassignmentPlan{}, fmt.Errorf("source management cluster is incomplete")
 	}
-	source, err := r.ocmClient.Cluster(cluster.MgmtClusterID)
+	source, err := r.ocmClient.Cluster(ctx, cluster.MgmtClusterID)
 	if err != nil {
 		return ReassignmentPlan{}, fmt.Errorf("resolving source management cluster %s: %w", cluster.MgmtClusterID, err)
 	}
@@ -67,7 +67,7 @@ func (r *DefaultReassignmentManager) PrepareReassignment(ctx context.Context, re
 		return ReassignmentPlan{}, fmt.Errorf("source management cluster %s has no region", cluster.MgmtClusterName)
 	}
 
-	replacement, err := r.ocmClient.Cluster(request.ReplacementMC)
+	replacement, err := r.ocmClient.Cluster(ctx, request.ReplacementMC)
 	if err != nil {
 		return ReassignmentPlan{}, fmt.Errorf("resolving replacement management cluster %s: %w", request.ReplacementMC, err)
 	}
