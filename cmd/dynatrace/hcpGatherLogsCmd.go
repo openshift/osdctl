@@ -11,7 +11,7 @@ import (
 	"github.com/openshift/osdctl/cmd/common"
 	"github.com/openshift/osdctl/pkg/utils"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
