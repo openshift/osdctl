@@ -18,6 +18,7 @@ osdctl hcp restore manifestwork move cluster-resources --cluster-id <cluster-id>
 ```
   -C, --cluster-id string   Internal ID, name, or external ID of the HCP cluster
   -h, --help                help for cluster-resources
+      --paused              Leave the destination HostedCluster paused
       --reason string       Reason for elevated access
       --source-mc string    Management cluster whose namespace contains the ManifestWorks (defaults to the HCP management cluster)
       --target-mc string    Internal ID, name, or external ID of the target management cluster

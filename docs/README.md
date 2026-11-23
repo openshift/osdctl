@@ -3622,6 +3622,7 @@ osdctl hcp restore manifestwork move cluster-resources --cluster-id <cluster-id>
       --insecure-skip-tls-verify         If true, the server's certificate will not be checked for validity. This will make your HTTPS connections insecure
       --kubeconfig string                Path to the kubeconfig file to use for CLI requests.
   -o, --output string                    Valid formats are ['', 'json', 'yaml', 'env']
+      --paused                           Leave the destination HostedCluster paused
       --reason string                    Reason for elevated access
       --request-timeout string           The length of time to wait before giving up on a single server request. Non-zero values should contain a corresponding time unit (e.g. 1s, 2m, 3h). A value of zero means don't timeout requests. (default "0")
   -s, --server string                    The address and port of the Kubernetes API server

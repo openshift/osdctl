@@ -131,7 +131,10 @@ func newCmdManifestWorkMoveClusterResources() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			message := fmt.Sprintf("Pause HostedCluster and NodePool reconciliation in the source, then move %d cluster ManifestWork(s) to %s on service cluster %s?\nSource ManifestWorks will be retained and both source and destination resources will remain paused. [y/N] ", plan.Count, plan.ReplacementMC, plan.ServiceClusterName)
+			message := fmt.Sprintf("Pause HostedCluster and NodePool reconciliation in the source, then move %d cluster ManifestWork(s) to %s on service cluster %s?\nSource ManifestWorks and destination NodePools will remain paused. The destination HostedCluster will remain unpaused. [y/N] ", plan.Count, plan.ReplacementMC, plan.ServiceClusterName)
+			if flags.Paused {
+				message = fmt.Sprintf("Pause HostedCluster and NodePool reconciliation in the source, then move %d cluster ManifestWork(s) to %s on service cluster %s?\nSource ManifestWorks and destination resources will remain paused. [y/N] ", plan.Count, plan.ReplacementMC, plan.ServiceClusterName)
+			}
 			if !confirm(cmd.InOrStdin(), cmd.OutOrStdout(), message) {
 				_, err := fmt.Fprintln(cmd.OutOrStdout(), "ManifestWork move cancelled.")
 				return err
@@ -149,6 +152,7 @@ func newCmdManifestWorkMoveClusterResources() *cobra.Command {
 		},
 	}
 	flags.RegisterFlags(cmd)
+	cmd.Flags().BoolVar(&flags.Paused, "paused", false, "Leave the destination HostedCluster paused")
 	return cmd
 }
 
@@ -157,6 +161,7 @@ type manifestWorkFlags struct {
 	hcpflags.Reason
 	hcpflags.Destination
 	hcpflags.Source
+	Paused bool
 }
 
 func (f *manifestWorkFlags) RegisterFlags(cmd *cobra.Command) {
@@ -167,7 +172,7 @@ func (f *manifestWorkFlags) RegisterFlags(cmd *cobra.Command) {
 }
 
 func manifestWorkRequest(flags *manifestWorkFlags) internalcmd.ManifestWorkRequest {
-	return internalcmd.ManifestWorkRequest{ClusterID: string(flags.Cluster), SourceMC: string(flags.Source), ReplacementMC: string(flags.Destination), Reason: string(flags.Reason)}
+	return internalcmd.ManifestWorkRequest{ClusterID: string(flags.Cluster), SourceMC: string(flags.Source), ReplacementMC: string(flags.Destination), Reason: string(flags.Reason), Paused: flags.Paused}
 }
 
 func printManifestWorkComparison(out io.Writer, comparisons []internalcmd.ManifestWorkComparison) error {

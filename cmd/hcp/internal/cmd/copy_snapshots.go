@@ -146,7 +146,7 @@ type DefaultSnapshotCopier struct {
 
 type snapshotCopyOCMClient interface {
 	internalclient.ClusterResolver
-	Cluster(string) (*cmv1.Cluster, error)
+	Cluster(context.Context, string) (*cmv1.Cluster, error)
 	HCPNamespace(context.Context, string) (string, error)
 	ElevatedManagementCluster(string, string, ...internalclient.ManagementClusterClientOption) (internalclient.ManagementClusterClient, error)
 }
@@ -186,11 +186,11 @@ func (c *DefaultSnapshotCopier) PrepareSnapshotCopy(ctx context.Context, request
 	if request.SourceMC == "" {
 		c.cfg.Logger.WithField("source_management_cluster", sourceIdentifier).Info("Using the HCP's current management cluster as the source")
 	}
-	source, err := c.ocmClient.Cluster(sourceIdentifier)
+	source, err := c.ocmClient.Cluster(ctx, sourceIdentifier)
 	if err != nil {
 		return SnapshotCopyPlan{}, fmt.Errorf("resolving source management cluster: %w", err)
 	}
-	replacement, err := c.ocmClient.Cluster(request.ReplacementMC)
+	replacement, err := c.ocmClient.Cluster(ctx, request.ReplacementMC)
 	if err != nil {
 		return SnapshotCopyPlan{}, fmt.Errorf("resolving replacement management cluster: %w", err)
 	}

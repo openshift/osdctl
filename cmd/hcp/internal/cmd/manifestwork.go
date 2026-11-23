@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"time"
 
+	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	internalclient "github.com/openshift/osdctl/cmd/hcp/internal/client"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	workv1 "open-cluster-management.io/api/work/v1"
 )
@@ -37,6 +40,7 @@ type ManifestWorkRequest struct {
 	SourceMC      string
 	ReplacementMC string
 	Reason        string
+	Paused        bool
 }
 
 // ManifestWorkManager compares and relocates HCP ManifestWorks.
@@ -63,9 +67,10 @@ type ManifestWorkMovePlan struct {
 	Count              int
 	ManifestWorks      []*workv1.ManifestWork
 
-	move        preparedManifestWorkMove
-	pause       bool
-	sourceWorks []*workv1.ManifestWork
+	move         preparedManifestWorkMove
+	pause        bool
+	waitForPause bool
+	sourceWorks  []*workv1.ManifestWork
 }
 
 // ManifestWorkMoveResult describes an applied move.
@@ -79,16 +84,46 @@ type ManifestWorkMoveResult struct {
 // DefaultManifestWorkManager is the production ManifestWork implementation.
 type DefaultManifestWorkManager struct {
 	ocmClient manifestWorkOCMClient
+	cfg       DefaultManifestWorkManagerConfig
+}
+
+type DefaultManifestWorkManagerConfig struct {
+	PauseTimeout              time.Duration
+	PauseAcknowledgmentPeriod time.Duration
+}
+
+func (c *DefaultManifestWorkManagerConfig) Defaults() {
+	if c.PauseTimeout <= 0 {
+		c.PauseTimeout = 5 * time.Minute
+	}
+	if c.PauseAcknowledgmentPeriod <= 0 {
+		c.PauseAcknowledgmentPeriod = time.Second
+	}
+}
+
+func (c *DefaultManifestWorkManagerConfig) Options(opts ...DefaultManifestWorkManagerOption) {
+	for _, opt := range opts {
+		opt.ConfigureDefaultManifestWorkManager(c)
+	}
+}
+
+type DefaultManifestWorkManagerOption interface {
+	ConfigureDefaultManifestWorkManager(*DefaultManifestWorkManagerConfig)
 }
 
 type manifestWorkOCMClient interface {
 	internalclient.ClusterResolver
+	Cluster(ctx context.Context, identifier string) (*cmv1.Cluster, error)
 	ResolveServiceCluster(ctx context.Context, clusterID string) (internalclient.ServiceClusterInfo, error)
 	ServiceCluster(clusterID, reason string) (internalclient.ServiceClusterClient, error)
 }
 
-func NewDefaultManifestWorkManager(ocmClient manifestWorkOCMClient) *DefaultManifestWorkManager {
-	return &DefaultManifestWorkManager{ocmClient: ocmClient}
+func NewDefaultManifestWorkManager(ocmClient manifestWorkOCMClient, opts ...DefaultManifestWorkManagerOption) *DefaultManifestWorkManager {
+	var cfg DefaultManifestWorkManagerConfig
+	cfg.Options(opts...)
+	cfg.Defaults()
+
+	return &DefaultManifestWorkManager{ocmClient: ocmClient, cfg: cfg}
 }
 
 func (r *DefaultManifestWorkManager) CompareManifestWorks(ctx context.Context, flags ManifestWorkRequest) ([]ManifestWorkComparison, error) {
@@ -96,11 +131,15 @@ func (r *DefaultManifestWorkManager) CompareManifestWorks(ctx context.Context, f
 	if err != nil {
 		return nil, fmt.Errorf("resolving cluster: %w", err)
 	}
+	replacementMC, err := r.resolveReplacementMC(ctx, flags.ReplacementMC)
+	if err != nil {
+		return nil, err
+	}
 	sourceMC := sourceManifestWorkNamespace(flags.SourceMC, cluster)
 	if sourceMC == "" {
 		return nil, fmt.Errorf("source management cluster is empty")
 	}
-	if sourceMC == flags.ReplacementMC {
+	if sourceMC == replacementMC {
 		return nil, fmt.Errorf("source and replacement management clusters must differ")
 	}
 	serviceCluster, err := r.ocmClient.ResolveServiceCluster(ctx, cluster.HCPClusterID)
@@ -115,7 +154,7 @@ func (r *DefaultManifestWorkManager) CompareManifestWorks(ctx context.Context, f
 	if err != nil {
 		return nil, err
 	}
-	replacementWorks, err := listHCPManifestWorks(ctx, serviceClient, flags.ReplacementMC, cluster.HCPClusterID)
+	replacementWorks, err := listHCPManifestWorks(ctx, serviceClient, replacementMC, cluster.HCPClusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +201,7 @@ func (r *DefaultManifestWorkManager) PrepareClusterManifestWorkMove(ctx context.
 	if err != nil {
 		return ManifestWorkMovePlan{}, err
 	}
-	expectedDestinations, err := destinationManifestWorks(move, works, true)
+	expectedDestinations, err := destinationManifestWorks(move, works, flags.Paused)
 	if err != nil {
 		return ManifestWorkMovePlan{}, err
 	}
@@ -170,7 +209,7 @@ func (r *DefaultManifestWorkManager) PrepareClusterManifestWorkMove(ctx context.
 	if err != nil {
 		return ManifestWorkMovePlan{}, err
 	}
-	return ManifestWorkMovePlan{Phase: "cluster resource", ReplacementMC: move.replacementMC, ServiceClusterName: move.serviceCluster.Name, SourceRetained: true, Count: len(works), ManifestWorks: destinations, move: move, pause: true, sourceWorks: works}, nil
+	return ManifestWorkMovePlan{Phase: "cluster resource", ReplacementMC: move.replacementMC, ServiceClusterName: move.serviceCluster.Name, SourceRetained: true, Count: len(works), ManifestWorks: destinations, move: move, pause: true, waitForPause: !flags.Paused, sourceWorks: works}, nil
 }
 
 type preparedManifestWorkMove struct {
@@ -186,11 +225,15 @@ func (r *DefaultManifestWorkManager) prepareMove(ctx context.Context, flags Mani
 	if err != nil {
 		return preparedManifestWorkMove{}, fmt.Errorf("resolving cluster: %w", err)
 	}
+	replacementMC, err := r.resolveReplacementMC(ctx, flags.ReplacementMC)
+	if err != nil {
+		return preparedManifestWorkMove{}, err
+	}
 	sourceMC := sourceManifestWorkNamespace(flags.SourceMC, cluster)
 	if sourceMC == "" {
 		return preparedManifestWorkMove{}, fmt.Errorf("source management cluster is empty")
 	}
-	if sourceMC == flags.ReplacementMC {
+	if sourceMC == replacementMC {
 		return preparedManifestWorkMove{}, fmt.Errorf("source and replacement management clusters must differ")
 	}
 	serviceCluster, err := r.ocmClient.ResolveServiceCluster(ctx, cluster.HCPClusterID)
@@ -201,7 +244,18 @@ func (r *DefaultManifestWorkManager) prepareMove(ctx context.Context, flags Mani
 	if err != nil {
 		return preparedManifestWorkMove{}, fmt.Errorf("connecting to service cluster %s with elevation: %w", serviceCluster.ID, err)
 	}
-	return preparedManifestWorkMove{cluster: cluster, sourceMC: sourceMC, replacementMC: flags.ReplacementMC, serviceCluster: serviceCluster, client: serviceClient}, nil
+	return preparedManifestWorkMove{cluster: cluster, sourceMC: sourceMC, replacementMC: replacementMC, serviceCluster: serviceCluster, client: serviceClient}, nil
+}
+
+func (r *DefaultManifestWorkManager) resolveReplacementMC(ctx context.Context, identifier string) (string, error) {
+	replacement, err := r.ocmClient.Cluster(ctx, identifier)
+	if err != nil {
+		return "", fmt.Errorf("resolving replacement management cluster %s: %w", identifier, err)
+	}
+	if replacement.Name() == "" {
+		return "", fmt.Errorf("replacement management cluster %s has no name", identifier)
+	}
+	return replacement.Name(), nil
 }
 
 func (r *DefaultManifestWorkManager) MoveManifestWorks(ctx context.Context, plan ManifestWorkMovePlan) (ManifestWorkMoveResult, error) {
@@ -210,11 +264,31 @@ func (r *DefaultManifestWorkManager) MoveManifestWorks(ctx context.Context, plan
 		return ManifestWorkMoveResult{}, err
 	}
 	if plan.pause {
+		if err := validateSourceManifestWorks(ctx, plan.move.client, plan.sourceWorks); err != nil {
+			return ManifestWorkMoveResult{}, err
+		}
 		for _, work := range plan.sourceWorks {
 			if work.Name == plan.move.cluster.HCPClusterID || isNodePoolManifestWork(work) {
 				if err := pauseManifestWork(ctx, plan.move.client, work); err != nil {
 					return ManifestWorkMoveResult{}, err
 				}
+			}
+		}
+		var acknowledgedGeneration int64
+		waitedForPause := false
+		if plan.waitForPause && len(destinations) > 0 {
+			acknowledgedGeneration, err = waitForManifestWorkPause(ctx, plan.move.client, plan.move.sourceMC, plan.move.cluster.HCPClusterID, r.cfg.PauseTimeout, r.cfg.PauseAcknowledgmentPeriod)
+			if err != nil {
+				return ManifestWorkMoveResult{}, err
+			}
+			waitedForPause = true
+		}
+		if err := validateSourceManifestWorks(ctx, plan.move.client, plan.sourceWorks); err != nil {
+			return ManifestWorkMoveResult{}, err
+		}
+		if waitedForPause {
+			if err := validateManifestWorkPauseAcknowledgment(ctx, plan.move.client, plan.move.sourceMC, plan.move.cluster.HCPClusterID, acknowledgedGeneration); err != nil {
+				return ManifestWorkMoveResult{}, err
 			}
 		}
 	}
@@ -236,13 +310,72 @@ func (r *DefaultManifestWorkManager) MoveManifestWorks(ctx context.Context, plan
 	return ManifestWorkMoveResult{Phase: plan.Phase, ReplacementMC: plan.ReplacementMC, Created: len(destinations)}, nil
 }
 
-func destinationManifestWorks(move preparedManifestWorkMove, works []*workv1.ManifestWork, pause bool) ([]*workv1.ManifestWork, error) {
+func validateSourceManifestWorks(ctx context.Context, serviceClient internalclient.ServiceClusterClient, expected []*workv1.ManifestWork) error {
+	for _, work := range expected {
+		current, err := getManifestWork(ctx, serviceClient, work.Namespace, work.Name)
+		if err != nil {
+			return err
+		}
+		if !manifestWorksMatch(work, current) {
+			return fmt.Errorf("source ManifestWork %s/%s changed since planning", work.Namespace, work.Name)
+		}
+	}
+	return nil
+}
+
+func waitForManifestWorkPause(ctx context.Context, serviceClient internalclient.ServiceClusterClient, namespace, name string, timeout, interval time.Duration) (int64, error) {
+	var acknowledgedGeneration int64
+	err := wait.PollUntilContextTimeout(ctx, interval, timeout, true, func(ctx context.Context) (bool, error) {
+		work, err := getManifestWork(ctx, serviceClient, namespace, name)
+		if err != nil {
+			return false, err
+		}
+		for _, condition := range work.Status.Conditions {
+			if condition.Type == workv1.WorkApplied && condition.Status == metav1.ConditionTrue && condition.ObservedGeneration >= work.Generation {
+				acknowledgedGeneration = work.Generation
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+	if err != nil {
+		return 0, fmt.Errorf("waiting for source HostedCluster ManifestWork %s/%s pause to apply: %w", namespace, name, err)
+	}
+	return acknowledgedGeneration, nil
+}
+
+func validateManifestWorkPauseAcknowledgment(ctx context.Context, serviceClient internalclient.ServiceClusterClient, namespace, name string, generation int64) error {
+	work, err := getManifestWork(ctx, serviceClient, namespace, name)
+	if err != nil {
+		return err
+	}
+	if work.Generation != generation {
+		return fmt.Errorf("source HostedCluster ManifestWork %s/%s changed after pause acknowledgement", namespace, name)
+	}
+	for _, condition := range work.Status.Conditions {
+		if condition.Type == workv1.WorkApplied && condition.Status == metav1.ConditionTrue && condition.ObservedGeneration >= generation {
+			return nil
+		}
+	}
+	return fmt.Errorf("source HostedCluster ManifestWork %s/%s pause acknowledgement is no longer current", namespace, name)
+}
+
+func destinationManifestWorks(move preparedManifestWorkMove, works []*workv1.ManifestWork, pauseHostedCluster bool) ([]*workv1.ManifestWork, error) {
 	destinations := make([]*workv1.ManifestWork, 0, len(works))
 	for _, work := range works {
 		source := work
-		if pause && (work.Name == move.cluster.HCPClusterID || isNodePoolManifestWork(work)) {
+		if isNodePoolManifestWork(work) {
 			source = work.DeepCopy()
 			if err := pauseManifestWorkPayload(source); err != nil {
+				return nil, err
+			}
+		} else if work.Name == move.cluster.HCPClusterID {
+			source = work.DeepCopy()
+			if pauseHostedCluster {
+				if err := pauseManifestWorkPayload(source); err != nil {
+					return nil, err
+				}
+			} else if err := unpauseManifestWorkPayload(source); err != nil {
 				return nil, err
 			}
 		}
@@ -443,6 +576,9 @@ func pauseManifestWork(ctx context.Context, serviceClient internalclient.Service
 		if err != nil {
 			return err
 		}
+		if !manifestWorksMatch(work, current) {
+			return fmt.Errorf("source ManifestWork %s/%s changed since planning", work.Namespace, work.Name)
+		}
 		if err := pauseManifestWorkPayload(current); err != nil {
 			return err
 		}
@@ -473,6 +609,25 @@ func pauseManifestWorkPayload(work *workv1.ManifestWork) error {
 	raw, err := json.Marshal(object.Object)
 	if err != nil {
 		return fmt.Errorf("encoding paused %s in ManifestWork %s/%s: %w", kind, work.Namespace, work.Name, err)
+	}
+	work.Spec.Workload.Manifests[index].Raw = raw
+	work.Spec.Workload.Manifests[index].Object = nil
+	return nil
+}
+
+func unpauseManifestWorkPayload(work *workv1.ManifestWork) error {
+	index, err := pauseableManifestIndex(work, hostedClusterAPIVersion, hostedClusterKind)
+	if err != nil {
+		return err
+	}
+	object, err := manifestObject(&work.Spec.Workload.Manifests[index])
+	if err != nil {
+		return fmt.Errorf("decoding ManifestWork %s/%s: %w", work.Namespace, work.Name, err)
+	}
+	unstructured.RemoveNestedField(object.Object, "spec", "pausedUntil")
+	raw, err := json.Marshal(object.Object)
+	if err != nil {
+		return fmt.Errorf("encoding unpaused %s in ManifestWork %s/%s: %w", hostedClusterKind, work.Namespace, work.Name, err)
 	}
 	work.Spec.Workload.Manifests[index].Raw = raw
 	work.Spec.Workload.Manifests[index].Object = nil

@@ -107,7 +107,7 @@ func (c *testTrustPolicyOCMClient) Resolve(_ context.Context, _ string) (Cluster
 	return c.cluster, c.err
 }
 
-func (c *testTrustPolicyOCMClient) Cluster(identifier string) (*cmv1.Cluster, error) {
+func (c *testTrustPolicyOCMClient) Cluster(_ context.Context, identifier string) (*cmv1.Cluster, error) {
 	cluster, ok := c.clusters[identifier]
 	if !ok {
 		return nil, fmt.Errorf("unexpected identifier %s", identifier)
@@ -124,15 +124,28 @@ func (c *testTrustPolicyOCMClient) BackupConfig(_ context.Context, _ string, man
 }
 
 type testManifestWorkOCMClient struct {
-	cluster        ClusterInfo
-	serviceCluster ServiceClusterInfo
-	client         ServiceClusterClient
-	resolved       []string
-	calls          []serviceClusterCall
+	cluster            ClusterInfo
+	serviceCluster     ServiceClusterInfo
+	client             ServiceClusterClient
+	managementClusters map[string]*cmv1.Cluster
+	clusterContext     context.Context
+	resolved           []string
+	calls              []serviceClusterCall
 }
 
 func (c *testManifestWorkOCMClient) Resolve(_ context.Context, _ string) (ClusterInfo, error) {
 	return c.cluster, nil
+}
+
+func (c *testManifestWorkOCMClient) Cluster(ctx context.Context, identifier string) (*cmv1.Cluster, error) {
+	c.clusterContext = ctx
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if cluster, ok := c.managementClusters[identifier]; ok {
+		return cluster, nil
+	}
+	return cmv1.NewCluster().ID(identifier).Name(identifier).Build()
 }
 
 func (c *testManifestWorkOCMClient) ResolveServiceCluster(_ context.Context, clusterID string) (ServiceClusterInfo, error) {
