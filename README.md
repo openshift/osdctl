@@ -41,6 +41,10 @@ make build
 ```
 
 Then you can find the `osdctl` binary file in the `./dist` subdirectory matching your architecture.
+The `.goreleaser-version` file is the single source of truth for the GoReleaser version used
+by local Make targets and release workflows. Update that file to change the version everywhere.
+CI uses the GoReleaser binary supplied by its boilerplate image; `make ci-build` verifies that
+the supplied binary matches the configured version before building.
 
 ### Update documentation after every release
 
