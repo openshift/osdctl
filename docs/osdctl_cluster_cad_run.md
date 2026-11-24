@@ -16,7 +16,7 @@ Prerequisites:
 Available Investigations:
   chgm, cmbb, can-not-retrieve-updates, ai, cpd, etcd-quota-low,
   insightsoperatordown, machine-health-check, must-gather, upgrade-config,
-  restart-controlplane, describe-nodes
+  restart-controlplane, describe-nodes, upgrade-cp-timeout
 
 Note:
   After the investigation completes (may take several minutes), view results using:
